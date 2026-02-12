@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import styles from "./login.module.css";
+import Image from "next/image";
+import { User, Lock, LogIn, Loader2, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,87 +44,103 @@ export default function LoginPage() {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.bgOrbs}>
-        <div className={styles.orb1}></div>
-        <div className={styles.orb2}></div>
-        <div className={styles.orb3}></div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#FFF5F7] via-white to-[#FFF0F0] relative overflow-hidden">
+      {/* Decorative Elements */}
+      <div className="absolute top-[-120px] right-[-80px] w-[300px] h-[300px] bg-[var(--primary)]/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-[-100px] left-[-60px] w-[250px] h-[250px] bg-[var(--primary)]/8 rounded-full blur-3xl" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[var(--primary)]/3 rounded-full blur-[128px]" />
 
-      <div className={styles.loginCard}>
-        <div className={styles.logo}>
-          <div className={styles.logoIcon}>
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-              <rect width="40" height="40" rx="10" fill="url(#grad)" />
-              <text x="50%" y="55%" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="16" fontWeight="bold">W</text>
-              <defs>
-                <linearGradient id="grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#6366f1" />
-                  <stop offset="1" stopColor="#06b6d4" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <h1 className={styles.brandName}>WIG Attendance</h1>
-          <p className={styles.brandSub}>PT Wijaya Inovasi Gemilang</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className={styles.form}>
-          {error && <div className={styles.error}>{error}</div>}
-
-          <div className={styles.inputGroup}>
-            <label htmlFor="employeeId" className={styles.label}>
-              ID Karyawan
-            </label>
-            <div className={styles.inputWrap}>
-              <span className={styles.inputIcon}>👤</span>
-              <input
-                id="employeeId"
-                type="text"
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                placeholder="Contoh: WIG001"
-                className={styles.input}
-                required
+      <div className="relative z-10 w-full max-w-[420px] mx-4">
+        <div className="bg-white rounded-2xl shadow-lg border border-[var(--border)] p-8 md:p-10">
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 relative mb-4">
+              <Image
+                src="/assets/Logo WIG.png"
+                alt="WIG Logo"
+                fill
+                className="object-contain"
+                priority
               />
             </div>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">WIG Attendance</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">PT Wijaya Inovasi Gemilang</p>
           </div>
 
-          <div className={styles.inputGroup}>
-            <label htmlFor="password" className={styles.label}>
-              Password
-            </label>
-            <div className={styles.inputWrap}>
-              <span className={styles.inputIcon}>🔒</span>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Masukkan password"
-                className={styles.input}
-                required
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className={styles.submitBtn}
-            disabled={loading}
-          >
-            {loading ? (
-              <span className={styles.spinner}></span>
-            ) : (
-              "Masuk"
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                <span className="text-red-500">!</span>
+                {error}
+              </div>
             )}
-          </button>
 
-          <div className={styles.demoInfo}>
-            <p>🔑 Demo: <strong>WIG001</strong> (HR) atau <strong>WIG002</strong> (Employee)</p>
-            <p>Password: <strong>password123</strong></p>
-          </div>
-        </form>
+            <div className="space-y-1.5">
+              <label htmlFor="employeeId" className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
+                ID Karyawan
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input
+                  id="employeeId"
+                  type="text"
+                  value={employeeId}
+                  onChange={(e) => setEmployeeId(e.target.value)}
+                  placeholder="Contoh: WIG001"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all duration-200"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Masukkan password"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all duration-200"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-light,#9B1B30)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  Masuk
+                </>
+              )}
+            </button>
+
+            <div className="mt-5 p-3 bg-[var(--secondary)] rounded-lg border border-[var(--border)]">
+              <div className="flex items-center gap-2 mb-2">
+                <KeyRound className="w-3.5 h-3.5 text-[var(--primary)]" />
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">Demo Credentials</span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)]">
+                <strong className="text-[var(--text-secondary)]">WIG001</strong> (HR) atau <strong className="text-[var(--text-secondary)]">WIG002</strong> (Employee)
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Password: <strong className="text-[var(--text-secondary)]">password123</strong>
+              </p>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

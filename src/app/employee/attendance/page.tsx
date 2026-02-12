@@ -1,233 +1,188 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import styles from "./attendance.module.css";
+import { Camera, MapPin, Clock, CheckCircle, AlertCircle, Loader2, Video, VideoOff } from "lucide-react";
 
 export default function AttendancePage() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+
     const [streaming, setStreaming] = useState(false);
     const [photo, setPhoto] = useState<string | null>(null);
     const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-    const [locationName, setLocationName] = useState("Mengambil lokasi...");
-    const [loading, setLoading] = useState(false);
-    const [result, setResult] = useState<{ type: string; message: string } | null>(null);
-    const [todayStatus, setTodayStatus] = useState<string | null>(null);
+    const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+    const [message, setMessage] = useState("");
+    const [todayRecord, setTodayRecord] = useState<{ clockIn?: string; clockOut?: string } | null>(null);
 
     useEffect(() => {
-        // Get location
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    setLocation(loc);
-                    setLocationName(`${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`);
-                },
-                () => setLocationName("Gagal mengambil lokasi")
+                (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => setMessage("Gagal mendapatkan lokasi. Aktifkan GPS.")
             );
         }
-
-        // Check today's status
-        fetch("/api/attendance")
-            .then((r) => r.json())
-            .then((data) => {
-                const today = new Date().toISOString().split("T")[0];
-                const todayRec = data.find((a: { date: string }) => a.date === today);
-                if (todayRec) {
-                    if (todayRec.clockOut) {
-                        setTodayStatus("completed");
-                    } else {
-                        setTodayStatus("clocked-in");
-                    }
-                }
-            });
+        fetch("/api/attendance").then((r) => r.json()).then((data) => {
+            const today = new Date().toISOString().split("T")[0];
+            const found = data.find((a: { date: string }) => a.date === today);
+            if (found) setTodayRecord(found);
+        });
     }, []);
 
     const startCamera = useCallback(async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: 640, height: 480 },
-            });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 setStreaming(true);
             }
         } catch {
-            setResult({ type: "error", message: "Gagal mengakses kamera. Pastikan izin kamera diberikan." });
+            setMessage("Gagal mengakses kamera. Berikan izin kamera.");
+        }
+    }, []);
+
+    const stopCamera = useCallback(() => {
+        if (videoRef.current?.srcObject) {
+            const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+            tracks.forEach((t) => t.stop());
+            videoRef.current.srcObject = null;
+            setStreaming(false);
         }
     }, []);
 
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current) return;
-        const ctx = canvasRef.current.getContext("2d");
-        if (!ctx) return;
-
-        canvasRef.current.width = 640;
-        canvasRef.current.height = 480;
-        ctx.drawImage(videoRef.current, 0, 0, 640, 480);
-
-        const dataUrl = canvasRef.current.toDataURL("image/jpeg", 0.8);
-        setPhoto(dataUrl);
-
-        // Stop camera
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream?.getTracks().forEach((track) => track.stop());
-        setStreaming(false);
-    }, []);
+        const canvas = canvasRef.current;
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+            setPhoto(canvas.toDataURL("image/jpeg", 0.8));
+            stopCamera();
+        }
+    }, [stopCamera]);
 
     const submitAttendance = useCallback(async () => {
-        if (!photo) {
-            setResult({ type: "error", message: "Silakan ambil foto terlebih dahulu" });
-            return;
-        }
+        if (!photo || !location) return;
+        setStatus("submitting");
 
-        setLoading(true);
         try {
             const res = await fetch("/api/attendance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ photo, location }),
             });
-
             const data = await res.json();
 
-            if (!res.ok) {
-                setResult({ type: "error", message: data.error });
+            if (res.ok) {
+                setStatus("success");
+                setMessage(data.clockOut ? "Clock Out berhasil!" : "Clock In berhasil!");
+                setTodayRecord(data);
             } else {
-                const isClockOut = !!data.clockOut;
-                setResult({
-                    type: "success",
-                    message: isClockOut
-                        ? `Clock Out berhasil pada ${new Date(data.clockOut).toLocaleTimeString("id-ID")}`
-                        : `Clock In berhasil pada ${new Date(data.clockIn).toLocaleTimeString("id-ID")} — Status: ${data.status === "late" ? "Terlambat" : "Tepat Waktu"}`,
-                });
-                setTodayStatus(isClockOut ? "completed" : "clocked-in");
-                setPhoto(null);
+                setStatus("error");
+                setMessage(data.error || "Gagal submit absensi");
             }
         } catch {
-            setResult({ type: "error", message: "Terjadi kesalahan" });
+            setStatus("error");
+            setMessage("Terjadi kesalahan koneksi");
         }
-        setLoading(false);
     }, [photo, location]);
 
-    const retakePhoto = useCallback(() => {
-        setPhoto(null);
-        startCamera();
-    }, [startCamera]);
+    const isClockIn = !todayRecord?.clockIn;
+    const isClockOut = todayRecord?.clockIn && !todayRecord?.clockOut;
+    const isDone = todayRecord?.clockIn && todayRecord?.clockOut;
 
     return (
-        <div className={styles.page}>
-            <div className={styles.header}>
-                <h1 className={styles.title}>📸 Absensi Face Recognition</h1>
-                <p className={styles.subtitle}>Absen dengan foto wajah dan lokasi GPS</p>
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+            <div>
+                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <Camera className="w-5 h-5 text-[var(--primary)]" />
+                    Absensi
+                </h1>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Rekam kehadiran dengan foto dan lokasi</p>
             </div>
 
             {/* Status Banner */}
-            {todayStatus && (
-                <div className={`${styles.statusBanner} ${todayStatus === "completed" ? styles.statusCompleted : styles.statusActive}`}>
-                    <span className={styles.statusIcon}>
-                        {todayStatus === "completed" ? "✅" : "⏰"}
-                    </span>
-                    <span>
-                        {todayStatus === "completed"
-                            ? "Anda sudah menyelesaikan absensi hari ini"
-                            : "Anda sudah Clock In. Silakan Clock Out saat selesai kerja"}
-                    </span>
+            {isDone && (
+                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                    <div>
+                        <p className="text-sm font-semibold text-green-800">Absensi hari ini selesai</p>
+                        <p className="text-xs text-green-600">In: {todayRecord?.clockIn ? new Date(todayRecord.clockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"} • Out: {todayRecord?.clockOut ? new Date(todayRecord.clockOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</p>
+                    </div>
                 </div>
             )}
 
-            <div className={styles.content}>
-                {/* Camera Section */}
-                <div className={`glass-card ${styles.cameraSection}`}>
-                    <h2 className={styles.sectionTitle}>Kamera</h2>
-
-                    <div className={styles.cameraBox}>
+            {/* Camera */}
+            {!isDone && (
+                <div className="card overflow-hidden">
+                    <div className="relative aspect-[4/3] bg-gray-100">
+                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} />
                         {!streaming && !photo && (
-                            <div className={styles.cameraPlaceholder}>
-                                <span className={styles.cameraEmoji}>📷</span>
-                                <p>Tekan tombol di bawah untuk mulai</p>
-                                <button className="btn btn-primary" onClick={startCamera}>
-                                    Buka Kamera
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
+                                <Video className="w-12 h-12 opacity-30" />
+                                <p className="text-sm">Kamera belum aktif</p>
+                                <button onClick={startCamera} className="btn btn-primary btn-sm">
+                                    <Camera className="w-4 h-4" /> Aktifkan Kamera
                                 </button>
                             </div>
                         )}
-
-                        {streaming && (
-                            <div className={styles.videoWrap}>
-                                <video ref={videoRef} autoPlay playsInline className={styles.video} />
-                                <div className={styles.faceGuide}>
-                                    <div className={styles.faceOval}></div>
-                                </div>
-                                <button className={styles.captureBtn} onClick={capturePhoto}>
-                                    <div className={styles.captureBtnInner}></div>
-                                </button>
-                            </div>
-                        )}
-
                         {photo && (
-                            <div className={styles.photoPreview}>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={photo} alt="Captured" className={styles.previewImg} />
-                                <button className={styles.retakeBtn} onClick={retakePhoto}>
-                                    🔄 Ulangi
-                                </button>
+                            <img src={photo} alt="Captured" className="w-full h-full object-cover" />
+                        )}
+                        {streaming && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="w-40 h-52 border-2 border-[var(--primary)]/60 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.15)]" />
                             </div>
                         )}
+                        <canvas ref={canvasRef} className="hidden" />
                     </div>
 
-                    <canvas ref={canvasRef} style={{ display: "none" }} />
+                    <div className="p-4 space-y-3">
+                        {/* Controls */}
+                        <div className="flex gap-2">
+                            {streaming ? (
+                                <>
+                                    <button onClick={capturePhoto} className="btn btn-primary flex-1">
+                                        <Camera className="w-4 h-4" /> Ambil Foto
+                                    </button>
+                                    <button onClick={stopCamera} className="btn btn-secondary">
+                                        <VideoOff className="w-4 h-4" />
+                                    </button>
+                                </>
+                            ) : photo ? (
+                                <>
+                                    <button onClick={() => { setPhoto(null); startCamera(); }} className="btn btn-secondary flex-1">Ulang</button>
+                                    <button onClick={submitAttendance} className="btn btn-primary flex-1" disabled={status === "submitting" || !location}>
+                                        {status === "submitting" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                        {isClockIn ? "Clock In" : isClockOut ? "Clock Out" : "Submit"}
+                                    </button>
+                                </>
+                            ) : null}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+                            <div className="flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5" />
+                                {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "Mendapatkan lokasi..."}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" />
+                                {new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            )}
 
-                {/* Info Section */}
-                <div className={styles.infoSection}>
-                    {/* Location Card */}
-                    <div className={`glass-card ${styles.infoCard}`}>
-                        <div className={styles.infoCardIcon}>📍</div>
-                        <div>
-                            <p className={styles.infoCardLabel}>Lokasi Anda</p>
-                            <p className={styles.infoCardValue}>{locationName}</p>
-                        </div>
-                    </div>
-
-                    {/* Time Card */}
-                    <div className={`glass-card ${styles.infoCard}`}>
-                        <div className={styles.infoCardIcon}>🕐</div>
-                        <div>
-                            <p className={styles.infoCardLabel}>Waktu Saat Ini</p>
-                            <p className={styles.infoCardValue}>
-                                {new Date().toLocaleTimeString("id-ID", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                })}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Submit Button */}
-                    <button
-                        className={`btn btn-primary btn-lg ${styles.submitBtn}`}
-                        onClick={submitAttendance}
-                        disabled={!photo || loading || todayStatus === "completed"}
-                    >
-                        {loading ? (
-                            <span className="spinner" style={{ width: 20, height: 20 }}></span>
-                        ) : todayStatus === "clocked-in" ? (
-                            "🏁 Clock Out"
-                        ) : todayStatus === "completed" ? (
-                            "✅ Sudah Selesai"
-                        ) : (
-                            "📸 Clock In"
-                        )}
-                    </button>
-
-                    {/* Result */}
-                    {result && (
-                        <div className={`${styles.resultBanner} ${result.type === "success" ? styles.resultSuccess : styles.resultError}`}>
-                            {result.message}
-                        </div>
-                    )}
+            {/* Message */}
+            {message && (
+                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${status === "success" ? "bg-green-50 text-green-700 border border-green-200" : status === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-yellow-50 text-yellow-700 border border-yellow-200"}`}>
+                    {status === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                    {message}
                 </div>
-            </div>
+            )}
         </div>
     );
 }

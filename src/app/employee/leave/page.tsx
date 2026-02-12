@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import styles from "./leave.module.css";
+import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X } from "lucide-react";
 
 interface LeaveRequest {
     id: string;
@@ -13,38 +13,29 @@ interface LeaveRequest {
     createdAt: string;
 }
 
-interface User {
-    totalLeave: number;
-    usedLeave: number;
-}
-
 export default function LeavePage() {
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
-    const [user, setUser] = useState<User | null>(null);
+    const [balance, setBalance] = useState({ total: 12, used: 0 });
     const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({
-        type: "annual",
-        startDate: "",
-        endDate: "",
-        reason: "",
-    });
+    const [form, setForm] = useState({ type: "annual", startDate: "", endDate: "", reason: "" });
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        fetch("/api/leave").then((r) => r.json()).then(setLeaves);
-        fetch("/api/auth/me").then((r) => r.json()).then(setUser);
+        fetch("/api/leave").then((r) => r.json()).then((data) => {
+            setLeaves(data);
+            const used = data.filter((l: LeaveRequest) => l.status === "approved").length;
+            setBalance({ total: 12, used });
+        });
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-
         const res = await fetch("/api/leave", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(form),
         });
-
         if (res.ok) {
             const newLeave = await res.json();
             setLeaves((prev) => [newLeave, ...prev]);
@@ -54,161 +45,120 @@ export default function LeavePage() {
         setLoading(false);
     };
 
-    const remaining = user ? user.totalLeave - user.usedLeave : 0;
-
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case "approved": return "success";
-            case "rejected": return "error";
-            default: return "warning";
-        }
+    const getTypeLabel = (t: string) => {
+        switch (t) { case "annual": return "Tahunan"; case "sick": return "Sakit"; case "personal": return "Pribadi"; case "maternity": return "Melahirkan"; default: return t; }
     };
 
-    const getStatusLabel = (status: string) => {
-        switch (status) {
-            case "approved": return "Disetujui";
-            case "rejected": return "Ditolak";
-            default: return "Menunggu";
-        }
-    };
-
-    const getTypeLabel = (type: string) => {
-        switch (type) {
-            case "annual": return "Tahunan";
-            case "sick": return "Sakit";
-            case "personal": return "Pribadi";
-            case "maternity": return "Melahirkan";
-            default: return type;
+    const getStatusInfo = (s: string) => {
+        switch (s) {
+            case "approved": return { label: "Disetujui", badge: "badge-success", icon: CheckCircle };
+            case "rejected": return { label: "Ditolak", badge: "badge-error", icon: XCircle };
+            default: return { label: "Menunggu", badge: "badge-warning", icon: Clock };
         }
     };
 
     return (
-        <div className={styles.page}>
-            <div className={styles.header}>
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+            <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                    <h1 className={styles.title}>🏖️ Manajemen Cuti</h1>
-                    <p className={styles.subtitle}>Ajukan dan pantau status cuti Anda</p>
+                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <CalendarOff className="w-5 h-5 text-[var(--primary)]" />
+                        Manajemen Cuti
+                    </h1>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">Ajukan dan pantau pengajuan cuti</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowForm(true)}>
-                    + Ajukan Cuti
+                <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+                    <Send className="w-4 h-4" /> Ajukan Cuti
                 </button>
             </div>
 
-            {/* Leave Balance */}
-            <div className={styles.balanceGrid}>
-                <div className={`glass-card ${styles.balanceCard}`}>
-                    <div className={`${styles.balanceIcon} ${styles.balanceIconTotal}`}>📅</div>
-                    <p className={styles.balanceValue}>{user?.totalLeave || 0}</p>
-                    <p className={styles.balanceLabel}>Total Cuti</p>
+            {/* Balance */}
+            <div className="grid grid-cols-3 gap-4">
+                <div className="card p-4 text-center">
+                    <p className="text-2xl font-extrabold text-[var(--primary)]">{balance.total}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Total</p>
                 </div>
-                <div className={`glass-card ${styles.balanceCard}`}>
-                    <div className={`${styles.balanceIcon} ${styles.balanceIconUsed}`}>✈️</div>
-                    <p className={styles.balanceValue}>{user?.usedLeave || 0}</p>
-                    <p className={styles.balanceLabel}>Terpakai</p>
+                <div className="card p-4 text-center">
+                    <p className="text-2xl font-extrabold text-orange-500">{balance.used}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Terpakai</p>
                 </div>
-                <div className={`glass-card ${styles.balanceCard}`}>
-                    <div className={`${styles.balanceIcon} ${styles.balanceIconRemain}`}>🎯</div>
-                    <p className={styles.balanceValueHighlight}>{remaining}</p>
-                    <p className={styles.balanceLabel}>Sisa Cuti</p>
+                <div className="card p-4 text-center">
+                    <p className="text-2xl font-extrabold text-green-600">{balance.total - balance.used}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Sisa</p>
                 </div>
             </div>
 
-            {/* Leave History */}
-            <div className={styles.section}>
-                <h2 className={styles.sectionTitle}>Riwayat Pengajuan</h2>
+            {/* Form */}
+            {showForm && (
+                <div className="card p-6 border-2 border-[var(--primary)]/20">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-bold text-[var(--text-primary)]">Form Pengajuan Cuti</h3>
+                        <button onClick={() => setShowForm(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-4 h-4" /></button>
+                    </div>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="form-group !mb-0">
+                            <label className="form-label">Jenis Cuti</label>
+                            <select className="form-select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                                <option value="annual">Tahunan</option>
+                                <option value="sick">Sakit</option>
+                                <option value="personal">Pribadi</option>
+                                <option value="maternity">Melahirkan</option>
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Tanggal Mulai</label>
+                                <input type="date" className="form-input" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
+                            </div>
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Tanggal Selesai</label>
+                                <input type="date" className="form-input" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+                            </div>
+                        </div>
+                        <div className="form-group !mb-0">
+                            <label className="form-label">Alasan</label>
+                            <textarea className="form-textarea" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required />
+                        </div>
+                        <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            {loading ? "Mengirim..." : "Kirim Pengajuan"}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* History */}
+            <div className="space-y-3">
+                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-[var(--primary)]" />
+                    Riwayat Cuti
+                </h2>
                 {leaves.length === 0 ? (
-                    <div className="glass-card empty-state">
-                        <span className="empty-state-icon">🏖️</span>
-                        <p className="empty-state-title">Belum ada pengajuan cuti</p>
+                    <div className="card p-8 text-center">
+                        <CalendarOff className="w-10 h-10 text-[var(--text-muted)] opacity-30 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada pengajuan</p>
                     </div>
                 ) : (
-                    <div className={styles.leaveList}>
-                        {leaves.map((leave) => (
-                            <div key={leave.id} className={`glass-card ${styles.leaveCard}`}>
-                                <div className={styles.leaveCardHeader}>
-                                    <span className={`badge badge-${getStatusBadge(leave.status)}`}>
-                                        {getStatusLabel(leave.status)}
-                                    </span>
-                                    <span className="badge badge-info">{getTypeLabel(leave.type)}</span>
+                    <div className="space-y-2">
+                        {leaves.map((l) => {
+                            const info = getStatusInfo(l.status);
+                            const StatusIcon = info.icon;
+                            return (
+                                <div key={l.id} className="card p-4 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="badge badge-info">{getTypeLabel(l.type)}</span>
+                                        <span className={`badge ${info.badge} flex items-center gap-1`}>
+                                            <StatusIcon className="w-3 h-3" /> {info.label}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{l.startDate} — {l.endDate}</p>
+                                    <p className="text-xs text-[var(--text-secondary)]">{l.reason}</p>
                                 </div>
-                                <p className={styles.leaveDates}>
-                                    {leave.startDate} — {leave.endDate}
-                                </p>
-                                <p className={styles.leaveReason}>{leave.reason}</p>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
-
-            {/* Request Form Modal */}
-            {showForm && (
-                <div className="modal-overlay" onClick={() => setShowForm(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Ajukan Cuti</h2>
-                            <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
-                        </div>
-
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-group">
-                                <label className="form-label">Jenis Cuti</label>
-                                <select
-                                    className="form-select"
-                                    value={form.type}
-                                    onChange={(e) => setForm({ ...form, type: e.target.value })}
-                                >
-                                    <option value="annual">Tahunan</option>
-                                    <option value="sick">Sakit</option>
-                                    <option value="personal">Pribadi</option>
-                                    <option value="maternity">Melahirkan</option>
-                                </select>
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Tanggal Mulai</label>
-                                <input
-                                    type="date"
-                                    className="form-input"
-                                    value={form.startDate}
-                                    onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                                    required
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Tanggal Selesai</label>
-                                <input
-                                    type="date"
-                                    className="form-input"
-                                    value={form.endDate}
-                                    onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-                                    required
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">Alasan</label>
-                                <textarea
-                                    className="form-textarea"
-                                    value={form.reason}
-                                    onChange={(e) => setForm({ ...form, reason: e.target.value })}
-                                    required
-                                    placeholder="Jelaskan alasan cuti Anda..."
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                className="btn btn-primary btn-lg w-full"
-                                disabled={loading}
-                            >
-                                {loading ? "Mengirim..." : "Ajukan Cuti"}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

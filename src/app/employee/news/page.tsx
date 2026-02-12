@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import styles from "./news.module.css";
+import { Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe } from "lucide-react";
 
 interface NewsItem {
     id: string;
@@ -24,93 +24,83 @@ export default function NewsPage() {
 
     const filtered = filter === "all" ? news : news.filter((n) => n.category === filter);
 
-    const getCategoryColor = (cat: string) => {
+    const getCategoryInfo = (cat: string) => {
         switch (cat) {
-            case "announcement": return "primary";
-            case "event": return "info";
-            case "policy": return "warning";
-            default: return "primary";
+            case "announcement": return { label: "Pengumuman", icon: Megaphone, color: "text-[var(--primary)]", bg: "bg-[var(--primary)]/10" };
+            case "event": return { label: "Acara", icon: PartyPopper, color: "text-blue-600", bg: "bg-blue-500/10" };
+            case "policy": return { label: "Kebijakan", icon: BookOpen, color: "text-orange-600", bg: "bg-orange-500/10" };
+            default: return { label: "Umum", icon: Globe, color: "text-gray-600", bg: "bg-gray-500/10" };
         }
     };
 
-    const getCategoryLabel = (cat: string) => {
-        switch (cat) {
-            case "announcement": return "Pengumuman";
-            case "event": return "Acara";
-            case "policy": return "Kebijakan";
-            default: return "Umum";
-        }
-    };
-
-    const getCategoryIcon = (cat: string) => {
-        switch (cat) {
-            case "announcement": return "📢";
-            case "event": return "🎉";
-            case "policy": return "📋";
-            default: return "📰";
-        }
-    };
+    const filters = [
+        { key: "all", label: "Semua" },
+        { key: "announcement", label: "Pengumuman" },
+        { key: "event", label: "Acara" },
+        { key: "policy", label: "Kebijakan" },
+        { key: "general", label: "Umum" },
+    ];
 
     return (
-        <div className={styles.page}>
-            <div className={styles.header}>
-                <h1 className={styles.title}>📢 WIG&apos;s News</h1>
-                <p className={styles.subtitle}>Informasi dan pengumuman perusahaan</p>
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+            <div>
+                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <Newspaper className="w-5 h-5 text-[var(--primary)]" />
+                    WIG News
+                </h1>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Informasi dan pengumuman perusahaan</p>
             </div>
 
             {/* Filters */}
-            <div className={styles.filters}>
-                {["all", "announcement", "event", "policy", "general"].map((f) => (
+            <div className="flex gap-2 flex-wrap">
+                {filters.map((f) => (
                     <button
-                        key={f}
-                        className={`${styles.filterBtn} ${filter === f ? styles.filterActive : ""}`}
-                        onClick={() => setFilter(f)}
+                        key={f.key}
+                        onClick={() => setFilter(f.key)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${filter === f.key
+                                ? "bg-[var(--primary)] text-white shadow-sm"
+                                : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
+                            }`}
                     >
-                        {f === "all" ? "Semua" : getCategoryLabel(f)}
+                        {f.label}
                     </button>
                 ))}
             </div>
 
             {/* News List */}
             {filtered.length === 0 ? (
-                <div className="glass-card empty-state">
-                    <span className="empty-state-icon">📰</span>
-                    <p className="empty-state-title">Tidak ada berita</p>
+                <div className="card p-12 text-center">
+                    <Newspaper className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada berita</p>
                 </div>
             ) : (
-                <div className={styles.newsList}>
-                    {filtered.map((item) => (
-                        <div
-                            key={item.id}
-                            className={`glass-card ${styles.newsCard}`}
-                            onClick={() => setSelected(item)}
-                        >
-                            <div className={styles.newsCardIcon}>
-                                {getCategoryIcon(item.category)}
-                            </div>
-                            <div className={styles.newsCardContent}>
-                                <div className={styles.newsCardHeader}>
-                                    {item.isPinned && <span className={styles.pin}>📌</span>}
-                                    <span className={`badge badge-${getCategoryColor(item.category)}`}>
-                                        {getCategoryLabel(item.category)}
-                                    </span>
-                                </div>
-                                <h3 className={styles.newsCardTitle}>{item.title}</h3>
-                                <p className={styles.newsCardText}>{item.content.slice(0, 150)}...</p>
-                                <div className={styles.newsCardMeta}>
-                                    <span>Oleh {item.author}</span>
-                                    <span>•</span>
-                                    <span>
-                                        {new Date(item.createdAt).toLocaleDateString("id-ID", {
-                                            day: "numeric",
-                                            month: "long",
-                                            year: "numeric",
-                                        })}
-                                    </span>
+                <div className="space-y-3">
+                    {filtered.map((item) => {
+                        const info = getCategoryInfo(item.category);
+                        const CatIcon = info.icon;
+                        return (
+                            <div key={item.id} className="card p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelected(item)}>
+                                <div className="flex gap-4">
+                                    <div className={`w-10 h-10 rounded-lg ${info.bg} flex items-center justify-center shrink-0`}>
+                                        <CatIcon className={`w-5 h-5 ${info.color}`} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            {item.isPinned && <Pin className="w-3 h-3 text-[var(--primary)] shrink-0" />}
+                                            <span className="badge badge-primary">{info.label}</span>
+                                        </div>
+                                        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">{item.title}</h3>
+                                        <p className="text-xs text-[var(--text-secondary)] line-clamp-2">{item.content}</p>
+                                        <div className="flex items-center gap-2 mt-2 text-[10px] text-[var(--text-muted)]">
+                                            <span>Oleh {item.author}</span>
+                                            <span>·</span>
+                                            <span>{new Date(item.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
@@ -120,24 +110,14 @@ export default function NewsPage() {
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">{selected.title}</h2>
-                            <button className="modal-close" onClick={() => setSelected(null)}>✕</button>
+                            <button className="modal-close" onClick={() => setSelected(null)}><X className="w-4 h-4" /></button>
                         </div>
-                        <div className={styles.modalMeta}>
-                            <span className={`badge badge-${getCategoryColor(selected.category)}`}>
-                                {getCategoryLabel(selected.category)}
-                            </span>
-                            <span className={styles.modalAuthor}>Oleh {selected.author}</span>
-                            <span className={styles.modalDate}>
-                                {new Date(selected.createdAt).toLocaleDateString("id-ID", {
-                                    day: "numeric",
-                                    month: "long",
-                                    year: "numeric",
-                                })}
-                            </span>
+                        <div className="flex items-center gap-3 mb-4 flex-wrap">
+                            <span className="badge badge-primary">{getCategoryInfo(selected.category).label}</span>
+                            <span className="text-xs text-[var(--text-muted)]">Oleh {selected.author}</span>
+                            <span className="text-xs text-[var(--text-muted)]">{new Date(selected.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
                         </div>
-                        <div className={styles.modalBody}>
-                            <p>{selected.content}</p>
-                        </div>
+                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{selected.content}</p>
                     </div>
                 </div>
             )}
