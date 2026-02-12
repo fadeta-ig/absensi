@@ -41,12 +41,20 @@ export interface PayslipRecord {
     employeeId: string;
     period: string; // e.g., "2026-02"
     basicSalary: number;
-    allowances: number;
-    deductions: number;
+    allowances: { name: string; amount: number }[];
+    deductions: { name: string; amount: number }[];
     overtime: number;
     netSalary: number;
     issuedDate: string;
     notes?: string;
+}
+
+export interface WorkShift {
+    id: string;
+    name: string;
+    startTime: string; // "08:00"
+    endTime: string;   // "17:00"
+    isDefault: boolean;
 }
 
 export interface LeaveRequest {
@@ -81,7 +89,7 @@ export interface TodoItem {
 // ============== In-Memory Store ==============
 const employees: Employee[] = [
     {
-        id: uuidv4(),
+        id: "emp-001",
         employeeId: "WIG001",
         name: "Admin HR",
         email: "hr@wig.co.id",
@@ -89,14 +97,14 @@ const employees: Employee[] = [
         department: "Human Resources",
         position: "HR Manager",
         role: "hr",
-        password: "$2a$10$XQxBj3Fy.Cv5nWYZz0VZzOQKZvZ3q3q3q3q3q3q3q3q3q3q3q3q", // will be set on init
+        password: "password123",
         joinDate: "2024-01-15",
         totalLeave: 12,
         usedLeave: 2,
         isActive: true,
     },
     {
-        id: uuidv4(),
+        id: "emp-002",
         employeeId: "WIG002",
         name: "Budi Santoso",
         email: "budi@wig.co.id",
@@ -104,7 +112,7 @@ const employees: Employee[] = [
         department: "Engineering",
         position: "Software Engineer",
         role: "employee",
-        password: "$2a$10$XQxBj3Fy.Cv5nWYZz0VZzOQKZvZ3q3q3q3q3q3q3q3q3q3q3q3q",
+        password: "password123",
         joinDate: "2024-03-01",
         totalLeave: 12,
         usedLeave: 5,
@@ -117,7 +125,7 @@ const payslipRecords: PayslipRecord[] = [];
 const leaveRequests: LeaveRequest[] = [];
 const newsItems: NewsItem[] = [
     {
-        id: uuidv4(),
+        id: "news-001",
         title: "Selamat Datang di WIG Attendance System",
         content: "Sistem absensi digital PT Wijaya Inovasi Gemilang kini telah aktif. Silakan gunakan fitur absensi dengan face recognition untuk pencatatan kehadiran yang lebih akurat.",
         category: "announcement",
@@ -126,7 +134,7 @@ const newsItems: NewsItem[] = [
         isPinned: true,
     },
     {
-        id: uuidv4(),
+        id: "news-002",
         title: "Kebijakan Work From Home 2026",
         content: "Mulai bulan Maret 2026, kebijakan WFH akan diterapkan maksimal 2 hari per minggu. Detail lebih lanjut akan diinformasikan melalui email resmi perusahaan.",
         category: "policy",
@@ -136,6 +144,30 @@ const newsItems: NewsItem[] = [
     },
 ];
 const todoItems: TodoItem[] = [];
+
+const workShifts: WorkShift[] = [
+    {
+        id: "shift-001",
+        name: "Shift Pagi",
+        startTime: "08:00",
+        endTime: "17:00",
+        isDefault: true,
+    },
+    {
+        id: "shift-002",
+        name: "Shift Siang",
+        startTime: "14:00",
+        endTime: "22:00",
+        isDefault: false,
+    },
+    {
+        id: "shift-003",
+        name: "Shift Malam",
+        startTime: "22:00",
+        endTime: "06:00",
+        isDefault: false,
+    },
+];
 
 // ============== Employee CRUD ==============
 export function getEmployees(): Employee[] {
@@ -277,3 +309,35 @@ export function deleteTodo(id: string): boolean {
     todoItems.splice(idx, 1);
     return true;
 }
+
+// ============== Shift CRUD ==============
+export function getShifts(): WorkShift[] {
+    return workShifts;
+}
+
+export function createShift(data: Omit<WorkShift, "id">): WorkShift {
+    const shift: WorkShift = { id: uuidv4(), ...data };
+    if (shift.isDefault) {
+        workShifts.forEach((s) => (s.isDefault = false));
+    }
+    workShifts.push(shift);
+    return shift;
+}
+
+export function updateShift(id: string, data: Partial<WorkShift>): WorkShift | null {
+    const idx = workShifts.findIndex((s) => s.id === id);
+    if (idx === -1) return null;
+    if (data.isDefault) {
+        workShifts.forEach((s) => (s.isDefault = false));
+    }
+    workShifts[idx] = { ...workShifts[idx], ...data };
+    return workShifts[idx];
+}
+
+export function deleteShift(id: string): boolean {
+    const idx = workShifts.findIndex((s) => s.id === id);
+    if (idx === -1) return false;
+    workShifts.splice(idx, 1);
+    return true;
+}
+

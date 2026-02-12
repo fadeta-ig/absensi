@@ -37,12 +37,20 @@ export interface PayslipRecord {
     employeeId: string;
     period: string;
     basicSalary: number;
-    allowances: number;
-    deductions: number;
+    allowances: { name: string; amount: number }[];
+    deductions: { name: string; amount: number }[];
     overtime: number;
     netSalary: number;
     issuedDate: string;
     notes?: string;
+}
+
+export interface WorkShift {
+    id: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    isDefault: boolean;
 }
 
 export interface LeaveRequest {
@@ -80,3 +88,4 @@ export interface SessionUser {
     name: string;
     role: "employee" | "hr";
 }
+

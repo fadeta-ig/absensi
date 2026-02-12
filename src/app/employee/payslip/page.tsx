@@ -1,29 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Eye, X, DollarSign, TrendingUp, TrendingDown, Banknote } from "lucide-react";
+import { FileText, Download, X, Eye } from "lucide-react";
 
-interface PayslipRecord {
-    id: string;
-    period: string;
-    basicSalary: number;
-    allowances: number;
-    deductions: number;
-    overtime: number;
-    netSalary: number;
-    issuedDate: string;
-    notes?: string;
+interface AllowanceItem { name: string; amount: number; }
+interface Payslip {
+    id: string; employeeId: string; period: string;
+    basicSalary: number; allowances: AllowanceItem[]; deductions: AllowanceItem[];
+    overtime: number; netSalary: number; issuedDate: string; notes?: string;
 }
 
 export default function PayslipPage() {
-    const [payslips, setPayslips] = useState<PayslipRecord[]>([]);
-    const [selected, setSelected] = useState<PayslipRecord | null>(null);
+    const [payslips, setPayslips] = useState<Payslip[]>([]);
+    const [selected, setSelected] = useState<Payslip | null>(null);
 
     useEffect(() => {
-        fetch("/api/payslips").then((r) => r.json()).then(setPayslips);
+        fetch("/api/payslips").then((r) => r.json()).then((data) => {
+            if (Array.isArray(data)) setPayslips(data);
+        });
     }, []);
 
-    const fmt = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(n);
+    const fmt = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
+
+    const totalAllowances = (items: AllowanceItem[]) => {
+        if (!Array.isArray(items)) return typeof items === "number" ? items : 0;
+        return items.reduce((s, a) => s + a.amount, 0);
+    };
+
+    const totalDeductions = (items: AllowanceItem[]) => {
+        if (!Array.isArray(items)) return typeof items === "number" ? items : 0;
+        return items.reduce((s, d) => s + d.amount, 0);
+    };
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -37,35 +44,32 @@ export default function PayslipPage() {
 
             {payslips.length === 0 ? (
                 <div className="card p-12 text-center">
-                    <Banknote className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
+                    <FileText className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada slip gaji</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Slip gaji akan muncul setelah HR menerbitkannya</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Slip gaji akan muncul di sini setelah HR membuatnya</p>
                 </div>
             ) : (
                 <div className="space-y-3">
                     {payslips.map((p) => (
-                        <div key={p.id} className="card p-4 flex items-center justify-between hover:shadow-md transition-shadow">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center">
-                                    <FileText className="w-5 h-5 text-[var(--primary)]" />
-                                </div>
+                        <div key={p.id} className="card p-5">
+                            <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-semibold text-[var(--text-primary)]">Periode {p.period}</p>
-                                    <p className="text-xs text-[var(--text-muted)]">{p.issuedDate}</p>
+                                    <p className="text-sm font-bold text-[var(--text-primary)]">Periode: {p.period}</p>
+                                    <p className="text-xs text-[var(--text-muted)] mt-1">Diterbitkan: {new Date(p.issuedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <p className="text-sm font-bold text-[var(--primary)] hidden sm:block">{fmt(p.netSalary)}</p>
-                                <button onClick={() => setSelected(p)} className="btn btn-secondary btn-sm">
-                                    <Eye className="w-3.5 h-3.5" /> Detail
-                                </button>
+                                <div className="text-right">
+                                    <p className="text-lg font-extrabold text-[var(--primary)]">{fmt(p.netSalary)}</p>
+                                    <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm mt-1 text-[var(--primary)]">
+                                        <Eye className="w-3.5 h-3.5" /> Detail
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* Modal */}
+            {/* Detail Modal */}
             {selected && (
                 <div className="modal-overlay" onClick={() => setSelected(null)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -74,30 +78,78 @@ export default function PayslipPage() {
                             <button className="modal-close" onClick={() => setSelected(null)}><X className="w-4 h-4" /></button>
                         </div>
 
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
-                                <span className="flex items-center gap-2 text-sm text-[var(--text-secondary)]"><DollarSign className="w-4 h-4" /> Gaji Pokok</span>
-                                <span className="text-sm font-semibold">{fmt(selected.basicSalary)}</span>
+                        <div className="space-y-4">
+                            {/* Company Header */}
+                            <div className="text-center pb-4 border-b border-[var(--border)]">
+                                <p className="text-sm font-bold text-[var(--text-primary)]">PT Wijaya Inovasi Gemilang</p>
+                                <p className="text-xs text-[var(--text-muted)]">Slip Gaji Karyawan</p>
                             </div>
-                            <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
-                                <span className="flex items-center gap-2 text-sm text-green-600"><TrendingUp className="w-4 h-4" /> Tunjangan</span>
-                                <span className="text-sm font-semibold text-green-600">+{fmt(selected.allowances)}</span>
+
+                            {/* Items */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm py-1.5">
+                                    <span className="text-[var(--text-secondary)]">Gaji Pokok</span>
+                                    <span className="font-semibold">{fmt(selected.basicSalary)}</span>
+                                </div>
+
+                                {/* Allowances */}
+                                {Array.isArray(selected.allowances) && selected.allowances.length > 0 && (
+                                    <>
+                                        <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-3">Tunjangan</p>
+                                        {selected.allowances.map((a, i) => (
+                                            <div key={`a-${i}`} className="flex justify-between text-sm py-1 pl-3">
+                                                <span className="text-[var(--text-secondary)]">{a.name}</span>
+                                                <span className="font-medium text-green-600">+{fmt(a.amount)}</span>
+                                            </div>
+                                        ))}
+                                        <div className="flex justify-between text-sm py-1 pl-3 border-t border-dashed border-[var(--border)]">
+                                            <span className="text-[var(--text-secondary)] font-medium">Subtotal Tunjangan</span>
+                                            <span className="font-semibold text-green-600">+{fmt(totalAllowances(selected.allowances))}</span>
+                                        </div>
+                                    </>
+                                )}
+
+                                {selected.overtime > 0 && (
+                                    <div className="flex justify-between text-sm py-1.5">
+                                        <span className="text-[var(--text-secondary)]">Lembur</span>
+                                        <span className="font-medium text-green-600">+{fmt(selected.overtime)}</span>
+                                    </div>
+                                )}
+
+                                {/* Deductions */}
+                                {Array.isArray(selected.deductions) && selected.deductions.length > 0 && (
+                                    <>
+                                        <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-3">Potongan</p>
+                                        {selected.deductions.map((d, i) => (
+                                            <div key={`d-${i}`} className="flex justify-between text-sm py-1 pl-3">
+                                                <span className="text-[var(--text-secondary)]">{d.name}</span>
+                                                <span className="font-medium text-red-600">-{fmt(d.amount)}</span>
+                                            </div>
+                                        ))}
+                                        <div className="flex justify-between text-sm py-1 pl-3 border-t border-dashed border-[var(--border)]">
+                                            <span className="text-[var(--text-secondary)] font-medium">Subtotal Potongan</span>
+                                            <span className="font-semibold text-red-600">-{fmt(totalDeductions(selected.deductions))}</span>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* Net */}
+                                <div className="flex justify-between py-3 mt-3 border-t-2 border-[var(--primary)] bg-[var(--primary)]/5 px-3 rounded-lg">
+                                    <span className="text-sm font-bold text-[var(--text-primary)]">Take Home Pay</span>
+                                    <span className="text-lg font-extrabold text-[var(--primary)]">{fmt(selected.netSalary)}</span>
+                                </div>
+
+                                {selected.notes && (
+                                    <div className="mt-3 p-3 bg-[var(--secondary)] rounded-lg">
+                                        <p className="text-xs text-[var(--text-muted)]">Catatan:</p>
+                                        <p className="text-sm text-[var(--text-secondary)] mt-1">{selected.notes}</p>
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
-                                <span className="flex items-center gap-2 text-sm text-green-600"><TrendingUp className="w-4 h-4" /> Lembur</span>
-                                <span className="text-sm font-semibold text-green-600">+{fmt(selected.overtime)}</span>
-                            </div>
-                            <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
-                                <span className="flex items-center gap-2 text-sm text-red-600"><TrendingDown className="w-4 h-4" /> Potongan</span>
-                                <span className="text-sm font-semibold text-red-600">-{fmt(selected.deductions)}</span>
-                            </div>
-                            <div className="flex items-center justify-between py-3 bg-[var(--primary)]/5 rounded-lg px-3">
-                                <span className="text-sm font-bold text-[var(--text-primary)]">Gaji Bersih</span>
-                                <span className="text-lg font-extrabold text-[var(--primary)]">{fmt(selected.netSalary)}</span>
-                            </div>
-                            {selected.notes && (
-                                <p className="text-xs text-[var(--text-muted)] pt-2">Catatan: {selected.notes}</p>
-                            )}
+
+                            <button onClick={() => window.print()} className="btn btn-secondary w-full mt-4">
+                                <Download className="w-4 h-4" /> Cetak / Unduh
+                            </button>
                         </div>
                     </div>
                 </div>

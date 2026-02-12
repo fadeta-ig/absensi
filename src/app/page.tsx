@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { User, Lock, LogIn, Loader2, KeyRound } from "lucide-react";
@@ -11,9 +11,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const isSubmitting = useRef(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
     setLoading(true);
     setError("");
 
@@ -22,6 +25,7 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, password }),
+        credentials: "same-origin",
       });
 
       const data = await res.json();
@@ -29,8 +33,12 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.error || "Login gagal");
         setLoading(false);
+        isSubmitting.current = false;
         return;
       }
+
+      // Small delay to ensure cookie is properly set before navigation
+      await new Promise((r) => setTimeout(r, 200));
 
       if (data.role === "hr") {
         router.push("/dashboard");
@@ -40,6 +48,7 @@ export default function LoginPage() {
     } catch {
       setError("Terjadi kesalahan koneksi");
       setLoading(false);
+      isSubmitting.current = false;
     }
   };
 
@@ -90,6 +99,7 @@ export default function LoginPage() {
                   placeholder="Contoh: WIG001"
                   className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all duration-200"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -108,6 +118,7 @@ export default function LoginPage() {
                   placeholder="Masukkan password"
                   className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all duration-200"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import {
@@ -39,29 +39,42 @@ export default function EmployeeLayout({
     const pathname = usePathname();
     const [user, setUser] = useState<User | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [authChecked, setAuthChecked] = useState(false);
+    const fetchedRef = useRef(false);
 
     useEffect(() => {
-        fetch("/api/auth/me")
-            .then((r) => {
-                if (!r.ok) throw new Error();
-                return r.json();
-            })
-            .then((data) => {
+        if (fetchedRef.current) return;
+        fetchedRef.current = true;
+
+        const checkAuth = async () => {
+            try {
+                const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+                if (!res.ok) {
+                    router.replace("/");
+                    return;
+                }
+                const data = await res.json();
                 if (data.role === "hr") {
-                    router.push("/dashboard");
+                    router.replace("/dashboard");
                     return;
                 }
                 setUser(data);
-            })
-            .catch(() => router.push("/"));
-    }, [router]);
+            } catch {
+                router.replace("/");
+            } finally {
+                setAuthChecked(true);
+            }
+        };
+
+        checkAuth();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleLogout = useCallback(async () => {
         await fetch("/api/auth/logout", { method: "POST" });
-        router.push("/");
+        router.replace("/");
     }, [router]);
 
-    if (!user) {
+    if (!authChecked || !user) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[var(--background)]">
                 <div className="spinner" />
@@ -126,8 +139,8 @@ export default function EmployeeLayout({
                                 key={item.href}
                                 onClick={() => { router.push(item.href); setSidebarOpen(false); }}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${isActive
-                                        ? "bg-[var(--primary)] text-white shadow-sm"
-                                        : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
+                                    ? "bg-[var(--primary)] text-white shadow-sm"
+                                    : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
                                     }`}
                             >
                                 <Icon className="w-[18px] h-[18px] shrink-0" />
