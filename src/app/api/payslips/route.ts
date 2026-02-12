@@ -9,10 +9,10 @@ export async function GET() {
     }
 
     if (session.role === "hr") {
-        return NextResponse.json(getPayslips());
+        return NextResponse.json(await getPayslips());
     }
 
-    return NextResponse.json(getPayslips(session.id));
+    return NextResponse.json(await getPayslips(session.employeeId));
 }
 
 export async function POST(request: NextRequest) {
@@ -23,12 +23,13 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const payslip = createPayslip({
+        const payslip = await createPayslip({
             ...body,
             issuedDate: new Date().toISOString(),
         });
         return NextResponse.json(payslip, { status: 201 });
-    } catch {
+    } catch (err) {
+        console.error("[API POST Payslip Error]:", err);
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }

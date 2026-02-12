@@ -8,7 +8,7 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const employee = getEmployeeById(session.id);
+    const employee = await getEmployeeById(session.id);
     if (!employee) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
     }

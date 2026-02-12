@@ -16,6 +16,7 @@ export interface Employee {
     usedLeave: number;
     avatarUrl?: string;
     isActive: boolean;
+    shiftId?: string;
 }
 
 export interface AttendanceRecord {

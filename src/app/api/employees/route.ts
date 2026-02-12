@@ -13,7 +13,7 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const employees = getEmployees().map((e) => {
+    const employees = (await getEmployees()).map((e) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, faceDescriptor, ...safe } = e;
         return safe;
@@ -30,12 +30,12 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const employee = createEmployee({
+        const employee = await createEmployee({
             ...body,
-            password: "hashed_default",
-            isActive: true,
+            password: "password123",
+            isActive: body.isActive !== undefined ? body.isActive : true,
             totalLeave: body.totalLeave || 12,
-            usedLeave: 0,
+            usedLeave: body.usedLeave || 0,
         });
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -55,14 +55,15 @@ export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
         const { id, ...data } = body;
-        const updated = updateEmployee(id, data);
+        const updated = await updateEmployee(id, data);
         if (!updated) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...safe } = updated;
         return NextResponse.json(safe);
-    } catch {
+    } catch (err) {
+        console.error("[API PUT Employee Error]:", err);
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }
@@ -79,7 +80,7 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    const deleted = deleteEmployee(id);
+    const deleted = await deleteEmployee(id);
     if (!deleted) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

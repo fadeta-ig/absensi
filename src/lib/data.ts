@@ -1,63 +1,64 @@
-// In-memory data store for the WIG Attendance System
-// In production, replace with a real database (e.g., PostgreSQL, MySQL)
+// Data layer for the WIG Attendance System — backed by MySQL via Prisma
+// All functions are async and use the Prisma ORM
 
-import { v4 as uuidv4 } from "uuid";
+import { prisma } from "./prisma";
 
-// ============== Types ==============
-export interface Employee {
+// ============== Re-export Types ==============
+export type Employee = {
     id: string;
-    employeeId: string; // ID Karyawan (login credential)
+    employeeId: string;
     name: string;
     email: string;
     phone: string;
     department: string;
     position: string;
     role: "employee" | "hr";
-    password: string; // hashed
-    faceDescriptor?: number[]; // face-api.js descriptor
+    password: string;
+    faceDescriptor?: number[];
     joinDate: string;
     totalLeave: number;
     usedLeave: number;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
     isActive: boolean;
-}
+    shiftId?: string | null;
+};
 
-export interface AttendanceRecord {
+export type AttendanceRecord = {
     id: string;
     employeeId: string;
     date: string;
-    clockIn?: string;
-    clockOut?: string;
-    clockInLocation?: { lat: number; lng: number };
-    clockOutLocation?: { lat: number; lng: number };
-    clockInPhoto?: string;
-    clockOutPhoto?: string;
+    clockIn?: string | null;
+    clockOut?: string | null;
+    clockInLocation?: { lat: number; lng: number } | null;
+    clockOutLocation?: { lat: number; lng: number } | null;
+    clockInPhoto?: string | null;
+    clockOutPhoto?: string | null;
     status: "present" | "late" | "absent" | "leave";
-    notes?: string;
-}
+    notes?: string | null;
+};
 
-export interface PayslipRecord {
+export type PayslipRecord = {
     id: string;
     employeeId: string;
-    period: string; // e.g., "2026-02"
+    period: string;
     basicSalary: number;
     allowances: { name: string; amount: number }[];
     deductions: { name: string; amount: number }[];
     overtime: number;
     netSalary: number;
     issuedDate: string;
-    notes?: string;
-}
+    notes?: string | null;
+};
 
-export interface WorkShift {
+export type WorkShift = {
     id: string;
     name: string;
-    startTime: string; // "08:00"
-    endTime: string;   // "17:00"
+    startTime: string;
+    endTime: string;
     isDefault: boolean;
-}
+};
 
-export interface LeaveRequest {
+export type LeaveRequest = {
     id: string;
     employeeId: string;
     type: "annual" | "sick" | "personal" | "maternity";
@@ -66,9 +67,9 @@ export interface LeaveRequest {
     reason: string;
     status: "pending" | "approved" | "rejected";
     createdAt: string;
-}
+};
 
-export interface NewsItem {
+export type NewsItem = {
     id: string;
     title: string;
     content: string;
@@ -76,268 +77,377 @@ export interface NewsItem {
     author: string;
     createdAt: string;
     isPinned: boolean;
-}
+};
 
-export interface TodoItem {
+export type TodoItem = {
     id: string;
     employeeId: string;
     text: string;
     completed: boolean;
     createdAt: string;
-}
-
-// ============== In-Memory Store ==============
-const employees: Employee[] = [
-    {
-        id: "emp-001",
-        employeeId: "WIG001",
-        name: "Admin HR",
-        email: "hr@wig.co.id",
-        phone: "08123456789",
-        department: "Human Resources",
-        position: "HR Manager",
-        role: "hr",
-        password: "password123",
-        joinDate: "2024-01-15",
-        totalLeave: 12,
-        usedLeave: 2,
-        isActive: true,
-    },
-    {
-        id: "emp-002",
-        employeeId: "WIG002",
-        name: "Budi Santoso",
-        email: "budi@wig.co.id",
-        phone: "08198765432",
-        department: "Engineering",
-        position: "Software Engineer",
-        role: "employee",
-        password: "password123",
-        joinDate: "2024-03-01",
-        totalLeave: 12,
-        usedLeave: 5,
-        isActive: true,
-    },
-];
-
-const attendanceRecords: AttendanceRecord[] = [];
-const payslipRecords: PayslipRecord[] = [];
-const leaveRequests: LeaveRequest[] = [];
-const newsItems: NewsItem[] = [
-    {
-        id: "news-001",
-        title: "Selamat Datang di WIG Attendance System",
-        content: "Sistem absensi digital PT Wijaya Inovasi Gemilang kini telah aktif. Silakan gunakan fitur absensi dengan face recognition untuk pencatatan kehadiran yang lebih akurat.",
-        category: "announcement",
-        author: "Admin HR",
-        createdAt: new Date().toISOString(),
-        isPinned: true,
-    },
-    {
-        id: "news-002",
-        title: "Kebijakan Work From Home 2026",
-        content: "Mulai bulan Maret 2026, kebijakan WFH akan diterapkan maksimal 2 hari per minggu. Detail lebih lanjut akan diinformasikan melalui email resmi perusahaan.",
-        category: "policy",
-        author: "Admin HR",
-        createdAt: new Date().toISOString(),
-        isPinned: false,
-    },
-];
-const todoItems: TodoItem[] = [];
-
-const workShifts: WorkShift[] = [
-    {
-        id: "shift-001",
-        name: "Shift Pagi",
-        startTime: "08:00",
-        endTime: "17:00",
-        isDefault: true,
-    },
-    {
-        id: "shift-002",
-        name: "Shift Siang",
-        startTime: "14:00",
-        endTime: "22:00",
-        isDefault: false,
-    },
-    {
-        id: "shift-003",
-        name: "Shift Malam",
-        startTime: "22:00",
-        endTime: "06:00",
-        isDefault: false,
-    },
-];
+};
 
 // ============== Employee CRUD ==============
-export function getEmployees(): Employee[] {
-    return employees;
+export async function getEmployees(): Promise<Employee[]> {
+    const rows = await prisma.employee.findMany({ orderBy: { name: "asc" } });
+    return rows as unknown as Employee[];
 }
 
-export function getEmployeeById(id: string): Employee | undefined {
-    return employees.find((e) => e.id === id);
+export async function getEmployeeById(id: string): Promise<Employee | undefined> {
+    const row = await prisma.employee.findUnique({ where: { id } });
+    return (row as unknown as Employee) ?? undefined;
 }
 
-export function getEmployeeByEmployeeId(employeeId: string): Employee | undefined {
-    return employees.find((e) => e.employeeId === employeeId);
+export async function getEmployeeByEmployeeId(employeeId: string): Promise<Employee | undefined> {
+    const row = await prisma.employee.findUnique({ where: { employeeId } });
+    return (row as unknown as Employee) ?? undefined;
 }
 
-export function createEmployee(data: Omit<Employee, "id">): Employee {
-    const emp: Employee = { id: uuidv4(), ...data };
-    employees.push(emp);
-    return emp;
+export async function createEmployee(data: Omit<Employee, "id">): Promise<Employee> {
+    const row = await prisma.employee.create({
+        data: {
+            employeeId: data.employeeId,
+            name: data.name,
+            email: data.email,
+            phone: data.phone,
+            department: data.department,
+            position: data.position,
+            role: data.role,
+            password: data.password,
+            joinDate: data.joinDate,
+            totalLeave: data.totalLeave,
+            usedLeave: data.usedLeave,
+            avatarUrl: data.avatarUrl,
+            isActive: data.isActive,
+            shiftId: data.shiftId,
+        },
+    });
+    return row as unknown as Employee;
 }
 
-export function updateEmployee(id: string, data: Partial<Employee>): Employee | null {
-    const idx = employees.findIndex((e) => e.id === id);
-    if (idx === -1) return null;
-    employees[idx] = { ...employees[idx], ...data };
-    return employees[idx];
+export async function updateEmployee(id: string, data: Partial<Employee>): Promise<Employee | null> {
+    try {
+        const row = await prisma.employee.update({
+            where: { id },
+            data: {
+                ...(data.name !== undefined && { name: data.name }),
+                ...(data.email !== undefined && { email: data.email }),
+                ...(data.phone !== undefined && { phone: data.phone }),
+                ...(data.department !== undefined && { department: data.department }),
+                ...(data.position !== undefined && { position: data.position }),
+                ...(data.role !== undefined && { role: data.role }),
+                ...(data.password !== undefined && { password: data.password }),
+                ...(data.joinDate !== undefined && { joinDate: data.joinDate }),
+                ...(data.totalLeave !== undefined && { totalLeave: data.totalLeave }),
+                ...(data.usedLeave !== undefined && { usedLeave: data.usedLeave }),
+                ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
+                ...(data.isActive !== undefined && { isActive: data.isActive }),
+                ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
+            },
+        });
+        return row as unknown as Employee;
+    } catch {
+        return null;
+    }
 }
 
-export function deleteEmployee(id: string): boolean {
-    const idx = employees.findIndex((e) => e.id === id);
-    if (idx === -1) return false;
-    employees.splice(idx, 1);
-    return true;
+export async function deleteEmployee(id: string): Promise<boolean> {
+    try {
+        await prisma.employee.delete({ where: { id } });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 // ============== Attendance CRUD ==============
-export function getAttendanceRecords(employeeId?: string): AttendanceRecord[] {
-    if (employeeId) return attendanceRecords.filter((a) => a.employeeId === employeeId);
-    return attendanceRecords;
+export async function getAttendanceRecords(employeeId?: string): Promise<AttendanceRecord[]> {
+    const rows = await prisma.attendanceRecord.findMany({
+        where: employeeId ? { employeeId } : undefined,
+        orderBy: { date: "desc" },
+    });
+    return rows.map((r: any) => ({
+        ...r,
+        clockInLocation: r.clockInLocation as AttendanceRecord["clockInLocation"],
+        clockOutLocation: r.clockOutLocation as AttendanceRecord["clockOutLocation"],
+        status: r.status as AttendanceRecord["status"],
+    }));
 }
 
-export function getAttendanceByDate(employeeId: string, date: string): AttendanceRecord | undefined {
-    return attendanceRecords.find((a) => a.employeeId === employeeId && a.date === date);
+export async function getAttendanceByDate(employeeId: string, date: string): Promise<AttendanceRecord | undefined> {
+    const row = await prisma.attendanceRecord.findUnique({
+        where: { employeeId_date: { employeeId, date } },
+    });
+    if (!row) return undefined;
+    return {
+        ...row,
+        clockInLocation: row.clockInLocation as AttendanceRecord["clockInLocation"],
+        clockOutLocation: row.clockOutLocation as AttendanceRecord["clockOutLocation"],
+        status: row.status as AttendanceRecord["status"],
+    };
 }
 
-export function createAttendance(data: Omit<AttendanceRecord, "id">): AttendanceRecord {
-    const record: AttendanceRecord = { id: uuidv4(), ...data };
-    attendanceRecords.push(record);
-    return record;
+export async function createAttendance(data: Omit<AttendanceRecord, "id">): Promise<AttendanceRecord> {
+    const row = await prisma.attendanceRecord.create({
+        data: {
+            employeeId: data.employeeId,
+            date: data.date,
+            clockIn: data.clockIn,
+            clockOut: data.clockOut,
+            clockInLocation: data.clockInLocation ? JSON.parse(JSON.stringify(data.clockInLocation)) : undefined,
+            clockOutLocation: data.clockOutLocation ? JSON.parse(JSON.stringify(data.clockOutLocation)) : undefined,
+            clockInPhoto: data.clockInPhoto,
+            clockOutPhoto: data.clockOutPhoto,
+            status: data.status,
+            notes: data.notes,
+        },
+    });
+    return {
+        ...row,
+        clockInLocation: row.clockInLocation as AttendanceRecord["clockInLocation"],
+        clockOutLocation: row.clockOutLocation as AttendanceRecord["clockOutLocation"],
+        status: row.status as AttendanceRecord["status"],
+    };
 }
 
-export function updateAttendance(id: string, data: Partial<AttendanceRecord>): AttendanceRecord | null {
-    const idx = attendanceRecords.findIndex((a) => a.id === id);
-    if (idx === -1) return null;
-    attendanceRecords[idx] = { ...attendanceRecords[idx], ...data };
-    return attendanceRecords[idx];
+export async function updateAttendance(id: string, data: Partial<AttendanceRecord>): Promise<AttendanceRecord | null> {
+    try {
+        const row = await prisma.attendanceRecord.update({
+            where: { id },
+            data: {
+                ...(data.clockIn !== undefined && { clockIn: data.clockIn }),
+                ...(data.clockOut !== undefined && { clockOut: data.clockOut }),
+                ...(data.clockInLocation !== undefined && { clockInLocation: data.clockInLocation ? JSON.parse(JSON.stringify(data.clockInLocation)) : null }),
+                ...(data.clockOutLocation !== undefined && { clockOutLocation: data.clockOutLocation ? JSON.parse(JSON.stringify(data.clockOutLocation)) : null }),
+                ...(data.clockInPhoto !== undefined && { clockInPhoto: data.clockInPhoto }),
+                ...(data.clockOutPhoto !== undefined && { clockOutPhoto: data.clockOutPhoto }),
+                ...(data.status !== undefined && { status: data.status }),
+                ...(data.notes !== undefined && { notes: data.notes }),
+            },
+        });
+        return {
+            ...row,
+            clockInLocation: row.clockInLocation as AttendanceRecord["clockInLocation"],
+            clockOutLocation: row.clockOutLocation as AttendanceRecord["clockOutLocation"],
+            status: row.status as AttendanceRecord["status"],
+        };
+    } catch {
+        return null;
+    }
 }
 
 // ============== Payslip CRUD ==============
-export function getPayslips(employeeId?: string): PayslipRecord[] {
-    if (employeeId) return payslipRecords.filter((p) => p.employeeId === employeeId);
-    return payslipRecords;
+export async function getPayslips(employeeId?: string): Promise<PayslipRecord[]> {
+    const rows = await prisma.payslipRecord.findMany({
+        where: employeeId ? { employeeId } : undefined,
+        orderBy: { issuedDate: "desc" },
+    });
+    return rows.map((r: any) => ({
+        ...r,
+        allowances: r.allowances as PayslipRecord["allowances"],
+        deductions: r.deductions as PayslipRecord["deductions"],
+    }));
 }
 
-export function createPayslip(data: Omit<PayslipRecord, "id">): PayslipRecord {
-    const record: PayslipRecord = { id: uuidv4(), ...data };
-    payslipRecords.push(record);
-    return record;
+export async function createPayslip(data: Omit<PayslipRecord, "id">): Promise<PayslipRecord> {
+    const row = await prisma.payslipRecord.create({
+        data: {
+            employeeId: data.employeeId,
+            period: data.period,
+            basicSalary: data.basicSalary,
+            allowances: JSON.parse(JSON.stringify(data.allowances)),
+            deductions: JSON.parse(JSON.stringify(data.deductions)),
+            overtime: data.overtime,
+            netSalary: data.netSalary,
+            issuedDate: data.issuedDate,
+            notes: data.notes,
+        },
+    });
+    return {
+        ...row,
+        allowances: row.allowances as PayslipRecord["allowances"],
+        deductions: row.deductions as PayslipRecord["deductions"],
+    };
 }
 
 // ============== Leave CRUD ==============
-export function getLeaveRequests(employeeId?: string): LeaveRequest[] {
-    if (employeeId) return leaveRequests.filter((l) => l.employeeId === employeeId);
-    return leaveRequests;
+export async function getLeaveRequests(employeeId?: string): Promise<LeaveRequest[]> {
+    const rows = await prisma.leaveRequest.findMany({
+        where: employeeId ? { employeeId } : undefined,
+        orderBy: { createdAt: "desc" },
+    });
+    return rows as unknown as LeaveRequest[];
 }
 
-export function createLeaveRequest(data: Omit<LeaveRequest, "id">): LeaveRequest {
-    const record: LeaveRequest = { id: uuidv4(), ...data };
-    leaveRequests.push(record);
-    return record;
+export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promise<LeaveRequest> {
+    const row = await prisma.leaveRequest.create({
+        data: {
+            employeeId: data.employeeId,
+            type: data.type,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            reason: data.reason,
+            status: data.status,
+            createdAt: data.createdAt,
+        },
+    });
+    return row as unknown as LeaveRequest;
 }
 
-export function updateLeaveRequest(id: string, data: Partial<LeaveRequest>): LeaveRequest | null {
-    const idx = leaveRequests.findIndex((l) => l.id === id);
-    if (idx === -1) return null;
-    leaveRequests[idx] = { ...leaveRequests[idx], ...data };
-    return leaveRequests[idx];
+export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | null> {
+    try {
+        const row = await prisma.leaveRequest.update({
+            where: { id },
+            data: {
+                ...(data.status !== undefined && { status: data.status }),
+                ...(data.reason !== undefined && { reason: data.reason }),
+            },
+        });
+        return row as unknown as LeaveRequest;
+    } catch {
+        return null;
+    }
 }
 
 // ============== News CRUD ==============
-export function getNews(): NewsItem[] {
-    return newsItems.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+export async function getNews(): Promise<NewsItem[]> {
+    const rows = await prisma.newsItem.findMany({
+        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
+    return rows as unknown as NewsItem[];
 }
 
-export function createNews(data: Omit<NewsItem, "id">): NewsItem {
-    const item: NewsItem = { id: uuidv4(), ...data };
-    newsItems.push(item);
-    return item;
+export async function createNews(data: Omit<NewsItem, "id">): Promise<NewsItem> {
+    const row = await prisma.newsItem.create({
+        data: {
+            title: data.title,
+            content: data.content,
+            category: data.category,
+            author: data.author,
+            createdAt: data.createdAt,
+            isPinned: data.isPinned,
+        },
+    });
+    return row as unknown as NewsItem;
 }
 
-export function updateNews(id: string, data: Partial<NewsItem>): NewsItem | null {
-    const idx = newsItems.findIndex((n) => n.id === id);
-    if (idx === -1) return null;
-    newsItems[idx] = { ...newsItems[idx], ...data };
-    return newsItems[idx];
+export async function updateNews(id: string, data: Partial<NewsItem>): Promise<NewsItem | null> {
+    try {
+        const row = await prisma.newsItem.update({
+            where: { id },
+            data: {
+                ...(data.title !== undefined && { title: data.title }),
+                ...(data.content !== undefined && { content: data.content }),
+                ...(data.category !== undefined && { category: data.category }),
+                ...(data.isPinned !== undefined && { isPinned: data.isPinned }),
+            },
+        });
+        return row as unknown as NewsItem;
+    } catch {
+        return null;
+    }
 }
 
-export function deleteNews(id: string): boolean {
-    const idx = newsItems.findIndex((n) => n.id === id);
-    if (idx === -1) return false;
-    newsItems.splice(idx, 1);
-    return true;
+export async function deleteNews(id: string): Promise<boolean> {
+    try {
+        await prisma.newsItem.delete({ where: { id } });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 // ============== Todo CRUD ==============
-export function getTodos(employeeId: string): TodoItem[] {
-    return todoItems.filter((t) => t.employeeId === employeeId);
+export async function getTodos(employeeId: string): Promise<TodoItem[]> {
+    const rows = await prisma.todoItem.findMany({
+        where: { employeeId },
+        orderBy: { createdAt: "desc" },
+    });
+    return rows as unknown as TodoItem[];
 }
 
-export function createTodo(data: Omit<TodoItem, "id">): TodoItem {
-    const item: TodoItem = { id: uuidv4(), ...data };
-    todoItems.push(item);
-    return item;
+export async function createTodo(data: Omit<TodoItem, "id">): Promise<TodoItem> {
+    const row = await prisma.todoItem.create({
+        data: {
+            employeeId: data.employeeId,
+            text: data.text,
+            completed: data.completed,
+            createdAt: data.createdAt,
+        },
+    });
+    return row as unknown as TodoItem;
 }
 
-export function updateTodo(id: string, data: Partial<TodoItem>): TodoItem | null {
-    const idx = todoItems.findIndex((t) => t.id === id);
-    if (idx === -1) return null;
-    todoItems[idx] = { ...todoItems[idx], ...data };
-    return todoItems[idx];
+export async function updateTodo(id: string, data: Partial<TodoItem>): Promise<TodoItem | null> {
+    try {
+        const row = await prisma.todoItem.update({
+            where: { id },
+            data: {
+                ...(data.text !== undefined && { text: data.text }),
+                ...(data.completed !== undefined && { completed: data.completed }),
+            },
+        });
+        return row as unknown as TodoItem;
+    } catch {
+        return null;
+    }
 }
 
-export function deleteTodo(id: string): boolean {
-    const idx = todoItems.findIndex((t) => t.id === id);
-    if (idx === -1) return false;
-    todoItems.splice(idx, 1);
-    return true;
+export async function deleteTodo(id: string): Promise<boolean> {
+    try {
+        await prisma.todoItem.delete({ where: { id } });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 // ============== Shift CRUD ==============
-export function getShifts(): WorkShift[] {
-    return workShifts;
+export async function getShifts(): Promise<WorkShift[]> {
+    const rows = await prisma.workShift.findMany({ orderBy: { name: "asc" } });
+    return rows as unknown as WorkShift[];
 }
 
-export function createShift(data: Omit<WorkShift, "id">): WorkShift {
-    const shift: WorkShift = { id: uuidv4(), ...data };
-    if (shift.isDefault) {
-        workShifts.forEach((s) => (s.isDefault = false));
-    }
-    workShifts.push(shift);
-    return shift;
-}
-
-export function updateShift(id: string, data: Partial<WorkShift>): WorkShift | null {
-    const idx = workShifts.findIndex((s) => s.id === id);
-    if (idx === -1) return null;
+export async function createShift(data: Omit<WorkShift, "id">): Promise<WorkShift> {
     if (data.isDefault) {
-        workShifts.forEach((s) => (s.isDefault = false));
+        await prisma.workShift.updateMany({ data: { isDefault: false } });
     }
-    workShifts[idx] = { ...workShifts[idx], ...data };
-    return workShifts[idx];
+    const row = await prisma.workShift.create({
+        data: {
+            name: data.name,
+            startTime: data.startTime,
+            endTime: data.endTime,
+            isDefault: data.isDefault,
+        },
+    });
+    return row as unknown as WorkShift;
 }
 
-export function deleteShift(id: string): boolean {
-    const idx = workShifts.findIndex((s) => s.id === id);
-    if (idx === -1) return false;
-    workShifts.splice(idx, 1);
-    return true;
+export async function updateShift(id: string, data: Partial<WorkShift>): Promise<WorkShift | null> {
+    try {
+        if (data.isDefault) {
+            await prisma.workShift.updateMany({ data: { isDefault: false } });
+        }
+        const row = await prisma.workShift.update({
+            where: { id },
+            data: {
+                ...(data.name !== undefined && { name: data.name }),
+                ...(data.startTime !== undefined && { startTime: data.startTime }),
+                ...(data.endTime !== undefined && { endTime: data.endTime }),
+                ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+            },
+        });
+        return row as unknown as WorkShift;
+    } catch {
+        return null;
+    }
 }
 
+export async function deleteShift(id: string): Promise<boolean> {
+    try {
+        await prisma.workShift.delete({ where: { id } });
+        return true;
+    } catch {
+        return false;
+    }
+}

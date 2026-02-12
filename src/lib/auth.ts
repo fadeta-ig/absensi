@@ -61,12 +61,11 @@ export async function verifyLogin(
     employeeId: string,
     password: string
 ): Promise<Employee | null> {
-    const employee = getEmployeeByEmployeeId(employeeId);
+    const employee = await getEmployeeByEmployeeId(employeeId);
     if (!employee || !employee.isActive) return null;
 
-    // For demo: accept "password123" for all users
     // In production, use bcrypt.compare(password, employee.password)
-    if (password === "password123") {
+    if (password === employee.password) {
         return employee;
     }
     return null;

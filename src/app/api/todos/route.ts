@@ -8,7 +8,7 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    return NextResponse.json(getTodos(session.id));
+    return NextResponse.json(await getTodos(session.employeeId));
 }
 
 export async function POST(request: NextRequest) {
@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const todo = createTodo({
-            employeeId: session.id,
+        const todo = await createTodo({
+            employeeId: session.employeeId,
             text: body.text,
             completed: false,
             createdAt: new Date().toISOString(),
@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
         const { id, ...data } = body;
-        const updated = updateTodo(id, data);
+        const updated = await updateTodo(id, data);
         if (!updated) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
@@ -62,7 +62,7 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    const deleted = deleteTodo(id);
+    const deleted = await deleteTodo(id);
     if (!deleted) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

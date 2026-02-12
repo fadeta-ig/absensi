@@ -17,11 +17,11 @@ export async function GET(request: NextRequest) {
     const employeeId = searchParams.get("employeeId");
 
     if (session.role === "hr") {
-        const records = getAttendanceRecords(employeeId || undefined);
+        const records = await getAttendanceRecords(employeeId || undefined);
         return NextResponse.json(records);
     }
 
-    const records = getAttendanceRecords(session.id);
+    const records = await getAttendanceRecords(session.employeeId);
     return NextResponse.json(records);
 }
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const today = new Date().toISOString().split("T")[0];
 
-        const existing = getAttendanceByDate(session.id, today);
+        const existing = await getAttendanceByDate(session.employeeId, today);
 
         if (existing) {
             if (existing.clockOut) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const updated = updateAttendance(existing.id, {
+            const updated = await updateAttendance(existing.id, {
                 clockOut: new Date().toISOString(),
                 clockOutLocation: body.location,
                 clockOutPhoto: body.photo,
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
         const hour = now.getHours();
         const status = hour > 9 ? "late" : "present";
 
-        const record = createAttendance({
-            employeeId: session.id,
+        const record = await createAttendance({
+            employeeId: session.employeeId,
             date: today,
             clockIn: now.toISOString(),
             clockInLocation: body.location,
@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
         });
 
         return NextResponse.json(record);
-    } catch {
+    } catch (err) {
+        console.error("[API POST Attendance Error]:", err);
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }

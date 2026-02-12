@@ -7,7 +7,7 @@ export async function GET() {
     if (!session) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.json(getShifts());
+    return NextResponse.json(await getShifts());
 }
 
 export async function POST(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const shift = createShift(body);
+        const shift = await createShift(body);
         return NextResponse.json(shift, { status: 201 });
     } catch {
         return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -34,7 +34,7 @@ export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
         const { id, ...data } = body;
-        const shift = updateShift(id, data);
+        const shift = await updateShift(id, data);
         if (!shift) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
@@ -56,7 +56,7 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    const success = deleteShift(id);
+    const success = await deleteShift(id);
     if (!success) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

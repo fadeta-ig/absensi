@@ -8,7 +8,7 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    return NextResponse.json(getNews());
+    return NextResponse.json(await getNews());
 }
 
 export async function POST(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const news = createNews({
+        const news = await createNews({
             ...body,
             author: session.name,
             createdAt: new Date().toISOString(),
@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
         const { id, ...data } = body;
-        const updated = updateNews(id, data);
+        const updated = await updateNews(id, data);
         if (!updated) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
@@ -62,7 +62,7 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "ID required" }, { status: 400 });
     }
 
-    const deleted = deleteNews(id);
+    const deleted = await deleteNews(id);
     if (!deleted) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }

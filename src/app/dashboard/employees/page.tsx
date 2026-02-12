@@ -1,25 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, Search, Pencil, Trash2, X, Loader2 } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar } from "lucide-react";
 
+interface WorkShift { id: string; name: string; startTime: string; endTime: string; isDefault: boolean; }
 interface Employee {
     id: string; employeeId: string; name: string; email: string; phone: string;
-    department: string; position: string; role: string; isActive: boolean; joinDate: string;
+    department: string; position: string; role: string; isActive: boolean; joinDate: string; shiftId?: string;
 }
 
-const INIT_FORM: { employeeId: string; name: string; email: string; phone: string; department: string; position: string; role: "employee" | "hr"; password: string; joinDate: string; totalLeave: number; usedLeave: number; isActive: boolean } = { employeeId: "", name: "", email: "", phone: "", department: "", position: "", role: "employee", password: "password123", joinDate: new Date().toISOString().split("T")[0], totalLeave: 12, usedLeave: 0, isActive: true };
+const DEPARTMENTS = ["Human Resources", "Engineering", "Finance", "Marketing", "Operations", "General Affairs"];
 
 export default function EmployeesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [shifts, setShifts] = useState<WorkShift[]>([]);
     const [search, setSearch] = useState("");
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
-    const [form, setForm] = useState(INIT_FORM);
     const [loading, setLoading] = useState(false);
+    const [form, setForm] = useState({
+        employeeId: "", name: "", email: "", phone: "", department: "", position: "",
+        role: "employee" as "employee" | "hr", password: "password123", joinDate: new Date().toISOString().split("T")[0],
+        totalLeave: 12, usedLeave: 0, isActive: true, shiftId: "",
+    });
 
     useEffect(() => {
         fetch("/api/employees").then((r) => r.json()).then(setEmployees);
+        fetch("/api/shifts").then((r) => r.json()).then((data: WorkShift[]) => {
+            setShifts(data);
+            const def = data.find((s: WorkShift) => s.isDefault);
+            if (def) setForm((f) => ({ ...f, shiftId: f.shiftId || def.id }));
+        });
     }, []);
 
     const filtered = employees.filter((e) =>
@@ -27,6 +38,22 @@ export default function EmployeesPage() {
         e.employeeId.toLowerCase().includes(search.toLowerCase()) ||
         e.department.toLowerCase().includes(search.toLowerCase())
     );
+
+    const getShiftName = (sId?: string) => {
+        if (!sId) return "-";
+        const s = shifts.find((sh) => sh.id === sId);
+        return s ? `${s.name} (${s.startTime}-${s.endTime})` : "-";
+    };
+
+    const resetForm = () => {
+        const def = shifts.find((s) => s.isDefault);
+        setForm({
+            employeeId: "", name: "", email: "", phone: "", department: "", position: "",
+            role: "employee", password: "password123", joinDate: new Date().toISOString().split("T")[0],
+            totalLeave: 12, usedLeave: 0, isActive: true, shiftId: def?.id || "",
+        });
+        setEditId(null);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -41,14 +68,13 @@ export default function EmployeesPage() {
             if (editId) setEmployees((prev) => prev.map((e) => (e.id === editId ? data : e)));
             else setEmployees((prev) => [...prev, data]);
             setShowForm(false);
-            setEditId(null);
-            setForm(INIT_FORM);
+            resetForm();
         }
         setLoading(false);
     };
 
     const handleEdit = (emp: Employee) => {
-        setForm({ ...emp, password: "", totalLeave: 12, usedLeave: 0 } as typeof INIT_FORM);
+        setForm({ ...emp, password: "", totalLeave: 12, usedLeave: 0, shiftId: emp.shiftId || "" } as typeof form);
         setEditId(emp.id);
         setShowForm(true);
     };
@@ -69,7 +95,7 @@ export default function EmployeesPage() {
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">{employees.length} karyawan terdaftar</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
+                <button className="btn btn-primary" onClick={() => { setShowForm(true); resetForm(); }}>
                     <Plus className="w-4 h-4" /> Tambah Karyawan
                 </button>
             </div>
@@ -77,7 +103,7 @@ export default function EmployeesPage() {
             {/* Search */}
             <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                <input type="text" className="form-input pl-10" placeholder="Cari karyawan..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input type="text" className="form-input pl-10" placeholder="Cari nama, ID, atau departemen..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
 
             {/* Table */}
@@ -90,13 +116,14 @@ export default function EmployeesPage() {
                                 <th>Nama</th>
                                 <th className="hidden md:table-cell">Departemen</th>
                                 <th className="hidden lg:table-cell">Jabatan</th>
+                                <th className="hidden lg:table-cell">Jam Kerja</th>
                                 <th>Status</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filtered.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada karyawan ditemukan</td></tr>
+                                <tr><td colSpan={7} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada karyawan ditemukan</td></tr>
                             ) : (
                                 filtered.map((e) => (
                                     <tr key={e.id}>
@@ -112,6 +139,7 @@ export default function EmployeesPage() {
                                         </td>
                                         <td className="hidden md:table-cell">{e.department}</td>
                                         <td className="hidden lg:table-cell">{e.position}</td>
+                                        <td className="hidden lg:table-cell text-xs">{getShiftName(e.shiftId)}</td>
                                         <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
                                         <td>
                                             <div className="flex items-center gap-1.5">
@@ -130,49 +158,82 @@ export default function EmployeesPage() {
             {/* Form Modal */}
             {showForm && (
                 <div className="modal-overlay" onClick={() => setShowForm(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">{editId ? "Edit Karyawan" : "Tambah Karyawan Baru"}</h2>
                             <button className="modal-close" onClick={() => setShowForm(false)}><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            {/* Employee ID & Name */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
-                                    <label className="form-label">ID Karyawan</label>
-                                    <input className="form-input" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} required />
+                                    <label className="form-label"><span className="flex items-center gap-1"><Users className="w-3 h-3" /> ID Karyawan</span></label>
+                                    <input className="form-input" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} placeholder="WIG003" required />
                                 </div>
                                 <div className="form-group !mb-0">
                                     <label className="form-label">Nama Lengkap</label>
                                     <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                                 </div>
                             </div>
+                            {/* Email & Phone */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
-                                    <label className="form-label">Email</label>
+                                    <label className="form-label"><span className="flex items-center gap-1"><Mail className="w-3 h-3" /> Email</span></label>
                                     <input type="email" className="form-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
                                 </div>
                                 <div className="form-group !mb-0">
-                                    <label className="form-label">Telepon</label>
+                                    <label className="form-label"><span className="flex items-center gap-1"><Phone className="w-3 h-3" /> Telepon</span></label>
                                     <input className="form-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
                                 </div>
                             </div>
+                            {/* Department & Position */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
-                                    <label className="form-label">Departemen</label>
-                                    <input className="form-input" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required />
+                                    <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3 h-3" /> Departemen</span></label>
+                                    <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required>
+                                        <option value="">Pilih Departemen</option>
+                                        {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                                    </select>
                                 </div>
                                 <div className="form-group !mb-0">
-                                    <label className="form-label">Jabatan</label>
+                                    <label className="form-label"><span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> Jabatan</span></label>
                                     <input className="form-input" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} required />
                                 </div>
                             </div>
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Role</label>
-                                <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" })}>
-                                    <option value="employee">Employee</option>
-                                    <option value="hr">HR</option>
-                                </select>
+                            {/* Role & Shift */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Role</label>
+                                    <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" })}>
+                                        <option value="employee">Employee</option>
+                                        <option value="hr">HR</option>
+                                    </select>
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Jam Kerja</span></label>
+                                    <select className="form-select" value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })} required>
+                                        <option value="">Pilih Shift</option>
+                                        {shifts.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</option>)}
+                                    </select>
+                                </div>
                             </div>
+                            {/* Join date & Leave */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Tanggal Bergabung</span></label>
+                                    <input type="date" className="form-input" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} required />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">Jatah Cuti / Tahun</label>
+                                    <input type="number" className="form-input" value={form.totalLeave} onChange={(e) => setForm({ ...form, totalLeave: Number(e.target.value) })} min={0} />
+                                </div>
+                            </div>
+                            {/* Active status */}
+                            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                                <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="w-4 h-4 accent-[var(--primary)]" />
+                                Karyawan aktif
+                            </label>
+
                             <button type="submit" className="btn btn-primary w-full" disabled={loading}>
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                 {editId ? "Simpan Perubahan" : "Tambah Karyawan"}

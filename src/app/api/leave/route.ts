@@ -9,10 +9,10 @@ export async function GET() {
     }
 
     if (session.role === "hr") {
-        return NextResponse.json(getLeaveRequests());
+        return NextResponse.json(await getLeaveRequests());
     }
 
-    return NextResponse.json(getLeaveRequests(session.id));
+    return NextResponse.json(await getLeaveRequests(session.employeeId));
 }
 
 export async function POST(request: NextRequest) {
@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const leave = createLeaveRequest({
+        const leave = await createLeaveRequest({
             ...body,
-            employeeId: session.id,
+            employeeId: session.employeeId,
             status: "pending",
             createdAt: new Date().toISOString(),
         });
@@ -44,12 +44,13 @@ export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
         const { id, ...data } = body;
-        const updated = updateLeaveRequest(id, data);
+        const updated = await updateLeaveRequest(id, data);
         if (!updated) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
         return NextResponse.json(updated);
-    } catch {
+    } catch (err) {
+        console.error("[API PUT Leave Error]:", err);
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }

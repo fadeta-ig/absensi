@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FileText, Download, X, Eye } from "lucide-react";
+import { exportPayslipPdf } from "@/lib/export";
 
 interface AllowanceItem { name: string; amount: number; }
 interface Payslip {
@@ -32,6 +33,20 @@ export default function PayslipPage() {
         return items.reduce((s, d) => s + d.amount, 0);
     };
 
+    const handleDownloadPdf = (p: Payslip) => {
+        exportPayslipPdf({
+            employeeId: p.employeeId,
+            period: p.period,
+            basicSalary: p.basicSalary,
+            overtime: p.overtime,
+            allowances: Array.isArray(p.allowances) ? p.allowances : [],
+            deductions: Array.isArray(p.deductions) ? p.deductions : [],
+            netSalary: p.netSalary,
+            issuedDate: p.issuedDate,
+            notes: p.notes,
+        });
+    };
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             <div>
@@ -59,9 +74,14 @@ export default function PayslipPage() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-lg font-extrabold text-[var(--primary)]">{fmt(p.netSalary)}</p>
-                                    <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm mt-1 text-[var(--primary)]">
-                                        <Eye className="w-3.5 h-3.5" /> Detail
-                                    </button>
+                                    <div className="flex items-center gap-1.5 mt-1 justify-end">
+                                        <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm text-[var(--primary)]">
+                                            <Eye className="w-3.5 h-3.5" /> Detail
+                                        </button>
+                                        <button onClick={() => handleDownloadPdf(p)} className="btn btn-ghost btn-sm text-red-600">
+                                            <Download className="w-3.5 h-3.5" /> PDF
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -147,8 +167,8 @@ export default function PayslipPage() {
                                 )}
                             </div>
 
-                            <button onClick={() => window.print()} className="btn btn-secondary w-full mt-4">
-                                <Download className="w-4 h-4" /> Cetak / Unduh
+                            <button onClick={() => handleDownloadPdf(selected)} className="btn btn-primary w-full mt-4">
+                                <Download className="w-4 h-4" /> Download PDF
                             </button>
                         </div>
                     </div>

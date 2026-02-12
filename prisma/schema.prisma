@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id             String   @id @default(uuid())
+  employeeId     String   @unique @map("employee_id")
+  name           String
+  email          String
+  phone          String
+  department     String
+  position       String
+  role           String   @default("employee") // "employee" | "hr"
+  password       String
+  faceDescriptor Json?    @map("face_descriptor")
+  joinDate       String   @map("join_date")
+  totalLeave     Int      @default(12) @map("total_leave")
+  usedLeave      Int      @default(0) @map("used_leave")
+  avatarUrl      String?  @map("avatar_url")
+  isActive       Boolean  @default(true) @map("is_active")
+  shiftId        String?  @map("shift_id")
+
+  // Relations
+  shift        WorkShift?          @relation(fields: [shiftId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  attendances  AttendanceRecord[]
+  payslips     PayslipRecord[]
+  leaves       LeaveRequest[]
+  todos        TodoItem[]
+
+  @@map("employees")
+}
+
+model AttendanceRecord {
+  id               String   @id @default(uuid())
+  employeeId       String   @map("employee_id")
+  date             String
+  clockIn          String?  @map("clock_in")
+  clockOut         String?  @map("clock_out")
+  clockInLocation  Json?    @map("clock_in_location")
+  clockOutLocation Json?    @map("clock_out_location")
+  clockInPhoto     String?  @db.LongText @map("clock_in_photo")
+  clockOutPhoto    String?  @db.LongText @map("clock_out_photo")
+  status           String   @default("present") // "present" | "late" | "absent" | "leave"
+  notes            String?  @db.Text
+
+  // Relations - Changed to reference employeeId (string) instead of id (UUID)
+  employee         Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@map("attendance_records")
+}
+
+model PayslipRecord {
+  id          String   @id @default(uuid())
+  employeeId  String   @map("employee_id")
+  period      String
+  basicSalary Float    @map("basic_salary")
+  allowances  Json     // [{ name, amount }]
+  deductions  Json     // [{ name, amount }]
+  overtime    Float    @default(0)
+  netSalary   Float    @map("net_salary")
+  issuedDate  String   @map("issued_date")
+  notes       String?  @db.Text
+
+  // Relations - Changed to reference employeeId (string) instead of id (UUID)
+  employee    Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
+
+  @@map("payslip_records")
+}
+
+model WorkShift {
+  id        String   @id @default(uuid())
+  name      String
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  isDefault Boolean  @default(false) @map("is_default")
+
+  // Relations
+  employees Employee[]
+
+  @@map("work_shifts")
+}
+
+model LeaveRequest {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  type       String   // "annual" | "sick" | "personal" | "maternity"
+  startDate  String   @map("start_date")
+  endDate    String   @map("end_date")
+  reason     String   @db.Text
+  status     String   @default("pending") // "pending" | "approved" | "rejected"
+  createdAt  String   @map("created_at")
+
+  // Relations - Changed to reference employeeId (string) instead of id (UUID)
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
+
+  @@map("leave_requests")
+}
+
+model NewsItem {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  category  String   @default("general") // "announcement" | "event" | "policy" | "general"
+  author    String
+  createdAt String   @map("created_at")
+  isPinned  Boolean  @default(false) @map("is_pinned")
+
+  @@map("news_items")
+}
+
+model TodoItem {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  text       String   @db.Text
+  completed  Boolean  @default(false)
+  createdAt  String   @map("created_at")
+
+  // Relations - Changed to reference employeeId (string) instead of id (UUID)
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
+
+  @@map("todo_items")
+}
