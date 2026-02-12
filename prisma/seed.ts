@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -44,10 +45,16 @@ async function main() {
 
     console.log(`✅ Shifts: ${shiftPagi.name}, ${shiftSiang.name}, ${shiftMalam.name}`);
 
+    const hashedPassword = await bcrypt.hash("password123", 10);
+
     // Create employees
     const hrAdmin = await prisma.employee.upsert({
         where: { employeeId: "WIG001" },
-        update: {},
+        update: {
+            password: hashedPassword,
+            isActive: true,
+            role: "hr",
+        },
         create: {
             id: "emp-001",
             employeeId: "WIG001",
@@ -57,7 +64,7 @@ async function main() {
             department: "Human Resources",
             position: "HR Manager",
             role: "hr",
-            password: "password123",
+            password: hashedPassword,
             joinDate: "2024-01-15",
             totalLeave: 12,
             usedLeave: 2,
@@ -68,7 +75,10 @@ async function main() {
 
     const budi = await prisma.employee.upsert({
         where: { employeeId: "WIG002" },
-        update: {},
+        update: {
+            password: hashedPassword,
+            isActive: true,
+        },
         create: {
             id: "emp-002",
             employeeId: "WIG002",
@@ -78,7 +88,7 @@ async function main() {
             department: "Engineering",
             position: "Software Engineer",
             role: "employee",
-            password: "password123",
+            password: hashedPassword,
             joinDate: "2024-03-01",
             totalLeave: 12,
             usedLeave: 5,

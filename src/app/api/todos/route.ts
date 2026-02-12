@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getTodos, createTodo, updateTodo, deleteTodo } from "@/lib/data";
+import { getTodos, createTodo, updateTodo, deleteTodo } from "@/lib/services/todoService";
 
 export async function GET() {
     const session = await getSession();

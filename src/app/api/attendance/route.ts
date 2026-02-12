@@ -5,7 +5,7 @@ import {
     getAttendanceByDate,
     createAttendance,
     updateAttendance,
-} from "@/lib/data";
+} from "@/lib/services/attendanceService";
 
 export async function GET(request: NextRequest) {
     const session = await getSession();

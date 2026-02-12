@@ -1,6 +1,4 @@
-// Shared types for the WIG Attendance System
-
-export interface Employee {
+export type Employee = {
     id: string;
     employeeId: string;
     name: string;
@@ -14,26 +12,26 @@ export interface Employee {
     joinDate: string;
     totalLeave: number;
     usedLeave: number;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
     isActive: boolean;
-    shiftId?: string;
-}
+    shiftId?: string | null;
+};
 
-export interface AttendanceRecord {
+export type AttendanceRecord = {
     id: string;
     employeeId: string;
     date: string;
-    clockIn?: string;
-    clockOut?: string;
-    clockInLocation?: { lat: number; lng: number };
-    clockOutLocation?: { lat: number; lng: number };
-    clockInPhoto?: string;
-    clockOutPhoto?: string;
+    clockIn?: string | null;
+    clockOut?: string | null;
+    clockInLocation?: { lat: number; lng: number } | null;
+    clockOutLocation?: { lat: number; lng: number } | null;
+    clockInPhoto?: string | null;
+    clockOutPhoto?: string | null;
     status: "present" | "late" | "absent" | "leave";
-    notes?: string;
-}
+    notes?: string | null;
+};
 
-export interface PayslipRecord {
+export type PayslipRecord = {
     id: string;
     employeeId: string;
     period: string;
@@ -43,18 +41,18 @@ export interface PayslipRecord {
     overtime: number;
     netSalary: number;
     issuedDate: string;
-    notes?: string;
-}
+    notes?: string | null;
+};
 
-export interface WorkShift {
+export type WorkShift = {
     id: string;
     name: string;
     startTime: string;
     endTime: string;
     isDefault: boolean;
-}
+};
 
-export interface LeaveRequest {
+export type LeaveRequest = {
     id: string;
     employeeId: string;
     type: "annual" | "sick" | "personal" | "maternity";
@@ -63,9 +61,9 @@ export interface LeaveRequest {
     reason: string;
     status: "pending" | "approved" | "rejected";
     createdAt: string;
-}
+};
 
-export interface NewsItem {
+export type NewsItem = {
     id: string;
     title: string;
     content: string;
@@ -73,20 +71,12 @@ export interface NewsItem {
     author: string;
     createdAt: string;
     isPinned: boolean;
-}
+};
 
-export interface TodoItem {
+export type TodoItem = {
     id: string;
     employeeId: string;
     text: string;
     completed: boolean;
     createdAt: string;
-}
-
-export interface SessionUser {
-    id: string;
-    employeeId: string;
-    name: string;
-    role: "employee" | "hr";
-}
-
+};

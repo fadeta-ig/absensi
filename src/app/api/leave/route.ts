@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getLeaveRequests, createLeaveRequest, updateLeaveRequest } from "@/lib/data";
+import { getLeaveRequests, createLeaveRequest, updateLeaveRequest } from "@/lib/services/leaveService";
 
 export async function GET() {
     const session = await getSession();

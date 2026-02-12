@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import bcrypt from "bcryptjs";
 import {
     getEmployees,
     createEmployee,
     updateEmployee,
     deleteEmployee,
-} from "@/lib/data";
+} from "@/lib/services/employeeService";
 
 export async function GET() {
     const session = await getSession();
@@ -30,9 +31,10 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
+        const hashedPassword = await bcrypt.hash("password123", 10);
         const employee = await createEmployee({
             ...body,
-            password: "password123",
+            password: hashedPassword,
             isActive: body.isActive !== undefined ? body.isActive : true,
             totalLeave: body.totalLeave || 12,
             usedLeave: body.usedLeave || 0,

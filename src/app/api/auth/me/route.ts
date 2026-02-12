@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getEmployeeById } from "@/lib/data";
+import { getEmployeeById } from "@/lib/services/employeeService";
 
 export async function GET() {
     const session = await getSession();

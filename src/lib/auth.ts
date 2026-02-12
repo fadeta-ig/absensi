@@ -1,6 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { getEmployeeByEmployeeId, type Employee } from "./data";
+import bcrypt from "bcryptjs";
+import { getEmployeeByEmployeeId } from "./services/employeeService";
+import { Employee } from "@/types";
 
 const SECRET = new TextEncoder().encode(
     process.env.JWT_SECRET || "wig-attendance-secret-key-2026"
@@ -61,11 +63,23 @@ export async function verifyLogin(
     employeeId: string,
     password: string
 ): Promise<Employee | null> {
+    console.log("[Auth] Verifying login for:", employeeId);
     const employee = await getEmployeeByEmployeeId(employeeId);
-    if (!employee || !employee.isActive) return null;
 
-    // In production, use bcrypt.compare(password, employee.password)
-    if (password === employee.password) {
+    if (!employee) {
+        console.log("[Auth] Employee not found:", employeeId);
+        return null;
+    }
+
+    if (!employee.isActive) {
+        console.log("[Auth] Employee is inactive:", employeeId);
+        return null;
+    }
+
+    const isValid = await bcrypt.compare(password, employee.password);
+    console.log("[Auth] Password valid:", isValid);
+
+    if (isValid) {
         return employee;
     }
     return null;

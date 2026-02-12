@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getShifts, createShift, updateShift, deleteShift } from "@/lib/data";
+import { getShifts, createShift, updateShift, deleteShift } from "@/lib/services/shiftService";
 
 export async function GET() {
     const session = await getSession();

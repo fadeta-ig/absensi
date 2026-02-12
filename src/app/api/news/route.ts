@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getNews, createNews, updateNews, deleteNews } from "@/lib/data";
+import { getNews, createNews, updateNews, deleteNews } from "@/lib/services/newsService";
 
 export async function GET() {
     const session = await getSession();
