@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key } from "lucide-react";
 
 interface WorkShift { id: string; name: string; startTime: string; endTime: string; isDefault: boolean; }
 interface Employee {
@@ -18,6 +18,8 @@ export default function EmployeesPage() {
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [sendingPassword, setSendingPassword] = useState<string | null>(null);
+    const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [form, setForm] = useState({
         employeeId: "", name: "", email: "", phone: "", department: "", position: "",
         role: "employee" as "employee" | "hr", password: "password123", joinDate: new Date().toISOString().split("T")[0],
@@ -85,6 +87,28 @@ export default function EmployeesPage() {
         if (res.ok) setEmployees((prev) => prev.filter((e) => e.id !== id));
     };
 
+    const handleSendPassword = async (emp: Employee) => {
+        if (!confirm(`Kirim password baru ke email ${emp.name}?`)) return;
+        setSendingPassword(emp.id);
+        setPasswordMsg(null);
+        try {
+            const res = await fetch("/api/auth/send-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ employeeId: emp.employeeId }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setPasswordMsg({ type: "success", text: data.message });
+            } else {
+                setPasswordMsg({ type: "error", text: data.error || "Gagal mengirim password" });
+            }
+        } catch {
+            setPasswordMsg({ type: "error", text: "Terjadi kesalahan koneksi" });
+        }
+        setSendingPassword(null);
+    };
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -99,6 +123,16 @@ export default function EmployeesPage() {
                     <Plus className="w-4 h-4" /> Tambah Karyawan
                 </button>
             </div>
+
+            {/* Password Message */}
+            {passwordMsg && (
+                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${passwordMsg.type === "success" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                    {passwordMsg.text}
+                    <button onClick={() => setPasswordMsg(null)} className="ml-auto text-current opacity-60 hover:opacity-100">
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
 
             {/* Search */}
             <div className="relative max-w-md">
@@ -143,6 +177,16 @@ export default function EmployeesPage() {
                                         <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
                                         <td>
                                             <div className="flex items-center gap-1.5">
+                                                {e.role === "employee" && e.isActive && (
+                                                    <button
+                                                        onClick={() => handleSendPassword(e)}
+                                                        className="btn btn-ghost btn-sm !p-1.5 text-blue-600 hover:!bg-blue-50"
+                                                        disabled={sendingPassword === e.id}
+                                                        title="Kirim Password via Email"
+                                                    >
+                                                        {sendingPassword === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                                                    </button>
+                                                )}
                                                 <button onClick={() => handleEdit(e)} className="btn btn-ghost btn-sm !p-1.5"><Pencil className="w-3.5 h-3.5" /></button>
                                                 <button onClick={() => handleDelete(e.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                                             </div>

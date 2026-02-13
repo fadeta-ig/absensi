@@ -80,3 +80,18 @@ export type TodoItem = {
     completed: boolean;
     createdAt: string;
 };
+
+export type VisitReport = {
+    id: string;
+    employeeId: string;
+    date: string;
+    clientName: string;
+    clientAddress: string;
+    purpose: string;
+    result?: string | null;
+    location?: { lat: number; lng: number } | null;
+    photo?: string | null;
+    status: "pending" | "approved" | "rejected";
+    notes?: string | null;
+    createdAt: string;
+};

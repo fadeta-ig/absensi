@@ -31,8 +31,28 @@ model Employee {
   payslips     PayslipRecord[]
   leaves       LeaveRequest[]
   todos        TodoItem[]
+  visits       VisitReport[]
 
   @@map("employees")
+}
+
+model VisitReport {
+  id            String   @id @default(uuid())
+  employeeId    String   @map("employee_id")
+  date          String
+  clientName    String   @map("client_name")
+  clientAddress String   @db.Text @map("client_address")
+  purpose       String   @db.Text
+  result        String?  @db.Text
+  location      Json?
+  photo         String?  @db.LongText
+  status        String   @default("pending")
+  notes         String?  @db.Text
+  createdAt     String   @map("created_at")
+
+  employee      Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
+
+  @@map("visit_reports")
 }
 
 model AttendanceRecord {

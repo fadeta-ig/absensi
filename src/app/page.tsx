@@ -139,15 +139,12 @@ export default function LoginPage() {
             </button>
 
             <div className="mt-5 p-3 bg-[var(--secondary)] rounded-lg border border-[var(--border)]">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <KeyRound className="w-3.5 h-3.5 text-[var(--primary)]" />
-                <span className="text-xs font-semibold text-[var(--text-secondary)]">Demo Credentials</span>
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">Informasi Login</span>
               </div>
               <p className="text-xs text-[var(--text-muted)]">
-                <strong className="text-[var(--text-secondary)]">WIG001</strong> (HR) atau <strong className="text-[var(--text-secondary)]">WIG002</strong> (Employee)
-              </p>
-              <p className="text-xs text-[var(--text-muted)]">
-                Password: <strong className="text-[var(--text-secondary)]">password123</strong>
+                Hubungi <strong className="text-[var(--text-secondary)]">HR</strong> untuk mendapatkan password akun Anda via email.
               </p>
             </div>
           </form>

@@ -10,6 +10,8 @@ import {
     CalendarOff,
     Newspaper,
     NotebookPen,
+    MapPinned,
+    Settings,
     LogOut,
     Menu,
     X,
@@ -24,10 +26,12 @@ interface User {
 const navItems = [
     { href: "/employee", icon: Home, label: "Beranda" },
     { href: "/employee/attendance", icon: Camera, label: "Absensi" },
+    { href: "/employee/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/employee/payslip", icon: FileText, label: "Slip Gaji" },
     { href: "/employee/leave", icon: CalendarOff, label: "Cuti" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
+    { href: "/employee/settings", icon: Settings, label: "Pengaturan" },
 ];
 
 export default function EmployeeLayout({
