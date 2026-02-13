@@ -6,6 +6,7 @@ import { exportToExcel, exportPayslipPdf } from "@/lib/export";
 
 interface Employee { id: string; employeeId: string; name: string; }
 interface AllowanceItem { name: string; amount: number; }
+interface MasterComponent { id: string; name: string; type: string; defaultAmount: number; isActive: boolean; }
 interface Payslip {
     id: string; employeeId: string; period: string; basicSalary: number;
     allowances: AllowanceItem[]; deductions: AllowanceItem[];
@@ -18,13 +19,12 @@ export default function PayrollPage() {
     const [tab, setTab] = useState<Tab>("create");
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [payslips, setPayslips] = useState<Payslip[]>([]);
+    const [masterComponents, setMasterComponents] = useState<MasterComponent[]>([]);
     const [selected, setSelected] = useState<Payslip | null>(null);
     const [form, setForm] = useState({
         employeeId: "", period: "", basicSalary: 0, overtime: 0, notes: "",
     });
-    const [allowances, setAllowances] = useState<AllowanceItem[]>([
-        { name: "Tunjangan Makan", amount: 0 },
-    ]);
+    const [allowances, setAllowances] = useState<AllowanceItem[]>([]);
     const [deductions, setDeductions] = useState<AllowanceItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState("");
@@ -32,6 +32,14 @@ export default function PayrollPage() {
     useEffect(() => {
         fetch("/api/employees").then((r) => r.json()).then(setEmployees);
         fetch("/api/payslips").then((r) => r.json()).then((d: Payslip[]) => { if (Array.isArray(d)) setPayslips(d); });
+        fetch("/api/master/payroll-components").then((r) => r.json()).then((d) => {
+            if (Array.isArray(d)) {
+                setMasterComponents(d);
+                const active = d.filter(c => c.isActive);
+                setAllowances(active.filter(c => c.type === "allowance").map(c => ({ name: c.name, amount: c.defaultAmount })));
+                setDeductions(active.filter(c => c.type === "deduction").map(c => ({ name: c.name, amount: c.defaultAmount })));
+            }
+        });
     }, []);
 
     const getEmpName = (empId: string) => employees.find((e) => e.employeeId === empId)?.name || empId;
@@ -58,8 +66,12 @@ export default function PayrollPage() {
             const newPayslip = await res.json();
             setSuccess("Slip gaji berhasil dibuat!");
             setForm({ employeeId: "", period: "", basicSalary: 0, overtime: 0, notes: "" });
-            setAllowances([{ name: "Tunjangan Makan", amount: 0 }]);
-            setDeductions([]);
+
+            // Reset to master defaults
+            const active = masterComponents.filter(c => c.isActive);
+            setAllowances(active.filter(c => c.type === "allowance").map(c => ({ name: c.name, amount: c.defaultAmount })));
+            setDeductions(active.filter(c => c.type === "deduction").map(c => ({ name: c.name, amount: c.defaultAmount })));
+
             setPayslips((prev) => [newPayslip, ...prev]);
         }
         setLoading(false);

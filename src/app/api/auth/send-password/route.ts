@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
             emailSent,
             message: emailSent
                 ? `Password berhasil dikirim ke ${employee.email}`
-                : `Password berhasil di-generate (cek console log)`,
+                : `Password berhasil diupdate tapi email gagal terkirim. Cek konfigurasi SMTP.`,
         });
     } catch {
         return NextResponse.json(

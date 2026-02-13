@@ -9,11 +9,14 @@ interface Employee {
     department: string; position: string; role: string; isActive: boolean; joinDate: string; shiftId?: string;
 }
 
-const DEPARTMENTS = ["Human Resources", "Engineering", "Finance", "Marketing", "Operations", "General Affairs"];
+interface Department { id: string; name: string; }
+interface Position { id: string; name: string; departmentId: string; }
 
 export default function EmployeesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [shifts, setShifts] = useState<WorkShift[]>([]);
+    const [masterDepts, setMasterDepts] = useState<Department[]>([]);
+    const [masterPositions, setMasterPositions] = useState<Position[]>([]);
     const [search, setSearch] = useState("");
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
@@ -28,6 +31,8 @@ export default function EmployeesPage() {
 
     useEffect(() => {
         fetch("/api/employees").then((r) => r.json()).then(setEmployees);
+        fetch("/api/master/departments").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterDepts(d); });
+        fetch("/api/master/positions").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterPositions(d); });
         fetch("/api/shifts").then((r) => r.json()).then((data: WorkShift[]) => {
             setShifts(data);
             const def = data.find((s: WorkShift) => s.isDefault);
@@ -40,6 +45,11 @@ export default function EmployeesPage() {
         e.employeeId.toLowerCase().includes(search.toLowerCase()) ||
         e.department.toLowerCase().includes(search.toLowerCase())
     );
+
+    const availablePositions = masterPositions.filter((p) => {
+        const dept = masterDepts.find((d) => d.name === form.department);
+        return dept ? p.departmentId === dept.id : true;
+    });
 
     const getShiftName = (sId?: string) => {
         if (!sId) return "-";
@@ -234,14 +244,17 @@ export default function EmployeesPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
                                     <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3 h-3" /> Departemen</span></label>
-                                    <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required>
+                                    <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value, position: "" })} required>
                                         <option value="">Pilih Departemen</option>
-                                        {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                                        {masterDepts.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group !mb-0">
                                     <label className="form-label"><span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> Jabatan</span></label>
-                                    <input className="form-input" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} required />
+                                    <select className="form-select" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} required disabled={!form.department}>
+                                        <option value="">Pilih Jabatan</option>
+                                        {availablePositions.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                    </select>
                                 </div>
                             </div>
                             {/* Role & Shift */}

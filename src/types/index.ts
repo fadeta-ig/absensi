@@ -95,3 +95,15 @@ export type VisitReport = {
     notes?: string | null;
     createdAt: string;
 };
+
+export type OvertimeRequest = {
+    id: string;
+    employeeId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    hours: number;
+    reason: string;
+    status: "pending" | "approved" | "rejected";
+    createdAt: string;
+};

@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import {
-    getVisitReports,
-    getVisitReportById,
-    createVisitReport,
-    updateVisitReport,
-    deleteVisitReport,
-} from "@/lib/services/visitService";
+    getOvertimeRequests,
+    getOvertimeRequestById,
+    createOvertimeRequest,
+    updateOvertimeRequest,
+    deleteOvertimeRequest,
+} from "@/lib/services/overtimeService";
+
+function calculateHours(startTime: string, endTime: string): number {
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    const diff = endMinutes - startMinutes;
+    return Math.round((diff / 60) * 100) / 100;
+}
 
 export async function GET() {
     try {
@@ -15,11 +24,10 @@ export async function GET() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // HR sees all visits, employee only their own
-        const visits = await getVisitReports(
+        const overtime = await getOvertimeRequests(
             session.role === "hr" ? undefined : session.employeeId
         );
-        return NextResponse.json(visits);
+        return NextResponse.json(overtime);
     } catch {
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
@@ -33,30 +41,41 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { clientName, clientAddress, purpose, result, location, photo, notes } = body;
+        const { date, startTime, endTime, reason } = body;
 
-        if (!clientName || !clientAddress || !purpose) {
+        if (!date || !startTime || !endTime || !reason) {
             return NextResponse.json(
-                { error: "Nama klien, alamat, dan tujuan harus diisi" },
+                { error: "Tanggal, jam mulai, jam selesai, dan alasan harus diisi" },
                 { status: 400 }
             );
         }
 
-        const visit = await createVisitReport({
+        const hours = calculateHours(startTime, endTime);
+        if (hours <= 0) {
+            return NextResponse.json(
+                { error: "Jam selesai harus setelah jam mulai" },
+                { status: 400 }
+            );
+        }
+        if (hours > 8) {
+            return NextResponse.json(
+                { error: "Maksimal lembur 8 jam per hari" },
+                { status: 400 }
+            );
+        }
+
+        const overtime = await createOvertimeRequest({
             employeeId: session.employeeId,
-            date: new Date().toISOString().split("T")[0],
-            clientName,
-            clientAddress,
-            purpose,
-            result: result || null,
-            location: location || null,
-            photo: photo || null,
+            date,
+            startTime,
+            endTime,
+            hours,
+            reason,
             status: "pending",
-            notes: notes || null,
             createdAt: new Date().toISOString(),
         });
 
-        return NextResponse.json(visit, { status: 201 });
+        return NextResponse.json(overtime, { status: 201 });
     } catch {
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
@@ -70,16 +89,15 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { id, status, notes, clientName, clientAddress, purpose, result } = body;
+        const { id, status, date, startTime, endTime, reason } = body;
 
         if (!id) {
             return NextResponse.json({ error: "ID harus diisi" }, { status: 400 });
         }
 
-        // Verify ownership or HR role
-        const existing = await getVisitReportById(id);
+        const existing = await getOvertimeRequestById(id);
         if (!existing) {
-            return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
+            return NextResponse.json({ error: "Tidak ditemukan" }, { status: 404 });
         }
 
         // Only HR can update status
@@ -90,31 +108,36 @@ export async function PUT(request: NextRequest) {
             );
         }
 
-        // Employees can only edit their own pending visits
+        // Employees can only edit their own pending requests
         if (session.role !== "hr") {
             if (existing.employeeId !== session.employeeId) {
                 return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
             }
             if (existing.status !== "pending") {
                 return NextResponse.json(
-                    { error: "Tidak dapat mengedit kunjungan yang sudah diproses" },
+                    { error: "Tidak dapat mengedit yang sudah diproses" },
                     { status: 400 }
                 );
             }
         }
 
-        // Build safe update data
         const updateData: Record<string, unknown> = {};
-        if (session.role === "hr") {
-            if (status !== undefined) updateData.status = status;
-            if (notes !== undefined) updateData.notes = notes;
+        if (session.role === "hr" && status !== undefined) {
+            updateData.status = status;
         }
-        if (clientName !== undefined) updateData.clientName = clientName;
-        if (clientAddress !== undefined) updateData.clientAddress = clientAddress;
-        if (purpose !== undefined) updateData.purpose = purpose;
-        if (result !== undefined) updateData.result = result;
+        if (date !== undefined) updateData.date = date;
+        if (reason !== undefined) updateData.reason = reason;
+        if (startTime !== undefined && endTime !== undefined) {
+            const hours = calculateHours(startTime, endTime);
+            if (hours <= 0 || hours > 8) {
+                return NextResponse.json({ error: "Jam tidak valid" }, { status: 400 });
+            }
+            updateData.startTime = startTime;
+            updateData.endTime = endTime;
+            updateData.hours = hours;
+        }
 
-        const updated = await updateVisitReport(id, updateData);
+        const updated = await updateOvertimeRequest(id, updateData);
         if (!updated) {
             return NextResponse.json({ error: "Gagal mengupdate" }, { status: 404 });
         }
@@ -139,17 +162,16 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "ID harus diisi" }, { status: 400 });
         }
 
-        // Verify ownership or HR role
-        const existing = await getVisitReportById(id);
+        const existing = await getOvertimeRequestById(id);
         if (!existing) {
-            return NextResponse.json({ error: "Kunjungan tidak ditemukan" }, { status: 404 });
+            return NextResponse.json({ error: "Tidak ditemukan" }, { status: 404 });
         }
 
         if (session.role !== "hr" && existing.employeeId !== session.employeeId) {
             return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
         }
 
-        const deleted = await deleteVisitReport(id);
+        const deleted = await deleteOvertimeRequest(id);
         if (!deleted) {
             return NextResponse.json({ error: "Gagal menghapus" }, { status: 404 });
         }

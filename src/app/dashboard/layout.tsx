@@ -11,12 +11,17 @@ import {
     CalendarOff,
     Megaphone,
     Clock,
+    Clock4,
     MapPinned,
+    FileDown,
+    Database,
+    Settings2,
     LogOut,
     Menu,
     X,
     ChevronRight,
 } from "lucide-react";
+import NotificationCenter from "@/components/NotificationCenter";
 
 interface User {
     name: string;
@@ -29,9 +34,13 @@ const navItems = [
     { href: "/dashboard/employees", icon: Users, label: "Karyawan" },
     { href: "/dashboard/attendance", icon: ClipboardList, label: "Absensi" },
     { href: "/dashboard/visits", icon: MapPinned, label: "Kunjungan" },
+    { href: "/dashboard/overtime", icon: Clock4, label: "Lembur" },
     { href: "/dashboard/payroll", icon: Wallet, label: "Payroll" },
     { href: "/dashboard/leave", icon: CalendarOff, label: "Cuti" },
     { href: "/dashboard/shifts", icon: Clock, label: "Jam Kerja" },
+    { href: "/dashboard/master-data", icon: Database, label: "Master Data" },
+    { href: "/dashboard/master-payroll", icon: Settings2, label: "Master Payroll" },
+    { href: "/dashboard/reports", icon: FileDown, label: "Laporan" },
     { href: "/dashboard/news", icon: Megaphone, label: "WIG News" },
 ];
 
@@ -101,8 +110,11 @@ export default function DashboardLayout({
                     </div>
                     <span className="text-sm font-bold text-[var(--primary)]">WIG HR</span>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-xs font-bold">
-                    {user.name.charAt(0)}
+                <div className="flex items-center gap-1">
+                    <NotificationCenter />
+                    <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-xs font-bold">
+                        {user.name.charAt(0)}
+                    </div>
                 </div>
             </header>
 
