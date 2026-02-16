@@ -9,13 +9,8 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        const { searchParams } = new URL(request.url);
-        const departmentId = searchParams.get("departmentId");
-
         const positions = await prisma.position.findMany({
-            where: departmentId ? { departmentId } : {},
             orderBy: { name: "asc" },
-            include: { department: { select: { name: true } } },
         });
 
         return NextResponse.json(positions);
@@ -33,18 +28,15 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await request.json();
-        if (!data.name || !data.departmentId) {
-            return NextResponse.json({ error: "Nama dan Departemen harus diisi" }, { status: 400 });
+        if (!data.name) {
+            return NextResponse.json({ error: "Nama jabatan harus diisi" }, { status: 400 });
         }
 
         const position = await prisma.position.create({
             data: {
                 name: data.name,
-                departmentId: data.departmentId,
-                level: data.level || 1,
                 isActive: data.isActive !== undefined ? data.isActive : true,
             },
-            include: { department: { select: { name: true } } },
         });
 
         return NextResponse.json(position);
@@ -62,19 +54,16 @@ export async function PUT(request: NextRequest) {
         }
 
         const data = await request.json();
-        if (!data.id || !data.name || !data.departmentId) {
-            return NextResponse.json({ error: "ID, Nama, dan Departemen harus diisi" }, { status: 400 });
+        if (!data.id || !data.name) {
+            return NextResponse.json({ error: "ID dan Nama jabatan harus diisi" }, { status: 400 });
         }
 
         const position = await prisma.position.update({
             where: { id: data.id },
             data: {
                 name: data.name,
-                departmentId: data.departmentId,
-                level: data.level || 1,
                 isActive: data.isActive !== undefined ? data.isActive : true,
             },
-            include: { department: { select: { name: true } } },
         });
 
         return NextResponse.json(position);

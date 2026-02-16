@@ -29,17 +29,36 @@ interface User {
     role: string;
 }
 
-const navItems = [
+interface NavItem {
+    href?: string;
+    icon: any;
+    label: string;
+    subItems?: { href: string; label: string }[];
+}
+
+const navItems: NavItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/employees", icon: Users, label: "Karyawan" },
     { href: "/dashboard/attendance", icon: ClipboardList, label: "Absensi" },
     { href: "/dashboard/visits", icon: MapPinned, label: "Kunjungan" },
-    { href: "/dashboard/overtime", icon: Clock4, label: "Lembur" },
-    { href: "/dashboard/payroll", icon: Wallet, label: "Payroll" },
     { href: "/dashboard/leave", icon: CalendarOff, label: "Cuti" },
-    { href: "/dashboard/shifts", icon: Clock, label: "Jam Kerja" },
-    { href: "/dashboard/master-data", icon: Database, label: "Master Data" },
-    { href: "/dashboard/master-payroll", icon: Settings2, label: "Master Payroll" },
+    {
+        label: "Master Data",
+        icon: Database,
+        subItems: [
+            { href: "/dashboard/employees", label: "Karyawan" },
+            { href: "/dashboard/shifts", label: "Jam Kerja" },
+            { href: "/dashboard/master-data", label: "Pengaturan Data" },
+        ]
+    },
+    {
+        label: "Master Payroll",
+        icon: Settings2,
+        subItems: [
+            { href: "/dashboard/overtime", label: "Lembur" },
+            { href: "/dashboard/payroll", label: "Payroll" },
+            { href: "/dashboard/master-payroll", label: "Pengaturan Payroll" },
+        ]
+    },
     { href: "/dashboard/reports", icon: FileDown, label: "Laporan" },
     { href: "/dashboard/news", icon: Megaphone, label: "WIG News" },
 ];
@@ -53,8 +72,18 @@ export default function DashboardLayout({
     const pathname = usePathname();
     const [user, setUser] = useState<User | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [openMenus, setOpenMenus] = useState<string[]>([]);
     const [authChecked, setAuthChecked] = useState(false);
     const fetchedRef = useRef(false);
+
+    useEffect(() => {
+        // Auto-expand menu if sub-item is active
+        navItems.forEach(item => {
+            if (item.subItems?.some(sub => pathname === sub.href)) {
+                setOpenMenus(prev => prev.includes(item.label) ? prev : [...prev, item.label]);
+            }
+        });
+    }, [pathname]);
 
     useEffect(() => {
         if (fetchedRef.current) return;
@@ -87,6 +116,12 @@ export default function DashboardLayout({
         await fetch("/api/auth/logout", { method: "POST" });
         router.replace("/");
     }, [router]);
+
+    const toggleMenu = (label: string) => {
+        setOpenMenus(prev =>
+            prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
+        );
+    };
 
     if (!authChecked || !user) {
         return (
@@ -147,23 +182,63 @@ export default function DashboardLayout({
                     </div>
                 </div>
 
-                <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
+                <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => {
-                        const isActive = pathname === item.href;
                         const Icon = item.icon;
+                        const hasSubItems = item.subItems && item.subItems.length > 0;
+                        const isMenuOpen = openMenus.includes(item.label);
+                        const isActive = item.href ? pathname === item.href : item.subItems?.some(s => pathname === s.href);
+
                         return (
-                            <button
-                                key={item.href}
-                                onClick={() => { router.push(item.href); setSidebarOpen(false); }}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${isActive
-                                    ? "bg-[var(--primary)] text-white shadow-sm"
-                                    : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
-                                    }`}
-                            >
-                                <Icon className="w-[18px] h-[18px] shrink-0" />
-                                <span className="flex-1">{item.label}</span>
-                                {isActive && <ChevronRight className="w-4 h-4 opacity-70" />}
-                            </button>
+                            <div key={item.label} className="flex flex-col gap-1">
+                                <button
+                                    onClick={() => {
+                                        if (hasSubItems) {
+                                            toggleMenu(item.label);
+                                        } else if (item.href) {
+                                            router.push(item.href);
+                                            setSidebarOpen(false);
+                                        }
+                                    }}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${isActive && !hasSubItems
+                                        ? "bg-[var(--primary)] text-white shadow-sm"
+                                        : isActive && hasSubItems
+                                            ? "text-[var(--primary)] bg-[var(--secondary)]"
+                                            : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
+                                        }`}
+                                >
+                                    <Icon className="w-[18px] h-[18px] shrink-0" />
+                                    <span className="flex-1">{item.label}</span>
+                                    {hasSubItems ? (
+                                        <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isMenuOpen ? "rotate-90" : ""}`} />
+                                    ) : (
+                                        isActive && <ChevronRight className="w-4 h-4 opacity-70" />
+                                    )}
+                                </button>
+
+                                {hasSubItems && isMenuOpen && (
+                                    <div className="flex flex-col gap-1 ml-9 mt-1 border-l border-[var(--border)] pl-3">
+                                        {item.subItems!.map((sub) => {
+                                            const isSubActive = pathname === sub.href;
+                                            return (
+                                                <button
+                                                    key={sub.href}
+                                                    onClick={() => {
+                                                        router.push(sub.href);
+                                                        setSidebarOpen(false);
+                                                    }}
+                                                    className={`px-3 py-2 rounded-md text-xs font-medium transition-all duration-200 text-left ${isSubActive
+                                                        ? "text-[var(--primary)] bg-[var(--secondary)]"
+                                                        : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
+                                                        }`}
+                                                >
+                                                    {sub.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </nav>

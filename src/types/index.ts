@@ -5,6 +5,7 @@ export type Employee = {
     email: string;
     phone: string;
     department: string;
+    division?: string | null;
     position: string;
     role: "employee" | "hr";
     password: string;
@@ -15,6 +16,8 @@ export type Employee = {
     avatarUrl?: string | null;
     isActive: boolean;
     shiftId?: string | null;
+    bypassLocation: boolean;
+    locations?: { id: string; name: string }[];
 };
 
 export type AttendanceRecord = {

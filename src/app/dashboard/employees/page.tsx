@@ -1,38 +1,48 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers } from "lucide-react";
 
 interface WorkShift { id: string; name: string; startTime: string; endTime: string; isDefault: boolean; }
 interface Employee {
     id: string; employeeId: string; name: string; email: string; phone: string;
-    department: string; position: string; role: string; isActive: boolean; joinDate: string; shiftId?: string;
+    department: string; division?: string | null; position: string; role: string; isActive: boolean; joinDate: string; shiftId?: string;
+    bypassLocation: boolean; locations?: { id: string; name: string }[];
 }
 
+interface Location { id: string; name: string; }
+
 interface Department { id: string; name: string; }
-interface Position { id: string; name: string; departmentId: string; }
+interface Division { id: string; name: string; departmentId: string; department: { name: string } }
+interface Position { id: string; name: string; }
 
 export default function EmployeesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [shifts, setShifts] = useState<WorkShift[]>([]);
     const [masterDepts, setMasterDepts] = useState<Department[]>([]);
+    const [masterDivisions, setMasterDivisions] = useState<Division[]>([]);
     const [masterPositions, setMasterPositions] = useState<Position[]>([]);
+    const [masterLocations, setMasterLocations] = useState<Location[]>([]);
     const [search, setSearch] = useState("");
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [sendingPassword, setSendingPassword] = useState<string | null>(null);
     const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
     const [form, setForm] = useState({
-        employeeId: "", name: "", email: "", phone: "", department: "", position: "",
+        employeeId: "", name: "", email: "", phone: "", department: "", division: "", position: "",
         role: "employee" as "employee" | "hr", password: "password123", joinDate: new Date().toISOString().split("T")[0],
         totalLeave: 12, usedLeave: 0, isActive: true, shiftId: "",
+        bypassLocation: false, locations: [] as { id: string; name: string }[],
     });
 
     useEffect(() => {
         fetch("/api/employees").then((r) => r.json()).then(setEmployees);
         fetch("/api/master/departments").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterDepts(d); });
+        fetch("/api/master/divisions").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterDivisions(d); });
         fetch("/api/master/positions").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterPositions(d); });
+        fetch("/api/master/locations").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterLocations(d); });
         fetch("/api/shifts").then((r) => r.json()).then((data: WorkShift[]) => {
             setShifts(data);
             const def = data.find((s: WorkShift) => s.isDefault);
@@ -43,12 +53,13 @@ export default function EmployeesPage() {
     const filtered = employees.filter((e) =>
         e.name.toLowerCase().includes(search.toLowerCase()) ||
         e.employeeId.toLowerCase().includes(search.toLowerCase()) ||
-        e.department.toLowerCase().includes(search.toLowerCase())
+        e.department.toLowerCase().includes(search.toLowerCase()) ||
+        (e.division && e.division.toLowerCase().includes(search.toLowerCase()))
     );
 
-    const availablePositions = masterPositions.filter((p) => {
-        const dept = masterDepts.find((d) => d.name === form.department);
-        return dept ? p.departmentId === dept.id : true;
+    const availableDivisions = masterDivisions.filter((v) => {
+        if (!form.department) return false;
+        return v.department.name === form.department;
     });
 
     const getShiftName = (sId?: string) => {
@@ -60,9 +71,10 @@ export default function EmployeesPage() {
     const resetForm = () => {
         const def = shifts.find((s) => s.isDefault);
         setForm({
-            employeeId: "", name: "", email: "", phone: "", department: "", position: "",
+            employeeId: "", name: "", email: "", phone: "", department: "", division: "", position: "",
             role: "employee", password: "password123", joinDate: new Date().toISOString().split("T")[0],
             totalLeave: 12, usedLeave: 0, isActive: true, shiftId: def?.id || "",
+            bypassLocation: false, locations: [],
         });
         setEditId(null);
     };
@@ -86,7 +98,16 @@ export default function EmployeesPage() {
     };
 
     const handleEdit = (emp: Employee) => {
-        setForm({ ...emp, password: "", totalLeave: 12, usedLeave: 0, shiftId: emp.shiftId || "" } as typeof form);
+        setForm({
+            ...emp,
+            division: emp.division || "",
+            password: "",
+            totalLeave: 12,
+            usedLeave: 0,
+            shiftId: emp.shiftId || "",
+            bypassLocation: emp.bypassLocation || false,
+            locations: emp.locations || [],
+        } as typeof form);
         setEditId(emp.id);
         setShowForm(true);
     };
@@ -147,7 +168,7 @@ export default function EmployeesPage() {
             {/* Search */}
             <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                <input type="text" className="form-input pl-10" placeholder="Cari nama, ID, atau departemen..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input type="text" className="form-input pl-10" placeholder="Cari nama, ID, departemen, atau divisi..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
 
             {/* Table */}
@@ -158,8 +179,9 @@ export default function EmployeesPage() {
                             <tr>
                                 <th>ID</th>
                                 <th>Nama</th>
-                                <th className="hidden md:table-cell">Departemen</th>
-                                <th className="hidden lg:table-cell">Jabatan</th>
+                                <th className="hidden md:table-cell">Dept / Divisi</th>
+                                <th>Jabatan</th>
+                                <th className="hidden lg:table-cell">Lokasi</th>
                                 <th className="hidden lg:table-cell">Jam Kerja</th>
                                 <th>Status</th>
                                 <th>Aksi</th>
@@ -177,12 +199,32 @@ export default function EmployeesPage() {
                                                 <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-[10px] font-bold shrink-0">{e.name.charAt(0)}</div>
                                                 <div>
                                                     <p>{e.name}</p>
-                                                    <p className="text-[10px] text-[var(--text-muted)] md:hidden">{e.department}</p>
+                                                    <p className="text-[10px] text-[var(--text-muted)] md:hidden">{e.department} {e.division ? `/ ${e.division}` : ""}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="hidden md:table-cell">{e.department}</td>
+                                        <td className="hidden md:table-cell">
+                                            <div className="text-sm">{e.department}</div>
+                                            {e.division && <div className="text-[10px] text-[var(--text-muted)]">{e.division}</div>}
+                                        </td>
                                         <td className="hidden lg:table-cell">{e.position}</td>
+                                        <td className="hidden lg:table-cell">
+                                            {e.bypassLocation ? (
+                                                <span className="text-[10px] text-blue-600 font-medium">Bypass</span>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {e.locations && e.locations.length > 0 ? (
+                                                        e.locations.map(l => (
+                                                            <span key={l.id} className="text-[10px] px-1.5 py-0.5 bg-[var(--secondary)] rounded text-[var(--text-secondary)]">
+                                                                {l.name}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-[10px] text-red-500 font-medium">Belum diset</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="hidden lg:table-cell text-xs">{getShiftName(e.shiftId)}</td>
                                         <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
                                         <td>
@@ -240,25 +282,32 @@ export default function EmployeesPage() {
                                     <input className="form-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
                                 </div>
                             </div>
-                            {/* Department & Position */}
+                            {/* Department & Division */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
                                     <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3 h-3" /> Departemen</span></label>
-                                    <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value, position: "" })} required>
+                                    <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value, division: "" })} required>
                                         <option value="">Pilih Departemen</option>
                                         {masterDepts.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group !mb-0">
-                                    <label className="form-label"><span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> Jabatan</span></label>
-                                    <select className="form-select" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} required disabled={!form.department}>
-                                        <option value="">Pilih Jabatan</option>
-                                        {availablePositions.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                    <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3 h-3" /> Divisi</span></label>
+                                    <select className="form-select" value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })} required disabled={!form.department}>
+                                        <option value="">Pilih Divisi</option>
+                                        {availableDivisions.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
                                     </select>
                                 </div>
                             </div>
-                            {/* Role & Shift */}
+                            {/* Position & Role */}
                             <div className="grid grid-cols-2 gap-4">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label"><span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> Jabatan</span></label>
+                                    <select className="form-select" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} required>
+                                        <option value="">Pilih Jabatan</option>
+                                        {masterPositions.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                    </select>
+                                </div>
                                 <div className="form-group !mb-0">
                                     <label className="form-label">Role</label>
                                     <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" })}>
@@ -266,6 +315,9 @@ export default function EmployeesPage() {
                                         <option value="hr">HR</option>
                                     </select>
                                 </div>
+                            </div>
+                            {/* Shift & Join Date */}
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
                                     <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Jam Kerja</span></label>
                                     <select className="form-select" value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })} required>
@@ -273,18 +325,62 @@ export default function EmployeesPage() {
                                         {shifts.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</option>)}
                                     </select>
                                 </div>
-                            </div>
-                            {/* Join date & Leave */}
-                            <div className="grid grid-cols-2 gap-4">
                                 <div className="form-group !mb-0">
                                     <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Tanggal Bergabung</span></label>
                                     <input type="date" className="form-input" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} required />
                                 </div>
-                                <div className="form-group !mb-0">
-                                    <label className="form-label">Jatah Cuti / Tahun</label>
-                                    <input type="number" className="form-input" value={form.totalLeave} onChange={(e) => setForm({ ...form, totalLeave: Number(e.target.value) })} min={0} />
-                                </div>
                             </div>
+                            {/* Leave */}
+                            <div className="form-group !mb-0">
+                                <label className="form-label">Jatah Cuti / Tahun</label>
+                                <input type="number" className="form-input" value={form.totalLeave} onChange={(e) => setForm({ ...form, totalLeave: Number(e.target.value) })} min={0} />
+                            </div>
+
+                            {/* Location Settings */}
+                            <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-semibold text-[var(--text-primary)]">Pengaturan Lokasi Absensi</label>
+                                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.bypassLocation}
+                                            onChange={(e) => setForm({ ...form, bypassLocation: e.target.checked })}
+                                            className="w-3.5 h-3.5 accent-blue-600"
+                                        />
+                                        Bypass Lokasi
+                                    </label>
+                                </div>
+
+                                {!form.bypassLocation && (
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] text-[var(--text-muted)]">Pilih satu atau beberapa lokasi di bawah ini agar karyawan bisa melakukan absensi.</p>
+                                        <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1">
+                                            {masterLocations.map((loc) => (
+                                                <label key={loc.id} className="flex items-center gap-2 p-2 bg-white rounded border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={form.locations.some(l => l.id === loc.id)}
+                                                        onChange={(e) => {
+                                                            const newLocs = e.target.checked
+                                                                ? [...form.locations, { id: loc.id, name: loc.name }]
+                                                                : form.locations.filter(l => l.id !== loc.id);
+                                                            setForm({ ...form, locations: newLocs });
+                                                        }}
+                                                        className="w-3.5 h-3.5 accent-[var(--primary)]"
+                                                    />
+                                                    <span className="text-xs truncate">{loc.name}</span>
+                                                </label>
+                                            ))}
+                                            {masterLocations.length === 0 && (
+                                                <div className="col-span-2 text-center py-2 text-[10px] text-red-500 font-medium">
+                                                    Belum ada data lokasi. Tambahkan di Master Data.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Active status */}
                             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
                                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="w-4 h-4 accent-[var(--primary)]" />

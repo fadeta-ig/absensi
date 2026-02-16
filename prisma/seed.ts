@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
     console.log("🌱 Seeding database...");
 
-    // Create shifts first (referenced by employees)
+    // 1. Create shifts
     const shiftPagi = await prisma.workShift.upsert({
         where: { id: "shift-001" },
         update: {},
@@ -19,35 +19,50 @@ async function main() {
         },
     });
 
-    const shiftSiang = await prisma.workShift.upsert({
-        where: { id: "shift-002" },
+    // 2. Create Departments
+    const deptIT = await prisma.department.upsert({
+        where: { name: "IT" },
         update: {},
-        create: {
-            id: "shift-002",
-            name: "Shift Siang",
-            startTime: "14:00",
-            endTime: "22:00",
-            isDefault: false,
-        },
+        create: { name: "IT", code: "IT", description: "Information Technology" }
     });
 
-    const shiftMalam = await prisma.workShift.upsert({
-        where: { id: "shift-003" },
+    const deptHR = await prisma.department.upsert({
+        where: { name: "Human Resources" },
         update: {},
-        create: {
-            id: "shift-003",
-            name: "Shift Malam",
-            startTime: "22:00",
-            endTime: "06:00",
-            isDefault: false,
-        },
+        create: { name: "Human Resources", code: "HR", description: "Human Resources Department" }
     });
 
-    console.log(`✅ Shifts: ${shiftPagi.name}, ${shiftSiang.name}, ${shiftMalam.name}`);
+    // 3. Create Divisions
+    const divHRGA = await prisma.division.upsert({
+        where: { name_departmentId: { name: "HRGA-IT", departmentId: deptIT.id } },
+        update: {},
+        create: { name: "HRGA-IT", departmentId: deptIT.id }
+    });
+
+    const divOps = await prisma.division.upsert({
+        where: { name_departmentId: { name: "Operations", departmentId: deptHR.id } },
+        update: {},
+        create: { name: "Operations", departmentId: deptHR.id }
+    });
+
+    // 4. Create Positions (Standalone now)
+    const posStaff = await prisma.position.upsert({
+        where: { name: "Staff" },
+        update: {},
+        create: { name: "Staff" }
+    });
+
+    const posManager = await prisma.position.upsert({
+        where: { name: "Manager" },
+        update: {},
+        create: { name: "Manager" }
+    });
+
+    console.log("✅ Master data (Shifts, Depts, Divisions, Positions) seeded");
 
     const hashedPassword = await bcrypt.hash("password123", 10);
 
-    // Create employees
+    // 5. Create employees
     const hrAdmin = await prisma.employee.upsert({
         where: { employeeId: "WIG001" },
         update: {
@@ -62,7 +77,8 @@ async function main() {
             email: "hr@wig.co.id",
             phone: "08123456789",
             department: "Human Resources",
-            position: "HR Manager",
+            division: "Operations",
+            position: "Manager",
             role: "hr",
             password: hashedPassword,
             joinDate: "2024-01-15",
@@ -85,8 +101,9 @@ async function main() {
             name: "Budi Santoso",
             email: "budi@wig.co.id",
             phone: "08198765432",
-            department: "Engineering",
-            position: "Software Engineer",
+            department: "IT",
+            division: "HRGA-IT",
+            position: "Staff",
             role: "employee",
             password: hashedPassword,
             joinDate: "2024-03-01",
@@ -97,9 +114,9 @@ async function main() {
         },
     });
 
-    console.log(`✅ Employees: ${hrAdmin.name}, ${budi.name}`);
+    console.log(`✅ Employees seeded: ${hrAdmin.name}, ${budi.name}`);
 
-    // Create news
+    // 6. Create news
     await prisma.newsItem.upsert({
         where: { id: "news-001" },
         update: {},
@@ -115,23 +132,7 @@ async function main() {
         },
     });
 
-    await prisma.newsItem.upsert({
-        where: { id: "news-002" },
-        update: {},
-        create: {
-            id: "news-002",
-            title: "Kebijakan Work From Home 2026",
-            content:
-                "Mulai bulan Maret 2026, kebijakan WFH akan diterapkan maksimal 2 hari per minggu. Detail lebih lanjut akan diinformasikan melalui email resmi perusahaan.",
-            category: "policy",
-            author: "Admin HR",
-            createdAt: new Date().toISOString(),
-            isPinned: false,
-        },
-    });
-
     console.log("✅ News seeded");
-
     console.log("🎉 Seeding complete!");
 }
 

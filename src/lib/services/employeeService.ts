@@ -2,7 +2,10 @@ import { prisma } from "../prisma";
 import { Employee } from "@/types";
 
 export async function getEmployees(): Promise<Employee[]> {
-    const rows = await prisma.employee.findMany({ orderBy: { name: "asc" } });
+    const rows = await prisma.employee.findMany({
+        include: { locations: { select: { id: true, name: true } } },
+        orderBy: { name: "asc" }
+    });
     return rows as unknown as Employee[];
 }
 
@@ -24,6 +27,7 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             email: data.email,
             phone: data.phone,
             department: data.department,
+            division: data.division,
             position: data.position,
             role: data.role,
             password: data.password,
@@ -33,7 +37,12 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             avatarUrl: data.avatarUrl,
             isActive: data.isActive,
             shiftId: data.shiftId,
+            bypassLocation: data.bypassLocation || false,
+            locations: data.locations ? {
+                connect: data.locations.map(l => ({ id: l.id }))
+            } : undefined,
         },
+        include: { locations: { select: { id: true, name: true } } }
     });
     return row as unknown as Employee;
 }
@@ -47,6 +56,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.email !== undefined && { email: data.email }),
                 ...(data.phone !== undefined && { phone: data.phone }),
                 ...(data.department !== undefined && { department: data.department }),
+                ...(data.division !== undefined && { division: data.division }),
                 ...(data.position !== undefined && { position: data.position }),
                 ...(data.role !== undefined && { role: data.role }),
                 ...(data.password !== undefined && { password: data.password }),
@@ -56,7 +66,14 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
                 ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
+                ...(data.bypassLocation !== undefined && { bypassLocation: data.bypassLocation }),
+                ...(data.locations !== undefined && {
+                    locations: {
+                        set: data.locations.map(l => ({ id: l.id }))
+                    }
+                }),
             },
+            include: { locations: { select: { id: true, name: true } } }
         });
         return row as unknown as Employee;
     } catch {

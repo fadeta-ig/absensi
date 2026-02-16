@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp } from "lucide-react";
+import { Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 interface NewsItem { id: string; title: string; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
@@ -68,9 +69,20 @@ export default function EmployeeHomePage() {
                     </div>
                     <div>
                         <p className="text-xs text-[var(--text-muted)]">Status Hari Ini</p>
-                        <p className="text-lg font-bold text-[var(--text-primary)]">
-                            {todayRecord ? getStatusLabel(todayRecord.status) : "Belum Absen"}
-                        </p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-lg font-bold text-[var(--text-primary)]">
+                                {todayRecord ? getStatusLabel(todayRecord.status) : "Belum Absen"}
+                            </p>
+                            {!todayRecord?.clockOut && (
+                                <Link
+                                    href="/employee/attendance"
+                                    className="p-1 hover:bg-[var(--primary)]/10 rounded transition-colors"
+                                    title={!todayRecord?.clockIn ? "Lakukan Clock In" : "Lakukan Clock Out"}
+                                >
+                                    <ChevronRight className="w-4 h-4 text-[var(--primary)]" />
+                                </Link>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="card p-5 flex items-center gap-4">
