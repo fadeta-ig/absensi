@@ -4,9 +4,15 @@ import { useEffect, useState } from "react";
 import { CalendarOff, CheckCircle, XCircle, Clock, Filter } from "lucide-react";
 
 interface LeaveRequest {
-    id: string; employeeId: string; type: string;
-    startDate: string; endDate: string; reason: string;
-    status: string; createdAt: string;
+    id: string;
+    employeeId: string;
+    employee?: { name: string; totalLeave: number; usedLeave: number };
+    type: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    status: string;
+    createdAt: string;
 }
 
 export default function LeaveManagementPage() {
@@ -14,7 +20,9 @@ export default function LeaveManagementPage() {
     const [filter, setFilter] = useState("all");
 
     useEffect(() => {
-        fetch("/api/leave").then((r) => r.json()).then(setLeaves);
+        fetch("/api/leave").then((r) => r.json()).then((d) => {
+            if (Array.isArray(d)) setLeaves(d);
+        });
     }, []);
 
     const filtered = filter === "all" ? leaves : leaves.filter((l) => l.status === filter);
@@ -25,7 +33,10 @@ export default function LeaveManagementPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, status }),
         });
-        if (res.ok) setLeaves((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
+        if (res.ok) {
+            const updated = await res.json();
+            setLeaves((prev) => prev.map((l) => (l.id === id ? { ...l, ...updated } : l)));
+        }
     };
 
     const getTypeLabel = (t: string) => {
@@ -38,6 +49,13 @@ export default function LeaveManagementPage() {
             case "rejected": return { label: "Ditolak", badge: "badge-error", icon: XCircle };
             default: return { label: "Menunggu", badge: "badge-warning", icon: Clock };
         }
+    };
+
+    const calculateDays = (start: string, end: string) => {
+        const s = new Date(start);
+        const e = new Date(end);
+        const diff = e.getTime() - s.getTime();
+        return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
     };
 
     const pendingCount = leaves.filter((l) => l.status === "pending").length;
@@ -73,15 +91,22 @@ export default function LeaveManagementPage() {
                     {filtered.map((l) => {
                         const info = getStatusInfo(l.status);
                         const StatusIcon = info.icon;
+                        const days = calculateDays(l.startDate, l.endDate);
                         return (
                             <div key={l.id} className="card p-5">
                                 <div className="flex items-start justify-between gap-4 flex-wrap">
                                     <div className="space-y-2 flex-1">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-sm font-bold text-[var(--text-primary)]">{l.employeeId}</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-[var(--text-primary)]">{l.employee?.name || "Karyawan"}</span>
+                                                <span className="text-[10px] font-mono text-[var(--text-muted)]">{l.employeeId}</span>
+                                            </div>
                                             <span className="badge badge-info">{getTypeLabel(l.type)}</span>
                                             <span className={`badge ${info.badge} flex items-center gap-1`}>
                                                 <StatusIcon className="w-3 h-3" /> {info.label}
+                                            </span>
+                                            <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] rounded-full text-[var(--text-secondary)] font-medium">
+                                                {days} Hari
                                             </span>
                                         </div>
                                         <p className="text-sm text-[var(--text-secondary)]">{l.startDate} — {l.endDate}</p>
@@ -89,7 +114,7 @@ export default function LeaveManagementPage() {
                                         <p className="text-[10px] text-[var(--text-muted)]">Diajukan: {new Date(l.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
                                     </div>
                                     {l.status === "pending" && (
-                                        <div className="flex gap-2 shrink-0">
+                                        <div className="flex gap-2 shrink-0 self-center">
                                             <button onClick={() => handleUpdate(l.id, "approved")} className="btn btn-success btn-sm">
                                                 <CheckCircle className="w-3.5 h-3.5" /> Setujui
                                             </button>

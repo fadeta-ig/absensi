@@ -9,6 +9,7 @@ import {
 interface OvertimeRequest {
     id: string;
     employeeId: string;
+    employee?: { name: string };
     date: string;
     startTime: string;
     endTime: string;
@@ -45,15 +46,18 @@ export default function DashboardOvertimePage() {
             });
             if (res.ok) {
                 const updated = await res.json();
-                setRequests((prev) => prev.map((r) => (r.id === id ? updated : r)));
-                if (selectedReq?.id === id) setSelectedReq(updated);
+                // Ensure we keep the employee name if updated doesn't include it
+                setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+                if (selectedReq?.id === id) setSelectedReq({ ...selectedReq, ...updated });
             }
         } catch { /* silent */ }
         setUpdating(null);
     };
 
     const filtered = requests.filter((r) => {
+        const empName = r.employee?.name || "";
         const matchSearch = r.employeeId.toLowerCase().includes(search.toLowerCase()) ||
+            empName.toLowerCase().includes(search.toLowerCase()) ||
             r.reason.toLowerCase().includes(search.toLowerCase());
         const matchStatus = filterStatus === "all" || r.status === filterStatus;
         return matchSearch && matchStatus;
@@ -98,7 +102,7 @@ export default function DashboardOvertimePage() {
             <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                    <input type="text" className="form-input pl-10" placeholder="Cari employee ID atau alasan..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input type="text" className="form-input pl-10" placeholder="Cari nama, ID atau alasan..." value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-[var(--text-muted)]" />
@@ -137,10 +141,10 @@ export default function DashboardOvertimePage() {
                                     const cfg = STATUS_CONFIG[r.status];
                                     return (
                                         <tr key={r.id}>
-                                            <td className="font-mono text-xs">
-                                                <div className="flex items-center gap-1.5">
-                                                    <User className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                                                    {r.employeeId}
+                                            <td>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-sm text-[var(--text-primary)]">{r.employee?.name || "Karyawan"}</span>
+                                                    <span className="font-mono text-[10px] text-[var(--text-muted)]">{r.employeeId}</span>
                                                 </div>
                                             </td>
                                             <td className="text-xs">{r.date}</td>
@@ -198,9 +202,9 @@ export default function DashboardOvertimePage() {
                         </div>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <User className="w-4 h-4 text-[var(--text-muted)]" />
-                                    <span className="text-sm font-mono text-[var(--text-secondary)]">{selectedReq.employeeId}</span>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-[var(--text-primary)]">{selectedReq.employee?.name || "Karyawan"}</span>
+                                    <span className="text-[11px] font-mono text-[var(--text-muted)]">{selectedReq.employeeId}</span>
                                 </div>
                                 <span className={`badge ${STATUS_CONFIG[selectedReq.status].class}`}>
                                     {STATUS_CONFIG[selectedReq.status].label}

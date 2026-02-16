@@ -7,6 +7,7 @@ import {
     Clock, Wallet, Megaphone, Activity, UserCheck, UserX, AlertCircle,
     MapPinned, Clock4, BarChart3
 } from "lucide-react";
+import LeaveCalendar from "@/components/LeaveCalendar";
 
 interface AnalyticsData {
     summary: {
@@ -163,6 +164,14 @@ export default function DashboardPage() {
                         );
                     })}
                 </div>
+            </div>
+
+            {/* Leave Calendar Section */}
+            <div className="space-y-3">
+                <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                    <CalendarOff className="w-4 h-4 text-[var(--primary)]" /> Monitoring Cuti Karyawan
+                </h2>
+                <LeaveCalendar leaves={leaves} />
             </div>
 
             {/* Weekly Attendance Chart + Department Stats */}
@@ -459,6 +468,6 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

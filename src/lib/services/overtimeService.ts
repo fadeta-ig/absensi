@@ -1,12 +1,20 @@
 import { prisma } from "../prisma";
 import { OvertimeRequest } from "@/types";
 
-export async function getOvertimeRequests(employeeId?: string): Promise<OvertimeRequest[]> {
+export async function getOvertimeRequests(employeeId?: string): Promise<any[]> {
     const rows = await prisma.overtimeRequest.findMany({
         where: employeeId ? { employeeId } : undefined,
+        include: {
+            employee: {
+                select: {
+                    name: true,
+                    employeeId: true
+                }
+            }
+        },
         orderBy: { createdAt: "desc" },
     });
-    return rows as OvertimeRequest[];
+    return rows;
 }
 
 export async function getOvertimeRequestById(id: string): Promise<OvertimeRequest | undefined> {
