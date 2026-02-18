@@ -118,6 +118,7 @@ model LeaveRequest {
   endDate    String   @map("end_date")
   reason     String   @db.Text
   status     String   @default("pending") // "pending" | "approved" | "rejected"
+  attachment String?  @db.LongText
   createdAt  String   @map("created_at")
 
   // Relations - Changed to reference employeeId (string) instead of id (UUID)

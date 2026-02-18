@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarOff, CheckCircle, XCircle, Clock, Filter } from "lucide-react";
+import { CalendarOff, CheckCircle, XCircle, Clock, Filter, Paperclip } from "lucide-react";
 
 interface LeaveRequest {
     id: string;
@@ -12,6 +12,7 @@ interface LeaveRequest {
     endDate: string;
     reason: string;
     status: string;
+    attachment?: string | null;
     createdAt: string;
 }
 
@@ -48,6 +49,13 @@ export default function LeaveManagementPage() {
             case "approved": return { label: "Disetujui", badge: "badge-success", icon: CheckCircle };
             case "rejected": return { label: "Ditolak", badge: "badge-error", icon: XCircle };
             default: return { label: "Menunggu", badge: "badge-warning", icon: Clock };
+        }
+    };
+
+    const openAttachment = (data: string) => {
+        const win = window.open();
+        if (win) {
+            win.document.write(`<iframe src="${data}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
         }
     };
 
@@ -108,6 +116,11 @@ export default function LeaveManagementPage() {
                                             <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] rounded-full text-[var(--text-secondary)] font-medium">
                                                 {days} Hari
                                             </span>
+                                            {l.attachment && (
+                                                <button onClick={() => openAttachment(l.attachment!)} className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--primary)]/10 text-[var(--primary)] rounded text-[10px] font-bold hover:bg-[var(--primary)] transition-colors">
+                                                    <Paperclip className="w-3 h-3" /> Bukti
+                                                </button>
+                                            )}
                                         </div>
                                         <p className="text-sm text-[var(--text-secondary)]">{l.startDate} — {l.endDate}</p>
                                         <p className="text-xs text-[var(--text-muted)]">{l.reason}</p>

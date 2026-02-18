@@ -63,6 +63,7 @@ export type LeaveRequest = {
     endDate: string;
     reason: string;
     status: "pending" | "approved" | "rejected";
+    attachment?: string | null;
     createdAt: string;
 };
 
