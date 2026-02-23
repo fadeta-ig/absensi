@@ -20,8 +20,15 @@ export default function EmployeeHomePage() {
         fetch("/api/attendance").then((r) => r.json()).then(setAttendance);
         fetch("/api/leave").then((r) => r.json()).then((data) => {
             if (Array.isArray(data)) {
-                const approved = data.filter((l: { status: string }) => l.status === "approved").length;
-                setLeaveBalance({ total: 12, used: approved });
+                const approvedLeaves = data.filter((l: { status: string }) => l.status === "approved");
+                let usedDays = 0;
+                approvedLeaves.forEach((l: { startDate: string; endDate: string }) => {
+                    const s = new Date(l.startDate);
+                    const e = new Date(l.endDate);
+                    const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    usedDays += diff;
+                });
+                setLeaveBalance({ total: 12, used: usedDays });
             }
         });
 
@@ -130,32 +137,18 @@ export default function EmployeeHomePage() {
                     <ClipboardList className="w-4 h-4 text-[var(--primary)]" />
                     Riwayat Kehadiran
                 </h2>
-                <div className="card overflow-hidden">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Tanggal</th>
-                                <th>Clock In</th>
-                                <th>Clock Out</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {attendance.length === 0 ? (
-                                <tr><td colSpan={4} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data</td></tr>
-                            ) : (
-                                attendance.slice(0, 5).map((r, i) => (
-                                    <tr key={i}>
-                                        <td className="font-medium text-[var(--text-primary)]">{r.date}</td>
-                                        <td>{formatTime(r.clockIn)}</td>
-                                        <td>{formatTime(r.clockOut)}</td>
-                                        <td><span className={`badge badge-${r.status === "present" ? "success" : r.status === "late" ? "warning" : "error"}`}>{getStatusLabel(r.status)}</span></td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                <Link href="/employee/attendance-history" className="card p-5 flex items-center justify-between hover:shadow-md transition-shadow group">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center group-hover:bg-[var(--primary)]/20 transition-colors">
+                            <ClipboardList className="w-5 h-5 text-[var(--primary)]" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-semibold text-[var(--text-primary)]">Lihat Riwayat Kehadiran</p>
+                            <p className="text-xs text-[var(--text-muted)]">Filter berdasarkan hari, bulan, atau tahun</p>
+                        </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
+                </Link>
             </div>
         </div>
     );

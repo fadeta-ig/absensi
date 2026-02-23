@@ -6,6 +6,8 @@ import {
     Building2, Briefcase, ChevronRight, AlertCircle, Check, Layers, MapPin, Target, Search
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import { useConfirm } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
 
 // Dynamic import for the Map component to avoid SSR issues
 const LocationMap = dynamic(() => import("@/components/LocationMap"), {
@@ -68,6 +70,9 @@ export default function MasterDataPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchLoading, setSearchLoading] = useState(false);
 
+    const confirm = useConfirm();
+    const toast = useToast();
+
     const handleDetectLocation = () => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -79,7 +84,7 @@ export default function MasterDataPage() {
                         longitude: longitude.toString()
                     }));
                 },
-                () => alert("Gagal mendapatkan lokasi. Pastikan GPS aktif dan izin diberikan.")
+                () => toast("Gagal mendapatkan lokasi. Pastikan GPS aktif dan izin diberikan.", "error")
             );
         }
     };
@@ -99,11 +104,11 @@ export default function MasterDataPage() {
                     longitude: lon
                 }));
             } else {
-                alert("Lokasi tidak ditemukan");
+                toast("Lokasi tidak ditemukan", "warning");
             }
         } catch (err) {
             console.error(err);
-            alert("Terjadi kesalahan saat mencari lokasi");
+            toast("Terjadi kesalahan saat mencari lokasi", "error");
         } finally {
             setSearchLoading(false);
         }
@@ -294,66 +299,94 @@ export default function MasterDataPage() {
     };
 
     const handleDeleteDept = async (id: string) => {
-        if (!confirm("Hapus departemen ini? Ini tidak bisa dihapus jika masih ada divisi didalamnya.")) return;
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/master/departments?id=${id}`, { method: "DELETE" });
-            const data = await res.json();
-            if (res.ok) {
-                fetchData();
-            } else {
-                alert(data.error);
-            }
-        } catch {
-            alert("Gagal menghapus data");
-        } finally {
-            setLoading(false);
-        }
+        confirm({
+            title: "Hapus Departemen",
+            message: "Hapus departemen ini? Tidak bisa dihapus jika masih ada divisi di dalamnya.",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`/api/master/departments?id=${id}`, { method: "DELETE" });
+                    const data = await res.json();
+                    if (res.ok) {
+                        fetchData();
+                    } else {
+                        toast(data.error, "error");
+                    }
+                } catch {
+                    toast("Gagal menghapus data", "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+        });
     };
 
     const handleDeleteDiv = async (id: string) => {
-        if (!confirm("Hapus divisi ini?")) return;
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/master/divisions?id=${id}`, { method: "DELETE" });
-            if (res.ok) {
-                fetchData();
-            }
-        } catch {
-            alert("Gagal menghapus data");
-        } finally {
-            setLoading(false);
-        }
+        confirm({
+            title: "Hapus Divisi",
+            message: "Hapus divisi ini?",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`/api/master/divisions?id=${id}`, { method: "DELETE" });
+                    if (res.ok) {
+                        fetchData();
+                    }
+                } catch {
+                    toast("Gagal menghapus data", "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+        });
     };
 
     const handleDeletePos = async (id: string) => {
-        if (!confirm("Hapus jabatan ini?")) return;
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/master/positions?id=${id}`, { method: "DELETE" });
-            if (res.ok) {
-                fetchData();
-            }
-        } catch {
-            alert("Gagal menghapus data");
-        } finally {
-            setLoading(false);
-        }
+        confirm({
+            title: "Hapus Jabatan",
+            message: "Hapus jabatan ini?",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`/api/master/positions?id=${id}`, { method: "DELETE" });
+                    if (res.ok) {
+                        fetchData();
+                    }
+                } catch {
+                    toast("Gagal menghapus data", "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+        });
     };
 
     const handleDeleteLoc = async (id: string) => {
-        if (!confirm("Hapus lokasi ini?")) return;
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/master/locations?id=${id}`, { method: "DELETE" });
-            if (res.ok) {
-                fetchData();
-            }
-        } catch {
-            alert("Gagal menghapus data");
-        } finally {
-            setLoading(false);
-        }
+        confirm({
+            title: "Hapus Lokasi",
+            message: "Hapus lokasi ini?",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`/api/master/locations?id=${id}`, { method: "DELETE" });
+                    if (res.ok) {
+                        fetchData();
+                    }
+                } catch {
+                    toast("Gagal menghapus data", "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+        });
     };
 
     const getTabName = () => {

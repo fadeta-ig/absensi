@@ -6,6 +6,7 @@ import Image from "next/image";
 import {
     Home,
     Camera,
+    ClipboardList,
     FileText,
     CalendarOff,
     Newspaper,
@@ -27,6 +28,7 @@ interface User {
 const navItems = [
     { href: "/employee", icon: Home, label: "Beranda" },
     { href: "/employee/attendance", icon: Camera, label: "Absensi" },
+    { href: "/employee/attendance-history", icon: ClipboardList, label: "Riwayat" },
     { href: "/employee/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/employee/overtime", icon: Clock4, label: "Lembur" },
     { href: "/employee/payslip", icon: FileText, label: "Slip Gaji" },

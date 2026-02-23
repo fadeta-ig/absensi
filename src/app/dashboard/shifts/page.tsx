@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer } from "lucide-react";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface WorkShift {
     id: string;
@@ -55,10 +56,19 @@ export default function ShiftsPage() {
         setLoading(false);
     };
 
+    const confirm = useConfirm();
+
     const handleDelete = async (id: string) => {
-        if (!confirm("Yakin ingin menghapus shift ini?")) return;
-        const res = await fetch(`/api/shifts?id=${id}`, { method: "DELETE" });
-        if (res.ok) setShifts((prev) => prev.filter((s) => s.id !== id));
+        confirm({
+            title: "Hapus Shift",
+            message: "Yakin ingin menghapus shift ini?",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                const res = await fetch(`/api/shifts?id=${id}`, { method: "DELETE" });
+                if (res.ok) setShifts((prev) => prev.filter((s) => s.id !== id));
+            },
+        });
     };
 
     const handleSetDefault = async (shift: WorkShift) => {

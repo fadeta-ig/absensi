@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ConfirmModal from "@/components/ConfirmModal";
+import ToastContainer from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "WIG Attendance - PT Wijaya Inovasi Gemilang",
@@ -21,7 +23,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        {children}
+        <ConfirmModal />
+        <ToastContainer />
+      </body>
     </html>
   );
 }

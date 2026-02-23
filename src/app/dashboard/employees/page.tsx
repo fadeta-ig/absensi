@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers, CalendarDays } from "lucide-react";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface WorkShift { id: string; name: string; startTime: string; endTime: string; isDefault: boolean; }
 interface Employee {
@@ -133,32 +134,48 @@ export default function EmployeesPage() {
         return days.map((d) => DAY_LABELS[d]).join(", ");
     };
 
+    const confirm = useConfirm();
+
     const handleDelete = async (id: string) => {
-        if (!confirm("Yakin ingin menghapus karyawan ini?")) return;
-        const res = await fetch(`/api/employees?id=${id}`, { method: "DELETE" });
-        if (res.ok) setEmployees((prev) => prev.filter((e) => e.id !== id));
+        confirm({
+            title: "Hapus Karyawan",
+            message: "Yakin ingin menghapus karyawan ini? Data tidak dapat dikembalikan.",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                const res = await fetch(`/api/employees?id=${id}`, { method: "DELETE" });
+                if (res.ok) setEmployees((prev) => prev.filter((e) => e.id !== id));
+            },
+        });
     };
 
     const handleSendPassword = async (emp: Employee) => {
-        if (!confirm(`Kirim password baru ke email ${emp.name}?`)) return;
-        setSendingPassword(emp.id);
-        setPasswordMsg(null);
-        try {
-            const res = await fetch("/api/auth/send-password", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ employeeId: emp.employeeId }),
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setPasswordMsg({ type: "success", text: data.message });
-            } else {
-                setPasswordMsg({ type: "error", text: data.error || "Gagal mengirim password" });
-            }
-        } catch {
-            setPasswordMsg({ type: "error", text: "Terjadi kesalahan koneksi" });
-        }
-        setSendingPassword(null);
+        confirm({
+            title: "Kirim Password",
+            message: `Kirim password baru ke email ${emp.name}?`,
+            variant: "warning",
+            confirmLabel: "Kirim",
+            onConfirm: async () => {
+                setSendingPassword(emp.id);
+                setPasswordMsg(null);
+                try {
+                    const res = await fetch("/api/auth/send-password", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ employeeId: emp.employeeId }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        setPasswordMsg({ type: "success", text: data.message });
+                    } else {
+                        setPasswordMsg({ type: "error", text: data.error || "Gagal mengirim password" });
+                    }
+                } catch {
+                    setPasswordMsg({ type: "error", text: "Terjadi kesalahan koneksi" });
+                }
+                setSendingPassword(null);
+            },
+        });
     };
 
     return (
@@ -365,8 +382,8 @@ export default function EmployeesPage() {
                                             type="button"
                                             onClick={() => toggleDay(idx)}
                                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${form.workDays.includes(idx)
-                                                    ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                                                    : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                                                ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                                                : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
                                                 }`}
                                         >
                                             {label}

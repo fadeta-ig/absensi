@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Megaphone, Plus, Pencil, Trash2, Pin, X, Loader2, Upload, Paperclip, FileText } from "lucide-react";
+import { useConfirm } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
 
 interface NewsItem {
     id: string; title: string; content: string;
@@ -18,7 +20,10 @@ export default function NewsManagementPage() {
     const [form, setForm] = useState(INIT_FORM);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
+    const confirm = useConfirm();
+    const toast = useToast();
 
     useEffect(() => {
         fetch("/api/news").then((r) => r.json()).then(setNews);
@@ -32,12 +37,12 @@ export default function NewsManagementPage() {
             const res = await fetch("/api/news/upload", { method: "POST", body: fd });
             if (!res.ok) {
                 const err = await res.json();
-                alert(err.error || "Upload gagal");
+                toast(err.error || "Upload gagal", "error");
                 return null;
             }
             return await res.json();
         } catch {
-            alert("Upload gagal, cek koneksi");
+            toast("Upload gagal, cek koneksi", "error");
             return null;
         } finally {
             setUploading(false);
@@ -48,12 +53,10 @@ export default function NewsManagementPage() {
         e.preventDefault();
         setLoading(true);
 
-        // Upload file if selected
         let mediaUrl = form.mediaUrl;
         let mediaName = form.mediaName;
-        const fileInput = fileRef.current;
-        if (fileInput?.files?.[0]) {
-            const result = await uploadFile(fileInput.files[0]);
+        if (selectedFile) {
+            const result = await uploadFile(selectedFile);
             if (result) {
                 mediaUrl = result.url;
                 mediaName = result.name;
@@ -86,9 +89,16 @@ export default function NewsManagementPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Yakin ingin menghapus berita ini?")) return;
-        const res = await fetch(`/api/news?id=${id}`, { method: "DELETE" });
-        if (res.ok) setNews((prev) => prev.filter((n) => n.id !== id));
+        confirm({
+            title: "Hapus Berita",
+            message: "Yakin ingin menghapus berita ini?",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                const res = await fetch(`/api/news?id=${id}`, { method: "DELETE" });
+                if (res.ok) setNews((prev) => prev.filter((n) => n.id !== id));
+            },
+        });
     };
 
     const togglePin = async (item: NewsItem) => {
@@ -117,12 +127,21 @@ export default function NewsManagementPage() {
         setShowForm(false);
         setEditId(null);
         setForm(INIT_FORM);
+        setSelectedFile(null);
         if (fileRef.current) fileRef.current.value = "";
     };
 
     const removeMedia = () => {
         setForm({ ...form, mediaUrl: null, mediaName: null });
+        setSelectedFile(null);
         if (fileRef.current) fileRef.current.value = "";
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+        }
     };
 
     const getCategoryLabel = (cat: string) => {
@@ -217,10 +236,17 @@ export default function NewsManagementPage() {
                                 <label className="form-label flex items-center gap-1">
                                     <Paperclip className="w-3 h-3" /> Lampiran Media
                                 </label>
-                                {form.mediaUrl && form.mediaName ? (
+                                {(form.mediaUrl && form.mediaName) || selectedFile ? (
                                     <div className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)]">
                                         <FileText className="w-4 h-4 text-[var(--primary)] shrink-0" />
-                                        <span className="text-xs text-[var(--text-secondary)] truncate flex-1">{form.mediaName}</span>
+                                        <span className="text-xs text-[var(--text-secondary)] truncate flex-1">
+                                            {selectedFile ? selectedFile.name : form.mediaName}
+                                        </span>
+                                        {selectedFile && (
+                                            <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                                                {(selectedFile.size / 1024).toFixed(0)} KB
+                                            </span>
+                                        )}
                                         <button type="button" onClick={removeMedia} className="text-red-400 hover:text-red-600 shrink-0">
                                             <X className="w-3.5 h-3.5" />
                                         </button>
@@ -233,7 +259,7 @@ export default function NewsManagementPage() {
                                             accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
                                             className="hidden"
                                             id="news-media-upload"
-                                            onChange={() => { /* handled on submit */ }}
+                                            onChange={handleFileChange}
                                         />
                                         <label
                                             htmlFor="news-media-upload"

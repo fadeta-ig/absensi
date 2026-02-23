@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
+import { useToast } from "@/components/Toast";
 
 interface LeaveRequest {
     id: string;
@@ -41,12 +42,14 @@ export default function LeavePage() {
         });
     }, []);
 
+    const toast = useToast();
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         if (file.size > 2 * 1024 * 1024) {
-            alert("File terlalu besar (maksimal 2MB)");
+            toast("File terlalu besar (maksimal 2MB)", "warning");
             return;
         }
 

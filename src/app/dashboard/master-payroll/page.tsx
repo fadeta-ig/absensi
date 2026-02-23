@@ -5,6 +5,8 @@ import {
     Settings, Plus, Pencil, Trash2, X, Loader2,
     Wallet, TrendingUp, TrendingDown, AlertCircle, Check, Info
 } from "lucide-react";
+import { useConfirm } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
 
 interface PayrollComponent {
     id: string;
@@ -93,17 +95,27 @@ export default function MasterPayrollPage() {
         }
     };
 
+    const confirm = useConfirm();
+    const toast = useToast();
+
     const handleDelete = async (id: string) => {
-        if (!confirm("Hapus komponen ini?")) return;
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/master/payroll-components?id=${id}`, { method: "DELETE" });
-            if (res.ok) fetchData();
-        } catch {
-            alert("Gagal menghapus data");
-        } finally {
-            setLoading(false);
-        }
+        confirm({
+            title: "Hapus Komponen",
+            message: "Hapus komponen payroll ini? Data tidak dapat dikembalikan.",
+            variant: "danger",
+            confirmLabel: "Ya, Hapus",
+            onConfirm: async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch(`/api/master/payroll-components?id=${id}`, { method: "DELETE" });
+                    if (res.ok) fetchData();
+                } catch {
+                    toast("Gagal menghapus data", "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+        });
     };
 
     const fmt = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
