@@ -38,7 +38,7 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             isActive: data.isActive,
             shiftId: data.shiftId,
             bypassLocation: data.bypassLocation || false,
-            workDays: data.workDays ?? [1, 2, 3, 4, 5],
+
             locations: data.locations ? {
                 connect: data.locations.map(l => ({ id: l.id }))
             } : undefined,
@@ -68,7 +68,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
                 ...(data.bypassLocation !== undefined && { bypassLocation: data.bypassLocation }),
-                ...(data.workDays !== undefined && { workDays: data.workDays }),
+
                 ...(data.locations !== undefined && {
                     locations: {
                         set: data.locations.map(l => ({ id: l.id }))

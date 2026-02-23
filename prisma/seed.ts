@@ -13,9 +13,18 @@ async function main() {
         create: {
             id: "shift-001",
             name: "Shift Pagi",
-            startTime: "08:00",
-            endTime: "17:00",
             isDefault: true,
+            days: {
+                create: [
+                    { dayOfWeek: 0, startTime: "08:00", endTime: "17:00", isOff: true },
+                    { dayOfWeek: 1, startTime: "08:00", endTime: "17:00", isOff: false },
+                    { dayOfWeek: 2, startTime: "08:00", endTime: "17:00", isOff: false },
+                    { dayOfWeek: 3, startTime: "08:00", endTime: "17:00", isOff: false },
+                    { dayOfWeek: 4, startTime: "08:00", endTime: "17:00", isOff: false },
+                    { dayOfWeek: 5, startTime: "08:00", endTime: "17:00", isOff: false },
+                    { dayOfWeek: 6, startTime: "08:00", endTime: "13:00", isOff: false },
+                ],
+            },
         },
     });
 

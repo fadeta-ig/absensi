@@ -17,7 +17,7 @@ export type Employee = {
     isActive: boolean;
     shiftId?: string | null;
     bypassLocation: boolean;
-    workDays?: number[];
+    workDays?: number[]; // @deprecated - kept for backward compat, derived from shift days
     locations?: { id: string; name: string }[];
 };
 
@@ -48,16 +48,24 @@ export type PayslipRecord = {
     notes?: string | null;
 };
 
+export type WorkShiftDay = {
+    id: string;
+    shiftId: string;
+    dayOfWeek: number; // 0=Sunday, 1=Monday, ... 6=Saturday
+    startTime: string;
+    endTime: string;
+    isOff: boolean;
+};
+
 export type WorkShift = {
     id: string;
     name: string;
-    startTime: string;
-    endTime: string;
     isDefault: boolean;
     lateCheckIn: number;
     earlyCheckIn: number;
     lateCheckOut: number;
     earlyCheckOut: number;
+    days: WorkShiftDay[];
 };
 
 export type LeaveRequest = {

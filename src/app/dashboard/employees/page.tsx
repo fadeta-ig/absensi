@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers, CalendarDays } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 
-interface WorkShift { id: string; name: string; startTime: string; endTime: string; isDefault: boolean; }
+interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
+interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
 interface Employee {
     id: string; employeeId: string; name: string; email: string; phone: string;
     department: string; division?: string | null; position: string; role: string; isActive: boolean; joinDate: string; shiftId?: string;
-    bypassLocation: boolean; workDays?: number[]; locations?: { id: string; name: string }[];
+    bypassLocation: boolean; locations?: { id: string; name: string }[];
 }
 
 interface Location { id: string; name: string; }
@@ -31,14 +32,13 @@ export default function EmployeesPage() {
     const [sendingPassword, setSendingPassword] = useState<string | null>(null);
     const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-    const DAY_LABELS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-    const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5];
+    const DAY_LABELS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
     const [form, setForm] = useState({
         employeeId: "", name: "", email: "", phone: "", department: "", division: "", position: "",
         role: "employee" as "employee" | "hr", password: "password123", joinDate: new Date().toISOString().split("T")[0],
         totalLeave: 12, usedLeave: 0, isActive: true, shiftId: "",
-        bypassLocation: false, workDays: DEFAULT_WORK_DAYS as number[],
+        bypassLocation: false,
         locations: [] as { id: string; name: string }[],
     });
 
@@ -70,7 +70,21 @@ export default function EmployeesPage() {
     const getShiftName = (sId?: string) => {
         if (!sId) return "-";
         const s = shifts.find((sh) => sh.id === sId);
-        return s ? `${s.name} (${s.startTime}-${s.endTime})` : "-";
+        if (!s) return "-";
+        const workDays = s.days.filter((d) => !d.isOff);
+        if (workDays.length === 0) return s.name;
+        const firstDay = workDays[0];
+        return `${s.name} (${firstDay.startTime}-${firstDay.endTime})`;
+    };
+
+    const getShiftDaysSummary = (sId?: string) => {
+        if (!sId) return "-";
+        const s = shifts.find((sh) => sh.id === sId);
+        if (!s) return "-";
+        const workDayNums = s.days.filter((d) => !d.isOff).map((d) => d.dayOfWeek);
+        if (workDayNums.length === 0) return "Tidak ada hari kerja";
+        if (workDayNums.length === 7) return "Setiap Hari";
+        return workDayNums.map((d) => DAY_LABELS_SHORT[d]).join(", ");
     };
 
     const resetForm = () => {
@@ -79,7 +93,7 @@ export default function EmployeesPage() {
             employeeId: "", name: "", email: "", phone: "", department: "", division: "", position: "",
             role: "employee", password: "password123", joinDate: new Date().toISOString().split("T")[0],
             totalLeave: 12, usedLeave: 0, isActive: true, shiftId: def?.id || "",
-            bypassLocation: false, workDays: DEFAULT_WORK_DAYS,
+            bypassLocation: false,
             locations: [],
         });
         setEditId(null);
@@ -112,27 +126,13 @@ export default function EmployeesPage() {
             usedLeave: 0,
             shiftId: emp.shiftId || "",
             bypassLocation: emp.bypassLocation || false,
-            workDays: (emp.workDays as number[]) ?? DEFAULT_WORK_DAYS,
             locations: emp.locations || [],
         } as typeof form);
         setEditId(emp.id);
         setShowForm(true);
     };
 
-    const toggleDay = (day: number) => {
-        setForm((f) => ({
-            ...f,
-            workDays: f.workDays.includes(day)
-                ? f.workDays.filter((d) => d !== day)
-                : [...f.workDays, day].sort(),
-        }));
-    };
 
-    const formatWorkDays = (days?: number[]) => {
-        if (!days || days.length === 0) return "-";
-        if (days.length === 7) return "Setiap Hari";
-        return days.map((d) => DAY_LABELS[d]).join(", ");
-    };
 
     const confirm = useConfirm();
 
@@ -265,7 +265,7 @@ export default function EmployeesPage() {
                                         </td>
                                         <td className="hidden lg:table-cell text-xs">
                                             <div>{getShiftName(e.shiftId)}</div>
-                                            <div className="text-[10px] text-[var(--text-muted)]">{formatWorkDays(e.workDays)}</div>
+                                            <div className="text-[10px] text-[var(--text-muted)]">{getShiftDaysSummary(e.shiftId)}</div>
                                         </td>
                                         <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
                                         <td>
@@ -363,7 +363,12 @@ export default function EmployeesPage() {
                                     <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Jam Kerja</span></label>
                                     <select className="form-select" value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })} required>
                                         <option value="">Pilih Shift</option>
-                                        {shifts.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.startTime}-{s.endTime})</option>)}
+                                        {shifts.map((s) => {
+                                            const workDays = s.days.filter((d) => !d.isOff);
+                                            const firstDay = workDays[0];
+                                            const label = firstDay ? `${s.name} (${firstDay.startTime}-${firstDay.endTime})` : s.name;
+                                            return <option key={s.id} value={s.id}>{label}</option>;
+                                        })}
                                     </select>
                                 </div>
                                 <div className="form-group !mb-0">
@@ -372,25 +377,6 @@ export default function EmployeesPage() {
                                 </div>
                             </div>
 
-                            {/* Work Days */}
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> Hari Kerja</span></label>
-                                <div className="flex flex-wrap gap-2">
-                                    {DAY_LABELS.map((label, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => toggleDay(idx)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${form.workDays.includes(idx)
-                                                ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                                                : "bg-white text-[var(--text-muted)] border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)]"
-                                                }`}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                             {/* Leave */}
                             <div className="form-group !mb-0">
                                 <label className="form-label">Jatah Cuti / Tahun</label>

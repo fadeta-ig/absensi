@@ -26,7 +26,7 @@ model Employee {
   isActive       Boolean  @default(true) @map("is_active")
   shiftId        String?  @map("shift_id")
   bypassLocation Boolean  @default(false) @map("bypass_location")
-  workDays       Json?    @map("work_days")
+
 
   // Relations
   shift        WorkShift?          @relation(fields: [shiftId], references: [id], onUpdate: Cascade, onDelete: SetNull)
@@ -101,8 +101,6 @@ model PayslipRecord {
 model WorkShift {
   id             String   @id @default(uuid())
   name           String
-  startTime      String   @map("start_time")
-  endTime        String   @map("end_time")
   isDefault      Boolean  @default(false) @map("is_default")
   lateCheckIn    Int      @default(0) @map("late_check_in")
   earlyCheckIn   Int      @default(0) @map("early_check_in")
@@ -111,8 +109,23 @@ model WorkShift {
 
   // Relations
   employees Employee[]
+  days      WorkShiftDay[]
 
   @@map("work_shifts")
+}
+
+model WorkShiftDay {
+  id         String    @id @default(uuid())
+  shiftId    String    @map("shift_id")
+  dayOfWeek  Int       @map("day_of_week") // 0=Sunday, 1=Monday, ... 6=Saturday
+  startTime  String    @map("start_time")
+  endTime    String    @map("end_time")
+  isOff      Boolean   @default(false) @map("is_off")
+
+  shift      WorkShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@unique([shiftId, dayOfWeek])
+  @@map("work_shift_days")
 }
 
 model LeaveRequest {
