@@ -38,12 +38,15 @@ export async function POST(request: NextRequest) {
             isActive: body.isActive !== undefined ? body.isActive : true,
             totalLeave: body.totalLeave || 12,
             usedLeave: body.usedLeave || 0,
+            basicSalary: body.basicSalary || 0,
+            payrollComponents: body.payrollComponents || [],
         });
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...safe } = employee;
         return NextResponse.json(safe, { status: 201 });
-    } catch {
+    } catch (err) {
+        console.error("[API POST Employee Error]:", err);
         return NextResponse.json({ error: "Server error" }, { status: 500 });
     }
 }

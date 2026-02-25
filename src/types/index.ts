@@ -17,8 +17,21 @@ export type Employee = {
     isActive: boolean;
     shiftId?: string | null;
     bypassLocation: boolean;
-    workDays?: number[]; // @deprecated - kept for backward compat, derived from shift days
     locations?: { id: string; name: string }[];
+    basicSalary: number;
+    payrollComponents?: EmployeePayrollComponent[];
+};
+
+export type EmployeePayrollComponent = {
+    id: string;
+    employeeId: string;
+    componentId: string;
+    amount: number;
+    component?: {
+        id: string;
+        name: string;
+        type: "allowance" | "deduction";
+    };
 };
 
 export type AttendanceRecord = {

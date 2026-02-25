@@ -26,17 +26,18 @@ model Employee {
   isActive       Boolean  @default(true) @map("is_active")
   shiftId        String?  @map("shift_id")
   bypassLocation Boolean  @default(false) @map("bypass_location")
-
+  basicSalary    Float    @default(0) @map("basic_salary")
 
   // Relations
-  shift        WorkShift?          @relation(fields: [shiftId], references: [id], onUpdate: Cascade, onDelete: SetNull)
-  attendances  AttendanceRecord[]
-  payslips     PayslipRecord[]
-  leaves       LeaveRequest[]
-  todos        TodoItem[]
-  visits       VisitReport[]
-  overtimes    OvertimeRequest[]
-  locations    Location[]        @relation("EmployeeLocations")
+  shift             WorkShift?                 @relation(fields: [shiftId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+  payrollComponents EmployeePayrollComponent[]
+  attendances       AttendanceRecord[]
+  payslips          PayslipRecord[]
+  leaves            LeaveRequest[]
+  todos             TodoItem[]
+  visits            VisitReport[]
+  overtimes         OvertimeRequest[]
+  locations         Location[]                 @relation("EmployeeLocations")
 
   @@map("employees")
 }
@@ -232,7 +233,22 @@ model PayrollComponent {
   description   String?  @db.Text
   createdAt     DateTime @default(now()) @map("created_at")
 
+  employeeComponents EmployeePayrollComponent[]
+
   @@map("payroll_components")
+}
+
+model EmployeePayrollComponent {
+  id          String @id @default(uuid())
+  employeeId  String @map("employee_id")
+  componentId String @map("component_id")
+  amount      Float  @default(0)
+
+  employee  Employee         @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  component PayrollComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, componentId])
+  @@map("employee_payroll_components")
 }
 
 model Location {

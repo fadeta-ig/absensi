@@ -17,6 +17,8 @@ import {
     LogOut,
     Menu,
     X,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from "lucide-react";
 
 interface User {
@@ -47,8 +49,14 @@ export default function EmployeeLayout({
     const pathname = usePathname();
     const [user, setUser] = useState<User | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [authChecked, setAuthChecked] = useState(false);
     const fetchedRef = useRef(false);
+
+    useEffect(() => {
+        const saved = localStorage.getItem("employee-sidebar-collapsed");
+        if (saved === "true") setSidebarCollapsed(true);
+    }, []);
 
     useEffect(() => {
         if (fetchedRef.current) return;
@@ -82,6 +90,14 @@ export default function EmployeeLayout({
         router.replace("/");
     }, [router]);
 
+    const toggleCollapse = useCallback(() => {
+        setSidebarCollapsed(prev => {
+            const next = !prev;
+            localStorage.setItem("employee-sidebar-collapsed", String(next));
+            return next;
+        });
+    }, []);
+
     if (!authChecked || !user) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[var(--background)]">
@@ -110,10 +126,10 @@ export default function EmployeeLayout({
             </header>
 
             {/* Sidebar */}
-            <aside className={`fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-[var(--border)] flex flex-col z-[200] transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-                <div className="p-5 flex items-center justify-between border-b border-[var(--border)]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 relative">
+            <aside className={`fixed left-0 top-0 bottom-0 bg-white border-r border-[var(--border)] flex flex-col z-[200] transition-all duration-300 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"} w-64 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+                <div className={`p-4 flex items-center border-b border-[var(--border)] ${sidebarCollapsed ? "lg:justify-center" : "justify-between"}`}>
+                    <div className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                        <div className="w-9 h-9 relative shrink-0">
                             <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
                         </div>
                         <div>
@@ -121,47 +137,61 @@ export default function EmployeeLayout({
                             <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Employee</p>
                         </div>
                     </div>
+                    {/* Collapsed logo (icon only) */}
+                    <div className={`w-9 h-9 relative shrink-0 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
+                        <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
+                    </div>
+                    {/* Desktop toggle — minimalist icon */}
+                    <button
+                        onClick={toggleCollapse}
+                        title={sidebarCollapsed ? "Buka Sidebar" : "Tutup Sidebar"}
+                        className={`hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)] transition-all duration-200 ${sidebarCollapsed ? "lg:mt-2" : ""}`}
+                    >
+                        {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                    </button>
+                    {/* Mobile close */}
                     <button onClick={() => setSidebarOpen(false)} className="lg:hidden w-8 h-8 flex items-center justify-center rounded-md hover:bg-[var(--secondary)] transition-colors">
                         <X className="w-4 h-4 text-[var(--text-secondary)]" />
                     </button>
                 </div>
 
-                <div className="p-4 border-b border-[var(--border)]">
+                <div className={`p-4 border-b border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-sm font-bold shrink-0">
                             {user.name.charAt(0)}
                         </div>
-                        <div className="min-w-0">
+                        <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                             <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
                             <p className="text-xs text-[var(--text-muted)]">{user.employeeId}</p>
                         </div>
                     </div>
                 </div>
 
-                <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
+                <nav className={`flex-1 p-3 flex flex-col gap-1 overflow-y-auto ${sidebarCollapsed ? "lg:items-center" : ""}`}>
                     {navItems.map((item) => {
                         const isActive = pathname === item.href;
                         const Icon = item.icon;
                         return (
                             <button
                                 key={item.href}
+                                title={sidebarCollapsed ? item.label : undefined}
                                 onClick={() => { router.push(item.href); setSidebarOpen(false); }}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${isActive
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""} ${isActive
                                     ? "bg-[var(--primary)] text-white shadow-sm"
                                     : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
                                     }`}
                             >
                                 <Icon className="w-[18px] h-[18px] shrink-0" />
-                                <span>{item.label}</span>
+                                <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
                             </button>
                         );
                     })}
                 </nav>
 
-                <div className="p-3 border-t border-[var(--border)]">
-                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
-                        <LogOut className="w-[18px] h-[18px]" />
-                        <span>Keluar</span>
+                <div className={`p-3 border-t border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>
+                    <button onClick={handleLogout} title={sidebarCollapsed ? "Keluar" : undefined} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}>
+                        <LogOut className="w-[18px] h-[18px] shrink-0" />
+                        <span className={sidebarCollapsed ? "lg:hidden" : ""}>Keluar</span>
                     </button>
                 </div>
             </aside>
@@ -172,7 +202,7 @@ export default function EmployeeLayout({
             )}
 
             {/* Main Content */}
-            <main className="flex-1 lg:ml-64 pt-14 lg:pt-0 min-h-screen">
+            <main className={`flex-1 pt-14 lg:pt-0 min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"}`}>
                 <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto">
                     {children}
                 </div>

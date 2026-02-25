@@ -3,7 +3,10 @@ import { Employee } from "@/types";
 
 export async function getEmployees(): Promise<Employee[]> {
     const rows = await prisma.employee.findMany({
-        include: { locations: { select: { id: true, name: true } } },
+        include: {
+            locations: { select: { id: true, name: true } },
+            payrollComponents: { include: { component: true } }
+        },
         orderBy: { name: "asc" }
     });
     return rows as unknown as Employee[];
@@ -38,12 +41,23 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             isActive: data.isActive,
             shiftId: data.shiftId,
             bypassLocation: data.bypassLocation || false,
+            basicSalary: data.basicSalary || 0,
 
             locations: data.locations ? {
                 connect: data.locations.map(l => ({ id: l.id }))
             } : undefined,
+
+            payrollComponents: data.payrollComponents ? {
+                create: data.payrollComponents.map(c => ({
+                    componentId: c.componentId,
+                    amount: c.amount
+                }))
+            } : undefined,
         },
-        include: { locations: { select: { id: true, name: true } } }
+        include: {
+            locations: { select: { id: true, name: true } },
+            payrollComponents: { include: { component: true } }
+        }
     });
     return row as unknown as Employee;
 }
@@ -66,19 +80,35 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.usedLeave !== undefined && { usedLeave: data.usedLeave }),
                 ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
                 ...(data.isActive !== undefined && { isActive: data.isActive }),
+                ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
                 ...(data.bypassLocation !== undefined && { bypassLocation: data.bypassLocation }),
+                ...(data.basicSalary !== undefined && { basicSalary: data.basicSalary }),
 
                 ...(data.locations !== undefined && {
                     locations: {
                         set: data.locations.map(l => ({ id: l.id }))
                     }
                 }),
+
+                ...(data.payrollComponents !== undefined && {
+                    payrollComponents: {
+                        deleteMany: {},
+                        create: data.payrollComponents.map(c => ({
+                            componentId: c.componentId,
+                            amount: c.amount
+                        }))
+                    }
+                }),
             },
-            include: { locations: { select: { id: true, name: true } } }
+            include: {
+                locations: { select: { id: true, name: true } },
+                payrollComponents: { include: { component: true } }
+            }
         });
         return row as unknown as Employee;
-    } catch {
+    } catch (err) {
+        console.error("[updateEmployee Error]:", err);
         return null;
     }
 }
