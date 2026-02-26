@@ -10,8 +10,8 @@ export async function getPayslips(employeeId?: string): Promise<PayslipRecord[]>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return rows.map((r: any) => ({
         ...r,
-        allowances: r.allowances as PayslipRecord["allowances"],
-        deductions: r.deductions as PayslipRecord["deductions"],
+        allowances: r.allowances ? JSON.parse(r.allowances as unknown as string) : [],
+        deductions: r.deductions ? JSON.parse(r.deductions as unknown as string) : [],
     })) as PayslipRecord[];
 }
 
@@ -22,8 +22,8 @@ export async function createPayslip(data: Omit<PayslipRecord, "id">): Promise<Pa
             employeeId: data.employeeId,
             period: data.period,
             basicSalary: data.basicSalary,
-            allowances: JSON.parse(JSON.stringify(data.allowances)),
-            deductions: JSON.parse(JSON.stringify(data.deductions)),
+            allowances: JSON.stringify(data.allowances),
+            deductions: JSON.stringify(data.deductions),
             overtime: data.overtime,
             netSalary: data.netSalary,
             issuedDate: data.issuedDate,
@@ -32,7 +32,7 @@ export async function createPayslip(data: Omit<PayslipRecord, "id">): Promise<Pa
     });
     return {
         ...row,
-        allowances: row.allowances as PayslipRecord["allowances"],
-        deductions: row.deductions as PayslipRecord["deductions"],
+        allowances: row.allowances ? JSON.parse(row.allowances as unknown as string) : [],
+        deductions: row.deductions ? JSON.parse(row.deductions as unknown as string) : [],
     } as PayslipRecord;
 }

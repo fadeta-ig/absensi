@@ -17,8 +17,8 @@ interface Employee {
         component: { name: string; type: "allowance" | "deduction" };
     }[];
 }
-interface Department { id: string; name: string; }
-interface Division { id: string; name: string; departmentId: string; department: { name: string } }
+interface Division { id: string; name: string; }
+interface Department { id: string; name: string; divisionId: string; division?: { name: string } }
 interface AllowanceItem { name: string; amount: number; }
 interface MasterComponent { id: string; name: string; type: string; defaultAmount: number; isActive: boolean; }
 interface Payslip {
@@ -273,7 +273,8 @@ export default function PayrollPage() {
         });
     };
 
-    const availableDivisions = masterDivisions.filter(v => v.department.name === filterDept);
+    const selectedFilterDivision = masterDivisions.find(v => v.name === filterDiv);
+    const availableDepartments = masterDepts.filter(d => selectedFilterDivision ? d.divisionId === selectedFilterDivision.id : false);
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -318,13 +319,13 @@ export default function PayrollPage() {
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
-                        <select className="form-select" value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterDiv(""); }}>
-                            <option value="">Semua Departemen</option>
-                            {masterDepts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                        </select>
-                        <select className="form-select" value={filterDiv} onChange={(e) => setFilterDiv(e.target.value)} disabled={!filterDept}>
+                        <select className="form-select" value={filterDiv} onChange={(e) => { setFilterDiv(e.target.value); setFilterDept(""); }}>
                             <option value="">Semua Divisi</option>
-                            {availableDivisions.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                            {masterDivisions.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                        </select>
+                        <select className="form-select" value={filterDept} onChange={(e) => setFilterDept(e.target.value)} disabled={!filterDiv}>
+                            <option value="">Semua Departemen</option>
+                            {availableDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
                         </select>
                         {tab === "recap" && (
                             <input type="month" className="form-input" value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} />

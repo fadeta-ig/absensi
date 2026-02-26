@@ -19,7 +19,8 @@ export async function GET() {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const descriptor = employee.faceDescriptor as number[] | null;
+    const descriptorRaw = employee.faceDescriptor as string | null;
+    const descriptor = descriptorRaw ? JSON.parse(descriptorRaw) : null;
     return NextResponse.json({
         hasFace: !!descriptor && Array.isArray(descriptor) && descriptor.length === 128,
         descriptor: descriptor,
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
 
         await prisma.employee.update({
             where: { employeeId: session.employeeId },
-            data: { faceDescriptor: descriptor },
+            data: { faceDescriptor: JSON.stringify(descriptor) },
         });
 
         return NextResponse.json({ success: true });
@@ -76,7 +77,7 @@ export async function DELETE() {
     try {
         await prisma.employee.update({
             where: { employeeId: session.employeeId },
-            data: { faceDescriptor: Prisma.DbNull },
+            data: { faceDescriptor: null },
         });
 
         return NextResponse.json({ success: true });

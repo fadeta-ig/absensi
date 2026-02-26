@@ -12,8 +12,8 @@ import { Employee, EmployeePayrollComponent } from "@/types";
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
 interface Location { id: string; name: string; }
-interface Department { id: string; name: string; }
-interface Division { id: string; name: string; departmentId: string; department: { name: string } }
+interface Division { id: string; name: string; }
+interface Department { id: string; name: string; divisionId: string; division?: { name: string } }
 interface Position { id: string; name: string; }
 interface MasterPayrollComponent { id: string; name: string; type: "allowance" | "deduction"; defaultAmount: number; isActive: boolean; }
 
@@ -97,8 +97,9 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         load();
     }, [isEdit]);
 
-    const availableDivisions = masterDivisions.filter(v =>
-        form.department ? v.department.name === form.department : false
+    const selectedDivision = masterDivisions.find(v => v.name === form.division);
+    const availableDepartments = masterDepts.filter(d =>
+        selectedDivision ? d.divisionId === selectedDivision.id : false
     );
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -232,17 +233,17 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3 h-3 text-slate-400" /> Departemen</span></label>
-                                <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value, division: "" })} required>
-                                    <option value="">Pilih Departemen</option>
-                                    {masterDepts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                                <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-slate-400" /> Divisi</span></label>
+                                <select className="form-select" value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value, department: "" })} required>
+                                    <option value="">Pilih Divisi</option>
+                                    {masterDivisions.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
                                 </select>
                             </div>
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3 h-3 text-slate-400" /> Divisi</span></label>
-                                <select className="form-select" value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })} required disabled={!form.department}>
-                                    <option value="">Pilih Divisi</option>
-                                    {availableDivisions.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                                <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3.5 h-3.5 text-slate-400" /> Departemen</span></label>
+                                <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required disabled={!form.division}>
+                                    <option value="">Pilih Departemen</option>
+                                    {availableDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
                                 </select>
                             </div>
                         </div>

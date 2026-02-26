@@ -28,33 +28,43 @@ async function main() {
         },
     });
 
+    // 1. Create Divisions
+    const divCorporate = await prisma.division.upsert({
+        where: { name: "Corporate Services" },
+        update: {},
+        create: { name: "Corporate Services" }
+    });
+
+    const divTech = await prisma.division.upsert({
+        where: { name: "Technology" },
+        update: {},
+        create: { name: "Technology" }
+    });
+
     // 2. Create Departments
     const deptIT = await prisma.department.upsert({
         where: { name: "IT" },
         update: {},
-        create: { name: "IT", code: "IT", description: "Information Technology" }
+        create: {
+            name: "IT",
+            code: "IT",
+            description: "Information Technology",
+            divisionId: divTech.id
+        }
     });
 
     const deptHR = await prisma.department.upsert({
         where: { name: "Human Resources" },
         update: {},
-        create: { name: "Human Resources", code: "HR", description: "Human Resources Department" }
+        create: {
+            name: "Human Resources",
+            code: "HR",
+            description: "Human Resources Department",
+            divisionId: divCorporate.id
+        }
     });
 
-    // 3. Create Divisions
-    const divHRGA = await prisma.division.upsert({
-        where: { name_departmentId: { name: "HRGA-IT", departmentId: deptIT.id } },
-        update: {},
-        create: { name: "HRGA-IT", departmentId: deptIT.id }
-    });
-
-    const divOps = await prisma.division.upsert({
-        where: { name_departmentId: { name: "Operations", departmentId: deptHR.id } },
-        update: {},
-        create: { name: "Operations", departmentId: deptHR.id }
-    });
-
-    // 4. Create Positions (Standalone now)
+    // 3. Create Positions (Standalone)
     const posStaff = await prisma.position.upsert({
         where: { name: "Staff" },
         update: {},
@@ -67,7 +77,7 @@ async function main() {
         create: { name: "Manager" }
     });
 
-    console.log("✅ Master data (Shifts, Depts, Divisions, Positions) seeded");
+    console.log("✅ Master data (Shifts, Divisions, Depts, Positions) seeded");
 
     const hashedPassword = await bcrypt.hash("password123", 10);
 

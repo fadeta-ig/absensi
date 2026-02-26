@@ -190,9 +190,10 @@ model Department {
   name        String   @unique
   code        String?  @unique
   description String?  @db.Text
+  divisionId  String   @map("division_id")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
-  divisionId  String   @map("division_id")
+
   division    Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
 
   @@index([divisionId], map: "departments_division_id_fkey")
