@@ -8,37 +8,41 @@ datasource db {
 }
 
 model Employee {
-  id             String   @id @default(uuid())
-  employeeId     String   @unique @map("employee_id")
-  name           String
-  email          String
-  phone          String
-  department     String
-  division       String?
-  position       String
-  role           String   @default("employee") // "employee" | "hr"
-  password       String
-  faceDescriptor Json?    @map("face_descriptor")
-  joinDate       String   @map("join_date")
-  totalLeave     Int      @default(12) @map("total_leave")
-  usedLeave      Int      @default(0) @map("used_leave")
-  avatarUrl      String?  @map("avatar_url")
-  isActive       Boolean  @default(true) @map("is_active")
-  shiftId        String?  @map("shift_id")
-  bypassLocation Boolean  @default(false) @map("bypass_location")
-  basicSalary    Float    @default(0) @map("basic_salary")
-
-  // Relations
-  shift             WorkShift?                 @relation(fields: [shiftId], references: [id], onUpdate: Cascade, onDelete: SetNull)
-  payrollComponents EmployeePayrollComponent[]
+  id                String                     @id @default(uuid())
+  employeeId        String                     @unique @map("employee_id")
+  name              String
+  email             String
+  phone             String
+  department        String
+  division          String?
+  position          String
+  role              String                     @default("employee")
+  password          String
+  faceDescriptor    String?                    @map("face_descriptor") @db.LongText
+  joinDate          String                     @map("join_date")
+  totalLeave        Int                        @default(12) @map("total_leave")
+  usedLeave         Int                        @default(0) @map("used_leave")
+  avatarUrl         String?                    @map("avatar_url")
+  isActive          Boolean                    @default(true) @map("is_active")
+  shiftId           String?                    @map("shift_id")
+  bypassLocation    Boolean                    @default(false) @map("bypass_location")
+  basicSalary       Float                      @default(0) @map("basic_salary")
+  level             String                     @default("STAFF")
+  managerId         String?                    @map("manager_id")
   attendances       AttendanceRecord[]
-  payslips          PayslipRecord[]
+  payrollComponents EmployeePayrollComponent[]
+  manager           Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
+  subordinates      Employee[]                 @relation("Hierarchy")
+  shift             WorkShift?                 @relation(fields: [shiftId], references: [id])
   leaves            LeaveRequest[]
+  overtimes         OvertimeRequest[]
+  payslips          PayslipRecord[]
   todos             TodoItem[]
   visits            VisitReport[]
-  overtimes         OvertimeRequest[]
-  locations         Location[]                 @relation("EmployeeLocations")
+  locations         Location[]                 @relation("employeelocations")
 
+  @@index([managerId], map: "employees_manager_id_fkey")
+  @@index([shiftId], map: "employees_shift_id_fkey")
   @@map("employees")
 }
 
@@ -47,17 +51,17 @@ model VisitReport {
   employeeId    String   @map("employee_id")
   date          String
   clientName    String   @map("client_name")
-  clientAddress String   @db.Text @map("client_address")
+  clientAddress String   @map("client_address") @db.Text
   purpose       String   @db.Text
   result        String?  @db.Text
-  location      Json?
+  location      String?  @db.LongText
   photo         String?  @db.LongText
   status        String   @default("pending")
   notes         String?  @db.Text
   createdAt     String   @map("created_at")
+  employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
-  employee      Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
-
+  @@index([employeeId], map: "visit_reports_employee_id_fkey")
   @@map("visit_reports")
 }
 
@@ -67,15 +71,13 @@ model AttendanceRecord {
   date             String
   clockIn          String?  @map("clock_in")
   clockOut         String?  @map("clock_out")
-  clockInLocation  Json?    @map("clock_in_location")
-  clockOutLocation Json?    @map("clock_out_location")
-  clockInPhoto     String?  @db.LongText @map("clock_in_photo")
-  clockOutPhoto    String?  @db.LongText @map("clock_out_photo")
-  status           String   @default("present") // "present" | "late" | "absent" | "leave"
+  clockInLocation  String?  @map("clock_in_location") @db.LongText
+  clockOutLocation String?  @map("clock_out_location") @db.LongText
+  clockInPhoto     String?  @map("clock_in_photo") @db.LongText
+  clockOutPhoto    String?  @map("clock_out_photo") @db.LongText
+  status           String   @default("present")
   notes            String?  @db.Text
-
-  // Relations - Changed to reference employeeId (string) instead of id (UUID)
-  employee         Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
+  employee         Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@map("attendance_records")
@@ -86,44 +88,40 @@ model PayslipRecord {
   employeeId  String   @map("employee_id")
   period      String
   basicSalary Float    @map("basic_salary")
-  allowances  Json     // [{ name, amount }]
-  deductions  Json     // [{ name, amount }]
+  allowances  String   @db.LongText
+  deductions  String   @db.LongText
   overtime    Float    @default(0)
   netSalary   Float    @map("net_salary")
   issuedDate  String   @map("issued_date")
   notes       String?  @db.Text
+  employee    Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
-  // Relations - Changed to reference employeeId (string) instead of id (UUID)
-  employee    Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
-
+  @@index([employeeId], map: "payslip_records_employee_id_fkey")
   @@map("payslip_records")
 }
 
 model WorkShift {
-  id             String   @id @default(uuid())
-  name           String
-  isDefault      Boolean  @default(false) @map("is_default")
-  lateCheckIn    Int      @default(0) @map("late_check_in")
-  earlyCheckIn   Int      @default(0) @map("early_check_in")
-  lateCheckOut   Int      @default(0) @map("late_check_out")
-  earlyCheckOut  Int      @default(0) @map("early_check_out")
-
-  // Relations
-  employees Employee[]
-  days      WorkShiftDay[]
+  id            String         @id @default(uuid())
+  name          String
+  isDefault     Boolean        @default(false) @map("is_default")
+  earlyCheckIn  Int            @default(0) @map("early_check_in")
+  earlyCheckOut Int            @default(0) @map("early_check_out")
+  lateCheckIn   Int            @default(0) @map("late_check_in")
+  lateCheckOut  Int            @default(0) @map("late_check_out")
+  employees     Employee[]
+  days          WorkShiftDay[]
 
   @@map("work_shifts")
 }
 
 model WorkShiftDay {
-  id         String    @id @default(uuid())
-  shiftId    String    @map("shift_id")
-  dayOfWeek  Int       @map("day_of_week") // 0=Sunday, 1=Monday, ... 6=Saturday
-  startTime  String    @map("start_time")
-  endTime    String    @map("end_time")
-  isOff      Boolean   @default(false) @map("is_off")
-
-  shift      WorkShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  id        String    @id @default(uuid())
+  shiftId   String    @map("shift_id")
+  dayOfWeek Int       @map("day_of_week")
+  startTime String    @map("start_time")
+  endTime   String    @map("end_time")
+  isOff     Boolean   @default(false) @map("is_off")
+  shift     WorkShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 
   @@unique([shiftId, dayOfWeek])
   @@map("work_shift_days")
@@ -132,30 +130,29 @@ model WorkShiftDay {
 model LeaveRequest {
   id         String   @id @default(uuid())
   employeeId String   @map("employee_id")
-  type       String   // "annual" | "sick" | "personal" | "maternity"
+  type       String
   startDate  String   @map("start_date")
   endDate    String   @map("end_date")
   reason     String   @db.Text
-  status     String   @default("pending") // "pending" | "approved" | "rejected"
-  attachment String?  @db.LongText
+  status     String   @default("pending")
   createdAt  String   @map("created_at")
+  attachment String?  @db.LongText
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
-  // Relations - Changed to reference employeeId (string) instead of id (UUID)
-  employee   Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
-
+  @@index([employeeId], map: "leave_requests_employee_id_fkey")
   @@map("leave_requests")
 }
 
 model NewsItem {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   title     String
-  content   String   @db.Text
-  category  String   @default("general") // "announcement" | "event" | "policy" | "general"
+  content   String  @db.Text
+  category  String  @default("general")
   author    String
-  createdAt String   @map("created_at")
-  isPinned  Boolean  @default(false) @map("is_pinned")
-  mediaUrl  String?  @map("media_url")
-  mediaName String?  @map("media_name")
+  createdAt String  @map("created_at")
+  isPinned  Boolean @default(false) @map("is_pinned")
+  mediaName String? @map("media_name")
+  mediaUrl  String? @map("media_url")
 
   @@map("news_items")
 }
@@ -166,10 +163,9 @@ model TodoItem {
   text       String   @db.Text
   completed  Boolean  @default(false)
   createdAt  String   @map("created_at")
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
-  // Relations - Changed to reference employeeId (string) instead of id (UUID)
-  employee   Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
-
+  @@index([employeeId], map: "todo_items_employee_id_fkey")
   @@map("todo_items")
 }
 
@@ -181,11 +177,11 @@ model OvertimeRequest {
   endTime    String   @map("end_time")
   hours      Float
   reason     String   @db.Text
-  status     String   @default("pending") // "pending" | "approved" | "rejected"
+  status     String   @default("pending")
   createdAt  String   @map("created_at")
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
-  employee   Employee @relation(fields: [employeeId], references: [employeeId], onUpdate: Cascade, onDelete: Cascade)
-
+  @@index([employeeId], map: "overtime_requests_employee_id_fkey")
   @@map("overtime_requests")
 }
 
@@ -196,71 +192,68 @@ model Department {
   description String?  @db.Text
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
+  divisionId  String   @map("division_id")
+  division    Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
 
-  divisions   Division[]
-
+  @@index([divisionId], map: "departments_division_id_fkey")
   @@map("departments")
 }
 
 model Division {
   id           String     @id @default(uuid())
-  name         String
-  departmentId String     @map("department_id")
+  name         String     @unique
   isActive     Boolean    @default(true) @map("is_active")
   createdAt    DateTime   @default(now()) @map("created_at")
 
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  departments  Department[]
 
-  @@unique([name, departmentId])
   @@map("divisions")
 }
 
 model Position {
-  id           String   @id @default(uuid())
-  name         String   @unique
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("positions")
 }
 
 model PayrollComponent {
-  id            String   @id @default(uuid())
-  name          String   @unique
-  type          String   // "allowance" | "deduction"
-  defaultAmount Float    @default(0) @map("default_amount")
-  isActive      Boolean  @default(true) @map("is_active")
-  description   String?  @db.Text
-  createdAt     DateTime @default(now()) @map("created_at")
-
+  id                 String                     @id @default(uuid())
+  name               String                     @unique
+  type               String
+  defaultAmount      Float                      @default(0) @map("default_amount")
+  isActive           Boolean                    @default(true) @map("is_active")
+  description        String?                    @db.Text
+  createdAt          DateTime                   @default(now()) @map("created_at")
   employeeComponents EmployeePayrollComponent[]
 
   @@map("payroll_components")
 }
 
 model EmployeePayrollComponent {
-  id          String @id @default(uuid())
-  employeeId  String @map("employee_id")
-  componentId String @map("component_id")
-  amount      Float  @default(0)
-
-  employee  Employee         @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
-  component PayrollComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  id          String           @id @default(uuid())
+  employeeId  String           @map("employee_id")
+  componentId String           @map("component_id")
+  amount      Float            @default(0)
+  component   PayrollComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  employee    Employee         @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@unique([employeeId, componentId])
+  @@index([componentId], map: "employee_payroll_components_component_id_fkey")
   @@map("employee_payroll_components")
 }
 
 model Location {
-  id        String   @id @default(uuid())
-  name      String   @unique
+  id        String     @id @default(uuid())
+  name      String     @unique
   latitude  Float
   longitude Float
-  radius    Float    @default(100) // in meters
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  employees Employee[] @relation("EmployeeLocations")
+  radius    Float      @default(100)
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  employees Employee[] @relation("employeelocations")
 
   @@map("locations")
 }

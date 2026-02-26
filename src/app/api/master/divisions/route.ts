@@ -9,13 +9,9 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
-        const { searchParams } = new URL(request.url);
-        const departmentId = searchParams.get("departmentId");
-
         const divisions = await prisma.division.findMany({
-            where: departmentId ? { departmentId } : {},
             orderBy: { name: "asc" },
-            include: { department: { select: { name: true } } },
+            include: { _count: { select: { departments: true } } },
         });
 
         return NextResponse.json(divisions);
@@ -33,17 +29,15 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await request.json();
-        if (!data.name || !data.departmentId) {
-            return NextResponse.json({ error: "Nama dan Departemen harus diisi" }, { status: 400 });
+        if (!data.name) {
+            return NextResponse.json({ error: "Nama divisi harus diisi" }, { status: 400 });
         }
 
         const division = await prisma.division.create({
             data: {
                 name: data.name,
-                departmentId: data.departmentId,
                 isActive: data.isActive !== undefined ? data.isActive : true,
             },
-            include: { department: { select: { name: true } } },
         });
 
         return NextResponse.json(division);
@@ -61,18 +55,16 @@ export async function PUT(request: NextRequest) {
         }
 
         const data = await request.json();
-        if (!data.id || !data.name || !data.departmentId) {
-            return NextResponse.json({ error: "ID, Nama, dan Departemen harus diisi" }, { status: 400 });
+        if (!data.id || !data.name) {
+            return NextResponse.json({ error: "ID dan Nama divisi harus diisi" }, { status: 400 });
         }
 
         const division = await prisma.division.update({
             where: { id: data.id },
             data: {
                 name: data.name,
-                departmentId: data.departmentId,
                 isActive: data.isActive !== undefined ? data.isActive : true,
             },
-            include: { department: { select: { name: true } } },
         });
 
         return NextResponse.json(division);

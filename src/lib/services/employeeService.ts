@@ -5,11 +5,84 @@ export async function getEmployees(): Promise<Employee[]> {
     const rows = await prisma.employee.findMany({
         include: {
             locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } }
+            payrollComponents: { include: { component: true } },
+            manager: true,
+            subordinates: true
         },
         orderBy: { name: "asc" }
     });
     return rows as unknown as Employee[];
+}
+
+export async function getVisibleEmployees(requester: Employee): Promise<Employee[]> {
+    const { level, employeeId, department, division, role } = requester;
+
+    // CEO and HR can see everyone
+    if (level === "CEO" || level === "HR" || role === "hr") {
+        return getEmployees();
+    }
+
+    // GM sees everyone in their department
+    if (level === "GM") {
+        const rows = await prisma.employee.findMany({
+            where: { department },
+            include: {
+                locations: { select: { id: true, name: true } },
+                payrollComponents: { include: { component: true } },
+                manager: true,
+                subordinates: true
+            },
+            orderBy: { name: "asc" }
+        });
+        return rows as unknown as Employee[];
+    }
+
+    // Manager sees everyone in their division
+    if (level === "MANAGER") {
+        const rows = await prisma.employee.findMany({
+            where: { division },
+            include: {
+                locations: { select: { id: true, name: true } },
+                payrollComponents: { include: { component: true } },
+                manager: true,
+                subordinates: true
+            },
+            orderBy: { name: "asc" }
+        });
+        return rows as unknown as Employee[];
+    }
+
+    // Supervisor sees their direct subordinates
+    if (level === "SUPERVISOR") {
+        const rows = await prisma.employee.findMany({
+            where: {
+                OR: [
+                    { managerId: employeeId },
+                    { employeeId: employeeId }
+                ]
+            },
+            include: {
+                locations: { select: { id: true, name: true } },
+                payrollComponents: { include: { component: true } },
+                manager: true,
+                subordinates: true
+            },
+            orderBy: { name: "asc" }
+        });
+        return rows as unknown as Employee[];
+    }
+
+    // Staff only sees themselves
+    const row = await prisma.employee.findUnique({
+        where: { employeeId },
+        include: {
+            locations: { select: { id: true, name: true } },
+            payrollComponents: { include: { component: true } },
+            manager: true,
+            subordinates: true
+        }
+    });
+    return row ? [row as unknown as Employee] : [];
 }
 
 export async function getEmployeeById(id: string): Promise<Employee | undefined> {
@@ -33,6 +106,8 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             division: data.division,
             position: data.position,
             role: data.role,
+            level: data.level || "STAFF",
+            managerId: data.managerId,
             password: data.password,
             joinDate: data.joinDate,
             totalLeave: data.totalLeave,
@@ -56,7 +131,9 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
         },
         include: {
             locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } }
+            payrollComponents: { include: { component: true } },
+            manager: true,
+            subordinates: true
         }
     });
     return row as unknown as Employee;
@@ -74,12 +151,13 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.division !== undefined && { division: data.division }),
                 ...(data.position !== undefined && { position: data.position }),
                 ...(data.role !== undefined && { role: data.role }),
+                ...(data.level !== undefined && { level: data.level }),
+                ...(data.managerId !== undefined && { managerId: data.managerId }),
                 ...(data.password !== undefined && { password: data.password }),
                 ...(data.joinDate !== undefined && { joinDate: data.joinDate }),
                 ...(data.totalLeave !== undefined && { totalLeave: data.totalLeave }),
                 ...(data.usedLeave !== undefined && { usedLeave: data.usedLeave }),
                 ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
-                ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
                 ...(data.bypassLocation !== undefined && { bypassLocation: data.bypassLocation }),
@@ -103,7 +181,9 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
             },
             include: {
                 locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } }
+                payrollComponents: { include: { component: true } },
+                manager: true,
+                subordinates: true
             }
         });
         return row as unknown as Employee;

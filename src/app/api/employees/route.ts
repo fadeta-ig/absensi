@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import {
     getEmployees,
+    getVisibleEmployees,
+    getEmployeeByEmployeeId,
     createEmployee,
     updateEmployee,
     deleteEmployee,
@@ -10,11 +12,16 @@ import {
 
 export async function GET() {
     const session = await getSession();
-    if (!session || session.role !== "hr") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const employees = (await getEmployees()).map((e) => {
+    const requester = await getEmployeeByEmployeeId(session.employeeId);
+    if (!requester) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const employees = (await getVisibleEmployees(requester)).map((e) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, faceDescriptor, ...safe } = e;
         return safe;

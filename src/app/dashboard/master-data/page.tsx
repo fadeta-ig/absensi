@@ -22,16 +22,16 @@ interface Department {
     name: string;
     code: string | null;
     description: string | null;
+    divisionId: string;
     isActive: boolean;
-    _count?: { divisions: number };
+    division: { name: string };
 }
 
 interface Division {
     id: string;
     name: string;
-    departmentId: string;
     isActive: boolean;
-    department: { name: string };
+    _count?: { departments: number };
 }
 
 interface Position {
@@ -63,8 +63,8 @@ export default function MasterDataPage() {
     const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
     // Form states
-    const [deptForm, setDeptForm] = useState({ id: "", name: "", code: "", description: "", isActive: true });
-    const [divForm, setDivForm] = useState({ id: "", name: "", departmentId: "", isActive: true });
+    const [deptForm, setDeptForm] = useState({ id: "", name: "", code: "", description: "", divisionId: "", isActive: true });
+    const [divForm, setDivForm] = useState({ id: "", name: "", isActive: true });
     const [posForm, setPosForm] = useState({ id: "", name: "", isActive: true });
     const [locForm, setLocForm] = useState({ id: "", name: "", latitude: "", longitude: "", radius: "100", isActive: true });
     const [searchQuery, setSearchQuery] = useState("");
@@ -139,8 +139,8 @@ export default function MasterDataPage() {
     }, []);
 
     const resetForms = () => {
-        setDeptForm({ id: "", name: "", code: "", description: "", isActive: true });
-        setDivForm({ id: "", name: "", departmentId: "", isActive: true });
+        setDeptForm({ id: "", name: "", code: "", description: "", divisionId: "", isActive: true });
+        setDivForm({ id: "", name: "", isActive: true });
         setPosForm({ id: "", name: "", isActive: true });
         setLocForm({ id: "", name: "", latitude: "", longitude: "", radius: "100", isActive: true });
         setEditMode(false);
@@ -158,6 +158,7 @@ export default function MasterDataPage() {
             name: dept.name,
             code: dept.code || "",
             description: dept.description || "",
+            divisionId: dept.divisionId,
             isActive: dept.isActive
         });
         setEditMode(true);
@@ -168,7 +169,6 @@ export default function MasterDataPage() {
         setDivForm({
             id: div.id,
             name: div.name,
-            departmentId: div.departmentId,
             isActive: div.isActive
         });
         setEditMode(true);
@@ -301,7 +301,7 @@ export default function MasterDataPage() {
     const handleDeleteDept = async (id: string) => {
         confirm({
             title: "Hapus Departemen",
-            message: "Hapus departemen ini? Tidak bisa dihapus jika masih ada divisi di dalamnya.",
+            message: "Hapus departemen ini?",
             variant: "danger",
             confirmLabel: "Ya, Hapus",
             onConfirm: async () => {
@@ -326,7 +326,7 @@ export default function MasterDataPage() {
     const handleDeleteDiv = async (id: string) => {
         confirm({
             title: "Hapus Divisi",
-            message: "Hapus divisi ini?",
+            message: "Hapus divisi ini? Tidak bisa dihapus jika masih ada departemen di dalamnya.",
             variant: "danger",
             confirmLabel: "Ya, Hapus",
             onConfirm: async () => {
@@ -467,12 +467,12 @@ export default function MasterDataPage() {
                                             <td className="font-mono text-xs font-bold text-[var(--primary)]">{dept.code || "-"}</td>
                                             <td>
                                                 <div className="font-semibold text-[var(--text-primary)]">{dept.name}</div>
-                                                <div className="text-[10px] text-[var(--text-muted)] line-clamp-1">{dept.description}</div>
                                             </td>
                                             <td>
-                                                <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] rounded-full font-medium">
-                                                    {dept._count?.divisions || 0} Divisi
-                                                </span>
+                                                <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                                                    <Layers className="w-3.5 h-3.5 opacity-50" />
+                                                    {dept.division?.name || "-"}
+                                                </div>
                                             </td>
                                             <td>
                                                 <span className={`badge ${dept.isActive ? "badge-success" : "badge-error"}`}>
@@ -521,8 +521,7 @@ export default function MasterDataPage() {
                                             </td>
                                             <td>
                                                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                                                    <Building2 className="w-3.5 h-3.5 opacity-50" />
-                                                    {div.department.name}
+                                                    {div._count?.departments || 0} Departemen
                                                 </div>
                                             </td>
                                             <td>
@@ -691,22 +690,36 @@ export default function MasterDataPage() {
                                             />
                                         </div>
                                         <div className="form-group">
-                                            <label className="form-label">Status</label>
+                                            <label className="form-label">Divisi</label>
                                             <select
                                                 className="form-select"
-                                                value={deptForm.isActive ? "1" : "0"}
-                                                onChange={(e) => setDeptForm({ ...deptForm, isActive: e.target.value === "1" })}
+                                                value={deptForm.divisionId}
+                                                onChange={(e) => setDeptForm({ ...deptForm, divisionId: e.target.value })}
+                                                required
                                             >
-                                                <option value="1">Aktif</option>
-                                                <option value="0">Non-aktif</option>
+                                                <option value="">Pilih Divisi</option>
+                                                {divisions.map((d) => (
+                                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                                ))}
                                             </select>
                                         </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Status</label>
+                                        <select
+                                            className="form-select"
+                                            value={deptForm.isActive ? "1" : "0"}
+                                            onChange={(e) => setDeptForm({ ...deptForm, isActive: e.target.value === "1" })}
+                                        >
+                                            <option value="1">Aktif</option>
+                                            <option value="0">Non-aktif</option>
+                                        </select>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Deskripsi</label>
                                         <textarea
                                             className="form-textarea"
-                                            rows={3}
+                                            rows={2}
                                             placeholder="Deskripsi singkat..."
                                             value={deptForm.description}
                                             onChange={(e) => setDeptForm({ ...deptForm, description: e.target.value })}
@@ -724,20 +737,6 @@ export default function MasterDataPage() {
                                             onChange={(e) => setDivForm({ ...divForm, name: e.target.value })}
                                             required
                                         />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label">Departemen</label>
-                                        <select
-                                            className="form-select"
-                                            value={divForm.departmentId}
-                                            onChange={(e) => setDivForm({ ...divForm, departmentId: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Pilih Departemen</option>
-                                            {departments.map((d) => (
-                                                <option key={d.id} value={d.id}>{d.name}</option>
-                                            ))}
-                                        </select>
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Status</label>

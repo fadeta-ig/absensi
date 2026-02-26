@@ -205,6 +205,13 @@ export default function EmployeesPage() {
                                                         {sendingPassword === e.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
                                                     </button>
                                                 )}
+                                                <button
+                                                    onClick={() => window.location.href = `/dashboard/employees/${e.id}/360-view`}
+                                                    className="btn btn-ghost btn-sm !p-1.5 text-emerald-600 hover:!bg-emerald-50"
+                                                    title="Lihat Profil 360°"
+                                                >
+                                                    <Layers className="w-3.5 h-3.5" />
+                                                </button>
                                                 <button onClick={() => handleEdit(e)} className="btn btn-ghost btn-sm !p-1.5"><Pencil className="w-3.5 h-3.5" /></button>
                                                 <button onClick={() => handleDelete(e.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                                             </div>

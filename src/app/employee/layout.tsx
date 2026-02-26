@@ -17,6 +17,7 @@ import {
     LogOut,
     Menu,
     X,
+    Users,
     PanelLeftClose,
     PanelLeftOpen,
 } from "lucide-react";
@@ -186,6 +187,23 @@ export default function EmployeeLayout({
                             </button>
                         );
                     })}
+
+                    {/* Monitoring Menu for Non-Staff */}
+                    {user && (user as any).level !== "STAFF" && (
+                        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                            <p className={`text-[10px] font-bold text-[var(--text-muted)] px-3 mb-2 uppercase tracking-widest ${sidebarCollapsed ? "lg:hidden" : ""}`}>Management</p>
+                            <button
+                                onClick={() => { router.push("/employee/monitoring"); setSidebarOpen(false); }}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""} ${pathname === "/employee/monitoring"
+                                    ? "bg-[var(--primary)] text-white shadow-sm"
+                                    : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
+                                    }`}
+                            >
+                                <Users className="w-[18px] h-[18px] shrink-0" />
+                                <span className={sidebarCollapsed ? "lg:hidden" : ""}>Monitoring Tim</span>
+                            </button>
+                        </div>
+                    )}
                 </nav>
 
                 <div className={`p-3 border-t border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>

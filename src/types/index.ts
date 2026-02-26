@@ -8,6 +8,8 @@ export type Employee = {
     division?: string | null;
     position: string;
     role: "employee" | "hr";
+    level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
+    managerId?: string | null;
     password: string;
     faceDescriptor?: number[];
     joinDate: string;

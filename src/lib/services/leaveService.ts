@@ -46,33 +46,51 @@ function calculateDays(start: string, end: string): number {
 
 export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | null> {
     try {
-        // If approving, we need to update employee leave balance
-        if (data.status === "approved") {
-            logger.info("Cuti disetujui", { leaveId: id });
-            const request = await prisma.leaveRequest.findUnique({
-                where: { id },
-                include: { employee: true }
-            });
+        const existing = await prisma.leaveRequest.findUnique({
+            where: { id },
+            include: { employee: true }
+        });
 
-            if (request && request.status !== "approved") {
-                const days = calculateDays(request.startDate, request.endDate);
+        if (!existing) return null;
 
-                // Update employee usedLeave
+        // Balance Recalculation Logic
+        if (data.status === "approved" || (existing.status === "approved" && (data.startDate || data.endDate))) {
+            const oldDays = calculateDays(existing.startDate, existing.endDate);
+            const newDays = calculateDays(
+                data.startDate || existing.startDate,
+                data.endDate || existing.endDate
+            );
+
+            let diff = 0;
+            if (existing.status !== "approved" && data.status === "approved") {
+                // Changing from pending/rejected to approved
+                diff = newDays;
+            } else if (existing.status === "approved" && data.status !== "rejected") {
+                // Already approved, just adjusting dates
+                diff = newDays - oldDays;
+            }
+
+            if (diff !== 0) {
                 await prisma.employee.update({
-                    where: { employeeId: request.employeeId },
-                    data: {
-                        usedLeave: {
-                            increment: days
-                        }
-                    }
+                    where: { employeeId: existing.employeeId },
+                    data: { usedLeave: { increment: diff } }
                 });
             }
+        } else if (existing.status === "approved" && data.status === "rejected") {
+            // Reversing an approval
+            const days = calculateDays(existing.startDate, existing.endDate);
+            await prisma.employee.update({
+                where: { employeeId: existing.employeeId },
+                data: { usedLeave: { decrement: days } }
+            });
         }
 
         const row = await prisma.leaveRequest.update({
             where: { id },
             data: {
                 ...(data.status !== undefined && { status: data.status }),
+                ...(data.startDate !== undefined && { startDate: data.startDate }),
+                ...(data.endDate !== undefined && { endDate: data.endDate }),
                 ...(data.reason !== undefined && { reason: data.reason }),
             },
         });

@@ -14,6 +14,7 @@ export async function createSession(employee: Employee) {
         employeeId: employee.employeeId,
         name: employee.name,
         role: employee.role,
+        level: employee.level,
     })
         .setProtectedHeader({ alg: "HS256" })
         .setExpirationTime("8h")
@@ -36,6 +37,7 @@ export async function getSession(): Promise<{
     employeeId: string;
     name: string;
     role: "employee" | "hr";
+    level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
 } | null> {
     const cookieStore = await cookies();
     const token = cookieStore.get("session")?.value;
@@ -48,6 +50,7 @@ export async function getSession(): Promise<{
             employeeId: string;
             name: string;
             role: "employee" | "hr";
+            level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
         };
     } catch {
         return null;
