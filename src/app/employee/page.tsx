@@ -107,7 +107,7 @@ export default function EmployeeHomePage() {
                     </div>
                     <div>
                         <p className="text-xs text-[var(--text-muted)]">Total Kehadiran</p>
-                        <p className="text-lg font-bold text-[var(--text-primary)]">{attendance.length} hari</p>
+                        <p className="text-lg font-bold text-[var(--text-primary)]">{attendance.filter(a => a.status === "present" || a.status === "late").length} hari</p>
                     </div>
                 </div>
             </div>

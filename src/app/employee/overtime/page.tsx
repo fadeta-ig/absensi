@@ -86,7 +86,7 @@ export default function EmployeeOvertimePage() {
                         Lembur
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Total disetujui: <strong className="text-[var(--text-primary)]">{totalApproved}</strong> jam
+                        Total disetujui: <strong className="text-[var(--text-primary)]">{Number(totalApproved.toFixed(2))}</strong> jam
                     </p>
                 </div>
                 <button className="btn btn-primary" onClick={() => { setShowForm(true); resetForm(); }}>

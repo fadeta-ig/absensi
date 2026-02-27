@@ -117,7 +117,7 @@ export default function AttendanceHistoryPage() {
 
     /** Summary stats from filtered data */
     const stats = useMemo(() => {
-        const present = filteredRecords.filter((r) => r.status === "present").length;
+        const present = filteredRecords.filter((r) => r.status === "present" || r.status === "late").length;
         const late = filteredRecords.filter((r) => r.status === "late").length;
         const absent = filteredRecords.filter((r) => r.status === "absent").length;
         const leave = filteredRecords.filter((r) => r.status === "leave").length;

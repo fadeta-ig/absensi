@@ -66,7 +66,7 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
         where: { employeeId: employee.employeeId }
     });
 
-    const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
+    const attendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0;
 
     // Calculate leave from actual approved requests for accuracy
     const approvedLeaves = await prisma.leaveRequest.findMany({
