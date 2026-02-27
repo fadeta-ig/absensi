@@ -9,7 +9,7 @@ export async function getVisitReports(employeeId?: string): Promise<VisitReport[
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return rows.map((r: any) => ({
         ...r,
-        location: r.location as VisitReport["location"],
+        location: typeof r.location === "string" ? JSON.parse(r.location) : r.location,
         status: r.status as VisitReport["status"],
     })) as VisitReport[];
 }
@@ -19,7 +19,7 @@ export async function getVisitReportById(id: string): Promise<VisitReport | unde
     if (!row) return undefined;
     return {
         ...row,
-        location: row.location as VisitReport["location"],
+        location: typeof row.location === "string" ? JSON.parse(row.location) : row.location,
         status: row.status as VisitReport["status"],
     } as VisitReport;
 }
@@ -33,7 +33,7 @@ export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<
             clientAddress: data.clientAddress,
             purpose: data.purpose,
             result: data.result,
-            location: data.location ? JSON.parse(JSON.stringify(data.location)) : undefined,
+            location: data.location ? JSON.stringify(data.location) : undefined,
             photo: data.photo,
             status: data.status,
             notes: data.notes,
@@ -42,7 +42,7 @@ export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<
     });
     return {
         ...row,
-        location: row.location as VisitReport["location"],
+        location: typeof row.location === "string" ? JSON.parse(row.location) : row.location,
         status: row.status as VisitReport["status"],
     } as VisitReport;
 }
@@ -56,7 +56,7 @@ export async function updateVisitReport(id: string, data: Partial<VisitReport>):
                 ...(data.clientAddress !== undefined && { clientAddress: data.clientAddress }),
                 ...(data.purpose !== undefined && { purpose: data.purpose }),
                 ...(data.result !== undefined && { result: data.result }),
-                ...(data.location !== undefined && { location: data.location ? JSON.parse(JSON.stringify(data.location)) : null }),
+                ...(data.location !== undefined && { location: data.location ? JSON.stringify(data.location) : null }),
                 ...(data.photo !== undefined && { photo: data.photo }),
                 ...(data.status !== undefined && { status: data.status }),
                 ...(data.notes !== undefined && { notes: data.notes }),
@@ -64,7 +64,7 @@ export async function updateVisitReport(id: string, data: Partial<VisitReport>):
         });
         return {
             ...row,
-            location: row.location as VisitReport["location"],
+            location: typeof row.location === "string" ? JSON.parse(row.location) : row.location,
             status: row.status as VisitReport["status"],
         } as VisitReport;
     } catch {

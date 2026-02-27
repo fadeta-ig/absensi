@@ -33,21 +33,16 @@ export default function VisitsPage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [visits, setVisits] = useState<VisitReport[]>([]);
-    const [showForm, setShowForm] = useState(false);
-    const [streaming, setStreaming] = useState(false);
     const [photo, setPhoto] = useState<string | null>(null);
     const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-    const [filterStatus, setFilterStatus] = useState<string>("all");
+    const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
+    const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
+    const [form, setForm] = useState({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "" });
+    const [showForm, setShowForm] = useState(false);
+    const [streaming, setStreaming] = useState(false);
 
-    const [form, setForm] = useState({
-        clientName: "",
-        clientAddress: "",
-        purpose: "",
-        result: "",
-        notes: "",
-    });
 
     useEffect(() => {
         fetch("/api/visits").then((r) => r.json()).then(setVisits);
@@ -164,7 +159,7 @@ export default function VisitsPage() {
                 {["all", "pending", "approved", "rejected"].map((s) => (
                     <button
                         key={s}
-                        onClick={() => setFilterStatus(s)}
+                        onClick={() => setFilterStatus(s as "all" | "pending" | "approved" | "rejected")}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filterStatus === s
                             ? "bg-[var(--primary)] text-white"
                             : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
@@ -177,44 +172,47 @@ export default function VisitsPage() {
 
             {/* Visit List */}
             {filtered.length === 0 ? (
-                <div className="card p-8 text-center">
-                    <MapPinned className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
-                    <p className="text-sm text-[var(--text-muted)]">Belum ada laporan kunjungan</p>
+                <div className="card p-12 text-center border-dashed">
+                    <MapPinned className="w-12 h-12 text-[var(--border)] mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-[var(--text-primary)]">Belum ada laporan</h3>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">Laporan kunjungan Anda akan tampil di sini</p>
                 </div>
             ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filtered.map((visit) => {
                         const cfg = STATUS_CONFIG[visit.status];
                         return (
-                            <div key={visit.id} className="card p-4 hover:shadow-md transition-shadow">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <Building2 className="w-4 h-4 text-[var(--primary)] shrink-0" />
-                                            <h3 className="text-sm font-semibold text-[var(--text-primary)] truncate">{visit.clientName}</h3>
-                                        </div>
-                                        <p className="text-xs text-[var(--text-muted)] mb-2 line-clamp-1">
-                                            <Navigation className="w-3 h-3 inline mr-1" />{visit.clientAddress}
-                                        </p>
-                                        <p className="text-xs text-[var(--text-secondary)] line-clamp-2">
-                                            <FileText className="w-3 h-3 inline mr-1" />{visit.purpose}
-                                        </p>
-                                        {visit.result && (
-                                            <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-1">Hasil: {visit.result}</p>
-                                        )}
+                            <div
+                                key={visit.id}
+                                className="card p-5 hover:border-[var(--primary)] hover:shadow-md transition-all cursor-pointer group flex flex-col h-full bg-white"
+                                onClick={() => setSelectedVisit(visit)}
+                            >
+                                <div className="flex items-start justify-between gap-4 mb-3">
+                                    <div className="w-10 h-10 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                                        <Building2 className="w-5 h-5" />
                                     </div>
-                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                        <span className={`badge ${cfg.class}`}>{cfg.label}</span>
-                                        <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />{visit.date}
-                                        </span>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="text-[15px] font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
+                                            {visit.clientName}
+                                        </h3>
+                                        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1.5">
+                                            <span className="flex items-center gap-1 truncate max-w-[150px]">
+                                                <Navigation className="w-3 h-3 shrink-0" />
+                                                <span className="truncate">{visit.clientAddress}</span>
+                                            </span>
+                                            <span className="flex items-center gap-1 shrink-0">
+                                                <Clock className="w-3 h-3 shrink-0" />
+                                                {visit.date}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                                {visit.photo && (
-                                    <div className="mt-3 rounded-lg overflow-hidden border border-[var(--border)]">
-                                        <img src={visit.photo} alt="Bukti kunjungan" className="w-full h-32 object-cover" />
-                                    </div>
-                                )}
+                                <div className="mt-auto pt-3 border-t border-[var(--border)] flex items-center justify-between">
+                                    <span className={`badge ${cfg.class} px-3 py-1 text-[11px] font-bold`}>{cfg.label}</span>
+                                    <span className="text-xs font-bold text-[var(--primary)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 translate-x-2 group-hover:translate-x-0">
+                                        Lihat Detail &rarr;
+                                    </span>
+                                </div>
                             </div>
                         );
                     })}
@@ -223,14 +221,20 @@ export default function VisitsPage() {
 
             {/* Form Modal */}
             {showForm && (
-                <div className="modal-overlay" onClick={() => { setShowForm(false); stopCamera(); }}>
+                <div className="modal-overlay" onClick={() => { setShowForm(false); stopCamera(); if (message?.type === 'error') setMessage(null); }}>
                     <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">Laporan Kunjungan Baru</h2>
-                            <button className="modal-close" onClick={() => { setShowForm(false); stopCamera(); }}>
+                            <button className="modal-close" onClick={() => { setShowForm(false); stopCamera(); if (message?.type === 'error') setMessage(null); }}>
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
+                        {message && message.type === "error" && (
+                            <div className="mb-4 flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                {message.text}
+                            </div>
+                        )}
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="form-group !mb-0">
                                 <label className="form-label">
@@ -311,6 +315,79 @@ export default function VisitsPage() {
                                 Kirim Laporan
                             </button>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Detail Modal */}
+            {selectedVisit && (
+                <div className="modal-overlay" onClick={() => setSelectedVisit(null)}>
+                    <div className="modal-content max-w-lg p-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-[var(--secondary)] p-5 border-b border-[var(--border)] flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-[var(--primary)]" />
+                                Detail Kunjungan
+                            </h2>
+                            <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--destructive)] hover:text-white text-[var(--text-secondary)] transition-colors" onClick={() => setSelectedVisit(null)}>
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedVisit.clientName}</h3>
+                                    <p className="text-sm text-[var(--text-muted)] mt-1 flex items-center gap-1">
+                                        <Clock className="w-4 h-4" /> {selectedVisit.date}
+                                    </p>
+                                </div>
+                                <span className={`badge ${STATUS_CONFIG[selectedVisit.status].class} text-xs px-2.5 py-1.5`}>
+                                    {STATUS_CONFIG[selectedVisit.status].label}
+                                </span>
+                            </div>
+
+                            <div className="grid gap-4 text-sm bg-[var(--background)] p-4 rounded-xl border border-[var(--border)]">
+                                <div>
+                                    <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" /> Alamat</p>
+                                    <p className="text-[var(--text-primary)] font-medium leading-relaxed">{selectedVisit.clientAddress}</p>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[var(--border)]">
+                                    <div>
+                                        <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Tujuan</p>
+                                        <p className="text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">{selectedVisit.purpose}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Hasil</p>
+                                        <p className="text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">{selectedVisit.result || "-"}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {selectedVisit.notes && (
+                                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+                                    <p className="text-[11px] font-bold text-yellow-700 uppercase tracking-wider mb-1 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Catatan HR</p>
+                                    <p className="text-yellow-800 text-sm italic leading-relaxed">{selectedVisit.notes}</p>
+                                </div>
+                            )}
+
+                            {selectedVisit.photo && (
+                                <div>
+                                    <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5"><Camera className="w-3.5 h-3.5" /> Bukti Kunjungan</p>
+                                    <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--secondary)]">
+                                        <img src={selectedVisit.photo} alt="Foto Kunjungan" className="w-full h-auto object-cover max-h-[400px]" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedVisit.location && (
+                                <div>
+                                    <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Koordinat GPS</p>
+                                    <div className="text-xs font-mono bg-[var(--secondary)] p-3 rounded-lg border border-[var(--border)] text-[var(--text-secondary)] inline-flex">
+                                        {selectedVisit.location.lat}, {selectedVisit.location.lng}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

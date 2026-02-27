@@ -29,17 +29,46 @@ const STATUS_MAP: Record<string, { label: string; badge: string; icon: typeof Ch
     leave: { label: "Cuti", badge: "badge-info", icon: CalendarDays },
 };
 
-/** Format ISO string → HH:mm */
-function fmtTime(iso?: string | null): string {
-    if (!iso) return "--:--";
-    return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+/** Format ISO string or HH:mm → HH:mm */
+function fmtTime(val?: string | null): string {
+    if (!val) return "--:--";
+
+    // Validasi apabila nilainya berupa hh:mm atau hh:mm:ss
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(val)) {
+        return val.substring(0, 5);
+    }
+
+    // Attempt parse as date (ISO)
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return "--:--";
+    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
 /** Calculate work duration in hours & minutes */
 function calcDuration(clockIn?: string | null, clockOut?: string | null): string {
     if (!clockIn || !clockOut) return "-";
-    const diff = new Date(clockOut).getTime() - new Date(clockIn).getTime();
+
+    let t1, t2;
+    // Process clockIn
+    if (/^\d{2}:\d{2}/.test(clockIn)) {
+        const [h, m] = clockIn.split(':').map(Number);
+        t1 = new Date().setHours(h, m, 0, 0);
+    } else {
+        t1 = new Date(clockIn).getTime();
+    }
+    // Process clockOut
+    if (/^\d{2}:\d{2}/.test(clockOut)) {
+        const [h, m] = clockOut.split(':').map(Number);
+        t2 = new Date().setHours(h, m, 0, 0);
+    } else {
+        t2 = new Date(clockOut).getTime();
+    }
+
+    if (isNaN(t1) || isNaN(t2)) return "-";
+
+    const diff = t2 - t1;
     if (diff <= 0) return "-";
+
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}j ${minutes}m`;
@@ -155,8 +184,8 @@ export default function AttendanceHistoryPage() {
                             key={mode}
                             onClick={() => setFilterMode(mode)}
                             className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${filterMode === mode
-                                    ? "bg-white text-[var(--primary)] shadow-sm"
-                                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                                ? "bg-white text-[var(--primary)] shadow-sm"
+                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                 }`}
                         >
                             {mode === "day" ? "Hari" : mode === "month" ? "Bulan" : "Tahun"}
@@ -261,14 +290,14 @@ export default function AttendanceHistoryPage() {
                 <div className="card overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Tanggal</th>
-                                    <th>Clock In</th>
-                                    <th>Clock Out</th>
-                                    <th>Durasi</th>
-                                    <th>Status</th>
-                                    <th>Catatan</th>
+                            <thead className="bg-[var(--secondary)]">
+                                <tr className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-left border-b border-[var(--border)]">
+                                    <th className="py-3 px-4">Tanggal</th>
+                                    <th className="py-3 px-4">Clock In</th>
+                                    <th className="py-3 px-4">Clock Out</th>
+                                    <th className="py-3 px-4">Durasi</th>
+                                    <th className="py-3 px-4">Status</th>
+                                    <th className="py-3 px-4">Catatan</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -285,37 +314,37 @@ export default function AttendanceHistoryPage() {
                                         const si = STATUS_MAP[r.status] ?? STATUS_MAP["present"];
                                         const StatusIcon = si.icon;
                                         return (
-                                            <tr key={r.id}>
-                                                <td>
+                                            <tr key={r.id} className="border-b border-[var(--border)] hover:bg-[var(--secondary)]/30 transition-colors">
+                                                <td className="py-2.5 px-4 align-middle">
                                                     <div className="font-semibold text-[var(--text-primary)] text-sm whitespace-nowrap">
                                                         {fmtDate(r.date)}
                                                     </div>
                                                 </td>
-                                                <td>
+                                                <td className="py-2.5 px-4 align-middle">
                                                     <div className="flex items-center gap-1.5 text-sm">
                                                         <Clock className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                                                        <span className="font-mono">{fmtTime(r.clockIn)}</span>
+                                                        <span className="font-mono text-[var(--text-secondary)]">{fmtTime(r.clockIn)}</span>
                                                     </div>
                                                 </td>
-                                                <td>
+                                                <td className="py-2.5 px-4 align-middle">
                                                     <div className="flex items-center gap-1.5 text-sm">
-                                                        <Clock className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                                                        <span className="font-mono">{fmtTime(r.clockOut)}</span>
+                                                        <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                                        <span className="font-mono text-[var(--text-secondary)]">{fmtTime(r.clockOut)}</span>
                                                     </div>
                                                 </td>
-                                                <td>
-                                                    <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] rounded-full font-medium whitespace-nowrap">
+                                                <td className="py-2.5 px-4 align-middle">
+                                                    <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] text-[var(--text-secondary)] rounded-full font-medium whitespace-nowrap border border-[var(--border)]">
                                                         {calcDuration(r.clockIn, r.clockOut)}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <span className={`badge ${si.badge} flex items-center gap-1 w-fit`}>
+                                                <td className="py-2.5 px-4 align-middle">
+                                                    <span className={`badge ${si.badge} flex items-center gap-1 w-fit text-[11px] px-2 py-1`}>
                                                         <StatusIcon className="w-3 h-3" />
                                                         {si.label}
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <span className="text-xs text-[var(--text-muted)] line-clamp-1">
+                                                <td className="py-2.5 px-4 align-middle">
+                                                    <span className="text-xs text-[var(--text-muted)] line-clamp-1 italic max-w-xs">
                                                         {r.notes || "-"}
                                                     </span>
                                                 </td>
