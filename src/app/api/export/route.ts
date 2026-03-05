@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
             sheetName = "Laporan Absensi";
 
             if (mode === "matrix") {
-                finalHeaders = ["Nama Karyawan", "No", "Departemen"];
+                finalHeaders = ["Nama Karyawan", "ID Karyawan", "Departemen"];
                 for (let i = 1; i <= daysInMonth; i++) finalHeaders.push(String(i));
                 finalHeaders.push("Hadir", "Lambat", "Alpa");
 
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
                     const empRecords = records.filter((r) => r.employeeId === emp.employeeId);
                     const row: ExportRow = {
                         "Nama Karyawan": emp.name,
-                        "No": employees.indexOf(emp) + 1,
+                        "ID Karyawan": emp.employeeId,
                         "Departemen": emp.department || "-",
                     };
 
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
                     }
 
                     // Add Summary
-                    row["Hadir"] = empRecords.filter(r => r.status === "present").length;
+                    row["Hadir"] = empRecords.filter(r => r.status === "present" || r.status === "late").length;
                     row["Lambat"] = empRecords.filter(r => r.status === "late").length;
                     row["Alpa"] = empRecords.filter(r => r.status === "absent").length;
 
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
                     let totalLate = 0;
 
                     empRecords.forEach((r) => {
-                        if (r.status === "present") totalPresent++;
+                        if (r.status === "present" || r.status === "late") totalPresent++;
                         if (r.status === "late") totalLate++;
 
                         finalRows.push({
