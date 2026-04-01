@@ -9,6 +9,25 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  /**
+   * Webpack config — suppress Node.js-only module warnings dari face-api.js & TensorFlow.js.
+   * Library ini mencoba import `fs` dan `encoding` yang tidak tersedia di browser bundle.
+   * Solusi: fallback ke modul kosong (`false`) sehingga webpack tidak error.
+   */
+  webpack(config, { isServer }) {
+    if (!isServer) {
+      // face-api.js mengakses `fs` di sisi server — tidak dibutuhkan di browser
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        encoding: false,
+        path: false,
+        crypto: false,
+      };
+    }
+    return config;
+  },
+
   async headers() {
     return [
       {
@@ -45,3 +64,4 @@ const nextConfig: NextConfig = {
 };
 
 export default withPWA(nextConfig);
+
