@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import logger from "@/lib/logger";
 
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
@@ -43,12 +44,17 @@ export async function sendPasswordEmail(
     </div>`;
 
     if (!isSmtpConfigured) {
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        console.log("📧 [EMAIL FALLBACK - SMTP not configured]");
-        console.log(`   To:       ${email}`);
-        console.log(`   Name:     ${name}`);
-        console.log(`   Password: ${password}`);
-        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        /**
+         * SECURITY: SMTP belum dikonfigurasi.
+         * Hanya catat bahwa email AKAN dikirim ke siapa — TIDAK mencatat nilai password.
+         * Untuk mengaktifkan pengiriman email, konfigurasi SMTP_HOST, SMTP_USER,
+         * SMTP_PASS di file .env.
+         */
+        logger.warn("[Email] SMTP tidak dikonfigurasi — email tidak terkirim", {
+            action: "send-password",
+            recipient: email,
+            recipientName: name,
+        });
         return true;
     }
 
@@ -60,10 +66,16 @@ export async function sendPasswordEmail(
             subject: "Password Akun WIG Attendance",
             html,
         });
-        console.log(`[Email] Password sent to ${email}`);
+        logger.info("[Email] Password email berhasil dikirim", {
+            recipient: email,
+            recipientName: name,
+        });
         return true;
     } catch (error) {
-        console.error("[Email] Failed to send:", error);
+        logger.error("[Email] Gagal mengirim password email", {
+            recipient: email,
+            error: error instanceof Error ? error.message : String(error),
+        });
         return false;
     }
 }

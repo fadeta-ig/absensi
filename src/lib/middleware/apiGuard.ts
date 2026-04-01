@@ -54,7 +54,7 @@ export async function validateBody<T>(
         return { data };
     } catch (err) {
         if (err instanceof ZodError) {
-            const messages = err.errors.map((e) => e.message);
+            const messages = err.issues.map((e: { message: string }) => e.message);
             logger.warn("Validation failed", { errors: messages });
             return {
                 error: NextResponse.json(
