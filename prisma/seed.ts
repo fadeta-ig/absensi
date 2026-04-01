@@ -79,7 +79,7 @@ async function main() {
 
     console.log("✅ Master data (Shifts, Divisions, Depts, Positions) seeded");
 
-    const hashedPassword = await bcrypt.hash("password123", 10);
+    const hashedPassword = await bcrypt.hash("123", 10);
 
     // 5. Create employees
     const hrAdmin = await prisma.employee.upsert({

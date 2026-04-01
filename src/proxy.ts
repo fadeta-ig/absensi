@@ -1,39 +1,24 @@
 /**
- * Next.js Middleware — Server-Side Route Guard
+ * Next.js Proxy (Route Guard) — Next.js 16
  *
- * File ini berjalan di Edge Runtime SEBELUM halaman/API di-render.
- * Dengan ini, proteksi tidak lagi bergantung pada client-side useEffect fetch.
+ * Di Next.js 16, file ini harus bernama "proxy.ts" dan export fungsi bernama "proxy".
+ * Berjalan di Edge Runtime SEBELUM halaman/API di-render.
  *
  * Alur:
- * - Request ke /dashboard/* atau /employee/* → cek cookie "session"
- * - Token valid + role sesuai → lanjut
- * - Token tidak ada / tidak valid → redirect ke /
- * - Role salah (employee ke dashboard, HR ke employee) → redirect ke halaman yang sesuai
- *
- * Catatan: middleware.ts HARUS di root src/ atau root project, bukan di dalam app/
+ * - Request ke /dashboard/* → hanya role "hr"
+ * - Request ke /employee/* → hanya role "employee"
+ * - Token tidak valid / tidak ada → redirect ke / (login)
+ * - Role salah → redirect ke portal yang sesuai
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-// ─── Secret ──────────────────────────────────────────────────
-// Harus sama dengan yang digunakan di lib/auth.ts
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET || JWT_SECRET.length < 16) {
-    // Ini akan throw saat build/startup — intentional fail-fast
-    throw new Error(
-        "JWT_SECRET wajib diisi di .env dan minimal 16 karakter. Middleware tidak dapat berjalan."
-    );
-}
-
-const SECRET = new TextEncoder().encode(JWT_SECRET);
-
 // ─── Route Groups ─────────────────────────────────────────────
 const HR_ONLY_PREFIX = "/dashboard";
 const EMPLOYEE_PREFIX = "/employee";
 
-// ─── Helper ───────────────────────────────────────────────────
+// ─── Session Helper ───────────────────────────────────────────
 interface SessionPayload {
     id: string;
     employeeId: string;
@@ -42,72 +27,67 @@ interface SessionPayload {
     level: string;
 }
 
-async function getSessionFromCookie(
-    request: NextRequest
-): Promise<SessionPayload | null> {
+async function getSession(request: NextRequest): Promise<SessionPayload | null> {
+    const jwtSecret = process.env.JWT_SECRET;
+
+    // Jika JWT_SECRET tidak dikonfigurasi, lewatkan tanpa crash
+    if (!jwtSecret || jwtSecret.length < 16) return null;
+
     const token = request.cookies.get("session")?.value;
     if (!token) return null;
 
     try {
-        const { payload } = await jwtVerify(token, SECRET);
+        const secret = new TextEncoder().encode(jwtSecret);
+        const { payload } = await jwtVerify(token, secret);
         return payload as unknown as SessionPayload;
     } catch {
-        // Token expired, invalid signature, or malformed
+        // Token expired, invalid signature, atau malformed
         return null;
     }
 }
 
-// ─── Middleware ────────────────────────────────────────────────
-export async function middleware(request: NextRequest) {
+// ─── Proxy Function (Next.js 16) ──────────────────────────────
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    const isDashboardRoute = pathname.startsWith(HR_ONLY_PREFIX);
-    const isEmployeeRoute = pathname.startsWith(EMPLOYEE_PREFIX);
+    const isDashboard = pathname.startsWith(HR_ONLY_PREFIX);
+    const isEmployee = pathname.startsWith(EMPLOYEE_PREFIX);
 
-    // Bukan route yang perlu dilindungi — lewatkan
-    if (!isDashboardRoute && !isEmployeeRoute) {
+    // Route tidak memerlukan auth → lewatkan
+    if (!isDashboard && !isEmployee) {
         return NextResponse.next();
     }
 
-    const session = await getSessionFromCookie(request);
+    const session = await getSession(request);
 
-    // Tidak ada session valid → redirect ke login
+    // Tidak ada session valid → redirect ke halaman login
     if (!session) {
         const loginUrl = new URL("/", request.url);
-        // Simpan halaman yang ingin dituju, opsional untuk redirect setelah login
         loginUrl.searchParams.set("redirect", pathname);
         return NextResponse.redirect(loginUrl);
     }
 
-    // Route HR-only: hanya role "hr" yang boleh masuk /dashboard
-    if (isDashboardRoute && session.role !== "hr") {
-        // Employee yang coba akses dashboard → arahkan ke employee portal
+    // /dashboard/* → hanya HR
+    if (isDashboard && session.role !== "hr") {
         return NextResponse.redirect(new URL(EMPLOYEE_PREFIX, request.url));
     }
 
-    // Route employee: role "hr" yang mengakses /employee → arahkan ke dashboard
-    if (isEmployeeRoute && session.role === "hr") {
+    // /employee/* → HR diarahkan ke dashboard
+    if (isEmployee && session.role === "hr") {
         return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
     }
 
-    // Session valid, role sesuai → lanjutkan request
     return NextResponse.next();
 }
 
 // ─── Route Matcher ────────────────────────────────────────────
-// Middleware hanya aktif untuk route yang relevan.
-// Pattern ini mengecualikan file statis, _next internal, favicon, dll.
 export const config = {
     matcher: [
-        /*
-         * Match semua request path KECUALI yang dimulai dengan:
-         * - /api (API routes — punya auth guard sendiri via requireAuth())
-         * - /_next/static (file statis Next.js)
-         * - /_next/image (image optimization)
-         * - /favicon.ico
-         * - /assets (folder public/assets)
-         * - /models (face-api.js model files di /public/models)
-         * - /icons (PWA icons)
+        /**
+         * Aktif di semua path KECUALI:
+         * - /api (punya auth guard sendiri)
+         * - /_next/* (Next.js internals)
+         * - /favicon.ico, /assets, /models, /icons
          */
         "/((?!api|_next/static|_next/image|favicon\\.ico|assets|models|icons).*)",
     ],
