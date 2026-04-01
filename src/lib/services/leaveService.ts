@@ -30,7 +30,7 @@ export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promis
             endDate: data.endDate,
             reason: data.reason,
             status: data.status,
-            attachment: (data as any).attachment,
+            attachment: data.attachment,
             createdAt: data.createdAt,
         },
     });

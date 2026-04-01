@@ -7,7 +7,7 @@ async function main() {
     console.log("🌱 Seeding database...");
 
     // 1. Create shifts
-    const shiftPagi = await prisma.workShift.upsert({
+    await prisma.workShift.upsert({
         where: { id: "shift-001" },
         update: {},
         create: {
@@ -28,67 +28,44 @@ async function main() {
         },
     });
 
-    // 1. Create Divisions
+    // 2. Create Divisions
     const divCorporate = await prisma.division.upsert({
         where: { name: "Corporate Services" },
         update: {},
-        create: { name: "Corporate Services" }
+        create: { name: "Corporate Services" },
     });
 
     const divTech = await prisma.division.upsert({
         where: { name: "Technology" },
         update: {},
-        create: { name: "Technology" }
+        create: { name: "Technology" },
     });
 
-    // 2. Create Departments
-    const deptIT = await prisma.department.upsert({
+    // 3. Create Departments
+    await prisma.department.upsert({
         where: { name: "IT" },
         update: {},
-        create: {
-            name: "IT",
-            code: "IT",
-            description: "Information Technology",
-            divisionId: divTech.id
-        }
+        create: { name: "IT", code: "IT", description: "Information Technology", divisionId: divTech.id },
     });
 
-    const deptHR = await prisma.department.upsert({
+    await prisma.department.upsert({
         where: { name: "Human Resources" },
         update: {},
-        create: {
-            name: "Human Resources",
-            code: "HR",
-            description: "Human Resources Department",
-            divisionId: divCorporate.id
-        }
+        create: { name: "Human Resources", code: "HR", description: "Human Resources Department", divisionId: divCorporate.id },
     });
 
-    // 3. Create Positions (Standalone)
-    const posStaff = await prisma.position.upsert({
-        where: { name: "Staff" },
-        update: {},
-        create: { name: "Staff" }
-    });
-
-    const posManager = await prisma.position.upsert({
-        where: { name: "Manager" },
-        update: {},
-        create: { name: "Manager" }
-    });
+    // 4. Create Positions
+    await prisma.position.upsert({ where: { name: "Staff" }, update: {}, create: { name: "Staff" } });
+    await prisma.position.upsert({ where: { name: "Manager" }, update: {}, create: { name: "Manager", level: "MANAGER" } });
 
     console.log("✅ Master data (Shifts, Divisions, Depts, Positions) seeded");
 
     const hashedPassword = await bcrypt.hash("123", 10);
 
-    // 5. Create employees
+    // 5. Create employees — joinDate sekarang DateTime
     const hrAdmin = await prisma.employee.upsert({
         where: { employeeId: "WIG001" },
-        update: {
-            password: hashedPassword,
-            isActive: true,
-            role: "hr",
-        },
+        update: { password: hashedPassword, isActive: true, role: "hr" },
         create: {
             id: "emp-001",
             employeeId: "WIG001",
@@ -100,7 +77,7 @@ async function main() {
             position: "Manager",
             role: "hr",
             password: hashedPassword,
-            joinDate: "2024-01-15",
+            joinDate: new Date("2024-01-15"),
             totalLeave: 12,
             usedLeave: 2,
             isActive: true,
@@ -110,10 +87,7 @@ async function main() {
 
     const budi = await prisma.employee.upsert({
         where: { employeeId: "WIG002" },
-        update: {
-            password: hashedPassword,
-            isActive: true,
-        },
+        update: { password: hashedPassword, isActive: true },
         create: {
             id: "emp-002",
             employeeId: "WIG002",
@@ -125,7 +99,7 @@ async function main() {
             position: "Staff",
             role: "employee",
             password: hashedPassword,
-            joinDate: "2024-03-01",
+            joinDate: new Date("2024-03-01"),
             totalLeave: 12,
             usedLeave: 5,
             isActive: true,
@@ -135,7 +109,7 @@ async function main() {
 
     console.log(`✅ Employees seeded: ${hrAdmin.name}, ${budi.name}`);
 
-    // 6. Create news
+    // 6. Create news — createdAt sekarang DateTime (default(now()) di schema)
     await prisma.newsItem.upsert({
         where: { id: "news-001" },
         update: {},
@@ -143,10 +117,9 @@ async function main() {
             id: "news-001",
             title: "Selamat Datang di WIG Attendance System",
             content:
-                "Sistem absensi digital PT Wijaya Inovasi Gemilang kini telah aktif. Silakan gunakan fitur absensi dengan face recognition untuk pencatatan kehadiran yang lebih akurat.",
+                "Sistem absensi digital WIG kini telah aktif. Silakan gunakan fitur absensi dengan face recognition untuk pencatatan kehadiran yang lebih akurat.",
             category: "announcement",
             author: "Admin HR",
-            createdAt: new Date().toISOString(),
             isPinned: true,
         },
     });

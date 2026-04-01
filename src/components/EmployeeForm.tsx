@@ -18,6 +18,19 @@ interface Department { id: string; name: string; divisionId: string; division?: 
 interface Position { id: string; name: string; level: string; }
 interface MasterPayrollComponent { id: string; name: string; type: "allowance" | "deduction"; defaultAmount: number; isActive: boolean; }
 
+/** Type lokal untuk payrollComponent di state form — belum punya id/employeeId sebelum disimpan */
+type FormPayrollComponent = {
+    id?: string;
+    employeeId?: string;
+    componentId: string;
+    amount: number;
+    component?: MasterPayrollComponent;
+};
+
+/** Valid level values */
+type EmployeeLevel = "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
+const VALID_LEVELS: EmployeeLevel[] = ["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"];
+
 interface Props {
     initialData?: Partial<Employee>;
     isEdit?: boolean;
@@ -55,9 +68,9 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         bypassLocation: initialData?.bypassLocation || false,
         locations: initialData?.locations || [] as { id: string; name: string }[],
         basicSalary: initialData?.basicSalary || 0,
-        payrollComponents: initialData?.payrollComponents || [] as any[],
-        level: (initialData as any)?.level || "STAFF",
-        managerId: (initialData as any)?.managerId || "",
+        payrollComponents: (initialData?.payrollComponents || []) as FormPayrollComponent[],
+        level: (initialData?.level || "STAFF") as EmployeeLevel,
+        managerId: initialData?.managerId || "",
     });
 
     useEffect(() => {
@@ -149,7 +162,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         if (!first) return;
         setForm({
             ...form,
-            payrollComponents: [...form.payrollComponents, { componentId: first.id, amount: first.defaultAmount, component: first }]
+            payrollComponents: [...form.payrollComponents, { componentId: first.id, amount: first.defaultAmount, component: first } as FormPayrollComponent]
         });
     };
 
@@ -261,7 +274,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                                 <label className="form-label">Jabatan</label>
                                 <select className="form-select" value={form.position} onChange={(e) => {
                                     const selectedPos = masterPositions.find(p => p.name === e.target.value);
-                                    setForm({ ...form, position: e.target.value, level: selectedPos?.level || "STAFF", managerId: "" });
+                                    setForm({ ...form, position: e.target.value, level: (VALID_LEVELS.includes(selectedPos?.level as EmployeeLevel) ? selectedPos?.level : "STAFF") as EmployeeLevel, managerId: "" });
                                 }} required>
                                     <option value="">Pilih Jabatan</option>
                                     {masterPositions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
@@ -269,7 +282,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                             </div>
                             <div className="form-group !mb-0">
                                 <label className="form-label">Role Sistem</label>
-                                <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}>
+                                <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" })}>
                                     <option value="employee">Employee (User)</option>
                                     <option value="hr">HR (Manager)</option>
                                 </select>

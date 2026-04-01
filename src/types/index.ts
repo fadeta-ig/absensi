@@ -19,9 +19,12 @@ export type Employee = {
     isActive: boolean;
     shiftId?: string | null;
     bypassLocation: boolean;
-    locations?: { id: string; name: string }[];
     basicSalary: number;
+    locations?: { id: string; name: string }[];
     payrollComponents?: EmployeePayrollComponent[];
+    /** Relasi Prisma — tersedia jika di-include dalam query */
+    manager?: { id: string; name: string; employeeId: string } | null;
+    subordinates?: { id: string; name: string; employeeId: string; level: string }[];
 };
 
 export type EmployeePayrollComponent = {

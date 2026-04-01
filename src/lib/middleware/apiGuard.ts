@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { ZodSchema, ZodError } from "zod";
 import logger from "@/lib/logger";
+import { sanitizeObject } from "./sanitize";
 
 /** Standardized session type from JWT payload */
 export interface SessionPayload {
@@ -42,6 +43,7 @@ export function forbiddenResponse(): NextResponse {
 
 /**
  * Validate request body against a Zod schema.
+ * Input otomatis di-sanitize (strip HTML tags) sebelum validasi Zod.
  * Returns parsed data on success, or a NextResponse error on failure.
  */
 export async function validateBody<T>(
@@ -49,7 +51,11 @@ export async function validateBody<T>(
     schema: ZodSchema<T>
 ): Promise<{ data: T } | { error: NextResponse }> {
     try {
-        const body = await request.json();
+        const raw = await request.json();
+        // Sanitize semua string values dari HTML tags untuk mencegah XSS
+        const body = typeof raw === "object" && raw !== null
+            ? sanitizeObject(raw as Record<string, unknown>)
+            : raw;
         const data = schema.parse(body);
         return { data };
     } catch (err) {

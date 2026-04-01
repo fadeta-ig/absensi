@@ -19,7 +19,7 @@ model Employee {
   role              String                     @default("employee")
   password          String
   faceDescriptor    String?                    @map("face_descriptor") @db.LongText
-  joinDate          String                     @map("join_date")
+  joinDate          DateTime                   @map("join_date")
   totalLeave        Int                        @default(12) @map("total_leave")
   usedLeave         Int                        @default(0) @map("used_leave")
   avatarUrl         String?                    @map("avatar_url")
@@ -49,7 +49,7 @@ model Employee {
 model VisitReport {
   id            String   @id @default(uuid())
   employeeId    String   @map("employee_id")
-  date          String
+  date          DateTime
   clientName    String   @map("client_name")
   clientAddress String   @map("client_address") @db.Text
   purpose       String   @db.Text
@@ -58,7 +58,7 @@ model VisitReport {
   photo         String?  @db.LongText
   status        String   @default("pending")
   notes         String?  @db.Text
-  createdAt     String   @map("created_at")
+  createdAt     DateTime @default(now()) @map("created_at")
   employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "visit_reports_employee_id_fkey")
@@ -66,18 +66,18 @@ model VisitReport {
 }
 
 model AttendanceRecord {
-  id               String   @id @default(uuid())
-  employeeId       String   @map("employee_id")
-  date             String
-  clockIn          String?  @map("clock_in")
-  clockOut         String?  @map("clock_out")
-  clockInLocation  String?  @map("clock_in_location") @db.LongText
-  clockOutLocation String?  @map("clock_out_location") @db.LongText
-  clockInPhoto     String?  @map("clock_in_photo") @db.LongText
-  clockOutPhoto    String?  @map("clock_out_photo") @db.LongText
-  status           String   @default("present")
-  notes            String?  @db.Text
-  employee         Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  id               String    @id @default(uuid())
+  employeeId       String    @map("employee_id")
+  date             DateTime
+  clockIn          DateTime? @map("clock_in")
+  clockOut         DateTime? @map("clock_out")
+  clockInLocation  String?   @map("clock_in_location") @db.LongText
+  clockOutLocation String?   @map("clock_out_location") @db.LongText
+  clockInPhoto     String?   @map("clock_in_photo") @db.LongText
+  clockOutPhoto    String?   @map("clock_out_photo") @db.LongText
+  status           String    @default("present")
+  notes            String?   @db.Text
+  employee         Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@map("attendance_records")
@@ -92,7 +92,7 @@ model PayslipRecord {
   deductions  String   @db.LongText
   overtime    Float    @default(0)
   netSalary   Float    @map("net_salary")
-  issuedDate  String   @map("issued_date")
+  issuedDate  DateTime @map("issued_date")
   notes       String?  @db.Text
   employee    Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
@@ -131,11 +131,11 @@ model LeaveRequest {
   id         String   @id @default(uuid())
   employeeId String   @map("employee_id")
   type       String
-  startDate  String   @map("start_date")
-  endDate    String   @map("end_date")
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
   reason     String   @db.Text
   status     String   @default("pending")
-  createdAt  String   @map("created_at")
+  createdAt  DateTime @default(now()) @map("created_at")
   attachment String?  @db.LongText
   employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
@@ -144,15 +144,15 @@ model LeaveRequest {
 }
 
 model NewsItem {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   title     String
-  content   String  @db.Text
-  category  String  @default("general")
+  content   String   @db.Text
+  category  String   @default("general")
   author    String
-  createdAt String  @map("created_at")
-  isPinned  Boolean @default(false) @map("is_pinned")
-  mediaName String? @map("media_name")
-  mediaUrl  String? @map("media_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  isPinned  Boolean  @default(false) @map("is_pinned")
+  mediaName String?  @map("media_name")
+  mediaUrl  String?  @map("media_url")
 
   @@map("news_items")
 }
@@ -162,7 +162,7 @@ model TodoItem {
   employeeId String   @map("employee_id")
   text       String   @db.Text
   completed  Boolean  @default(false)
-  createdAt  String   @map("created_at")
+  createdAt  DateTime @default(now()) @map("created_at")
   employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "todo_items_employee_id_fkey")
@@ -172,16 +172,16 @@ model TodoItem {
 model OvertimeRequest {
   id            String   @id @default(uuid())
   employeeId    String   @map("employee_id")
-  date          String
-  startTime     String   @map("start_time")
-  endTime       String   @map("end_time")
+  date          DateTime
+  startTime     DateTime @map("start_time")
+  endTime       DateTime @map("end_time")
   hours         Float
   approvedHours Float?   @map("approved_hours")
   isHoliday     Boolean  @default(false) @map("is_holiday")
   overtimePay   Float    @default(0) @map("overtime_pay")
   reason        String   @db.Text
   status        String   @default("pending")
-  createdAt     String   @map("created_at")
+  createdAt     DateTime @default(now()) @map("created_at")
   employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "overtime_requests_employee_id_fkey")

@@ -2,33 +2,13 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Image from "next/image";
 import {
-    Home,
-    Camera,
-    ClipboardList,
-    FileText,
-    CalendarOff,
-    Newspaper,
-    NotebookPen,
-    MapPinned,
-    Clock4,
-    Settings,
-    LogOut,
-    Menu,
-    X,
-    Users,
-    PanelLeftClose,
-    PanelLeftOpen,
+    Home, Camera, ClipboardList, FileText, CalendarOff,
+    Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users,
 } from "lucide-react";
+import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 
-interface User {
-    name: string;
-    employeeId: string;
-    role: string;
-}
-
-const navItems = [
+const navItems: NavItem[] = [
     { href: "/employee", icon: Home, label: "Beranda" },
     { href: "/employee/attendance", icon: Camera, label: "Absensi" },
     { href: "/employee/attendance-history", icon: ClipboardList, label: "Riwayat" },
@@ -41,23 +21,40 @@ const navItems = [
     { href: "/employee/settings", icon: Settings, label: "Pengaturan" },
 ];
 
-export default function EmployeeLayout({
-    children,
-}: {
-    children: React.ReactNode;
+// Mobile bottom nav — 5 item pertama
+function MobileBottomNav({ items, pathname, onNavigate }: {
+    items: NavItem[];
+    pathname: string;
+    onNavigate: (href: string) => void;
 }) {
+    return (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] flex items-center justify-around py-2 z-50 lg:hidden safe-area-bottom">
+            {items.slice(0, 5).map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+                return (
+                    <button
+                        key={item.href}
+                        onClick={() => onNavigate(item.href!)}
+                        className="flex flex-col items-center gap-0.5 py-1 px-2 min-w-[56px]"
+                    >
+                        <Icon className={`w-5 h-5 ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`} />
+                        <span className={`text-[10px] font-medium ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>
+                            {item.label}
+                        </span>
+                    </button>
+                );
+            })}
+        </nav>
+    );
+}
+
+export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const [user, setUser] = useState<User | null>(null);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [user, setUser] = useState<AppShellUser | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
     const fetchedRef = useRef(false);
-
-    useEffect(() => {
-        const saved = localStorage.getItem("employee-sidebar-collapsed");
-        if (saved === "true") setSidebarCollapsed(true);
-    }, []);
 
     useEffect(() => {
         if (fetchedRef.current) return;
@@ -66,15 +63,9 @@ export default function EmployeeLayout({
         const checkAuth = async () => {
             try {
                 const res = await fetch("/api/auth/me", { credentials: "same-origin" });
-                if (!res.ok) {
-                    router.replace("/");
-                    return;
-                }
+                if (!res.ok) { router.replace("/"); return; }
                 const data = await res.json();
-                if (data.role === "hr") {
-                    router.replace("/dashboard");
-                    return;
-                }
+                if (data.role === "hr") { router.replace("/dashboard"); return; }
                 setUser(data);
             } catch {
                 router.replace("/");
@@ -91,154 +82,52 @@ export default function EmployeeLayout({
         router.replace("/");
     }, [router]);
 
-    const toggleCollapse = useCallback(() => {
-        setSidebarCollapsed(prev => {
-            const next = !prev;
-            localStorage.setItem("employee-sidebar-collapsed", String(next));
-            return next;
-        });
-    }, []);
+    const handleNavigate = useCallback((href: string) => {
+        router.push(href);
+    }, [router]);
 
     if (!authChecked || !user) {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[var(--background)]">
-                <div className="spinner" />
-                <p className="text-sm text-[var(--text-muted)]">Memuat...</p>
-            </div>
-        );
+        return <AppShellLoading message="Memuat..." />;
     }
 
-    return (
-        <div className="flex min-h-screen bg-[var(--background)]">
-            {/* Mobile Header */}
-            <header className="fixed top-0 left-0 right-0 h-14 bg-white/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
-                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--secondary)] transition-colors">
-                    <Menu className="w-5 h-5 text-[var(--text-primary)]" />
-                </button>
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 relative">
-                        <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
-                    </div>
-                    <span className="text-sm font-bold text-[var(--primary)]">WIG</span>
-                </div>
-                <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-xs font-bold">
-                    {user.name.charAt(0)}
-                </div>
-            </header>
-
-            {/* Sidebar */}
-            <aside className={`fixed left-0 top-0 bottom-0 bg-white border-r border-[var(--border)] flex flex-col z-[200] transition-all duration-300 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"} w-64 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-                <div className={`p-4 flex items-center border-b border-[var(--border)] ${sidebarCollapsed ? "lg:justify-center" : "justify-between"}`}>
-                    <div className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                        <div className="w-9 h-9 relative shrink-0">
-                            <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
-                        </div>
-                        <div>
-                            <h2 className="text-sm font-bold text-[var(--text-primary)]">WIG Portal</h2>
-                            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Employee</p>
-                        </div>
-                    </div>
-                    {/* Collapsed logo (icon only) */}
-                    <div className={`w-9 h-9 relative shrink-0 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
-                        <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
-                    </div>
-                    {/* Desktop toggle — minimalist icon */}
-                    <button
-                        onClick={toggleCollapse}
-                        title={sidebarCollapsed ? "Buka Sidebar" : "Tutup Sidebar"}
-                        className={`hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)] transition-all duration-200 ${sidebarCollapsed ? "lg:mt-2" : ""}`}
-                    >
-                        {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-                    </button>
-                    {/* Mobile close */}
-                    <button onClick={() => setSidebarOpen(false)} className="lg:hidden w-8 h-8 flex items-center justify-center rounded-md hover:bg-[var(--secondary)] transition-colors">
-                        <X className="w-4 h-4 text-[var(--text-secondary)]" />
-                    </button>
-                </div>
-
-                <div className={`p-4 border-b border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-sm font-bold shrink-0">
-                            {user.name.charAt(0)}
-                        </div>
-                        <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                            <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{user.employeeId}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <nav className={`flex-1 p-3 flex flex-col gap-1 overflow-y-auto ${sidebarCollapsed ? "lg:items-center" : ""}`}>
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-                        const Icon = item.icon;
-                        return (
-                            <button
-                                key={item.href}
-                                title={sidebarCollapsed ? item.label : undefined}
-                                onClick={() => { router.push(item.href); setSidebarOpen(false); }}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""} ${isActive
-                                    ? "bg-[var(--primary)] text-white shadow-sm"
-                                    : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
-                                    }`}
-                            >
-                                <Icon className="w-[18px] h-[18px] shrink-0" />
-                                <span className={sidebarCollapsed ? "lg:hidden" : ""}>{item.label}</span>
-                            </button>
-                        );
-                    })}
-
-                    {/* Monitoring Menu for Non-Staff */}
-                    {user && (user as any).level !== "STAFF" && (
-                        <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                            <p className={`text-[10px] font-bold text-[var(--text-muted)] px-3 mb-2 uppercase tracking-widest ${sidebarCollapsed ? "lg:hidden" : ""}`}>Management</p>
-                            <button
-                                onClick={() => { router.push("/employee/monitoring"); setSidebarOpen(false); }}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""} ${pathname === "/employee/monitoring"
-                                    ? "bg-[var(--primary)] text-white shadow-sm"
-                                    : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
-                                    }`}
-                            >
-                                <Users className="w-[18px] h-[18px] shrink-0" />
-                                <span className={sidebarCollapsed ? "lg:hidden" : ""}>Monitoring Tim</span>
-                            </button>
-                        </div>
-                    )}
-                </nav>
-
-                <div className={`p-3 border-t border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>
-                    <button onClick={handleLogout} title={sidebarCollapsed ? "Keluar" : undefined} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}>
-                        <LogOut className="w-[18px] h-[18px] shrink-0" />
-                        <span className={sidebarCollapsed ? "lg:hidden" : ""}>Keluar</span>
-                    </button>
-                </div>
-            </aside>
-
-            {/* Overlay */}
-            {sidebarOpen && (
-                <div className="fixed inset-0 bg-black/30 z-[150] lg:hidden" onClick={() => setSidebarOpen(false)} />
-            )}
-
-            {/* Main Content */}
-            <main className={`flex-1 pt-14 lg:pt-0 min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"}`}>
-                <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto">
-                    {children}
-                </div>
-            </main>
-
-            {/* Mobile Bottom Nav */}
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] flex items-center justify-around py-2 z-50 lg:hidden safe-area-bottom">
-                {navItems.slice(0, 5).map((item) => {
-                    const isActive = pathname === item.href;
-                    const Icon = item.icon;
-                    return (
-                        <button key={item.href} onClick={() => router.push(item.href)} className="flex flex-col items-center gap-0.5 py-1 px-2 min-w-[56px]">
-                            <Icon className={`w-5 h-5 ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`} />
-                            <span className={`text-[10px] font-medium ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>{item.label}</span>
-                        </button>
-                    );
-                })}
-            </nav>
+    // Monitoring Tim hanya untuk level non-STAFF
+    const monitoringNav = user.level && user.level !== "STAFF" ? (
+        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+            <p className="text-[10px] font-bold text-[var(--text-muted)] px-3 mb-2 uppercase tracking-widest">
+                Management
+            </p>
+            <button
+                onClick={() => router.push("/employee/monitoring")}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${pathname === "/employee/monitoring"
+                    ? "bg-[var(--primary)] text-white shadow-sm"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--secondary)] hover:text-[var(--text-primary)]"
+                    }`}
+            >
+                <Users className="w-[18px] h-[18px] shrink-0" />
+                <span>Monitoring Tim</span>
+            </button>
         </div>
+    ) : null;
+
+    return (
+        <AppShell
+            user={user}
+            navItems={navItems}
+            brandTitle="WIG Portal"
+            brandSubtitle="Employee"
+            mobileTitle="WIG"
+            storageKey="employee-sidebar-collapsed"
+            onLogout={handleLogout}
+            extraNav={monitoringNav}
+            mobileBottomNav={
+                <MobileBottomNav
+                    items={navItems}
+                    pathname={pathname}
+                    onNavigate={handleNavigate}
+                />
+            }
+        >
+            {children}
+        </AppShell>
     );
 }
