@@ -184,7 +184,7 @@ export default function DashboardLayout({
                             <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Admin Panel</p>
                         </div>
                     </div>
-                    {/* Collapsed logo (icon only) */}
+                    {/* Collapsed logo (icon onlyyy) */}
                     <div className={`w-9 h-9 relative shrink-0 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
                         <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
                     </div>
