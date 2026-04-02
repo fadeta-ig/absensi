@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-    LayoutDashboard,
-    Smartphone,
-    Laptop,
-    Phone,
-    Package,
-} from "lucide-react";
+import { LayoutDashboard, Phone, Package } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
 
 const GA_NAV_ITEMS: NavItem[] = [
@@ -21,11 +15,11 @@ const GA_NAV_ITEMS: NavItem[] = [
             { href: "/ga/assets?category=HANDPHONE", label: "Handphone" },
             { href: "/ga/assets?category=LAPTOP", label: "Laptop" },
             { href: "/ga/assets?category=NOMOR_HP", label: "Nomor Indosat" },
+            { href: "/ga/assets?status=AVAILABLE", label: "Stok Tersedia" },
+            { href: "/ga/assets?status=MAINTENANCE", label: "Dalam Perbaikan" },
         ],
     },
-    { href: "/ga/assets?filter=available", icon: Smartphone, label: "Stok Tersedia" },
     { href: "/ga/nomor", icon: Phone, label: "Kartu SIM Expiry" },
-    { href: "/ga/assets?filter=maintenance", icon: Laptop, label: "Dalam Perbaikan" },
 ];
 
 export default function GaLayout({ children }: { children: React.ReactNode }) {

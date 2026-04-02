@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { LucideIcon, LogOut, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
@@ -65,8 +65,29 @@ export default function AppShell({
     onLogout,
     children,
 }: AppShellProps) {
-    const router = useRouter();
-    const pathname = usePathname();
+    const router   = useRouter();
+    const pathname  = usePathname();
+    const searchParams = useSearchParams();
+
+    /**
+     * Cek apakah href (bisa dengan query params) cocok dengan URL saat ini.
+     * - Href tanpa query params → cocok hanya jika path sama DAN tidak ada query params.
+     * - Href dengan query params → cocok jika path sama DAN semua query params-nya ada di URL.
+     */
+    const matchesHref = useCallback((href: string): boolean => {
+        const [hrefPath, hrefQuery] = href.split("?");
+        if (pathname !== hrefPath) return false;
+        if (!hrefQuery) {
+            // "Semua Aset" atau item tanpa query: aktif hanya jika URL juga kosong
+            return searchParams.toString() === "";
+        }
+        // Cek setiap key-value di href query params harus match
+        const hrefParams = new URLSearchParams(hrefQuery);
+        for (const [key, val] of hrefParams.entries()) {
+            if (searchParams.get(key) !== val) return false;
+        }
+        return true;
+    }, [pathname, searchParams]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [openMenus, setOpenMenus] = useState<string[]>([]);
@@ -77,10 +98,14 @@ export default function AppShell({
         if (saved === "true") setSidebarCollapsed(true);
     }, [storageKey]);
 
-    // Auto-expand sub-menu jika sub-item aktif
+    // Auto-expand sub-menu jika sub-item aktif (termasuk URL dengan query params)
     useEffect(() => {
         navItems.forEach((item) => {
-            if (item.subItems?.some((sub) => pathname === sub.href)) {
+            if (item.subItems?.some((sub) => {
+                // Bandingkan base path saja (abaikan query params)
+                const subBasePath = sub.href.split("?")[0];
+                return pathname === subBasePath || pathname.startsWith(subBasePath + "/");
+            })) {
                 setOpenMenus((prev) =>
                     prev.includes(item.label) ? prev : [...prev, item.label]
                 );
@@ -187,8 +212,8 @@ export default function AppShell({
                         const hasSubItems = item.subItems && item.subItems.length > 0;
                         const isMenuOpen = openMenus.includes(item.label);
                         const isActive = item.href
-                            ? pathname === item.href
-                            : item.subItems?.some((s) => pathname === s.href);
+                            ? matchesHref(item.href)
+                            : item.subItems?.some((s) => matchesHref(s.href));
 
                         return (
                             <div key={item.label} className="flex flex-col gap-1 w-full">
@@ -231,7 +256,7 @@ export default function AppShell({
                                 {hasSubItems && isMenuOpen && !sidebarCollapsed && (
                                     <div className="flex flex-col gap-1 ml-9 mt-1 border-l border-[var(--border)] pl-3">
                                         {item.subItems!.map((sub) => {
-                                            const isSubActive = pathname === sub.href;
+                                            const isSubActive = matchesHref(sub.href);
                                             return (
                                                 <button
                                                     key={sub.href}

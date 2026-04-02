@@ -4,7 +4,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import ToastContainer from "@/components/Toast";
 
 export const metadata: Metadata = {
-  title: "WIG Attendance - PT Wijaya Inovasi Gemilang",
+  title: "WIG HRIS - PT Wijaya Inovasi Gemilang",
   description: "Sistem Absensi Karyawan PT Wijaya Inovasi Gemilang",
   manifest: "/manifest.json",
 };

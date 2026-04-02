@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     Search, Plus, Filter, RefreshCw,
     Smartphone, Laptop, Phone, Package,
     User, Users, Building2, Archive, UserX,
-    Edit3, ArrowRightLeft, Trash2, History, X, Check
+    Edit3, ArrowRightLeft, Trash2, History, X,
 } from "lucide-react";
+import Pagination from "@/components/ui/Pagination";
 
 type Asset = {
     id: string; assetCode: string; name: string;
@@ -63,7 +64,7 @@ function HolderIcon({ holderType }: { holderType: string }) {
         GA_POOL: <Building2 size={13} color="#10b981" />,
         COMPANY_OWNED: <Archive size={13} color="#6b7280" />,
     };
-    return <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{icons[holderType]}</span>;
+    return <span style={{ display: "inline-flex", alignItems: "center" }}>{icons[holderType]}</span>;
 }
 
 function CategoryBadge({ cat }: { cat: string }) {
@@ -77,6 +78,139 @@ function CategoryBadge({ cat }: { cat: string }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#6366f1", background: "#eef2ff", padding: "2px 8px", borderRadius: 999 }}>
             {c.icon}{c.label}
         </span>
+    );
+}
+
+// ─── Modal: CREATE ──────────────────────────────────────────────
+
+function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+    const [form, setForm] = useState({
+        name: "",
+        category: "HANDPHONE" as "HANDPHONE" | "LAPTOP" | "NOMOR_HP",
+        kondisi: "BAIK" as "BAIK" | "KURANG_BAIK" | "RUSAK",
+        holderType: "GA_POOL" as string,
+        assignedToName: "",
+        nomorIndosat: "",
+        expiredDate: "",
+        keterangan: "",
+    });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    const set = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
+
+    const needsName = form.holderType !== "GA_POOL" && form.holderType !== "COMPANY_OWNED";
+    const isNomor = form.category === "NOMOR_HP";
+
+    const submit = async () => {
+        if (!form.name.trim()) { setError("Nama aset harus diisi"); return; }
+        if (needsName && !form.assignedToName.trim()) { setError("Nama pemegang harus diisi"); return; }
+        setLoading(true); setError("");
+        try {
+            const res = await fetch("/api/assets", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: form.name,
+                    category: form.category,
+                    kondisi: form.kondisi,
+                    holderType: form.holderType,
+                    assignedToName: needsName ? form.assignedToName : null,
+                    nomorIndosat: isNomor ? (form.nomorIndosat || null) : null,
+                    expiredDate: isNomor ? (form.expiredDate || null) : null,
+                    keterangan: form.keterangan || null,
+                }),
+            });
+            if (!res.ok) { const e = await res.json(); setError(e.error ?? "Gagal membuat aset"); return; }
+            onDone();
+        } finally { setLoading(false); }
+    };
+
+    return (
+        <div style={overlayStyle}>
+            <div style={{ ...modalStyle, maxWidth: 520 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <div>
+                        <h3 style={{ fontSize: 17, fontWeight: 700 }}>Tambah Aset Baru</h3>
+                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Kode aset akan digenerate otomatis</p>
+                    </div>
+                    <button onClick={onClose} style={iconBtnStyle}><X size={18} /></button>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
+                        <label style={labelStyle}>Nama Aset *</label>
+                        <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Contoh: iPhone 13 128GB / ThinkPad E14" style={inputStyle} />
+                    </div>
+
+                    <div style={fieldStyle}>
+                        <label style={labelStyle}>Kategori *</label>
+                        <select value={form.category} onChange={e => set("category", e.target.value)} style={inputStyle}>
+                            <option value="HANDPHONE">Handphone / Tablet</option>
+                            <option value="LAPTOP">Laptop</option>
+                            <option value="NOMOR_HP">Nomor Indosat (SIM)</option>
+                        </select>
+                    </div>
+
+                    <div style={fieldStyle}>
+                        <label style={labelStyle}>Kondisi *</label>
+                        <select value={form.kondisi} onChange={e => set("kondisi", e.target.value)} style={inputStyle}>
+                            <option value="BAIK">Baik</option>
+                            <option value="KURANG_BAIK">Kurang Baik</option>
+                            <option value="RUSAK">Rusak</option>
+                        </select>
+                    </div>
+
+                    <div style={fieldStyle}>
+                        <label style={labelStyle}>Pemegang Awal *</label>
+                        <select value={form.holderType} onChange={e => set("holderType", e.target.value)} style={inputStyle}>
+                            <option value="GA_POOL">GA — Brankas GA</option>
+                            <option value="EMPLOYEE">Karyawan Aktif</option>
+                            <option value="TEAM">Tim</option>
+                            <option value="FORMER_EMPLOYEE">Mantan Karyawan</option>
+                            <option value="COMPANY_OWNED">Milik Perusahaan</option>
+                        </select>
+                    </div>
+
+                    {needsName && (
+                        <div style={fieldStyle}>
+                            <label style={labelStyle}>Nama Pemegang *</label>
+                            <input
+                                value={form.assignedToName}
+                                onChange={e => set("assignedToName", e.target.value)}
+                                placeholder={form.holderType === "TEAM" ? "Tim Warehouse / Tim Creative" : "Nama lengkap"}
+                                style={inputStyle}
+                            />
+                        </div>
+                    )}
+
+                    {isNomor && <>
+                        <div style={fieldStyle}>
+                            <label style={labelStyle}>Nomor Indosat</label>
+                            <input value={form.nomorIndosat} onChange={e => set("nomorIndosat", e.target.value)} placeholder="08163344xx" style={inputStyle} />
+                        </div>
+                        <div style={fieldStyle}>
+                            <label style={labelStyle}>Tanggal Expired</label>
+                            <input type="date" value={form.expiredDate} onChange={e => set("expiredDate", e.target.value)} style={inputStyle} />
+                        </div>
+                    </>}
+
+                    <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
+                        <label style={labelStyle}>Keterangan (opsional)</label>
+                        <textarea value={form.keterangan} onChange={e => set("keterangan", e.target.value)} placeholder="Catatan kondisi, lokasi, atau informasi tambahan..." style={{ ...inputStyle, height: 72, resize: "vertical" as const }} />
+                    </div>
+                </div>
+
+                {error && <p style={{ fontSize: 13, color: "#ef4444", marginTop: 4 }}>{error}</p>}
+
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+                    <button onClick={onClose} style={outlineBtnStyle}>Batal</button>
+                    <button onClick={submit} disabled={loading} style={primaryBtnStyle}>
+                        <Plus size={14} /> {loading ? "Menyimpan..." : "Tambah Aset"}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -103,9 +237,7 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
             });
             if (!res.ok) { const e = await res.json(); setError(e.error ?? "Gagal"); return; }
             onDone();
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     };
 
     return (
@@ -117,21 +249,21 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
                 </div>
                 <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
                     <strong>{asset.assetCode}</strong> — {asset.name}
-                    {asset.assignedToName && <><br />Saat ini dipegang: <strong>{asset.assignedToName}</strong></>}
+                    {asset.assignedToName && <><br />Saat ini: <strong>{asset.assignedToName}</strong></>}
                 </p>
                 <div style={fieldStyle}>
                     <label style={labelStyle}>Aksi</label>
                     <select value={holderType} onChange={e => setHolderType(e.target.value)} style={inputStyle}>
-                        <option value="EMPLOYEE">Assign ke Karyawan</option>
+                        <option value="EMPLOYEE">Assign ke Karyawan Aktif</option>
                         <option value="FORMER_EMPLOYEE">Assign ke Mantan Karyawan</option>
                         <option value="TEAM">Assign ke Tim</option>
-                        <option value="GA_POOL">Kembalikan ke GA</option>
+                        <option value="GA_POOL">Kembalikan ke GA (Brankas)</option>
                     </select>
                 </div>
                 {!isReturning && (
                     <div style={fieldStyle}>
-                        <label style={labelStyle}>Nama Pemegang</label>
-                        <input value={toName} onChange={e => setToName(e.target.value)} placeholder="Nama lengkap / Tim Warehouse / dst" style={inputStyle} />
+                        <label style={labelStyle}>Nama Pemegang *</label>
+                        <input value={toName} onChange={e => setToName(e.target.value)} placeholder={holderType === "TEAM" ? "Tim Warehouse / Tim Creative" : "Nama lengkap karyawan"} style={inputStyle} />
                     </div>
                 )}
                 <div style={fieldStyle}>
@@ -144,7 +276,7 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
                 </div>
                 <div style={fieldStyle}>
                     <label style={labelStyle}>Catatan (opsional)</label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Keterangan perpindahan..." style={{ ...inputStyle, height: 72, resize: "vertical" }} />
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Keterangan perpindahan..." style={{ ...inputStyle, height: 68, resize: "vertical" as const }} />
                 </div>
                 {error && <p style={{ fontSize: 13, color: "#ef4444", marginBottom: 8 }}>{error}</p>}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
@@ -175,11 +307,7 @@ function EditModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => vo
             const res = await fetch(`/api/assets/${asset.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name, kondisi, status, keterangan: keterangan || null,
-                    nomorIndosat: nomorIndosat || null,
-                    expiredDate: expiredDate || null,
-                }),
+                body: JSON.stringify({ name, kondisi, status, keterangan: keterangan || null, nomorIndosat: nomorIndosat || null, expiredDate: expiredDate || null }),
             });
             if (res.ok) onDone();
         } finally { setLoading(false); }
@@ -208,7 +336,7 @@ function EditModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => vo
                     <div style={fieldStyle}><label style={labelStyle}>Nomor Indosat</label><input value={nomorIndosat} onChange={e => setNomorIndosat(e.target.value)} style={inputStyle} /></div>
                     <div style={fieldStyle}><label style={labelStyle}>Tanggal Expired</label><input type="date" value={expiredDate} onChange={e => setExpiredDate(e.target.value)} style={inputStyle} /></div>
                 </>}
-                <div style={fieldStyle}><label style={labelStyle}>Keterangan</label><textarea value={keterangan} onChange={e => setKeterangan(e.target.value)} style={{ ...inputStyle, height: 72, resize: "vertical" }} /></div>
+                <div style={fieldStyle}><label style={labelStyle}>Keterangan</label><textarea value={keterangan} onChange={e => setKeterangan(e.target.value)} style={{ ...inputStyle, height: 68, resize: "vertical" as const }} /></div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
                     <button onClick={onClose} style={outlineBtnStyle}>Batal</button>
                     <button onClick={submit} disabled={loading} style={primaryBtnStyle}>{loading ? "Menyimpan..." : "Simpan"}</button>
@@ -230,8 +358,8 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
     }, [asset.id]);
 
     const actionLabel: Record<string, string> = {
-        assigned: "Diberikan ke", returned: "Dikembalikan", sent_to_maintenance: "Dikirim perbaikan",
-        kondisi_changed: "Kondisi diubah", retired: "Di-retire",
+        assigned: "Diberikan ke", returned: "Dikembalikan",
+        sent_to_maintenance: "Dikirim perbaikan", kondisi_changed: "Kondisi diubah", retired: "Di-retire",
     };
 
     return (
@@ -252,13 +380,11 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                                         <strong>{actionLabel[h.action] ?? h.action}</strong>
                                         <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{new Date(h.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                                     </div>
-                                    <p style={{ color: "var(--text-muted)", marginTop: 4 }}>
-                                        {h.fromName ? `${h.fromName}` : "GA Pool"} → {h.toName ?? "GA Pool"}
+                                    <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 12 }}>
+                                        {h.fromName ?? "GA Pool"} → {h.toName ?? "GA Pool"}
                                     </p>
-                                    {h.notes && <p style={{ marginTop: 4, color: "#6b7280" }}>📝 {h.notes}</p>}
-                                    <div style={{ marginTop: 4 }}>
-                                        <KondisiBadge kondisi={h.kondisiSaat} />
-                                    </div>
+                                    {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12 }}>📝 {h.notes}</p>}
+                                    <div style={{ marginTop: 4 }}><KondisiBadge kondisi={h.kondisiSaat} /></div>
                                 </div>
                             ))}
                         </div>
@@ -269,22 +395,38 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
     );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────
+// ─── Main Page (inner — uses useSearchParams) ───────────────────
 
-export default function AssetsPage() {
+const PAGE_SIZE = 20;
+
+function AssetsPageInner() {
     const searchParams = useSearchParams();
+
     const [assets, setAssets] = useState<Asset[]>([]);
     const [filtered, setFiltered] = useState<Asset[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-    const [filterCat, setFilterCat] = useState(searchParams.get("category") ?? "ALL");
-    const [filterStatus, setFilterStatus] = useState(searchParams.get("filter") === "available" ? "AVAILABLE" : searchParams.get("filter") === "maintenance" ? "MAINTENANCE" : "ALL");
+
+    // Filter state — diinisialisasi dari URL, lalu di-sync via useEffect
+    const [filterCat, setFilterCat] = useState("ALL");
+    const [filterStatus, setFilterStatus] = useState("ALL");
     const [filterKondisi, setFilterKondisi] = useState("ALL");
 
+    const [showCreate, setShowCreate] = useState(false);
     const [assignTarget, setAssignTarget] = useState<Asset | null>(null);
     const [editTarget, setEditTarget] = useState<Asset | null>(null);
     const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
     const [retireConfirm, setRetireConfirm] = useState<Asset | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    // ── Sync state dari URL params setiap kali URL berubah ─────
+    useEffect(() => {
+        const cat    = searchParams.get("category") ?? "ALL";
+        const status = searchParams.get("status")   ?? "ALL";
+        setFilterCat(cat);
+        setFilterStatus(status);
+        setCurrentPage(1); // reset ke halaman 1 saat filter dari URL berubah
+    }, [searchParams]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -296,9 +438,10 @@ export default function AssetsPage() {
 
     useEffect(() => { load(); }, [load]);
 
+    // ── Apply filters ───────────────────────────────────────────
     useEffect(() => {
         let f = [...assets];
-        if (filterCat !== "ALL") f = f.filter(a => a.category === filterCat);
+        if (filterCat !== "ALL")    f = f.filter(a => a.category === filterCat);
         if (filterStatus !== "ALL") f = f.filter(a => a.status === filterStatus);
         if (filterKondisi !== "ALL") f = f.filter(a => a.kondisi === filterKondisi);
         if (search.trim()) {
@@ -311,6 +454,7 @@ export default function AssetsPage() {
             );
         }
         setFiltered(f);
+        setCurrentPage(1); // reset ke halaman 1 setiap filter/search berubah
     }, [assets, search, filterCat, filterStatus, filterKondisi]);
 
     const handleRetire = async (asset: Asset) => {
@@ -318,22 +462,49 @@ export default function AssetsPage() {
         if (res.ok) { load(); setRetireConfirm(null); }
     };
 
+    // Judul halaman dinamis berdasarkan filter aktif
+    const pageTitle = filterCat === "HANDPHONE" ? "Handphone" :
+                      filterCat === "LAPTOP"    ? "Laptop"    :
+                      filterCat === "NOMOR_HP"  ? "Nomor Indosat" :
+                      filterStatus === "AVAILABLE"   ? "Stok Tersedia" :
+                      filterStatus === "MAINTENANCE" ? "Dalam Perbaikan" :
+                      "Semua Aset";
+
+    // Slice untuk pagination
+    const pageItems = filtered.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE
+    );
+
     return (
         <div className="space-y-5">
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
                 <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 700 }}>Manajemen Aset</h1>
-                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Total: {filtered.length} dari {assets.length} aset</p>
+                    <h1 style={{ fontSize: 22, fontWeight: 700 }}>{pageTitle}</h1>
+                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
+                        {filtered.length} dari {assets.length} aset
+                        {filterCat !== "ALL" && ` · Kategori: ${filterCat}`}
+                        {filterStatus !== "ALL" && ` · Status: ${filterStatus}`}
+                    </p>
                 </div>
-                <button onClick={load} style={outlineBtnStyle} title="Refresh"><RefreshCw size={15} /></button>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={load} style={outlineBtnStyle} title="Refresh"><RefreshCw size={15} /></button>
+                    <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
+                        <Plus size={15} /> Tambah Aset
+                    </button>
+                </div>
             </div>
 
-            {/* Filters */}
+            {/* Filter bar */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-                    <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari nama, kode, pemegang..." style={{ ...inputStyle, paddingLeft: 32, width: "100%", boxSizing: "border-box" }} />
+                    <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
+                    <input
+                        value={search} onChange={e => setSearch(e.target.value)}
+                        placeholder="Cari nama, kode, pemegang, nomor..."
+                        style={{ ...inputStyle, paddingLeft: 32, width: "100%", boxSizing: "border-box" as const }}
+                    />
                 </div>
                 <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
                     <option value="ALL">Semua Kategori</option>
@@ -356,8 +527,7 @@ export default function AssetsPage() {
                     <option value="RUSAK">Rusak</option>
                 </select>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-muted)" }}>
-                    <Filter size={14} />
-                    <span>{filtered.length} hasil</span>
+                    <Filter size={14} /><span>{filtered.length} hasil</span>
                 </div>
             </div>
 
@@ -380,15 +550,19 @@ export default function AssetsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 ? (
-                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--text-muted)" }}>Tidak ada aset ditemukan</td></tr>
-                                ) : filtered.map(a => (
+                                {pageItems.length === 0 ? (
+                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
+                                        {search ? `Tidak ada aset cocok dengan "${search}"` : "Tidak ada aset ditemukan"}
+                                    </td></tr>
+                                ) : pageItems.map(a => (
                                     <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                                        <td style={tdStyle}><span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span></td>
+                                        <td style={tdStyle}>
+                                            <span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
+                                        </td>
                                         <td style={{ ...tdStyle, maxWidth: 200 }}>
                                             <span style={{ fontWeight: 500 }}>{a.name}</span>
                                             {a.nomorIndosat && <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{a.nomorIndosat}</span>}
-                                            {a.keterangan && <span style={{ display: "block", fontSize: 11, color: "#f59e0b" }} title={a.keterangan}>⚠ {a.keterangan.substring(0, 30)}{a.keterangan.length > 30 ? "..." : ""}</span>}
+                                            {a.keterangan && <span style={{ display: "block", fontSize: 11, color: "#f59e0b" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 28)}{a.keterangan.length > 28 ? "…" : ""}</span>}
                                         </td>
                                         <td style={tdStyle}><CategoryBadge cat={a.category} /></td>
                                         <td style={tdStyle}><KondisiBadge kondisi={a.kondisi} /></td>
@@ -396,17 +570,21 @@ export default function AssetsPage() {
                                         <td style={tdStyle}>
                                             <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                                 <HolderIcon holderType={a.holderType} />
-                                                <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)" }}>
-                                                    {a.assignedToName ?? "—"}
+                                                <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal" }}>
+                                                    {a.assignedToName ?? "GA Pool"}
                                                 </span>
                                             </span>
                                         </td>
                                         <td style={tdStyle}>
-                                            <div style={{ display: "flex", gap: 6 }}>
+                                            <div style={{ display: "flex", gap: 5 }}>
                                                 <button onClick={() => setEditTarget(a)} title="Edit" style={iconBtnSmall}><Edit3 size={14} /></button>
-                                                {a.status !== "RETIRED" && <button onClick={() => setAssignTarget(a)} title="Assign / Return" style={iconBtnSmall}><ArrowRightLeft size={14} /></button>}
+                                                {a.status !== "RETIRED" && <button onClick={() => setAssignTarget(a)} title="Assign/Return" style={iconBtnSmall}><ArrowRightLeft size={14} /></button>}
                                                 <button onClick={() => setHistoryTarget(a)} title="Riwayat" style={iconBtnSmall}><History size={14} /></button>
-                                                {a.status !== "RETIRED" && <button onClick={() => setRetireConfirm(a)} title="Retire" style={{ ...iconBtnSmall, color: "#ef4444" }}><Trash2 size={14} /></button>}
+                                                {a.status !== "RETIRED" && (
+                                                    <button onClick={() => setRetireConfirm(a)} title="Retire" style={{ ...iconBtnSmall, color: "#ef4444", borderColor: "#fecaca" }}>
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -415,11 +593,18 @@ export default function AssetsPage() {
                         </table>
                     </div>
                 )}
+                <Pagination
+                    currentPage={currentPage}
+                    totalItems={filtered.length}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setCurrentPage}
+                />
             </div>
 
             {/* Modals */}
-            {assignTarget && <AssignModal asset={assignTarget} onClose={() => setAssignTarget(null)} onDone={() => { setAssignTarget(null); load(); }} />}
-            {editTarget && <EditModal asset={editTarget} onClose={() => setEditTarget(null)} onDone={() => { setEditTarget(null); load(); }} />}
+            {showCreate   && <CreateModal  onClose={() => setShowCreate(false)}   onDone={() => { setShowCreate(false);   load(); }} />}
+            {assignTarget && <AssignModal  asset={assignTarget}  onClose={() => setAssignTarget(null)}  onDone={() => { setAssignTarget(null);  load(); }} />}
+            {editTarget   && <EditModal    asset={editTarget}    onClose={() => setEditTarget(null)}    onDone={() => { setEditTarget(null);    load(); }} />}
             {historyTarget && <HistoryModal asset={historyTarget} onClose={() => setHistoryTarget(null)} />}
 
             {/* Retire Confirm */}
@@ -429,7 +614,7 @@ export default function AssetsPage() {
                         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Retire Aset?</h3>
                         <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
                             <strong>{retireConfirm.assetCode}</strong> — {retireConfirm.name}<br />
-                            Aset akan ditandai sebagai Retired dan tidak bisa di-assign.
+                            Aset akan ditandai Retired dan tidak bisa di-assign lagi.
                         </p>
                         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                             <button onClick={() => setRetireConfirm(null)} style={outlineBtnStyle}>Batal</button>
@@ -444,6 +629,16 @@ export default function AssetsPage() {
     );
 }
 
+// ─── Export (wrapped dalam Suspense agar useSearchParams aman) ──
+
+export default function AssetsPage() {
+    return (
+        <Suspense fallback={<div style={{ textAlign: "center", padding: 48 }}><div className="spinner" /></div>}>
+            <AssetsPageInner />
+        </Suspense>
+    );
+}
+
 // ─── Style Constants ────────────────────────────────────────────
 const thStyle: React.CSSProperties = { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "var(--text-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" };
 const tdStyle: React.CSSProperties = { padding: "10px 14px", color: "var(--text-primary)", verticalAlign: "middle" };
@@ -451,8 +646,8 @@ const inputStyle: React.CSSProperties = { height: 36, padding: "0 10px", border:
 const fieldStyle: React.CSSProperties = { marginBottom: 12, display: "flex", flexDirection: "column", gap: 5 };
 const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" };
 const primaryBtnStyle: React.CSSProperties = { height: 36, padding: "0 16px", background: "var(--primary)", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 };
-const outlineBtnStyle: React.CSSProperties = { height: 36, padding: "0 16px", background: "white", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 };
+const outlineBtnStyle: React.CSSProperties = { height: 36, padding: "0 14px", background: "white", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 };
 const iconBtnStyle: React.CSSProperties = { padding: 6, border: "none", background: "transparent", cursor: "pointer", borderRadius: 6, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" };
-const iconBtnSmall: React.CSSProperties = { ...iconBtnStyle, padding: 4, border: "1px solid var(--border)", background: "white", color: "var(--text-secondary)" };
-const overlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
+const iconBtnSmall: React.CSSProperties = { ...iconBtnStyle, padding: 5, border: "1px solid var(--border)", background: "white", color: "var(--text-secondary)" };
+const overlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
 const modalStyle: React.CSSProperties = { background: "white", borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px -10px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto" };

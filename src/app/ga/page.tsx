@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
     Package, Smartphone, Laptop, Phone,
-    CheckCircle, AlertCircle, Wrench, TrendingUp, Clock,
+    CheckCircle, AlertCircle, Wrench, TrendingUp, Clock, AlertTriangle,
 } from "lucide-react";
 
 type AssetStats = {
@@ -82,9 +82,9 @@ export default function GaDashboard() {
             {/* Alert expiry */}
             {stats && stats.expiringNomor > 0 && (
                 <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <Clock size={18} color="#d97706" />
+                    <AlertTriangle size={18} color="#d97706" />
                     <span style={{ fontSize: 14, color: "#92400e", fontWeight: 500 }}>
-                        ⚠️ {stats.expiringNomor} nomor Indosat akan expired dalam 30 hari ke depan
+                        {stats.expiringNomor} nomor Indosat akan expired dalam 30 hari ke depan
                     </span>
                     <a href="/ga/nomor" style={{ marginLeft: "auto", fontSize: 13, color: "#d97706", textDecoration: "underline" }}>Lihat</a>
                 </div>

@@ -96,7 +96,7 @@ export default function LoginPage() {
                 priority
               />
             </div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">WIG Attendance</h1>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">WIG HRIS</h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">PT Wijaya Inovasi Gemilang</p>
           </div>
 

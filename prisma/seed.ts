@@ -115,7 +115,7 @@ async function main() {
         update: {},
         create: {
             id: "news-001",
-            title: "Selamat Datang di WIG Attendance System",
+            title: "Selamat Datang di WIG HRIS System",
             content:
                 "Sistem absensi digital WIG kini telah aktif. Silakan gunakan fitur absensi dengan face recognition untuk pencatatan kehadiran yang lebih akurat.",
             category: "announcement",

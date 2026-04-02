@@ -51,15 +51,15 @@ export default function NomorPage() {
             {loading ? <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" /></div> : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {/* Expired */}
-                    {expired.length > 0 && <SectionHeader label="🔴 Sudah Expired" />}
+                    {expired.length > 0 && <SectionHeader label="Sudah Expired" color="#ef4444" />}
                     {expired.map(n => <NomorRow key={n.id} asset={n} urgency="expired" />)}
 
                     {/* Soon */}
-                    {soon.length > 0 && <SectionHeader label="🟡 Akan Expired dalam 30 Hari" />}
+                    {soon.length > 0 && <SectionHeader label="Akan Expired dalam 30 Hari" color="#f59e0b" />}
                     {soon.map(n => <NomorRow key={n.id} asset={n} urgency="soon" />)}
 
                     {/* OK */}
-                    {ok.length > 0 && <SectionHeader label="🟢 Masih Aktif" />}
+                    {ok.length > 0 && <SectionHeader label="Masih Aktif" color="#10b981" />}
                     {ok.map(n => <NomorRow key={n.id} asset={n} urgency="ok" />)}
                 </div>
             )}
@@ -67,8 +67,13 @@ export default function NomorPage() {
     );
 }
 
-function SectionHeader({ label }: { label: string }) {
-    return <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-secondary)", marginTop: 8, marginBottom: 4 }}>{label}</h2>;
+function SectionHeader({ label, color }: { label: string; color: string }) {
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+            <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" }}>{label}</h2>
+        </div>
+    );
 }
 
 function SummaryCard({ icon, label, count, bg }: { icon: React.ReactNode; label: string; count: number; bg: string }) {
@@ -94,7 +99,7 @@ function NomorRow({ asset, urgency }: { asset: NomorAsset; urgency: string }) {
             </div>
             <div style={{ flex: 1, minWidth: 150 }}>
                 <p style={{ fontSize: 14, fontWeight: 600 }}>{asset.nomorIndosat ?? asset.name}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{asset.assignedToName ?? "GA Pool"}</p>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{asset.assignedToName ?? "GA"}</p>
             </div>
             <div style={{ textAlign: "right" }}>
                 <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Expired</p>
