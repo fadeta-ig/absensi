@@ -30,6 +30,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# application logs (berubah saat runtime, tidak perlu di-track)
+/logs/
+*.log
+
+# PWA generated files (digenerate saat build, berbeda tiap environment)
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+
 # env files (can opt-in for committing if needed)
 .env*
 
