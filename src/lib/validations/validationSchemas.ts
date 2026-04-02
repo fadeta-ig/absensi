@@ -57,7 +57,35 @@ export const employeeCreateSchema = z.object({
 
 export const employeeUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-}).catchall(z.unknown());
+    // Identitas dasar
+    name: z.string().min(1).optional(),
+    email: z.string().email("Format email tidak valid").optional(),
+    phone: z.string().min(1).optional(),
+    department: z.string().min(1).optional(),
+    division: z.string().nullable().optional(),
+    position: z.string().min(1).optional(),
+    // Role & Level — hanya HR yang bisa ubah (enforced di API route)
+    role: z.enum(["employee", "hr"]).optional(),
+    level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"]).optional(),
+    managerId: z.string().nullable().optional(),
+    // Kepegawaian
+    joinDate: z.string().optional(),
+    isActive: z.boolean().optional(),
+    totalLeave: z.number().min(0).optional(),
+    usedLeave: z.number().min(0).optional(),
+    bypassLocation: z.boolean().optional(),
+    // Penugasan
+    shiftId: z.string().nullable().optional(),
+    locationIds: z.array(z.string()).optional(),
+    // Payroll
+    basicSalary: z.number().min(0).optional(),
+    payrollComponents: z.array(z.any()).optional(),
+    // Foto profil
+    avatarUrl: z.string().nullable().optional(),
+    // ⛔ DILARANG via schema ini: password, faceDescriptor, employeeId
+});
+// Tipe untuk route handler agar tidak perlu cast 'as any'
+export type EmployeeUpdatePayload = z.infer<typeof employeeUpdateSchema>;
 
 /* ───────────────────── Leave ───────────────────── */
 
@@ -74,7 +102,12 @@ export const leaveRequestSchema = z.object({
 export const leaveUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
     status: z.enum(["pending", "approved", "rejected"]).optional(),
-}).catchall(z.unknown());
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    reason: z.string().optional(),
+    attachment: z.string().nullable().optional(),
+    // ⛔ employeeId tidak bisa diubah via update
+});
 
 /* ───────────────────── Overtime ───────────────────── */
 
@@ -134,7 +167,14 @@ export const newsCreateSchema = z.object({
 
 export const newsUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-}).catchall(z.unknown());
+    title: z.string().min(1).optional(),
+    content: z.string().min(1).optional(),
+    category: z.enum(["announcement", "event", "policy", "general"]).optional(),
+    isPinned: z.boolean().optional(),
+    mediaUrl: z.string().nullable().optional(),
+    mediaName: z.string().nullable().optional(),
+    // ⛔ author tidak bisa diubah via update
+});
 
 /* ───────────────────── Shift ───────────────────── */
 
@@ -157,7 +197,14 @@ export const shiftCreateSchema = z.object({
 
 export const shiftUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-}).catchall(z.unknown());
+    name: z.string().min(1).optional(),
+    isDefault: z.boolean().optional(),
+    lateCheckIn: z.number().min(0).optional(),
+    earlyCheckIn: z.number().min(0).optional(),
+    lateCheckOut: z.number().min(0).optional(),
+    earlyCheckOut: z.number().min(0).optional(),
+    days: z.array(shiftDaySchema).optional(),
+});
 
 /* ───────────────────── Todo ───────────────────── */
 
@@ -167,7 +214,10 @@ export const todoCreateSchema = z.object({
 
 export const todoUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-}).catchall(z.unknown());
+    text: z.string().min(1).optional(),
+    completed: z.boolean().optional(),
+    // ⛔ employeeId tidak bisa diubah via update
+});
 
 /* ───────────────────── Face Descriptor ───────────────────── */
 

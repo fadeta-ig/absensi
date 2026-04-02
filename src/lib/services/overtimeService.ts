@@ -48,12 +48,17 @@ export async function getOvertimeRequestById(id: string): Promise<OvertimeReques
 }
 
 export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): Promise<OvertimeRequest> {
+    // startTime dan endTime dikirim sebagai "HH:MM" — gabung dengan date agar jadi DateTime valid
+    const dateStr = data.date; // "YYYY-MM-DD"
+    const startDateTime = new Date(`${dateStr}T${data.startTime}:00`);
+    const endDateTime = new Date(`${dateStr}T${data.endTime}:00`);
+
     const row = await prisma.overtimeRequest.create({
         data: {
             employeeId: data.employeeId,
-            date: new Date(data.date),
-            startTime: new Date(data.startTime),
-            endTime: new Date(data.endTime),
+            date: new Date(dateStr),
+            startTime: startDateTime,
+            endTime: endDateTime,
             hours: data.hours,
             reason: data.reason,
             status: data.status,
@@ -63,14 +68,26 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
     return toOvertimeRequest(row);
 }
 
+
 export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRequest> & Record<string, unknown>): Promise<OvertimeRequest | null> {
     try {
+        // Ambil existing record untuk tahu date jika diperlukan saat konversi startTime/endTime
+        const existing = data.startTime !== undefined || data.endTime !== undefined
+            ? await prisma.overtimeRequest.findUnique({ where: { id }, select: { date: true } })
+            : null;
+
+        const baseDateStr = data.date
+            ? String(data.date)
+            : existing?.date
+                ? new Date(existing.date).toISOString().split("T")[0]
+                : "";
+
         const row = await prisma.overtimeRequest.update({
             where: { id },
             data: {
-                ...(data.date !== undefined && { date: new Date(data.date as string) }),
-                ...(data.startTime !== undefined && { startTime: new Date(data.startTime as string) }),
-                ...(data.endTime !== undefined && { endTime: new Date(data.endTime as string) }),
+                ...(data.date !== undefined && { date: new Date(baseDateStr) }),
+                ...(data.startTime !== undefined && { startTime: new Date(`${baseDateStr}T${data.startTime}:00`) }),
+                ...(data.endTime !== undefined && { endTime: new Date(`${baseDateStr}T${data.endTime}:00`) }),
                 ...(data.hours !== undefined && { hours: data.hours }),
                 ...(data.reason !== undefined && { reason: data.reason }),
                 ...(data.status !== undefined && { status: data.status }),
@@ -84,6 +101,7 @@ export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRe
         return null;
     }
 }
+
 
 export async function deleteOvertimeRequest(id: string): Promise<boolean> {
     try {

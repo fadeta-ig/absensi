@@ -86,7 +86,11 @@ export async function PUT(request: NextRequest) {
         const result = await validateBody(request, employeeUpdateSchema);
         if ("error" in result) return result.error;
 
-        const { id, ...data } = result.data as { id: string } & Record<string, any>;
+        const { id, ...rawData } = result.data;
+
+        // Defense in depth: strip field sensitif meskipun schema sudah melarangnya
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password: _p, faceDescriptor: _f, employeeId: _e, ...data } = rawData as Record<string, unknown>;
 
         const updated = await updateEmployee(id, data);
         if (!updated) {
@@ -98,8 +102,8 @@ export async function PUT(request: NextRequest) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...safe } = updated;
         return NextResponse.json(safe);
-    } catch (err: any) {
-        if (err?.code === "P2002") {
+    } catch (err: unknown) {
+        if ((err as { code?: string })?.code === "P2002") {
             return NextResponse.json({ error: "ID Karyawan sudah digunakan oleh akun lain." }, { status: 400 });
         }
         return serverErrorResponse("EmployeesPUT", err);
