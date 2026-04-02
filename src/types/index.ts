@@ -7,7 +7,7 @@ export type Employee = {
     department: string;
     division?: string | null;
     position: string;
-    role: "employee" | "hr";
+    role: "employee" | "hr" | "ga";
     level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
     managerId?: string | null;
     password: string;

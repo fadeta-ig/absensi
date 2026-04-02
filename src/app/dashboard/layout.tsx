@@ -14,6 +14,7 @@ import {
     FileDown,
     Database,
     Settings2,
+    Package,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
@@ -46,6 +47,16 @@ const navItems: NavItem[] = [
     },
     { href: "/dashboard/reports", icon: FileDown, label: "Laporan" },
     { href: "/dashboard/news", icon: Megaphone, label: "WIG News" },
+    {
+        label: "Aset Perusahaan",
+        icon: Package,
+        subItems: [
+            { href: "/dashboard/assets", label: "Semua Aset" },
+            { href: "/dashboard/assets?category=HANDPHONE", label: "Handphone" },
+            { href: "/dashboard/assets?category=LAPTOP", label: "Laptop" },
+            { href: "/dashboard/assets?category=NOMOR_HP", label: "Nomor Indosat" },
+        ],
+    },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

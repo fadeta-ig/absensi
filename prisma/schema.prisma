@@ -260,3 +260,80 @@ model Location {
 
   @@map("locations")
 }
+
+// ─── Asset Management ──────────────────────────────────────────
+
+enum AssetCategory {
+  HANDPHONE
+  LAPTOP
+  NOMOR_HP
+}
+
+enum AssetKondisi {
+  BAIK
+  KURANG_BAIK
+  RUSAK
+}
+
+enum AssetStatus {
+  AVAILABLE      // Di GA pool — siap dipinjamkan
+  IN_USE         // Sedang dipegang seseorang
+  MAINTENANCE    // Sedang diperbaiki
+  RETIRED        // Tidak layak pakai
+  COMPANY_OWNED  // Milik perusahaan (ex-lelang), hidden dari HR
+}
+
+enum HolderType {
+  EMPLOYEE        // Karyawan aktif
+  FORMER_EMPLOYEE // Mantan karyawan (nama tetap disimpan)
+  TEAM            // Dipegang tim (Warehouse, Creative, dll)
+  GA_POOL         // Di brankas GA — aset bebas
+  COMPANY_OWNED   // Milik perusahaan
+}
+
+model Asset {
+  id             String        @id @default(uuid())
+  assetCode      String        @unique @map("asset_code")
+  name           String
+  category       AssetCategory
+  kondisi        AssetKondisi  @default(BAIK)
+  status         AssetStatus   @default(AVAILABLE)
+  holderType     HolderType    @default(GA_POOL) @map("holder_type")
+
+  // Pemegang saat ini (nullable = di GA pool)
+  assignedToName String?       @map("assigned_to_name")
+  assignedAt     DateTime?     @map("assigned_at")
+
+  // Khusus kategori NOMOR_HP — SIM card fisik Indosat
+  nomorIndosat   String?       @map("nomor_indosat")
+  expiredDate    DateTime?     @map("expired_date")
+
+  keterangan     String?       @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  histories      AssetHistory[]
+
+  @@map("assets")
+}
+
+model AssetHistory {
+  id             String      @id @default(uuid())
+  assetId        String      @map("asset_id")
+  asset          Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  fromHolderType HolderType? @map("from_holder_type")
+  fromName       String?     @map("from_name")
+  toHolderType   HolderType  @map("to_holder_type")
+  toName         String?     @map("to_name")
+
+  // "assigned" | "returned" | "sent_to_maintenance" | "kondisi_changed" | "retired"
+  action         String
+  kondisiSaat    AssetKondisi @map("kondisi_saat")
+  notes          String?      @db.Text
+
+  performedBy    String       @map("performed_by") // employeeId GA
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("asset_histories")
+}

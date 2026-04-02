@@ -17,13 +17,15 @@ import { jwtVerify } from "jose";
 // ─── Route Groups ─────────────────────────────────────────────
 const HR_ONLY_PREFIX = "/dashboard";
 const EMPLOYEE_PREFIX = "/employee";
+const GA_PREFIX = "/ga";
+
 
 // ─── Session Helper ───────────────────────────────────────────
 interface SessionPayload {
     id: string;
     employeeId: string;
     name: string;
-    role: "employee" | "hr";
+    role: "employee" | "hr" | "ga";
     level: string;
 }
 
@@ -52,9 +54,11 @@ export async function proxy(request: NextRequest) {
 
     const isDashboard = pathname.startsWith(HR_ONLY_PREFIX);
     const isEmployee = pathname.startsWith(EMPLOYEE_PREFIX);
+    const isGa = pathname.startsWith(GA_PREFIX);
+
 
     // Route tidak memerlukan auth → lewatkan
-    if (!isDashboard && !isEmployee) {
+    if (!isDashboard && !isEmployee && !isGa) {
         return NextResponse.next();
     }
 
@@ -69,12 +73,20 @@ export async function proxy(request: NextRequest) {
 
     // /dashboard/* → hanya HR
     if (isDashboard && session.role !== "hr") {
+        if (session.role === "ga") return NextResponse.redirect(new URL(GA_PREFIX, request.url));
         return NextResponse.redirect(new URL(EMPLOYEE_PREFIX, request.url));
     }
 
-    // /employee/* → HR diarahkan ke dashboard
-    if (isEmployee && session.role === "hr") {
+    // /employee/* → HR dan GA diarahkan ke portal masing-masing
+    if (isEmployee && session.role !== "employee") {
+        if (session.role === "ga") return NextResponse.redirect(new URL(GA_PREFIX, request.url));
         return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
+    }
+
+    // /ga/* → hanya GA
+    if (isGa && session.role !== "ga") {
+        if (session.role === "hr") return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
+        return NextResponse.redirect(new URL(EMPLOYEE_PREFIX, request.url));
     }
 
     return NextResponse.next();

@@ -20,7 +20,7 @@ export interface SessionPayload {
     id: string;
     employeeId: string;
     name: string;
-    role: "employee" | "hr";
+    role: "employee" | "hr" | "ga";
     level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
 }
 
