@@ -26,18 +26,18 @@ export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promis
         data: {
             employeeId: data.employeeId,
             type: data.type,
-            startDate: data.startDate,
-            endDate: data.endDate,
+            startDate: new Date(data.startDate),
+            endDate: new Date(data.endDate),
             reason: data.reason,
             status: data.status,
             attachment: data.attachment,
-            createdAt: data.createdAt,
+            // createdAt: @default(now()) — tidak perlu diisi
         },
     });
     return row as unknown as LeaveRequest;
 }
 
-function calculateDays(start: string, end: string): number {
+function calculateDays(start: Date | string, end: Date | string): number {
     const s = new Date(start);
     const e = new Date(end);
     const diff = e.getTime() - s.getTime();

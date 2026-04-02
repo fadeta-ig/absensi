@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Users, Search, ChevronRight, Activity, Layers } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
 interface Employee {
@@ -16,6 +14,15 @@ interface Employee {
     level: string;
     isActive: boolean;
 }
+
+const LEVEL_COLORS: Record<string, string> = {
+    CEO: "background:#6d28d9;color:#fff",
+    GM: "background:#7c3aed;color:#fff",
+    MANAGER: "background:#2563eb;color:#fff",
+    SUPERVISOR: "background:#0891b2;color:#fff",
+    HR: "background:#059669;color:#fff",
+    STAFF: "background:#6b7280;color:#fff",
+};
 
 export default function MonitoringPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -41,76 +48,110 @@ export default function MonitoringPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="spinner" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Monitoring Tim</h1>
-                    <p className="text-muted-foreground">Monitoring performa dan aktivitas anggota tim Anda secara real-time.</p>
+                    <h1 className="page-title">Monitoring Tim</h1>
+                    <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
+                        Monitoring performa dan aktivitas anggota tim Anda secara real-time.
+                    </p>
                 </div>
-                <Activity className="h-8 w-8 text-emerald-500" />
+                <Activity style={{ width: "32px", height: "32px", color: "var(--primary)" }} />
             </div>
 
-            <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            {/* Search */}
+            <div style={{ position: "relative", maxWidth: "400px" }}>
+                <Search style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", width: "16px", height: "16px", color: "var(--text-muted)" }} />
                 <input
                     type="text"
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all outline-none"
+                    className="form-input"
+                    style={{ paddingLeft: "40px" }}
                     placeholder="Cari anggota tim..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Grid kartu karyawan */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
                 {filtered.length > 0 ? filtered.map((e) => (
-                    <Card key={e.id} className="hover:shadow-md transition-shadow border-l-4 border-l-emerald-500">
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                                        {e.name.charAt(0)}
-                                    </div>
-                                    <div>
-                                        <CardTitle className="text-base">{e.name}</CardTitle>
-                                        <p className="text-xs text-muted-foreground">{e.position}</p>
-                                    </div>
+                    <div
+                        key={e.id}
+                        className="card"
+                        style={{ borderLeft: "4px solid var(--primary)", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}
+                    >
+                        {/* Card Header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <div style={{
+                                    width: "40px", height: "40px", borderRadius: "50%",
+                                    background: "var(--secondary)", color: "var(--primary)",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontWeight: "700", fontSize: "16px", flexShrink: 0
+                                }}>
+                                    {e.name.charAt(0)}
                                 </div>
-                                <Badge variant={e.isActive ? "success" : "destructive"} className="text-[10px]">
-                                    {e.isActive ? "Active" : "Inactive"}
-                                </Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3 mt-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground text-xs">Department</span>
-                                    <span className="font-medium text-xs">{e.department}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground text-xs">Level</span>
-                                    <span className="font-medium text-xs">{e.level}</span>
-                                </div>
-                                <div className="pt-3 border-t">
-                                    <Link
-                                        href={`/employee/monitoring/${e.id}`}
-                                        className="w-full flex items-center justify-center gap-2 py-2 bg-emerald-50 text-emerald-700 rounded-md hover:bg-emerald-100 transition-colors text-xs font-semibold"
-                                    >
-                                        <Layers className="h-3.5 w-3.5" />
-                                        Lihat Profil 360°
-                                    </Link>
+                                <div>
+                                    <p style={{ fontWeight: "600", fontSize: "14px", color: "var(--text-primary)" }}>{e.name}</p>
+                                    <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>{e.position}</p>
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                            {/* Badge status aktif */}
+                            <span style={{
+                                fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "9999px",
+                                background: e.isActive ? "#d1fae5" : "#fee2e2",
+                                color: e.isActive ? "#065f46" : "#991b1b",
+                            }}>
+                                {e.isActive ? "Active" : "Inactive"}
+                            </span>
+                        </div>
+
+                        {/* Card Content */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ color: "var(--text-muted)" }}>Department</span>
+                                <span style={{ fontWeight: "500", color: "var(--text-primary)" }}>{e.department}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ color: "var(--text-muted)" }}>Level</span>
+                                <span style={{
+                                    fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "9999px",
+                                    ...(LEVEL_COLORS[e.level]
+                                        ? Object.fromEntries(LEVEL_COLORS[e.level].split(";").map(s => s.split(":") as [string, string]))
+                                        : { background: "#e5e7eb", color: "#374151" })
+                                }}>
+                                    {e.level}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Action */}
+                        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
+                            <Link
+                                href={`/employee/monitoring/${e.id}`}
+                                className="btn btn-secondary"
+                                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12px", width: "100%" }}
+                            >
+                                <Layers style={{ width: "14px", height: "14px" }} />
+                                Lihat Profil 360°
+                            </Link>
+                        </div>
+                    </div>
                 )) : (
-                    <div className="col-span-full py-12 text-center text-muted-foreground bg-gray-50 rounded-lg border-2 border-dashed">
-                        Tidak ada anggota tim yang ditemukan.
+                    <div style={{
+                        gridColumn: "1 / -1", padding: "48px", textAlign: "center",
+                        color: "var(--text-muted)", background: "var(--secondary)",
+                        borderRadius: "12px", border: "2px dashed var(--border)"
+                    }}>
+                        <Users style={{ width: "32px", height: "32px", margin: "0 auto 8px", opacity: 0.4 }} />
+                        <p>Tidak ada anggota tim yang ditemukan.</p>
                     </div>
                 )}
             </div>

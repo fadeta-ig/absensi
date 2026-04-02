@@ -1,2 +1,7 @@
 {"employeeId":"WIG001","level":"info","message":"Login successful","service":"absensi-hris","timestamp":"2026-04-01 16:03:27"}
 {"employeeId":"WIG002","level":"info","message":"Login successful","service":"absensi-hris","timestamp":"2026-04-01 16:07:19"}
+{"employeeId":"WIG001","level":"info","message":"Login successful","service":"absensi-hris","timestamp":"2026-04-02 08:32:56"}
+{"level":"info","message":"Work shift updated","service":"absensi-hris","shiftId":"shift-001","timestamp":"2026-04-02 08:33:08","updatedBy":"WIG001"}
+{"createdBy":"WIG001","level":"info","message":"Work shift created","name":"tes","service":"absensi-hris","shiftId":"8b583087-2dcb-40b1-a20f-82dd95ccba9e","timestamp":"2026-04-02 08:33:20"}
+{"employeeId":"WIG001","level":"info","message":"Login successful","service":"absensi-hris","timestamp":"2026-04-02 08:33:34"}
+{"author":"WIG001","level":"info","message":"News item created","newsId":"367da029-4c7e-436d-8a68-429710fce9c7","service":"absensi-hris","timestamp":"2026-04-02 08:34:47"}

@@ -2,17 +2,33 @@ import { prisma } from "../prisma";
 import { PayslipRecord } from "@/types";
 import logger from "@/lib/logger";
 
+const d2s = (d: Date | string | null | undefined): string => {
+    if (!d) return "";
+    return d instanceof Date ? d.toISOString().split("T")[0] : String(d);
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toPayslipRecord(row: any): PayslipRecord {
+    return {
+        id: row.id,
+        employeeId: row.employeeId,
+        period: row.period,
+        basicSalary: row.basicSalary,
+        allowances: row.allowances ? JSON.parse(row.allowances as string) : [],
+        deductions: row.deductions ? JSON.parse(row.deductions as string) : [],
+        overtime: row.overtime,
+        netSalary: row.netSalary,
+        issuedDate: d2s(row.issuedDate),
+        notes: row.notes ?? null,
+    };
+}
+
 export async function getPayslips(employeeId?: string): Promise<PayslipRecord[]> {
     const rows = await prisma.payslipRecord.findMany({
         where: employeeId ? { employeeId } : undefined,
         orderBy: { issuedDate: "desc" },
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return rows.map((r: any) => ({
-        ...r,
-        allowances: r.allowances ? JSON.parse(r.allowances as unknown as string) : [],
-        deductions: r.deductions ? JSON.parse(r.deductions as unknown as string) : [],
-    })) as PayslipRecord[];
+    return rows.map(toPayslipRecord);
 }
 
 export async function createPayslip(data: Omit<PayslipRecord, "id">): Promise<PayslipRecord> {
@@ -26,13 +42,9 @@ export async function createPayslip(data: Omit<PayslipRecord, "id">): Promise<Pa
             deductions: JSON.stringify(data.deductions),
             overtime: data.overtime,
             netSalary: data.netSalary,
-            issuedDate: data.issuedDate,
+            issuedDate: new Date(data.issuedDate),
             notes: data.notes,
         },
     });
-    return {
-        ...row,
-        allowances: row.allowances ? JSON.parse(row.allowances as unknown as string) : [],
-        deductions: row.deductions ? JSON.parse(row.deductions as unknown as string) : [],
-    } as PayslipRecord;
+    return toPayslipRecord(row);
 }

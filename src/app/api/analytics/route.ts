@@ -3,6 +3,10 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 
+/** Konversi Date object dari Prisma ke string YYYY-MM-DD */
+const toDateStr = (d: Date | string): string =>
+    d instanceof Date ? d.toISOString().split("T")[0] : String(d);
+
 export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
     if (rateLimited) return rateLimited;
@@ -12,17 +16,20 @@ export async function GET(request: NextRequest) {
     if (session.role !== "hr") return forbiddenResponse();
 
     try {
-        const today = new Date().toISOString().split("T")[0];
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayEnd = new Date(todayStart.getTime() + 86400000); // +1 hari
 
         // Get all data in parallel for performance
         const [employees, todayAttendance, allLeaves, allVisits, allOvertime, recentAttendance] = await Promise.all([
             prisma.employee.findMany({ where: { isActive: true }, select: { employeeId: true, name: true, department: true } }),
-            prisma.attendanceRecord.findMany({ where: { date: today } }),
+            prisma.attendanceRecord.findMany({ where: { date: { gte: todayStart, lt: todayEnd } } }),
             prisma.leaveRequest.findMany(),
             prisma.visitReport.findMany(),
             prisma.overtimeRequest.findMany(),
             prisma.attendanceRecord.findMany({ orderBy: { date: "desc" }, take: 500 }),
         ]);
+
 
         // Summary counts
         const presentToday = todayAttendance.filter((a) => a.status === "present" || a.status === "late").length;
@@ -37,7 +44,7 @@ export async function GET(request: NextRequest) {
             const d = new Date();
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split("T")[0];
-            const dayRecords = recentAttendance.filter((a) => a.date === dateStr);
+            const dayRecords = recentAttendance.filter((a) => toDateStr(a.date) === dateStr);
             weeklyAttendance.push({
                 date: dateStr,
                 present: dayRecords.filter((a) => a.status === "present").length,
@@ -64,7 +71,8 @@ export async function GET(request: NextRequest) {
         const approvedOvertime = allOvertime.filter((o) => o.status === "approved");
         const otMap: Record<string, number> = {};
         for (const ot of approvedOvertime) {
-            otMap[ot.date] = (otMap[ot.date] || 0) + ot.hours;
+            const key = toDateStr(ot.date);
+            otMap[key] = (otMap[key] || 0) + ot.hours;
         }
         const monthlyOvertime = Object.entries(otMap)
             .sort(([a], [b]) => a.localeCompare(b))
@@ -80,7 +88,7 @@ export async function GET(request: NextRequest) {
             activities.push({
                 type: "leave",
                 message: `${emp?.name || l.employeeId} mengajukan cuti (${l.status})`,
-                time: l.createdAt,
+                time: toDateStr(l.createdAt),
             });
         }
         for (const v of allVisits.slice(0, 5)) {
@@ -88,7 +96,7 @@ export async function GET(request: NextRequest) {
             activities.push({
                 type: "visit",
                 message: `${emp?.name || v.employeeId} kunjungan ke ${v.clientName} (${v.status})`,
-                time: v.createdAt,
+                time: toDateStr(v.createdAt),
             });
         }
         for (const o of allOvertime.slice(0, 5)) {
@@ -96,7 +104,7 @@ export async function GET(request: NextRequest) {
             activities.push({
                 type: "overtime",
                 message: `${emp?.name || o.employeeId} lembur ${o.hours}h (${o.status})`,
-                time: o.createdAt,
+                time: toDateStr(o.createdAt),
             });
         }
 

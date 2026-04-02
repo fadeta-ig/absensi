@@ -9,6 +9,21 @@ interface ExportRow {
     [key: string]: string | number | null | undefined;
 }
 
+/** Konversi Date object dari Prisma ke string YYYY-MM-DD */
+const toDateStr = (d: Date | string | null | undefined): string => {
+    if (!d) return "-";
+    if (d instanceof Date) return d.toISOString().split("T")[0];
+    return String(d);
+};
+
+/** Buat Date range dari string periode YYYY-MM */
+const periodToRange = (period: string) => {
+    const [year, month] = period.split("-").map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 1); // exclusive
+    return { gte: start, lt: end };
+};
+
 export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
     if (rateLimited) return rateLimited;
@@ -44,7 +59,7 @@ export async function GET(request: NextRequest) {
 
         if (type === "attendance") {
             const records = await prisma.attendanceRecord.findMany({
-                where: { date: { startsWith: period } },
+                where: { date: periodToRange(period) },
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Absensi";
@@ -66,12 +81,12 @@ export async function GET(request: NextRequest) {
                     // Fill days 1 to daysInMonth
                     for (let d = 1; d <= daysInMonth; d++) {
                         const dateStr = `${period}-${String(d).padStart(2, "0")}`;
-                        const record = empRecords.find((r) => r.date === dateStr);
+                        const record = empRecords.find((r) => toDateStr(r.date) === dateStr);
 
                         if (record) {
                             // Detailed format for PDF/Excel
-                            const clockIn = record.clockIn || "-";
-                            const clockOut = record.clockOut || "-";
+                            const clockIn = record.clockIn ? toDateStr(record.clockIn) : "-";
+                            const clockOut = record.clockOut ? toDateStr(record.clockOut) : "-";
                             row[String(d)] = `${clockIn}\n${clockOut}`;
                         } else {
                             row[String(d)] = "-\n-";
@@ -125,9 +140,9 @@ export async function GET(request: NextRequest) {
                             "Nama": emp?.name || "-",
                             "ID Karyawan": r.employeeId,
                             "Departemen": emp?.department || "-",
-                            "Tanggal": r.date,
-                            "Jam Masuk": r.clockIn || "-",
-                            "Jam Pulang": r.clockOut || "-",
+                            "Tanggal": toDateStr(r.date),
+                            "Jam Masuk": r.clockIn ? toDateStr(r.clockIn) : "-",
+                            "Jam Pulang": r.clockOut ? toDateStr(r.clockOut) : "-",
                             "Status": r.status === "present" ? "Hadir" : r.status === "late" ? "Terlambat" : r.status === "absent" ? "Alpa" : "Cuti/Sakit",
                             "Catatan": r.notes || "-",
                         });
@@ -152,9 +167,9 @@ export async function GET(request: NextRequest) {
                         "Nama": emp?.name || "-",
                         "ID Karyawan": r.employeeId,
                         "Departemen": emp?.department || "-",
-                        "Tanggal": r.date,
-                        "Jam Masuk": r.clockIn || "-",
-                        "Jam Pulang": r.clockOut || "-",
+                        "Tanggal": toDateStr(r.date),
+                        "Jam Masuk": r.clockIn ? toDateStr(r.clockIn) : "-",
+                        "Jam Pulang": r.clockOut ? toDateStr(r.clockOut) : "-",
                         "Status": r.status === "present" ? "Hadir" : r.status === "late" ? "Terlambat" : r.status === "absent" ? "Tidak Hadir" : "Cuti",
                         "Catatan": r.notes || "-",
                     };
@@ -163,7 +178,7 @@ export async function GET(request: NextRequest) {
         } else if (type === "visits") {
             finalHeaders = ["Nama", "ID Karyawan", "Tanggal", "Nama Klien", "Alamat", "Tujuan", "Hasil", "Status"];
             const records = await prisma.visitReport.findMany({
-                where: { date: { startsWith: period } },
+                where: { date: periodToRange(period) },
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Kunjungan";
@@ -172,7 +187,7 @@ export async function GET(request: NextRequest) {
                 return {
                     "Nama": emp?.name || "-",
                     "ID Karyawan": r.employeeId,
-                    "Tanggal": r.date,
+                    "Tanggal": toDateStr(r.date),
                     "Nama Klien": r.clientName,
                     "Alamat": r.clientAddress,
                     "Tujuan": r.purpose,
@@ -183,7 +198,7 @@ export async function GET(request: NextRequest) {
         } else if (type === "overtime") {
             finalHeaders = ["Nama", "ID Karyawan", "Tanggal", "Jam Mulai", "Jam Selesai", "Durasi (Jam)", "Alasan", "Status"];
             const records = await prisma.overtimeRequest.findMany({
-                where: { date: { startsWith: period } },
+                where: { date: periodToRange(period) },
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Lembur";
@@ -192,9 +207,9 @@ export async function GET(request: NextRequest) {
                 return {
                     "Nama": emp?.name || "-",
                     "ID Karyawan": r.employeeId,
-                    "Tanggal": r.date,
-                    "Jam Mulai": r.startTime,
-                    "Jam Selesai": r.endTime,
+                    "Tanggal": toDateStr(r.date),
+                    "Jam Mulai": toDateStr(r.startTime),
+                    "Jam Selesai": toDateStr(r.endTime),
                     "Durasi (Jam)": r.hours,
                     "Alasan": r.reason,
                     "Status": r.status === "approved" ? "Disetujui" : r.status === "rejected" ? "Ditolak" : "Menunggu",

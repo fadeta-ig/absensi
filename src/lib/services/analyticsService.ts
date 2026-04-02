@@ -21,7 +21,7 @@ export type Employee360Data = {
  * Fungsi ini HANYA membaca data (read-only) — tidak ada side effect ke database.
  */
 function calculateUsedLeave(
-    approvedLeaves: { startDate: string; endDate: string }[]
+    approvedLeaves: { startDate: Date | string; endDate: Date | string }[]
 ): number {
     return approvedLeaves.reduce((sum, l) => {
         const s = new Date(l.startDate);

@@ -3,6 +3,9 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 
+const toDateStr = (d: Date | string): string =>
+    d instanceof Date ? d.toISOString().split("T")[0] : String(d);
+
 interface Notification {
     id: string;
     type: "leave" | "visit" | "overtime" | "absent";
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
                 title: "Pengajuan Cuti",
                 message: `${emp?.name || l.employeeId} mengajukan cuti ${l.type}`,
                 href: "/dashboard/leave",
-                time: l.createdAt,
+                time: toDateStr(l.createdAt),
             });
         }
 
@@ -62,7 +65,7 @@ export async function GET(request: NextRequest) {
                 title: "Laporan Kunjungan",
                 message: `${emp?.name || v.employeeId} → ${v.clientName}`,
                 href: "/dashboard/visits",
-                time: v.createdAt,
+                time: toDateStr(v.createdAt),
             });
         }
 
@@ -81,14 +84,17 @@ export async function GET(request: NextRequest) {
                 id: `overtime-${o.id}`,
                 type: "overtime",
                 title: "Pengajuan Lembur",
-                message: `${emp?.name || o.employeeId} — ${o.hours}h (${o.date})`,
+                message: `${emp?.name || o.employeeId} — ${o.hours}h (${toDateStr(o.date)})`,
                 href: "/dashboard/overtime",
-                time: o.createdAt,
+                time: toDateStr(o.createdAt),
             });
         }
 
         // Employees not yet present today
-        const todayAttendance = await prisma.attendanceRecord.findMany({ where: { date: today } });
+        const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+        const todayEnd = new Date(todayStart.getTime() + 86400000);
+        const todayStr = todayStart.toISOString().split("T")[0];
+        const todayAttendance = await prisma.attendanceRecord.findMany({ where: { date: { gte: todayStart, lt: todayEnd } } });
         const presentIds = new Set(todayAttendance.map((a) => a.employeeId));
         const now = new Date();
         const hour = now.getHours();
@@ -106,7 +112,7 @@ export async function GET(request: NextRequest) {
                     title: "Belum Hadir",
                     message: `${emp.name} belum absen hari ini`,
                     href: "/dashboard/attendance",
-                    time: today,
+                    time: todayStr,
                 });
             }
         }

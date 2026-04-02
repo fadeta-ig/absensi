@@ -1,34 +1,53 @@
 import { prisma } from "../prisma";
 import { VisitReport } from "@/types";
 
+// ─── Helper: Date → string ────────────────────────────────────
+const d2s = (d: Date | string | null | undefined): string => {
+    if (!d) return "";
+    return d instanceof Date ? d.toISOString().split("T")[0] : String(d);
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toVisitReport(row: any): VisitReport {
+    return {
+        id: row.id,
+        employeeId: row.employeeId,
+        date: d2s(row.date),
+        clientName: row.clientName,
+        clientAddress: row.clientAddress,
+        purpose: row.purpose,
+        result: row.result ?? null,
+        location: row.location
+            ? (typeof row.location === "string" ? JSON.parse(row.location) : row.location)
+            : null,
+        photo: row.photo ?? null,
+        status: row.status as VisitReport["status"],
+        notes: row.notes ?? null,
+        createdAt: d2s(row.createdAt),
+    };
+}
+
+// ─── Service Functions ────────────────────────────────────────
+
 export async function getVisitReports(employeeId?: string): Promise<VisitReport[]> {
     const rows = await prisma.visitReport.findMany({
         where: employeeId ? { employeeId } : undefined,
         orderBy: { createdAt: "desc" },
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return rows.map((r: any) => ({
-        ...r,
-        location: typeof r.location === "string" ? JSON.parse(r.location) : r.location,
-        status: r.status as VisitReport["status"],
-    })) as VisitReport[];
+    return rows.map(toVisitReport);
 }
 
 export async function getVisitReportById(id: string): Promise<VisitReport | undefined> {
     const row = await prisma.visitReport.findUnique({ where: { id } });
     if (!row) return undefined;
-    return {
-        ...row,
-        location: typeof row.location === "string" ? JSON.parse(row.location) : row.location,
-        status: row.status as VisitReport["status"],
-    } as VisitReport;
+    return toVisitReport(row);
 }
 
 export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<VisitReport> {
     const row = await prisma.visitReport.create({
         data: {
             employeeId: data.employeeId,
-            date: data.date,
+            date: new Date(data.date),
             clientName: data.clientName,
             clientAddress: data.clientAddress,
             purpose: data.purpose,
@@ -37,14 +56,10 @@ export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<
             photo: data.photo,
             status: data.status,
             notes: data.notes,
-            createdAt: data.createdAt,
+            // createdAt: @default(now()) — tidak perlu diisi
         },
     });
-    return {
-        ...row,
-        location: typeof row.location === "string" ? JSON.parse(row.location) : row.location,
-        status: row.status as VisitReport["status"],
-    } as VisitReport;
+    return toVisitReport(row);
 }
 
 export async function updateVisitReport(id: string, data: Partial<VisitReport>): Promise<VisitReport | null> {
@@ -62,11 +77,7 @@ export async function updateVisitReport(id: string, data: Partial<VisitReport>):
                 ...(data.notes !== undefined && { notes: data.notes }),
             },
         });
-        return {
-            ...row,
-            location: typeof row.location === "string" ? JSON.parse(row.location) : row.location,
-            status: row.status as VisitReport["status"],
-        } as VisitReport;
+        return toVisitReport(row);
     } catch {
         return null;
     }
