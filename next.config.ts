@@ -15,16 +15,30 @@ const nextConfig: NextConfig = {
    * Solusi: fallback ke modul kosong (`false`) sehingga webpack tidak error.
    */
   webpack(config, { isServer }) {
-    if (!isServer) {
-      // face-api.js mengakses `fs` di sisi server — tidak dibutuhkan di browser
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        encoding: false,
-        path: false,
-        crypto: false,
-      };
+    // face-api.js & @tensorflow/tfjs-core menggunakan node-fetch yang mencoba
+    // import `encoding` (native addon). Fallback ke `false` mencegah webpack error
+    // baik di server bundle maupun client bundle.
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      encoding: false,
+      path: false,
+      crypto: false,
+      "node-fetch": false,
+    };
+
+    if (isServer) {
+      // Hindari bundling face-api.js & tfjs di server — library ini hanya
+      // untuk browser (WebGL, canvas, DOM). Mark sebagai external.
+      const existingExternals = config.externals ?? [];
+      config.externals = [
+        ...(Array.isArray(existingExternals) ? existingExternals : [existingExternals]),
+        "face-api.js",
+        "@tensorflow/tfjs-core",
+        "@tensorflow/tfjs-backend-webgl",
+      ];
     }
+
     return config;
   },
 

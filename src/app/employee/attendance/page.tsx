@@ -80,7 +80,17 @@ export default function AttendancePage() {
             });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                setStreaming(true);
+                // Tunggu hingga video benar-benar siap render sebelum menampilkan.
+                // Menghindari race condition di mana video tampak blank (streaming=true
+                // tapi metadata/frame belum tersedia).
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play().then(() => {
+                        setStreaming(true);
+                    }).catch(() => {
+                        // Autoplay mungkin diblokir browser — coba tetap tampilkan
+                        setStreaming(true);
+                    });
+                };
             }
         } catch {
             setMessage("Gagal mengakses kamera. Berikan izin kamera.");
@@ -92,6 +102,7 @@ export default function AttendancePage() {
             const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
             tracks.forEach((t) => t.stop());
             videoRef.current.srcObject = null;
+            videoRef.current.onloadedmetadata = null; // bersihkan handler
             setStreaming(false);
         }
     }, []);
