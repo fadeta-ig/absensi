@@ -8,7 +8,7 @@ import logger from "@/lib/logger";
 const locationSchema = z.object({
     id: z.string().optional(),
     name: z.string().min(1, "Nama lokasi harus diisi"),
-    address: z.string().min(1, "Alamat harus diisi"),
+    address: z.string().optional(),
     latitude: z.number(),
     longitude: z.number(),
     radius: z.number().min(5, "Radius minimal 5 meter"),

@@ -280,10 +280,16 @@ export default function MasterDataPage() {
         setLoading(true);
         setMsg(null);
         try {
+            const payload = {
+                ...locForm,
+                latitude:  parseFloat(locForm.latitude),
+                longitude: parseFloat(locForm.longitude),
+                radius:    parseInt(locForm.radius, 10),
+            };
             const res = await fetch("/api/master/locations", {
                 method: editMode ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(locForm)
+                body: JSON.stringify(payload)
             });
             const data = await res.json();
             if (res.ok) {
