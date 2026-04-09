@@ -14,6 +14,33 @@ import { createClientLogger } from "@/lib/clientLogger";
 
 const log = createClientLogger("FaceRecognition");
 
+/**
+ * Threshold Euclidean distance untuk face matching.
+ *
+ * Cara kerja: match = distance < threshold
+ * - Nilai LEBIH TINGGI → lebih longgar (cocok untuk kamera HP jelek / pencahayaan buruk)
+ * - Nilai LEBIH RENDAH → lebih ketat (cocok untuk kamera berkualitas tinggi)
+ *
+ * Referensi nilai:
+ *   0.40 – sangat ketat   (kamera bagus, pencahayaan sempurna)
+ *   0.50 – standar        (kamera cukup baik)
+ *   0.60 – longgar        (kamera HP biasa / pencahayaan kurang)
+ *   0.65 – sangat longgar (kamera HP jelek / pencahayaan buruk) ← default saat ini
+ *
+ * Tuning tanpa deploy ulang: set env NEXT_PUBLIC_FACE_THRESHOLD=0.65 di .env
+ */
+const DEFAULT_THRESHOLD = (() => {
+    const envVal = parseFloat(process.env.NEXT_PUBLIC_FACE_THRESHOLD ?? "");
+    if (!isNaN(envVal) && envVal > 0 && envVal < 1) {
+        return envVal;
+    }
+    return 0.65; // default — sangat longgar untuk kamera HP jelek
+})();
+
+log.info(`Face threshold aktif: ${DEFAULT_THRESHOLD}`, {
+    source: process.env.NEXT_PUBLIC_FACE_THRESHOLD ? "env" : "default",
+});
+
 let modelsLoaded = false;
 let modelsLoading = false; // guard agar tidak double-load paralel
 
@@ -164,8 +191,6 @@ function getInputInfo(input: HTMLVideoElement | HTMLImageElement | HTMLCanvasEle
   return { inputType: "image" };
 }
 
-/** Match threshold — lower = stricter */
-const DEFAULT_THRESHOLD = 0.45;
 
 /**
  * Compare two face descriptors using Euclidean distance.
