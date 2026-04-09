@@ -9,6 +9,7 @@ const payrollComponentSchema = z.object({
     id: z.string().optional(),
     name: z.string().min(1, "Nama komponen harus diisi"),
     type: z.enum(["earning", "deduction"]),
+    defaultAmount: z.number().min(0).default(0),
     isFixed: z.boolean().default(true),
     isTaxable: z.boolean().default(true),
     description: z.string().nullish(),
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
             data: {
                 name: body.name,
                 type: body.type,
-                defaultAmount: 0, // Schema has it, adding manually or from body if updated
+                defaultAmount: body.defaultAmount ?? 0,
                 description: body.description || null,
                 isActive: body.isActive,
             },
@@ -74,7 +75,7 @@ export async function PUT(request: NextRequest) {
     try {
         const result = await validateBody(request, payrollComponentSchema);
         if ("error" in result) return result.error;
-        const { id, name, type, description, isActive } = result.data;
+        const { id, name, type, defaultAmount, description, isActive } = result.data;
 
         if (!id) {
             return NextResponse.json({ error: "ID komponen diperlukan." }, { status: 400 });
@@ -85,6 +86,7 @@ export async function PUT(request: NextRequest) {
             data: {
                 name,
                 type,
+                defaultAmount: defaultAmount ?? 0,
                 description: description || undefined,
                 isActive,
             },
