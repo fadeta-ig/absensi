@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, type SessionPayload } from "@/lib/auth";
 import { ZodSchema, ZodError } from "zod";
 import logger from "@/lib/logger";
 import { sanitizeObject } from "./sanitize";
 
-/** Standardized session type from JWT payload */
-export interface SessionPayload {
-    id: string;
-    employeeId: string;
-    name: string;
-    role: "employee" | "hr" | "ga";
-    level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
-}
+// SessionPayload is now imported from @/lib/auth (single source of truth)
+export type { SessionPayload } from "@/lib/auth";
 
 /**
  * Verify session and return it, or null if invalid.

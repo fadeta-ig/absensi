@@ -4,17 +4,15 @@ import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
 import logger from "@/lib/logger";
+import { toDateDisplay, toTimeString } from "@/lib/utils";
 
 interface ExportRow {
     [key: string]: string | number | null | undefined;
 }
 
-/** Konversi Date object dari Prisma ke string YYYY-MM-DD */
-const toDateStr = (d: Date | string | null | undefined): string => {
-    if (!d) return "-";
-    if (d instanceof Date) return d.toISOString().split("T")[0];
-    return String(d);
-};
+// Date/time helpers now imported from @/lib/utils (toDateDisplay, toTimeString)
+// Alias for backward compatibility within this file
+const toDateStr = toDateDisplay;
 
 /** Buat Date range dari string periode YYYY-MM */
 const periodToRange = (period: string) => {
@@ -84,9 +82,9 @@ export async function GET(request: NextRequest) {
                         const record = empRecords.find((r) => toDateStr(r.date) === dateStr);
 
                         if (record) {
-                            // Detailed format for PDF/Excel
-                            const clockIn = record.clockIn ? toDateStr(record.clockIn) : "-";
-                            const clockOut = record.clockOut ? toDateStr(record.clockOut) : "-";
+                            // Use time format (HH:MM) for clock-in/out display
+                            const clockIn = record.clockIn ? toTimeString(record.clockIn) : "-";
+                            const clockOut = record.clockOut ? toTimeString(record.clockOut) : "-";
                             row[String(d)] = `${clockIn}\n${clockOut}`;
                         } else {
                             row[String(d)] = "-\n-";
@@ -141,8 +139,8 @@ export async function GET(request: NextRequest) {
                             "ID Karyawan": r.employeeId,
                             "Departemen": emp?.department || "-",
                             "Tanggal": toDateStr(r.date),
-                            "Jam Masuk": r.clockIn ? toDateStr(r.clockIn) : "-",
-                            "Jam Pulang": r.clockOut ? toDateStr(r.clockOut) : "-",
+                            "Jam Masuk": r.clockIn ? toTimeString(r.clockIn) : "-",
+                            "Jam Pulang": r.clockOut ? toTimeString(r.clockOut) : "-",
                             "Status": r.status === "present" ? "Hadir" : r.status === "late" ? "Terlambat" : r.status === "absent" ? "Alpa" : "Cuti/Sakit",
                             "Catatan": r.notes || "-",
                         });
@@ -168,8 +166,8 @@ export async function GET(request: NextRequest) {
                         "ID Karyawan": r.employeeId,
                         "Departemen": emp?.department || "-",
                         "Tanggal": toDateStr(r.date),
-                        "Jam Masuk": r.clockIn ? toDateStr(r.clockIn) : "-",
-                        "Jam Pulang": r.clockOut ? toDateStr(r.clockOut) : "-",
+                        "Jam Masuk": r.clockIn ? toTimeString(r.clockIn) : "-",
+                        "Jam Pulang": r.clockOut ? toTimeString(r.clockOut) : "-",
                         "Status": r.status === "present" ? "Hadir" : r.status === "late" ? "Terlambat" : r.status === "absent" ? "Tidak Hadir" : "Cuti",
                         "Catatan": r.notes || "-",
                     };

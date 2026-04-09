@@ -38,7 +38,7 @@ export const employeeCreateSchema = z.object({
     department: z.string().min(1, "Departemen harus diisi"),
     division: z.string().nullable().optional(),
     position: z.string().min(1, "Posisi harus diisi"),
-    role: z.enum(["employee", "hr"], { message: "Role harus employee atau hr" }),
+    role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee, hr, atau ga" }),
     level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"], {
         message: "Level tidak valid",
     }),
@@ -65,7 +65,7 @@ export const employeeUpdateSchema = z.object({
     division: z.string().nullable().optional(),
     position: z.string().min(1).optional(),
     // Role & Level — hanya HR yang bisa ubah (enforced di API route)
-    role: z.enum(["employee", "hr"]).optional(),
+    role: z.enum(["employee", "hr", "ga"]).optional(),
     level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"]).optional(),
     managerId: z.string().nullable().optional(),
     // Kepegawaian
@@ -238,18 +238,9 @@ export const masterUpdateSchema = z.object({
     name: z.string().min(1, "Nama harus diisi"),
 });
 
-/* ───────────────────── BPJS ───────────────────── */
-
-export const bpjsCalculateSchema = z.object({
-    basicSalary: z.number().positive("Gaji pokok harus lebih dari 0"),
-    allowances: z.number().optional().default(0),
-    familyCount: z.number().optional().default(0),
-});
-
-/* ───────────────────── PPh21 ───────────────────── */
-
-export const pph21CalculateSchema = z.object({
-    grossIncome: z.number().positive("Penghasilan bruto harus lebih dari 0"),
-    npwp: z.boolean().optional().default(false),
-    maritalStatus: z.enum(["TK", "K0", "K1", "K2", "K3"]).optional().default("TK"),
-});
+// ────────────────────────────────────────────────────────────────
+// NOTE: PPh 21 and BPJS calculator schemas are defined inline in
+// their respective route handlers (src/app/api/pph21/calculate/route.ts
+// and src/app/api/bpjs/calculate/route.ts) because they have different
+// field names and logic than what a centralized schema would provide.
+// ────────────────────────────────────────────────────────────────

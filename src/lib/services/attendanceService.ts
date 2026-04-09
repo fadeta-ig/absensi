@@ -1,17 +1,9 @@
 import { prisma } from "../prisma";
 import { AttendanceRecord } from "@/types";
 import logger from "@/lib/logger";
+import { toDateString, toISOOrNull } from "@/lib/utils";
 
-// ─── Helper: Prisma DateTime → string YYYY-MM-DD ──────────────
-const dateStr = (d: Date | string | null | undefined): string => {
-    if (!d) return "";
-    return d instanceof Date ? d.toISOString().split("T")[0] : String(d);
-};
-
-const timeStr = (d: Date | string | null | undefined): string | null => {
-    if (!d) return null;
-    return d instanceof Date ? d.toISOString() : String(d);
-};
+// ─── Date helpers imported from @/lib/utils ────────────────────
 
 /**
  * Map Prisma AttendanceRecord (Date fields) → app AttendanceRecord (string fields).
@@ -22,9 +14,9 @@ function toAttendanceRecord(row: any): AttendanceRecord {
     return {
         id: row.id,
         employeeId: row.employeeId,
-        date: dateStr(row.date),
-        clockIn: timeStr(row.clockIn),
-        clockOut: timeStr(row.clockOut),
+        date: toDateString(row.date),
+        clockIn: toISOOrNull(row.clockIn),
+        clockOut: toISOOrNull(row.clockOut),
         clockInLocation: row.clockInLocation as AttendanceRecord["clockInLocation"],
         clockOutLocation: row.clockOutLocation as AttendanceRecord["clockOutLocation"],
         clockInPhoto: row.clockInPhoto ?? null,

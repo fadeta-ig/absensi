@@ -1,18 +1,15 @@
 import { prisma } from "../prisma";
 import { VisitReport } from "@/types";
+import { toDateString } from "@/lib/utils";
 
-// ─── Helper: Date → string ────────────────────────────────────
-const d2s = (d: Date | string | null | undefined): string => {
-    if (!d) return "";
-    return d instanceof Date ? d.toISOString().split("T")[0] : String(d);
-};
+// ─── Date helpers imported from @/lib/utils ────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toVisitReport(row: any): VisitReport {
     return {
         id: row.id,
         employeeId: row.employeeId,
-        date: d2s(row.date),
+        date: toDateString(row.date),
         clientName: row.clientName,
         clientAddress: row.clientAddress,
         purpose: row.purpose,
@@ -23,7 +20,7 @@ function toVisitReport(row: any): VisitReport {
         photo: row.photo ?? null,
         status: row.status as VisitReport["status"],
         notes: row.notes ?? null,
-        createdAt: d2s(row.createdAt),
+        createdAt: toDateString(row.createdAt),
     };
 }
 

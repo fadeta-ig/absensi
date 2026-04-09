@@ -1,27 +1,24 @@
 import { prisma } from "../prisma";
 import { OvertimeRequest } from "@/types";
+import { toDateString, toTimeString } from "@/lib/utils";
 
-// ─── Helper: Date → string ────────────────────────────────────
-const d2s = (d: Date | string | null | undefined): string => {
-    if (!d) return "";
-    return d instanceof Date ? d.toISOString().split("T")[0] : String(d);
-};
+// ─── Date helpers imported from @/lib/utils ────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toOvertimeRequest(row: any): OvertimeRequest {
     return {
         id: row.id,
         employeeId: row.employeeId,
-        date: d2s(row.date),
-        startTime: d2s(row.startTime),
-        endTime: d2s(row.endTime),
+        date: toDateString(row.date),
+        startTime: toTimeString(row.startTime),
+        endTime: toTimeString(row.endTime),
         hours: row.hours,
         approvedHours: row.approvedHours ?? null,
         isHoliday: row.isHoliday,
         overtimePay: row.overtimePay,
         reason: row.reason,
         status: row.status as OvertimeRequest["status"],
-        createdAt: d2s(row.createdAt),
+        createdAt: toDateString(row.createdAt),
     };
 }
 

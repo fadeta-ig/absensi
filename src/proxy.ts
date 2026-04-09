@@ -21,6 +21,10 @@ const GA_PREFIX = "/ga";
 
 
 // ─── Session Helper ───────────────────────────────────────────
+/**
+ * Duplicated from @/lib/auth — cannot import in Edge Runtime.
+ * @see src/lib/auth.ts SessionPayload (canonical source of truth)
+ */
 interface SessionPayload {
     id: string;
     employeeId: string;

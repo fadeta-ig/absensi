@@ -62,7 +62,7 @@ export async function getAssetById(id: string): Promise<AssetWithHistory | null>
     return toAsset(row);
 }
 
-/** CREATE aset baru */
+/** CREATE aset baru — with retry for asset code collision */
 export async function createAsset(data: {
     name: string;
     category: string;
@@ -73,53 +73,75 @@ export async function createAsset(data: {
     expiredDate?: string | null;
     keterangan?: string | null;
 }, performedBy: string): Promise<AssetWithHistory> {
-    // Generate assetCode: HP-001, LT-042, NUM-023
-    const prefix = data.category === "HANDPHONE" ? "HP" : data.category === "LAPTOP" ? "LT" : "NUM";
-    const count = await prisma.asset.count({ where: { category: data.category as never } });
-    const assetCode = `${prefix}-${String(count + 1).padStart(3, "0")}`;
+    const MAX_RETRIES = 3;
 
-    const holderType = (data.holderType ?? "GA_POOL") as never;
-    // Derive AssetStatus dari HolderType yang dipilih
-    const status: string =
-        holderType === "GA_POOL"       ? "AVAILABLE"      :
-        holderType === "COMPANY_OWNED" ? "COMPANY_OWNED"  :
-        "IN_USE"; // EMPLOYEE, FORMER_EMPLOYEE, TEAM
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            // Generate assetCode: HP-001, LT-042, NUM-023
+            const prefix = data.category === "HANDPHONE" ? "HP" : data.category === "LAPTOP" ? "LT" : "NUM";
+            const count = await prisma.asset.count({ where: { category: data.category as never } });
+            const assetCode = `${prefix}-${String(count + 1 + attempt).padStart(3, "0")}`;
 
-    const row = await prisma.asset.create({
-        data: {
-            assetCode,
-            name: data.name,
-            category: data.category as never,
-            kondisi: (data.kondisi ?? "BAIK") as never,
-            status: status as never,
-            holderType,
-            assignedToName: data.assignedToName ?? null,
-            assignedAt: data.assignedToName ? new Date() : null,
-            nomorIndosat: data.nomorIndosat ?? null,
-            expiredDate: data.expiredDate ? new Date(data.expiredDate) : null,
-            keterangan: data.keterangan ?? null,
-        },
-    });
+            const holderType = (data.holderType ?? "GA_POOL") as never;
+            // Derive AssetStatus dari HolderType yang dipilih
+            const status: string =
+                holderType === "GA_POOL"       ? "AVAILABLE"      :
+                holderType === "COMPANY_OWNED" ? "COMPANY_OWNED"  :
+                "IN_USE"; // EMPLOYEE, FORMER_EMPLOYEE, TEAM
 
-    // Catat history initial assign jika bukan GA pool
-    if (data.assignedToName) {
-        await prisma.assetHistory.create({
-            data: {
-                assetId: row.id,
-                fromHolderType: "GA_POOL",
-                fromName: null,
-                toHolderType: holderType,
-                toName: data.assignedToName,
-                action: "assigned",
-                kondisiSaat: (data.kondisi ?? "BAIK") as never,
-                notes: "Initial assignment saat pencatatan aset",
-                performedBy,
-            },
-        });
+            const row = await prisma.asset.create({
+                data: {
+                    assetCode,
+                    name: data.name,
+                    category: data.category as never,
+                    kondisi: (data.kondisi ?? "BAIK") as never,
+                    status: status as never,
+                    holderType,
+                    assignedToName: data.assignedToName ?? null,
+                    assignedAt: data.assignedToName ? new Date() : null,
+                    nomorIndosat: data.nomorIndosat ?? null,
+                    expiredDate: data.expiredDate ? new Date(data.expiredDate) : null,
+                    keterangan: data.keterangan ?? null,
+                },
+            });
+
+            // Catat history initial assign jika bukan GA pool
+            if (data.assignedToName) {
+                await prisma.assetHistory.create({
+                    data: {
+                        assetId: row.id,
+                        fromHolderType: "GA_POOL",
+                        fromName: null,
+                        toHolderType: holderType,
+                        toName: data.assignedToName,
+                        action: "assigned",
+                        kondisiSaat: (data.kondisi ?? "BAIK") as never,
+                        notes: "Initial assignment saat pencatatan aset",
+                        performedBy,
+                    },
+                });
+            }
+
+            logger.info("Aset dibuat", { assetCode, name: data.name, performedBy });
+            return toAsset(row);
+        } catch (err: unknown) {
+            // Prisma unique constraint violation → retry with incremented code
+            const isPrismaUniqueError =
+                err !== null &&
+                typeof err === "object" &&
+                "code" in err &&
+                (err as { code: string }).code === "P2002";
+
+            if (isPrismaUniqueError && attempt < MAX_RETRIES - 1) {
+                logger.warn("Asset code collision, retrying", { attempt: attempt + 1 });
+                continue;
+            }
+            throw err;
+        }
     }
 
-    logger.info("Aset dibuat", { assetCode, name: data.name, performedBy });
-    return toAsset(row);
+    // Should never reach here, but TypeScript needs the return
+    throw new Error("Gagal membuat aset setelah beberapa percobaan.");
 }
 
 /** UPDATE aset */

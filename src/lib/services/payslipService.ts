@@ -1,11 +1,9 @@
 import { prisma } from "../prisma";
 import { PayslipRecord } from "@/types";
 import logger from "@/lib/logger";
+import { toDateString } from "@/lib/utils";
 
-const d2s = (d: Date | string | null | undefined): string => {
-    if (!d) return "";
-    return d instanceof Date ? d.toISOString().split("T")[0] : String(d);
-};
+// ─── Date helpers imported from @/lib/utils ────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toPayslipRecord(row: any): PayslipRecord {
@@ -18,7 +16,7 @@ function toPayslipRecord(row: any): PayslipRecord {
         deductions: row.deductions ? JSON.parse(row.deductions as string) : [],
         overtime: row.overtime,
         netSalary: row.netSalary,
-        issuedDate: d2s(row.issuedDate),
+        issuedDate: toDateString(row.issuedDate),
         notes: row.notes ?? null,
     };
 }
