@@ -156,7 +156,7 @@ export async function PUT(request: NextRequest) {
 
             if (employee) {
                 const fixedAllowances = employee.payrollComponents
-                    .filter((pc) => pc.component.type === "allowance" && pc.component.isActive)
+                    .filter((pc) => pc.component.type === "earning" && pc.component.isActive)
                     .reduce((sum, pc) => sum + pc.amount, 0);
                 const monthlySalary = employee.basicSalary + fixedAllowances;
 

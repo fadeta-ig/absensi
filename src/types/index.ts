@@ -35,7 +35,7 @@ export type EmployeePayrollComponent = {
     component?: {
         id: string;
         name: string;
-        type: "allowance" | "deduction";
+        type: "earning" | "deduction";
     };
 };
 

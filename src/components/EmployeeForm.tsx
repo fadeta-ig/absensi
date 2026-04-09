@@ -16,7 +16,7 @@ interface Location { id: string; name: string; }
 interface Division { id: string; name: string; }
 interface Department { id: string; name: string; divisionId: string; division?: { name: string } }
 interface Position { id: string; name: string; level: string; }
-interface MasterPayrollComponent { id: string; name: string; type: "allowance" | "deduction"; defaultAmount: number; isActive: boolean; }
+interface MasterPayrollComponent { id: string; name: string; type: "earning" | "deduction"; defaultAmount: number; isActive: boolean; }
 
 /** Type lokal untuk payrollComponent di state form — belum punya id/employeeId sebelum disimpan */
 type FormPayrollComponent = {
@@ -377,7 +377,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                                                     onChange={(e) => updatePayrollComp(i, "componentId", e.target.value)}
                                                 >
                                                     {masterPayroll.map(p => (
-                                                        <option key={p.id} value={p.id}>{p.name} ({p.type === "allowance" ? "+" : "-"})</option>
+                                                        <option key={p.id} value={p.id}>{p.name} ({p.type === "earning" ? "+" : "-"})</option>
                                                     ))}
                                                 </select>
                                                 <div className="relative">

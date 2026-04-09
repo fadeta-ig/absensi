@@ -14,7 +14,7 @@ interface Employee {
     division?: string | null;
     payrollComponents?: {
         amount: number;
-        component: { name: string; type: "allowance" | "deduction" };
+        component: { name: string; type: "earning" | "deduction" };
     }[];
 }
 interface Division { id: string; name: string; }
@@ -87,7 +87,7 @@ export default function PayrollPage() {
 
             if (emp.payrollComponents && emp.payrollComponents.length > 0) {
                 const allowances = emp.payrollComponents
-                    .filter(pc => pc.component.type === "allowance")
+                    .filter(pc => pc.component.type === "earning")
                     .map(pc => ({ name: pc.component.name, amount: pc.amount }));
                 const deductions = emp.payrollComponents
                     .filter(pc => pc.component.type === "deduction")
@@ -97,7 +97,7 @@ export default function PayrollPage() {
                 setDeductions(deductions);
             } else {
                 const active = masterComponents.filter(c => c.isActive);
-                setAllowances(active.filter(c => c.type === "allowance").map(c => ({ name: c.name, amount: c.defaultAmount })));
+                setAllowances(active.filter(c => c.type === "earning").map(c => ({ name: c.name, amount: c.defaultAmount })));
                 setDeductions(active.filter(c => c.type === "deduction").map(c => ({ name: c.name, amount: c.defaultAmount })));
             }
         }
@@ -147,11 +147,11 @@ export default function PayrollPage() {
         });
 
         if (emp.payrollComponents && emp.payrollComponents.length > 0) {
-            setAllowances(emp.payrollComponents.filter(pc => pc.component.type === "allowance").map(pc => ({ name: pc.component.name, amount: pc.amount })));
+            setAllowances(emp.payrollComponents.filter(pc => pc.component.type === "earning").map(pc => ({ name: pc.component.name, amount: pc.amount })));
             setDeductions(emp.payrollComponents.filter(pc => pc.component.type === "deduction").map(pc => ({ name: pc.component.name, amount: pc.amount })));
         } else {
             const active = masterComponents.filter(c => c.isActive);
-            setAllowances(active.filter(c => c.type === "allowance").map(c => ({ name: c.name, amount: c.defaultAmount })));
+            setAllowances(active.filter(c => c.type === "earning").map(c => ({ name: c.name, amount: c.defaultAmount })));
             setDeductions(active.filter(c => c.type === "deduction").map(c => ({ name: c.name, amount: c.defaultAmount })));
         }
 
@@ -208,7 +208,7 @@ export default function PayrollPage() {
     const handleExportRecapExcel = () => {
         const data = filteredRecapEmployees.map(e => {
             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
-            const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "allowance").reduce((s, pc) => s + pc.amount, 0) || 0;
+            const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
 
             return {
@@ -242,7 +242,7 @@ export default function PayrollPage() {
     const handleExportRecapPdf = () => {
         const tableData = filteredRecapEmployees.map((e, idx) => {
             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
-            const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "allowance").reduce((s, pc) => s + pc.amount, 0) || 0;
+            const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
             const estNet = e.basicSalary + empAllowances - empDeductions;
 
@@ -382,7 +382,7 @@ export default function PayrollPage() {
                                     ) : (
                                         filteredRecapEmployees.map((e) => {
                                             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
-                                            const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "allowance").reduce((s, pc) => s + pc.amount, 0) || 0;
+                                            const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
                                             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
                                             const estNet = e.basicSalary + empAllowances - empDeductions;
 
