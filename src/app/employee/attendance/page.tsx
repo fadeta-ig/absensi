@@ -40,28 +40,19 @@ export default function AttendancePage() {
     const [registeredDescriptor, setRegisteredDescriptor] = useState<number[] | null>(null);
 
     useEffect(() => {
-        log.info("Halaman Absensi dimuat", {
-            userAgent: navigator.userAgent,
-            url: window.location.href,
-        });
-
         // Fetch GPS with validation
         (async () => {
-            log.info("Memulai fetch GPS...");
             try {
                 const { getValidatedPosition } = await import("@/lib/gpsValidator");
                 const { position, validation } = await getValidatedPosition();
-                const gps = {
+                setGpsInfo({
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
                     accuracy: position.coords.accuracy,
                     isValid: validation.isValid,
                     warnings: validation.warnings,
-                };
-                setGpsInfo(gps);
-                if (validation.isValid) {
-                    log.info("GPS valid", { lat: gps.lat.toFixed(5), lng: gps.lng.toFixed(5), accuracy: gps.accuracy });
-                } else {
+                });
+                if (!validation.isValid) {
                     log.warn("GPS tidak valid", { warnings: validation.warnings });
                 }
             } catch (err) {
@@ -72,43 +63,29 @@ export default function AttendancePage() {
         })();
 
         // Fetch today's attendance record
-        log.debug("Fetch data absensi hari ini...");
         fetch("/api/attendance")
             .then((r) => r.json())
             .then((data) => {
                 const today = new Date().toISOString().split("T")[0];
                 const found = data.find((a: { date: string }) => a.date === today);
-                if (found) {
-                    setTodayRecord(found);
-                    log.info("Data absensi hari ini ditemukan", { clockIn: found.clockIn, clockOut: found.clockOut });
-                } else {
-                    log.info("Belum ada absensi hari ini.");
-                }
+                if (found) setTodayRecord(found);
             })
             .catch((err) => log.error("Gagal fetch data absensi", { error: String(err) }));
 
         // Fetch registered face descriptor
-        log.debug("Fetch registered face descriptor...");
         fetch("/api/auth/face")
             .then((r) => r.json())
             .then((data) => {
                 if (data.hasFace && data.descriptor) {
                     setRegisteredDescriptor(data.descriptor);
-                    log.info("Face descriptor terdaftar ditemukan", { descriptorLength: data.descriptor.length });
                 } else {
-                    log.warn("Wajah belum terdaftar untuk user ini", { response: data });
+                    log.warn("Wajah belum terdaftar", { hasFace: data.hasFace });
                 }
             })
             .catch((err) => log.error("Gagal fetch face descriptor", { error: String(err) }));
     }, []);
 
     const startCamera = useCallback(async () => {
-        log.info("Mencoba mengaktifkan kamera...", {
-            mediaDevicesSupported: !!navigator.mediaDevices?.getUserMedia,
-            isSecureContext: window.isSecureContext,
-            protocol: window.location.protocol,
-        });
-
         if (!navigator.mediaDevices?.getUserMedia) {
             const errMsg = "Browser tidak mendukung camera API atau halaman tidak HTTPS.";
             log.error(errMsg, { protocol: window.location.protocol });
@@ -117,124 +94,47 @@ export default function AttendancePage() {
         }
 
         try {
-            const constraints = { video: { facingMode: "user", width: 640, height: 480 } };
-            log.debug("getUserMedia dipanggil", { constraints });
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-            const tracks = stream.getVideoTracks();
-            log.info("Stream kamera berhasil diperoleh", {
-                trackCount: tracks.length,
-                trackLabel: tracks[0]?.label,
-                trackState: tracks[0]?.readyState,
-                settings: tracks[0]?.getSettings(),
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user", width: 640, height: 480 },
             });
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                log.debug("srcObject di-assign ke video element", {
-                    videoReadyState: videoRef.current.readyState,
-                    videoWidth: videoRef.current.videoWidth,
-                    videoHeight: videoRef.current.videoHeight,
-                });
-
                 videoRef.current.onloadedmetadata = () => {
-                    log.info("onloadedmetadata terpicu — video metadata siap", {
-                        videoWidth: videoRef.current?.videoWidth,
-                        videoHeight: videoRef.current?.videoHeight,
-                        readyState: videoRef.current?.readyState,
-                        duration: videoRef.current?.duration,
-                    });
-
                     videoRef.current?.play()
-                        .then(() => {
-                            log.info("video.play() berhasil — kamera aktif dan siap ditampilkan");
-                            setStreaming(true);
-                        })
-                        .catch((playErr) => {
-                            log.warn("video.play() gagal (mungkin autoplay policy)", {
-                                error: String(playErr),
-                            });
-                            // Tetap tampilkan — user mungkin sudah interact
-                            setStreaming(true);
-                        });
+                        .then(() => setStreaming(true))
+                        .catch(() => setStreaming(true));
                 };
-
-                // Fallback: jika onloadedmetadata tidak pernah terpicu dalam 5 detik
+                // Fallback: jika onloadedmetadata tidak terpicu dalam 5 detik
                 setTimeout(() => {
                     if (!streaming && videoRef.current?.readyState && videoRef.current.readyState >= 1) {
-                        log.warn("Fallback: onloadedmetadata timeout, force streaming", {
-                            readyState: videoRef.current.readyState,
-                        });
                         setStreaming(true);
                     }
                 }, 5000);
-            } else {
-                log.error("videoRef.current adalah null setelah getUserMedia berhasil");
             }
         } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
             const errName = err instanceof Error ? err.name : "UnknownError";
-            log.error("GAGAL mengakses kamera", {
-                errorName: errName,
-                error: errMsg,
-                // DOMException names yang umum:
-                // NotAllowedError = user deny permission
-                // NotFoundError   = tidak ada kamera
-                // NotReadableError= kamera sedang dipakai app lain
-                hint: errName === "NotAllowedError" ? "User menolak izin kamera"
-                    : errName === "NotFoundError" ? "Tidak ada perangkat kamera ditemukan"
-                    : errName === "NotReadableError" ? "Kamera sedang digunakan app lain"
-                    : "Error tidak dikenal",
-            });
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log.error("Gagal mengakses kamera", { errorName: errName, error: errMsg });
             setMessage(`Gagal mengakses kamera: ${errName}. Berikan izin kamera.`);
         }
     }, [streaming]);
 
     const stopCamera = useCallback(() => {
         if (videoRef.current?.srcObject) {
-            const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-            log.info("Menghentikan kamera", { trackCount: tracks.length });
-            tracks.forEach((t) => {
-                t.stop();
-                log.debug("Track dihentikan", { label: t.label, kind: t.kind });
-            });
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
             videoRef.current.srcObject = null;
             videoRef.current.onloadedmetadata = null;
             setStreaming(false);
-            log.info("Kamera berhasil dihentikan");
-        } else {
-            log.debug("stopCamera dipanggil tapi srcObject sudah null");
         }
     }, []);
 
     const captureAndVerify = useCallback(async () => {
-        log.info("captureAndVerify dipanggil");
+        if (!videoRef.current || !canvasRef.current) return;
 
-        if (!videoRef.current) {
-            log.error("videoRef.current adalah null — tidak bisa capture");
-            return;
-        }
-        if (!canvasRef.current) {
-            log.error("canvasRef.current adalah null — tidak bisa capture");
-            return;
-        }
-
-        // Log state video sebelum capture
         const vid = videoRef.current;
-        log.info("State video saat capture", {
-            videoWidth: vid.videoWidth,
-            videoHeight: vid.videoHeight,
-            readyState: vid.readyState,   // 4 = HAVE_ENOUGH_DATA
-            paused: vid.paused,
-            srcObjectNull: vid.srcObject === null,
-            currentTime: vid.currentTime,
-        });
-
         if (vid.videoWidth === 0 || vid.videoHeight === 0) {
-            log.warn("Video width/height adalah 0 — frame mungkin belum siap", {
-                readyState: vid.readyState,
-            });
+            log.warn("Video frame belum siap saat capture", { readyState: vid.readyState });
         }
 
         const canvas = canvasRef.current;
@@ -248,38 +148,22 @@ export default function AttendancePage() {
 
         ctx.drawImage(vid, 0, 0, 640, 480);
         const photoData = canvas.toDataURL("image/jpeg", 0.8);
-        const photoSizeKB = Math.round(photoData.length * 0.75 / 1024);
-        log.info("Frame berhasil di-capture dari video", {
-            canvasW: canvas.width,
-            canvasH: canvas.height,
-            photoSizeKB,
-        });
 
-        // If no face registered, skip verification
         if (!registeredDescriptor) {
-            log.warn("Tidak ada descriptor wajah terdaftar — skip verifikasi");
             setPhoto(photoData);
             setFaceVerification({ status: "not_registered", message: "Wajah belum terdaftar. Daftarkan di Pengaturan." });
             stopCamera();
             return;
         }
 
-        log.info("Memulai proses verifikasi wajah...", {
-            registeredDescriptorLength: registeredDescriptor.length,
-        });
         setFaceVerification({ status: "checking", message: "Memverifikasi wajah..." });
 
         try {
-            log.debug("Dynamic import faceRecognition...");
             const { loadFaceModels, detectFaceDescriptor, compareFaces } = await import("@/lib/faceRecognition");
-            log.debug("loadFaceModels dipanggil...");
             await loadFaceModels();
-
-            log.debug("detectFaceDescriptor dipanggil pada canvas...");
             const descriptor = await detectFaceDescriptor(canvas);
 
             if (!descriptor) {
-                log.warn("Tidak ada wajah terdeteksi dalam frame yang di-capture");
                 setFaceVerification({ status: "no_face", message: "Wajah tidak terdeteksi. Coba ambil foto ulang." });
                 return;
             }
@@ -287,10 +171,6 @@ export default function AttendancePage() {
             const result = compareFaces(descriptor, registeredDescriptor);
 
             if (result.match) {
-                log.info("Verifikasi wajah BERHASIL", {
-                    distance: result.distance.toFixed(4),
-                    similarityPct: `${((1 - result.distance) * 100).toFixed(1)}%`,
-                });
                 setPhoto(photoData);
                 setFaceVerification({
                     status: "match",
@@ -299,10 +179,7 @@ export default function AttendancePage() {
                 });
                 stopCamera();
             } else {
-                log.warn("Verifikasi wajah GAGAL — wajah tidak cocok", {
-                    distance: result.distance.toFixed(4),
-                    threshold: 0.45,
-                });
+                // compareFaces sudah log.warn mismatch di dalam library
                 setFaceVerification({
                     status: "mismatch",
                     distance: result.distance,
@@ -310,33 +187,15 @@ export default function AttendancePage() {
                 });
             }
         } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log.error("ERROR saat proses verifikasi wajah", {
-                error: errMsg,
-                stack: err instanceof Error ? err.stack : undefined,
-            });
+            log.error("Error saat verifikasi wajah", { error: err instanceof Error ? err.message : String(err) });
             setFaceVerification({ status: "error", message: "Gagal memverifikasi wajah. Coba lagi." });
         }
     }, [registeredDescriptor, stopCamera]);
 
     const submitAttendance = useCallback(async () => {
-        log.info("submitAttendance dipanggil", {
-            faceStatus: faceVerification.status,
-            hasPhoto: !!photo,
-            gpsValid: gpsInfo?.isValid,
-            isClockIn: !todayRecord?.clockIn,
-        });
-
-        if (!photo || !gpsInfo) {
-            log.warn("Submit diabaikan — foto atau GPS tidak tersedia", {
-                hasPhoto: !!photo,
-                hasGps: !!gpsInfo,
-            });
-            return;
-        }
+        if (!photo || !gpsInfo) return;
 
         if (faceVerification.status === "mismatch") {
-            log.warn("Submit diblokir — verifikasi wajah gagal");
             setMessage("Verifikasi wajah gagal. Tidak dapat melakukan absensi.");
             return;
         }
@@ -348,10 +207,6 @@ export default function AttendancePage() {
         }
 
         setStatus("submitting");
-        log.info("Mengirim data absensi ke server...", {
-            lat: gpsInfo.lat.toFixed(5),
-            lng: gpsInfo.lng.toFixed(5),
-        });
 
         try {
             const res = await fetch("/api/attendance", {
@@ -365,25 +220,16 @@ export default function AttendancePage() {
             const data = await res.json();
 
             if (res.ok) {
-                log.info("Submit absensi berhasil", {
-                    type: data.clockOut ? "Clock Out" : "Clock In",
-                    clockIn: data.clockIn,
-                    clockOut: data.clockOut,
-                });
                 setStatus("success");
                 setMessage(data.clockOut ? "Clock Out berhasil!" : "Clock In berhasil!");
                 setTodayRecord(data);
             } else {
-                log.error("Submit absensi ditolak server", {
-                    httpStatus: res.status,
-                    error: data.error,
-                });
+                log.error("Submit absensi ditolak server", { httpStatus: res.status, error: data.error });
                 setStatus("error");
                 setMessage(data.error || "Gagal submit absensi");
             }
         } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log.error("Koneksi error saat submit absensi", { error: errMsg });
+            log.error("Koneksi error saat submit absensi", { error: err instanceof Error ? err.message : String(err) });
             setStatus("error");
             setMessage("Terjadi kesalahan koneksi");
         }

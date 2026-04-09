@@ -1,12 +1,10 @@
 /**
  * Client Logger — Browser-Side
  *
- * Fungsi:
- * 1. Log ke browser console dengan format berwarna & terstruktur
- * 2. Kirim log ke server (/api/logs/client) agar tercatat di logs/combined.log
- *
- * Digunakan khusus untuk komponen browser (camera, face recognition, GPS).
- * JANGAN import winston di sini — ini client-side only.
+ * Mode produksi:
+ * - TIDAK ada output ke browser console (silent)
+ * - Hanya warn & error yang dikirim ke server (/api/logs/client)
+ * - info & debug di-drop sepenuhnya
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -19,54 +17,21 @@ interface LogEntry {
   timestamp: string;
 }
 
-const IS_DEV = process.env.NODE_ENV !== "production";
-
-// Style console per level
-const STYLE: Record<LogLevel, string> = {
-  debug: "color:#6b7280;font-weight:normal",
-  info:  "color:#2563eb;font-weight:bold",
-  warn:  "color:#d97706;font-weight:bold",
-  error: "color:#dc2626;font-weight:bold",
-};
-
-const EMOJI: Record<LogLevel, string> = {
-  debug: "🔍",
-  info:  "ℹ️",
-  warn:  "⚠️",
-  error: "🔴",
-};
+/** Level yang dikirim ke server — hanya warn ke atas */
+const SERVER_LEVELS: LogLevel[] = ["warn", "error"];
 
 function formatTime(): string {
   return new Date().toISOString().replace("T", " ").substring(0, 23);
 }
 
-function printConsole(entry: LogEntry): void {
-  const { level, module, message, data } = entry;
-  const prefix = `${EMOJI[level]} [${module}]`;
-
-  if (data && Object.keys(data).length > 0) {
-    console.groupCollapsed(
-      `%c${prefix} ${message}`,
-      STYLE[level]
-    );
-    console.log("timestamp:", entry.timestamp);
-    console.log("data:", data);
-    console.groupEnd();
-  } else {
-    console.log(`%c${prefix} ${message}`, STYLE[level]);
-  }
-}
-
-/** Kirim log ke server secara async (fire-and-forget, tidak blokir UI) */
+/** Kirim ke server secara async fire-and-forget */
 function sendToServer(entry: LogEntry): void {
-  // Hanya kirim warn & error ke server untuk mengurangi traffic
-  if (entry.level === "debug" && !IS_DEV) return;
+  if (!SERVER_LEVELS.includes(entry.level)) return;
 
   fetch("/api/logs/client", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(entry),
-    // keepalive agar log terkirim meski halaman ditutup
     keepalive: true,
   }).catch(() => {
     // Jangan sampai log error menyebabkan infinite error loop
@@ -74,23 +39,20 @@ function sendToServer(entry: LogEntry): void {
 }
 
 function log(level: LogLevel, module: string, message: string, data?: Record<string, unknown>): void {
-  const entry: LogEntry = {
+  sendToServer({
     level,
     module,
     message,
     data,
     timestamp: formatTime(),
-  };
-
-  printConsole(entry);
-  sendToServer(entry);
+  });
 }
 
 /** Buat logger dengan nama module tertentu */
 export function createClientLogger(module: string) {
   return {
-    debug: (msg: string, data?: Record<string, unknown>) => log("debug", module, msg, data),
-    info:  (msg: string, data?: Record<string, unknown>) => log("info",  module, msg, data),
+    debug: (_msg: string, _data?: Record<string, unknown>) => { /* silent */ },
+    info:  (_msg: string, _data?: Record<string, unknown>) => { /* silent */ },
     warn:  (msg: string, data?: Record<string, unknown>) => log("warn",  module, msg, data),
     error: (msg: string, data?: Record<string, unknown>) => log("error", module, msg, data),
   };

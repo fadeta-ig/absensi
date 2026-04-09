@@ -1,22 +1,24 @@
 /**
  * POST /api/logs/client
  *
- * Endpoint server-side untuk menerima log dari browser (client logger).
- * Log akan ditulis ke logs/combined.log & logs/error.log via Winston.
- *
- * Body: { level, module, message, data, timestamp }
+ * Menerima log dari browser dan menulis ke Winston.
+ * Hanya level warn & error yang diproses — info/debug di-drop
+ * agar combined.log tidak spam.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import logger from "@/lib/logger";
+
+const ALLOWED_LEVELS = new Set(["warn", "error"]);
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { level, module: mod, message, data, timestamp } = body;
 
-    if (!level || !message) {
-      return NextResponse.json({ error: "Invalid log payload" }, { status: 400 });
+    // Drop info & debug — tidak perlu masuk file log
+    if (!level || !message || !ALLOWED_LEVELS.has(level)) {
+      return NextResponse.json({ ok: true });
     }
 
     const meta = {
@@ -26,17 +28,15 @@ export async function POST(req: NextRequest) {
       ...(data ?? {}),
     };
 
-    // Map ke winston level
-    switch (level) {
-      case "error": logger.error(`[CLIENT] ${message}`, meta); break;
-      case "warn":  logger.warn(`[CLIENT] ${message}`, meta);  break;
-      case "info":  logger.info(`[CLIENT] ${message}`, meta);  break;
-      default:      logger.debug(`[CLIENT] ${message}`, meta); break;
+    if (level === "error") {
+      logger.error(`[CLIENT] ${message}`, meta);
+    } else {
+      logger.warn(`[CLIENT] ${message}`, meta);
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    logger.error("[api/logs/client] Failed to parse client log", { err });
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  } catch {
+    // Jangan log error di sini agar tidak trigger loop
+    return NextResponse.json({ ok: true });
   }
 }

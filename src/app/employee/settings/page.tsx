@@ -49,19 +49,14 @@ export default function SettingsPage() {
 
     // ── Load face-api models lazily ──
     const ensureModelsLoaded = useCallback(async () => {
-        if (modelsLoaded) {
-            log.debug("Model AI sudah ter-load, skip.");
-            return true;
-        }
+        if (modelsLoaded) return true;
         setModelsLoading(true);
         setStep("models");
         setFaceMessage({ type: "info", text: "Memuat model AI deteksi wajah..." });
-        log.info("Mulai load model AI...");
         try {
             const { loadFaceModels } = await import("@/lib/faceRecognition");
             await loadFaceModels();
             setModelsLoaded(true);
-            log.info("Model AI berhasil dimuat.");
             return true;
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
@@ -76,18 +71,12 @@ export default function SettingsPage() {
 
     // ── Camera Controls ──
     const startFaceCamera = useCallback(async () => {
-        log.info("Tombol daftarkan wajah ditekan");
         setFaceMessage(null);
-
         const loaded = await ensureModelsLoaded();
         if (!loaded) return;
 
         setStep("camera");
         setFaceMessage({ type: "info", text: "Mengaktifkan kamera..." });
-        log.info("Mencoba getUserMedia untuk registrasi wajah...", {
-            isSecureContext: window.isSecureContext,
-            protocol: window.location.protocol,
-        });
 
         if (!navigator.mediaDevices?.getUserMedia) {
             const msg = "Browser tidak mendukung kamera atau halaman tidak HTTPS.";
@@ -102,63 +91,33 @@ export default function SettingsPage() {
                 video: { facingMode: "user", width: 640, height: 480 },
             });
 
-            const tracks = stream.getVideoTracks();
-            log.info("Stream kamera diperoleh", {
-                trackLabel: tracks[0]?.label,
-                trackState: tracks[0]?.readyState,
-                settings: tracks[0]?.getSettings(),
-            });
-
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                log.debug("srcObject di-assign ke videoRef");
-
                 videoRef.current.onloadedmetadata = () => {
-                    log.info("onloadedmetadata terpicu", {
-                        videoWidth: videoRef.current?.videoWidth,
-                        videoHeight: videoRef.current?.videoHeight,
-                        readyState: videoRef.current?.readyState,
-                    });
                     videoRef.current?.play()
                         .then(() => {
-                            log.info("video.play() berhasil — kamera siap");
                             setFaceStreaming(true);
                             setStep("ready");
                             setFaceMessage({ type: "info", text: "Posisikan wajah di dalam lingkaran, lalu tekan Scan & Simpan." });
                         })
-                        .catch((playErr) => {
-                            log.warn("video.play() gagal, force streaming", { error: String(playErr) });
+                        .catch(() => {
                             setFaceStreaming(true);
                             setStep("ready");
                             setFaceMessage({ type: "info", text: "Posisikan wajah di dalam lingkaran, lalu tekan Scan & Simpan." });
                         });
                 };
-
-                // Fallback jika onloadedmetadata tidak terpicu dalam 5 detik
                 setTimeout(() => {
                     if (!faceStreaming && videoRef.current?.readyState && videoRef.current.readyState >= 1) {
-                        log.warn("Fallback: onloadedmetadata timeout, force faceStreaming", {
-                            readyState: videoRef.current.readyState,
-                        });
                         setFaceStreaming(true);
                         setStep("ready");
                         setFaceMessage({ type: "info", text: "Posisikan wajah di dalam lingkaran, lalu tekan Scan & Simpan." });
                     }
                 }, 5000);
-            } else {
-                log.error("videoRef.current null setelah getUserMedia berhasil");
             }
         } catch (err) {
             const errName = err instanceof Error ? err.name : "UnknownError";
             const errMsg = err instanceof Error ? err.message : String(err);
-            log.error("GAGAL mengakses kamera", {
-                errorName: errName,
-                error: errMsg,
-                hint: errName === "NotAllowedError" ? "User menolak izin kamera"
-                    : errName === "NotFoundError" ? "Tidak ada kamera ditemukan"
-                    : errName === "NotReadableError" ? "Kamera digunakan app lain"
-                    : "Unknown",
-            });
+            log.error("Gagal mengakses kamera", { errorName: errName, error: errMsg });
             setFaceMessage({ type: "error", text: `Gagal akses kamera: ${errName}. Berikan izin kamera pada browser.` });
             setStep(null);
         }
@@ -166,9 +125,7 @@ export default function SettingsPage() {
 
     const stopFaceCamera = useCallback(() => {
         if (videoRef.current?.srcObject) {
-            const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-            log.info("Menghentikan kamera registrasi", { trackCount: tracks.length });
-            tracks.forEach((t) => t.stop());
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
             videoRef.current.srcObject = null;
             videoRef.current.onloadedmetadata = null;
             setFaceStreaming(false);
@@ -179,23 +136,11 @@ export default function SettingsPage() {
 
     // ── Capture & Register Face ──
     const registerFace = useCallback(async () => {
-        if (!videoRef.current || !canvasRef.current) {
-            log.error("registerFace: videoRef atau canvasRef null");
-            return;
-        }
+        if (!videoRef.current || !canvasRef.current) return;
 
-        // Log state video sebelum scan
         const vid = videoRef.current;
-        log.info("Mulai scan wajah untuk registrasi", {
-            videoWidth: vid.videoWidth,
-            videoHeight: vid.videoHeight,
-            readyState: vid.readyState,
-            paused: vid.paused,
-            srcObjectNull: vid.srcObject === null,
-        });
-
         if (vid.videoWidth === 0 || vid.videoHeight === 0) {
-            log.warn("Video width/height 0 — frame belum siap", { readyState: vid.readyState });
+            log.warn("Video frame belum siap saat scan registrasi", { readyState: vid.readyState });
         }
 
         setFaceProcessing(true);
@@ -207,14 +152,12 @@ export default function SettingsPage() {
             const descriptor = await detectFaceDescriptor(vid);
 
             if (!descriptor) {
-                log.warn("Wajah tidak terdeteksi dalam frame");
                 setFaceMessage({ type: "error", text: "Wajah tidak terdeteksi. Pastikan wajah terlihat jelas dan pencahayaan cukup." });
                 setStep("ready");
                 setFaceProcessing(false);
                 return;
             }
 
-            log.info("Wajah terdeteksi, menyimpan ke server...", { descriptorLength: descriptor.length });
             setStep("saving");
             setFaceMessage({ type: "info", text: "💾 Menyimpan data wajah ke server..." });
 
@@ -225,7 +168,6 @@ export default function SettingsPage() {
             });
 
             if (res.ok) {
-                log.info("Registrasi wajah BERHASIL");
                 setStep("done");
                 setFaceStatus("registered");
                 setFaceMessage({ type: "success", text: "✅ Wajah berhasil didaftarkan!" });
@@ -237,8 +179,7 @@ export default function SettingsPage() {
                 setStep("ready");
             }
         } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log.error("Error saat proses registrasi wajah", { error: errMsg, stack: err instanceof Error ? err.stack : undefined });
+            log.error("Error saat registrasi wajah", { error: err instanceof Error ? err.message : String(err) });
             setFaceMessage({ type: "error", text: "Terjadi kesalahan saat memproses wajah. Coba lagi." });
             setStep("ready");
         } finally {
