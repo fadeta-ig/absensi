@@ -79,7 +79,11 @@ export async function createAsset(data: {
     const assetCode = `${prefix}-${String(count + 1).padStart(3, "0")}`;
 
     const holderType = (data.holderType ?? "GA_POOL") as never;
-    const status = holderType === "GA_POOL" || holderType === "COMPANY_OWNED" ? holderType : "IN_USE";
+    // Derive AssetStatus dari HolderType yang dipilih
+    const status: string =
+        holderType === "GA_POOL"       ? "AVAILABLE"      :
+        holderType === "COMPANY_OWNED" ? "COMPANY_OWNED"  :
+        "IN_USE"; // EMPLOYEE, FORMER_EMPLOYEE, TEAM
 
     const row = await prisma.asset.create({
         data: {
