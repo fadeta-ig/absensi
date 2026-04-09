@@ -409,6 +409,13 @@ select {
   }
 }
 
+/* Face scan sweep line — used in settings face registration */
+@keyframes scanLine {
+  0%   { top: 0%; opacity: 0.8; }
+  50%  { top: 95%; opacity: 1; }
+  100% { top: 0%; opacity: 0.8; }
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 768px) {
   .modal-content {
