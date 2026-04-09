@@ -191,16 +191,18 @@ function getInputInfo(input: HTMLVideoElement | HTMLImageElement | HTMLCanvasEle
   return { inputType: "image" };
 }
 
+/** Threshold aktif — export agar bisa digunakan di UI (logging, display) */
+export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
 /**
  * Compare two face descriptors using Euclidean distance.
- * @returns `{ match, distance }` — match is true if distance < threshold
+ * @returns `{ match, distance, threshold }` — match is true if distance < threshold
  */
 export function compareFaces(
   descriptor1: Float32Array | number[],
   descriptor2: Float32Array | number[],
   threshold: number = DEFAULT_THRESHOLD
-): { match: boolean; distance: number } {
+): { match: boolean; distance: number; threshold: number } {
   const d1 = descriptor1 instanceof Float32Array ? descriptor1 : new Float32Array(descriptor1);
   const d2 = descriptor2 instanceof Float32Array ? descriptor2 : new Float32Array(descriptor2);
 
@@ -212,7 +214,8 @@ export function compareFaces(
     threshold,
     match,
     similarityPct: `${((1 - distance) * 100).toFixed(1)}%`,
+    margin: (threshold - distance).toFixed(4),
   });
 
-  return { match, distance };
+  return { match, distance, threshold };
 }
