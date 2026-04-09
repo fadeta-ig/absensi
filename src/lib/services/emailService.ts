@@ -14,7 +14,8 @@ function createTransporter() {
     return nodemailer.createTransport({
         host: SMTP_HOST,
         port: SMTP_PORT,
-        secure: SMTP_PORT === 465,
+        secure: SMTP_PORT === 465,      // true untuk SSL (465), false untuk STARTTLS (587)
+        requireTLS: SMTP_PORT === 587,  // wajib upgrade ke TLS untuk Gmail port 587
         auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
 }
@@ -38,7 +39,7 @@ export async function sendPasswordEmail(
         </div>
       </div>
       <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:16px">
-        <p style="margin:0;color:#92400e;font-size:12px">⚠️ Segera ubah password Anda setelah login pertama melalui menu <strong>Pengaturan</strong>.</p>
+        <p style="margin:0;color:#92400e;font-size:12px"><strong>Perhatian:</strong> Segera ubah password Anda setelah login pertama melalui menu <strong>Pengaturan</strong>.</p>
       </div>
       <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">Email ini dikirim secara otomatis. Jangan bagikan password Anda kepada siapapun.</p>
     </div>`;
