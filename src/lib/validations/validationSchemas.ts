@@ -25,7 +25,7 @@ const locationSchema = z.object({
 
 export const attendanceSchema = z.object({
     location: locationSchema.optional(),
-    photo: z.string().optional(),
+    photo: z.string().min(1, "Foto absensi wajib disertakan untuk keperluan face recognition"),
 });
 
 /* ───────────────────── Employee ───────────────────── */
@@ -38,6 +38,7 @@ export const employeeCreateSchema = z.object({
     department: z.string().min(1, "Departemen harus diisi"),
     division: z.string().nullable().optional(),
     position: z.string().min(1, "Posisi harus diisi"),
+    gender: z.enum(["Laki-Laki", "Perempuan"]).default("Laki-Laki"),
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee, hr, atau ga" }),
     level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"], {
         message: "Level tidak valid",
@@ -64,6 +65,7 @@ export const employeeUpdateSchema = z.object({
     department: z.string().min(1).optional(),
     division: z.string().nullable().optional(),
     position: z.string().min(1).optional(),
+    gender: z.enum(["Laki-Laki", "Perempuan"]).optional(),
     // Role & Level — hanya HR yang bisa ubah (enforced di API route)
     role: z.enum(["employee", "hr", "ga"]).optional(),
     level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"]).optional(),

@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, ser
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getLeaveRequests, createLeaveRequest, updateLeaveRequest } from "@/lib/services/leaveService";
 import { leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validationSchemas";
+import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -36,6 +37,26 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, leaveRequestSchema);
         if ("error" in result) return result.error;
         const body = result.data;
+
+        // Custom Validation Rule: Maternity Leave
+        if (body.type === "maternity") {
+            const employeeData = await prisma.employee.findUnique({
+                where: { employeeId: session.employeeId },
+                select: { gender: true },
+            });
+
+            if (employeeData?.gender !== "Perempuan") {
+                return NextResponse.json({ error: "Cuti 'maternity' hanya berlaku untuk karyawan Perempuan." }, { status: 400 });
+            }
+
+            const start = new Date(body.startDate).getTime();
+            const end = new Date(body.endDate).getTime();
+            const days = (end - start) / (1000 * 60 * 60 * 24);
+
+            if (days < 90) {
+                return NextResponse.json({ error: "Cuti melahirkan (maternity) minimal 90 hari." }, { status: 400 });
+            }
+        }
 
         const leave = await createLeaveRequest({
             ...body,

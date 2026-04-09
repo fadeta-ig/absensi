@@ -80,3 +80,48 @@ export async function sendPasswordEmail(
         return false;
     }
 }
+
+export async function sendPasswordChangedEmail(
+    email: string,
+    name: string
+): Promise<boolean> {
+    const html = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fff;border-radius:12px;border:1px solid #e5e7eb">
+      <div style="text-align:center;margin-bottom:24px">
+        <h2 style="margin:0;color:#1a1a2e;font-size:20px">WIG Attendance System</h2>
+        <p style="margin:4px 0 0;color:#6b7280;font-size:13px">Pemberitahuan Keamanan</p>
+      </div>
+      <div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:20px">
+        <p style="margin:0 0 8px;color:#374151;font-size:14px">Halo <strong>${name}</strong>,</p>
+        <p style="margin:0;color:#6b7280;font-size:13px">Password akun absensi Anda baru saja berhasil diubah.</p>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:16px">
+        <p style="margin:0;color:#92400e;font-size:12px"><strong>Penting:</strong> Jika Anda merasa tidak melakukan perubahan ini, segera hubungi tim IT atau Administrator.</p>
+      </div>
+      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">Email ini dikirim secara otomatis oleh sistem.</p>
+    </div>`;
+
+    if (!isSmtpConfigured) {
+        logger.warn("[Email] SMTP tidak dikonfigurasi — email peringatan password change tidak terkirim", {
+            action: "password-changed",
+            recipient: email,
+        });
+        return true;
+    }
+
+    try {
+        const transporter = createTransporter();
+        if (!transporter) return false;
+
+        await transporter.sendMail({
+            from: SMTP_FROM,
+            to: email,
+            subject: "Pemberitahuan Keamanan - Password Diubah",
+            html,
+        });
+        return true;
+    } catch (error) {
+        logger.error("[Email Error] Gagal mengirim email password changed:", error);
+        return false;
+    }
+}

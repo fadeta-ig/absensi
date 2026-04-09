@@ -17,6 +17,7 @@ model Employee {
   division          String?
   position          String
   role              String                     @default("employee")
+  gender            String                     @default("Laki-Laki")
   password          String
   faceDescriptor    String?                    @map("face_descriptor") @db.LongText
   joinDate          DateTime                   @map("join_date")

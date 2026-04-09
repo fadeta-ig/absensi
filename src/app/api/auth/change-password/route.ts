@@ -4,6 +4,7 @@ import { getEmployeeByEmployeeId, updateEmployee } from "@/lib/services/employee
 import { checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
 import { unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { changePasswordSchema } from "@/lib/validations/validationSchemas";
+import { sendPasswordChangedEmail } from "@/lib/services/emailService";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
@@ -37,6 +38,11 @@ export async function POST(request: NextRequest) {
 
         const hashedPassword = await bcrypt.hash(newPassword, 12);
         await updateEmployee(employee.id, { password: hashedPassword });
+
+        // Dispatch background email notification
+        sendPasswordChangedEmail(employee.email, employee.name).catch((e) => {
+            console.error("Gagal mengirim email reset: ", e);
+        });
 
         return NextResponse.json({
             success: true,

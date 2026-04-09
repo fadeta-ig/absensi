@@ -47,6 +47,10 @@ export async function POST(request: NextRequest) {
         if ("error" in result) return result.error;
         const body = result.data;
 
+        if (!body.photo) {
+            return NextResponse.json({ error: "Foto absensi wajib disertakan (Face Recognition mandatory)." }, { status: 400 });
+        }
+
         const today = new Date().toISOString().split("T")[0];
 
         // Fetch employee settings with proper typing
