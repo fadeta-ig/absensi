@@ -11,7 +11,7 @@ import { useToast } from "@/components/Toast";
 interface PayrollComponent {
     id: string;
     name: string;
-    type: string; // "allowance" | "deduction"
+    type: string; // "earning" | "deduction"
     defaultAmount: number;
     isActive: boolean;
     description: string | null;
@@ -27,7 +27,7 @@ export default function MasterPayrollPage() {
     const [form, setForm] = useState({
         id: "",
         name: "",
-        type: "allowance",
+        type: "earning",
         defaultAmount: 0,
         isActive: true,
         description: ""
@@ -50,7 +50,7 @@ export default function MasterPayrollPage() {
     }, []);
 
     const handleAdd = () => {
-        setForm({ id: "", name: "", type: "allowance", defaultAmount: 0, isActive: true, description: "" });
+        setForm({ id: "", name: "", type: "earning", defaultAmount: 0, isActive: true, description: "" });
         setEditMode(false);
         setMsg(null);
         setShowModal(true);
@@ -142,7 +142,7 @@ export default function MasterPayrollPage() {
                         <TrendingUp className="w-5 h-5" />
                     </div>
                     <div>
-                        <p className="text-xl font-bold">{components.filter(c => c.type === "allowance").length}</p>
+                        <p className="text-xl font-bold">{components.filter(c => c.type === "earning").length}</p>
                         <p className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Tipe Tunjangan</p>
                     </div>
                 </div>
@@ -194,9 +194,9 @@ export default function MasterPayrollPage() {
                                                 <div className="text-[10px] text-[var(--text-muted)] line-clamp-1 italic">{comp.description || "-"}</div>
                                             </td>
                                             <td>
-                                                <span className={`text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold uppercase ${comp.type === "allowance" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
-                                                    {comp.type === "allowance" ? <TrendingUp className="w-3" /> : <TrendingDown className="w-3" />}
-                                                    {comp.type === "allowance" ? "Tunjangan" : "Potongan"}
+                                                <span className={`text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold uppercase ${comp.type === "earning" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                                                    {comp.type === "earning" ? <TrendingUp className="w-3" /> : <TrendingDown className="w-3" />}
+                                                    {comp.type === "earning" ? "Tunjangan" : "Potongan"}
                                                 </span>
                                             </td>
                                             <td className="font-medium">{fmt(comp.defaultAmount)}</td>
@@ -267,7 +267,7 @@ export default function MasterPayrollPage() {
                                         value={form.type}
                                         onChange={(e) => setForm({ ...form, type: e.target.value })}
                                     >
-                                        <option value="allowance">Tunjangan (+)</option>
+                                        <option value="earning">Tunjangan (+)</option>
                                         <option value="deduction">Potongan (-)</option>
                                     </select>
                                 </div>
