@@ -42,6 +42,7 @@ model Employee {
   visits            VisitReport[]
   locations         Location[]                 @relation("employeelocations")
   pushSubscriptions PushSubscription[]
+  assignedAssets    Asset[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -317,6 +318,7 @@ model Asset {
 
   // Pemegang saat ini (nullable = di GA pool)
   assignedToName String?       @map("assigned_to_name")
+  assignedToId   String?       @map("assigned_to_id")
   assignedAt     DateTime?     @map("assigned_at")
 
   // Khusus kategori NOMOR_HP — SIM card fisik Indosat
@@ -327,7 +329,10 @@ model Asset {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
+  assignedTo     Employee?     @relation(fields: [assignedToId], references: [employeeId])
   histories      AssetHistory[]
+
+  @@index([assignedToId], map: "assets_assigned_to_id_fkey")
 
   @@map("assets")
 }

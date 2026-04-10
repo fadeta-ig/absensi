@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers, Upload } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
+import BulkImportModal from "@/components/BulkImportModal";
 
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
@@ -18,6 +19,7 @@ export default function EmployeesPage() {
     const [search, setSearch] = useState("");
     const [sendingPassword, setSendingPassword] = useState<string | null>(null);
     const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+    const [showImportModal, setShowImportModal] = useState(false);
 
     const DAY_LABELS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -113,9 +115,14 @@ export default function EmployeesPage() {
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">{employees.length} karyawan terdaftar</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => window.location.href = "/dashboard/employees/create"}>
-                    <Plus className="w-4 h-4" /> Tambah Karyawan
-                </button>
+                <div className="flex items-center gap-2">
+                    <button className="btn btn-secondary border border-[var(--border)]" onClick={() => setShowImportModal(true)}>
+                        <Upload className="w-4 h-4 text-[var(--text-muted)]" /> Import Massal
+                    </button>
+                    <button className="btn btn-primary" onClick={() => window.location.href = "/dashboard/employees/create"}>
+                        <Plus className="w-4 h-4" /> Tambah Karyawan
+                    </button>
+                </div>
             </div>
 
             {/* Password Message */}
@@ -223,6 +230,15 @@ export default function EmployeesPage() {
                     </table>
                 </div>
             </div>
+
+            <BulkImportModal
+                isOpen={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onImportComplete={() => {
+                    // Refetch employees after successful import
+                    fetch("/api/employees").then((r) => r.json()).then(setEmployees);
+                }}
+            />
         </div>
     );
 }

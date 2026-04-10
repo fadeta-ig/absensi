@@ -10,6 +10,7 @@ export type AssetWithHistory = {
     status: "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED" | "COMPANY_OWNED";
     holderType: "EMPLOYEE" | "FORMER_EMPLOYEE" | "TEAM" | "GA_POOL" | "COMPANY_OWNED";
     assignedToName: string | null;
+    assignedToId: string | null;
     assignedAt: string | null;
     nomorIndosat: string | null;
     expiredDate: string | null;
@@ -29,6 +30,7 @@ function toAsset(row: any): AssetWithHistory {
         status: row.status,
         holderType: row.holderType,
         assignedToName: row.assignedToName ?? null,
+        assignedToId: row.assignedToId ?? null,
         assignedAt: row.assignedAt ? new Date(row.assignedAt).toISOString() : null,
         nomorIndosat: row.nomorIndosat ?? null,
         expiredDate: row.expiredDate ? new Date(row.expiredDate).toISOString() : null,
@@ -69,6 +71,7 @@ export async function createAsset(data: {
     kondisi?: string;
     holderType?: string;
     assignedToName?: string | null;
+    assignedToId?: string | null;
     nomorIndosat?: string | null;
     expiredDate?: string | null;
     keterangan?: string | null;
@@ -98,6 +101,7 @@ export async function createAsset(data: {
                     status: status as never,
                     holderType,
                     assignedToName: data.assignedToName ?? null,
+                    assignedToId: (holderType === "EMPLOYEE" && data.assignedToId) ? data.assignedToId : null,
                     assignedAt: data.assignedToName ? new Date() : null,
                     nomorIndosat: data.nomorIndosat ?? null,
                     expiredDate: data.expiredDate ? new Date(data.expiredDate) : null,
@@ -177,6 +181,7 @@ export async function updateAsset(id: string, data: {
 export async function assignAsset(id: string, payload: {
     toHolderType: string;
     toName: string | null;
+    toEmployeeId?: string | null;
     notes?: string;
     kondisi?: string;
 }, performedBy: string): Promise<AssetWithHistory | null> {
@@ -205,6 +210,8 @@ export async function assignAsset(id: string, payload: {
         data: {
             holderType: payload.toHolderType as never,
             assignedToName: payload.toName,
+            assignedToId: (!isReturning && payload.toHolderType === "EMPLOYEE" && payload.toEmployeeId)
+                ? payload.toEmployeeId : null,
             assignedAt: isReturning ? null : new Date(),
             status: newStatus as never,
             ...(payload.kondisi && { kondisi: payload.kondisi as never }),
