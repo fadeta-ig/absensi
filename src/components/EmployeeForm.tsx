@@ -27,9 +27,8 @@ type FormPayrollComponent = {
     component?: MasterPayrollComponent;
 };
 
-/** Valid level values */
-type EmployeeLevel = "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
-const VALID_LEVELS: EmployeeLevel[] = ["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"];
+/** Valid level values - Now unlocked to accept dynamic string from Position */
+type EmployeeLevel = string;
 
 interface Props {
     initialData?: Partial<Employee>;
@@ -274,7 +273,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                                 <label className="form-label">Jabatan</label>
                                 <select className="form-select" value={form.position} onChange={(e) => {
                                     const selectedPos = masterPositions.find(p => p.name === e.target.value);
-                                    setForm({ ...form, position: e.target.value, level: (VALID_LEVELS.includes(selectedPos?.level as EmployeeLevel) ? selectedPos?.level : "STAFF") as EmployeeLevel, managerId: "" });
+                                    setForm({ ...form, position: e.target.value, level: selectedPos?.level || "STAFF", managerId: "" });
                                 }} required>
                                     <option value="">Pilih Jabatan</option>
                                     {masterPositions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}

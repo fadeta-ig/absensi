@@ -41,9 +41,7 @@ export const employeeCreateSchema = z.object({
     position: z.string().min(1, "Posisi harus diisi"),
     gender: z.enum(["Laki-Laki", "Perempuan"]).default("Laki-Laki"),
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee, hr, atau ga" }),
-    level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"], {
-        message: "Level tidak valid",
-    }),
+    level: z.string().min(1, "Level wajib diisi"),
     managerId: z.string().nullable().optional(),
     joinDate: z.string().min(1, "Tanggal bergabung harus diisi"),
     isActive: z.boolean().optional().default(true),
@@ -69,7 +67,7 @@ export const employeeUpdateSchema = z.object({
     gender: z.enum(["Laki-Laki", "Perempuan"]).optional(),
     // Role & Level — hanya HR yang bisa ubah (enforced di API route)
     role: z.enum(["employee", "hr", "ga"]).optional(),
-    level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"]).optional(),
+    level: z.string().optional(),
     managerId: z.string().nullable().optional(),
     // Kepegawaian
     joinDate: z.string().optional(),

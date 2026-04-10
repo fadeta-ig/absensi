@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "../prisma";
@@ -15,7 +16,7 @@ const bulkRowSchema = z.object({
     division: z.string().nullable().optional(),
     position: z.string().min(1, "Posisi wajib diisi"),
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee / hr / ga" }),
-    level: z.enum(["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"], { message: "Level tidak valid" }),
+    level: z.string().min(1, "Level wajib diisi"),
     joinDate: z.string().min(1, "Tanggal bergabung wajib diisi"),
     basicSalary: z.number().min(0).optional().default(0),
     totalLeave: z.number().min(0).optional().default(12),
@@ -286,10 +287,34 @@ export async function generateTemplate(): Promise<Buffer> {
         prisma.position.findMany({ where: { isActive: true }, select: { name: true }, orderBy: { name: "asc" } }),
     ]);
 
-    const wb = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
 
     // ── Sheet 1: Data Karyawan ─────────────────────────────
-    const exampleRow: Record<string, string | number> = {
+    const ws = workbook.addWorksheet("Data Karyawan", { views: [{ state: "frozen", ySplit: 1 }] });
+
+    // Define columns
+    ws.columns = TEMPLATE_HEADERS.map((header) => ({
+        header,
+        key: header,
+        width: Math.max(header.length + 5, 18),
+    }));
+
+    // Style the header row
+    const headerRow = ws.getRow(1);
+    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0f172a" } }; // Dark slate color
+    headerRow.alignment = { vertical: "middle", horizontal: "center" };
+    headerRow.eachCell((cell) => {
+        cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+        };
+    });
+
+    // Add Example Row
+    const exampleRow = ws.addRow({
         "ID Karyawan": "WIG-001",
         "Nama": "Budi Santoso",
         "Email": "budi@company.com",
@@ -305,55 +330,90 @@ export async function generateTemplate(): Promise<Buffer> {
         "Cuti Tahunan": 12,
         "Atasan (ID)": "",
         "Status Aktif": "Ya",
-    };
+    });
 
-    const dataSheet = XLSX.utils.json_to_sheet([exampleRow], { header: TEMPLATE_HEADERS });
+    // Style the example row data
+    exampleRow.font = { color: { argb: "FF64748B" }, italic: true }; // Muted text for example
 
-    // Auto-size columns
-    const colWidths = TEMPLATE_HEADERS.map((h) => ({
-        wch: Math.max(h.length + 2, String(exampleRow[h] ?? "").length + 2, 15),
-    }));
-    dataSheet["!cols"] = colWidths;
-
-    // Add data validation for enum columns
-    const validations: any[] = [
-        { sqref: "E2:E10000", type: "list", formula1: '"Laki-Laki,Perempuan"', showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih Laki-Laki atau Perempuan" },
-        { sqref: "I2:I10000", type: "list", formula1: '"employee,hr,ga"', showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih employee, hr, atau ga" },
-        { sqref: "J2:J10000", type: "list", formula1: '"STAFF,SUPERVISOR,MANAGER,GM,HR,CEO"', showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih level yang valid" },
-        { sqref: "O2:O10000", type: "list", formula1: '"Ya,Tidak"', showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih Ya atau Tidak" },
-    ];
-    dataSheet["!dataValidation"] = validations;
-
-    XLSX.utils.book_append_sheet(wb, dataSheet, "Data Karyawan");
+    // Add Data Validation
+    // Apply validations to 1000 rows
+    for (let i = 2; i <= 1000; i++) {
+        // Departemen (F) -> Panduan A2:A1000
+        ws.getCell(`F${i}`).dataValidation = {
+            type: "list", allowBlank: false, formulae: ['Panduan!$A$2:$A$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih departemen dari daftar panduan"
+        };
+        // Divisi (G) -> Panduan B2:B1000
+        ws.getCell(`G${i}`).dataValidation = {
+            type: "list", allowBlank: true, formulae: ['Panduan!$B$2:$B$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih divisi dari daftar panduan"
+        };
+        // Posisi (H) -> Panduan C2:C1000
+        ws.getCell(`H${i}`).dataValidation = {
+            type: "list", allowBlank: false, formulae: ['Panduan!$C$2:$C$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih posisi dari daftar panduan"
+        };
+        // Gender (E) -> Panduan D2:D1000
+        ws.getCell(`E${i}`).dataValidation = {
+            type: "list", allowBlank: false, formulae: ['Panduan!$D$2:$D$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih Laki-Laki atau Perempuan dari daftar panduan"
+        };
+        // Role (I) -> Panduan E2:E1000
+        ws.getCell(`I${i}`).dataValidation = {
+            type: "list", allowBlank: false, formulae: ['Panduan!$E$2:$E$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih role dari daftar panduan"
+        };
+        // Level (J) -> Panduan F2:F1000
+        ws.getCell(`J${i}`).dataValidation = {
+            type: "list", allowBlank: false, formulae: ['Panduan!$F$2:$F$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih level dari daftar panduan"
+        };
+        // Status Aktif (O) -> Panduan G2:G1000
+        ws.getCell(`O${i}`).dataValidation = {
+            type: "list", allowBlank: true, formulae: ['Panduan!$G$2:$G$1000'],
+            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih status aktif dari daftar panduan"
+        };
+    }
 
     // ── Sheet 2: Panduan ───────────────────────────────────
-    const guideData: Record<string, string>[] = [];
-    const maxRows = Math.max(departments.length, divisions.length, positions.length, 6);
+    const guideSheet = workbook.addWorksheet("Panduan");
 
-    const genderValues = ["Laki-Laki", "Perempuan"];
-    const roleValues = ["employee", "hr", "ga"];
-    const levelValues = ["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"];
-    const statusValues = ["Ya", "Tidak"];
+    const guideColumns = [
+        { header: "Departemen", key: "dept", width: 25 },
+        { header: "Divisi", key: "div", width: 25 },
+        { header: "Posisi", key: "pos", width: 25 },
+        { header: "Jenis Kelamin", key: "gender", width: 20 },
+        { header: "Role", key: "role", width: 20 },
+        { header: "Level", key: "level", width: 20 },
+        { header: "Status Aktif", key: "status", width: 20 },
+    ];
+    guideSheet.columns = guideColumns;
+
+    // Style Guide Headers
+    const guideHeaderRow = guideSheet.getRow(1);
+    guideHeaderRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    guideHeaderRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3b82f6" } }; // Blue color
+    guideHeaderRow.alignment = { vertical: "middle", horizontal: "center" };
+
+    const maxRows = Math.max(departments.length, divisions.length, positions.length, 6);
+    const genderVal = ["Laki-Laki", "Perempuan"];
+    const roleVal = ["employee", "hr", "ga"];
+    const levelVal = ["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"];
+    const statusVal = ["Ya", "Tidak"];
 
     for (let i = 0; i < maxRows; i++) {
-        guideData.push({
-            "Departemen": departments[i]?.name ?? "",
-            "Divisi": divisions[i]?.name ?? "",
-            "Posisi": positions[i]?.name ?? "",
-            "Jenis Kelamin": genderValues[i] ?? "",
-            "Role": roleValues[i] ?? "",
-            "Level": levelValues[i] ?? "",
-            "Status Aktif": statusValues[i] ?? "",
+        guideSheet.addRow({
+            dept: departments[i]?.name ?? "",
+            div: divisions[i]?.name ?? "",
+            pos: positions[i]?.name ?? "",
+            gender: genderVal[i] ?? "",
+            role: roleVal[i] ?? "",
+            level: levelVal[i] ?? "",
+            status: statusVal[i] ?? "",
         });
     }
 
-    const guideSheet = XLSX.utils.json_to_sheet(guideData);
-    const guideHeaders = ["Departemen", "Divisi", "Posisi", "Jenis Kelamin", "Role", "Level", "Status Aktif"];
-    guideSheet["!cols"] = guideHeaders.map((h) => ({ wch: Math.max(h.length + 2, 20) }));
-
-    XLSX.utils.book_append_sheet(wb, guideSheet, "Panduan");
-
     // ── Generate buffer ────────────────────────────────────
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-    return Buffer.from(buf);
+    const uint8Array = await workbook.xlsx.writeBuffer();
+    return Buffer.from(uint8Array);
 }

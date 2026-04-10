@@ -21,7 +21,7 @@ export interface SessionPayload {
     employeeId: string;
     name: string;
     role: "employee" | "hr" | "ga";
-    level: "STAFF" | "SUPERVISOR" | "MANAGER" | "GM" | "HR" | "CEO";
+    level: string;
 }
 
 /**
