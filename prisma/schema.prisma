@@ -41,10 +41,24 @@ model Employee {
   todos             TodoItem[]
   visits            VisitReport[]
   locations         Location[]                 @relation("employeelocations")
+  pushSubscriptions PushSubscription[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
   @@map("employees")
+}
+
+model PushSubscription {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  endpoint   String   @unique @db.VarChar(500)
+  p256dh     String   @db.Text
+  auth       String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+
+  @@index([employeeId], map: "push_subscriptions_employee_id_fkey")
+  @@map("push_subscriptions")
 }
 
 model VisitReport {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import PushNotificationManager from "@/components/PushNotificationManager";
 
 interface NewsItem { id: string; title: string; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
@@ -60,10 +61,11 @@ export default function EmployeeHomePage() {
                             {currentTime.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                         </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-2">
                         <p className="text-3xl font-extrabold font-mono tabular-nums">
                             {currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </p>
+                        <PushNotificationManager />
                     </div>
                 </div>
             </div>

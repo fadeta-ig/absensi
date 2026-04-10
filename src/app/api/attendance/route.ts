@@ -12,6 +12,13 @@ import { calculateDistance } from "@/lib/utils";
 import { attendanceSchema } from "@/lib/validations/validationSchemas";
 import logger from "@/lib/logger";
 
+/** Format total minutes → "HH:mm" */
+function formatMinutes(totalMinutes: number): string {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
     if (rateLimited) return rateLimited;
@@ -93,24 +100,7 @@ export async function POST(request: NextRequest) {
 
         const existing = await getAttendanceByDate(session.employeeId, today);
 
-        if (existing) {
-            if (existing.clockOut) {
-                return NextResponse.json(
-                    { error: "Anda sudah melakukan clock-in dan clock-out hari ini." },
-                    { status: 400 }
-                );
-            }
-
-            const updated = await updateAttendance(existing.id, {
-                clockOut: new Date().toISOString(),
-                clockOutLocation: body.location,
-                clockOutPhoto: body.photo,
-            });
-
-            logger.info("Clock-out success", { employeeId: session.employeeId });
-            return NextResponse.json(updated);
-        }
-
+        // ── Resolve shift early (needed for both clock-in and clock-out) ──
         const now = new Date();
         const todayDay = now.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
 
@@ -128,8 +118,50 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        const todaySchedule = shift?.days.find((d) => d.dayOfWeek === todayDay);
+
+        if (existing) {
+            if (existing.clockOut) {
+                return NextResponse.json(
+                    { error: "Anda sudah melakukan clock-in dan clock-out hari ini." },
+                    { status: 400 }
+                );
+            }
+
+            // ── Clock-Out Hard-Block Enforcement ──
+            if (shift && todaySchedule && !todaySchedule.isOff) {
+                const [endH, endM] = todaySchedule.endTime.split(":").map(Number);
+                const shiftEndMinutes = endH * 60 + endM;
+                const clockOutMinutes = now.getHours() * 60 + now.getMinutes();
+
+                const earliestOut = shiftEndMinutes - (shift.earlyCheckOut ?? 0);
+                if (clockOutMinutes < earliestOut) {
+                    return NextResponse.json(
+                        { error: `Belum waktunya clock-out. Anda bisa pulang mulai pukul ${formatMinutes(earliestOut)}.` },
+                        { status: 400 }
+                    );
+                }
+
+                const latestOut = shiftEndMinutes + (shift.lateCheckOut ?? 0);
+                if (shift.lateCheckOut > 0 && clockOutMinutes > latestOut) {
+                    return NextResponse.json(
+                        { error: `Waktu clock-out sudah melewati batas pukul ${formatMinutes(latestOut)}. Hubungi HR.` },
+                        { status: 400 }
+                    );
+                }
+            }
+
+            const updated = await updateAttendance(existing.id, {
+                clockOut: new Date().toISOString(),
+                clockOutLocation: body.location,
+                clockOutPhoto: body.photo,
+            });
+
+            logger.info("Clock-out success", { employeeId: session.employeeId });
+            return NextResponse.json(updated);
+        }
+
         if (shift) {
-            const todaySchedule = shift.days.find((d) => d.dayOfWeek === todayDay);
             if (!todaySchedule || todaySchedule.isOff) {
                 return NextResponse.json(
                     { error: "Hari ini bukan merupakan hari kerja Anda sesuai jadwal shift." },
@@ -138,22 +170,34 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // ── Clock-In Early Block ──
+        if (shift && todaySchedule && !todaySchedule.isOff) {
+            const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
+            const shiftStartMinutes = shiftHour * 60 + shiftMin;
+            const earliestIn = shiftStartMinutes - (shift.earlyCheckIn ?? 0);
+            const clockInMinutes = now.getHours() * 60 + now.getMinutes();
+
+            if (clockInMinutes < earliestIn) {
+                return NextResponse.json(
+                    { error: `Belum waktunya clock-in. Anda bisa absen mulai pukul ${formatMinutes(earliestIn)}.` },
+                    { status: 400 }
+                );
+            }
+        }
+
         let status: "present" | "late" = "present";
 
-        if (shift) {
-            const todaySchedule = shift.days.find((d) => d.dayOfWeek === todayDay);
-            if (todaySchedule && !todaySchedule.isOff) {
-                const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
-                const shiftStartMinutes = shiftHour * 60 + shiftMin;
-                const tolerance = shift.lateCheckIn ?? 0;
-                const deadlineMinutes = shiftStartMinutes + tolerance;
+        if (shift && todaySchedule && !todaySchedule.isOff) {
+            const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
+            const shiftStartMinutes = shiftHour * 60 + shiftMin;
+            const tolerance = shift.lateCheckIn ?? 0;
+            const deadlineMinutes = shiftStartMinutes + tolerance;
 
-                const clockInMinutes = now.getHours() * 60 + now.getMinutes();
-                if (clockInMinutes > deadlineMinutes) {
-                    status = "late";
-                }
+            const clockInMinutes = now.getHours() * 60 + now.getMinutes();
+            if (clockInMinutes > deadlineMinutes) {
+                status = "late";
             }
-        } else {
+        } else if (!shift) {
             if (now.getHours() > 9) {
                 status = "late";
             }
