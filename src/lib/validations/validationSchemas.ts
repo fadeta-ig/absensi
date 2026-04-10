@@ -50,7 +50,7 @@ export const employeeCreateSchema = z.object({
     usedLeave: z.number().optional().default(0),
     shiftId: z.string().nullable().optional(),
     bypassLocation: z.boolean().optional().default(false),
-    locationIds: z.array(z.string()).optional(),
+    locations: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
     basicSalary: z.number().optional().default(0),
     payrollComponents: z.array(z.any()).optional().default([]),
     avatarUrl: z.string().nullable().optional(),
@@ -78,7 +78,7 @@ export const employeeUpdateSchema = z.object({
     bypassLocation: z.boolean().optional(),
     // Penugasan
     shiftId: z.string().nullable().optional(),
-    locationIds: z.array(z.string()).optional(),
+    locations: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
     // Payroll
     basicSalary: z.number().min(0).optional(),
     payrollComponents: z.array(z.any()).optional(),
