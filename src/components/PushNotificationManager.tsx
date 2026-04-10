@@ -47,6 +47,13 @@ export default function PushNotificationManager() {
                 return;
             }
 
+            const swReg = await navigator.serviceWorker.getRegistration();
+            if (!swReg) {
+                toast("Service worker belum siap. Harap refresh halaman.", "error");
+                setLoading(false);
+                return;
+            }
+
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
