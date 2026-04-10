@@ -7,6 +7,7 @@ import {
     Smartphone, Laptop, Phone, Package,
     User, Users, Building2, Archive, UserX,
     Edit3, ArrowRightLeft, Trash2, History, X,
+    CheckCircle, Wrench, TrendingUp, AlertCircle
 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
 
@@ -81,6 +82,46 @@ function CategoryBadge({ cat }: { cat: string }) {
     );
 }
 
+// ─── Stat Card ──────────────────────────────────────────────────
+
+function StatCard({ icon, label, value, bg, color }: { icon: React.ReactNode; label: string; value: number; bg: string; color: string }) {
+    return (
+        <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color }}>
+                {icon}
+            </div>
+            <div>
+                <p style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>{value}</p>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{label}</p>
+            </div>
+        </div>
+    );
+}
+
+// ─── Filter Pill (quick filter tabs) ───────────────────────────
+
+function FilterPill({ label, icon, active, onClick, count }: { label: string; icon?: React.ReactNode; active: boolean; onClick: () => void; count: number }) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 500,
+                border: active ? "none" : "1px solid var(--border)",
+                background: active ? "var(--primary)" : "white",
+                color: active ? "white" : "var(--text-secondary)",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.15s",
+            }}
+        >
+            {icon && <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>}
+            {label}
+            <span style={{ background: active ? "rgba(255,255,255,0.25)" : "var(--secondary)", borderRadius: 999, padding: "1px 7px", fontSize: 11, fontWeight: 700, color: active ? "white" : "var(--text-secondary)" }}>
+                {count}
+            </span>
+        </button>
+    );
+}
+
 // ─── Modal: CREATE ──────────────────────────────────────────────
 
 function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -97,9 +138,27 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    // ── Employee list dari HR master data ──────────────────────────
+    const [employees, setEmployees] = useState<{ name: string; employeeId: string; position: string }[]>([]);
+    const [empLoading, setEmpLoading] = useState(true);
+
+    useEffect(() => {
+        fetch("/api/employees")
+            .then(r => r.json())
+            .then((data: Array<{ name: string; employeeId: string; position: string; isActive?: boolean }>) => {
+                setEmployees(data.filter(e => e.isActive !== false));
+            })
+            .catch(() => setEmployees([]))
+            .finally(() => setEmpLoading(false));
+    }, []);
+
     const set = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
+    // Reset nama pemegang saat ganti tipe
+    const setHolderType = (val: string) => setForm(prev => ({ ...prev, holderType: val, assignedToName: "" }));
 
     const needsName = form.holderType !== "GA_POOL" && form.holderType !== "COMPANY_OWNED";
+    const isEmployeeDropdown = form.holderType === "EMPLOYEE";
+    const isTextInput = form.holderType === "TEAM" || form.holderType === "FORMER_EMPLOYEE";
     const isNomor = form.category === "NOMOR_HP";
 
     const submit = async () => {
@@ -163,7 +222,7 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 
                     <div style={fieldStyle}>
                         <label style={labelStyle}>Pemegang Awal *</label>
-                        <select value={form.holderType} onChange={e => set("holderType", e.target.value)} style={inputStyle}>
+                        <select value={form.holderType} onChange={e => setHolderType(e.target.value)} style={inputStyle}>
                             <option value="GA_POOL">GA — Brankas GA</option>
                             <option value="EMPLOYEE">Karyawan Aktif</option>
                             <option value="TEAM">Tim</option>
@@ -172,13 +231,42 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                         </select>
                     </div>
 
-                    {needsName && (
-                        <div style={fieldStyle}>
-                            <label style={labelStyle}>Nama Pemegang *</label>
+                    {/* Dropdown karyawan aktif (dari HR master data) */}
+                    {isEmployeeDropdown && (
+                        <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
+                            <label style={labelStyle}>
+                                Pilih Karyawan *
+                                {empLoading && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>Memuat...</span>}
+                            </label>
+                            <select
+                                value={form.assignedToName}
+                                onChange={e => set("assignedToName", e.target.value)}
+                                style={{ ...inputStyle, height: "auto", padding: "8px 10px" }}
+                                disabled={empLoading}
+                            >
+                                <option value="">-- Pilih Karyawan --</option>
+                                {employees.map(emp => (
+                                    <option key={emp.employeeId} value={emp.name}>
+                                        {emp.name}{emp.position ? ` — ${emp.position}` : ""}
+                                    </option>
+                                ))}
+                            </select>
+                            {employees.length === 0 && !empLoading && (
+                                <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>⚠ Gagal memuat data karyawan dari HR</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Input manual untuk Tim atau Mantan Karyawan */}
+                    {isTextInput && (
+                        <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
+                            <label style={labelStyle}>
+                                {form.holderType === "TEAM" ? "Nama Tim *" : "Nama Mantan Karyawan *"}
+                            </label>
                             <input
                                 value={form.assignedToName}
                                 onChange={e => set("assignedToName", e.target.value)}
-                                placeholder={form.holderType === "TEAM" ? "Tim Warehouse / Tim Creative" : "Nama lengkap"}
+                                placeholder={form.holderType === "TEAM" ? "cth: Tim Warehouse / Tim Creative" : "Nama lengkap mantan karyawan"}
                                 style={inputStyle}
                             />
                         </div>
@@ -224,7 +312,23 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
+    // ── Employee list from HR master data ─────────────────────────
+    const [employees, setEmployees] = useState<{ name: string; employeeId: string; position: string; department: string }[]>([]);
+    const [empLoading, setEmpLoading] = useState(true);
+
+    useEffect(() => {
+        fetch("/api/employees")
+            .then(r => r.json())
+            .then((data: Array<{ name: string; employeeId: string; position: string; department: string; isActive?: boolean }>) => {
+                setEmployees(data.filter(e => e.isActive !== false));
+            })
+            .catch(() => setEmployees([]))
+            .finally(() => setEmpLoading(false));
+    }, []);
+
     const isReturning = holderType === "GA_POOL";
+    const needsEmployeeDropdown = holderType === "EMPLOYEE";
+    const needsTextInput = holderType === "FORMER_EMPLOYEE" || holderType === "TEAM";
 
     const submit = async () => {
         if (!isReturning && !toName.trim()) { setError("Nama pemegang harus diisi"); return; }
@@ -253,19 +357,55 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
                 </p>
                 <div style={fieldStyle}>
                     <label style={labelStyle}>Aksi</label>
-                    <select value={holderType} onChange={e => setHolderType(e.target.value)} style={inputStyle}>
+                    <select value={holderType} onChange={e => { setHolderType(e.target.value); setToName(""); }} style={inputStyle}>
                         <option value="EMPLOYEE">Assign ke Karyawan Aktif</option>
                         <option value="FORMER_EMPLOYEE">Assign ke Mantan Karyawan</option>
                         <option value="TEAM">Assign ke Tim</option>
                         <option value="GA_POOL">Kembalikan ke GA (Brankas)</option>
                     </select>
                 </div>
-                {!isReturning && (
+
+                {/* Dropdown karyawan aktif dari sistem HR */}
+                {needsEmployeeDropdown && (
                     <div style={fieldStyle}>
-                        <label style={labelStyle}>Nama Pemegang *</label>
-                        <input value={toName} onChange={e => setToName(e.target.value)} placeholder={holderType === "TEAM" ? "Tim Warehouse / Tim Creative" : "Nama lengkap karyawan"} style={inputStyle} />
+                        <label style={labelStyle}>
+                            Pilih Karyawan *
+                            {empLoading && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>Memuat data karyawan...</span>}
+                        </label>
+                        <select
+                            value={toName}
+                            onChange={e => setToName(e.target.value)}
+                            style={{ ...inputStyle, height: "auto", padding: "8px 10px" }}
+                            disabled={empLoading}
+                        >
+                            <option value="">-- Pilih Karyawan --</option>
+                            {employees.map(emp => (
+                                <option key={emp.employeeId} value={emp.name}>
+                                    {emp.name}{emp.position ? ` — ${emp.position}` : ""}
+                                </option>
+                            ))}
+                        </select>
+                        {employees.length === 0 && !empLoading && (
+                            <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>⚠ Gagal memuat data karyawan</p>
+                        )}
                     </div>
                 )}
+
+                {/* Input teks manual untuk Tim atau Mantan Karyawan */}
+                {needsTextInput && (
+                    <div style={fieldStyle}>
+                        <label style={labelStyle}>
+                            {holderType === "TEAM" ? "Nama Tim *" : "Nama Mantan Karyawan *"}
+                        </label>
+                        <input
+                            value={toName}
+                            onChange={e => setToName(e.target.value)}
+                            placeholder={holderType === "TEAM" ? "cth: Tim Warehouse / Tim Creative" : "Nama lengkap mantan karyawan"}
+                            style={inputStyle}
+                        />
+                    </div>
+                )}
+
                 <div style={fieldStyle}>
                     <label style={labelStyle}>Kondisi Saat Ini</label>
                     <select value={kondisi} onChange={e => setKondisi(e.target.value as typeof kondisi)} style={inputStyle}>
@@ -381,7 +521,7 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                                         <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{new Date(h.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                                     </div>
                                     <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 12 }}>
-                                        {h.fromName ?? "GA Pool"} → {h.toName ?? "GA Pool"}
+                                        {h.fromName ?? "GA"} → {h.toName ?? "GA"}
                                     </p>
                                     {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12 }}>📝 {h.notes}</p>}
                                     <div style={{ marginTop: 4 }}><KondisiBadge kondisi={h.kondisiSaat} /></div>
@@ -470,6 +610,21 @@ function AssetsPageInner() {
                       filterStatus === "MAINTENANCE" ? "Dalam Perbaikan" :
                       "Semua Aset";
 
+    // Stats
+    const stats = {
+        total: assets.length,
+        available: assets.filter(a => a.status === "AVAILABLE").length,
+        inUse: assets.filter(a => a.status === "IN_USE").length,
+        maintenance: assets.filter(a => a.status === "MAINTENANCE").length,
+        rusak: assets.filter(a => a.kondisi === "RUSAK").length,
+    };
+
+    const byCat = {
+        HANDPHONE: assets.filter(a => a.category === "HANDPHONE").length,
+        LAPTOP: assets.filter(a => a.category === "LAPTOP").length,
+        NOMOR_HP: assets.filter(a => a.category === "NOMOR_HP").length,
+    };
+
     // Slice untuk pagination
     const pageItems = filtered.slice(
         (currentPage - 1) * PAGE_SIZE,
@@ -483,20 +638,40 @@ function AssetsPageInner() {
                 <div>
                     <h1 style={{ fontSize: 22, fontWeight: 700 }}>{pageTitle}</h1>
                     <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
-                        {filtered.length} dari {assets.length} aset
-                        {filterCat !== "ALL" && ` · Kategori: ${filterCat}`}
-                        {filterStatus !== "ALL" && ` · Status: ${filterStatus}`}
+                        Kelola dan pantau seluruh aset perusahaan
                     </p>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={load} style={outlineBtnStyle} title="Refresh"><RefreshCw size={15} /></button>
+                    <button onClick={load} style={{ height: 35, padding: "0 14px", background: "white", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)" }}>
+                        <RefreshCw size={14} /> Refresh
+                    </button>
                     <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
                         <Plus size={15} /> Tambah Aset
                     </button>
                 </div>
             </div>
 
-            {/* Filter bar */}
+            {/* Stats Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+                <StatCard icon={<Package size={20} />}      label="Total Aset"   value={stats.total}       bg="#eef2ff"  color="#6366f1" />
+                <StatCard icon={<CheckCircle size={20} />}  label="Tersedia"     value={stats.available}   bg="#d1fae5"  color="#10b981" />
+                <StatCard icon={<TrendingUp size={20} />}   label="Digunakan"    value={stats.inUse}       bg="#dbeafe"  color="#3b82f6" />
+                <StatCard icon={<Wrench size={20} />}       label="Perbaikan"    value={stats.maintenance} bg="#fef3c7"  color="#f59e0b" />
+                <StatCard icon={<AlertCircle size={20} />}  label="Kondisi Rusak" value={stats.rusak}      bg="#fee2e2"  color="#ef4444" />
+            </div>
+
+            {/* Quick filter pills berdasarkan kategori */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Kategori:</span>
+                <FilterPill label="Semua" active={filterCat === "ALL" && filterStatus === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("ALL"); }} count={stats.total} />
+                <FilterPill label="Handphone" icon={<Smartphone size={12} />} active={filterCat === "HANDPHONE"} onClick={() => { setFilterCat("HANDPHONE"); setFilterStatus("ALL"); }} count={byCat.HANDPHONE} />
+                <FilterPill label="Laptop" icon={<Laptop size={12} />} active={filterCat === "LAPTOP"} onClick={() => { setFilterCat("LAPTOP"); setFilterStatus("ALL"); }} count={byCat.LAPTOP} />
+                <FilterPill label="Nomor Indosat" icon={<Phone size={12} />} active={filterCat === "NOMOR_HP"} onClick={() => { setFilterCat("NOMOR_HP"); setFilterStatus("ALL"); }} count={byCat.NOMOR_HP} />
+                <div style={{ width: 1, height: 20, background: "var(--border)", margin: "0 4px" }} />
+                <FilterPill label="Stok Tersedia" icon={<CheckCircle size={12} />} active={filterStatus === "AVAILABLE" && filterCat === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("AVAILABLE"); }} count={stats.available} />
+            </div>
+
+            {/* Search + Select Filters */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
                     <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
@@ -571,7 +746,7 @@ function AssetsPageInner() {
                                             <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                                 <HolderIcon holderType={a.holderType} />
                                                 <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal" }}>
-                                                    {a.assignedToName ?? "GA Pool"}
+                                                    {a.assignedToName ?? "GA"}
                                                 </span>
                                             </span>
                                         </td>

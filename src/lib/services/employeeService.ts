@@ -17,9 +17,24 @@ export async function getEmployees(): Promise<Employee[]> {
 export async function getVisibleEmployees(requester: Employee): Promise<Employee[]> {
     const { level, employeeId, department, division, role } = requester;
 
-    // CEO and HR can see everyone
+    // CEO, HR, and GA can see all active employees
     if (level === "CEO" || level === "HR" || role === "hr") {
         return getEmployees();
+    }
+
+    // GA sees all active employees (for asset assignment dropdown)
+    if (role === "ga") {
+        const rows = await prisma.employee.findMany({
+            where: { isActive: true },
+            include: {
+                locations: { select: { id: true, name: true } },
+                payrollComponents: { include: { component: true } },
+                manager: true,
+                subordinates: true,
+            },
+            orderBy: { name: "asc" },
+        });
+        return rows as unknown as Employee[];
     }
 
     // GM sees everyone in their department

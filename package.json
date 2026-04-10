@@ -13,7 +13,7 @@
     "db:seed": "prisma db seed",
     "db:seed:assets": "npx tsx prisma/seedAssets.ts",
     "db:seed:ga": "npx tsx prisma/seedGA.ts",
-    "db:reset": "prisma db push --force-reset && npm run db:seed && npm run db:seed:assets && npm run db:seed:ga",
+    "db:reset": "prisma db push --force-reset && npm run db:seed",
     "db:studio": "prisma studio"
   },
   "prisma": {

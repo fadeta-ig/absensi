@@ -138,9 +138,9 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                                                 <div>
                                                     <span style={{ fontWeight: 600 }}>{actionLabel[h.action] ?? h.action}</span>
                                                     <p style={{ color: "var(--text-muted)", marginTop: 3, fontSize: 12 }}>
-                                                        <span style={{ color: "#6b7280" }}>{h.fromName ?? "GA Pool"}</span>
+                                                        <span style={{ color: "#6b7280" }}>{h.fromName ?? "GA"}</span>
                                                         {" → "}
-                                                        <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{h.toName ?? "GA Pool"}</span>
+                                                        <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{h.toName ?? "GA"}</span>
                                                     </p>
                                                     {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>"{h.notes}"</p>}
                                                 </div>
@@ -391,7 +391,7 @@ function HrAssetsPageInner() {
                                                 <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                                     <HolderIcon holderType={a.holderType} />
                                                     <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal" }}>
-                                                        {a.assignedToName ?? "Di GA"}
+                                                        {a.assignedToName ?? "GA"}
                                                     </span>
                                                 </span>
                                             </td>
