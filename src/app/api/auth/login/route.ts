@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, loginSchema);
         if ("error" in result) return result.error;
 
-        const { employeeId, password } = result.data;
+        const { employeeId, password, rememberMe } = result.data;
 
         const employee = await verifyLogin(employeeId, password);
         if (!employee) {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        await createSession(employee);
+        await createSession(employee, rememberMe);
 
         return NextResponse.json({
             success: true,

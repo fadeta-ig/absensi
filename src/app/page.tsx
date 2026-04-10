@@ -9,6 +9,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -37,7 +38,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, password }),
+        body: JSON.stringify({ employeeId, password, rememberMe }),
         credentials: "same-origin",
       });
 
@@ -145,6 +146,20 @@ export default function LoginPage() {
                   disabled={loading}
                 />
               </div>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                id="rememberMe"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 text-[var(--primary)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--primary)] focus:ring-2"
+                disabled={loading}
+              />
+              <label htmlFor="rememberMe" className="ml-2 text-sm font-medium text-[var(--text-secondary)] select-none">
+                Ingat Saya
+              </label>
             </div>
 
             <button

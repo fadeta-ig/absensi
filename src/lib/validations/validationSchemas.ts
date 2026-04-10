@@ -5,6 +5,7 @@ import { z } from "zod";
 export const loginSchema = z.object({
     employeeId: z.string().min(1, "ID Karyawan harus diisi"),
     password: z.string().min(1, "Password harus diisi"),
+    rememberMe: z.boolean().optional(),
 });
 
 export const changePasswordSchema = z.object({

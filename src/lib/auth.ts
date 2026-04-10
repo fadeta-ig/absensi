@@ -27,7 +27,10 @@ export interface SessionPayload {
 /**
  * Create a new session and set the JWT token as an httpOnly cookie.
  */
-export async function createSession(employee: Employee): Promise<void> {
+export async function createSession(employee: Employee, rememberMe: boolean = false): Promise<void> {
+    const expiresIn = rememberMe ? "30d" : "8h";
+    const maxAge = rememberMe ? 30 * 24 * 60 * 60 : 8 * 60 * 60;
+
     const token = await new SignJWT({
         id: employee.id,
         employeeId: employee.employeeId,
@@ -37,7 +40,7 @@ export async function createSession(employee: Employee): Promise<void> {
     } satisfies SessionPayload)
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
-        .setExpirationTime("8h")
+        .setExpirationTime(expiresIn)
         .sign(SECRET);
 
     const cookieStore = await cookies();
@@ -45,7 +48,7 @@ export async function createSession(employee: Employee): Promise<void> {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 8 * 60 * 60,
+        maxAge: maxAge,
         path: "/",
     });
 }
