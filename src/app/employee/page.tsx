@@ -61,14 +61,16 @@ export default function EmployeeHomePage() {
                             {currentTime.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                         </p>
                     </div>
-                    <div className="text-right flex flex-col items-end gap-2">
+                    <div className="text-right">
                         <p className="text-3xl font-extrabold font-mono tabular-nums">
                             {currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </p>
-                        <PushNotificationManager />
                     </div>
                 </div>
             </div>
+
+            {/* Notification CTA Banner */}
+            <PushNotificationManager />
 
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
