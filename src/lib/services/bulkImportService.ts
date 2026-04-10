@@ -16,7 +16,7 @@ const bulkRowSchema = z.object({
     division: z.string().nullable().optional(),
     position: z.string().min(1, "Posisi wajib diisi"),
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee / hr / ga" }),
-    level: z.string().min(1, "Level wajib diisi"),
+    level: z.string().optional(),
     joinDate: z.string().min(1, "Tanggal bergabung wajib diisi"),
     basicSalary: z.number().min(0).optional().default(0),
     totalLeave: z.number().min(0).optional().default(12),
@@ -55,7 +55,6 @@ const COLUMN_MAP: Record<string, keyof BulkRowInput> = {
     "Divisi": "division",
     "Posisi": "position",
     "Role": "role",
-    "Level": "level",
     "Tanggal Bergabung": "joinDate",
     "Gaji Pokok": "basicSalary",
     "Cuti Tahunan": "totalLeave",
@@ -139,13 +138,12 @@ export async function validateImport(buffer: ArrayBuffer): Promise<ValidationRep
     const [departments, divisions, positions, existingEmployees] = await Promise.all([
         prisma.department.findMany({ where: { isActive: true }, select: { name: true } }),
         prisma.division.findMany({ where: { isActive: true }, select: { name: true } }),
-        prisma.position.findMany({ where: { isActive: true }, select: { name: true } }),
+        prisma.position.findMany({ where: { isActive: true }, select: { name: true, level: true } }),
         prisma.employee.findMany({ select: { employeeId: true, email: true } }),
     ]);
 
-    const deptNames = new Set(departments.map(d => d.name));
-    const divNames = new Set(divisions.map(d => d.name));
-    const posNames = new Set(positions.map(p => p.name));
+    const deptNames = new Set(departments.map(d => d.name.toLowerCase()));
+    const divNames = new Set(divisions.map(d => d.name.toLowerCase()));
     const existingIds = new Set(existingEmployees.map(e => e.employeeId));
     const existingEmails = new Set(existingEmployees.map(e => e.email.toLowerCase()));
 
@@ -196,17 +194,20 @@ export async function validateImport(buffer: ArrayBuffer): Promise<ValidationRep
         }
 
         // Referential checks
-        if (!deptNames.has(row.department)) {
+        if (!deptNames.has(row.department.toLowerCase())) {
             errors.push({ row: rowNum, field: "department", message: `Departemen "${row.department}" tidak ada di master data.` });
             hasError = true;
         }
-        if (row.division && !divNames.has(row.division)) {
+        if (row.division && !divNames.has(row.division.toLowerCase())) {
             errors.push({ row: rowNum, field: "division", message: `Divisi "${row.division}" tidak ada di master data.` });
             hasError = true;
         }
-        if (!posNames.has(row.position)) {
+        const posRecord = positions.find(p => p.name.toLowerCase() === row.position.toLowerCase());
+        if (!posRecord) {
             errors.push({ row: rowNum, field: "position", message: `Posisi "${row.position}" tidak ada di master data.` });
             hasError = true;
+        } else {
+            row.level = posRecord.level || "STAFF"; // Silently set the correct level from master data!
         }
         if (row.managerId && !existingIds.has(row.managerId) && !fileIds.has(row.managerId)) {
             errors.push({ row: rowNum, field: "managerId", message: `Atasan ID "${row.managerId}" tidak ditemukan.` });
@@ -324,7 +325,6 @@ export async function generateTemplate(): Promise<Buffer> {
         "Divisi": divisions[0]?.name ?? "",
         "Posisi": positions[0]?.name ?? "Staff",
         "Role": "employee",
-        "Level": "STAFF",
         "Tanggal Bergabung": "2026-01-15",
         "Gaji Pokok": 5000000,
         "Cuti Tahunan": 12,
@@ -363,13 +363,8 @@ export async function generateTemplate(): Promise<Buffer> {
             type: "list", allowBlank: false, formulae: ['Panduan!$E$2:$E$1000'],
             showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih role dari daftar panduan"
         };
-        // Level (J) -> Panduan F2:F1000
-        ws.getCell(`J${i}`).dataValidation = {
-            type: "list", allowBlank: false, formulae: ['Panduan!$F$2:$F$1000'],
-            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih level dari daftar panduan"
-        };
-        // Status Aktif (O) -> Panduan G2:G1000
-        ws.getCell(`O${i}`).dataValidation = {
+        // Status Aktif (N) -> Panduan G2:G1000
+        ws.getCell(`N${i}`).dataValidation = {
             type: "list", allowBlank: true, formulae: ['Panduan!$G$2:$G$1000'],
             showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih status aktif dari daftar panduan"
         };
