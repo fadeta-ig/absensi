@@ -266,7 +266,7 @@ function generateGuideline() {
     y = addSubHeader(doc, "Langkah-langkah Login", y);
     y = addNumbered(doc, [
         "Buka aplikasi WIG Attendance di browser.",
-        "Masukkan ID Karyawan (contoh: WIG001) pada kolom yang tersedia.",
+        "Masukkan ID Karyawan (contoh: ID25000001) pada kolom yang tersedia.",
         "Masukkan Password yang telah diberikan oleh HR.",
         "Klik tombol \"Masuk\".",
         "Sistem akan secara otomatis mengarahkan ke halaman yang sesuai:",

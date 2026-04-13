@@ -316,7 +316,7 @@ export async function generateTemplate(): Promise<Buffer> {
 
     // Add Example Row
     const exampleRow = ws.addRow({
-        "ID Karyawan": "WIG-000 (HAPUS BARIS INI)",
+        "ID Karyawan": "ID25000000 (HAPUS BARIS INI)",
         "Nama": "Budi Santoso",
         "Email": "budi@company.com",
         "No. Telepon": "081234567890",

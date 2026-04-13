@@ -8,8 +8,14 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+/** Generate unique ID format: ID25 + 6 digit angka random (total 10 karakter) */
+function generateID25(): string {
+    const digits = Math.floor(Math.random() * 1_000_000).toString().padStart(6, "0");
+    return `ID25${digits}`;
+}
+
 async function main() {
-    const GA_EMPLOYEE_ID = "WIG003";
+    const GA_EMPLOYEE_ID = generateID25();
     const GA_PASSWORD = "123";   // ← bisa diganti
 
     // Cek apakah sudah ada

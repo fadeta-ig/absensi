@@ -293,23 +293,59 @@ async function main() {
     });
     console.log(`✅ WorkShift: ${shift.name}`);
 
-    // ── 3. Positions ─────────────────────────────────────────────────────────
-    await prisma.position.create({ data: { name: "Staff", level: "STAFF" } });
-    await prisma.position.create({ data: { name: "Supervisor", level: "SUPERVISOR" } });
-    await prisma.position.create({ data: { name: "Manager", level: "MANAGER" } });
-    await prisma.position.create({ data: { name: "General Manager", level: "GM" } });
-    await prisma.position.create({ data: { name: "CEO", level: "CEO" } });
-    console.log("✅ Positions seeded");
+    // ── 3. Master Data (Division, Department, Position) ──────────────────────
+    const divisionsSet = new Set<string>();
+    const departmentsMap = new Map<string, string>(); // department -> division
+    const positionsMap = new Map<string, string>(); // position -> level
+
+    // Add admin data requirements
+    divisionsSet.add("HRGA & IT");
+    divisionsSet.add("Operation and Supply Chain Management");
+    departmentsMap.set("HRGA & IT", "HRGA & IT");
+    positionsMap.set("Manager", "MANAGER");
+    positionsMap.set("Staff", "STAFF");
+
+    for (const k of KARYAWAN) {
+        divisionsSet.add(k.div);
+        departmentsMap.set(k.dept, k.div);
+        positionsMap.set(k.jabatan, getLevel(k.jabatan));
+    }
+
+    // Seed Divisions
+    for (const div of divisionsSet) {
+        await prisma.division.create({ data: { name: div, isActive: true } });
+    }
+    console.log(`✅ Divisions seeded: ${divisionsSet.size}`);
+
+    // Seed Departments
+    for (const [dept, div] of departmentsMap) {
+        const divisionRecord = await prisma.division.findUnique({ where: { name: div } });
+        if (divisionRecord) {
+            await prisma.department.create({
+                data: { name: dept, isActive: true, divisionId: divisionRecord.id },
+            });
+        }
+    }
+    console.log(`✅ Departments seeded: ${departmentsMap.size}`);
+
+    // Seed Positions
+    for (const [pos, level] of positionsMap) {
+        await prisma.position.create({
+            data: { name: pos, level, isActive: true },
+        });
+    }
+    console.log(`✅ Positions seeded: ${positionsMap.size}`);
 
     // ── 4. Employees ─────────────────────────────────────────────────────────
     const hashedDefault = await bcrypt.hash("wig-absensi-default-pass", 10);
     const hashedAdmin = await bcrypt.hash("123", 10);
 
-    // WIG001 — Admin HR (akun sistem)
+    // Admin HR (akun sistem — ID auto-generated)
+    const adminHrId = generateID25();
     await prisma.employee.create({
         data: {
             id: "emp-001",
-            employeeId: "WIG001",
+            employeeId: adminHrId,
             name: "Admin HR",
             email: "hr@wig.co.id",
             phone: "",
@@ -327,11 +363,12 @@ async function main() {
         },
     });
 
-    // WIG002 — Admin GA (akun sistem)
+    // Admin GA (akun sistem — ID auto-generated)
+    const adminGaId = generateID25();
     await prisma.employee.create({
         data: {
             id: "emp-002",
-            employeeId: "WIG002",
+            employeeId: adminGaId,
             name: "Admin GA",
             email: "ga@wig.co.id",
             phone: "",
@@ -349,7 +386,7 @@ async function main() {
         },
     });
 
-    // WIG003–WIG049 — Karyawan nyata dari database_karyawan.json
+    // Karyawan nyata dari database_karyawan.json (ID auto-generated)
     const empNames: string[] = [];
     for (let i = 0; i < KARYAWAN.length; i++) {
         const k = KARYAWAN[i];
@@ -379,7 +416,7 @@ async function main() {
         empNames.push(`${empId}: ${k.name}`);
     }
 
-    console.log(`✅ Employees seeded: WIG001 (Admin HR), WIG002 (Admin GA), + ${KARYAWAN.length} karyawan aktif`);
+    console.log(`✅ Employees seeded: ${adminHrId} (Admin HR), ${adminGaId} (Admin GA), + ${KARYAWAN.length} karyawan aktif`);
 
     // ── 5. News ──────────────────────────────────────────────────────────────
     await prisma.newsItem.create({

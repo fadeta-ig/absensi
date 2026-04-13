@@ -224,7 +224,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
                                 <label className="form-label">ID Karyawan</label>
-                                <input className="form-input" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} placeholder="WIG001" required />
+                                <input className="form-input" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} placeholder="ID25000001" required />
                             </div>
                             <div className="form-group !mb-0">
                                 <label className="form-label">Nama Lengkap</label>
