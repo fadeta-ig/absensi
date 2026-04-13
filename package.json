@@ -11,12 +11,14 @@
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:seed:dev": "npx tsx prisma/seedDev.ts",
     "db:seed:hr": "npx tsx prisma/seedHR.ts",
     "db:seed:ga": "npx tsx prisma/seedGA.ts",
     "db:seed:employee": "npx tsx prisma/seedEmployee.ts",
     "db:seed:assets": "npx tsx prisma/seedAssets.ts",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "db:reset:only": "prisma db push --force-reset",
+    "db:reset:dev": "prisma db push --force-reset && npm run db:seed:dev",
     "db:studio": "prisma studio"
   },
   "prisma": {
