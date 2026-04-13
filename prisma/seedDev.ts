@@ -6,7 +6,7 @@
  *  - Akun HR Admin  : WIG001 / 123
  *  - Akun GA Admin  : WIG002 / 123
  *  - TIDAK ada karyawan (gunakan: npm run db:seed:employee)
- *  - Aset dummy sedikit (HP, Laptop, Nomor)
+ *  - TIDAK ada aset
  *
  * Jalankan: npx tsx prisma/seedDev.ts
  * atau    : npm run db:seed:dev
@@ -156,79 +156,11 @@ async function main() {
     });
     console.log("✅ News: 1 item");
 
-    // ── 6. Dummy Assets ──────────────────────────────────────────────────────
-    // Handphone — 3 item
-    const hp = [
-        { code: "HP-001", name: "iPhone 13 128 GB",        holder: "EMPLOYEE", to: "Admin HR",    status: "IN_USE"   },
-        { code: "HP-002", name: "Samsung A05 4/128 GB",     holder: "GA_POOL",  to: null,          status: "AVAILABLE"},
-        { code: "HP-003", name: "Redmi 10C 4/64 GB",        holder: "EMPLOYEE", to: "Admin GA",    status: "IN_USE"   },
-    ];
-    for (const item of hp) {
-        await prisma.asset.create({
-            data: {
-                assetCode: item.code,
-                name: item.name,
-                category: "HANDPHONE",
-                kondisi: "BAIK",
-                status: item.status as never,
-                holderType: item.holder as never,
-                assignedToName: item.to,
-                assignedAt: item.to ? new Date("2024-01-01") : null,
-            },
-        });
-    }
-    console.log("✅ Aset Handphone: 3 item");
-
-    // Laptop — 3 item
-    const laptop = [
-        { code: "LT-001", name: "Lenovo Thinkpad L13 Yoga RAM 16GB SSD 512GB", holder: "EMPLOYEE", to: "Admin HR", status: "IN_USE" },
-        { code: "LT-002", name: "Macbook Air M1 2020 16/256 GB",                holder: "GA_POOL",  to: null,       status: "AVAILABLE" },
-        { code: "LT-003", name: "Acer Aspire 3 AMD Athlon Silver 8/256 GB",    holder: "GA_POOL",  to: null,       status: "MAINTENANCE", kondisi: "KURANG_BAIK" },
-    ];
-    for (const item of laptop) {
-        await prisma.asset.create({
-            data: {
-                assetCode: item.code,
-                name: item.name,
-                category: "LAPTOP",
-                kondisi: ((item as any).kondisi || "BAIK") as never,
-                status: item.status as never,
-                holderType: item.holder as never,
-                assignedToName: item.to,
-                assignedAt: item.to ? new Date("2024-01-01") : null,
-            },
-        });
-    }
-    console.log("✅ Aset Laptop: 3 item");
-
-    // Nomor HP — 2 item
-    const nomor = [
-        { code: "NUM-001", nomor: "0816334413", to: "Admin GA",  expired: new Date("2026-06-01") },
-        { code: "NUM-002", nomor: "0816777097", to: "Admin HR",  expired: new Date("2026-06-01") },
-    ];
-    for (const item of nomor) {
-        await prisma.asset.create({
-            data: {
-                assetCode: item.code,
-                name: `Nomor Indosat ${item.nomor}`,
-                category: "NOMOR_HP",
-                kondisi: "BAIK",
-                status: "IN_USE",
-                holderType: "EMPLOYEE",
-                assignedToName: item.to,
-                assignedAt: new Date("2024-01-01"),
-                nomorIndosat: item.nomor,
-                expiredDate: item.expired,
-            },
-        });
-    }
-    console.log("✅ Aset Nomor Indosat: 2 item");
-
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log("\n🎉 [DEV] Seeding selesai!");
     console.log("   👤 Akun    : WIG001 (HR Admin) · WIG002 (GA Admin)");
     console.log("   🔑 Password: 123 (semua akun)");
-    console.log("   📦 Aset    : 3 HP · 3 Laptop · 2 Nomor");
+    console.log("   📦 Aset    : tidak ada");
     console.log("\n💡 Tambah dummy karyawan: npm run db:seed:employee");
 }
 
