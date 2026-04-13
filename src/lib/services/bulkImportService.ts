@@ -316,14 +316,14 @@ export async function generateTemplate(): Promise<Buffer> {
 
     // Add Example Row
     const exampleRow = ws.addRow({
-        "ID Karyawan": "WIG-001",
+        "ID Karyawan": "WIG-000 (HAPUS BARIS INI)",
         "Nama": "Budi Santoso",
         "Email": "budi@company.com",
         "No. Telepon": "081234567890",
         "Jenis Kelamin": "Laki-Laki",
-        "Departemen": departments[0]?.name ?? "IT",
+        "Departemen": departments[0]?.name ?? "",
         "Divisi": divisions[0]?.name ?? "",
-        "Posisi": positions[0]?.name ?? "Staff",
+        "Posisi": positions[0]?.name ?? "",
         "Role": "employee",
         "Tanggal Bergabung": "2026-01-15",
         "Gaji Pokok": 5000000,
@@ -363,9 +363,9 @@ export async function generateTemplate(): Promise<Buffer> {
             type: "list", allowBlank: false, formulae: ['Panduan!$E$2:$E$1000'],
             showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih role dari daftar panduan"
         };
-        // Status Aktif (N) -> Panduan G2:G1000
+        // Status Aktif (N) -> Panduan F2:F1000
         ws.getCell(`N${i}`).dataValidation = {
-            type: "list", allowBlank: true, formulae: ['Panduan!$G$2:$G$1000'],
+            type: "list", allowBlank: true, formulae: ['Panduan!$F$2:$F$1000'],
             showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih status aktif dari daftar panduan"
         };
     }
@@ -379,7 +379,6 @@ export async function generateTemplate(): Promise<Buffer> {
         { header: "Posisi", key: "pos", width: 25 },
         { header: "Jenis Kelamin", key: "gender", width: 20 },
         { header: "Role", key: "role", width: 20 },
-        { header: "Level", key: "level", width: 20 },
         { header: "Status Aktif", key: "status", width: 20 },
     ];
     guideSheet.columns = guideColumns;
@@ -390,10 +389,9 @@ export async function generateTemplate(): Promise<Buffer> {
     guideHeaderRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3b82f6" } }; // Blue color
     guideHeaderRow.alignment = { vertical: "middle", horizontal: "center" };
 
-    const maxRows = Math.max(departments.length, divisions.length, positions.length, 6);
+    const maxRows = Math.max(departments.length, divisions.length, positions.length, 3);
     const genderVal = ["Laki-Laki", "Perempuan"];
     const roleVal = ["employee", "hr", "ga"];
-    const levelVal = ["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"];
     const statusVal = ["Ya", "Tidak"];
 
     for (let i = 0; i < maxRows; i++) {
@@ -403,7 +401,6 @@ export async function generateTemplate(): Promise<Buffer> {
             pos: positions[i]?.name ?? "",
             gender: genderVal[i] ?? "",
             role: roleVal[i] ?? "",
-            level: levelVal[i] ?? "",
             status: statusVal[i] ?? "",
         });
     }
