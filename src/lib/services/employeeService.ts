@@ -67,37 +67,24 @@ export async function getVisibleEmployees(requester: Employee): Promise<Employee
         return rows as unknown as Employee[];
     }
 
-    // Supervisor sees their direct subordinates
-    if (level === "SUPERVISOR") {
-        const rows = await prisma.employee.findMany({
-            where: {
-                OR: [
-                    { managerId: employeeId },
-                    { employeeId: employeeId }
-                ]
-            },
-            include: {
-                locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } },
-                manager: true,
-                subordinates: true
-            },
-            orderBy: { name: "asc" }
-        });
-        return rows as unknown as Employee[];
-    }
-
-    // Staff only sees themselves
-    const row = await prisma.employee.findUnique({
-        where: { employeeId },
+    // Custom levels, Supervisors, and Staff implicitly fall back to this:
+    // They can see themselves and any formal direct subordinates (Atasan Langsung).
+    const rows = await prisma.employee.findMany({
+        where: {
+            OR: [
+                { managerId: employeeId },
+                { employeeId: employeeId }
+            ]
+        },
         include: {
             locations: { select: { id: true, name: true } },
             payrollComponents: { include: { component: true } },
             manager: true,
             subordinates: true
-        }
+        },
+        orderBy: { name: "asc" }
     });
-    return row ? [row as unknown as Employee] : [];
+    return rows as unknown as Employee[];
 }
 
 export async function getEmployeeById(id: string): Promise<Employee | undefined> {

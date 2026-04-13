@@ -779,18 +779,25 @@ export default function MasterDataPage() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="form-group">
                                             <label className="form-label">Level Organisasi</label>
-                                            <select
-                                                className="form-select"
+                                            <input
+                                                list="level-options"
+                                                className="form-input"
+                                                placeholder="Ketik level baru atau pilih"
                                                 value={posForm.level}
                                                 onChange={(e) => setPosForm({ ...posForm, level: e.target.value })}
-                                            >
+                                                required
+                                            />
+                                            <datalist id="level-options">
                                                 <option value="STAFF">Staff (Level 1)</option>
                                                 <option value="SUPERVISOR">Supervisor (Level 2)</option>
                                                 <option value="MANAGER">Manager (Level 3)</option>
                                                 <option value="GM">General Manager (Level 4)</option>
                                                 <option value="HR">HR (Level 5)</option>
                                                 <option value="CEO">CEO (Level 5)</option>
-                                            </select>
+                                                {Array.from(new Set(positions.map(p => p.level))).filter(l => !["STAFF", "SUPERVISOR", "MANAGER", "GM", "HR", "CEO"].includes(l)).map(l => (
+                                                    <option key={l} value={l} />
+                                                ))}
+                                            </datalist>
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Status</label>
