@@ -1,6 +1,6 @@
 /**
- * seedGA.ts — Buat akun GA (General Affairs) pertama
- * Jalankan: npx tsx prisma/seedGA.ts
+ * seedHR.ts — Buat akun HR Administrator pertama
+ * Jalankan: npx tsx prisma/seedHR.ts
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -9,34 +9,34 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-    const GA_EMPLOYEE_ID = "WIG002";
-    const GA_PASSWORD = "123";   // ← bisa diganti
+    const HR_EMPLOYEE_ID = "WIG001";
+    const HR_PASSWORD = "123";   // ← bisa diganti
 
     // Cek apakah sudah ada
     const existing = await prisma.employee.findUnique({
-        where: { employeeId: GA_EMPLOYEE_ID },
+        where: { employeeId: HR_EMPLOYEE_ID },
     });
 
     if (existing) {
-        console.log(`⚠️  Akun GA sudah ada: ${GA_EMPLOYEE_ID}`);
+        console.log(`⚠️  Akun HR Admin sudah ada: ${HR_EMPLOYEE_ID}`);
         console.log(`   Role: ${existing.role}`);
         await prisma.$disconnect();
         return;
     }
 
-    const hashedPassword = await bcrypt.hash(GA_PASSWORD, 12);
+    const hashedPassword = await bcrypt.hash(HR_PASSWORD, 12);
 
-    const ga = await prisma.employee.create({
+    const hr = await prisma.employee.create({
         data: {
-            employeeId: GA_EMPLOYEE_ID,
-            name: "Admin GA",
-            email: "ga@wig.co.id",
+            employeeId: HR_EMPLOYEE_ID,
+            name: "Admin HR",
+            email: "hr@wig.co.id",
             phone: "",
             department: "HRGA & IT",
-            division: "Operation and Supply Chain Management",
-            position: "General Affairs Staff",
-            role: "ga",
-            level: "STAFF",
+            division: "HRGA & IT",
+            position: "Manager",
+            role: "hr",
+            level: "MANAGER",
             password: hashedPassword,
             joinDate: new Date(),
             isActive: true,
@@ -44,14 +44,14 @@ async function main() {
         },
     });
 
-    console.log("\n✅ Akun GA berhasil dibuat!\n");
+    console.log("\n✅ Akun HR Admin berhasil dibuat!\n");
     console.log("┌─────────────────────────────────────┐");
-    console.log(`│  Employee ID : ${ga.employeeId.padEnd(21)} │`);
-    console.log(`│  Password    : ${GA_PASSWORD.padEnd(21)} │`);
-    console.log(`│  Role        : ${"ga".padEnd(21)} │`);
+    console.log(`│  Employee ID : ${hr.employeeId.padEnd(21)} │`);
+    console.log(`│  Password    : ${HR_PASSWORD.padEnd(21)} │`);
+    console.log(`│  Role        : ${"hr".padEnd(21)} │`);
     console.log(`│  Portal      : http://localhost:3000 │`);
     console.log("└─────────────────────────────────────┘");
-    console.log("\n👉 Login dari halaman biasa → otomatis redirect ke /ga");
+    console.log("\n👉 Login → otomatis redirect ke /dashboard");
 
     await prisma.$disconnect();
 }

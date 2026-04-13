@@ -340,12 +340,11 @@ async function main() {
     const hashedDefault = await bcrypt.hash("wig-absensi-default-pass", 10);
     const hashedAdmin = await bcrypt.hash("123", 10);
 
-    // Admin HR (akun sistem — ID auto-generated)
-    const adminHrId = generateID25();
+    // Admin HR (akun sistem — WIG001)
     await prisma.employee.create({
         data: {
             id: "emp-001",
-            employeeId: adminHrId,
+            employeeId: "WIG001",
             name: "Admin HR",
             email: "hr@wig.co.id",
             phone: "",
@@ -363,12 +362,11 @@ async function main() {
         },
     });
 
-    // Admin GA (akun sistem — ID auto-generated)
-    const adminGaId = generateID25();
+    // Admin GA (akun sistem — WIG002)
     await prisma.employee.create({
         data: {
             id: "emp-002",
-            employeeId: adminGaId,
+            employeeId: "WIG002",
             name: "Admin GA",
             email: "ga@wig.co.id",
             phone: "",
@@ -416,7 +414,7 @@ async function main() {
         empNames.push(`${empId}: ${k.name}`);
     }
 
-    console.log(`✅ Employees seeded: ${adminHrId} (Admin HR), ${adminGaId} (Admin GA), + ${KARYAWAN.length} karyawan aktif`);
+    console.log(`✅ Employees seeded: WIG001 (Admin HR), WIG002 (Admin GA), + ${KARYAWAN.length} karyawan aktif`);
 
     // ── 5. News ──────────────────────────────────────────────────────────────
     await prisma.newsItem.create({
