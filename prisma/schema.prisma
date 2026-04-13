@@ -16,6 +16,10 @@ model Employee {
   department        String
   division          String?
   position          String
+
+  departmentRel     Department                 @relation("EmployeeDepartment", fields: [department], references: [name], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel       Division?                  @relation("EmployeeDivision", fields: [division], references: [name], onDelete: Restrict, onUpdate: Cascade)
+  positionRel       Position                   @relation("EmployeePosition", fields: [position], references: [name], onDelete: Restrict, onUpdate: Cascade)
   role              String                     @default("employee")
   gender            String                     @default("Laki-Laki")
   password          String
@@ -213,6 +217,7 @@ model Department {
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   division    Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  employees   Employee[] @relation("EmployeeDepartment")
 
   @@index([divisionId], map: "departments_division_id_fkey")
   @@map("departments")
@@ -224,6 +229,7 @@ model Division {
   isActive    Boolean      @default(true) @map("is_active")
   createdAt   DateTime     @default(now()) @map("created_at")
   departments Department[]
+  employees   Employee[]   @relation("EmployeeDivision")
 
   @@map("divisions")
 }
@@ -234,6 +240,7 @@ model Position {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   level     String   @default("STAFF")
+  employees Employee[] @relation("EmployeePosition")
 
   @@map("positions")
 }
