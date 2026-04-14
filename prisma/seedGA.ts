@@ -1,6 +1,8 @@
 /**
  * seedGA.ts — Buat akun GA (General Affairs) pertama
  * Jalankan: npx tsx prisma/seedGA.ts
+ *
+ * Otomatis membuat Division, Department, Position jika belum ada.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -8,9 +10,42 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+async function ensureReferenceData() {
+    // 1. Division
+    const div = await prisma.division.upsert({
+        where: { name: "Operation and Supply Chain Management" },
+        update: {},
+        create: { name: "Operation and Supply Chain Management" },
+    });
+
+    // 2. Department — reuse HRGA & IT division if needed
+    const hrgaDiv = await prisma.division.upsert({
+        where: { name: "HRGA & IT" },
+        update: {},
+        create: { name: "HRGA & IT" },
+    });
+
+    await prisma.department.upsert({
+        where: { name: "HRGA & IT" },
+        update: {},
+        create: { name: "HRGA & IT", divisionId: hrgaDiv.id },
+    });
+
+    // 3. Position
+    await prisma.position.upsert({
+        where: { name: "General Affairs Staff" },
+        update: {},
+        create: { name: "General Affairs Staff", level: "STAFF" },
+    });
+
+    console.log("✅ Reference data (Division/Department/Position) ready.");
+}
+
 async function main() {
     const GA_EMPLOYEE_ID = "WIG002";
-    const GA_PASSWORD = "123";   // ← bisa diganti
+    const GA_PASSWORD = "GAAdmin@123";
+
+    await ensureReferenceData();
 
     // Cek apakah sudah ada
     const existing = await prisma.employee.findUnique({

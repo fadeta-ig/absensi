@@ -1,6 +1,8 @@
 /**
  * seedHR.ts — Buat akun HR Administrator pertama
  * Jalankan: npx tsx prisma/seedHR.ts
+ *
+ * Otomatis membuat Division, Department, Position jika belum ada.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -8,9 +10,36 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+async function ensureReferenceData() {
+    // 1. Division
+    const div = await prisma.division.upsert({
+        where: { name: "HRGA & IT" },
+        update: {},
+        create: { name: "HRGA & IT" },
+    });
+
+    // 2. Department (FK → Division)
+    await prisma.department.upsert({
+        where: { name: "HRGA & IT" },
+        update: {},
+        create: { name: "HRGA & IT", divisionId: div.id },
+    });
+
+    // 3. Position
+    await prisma.position.upsert({
+        where: { name: "Manager" },
+        update: {},
+        create: { name: "Manager", level: "MANAGER" },
+    });
+
+    console.log("✅ Reference data (Division/Department/Position) ready.");
+}
+
 async function main() {
     const HR_EMPLOYEE_ID = "WIG001";
-    const HR_PASSWORD = "123";   // ← bisa diganti
+    const HR_PASSWORD = "HRAdmin@123";
+
+    await ensureReferenceData();
 
     // Cek apakah sudah ada
     const existing = await prisma.employee.findUnique({
