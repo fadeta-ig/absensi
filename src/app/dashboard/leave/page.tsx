@@ -16,6 +16,7 @@ import {
     LayoutDashboard,
     Loader2
 } from "lucide-react";
+import { formatIndonesianDate } from "@/lib/utils";
 
 interface LeaveRequest {
     id: string;
@@ -72,7 +73,29 @@ export default function LeaveManagementPage() {
         setSelectedLeave(l);
         setEditStartDate(l.startDate);
         setEditEndDate(l.endDate);
+        setEditEndDate(l.endDate);
         setIsModalOpen(true);
+    };
+
+    const handleQuickAction = async (l: LeaveRequest, status: string) => {
+        setIsUpdating(true);
+        try {
+            const res = await fetch("/api/leave", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: l.id,
+                    status,
+                    startDate: l.startDate,
+                    endDate: l.endDate,
+                }),
+            });
+            if (res.ok) {
+                await fetchLeaves();
+            }
+        } finally {
+            setIsUpdating(false);
+        }
     };
 
     const handleUpdate = async (id: string, status: string) => {
@@ -239,10 +262,15 @@ export default function LeaveManagementPage() {
                                                 <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] rounded-full text-[var(--text-secondary)] font-medium">
                                                     {days} Hari
                                                 </span>
+                                                {l.employee && (
+                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] ml-auto md:ml-0">
+                                                        Sisa: {l.employee.totalLeave - l.employee.usedLeave} Cuti
+                                                    </span>
+                                                )}
                                             </div>
-                                            <p className="text-sm text-[var(--text-secondary)] flex items-center gap-1.5">
+                                            <p className="text-xs sm:text-sm text-[var(--text-secondary)] flex items-center gap-1.5">
                                                 <Calendar className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                                                {l.startDate} — {l.endDate}
+                                                {formatIndonesianDate(l.startDate)} — {formatIndonesianDate(l.endDate)}
                                             </p>
                                             <p className="text-xs text-[var(--text-muted)] truncate">{l.reason}</p>
                                             <p className="text-[10px] text-[var(--text-muted)]">
@@ -259,6 +287,26 @@ export default function LeaveManagementPage() {
                                             >
                                                 <Paperclip className="w-3.5 h-3.5" />
                                             </button>
+                                        )}
+                                        {l.status === "pending" && (
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    onClick={() => handleQuickAction(l, "approved")}
+                                                    disabled={isUpdating}
+                                                    className="btn btn-success btn-sm !px-2"
+                                                    title="Setujui Cuti"
+                                                >
+                                                    <Check className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Setujui</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleQuickAction(l, "rejected")}
+                                                    disabled={isUpdating}
+                                                    className="btn btn-danger btn-sm !px-2"
+                                                    title="Tolak Cuti"
+                                                >
+                                                    <X className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Tolak</span>
+                                                </button>
+                                            </div>
                                         )}
                                         <button
                                             onClick={() => handleOpenDetail(l)}

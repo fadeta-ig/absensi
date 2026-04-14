@@ -43,6 +43,24 @@ export function toDateDisplay(d: Date | string | null | undefined): string {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
 }
 
+/** 
+ * Format Date/string → "Senin, 12 Agustus 2024" (Indonesian locale)
+ * Useful for clearly surfacing days in the leave management UI.
+ */
+export function formatIndonesianDate(d: Date | string | null | undefined): string {
+    if (!d) return "-";
+    const date = d instanceof Date ? d : new Date(d);
+    if (isNaN(date.getTime())) return "-";
+    
+    return new Intl.DateTimeFormat("id-ID", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "Asia/Jakarta"
+    }).format(date);
+}
+
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters
   const phi1 = (lat1 * Math.PI) / 180;

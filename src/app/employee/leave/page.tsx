@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { formatIndonesianDate } from "@/lib/utils";
 
 interface LeaveRequest {
     id: string;
@@ -224,7 +225,7 @@ export default function LeavePage() {
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between text-sm font-semibold text-[var(--text-primary)]">
-                                            <span>{l.startDate} — {l.endDate}</span>
+                                            <span className="text-xs sm:text-sm">{formatIndonesianDate(l.startDate)} — {formatIndonesianDate(l.endDate)}</span>
                                             <span className="text-[10px] text-[var(--text-muted)] bg-[var(--secondary)] px-2 py-0.5 rounded-full">
                                                 {Math.ceil((new Date(l.endDate).getTime() - new Date(l.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} Hari
                                             </span>
