@@ -47,12 +47,11 @@ export const employeeCreateSchema = z.object({
     name: z.string().min(1, "Nama harus diisi"),
     email: z.string().email("Format email tidak valid"),
     phone: z.string().min(1, "Nomor telepon harus diisi"),
-    department: z.string().min(1, "Departemen harus diisi"),
-    division: z.string().nullable().optional(),
-    position: z.string().min(1, "Posisi harus diisi"),
+    departmentId: z.string().min(1, "Department ID harus diisi"),
+    divisionId: z.string().nullable().optional(),
+    positionId: z.string().min(1, "Position ID harus diisi"),
     gender: z.enum(["Laki-Laki", "Perempuan"]).default("Laki-Laki"),
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee, hr, atau ga" }),
-    level: z.string().min(1, "Level wajib diisi"),
     managerId: z.string().nullable().optional(),
     joinDate: z.string().min(1, "Tanggal bergabung harus diisi"),
     isActive: z.boolean().optional().default(true),
@@ -75,13 +74,12 @@ export const employeeUpdateSchema = z.object({
     name: z.string().min(1).optional(),
     email: z.string().email("Format email tidak valid").optional(),
     phone: z.string().min(1).optional(),
-    department: z.string().min(1).optional(),
-    division: z.string().nullable().optional(),
-    position: z.string().min(1).optional(),
+    departmentId: z.string().min(1).optional(),
+    divisionId: z.string().nullable().optional(),
+    positionId: z.string().min(1).optional(),
     gender: z.enum(["Laki-Laki", "Perempuan"]).optional(),
-    // Role & Level — hanya HR yang bisa ubah (enforced di API route)
+    // Role — hanya HR yang bisa ubah (enforced di API route)
     role: z.enum(["employee", "hr", "ga"]).optional(),
-    level: z.string().optional(),
     managerId: z.string().nullable().optional(),
     // Kepegawaian
     joinDate: z.string().optional(),
@@ -125,6 +123,14 @@ export const leaveUpdateSchema = z.object({
     reason: z.string().optional(),
     attachment: z.string().nullable().optional(),
     // ⛔ employeeId tidak bisa diubah via update
+}).refine(data => {
+    if (data.startDate && data.endDate) {
+        return new Date(data.endDate) >= new Date(data.startDate);
+    }
+    return true;
+}, {
+    message: "Tanggal selesai tidak boleh sebelum tanggal mulai",
+    path: ["endDate"]
 });
 
 /* ───────────────────── Overtime ───────────────────── */

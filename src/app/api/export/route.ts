@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         const daysInMonth = new Date(year, month, 0).getDate();
 
         const employees = await prisma.employee.findMany({
-            select: { employeeId: true, name: true, department: true, position: true },
+            select: { employeeId: true, name: true, departmentRel: { select: { name: true } }, positionRel: { select: { name: true } } },
             orderBy: { name: "asc" }
         });
         const empMap = new Map(employees.map((e) => [e.employeeId, e]));
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
                     const row: ExportRow = {
                         "Nama Karyawan": emp.name,
                         "ID Karyawan": emp.employeeId,
-                        "Departemen": emp.department || "-",
+                        "Departemen": emp.departmentRel?.name || "-",
                     };
 
                     // Fill days 1 to daysInMonth
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
                     finalRows.push({
                         "Nama": emp?.name || "-",
                         "ID Karyawan": `KARYAWAN: ${empId}`,
-                        "Departemen": emp?.department || "-", "Tanggal": "", "Jam Masuk": "", "Jam Pulang": "", "Status": "", "Catatan": ""
+                        "Departemen": emp?.departmentRel?.name || "-", "Tanggal": "", "Jam Masuk": "", "Jam Pulang": "", "Status": "", "Catatan": ""
                     });
 
                     let totalPresent = 0;
@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
                         finalRows.push({
                             "Nama": emp?.name || "-",
                             "ID Karyawan": r.employeeId,
-                            "Departemen": emp?.department || "-",
+                            "Departemen": emp?.departmentRel?.name || "-",
                             "Tanggal": toDateStr(r.date),
                             "Jam Masuk": r.clockIn ? toTimeString(r.clockIn) : "-",
                             "Jam Pulang": r.clockOut ? toTimeString(r.clockOut) : "-",
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
                     return {
                         "Nama": emp?.name || "-",
                         "ID Karyawan": r.employeeId,
-                        "Departemen": emp?.department || "-",
+                        "Departemen": emp?.departmentRel?.name || "-",
                         "Tanggal": toDateStr(r.date),
                         "Jam Masuk": r.clockIn ? toTimeString(r.clockIn) : "-",
                         "Jam Pulang": r.clockOut ? toTimeString(r.clockOut) : "-",

@@ -331,7 +331,7 @@ async function main() {
     // Seed Positions
     for (const [pos, level] of positionsMap) {
         await prisma.position.create({
-            data: { name: pos, level, isActive: true },
+            data: { name: pos, isActive: true },
         });
     }
     console.log(`✅ Positions seeded: ${positionsMap.size}`);
@@ -356,11 +356,10 @@ async function main() {
             name: "Admin HR",
             email: "hr@wig.co.id",
             phone: "",
-            department: "HRGA & IT",
-            division: "HRGA & IT",
-            position: "Manager",
+            departmentId: "HRGA & IT",
+            divisionId: "HRGA & IT",
+            positionId: "Manager",
             role: "hr",
-            level: "MANAGER",
             password: hashedAdmin,
             joinDate: new Date("2024-01-01"),
             totalLeave: 12,
@@ -378,11 +377,10 @@ async function main() {
             name: "Admin GA",
             email: "ga@wig.co.id",
             phone: "",
-            department: "HRGA & IT",
-            division: "Operation and Supply Chain Management",
-            position: "Staff",
+            departmentId: "HRGA & IT",
+            divisionId: "Operation and Supply Chain Management",
+            positionId: "Staff",
             role: "ga",
-            level: "STAFF",
             password: hashedGA,
             joinDate: new Date("2024-01-01"),
             totalLeave: 12,
@@ -406,11 +404,10 @@ async function main() {
                 name: k.name,
                 email,
                 phone: "",
-                department: k.dept,
-                division: k.div,
-                position: k.jabatan,
+                departmentId: k.dept,
+                divisionId: k.div,
+                positionId: k.jabatan,
                 role: "employee",
-                level,
                 password: hashedDefault,
                 joinDate: new Date("2024-01-01"),
                 totalLeave: 12,

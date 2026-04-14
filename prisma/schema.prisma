@@ -13,13 +13,13 @@ model Employee {
   name              String
   email             String                     @unique
   phone             String
-  department        String
-  division          String?
-  position          String
+  departmentId      String                     @map("department_id")
+  divisionId        String?                    @map("division_id")
+  positionId        String                     @map("position_id")
 
-  departmentRel     Department                 @relation("EmployeeDepartment", fields: [department], references: [name], onDelete: Restrict, onUpdate: Cascade)
-  divisionRel       Division?                  @relation("EmployeeDivision", fields: [division], references: [name], onDelete: Restrict, onUpdate: Cascade)
-  positionRel       Position                   @relation("EmployeePosition", fields: [position], references: [name], onDelete: Restrict, onUpdate: Cascade)
+  departmentRel     Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel       Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  positionRel       Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   role              String                     @default("employee")
   gender            String                     @default("Laki-Laki")
   password          String
@@ -32,7 +32,6 @@ model Employee {
   shiftId           String?                    @map("shift_id")
   bypassLocation    Boolean                    @default(false) @map("bypass_location")
   basicSalary       Float                      @default(0) @map("basic_salary")
-  level             String                     @default("STAFF")
   managerId         String?                    @map("manager_id")
   attendances       AttendanceRecord[]
   payrollComponents EmployeePayrollComponent[]
@@ -239,7 +238,6 @@ model Position {
   name      String   @unique
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
-  level     String   @default("STAFF")
   employees Employee[] @relation("EmployeePosition")
 
   @@map("positions")

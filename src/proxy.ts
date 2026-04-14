@@ -30,8 +30,9 @@ interface SessionPayload {
     id: string;
     employeeId: string;
     name: string;
+    departmentId: string;
+    divisionId?: string | null;
     role: "employee" | "hr" | "ga";
-    level: string;
 }
 
 async function getSession(request: NextRequest): Promise<SessionPayload | null> {

@@ -5,11 +5,10 @@ export type Employee = {
     email: string;
     phone: string;
     gender: "Laki-Laki" | "Perempuan";
-    department: string;
-    division?: string | null;
-    position: string;
+    departmentId: string;
+    divisionId?: string | null;
+    positionId: string;
     role: "employee" | "hr" | "ga";
-    level: string;
     managerId?: string | null;
     password: string;
     faceDescriptor?: number[];
@@ -25,8 +24,12 @@ export type Employee = {
     /** Persisted payroll components (from DB) OR input DTOs (from API) */
     payrollComponents?: (EmployeePayrollComponent | PayrollComponentInput)[];
     /** Relasi Prisma — tersedia jika di-include dalam query */
-    manager?: { id: string; name: string; employeeId: string } | null;
-    subordinates?: { id: string; name: string; employeeId: string; level: string }[];
+    manager?: { id: string; name: string; employeeId: string };
+    subordinates?: { id: string; name: string; employeeId: string }[];
+    departmentRel?: { id: string; name: string } | null;
+    divisionRel?: { id: string; name: string } | null;
+    positionRel?: { id: string; name: string } | null;
+    levelRel?: { id: string; name: string } | null;
 };
 
 export type EmployeePayrollComponent = {

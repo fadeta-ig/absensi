@@ -10,7 +10,10 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-async function ensureReferenceData() {
+async function main() {
+    const HR_EMPLOYEE_ID = "WIG001";
+    const HR_PASSWORD = "HRAdmin@123";
+
     // 1. Division
     const div = await prisma.division.upsert({
         where: { name: "HRGA & IT" },
@@ -19,27 +22,20 @@ async function ensureReferenceData() {
     });
 
     // 2. Department (FK → Division)
-    await prisma.department.upsert({
+    const department = await prisma.department.upsert({
         where: { name: "HRGA & IT" },
         update: {},
         create: { name: "HRGA & IT", divisionId: div.id },
     });
 
     // 3. Position
-    await prisma.position.upsert({
+    const position = await prisma.position.upsert({
         where: { name: "Manager" },
         update: {},
-        create: { name: "Manager", level: "MANAGER" },
+        create: { name: "Manager" },
     });
 
     console.log("✅ Reference data (Division/Department/Position) ready.");
-}
-
-async function main() {
-    const HR_EMPLOYEE_ID = "WIG001";
-    const HR_PASSWORD = "HRAdmin@123";
-
-    await ensureReferenceData();
 
     // Cek apakah sudah ada
     const existing = await prisma.employee.findUnique({
@@ -61,11 +57,10 @@ async function main() {
             name: "Admin HR",
             email: "hr@wig.co.id",
             phone: "",
-            department: "HRGA & IT",
-            division: "HRGA & IT",
-            position: "Manager",
+            departmentId: department.id,
+            divisionId: div.id,
+            positionId: position.id,
             role: "hr",
-            level: "MANAGER",
             password: hashedPassword,
             joinDate: new Date(),
             isActive: true,

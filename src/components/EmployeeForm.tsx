@@ -15,7 +15,7 @@ interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftD
 interface Location { id: string; name: string; }
 interface Division { id: string; name: string; }
 interface Department { id: string; name: string; divisionId: string; division?: { name: string } }
-interface Position { id: string; name: string; level: string; }
+interface Position { id: string; name: string; }
 interface MasterPayrollComponent { id: string; name: string; type: "earning" | "deduction"; defaultAmount: number; isActive: boolean; }
 
 /** Type lokal untuk payrollComponent di state form — belum punya id/employeeId sebelum disimpan */
@@ -27,8 +27,6 @@ type FormPayrollComponent = {
     component?: MasterPayrollComponent;
 };
 
-/** Valid level values - Now unlocked to accept dynamic string from Position */
-type EmployeeLevel = string;
 
 interface Props {
     initialData?: Partial<Employee>;
@@ -48,16 +46,16 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
     const [masterPositions, setMasterPositions] = useState<Position[]>([]);
     const [masterLocations, setMasterLocations] = useState<Location[]>([]);
     const [masterPayroll, setMasterPayroll] = useState<MasterPayrollComponent[]>([]);
-    const [allEmployees, setAllEmployees] = useState<{ employeeId: string; name: string; level: string }[]>([]);
+    const [allEmployees, setAllEmployees] = useState<{ employeeId: string; name: string }[]>([]);
 
     const [form, setForm] = useState({
         employeeId: initialData?.employeeId || "",
         name: initialData?.name || "",
         email: initialData?.email || "",
         phone: initialData?.phone || "",
-        department: initialData?.department || "",
-        division: initialData?.division || "",
-        position: initialData?.position || "",
+        departmentId: initialData?.departmentId || "",
+        divisionId: initialData?.divisionId || "",
+        positionId: initialData?.positionId || "",
         role: (initialData?.role || "employee") as "employee" | "hr",
         joinDate: initialData?.joinDate || new Date().toISOString().split("T")[0],
         totalLeave: initialData?.totalLeave ?? 12,
@@ -68,7 +66,6 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         locations: initialData?.locations || [] as { id: string; name: string }[],
         basicSalary: initialData?.basicSalary || 0,
         payrollComponents: (initialData?.payrollComponents || []) as FormPayrollComponent[],
-        level: (initialData?.level || "STAFF") as EmployeeLevel,
         managerId: initialData?.managerId || "",
     });
 
@@ -90,7 +87,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 setMasterLocations(l);
                 setShifts(s);
                 setMasterPayroll(m);
-                if (Array.isArray(emps)) setAllEmployees(emps.map((e: any) => ({ employeeId: e.employeeId, name: e.name, level: e.level || "STAFF" })));
+                if (Array.isArray(emps)) setAllEmployees(emps.map((e: any) => ({ employeeId: e.employeeId, name: e.name })));
 
                 // Set default shift if creating new
                 if (!isEdit && !form.shiftId) {
@@ -116,7 +113,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         load();
     }, [isEdit]);
 
-    const selectedDivision = masterDivisions.find(v => v.name === form.division);
+    const selectedDivision = masterDivisions.find(v => v.id === form.divisionId);
     const availableDepartments = masterDepts.filter(d =>
         selectedDivision ? d.divisionId === selectedDivision.id : false
     );
@@ -254,16 +251,16 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
                                 <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-slate-400" /> Divisi</span></label>
-                                <select className="form-select" value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value, department: "" })} required>
+                                <select className="form-select" value={form.divisionId} onChange={(e) => setForm({ ...form, divisionId: e.target.value, departmentId: "" })} required>
                                     <option value="">Pilih Divisi</option>
-                                    {masterDivisions.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                                    {masterDivisions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                 </select>
                             </div>
                             <div className="form-group !mb-0">
                                 <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3.5 h-3.5 text-slate-400" /> Departemen</span></label>
-                                <select className="form-select" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} required disabled={!form.division}>
+                                <select className="form-select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} required disabled={!form.divisionId}>
                                     <option value="">Pilih Departemen</option>
-                                    {availableDepartments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                                    {availableDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                 </select>
                             </div>
                         </div>
@@ -271,12 +268,9 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
                                 <label className="form-label">Jabatan</label>
-                                <select className="form-select" value={form.position} onChange={(e) => {
-                                    const selectedPos = masterPositions.find(p => p.name === e.target.value);
-                                    setForm({ ...form, position: e.target.value, level: selectedPos?.level || "STAFF", managerId: "" });
-                                }} required>
+                                <select className="form-select" value={form.positionId} onChange={(e) => setForm({ ...form, positionId: e.target.value, managerId: "" })} required>
                                     <option value="">Pilih Jabatan</option>
-                                    {masterPositions.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                    {masterPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                             </div>
                             <div className="form-group !mb-0">
@@ -290,14 +284,8 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5 text-slate-400" /> Level Organisasi</span></label>
-                                <div className="form-input bg-[var(--secondary)] cursor-not-allowed text-sm font-medium">
-                                    {({ STAFF: "Staff (Level 1)", SUPERVISOR: "Supervisor (Level 2)", MANAGER: "Manager (Level 3)", GM: "General Manager (Level 4)", HR: "HR (Level 5)", CEO: "CEO (Level 5)" } as Record<string, string>)[form.level] || form.level}
-                                </div>
-                            </div>
-                            <div className="form-group !mb-0">
                                 <label className="form-label"><span className="flex items-center gap-1"><UserCog className="w-3.5 h-3.5 text-slate-400" /> Atasan Langsung</span></label>
-                                <select className="form-select" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })} disabled={form.level === "CEO"}>
+                                <select className="form-select" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
                                     <option value="">Tidak Ada / Langsung ke CEO</option>
                                     {allEmployees
                                         .filter(e => e.employeeId !== (initialData?.employeeId || ""))

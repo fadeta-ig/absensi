@@ -21,7 +21,8 @@ export interface SessionPayload {
     employeeId: string;
     name: string;
     role: "employee" | "hr" | "ga";
-    level: string;
+    departmentId: string;
+    divisionId?: string | null;
 }
 
 /**
@@ -36,7 +37,8 @@ export async function createSession(employee: Employee, rememberMe: boolean = fa
         employeeId: employee.employeeId,
         name: employee.name,
         role: employee.role,
-        level: employee.level,
+        departmentId: employee.departmentId,
+        divisionId: employee.divisionId,
     } satisfies SessionPayload)
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()

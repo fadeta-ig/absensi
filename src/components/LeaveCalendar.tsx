@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, User } from "lucide-react";
+import { toDateString } from "@/lib/utils";
 
 interface LeaveRequest {
     id: string;
@@ -72,8 +73,8 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
         if (!isCurrentMonth) return [];
         const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         return leaves.filter((l) => {
-            const start = l.startDate;
-            const end = l.endDate;
+            const start = toDateString(l.startDate);
+            const end = toDateString(l.endDate);
             return dateStr >= start && dateStr <= end;
         });
     };

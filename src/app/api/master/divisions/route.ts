@@ -24,6 +24,9 @@ export async function GET(request: NextRequest) {
     try {
         const divisions = await prisma.division.findMany({
             orderBy: { name: "asc" },
+            include: {
+                _count: { select: { departments: true } },
+            },
         });
         return NextResponse.json(divisions);
     } catch (err) {

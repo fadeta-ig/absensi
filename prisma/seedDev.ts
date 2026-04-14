@@ -87,10 +87,10 @@ async function main() {
     console.log("✅ Departments: 5");
 
     // Positions
-    await prisma.position.create({ data: { name: "Manager",  level: "MANAGER",    isActive: true } });
-    await prisma.position.create({ data: { name: "Staff",    level: "STAFF",       isActive: true } });
-    await prisma.position.create({ data: { name: "Supervisor", level: "SUPERVISOR", isActive: true } });
-    await prisma.position.create({ data: { name: "General Affairs Staff", level: "STAFF", isActive: true } });
+    await prisma.position.create({ data: { name: "Manager",  isActive: true } });
+    await prisma.position.create({ data: { name: "Staff",    isActive: true } });
+    await prisma.position.create({ data: { name: "Supervisor", isActive: true } });
+    await prisma.position.create({ data: { name: "General Affairs Staff", isActive: true } });
     console.log("✅ Positions: 4");
 
     // ── 4. Admin accounts ────────────────────────────────────────────────────
@@ -104,11 +104,10 @@ async function main() {
             name: "Admin HR",
             email: "hr@wig.co.id",
             phone: "",
-            department: "HRGA & IT",
-            division: "HRGA & IT",
-            position: "Manager",
+            departmentId: "HRGA & IT",
+            divisionId: "HRGA & IT",
+            positionId: "Manager",
             role: "hr",
-            level: "MANAGER",
             password: hashedAdmin,
             joinDate: new Date("2024-01-01"),
             totalLeave: 12,
@@ -127,11 +126,10 @@ async function main() {
             name: "Admin GA",
             email: "ga@wig.co.id",
             phone: "",
-            department: "HRGA & IT",
-            division: "Operation and Supply Chain Management",
-            position: "General Affairs Staff",
+            departmentId: "HRGA & IT",
+            divisionId: "Operation and Supply Chain Management",
+            positionId: "General Affairs Staff",
             role: "ga",
-            level: "STAFF",
             password: hashedAdmin,
             joinDate: new Date("2024-01-01"),
             totalLeave: 12,

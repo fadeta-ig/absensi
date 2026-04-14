@@ -8,7 +8,6 @@ import logger from "@/lib/logger";
 const positionSchema = z.object({
     id: z.string().optional(),
     name: z.string().min(1, "Nama jabatan harus diisi"),
-    level: z.string().nullish(),
     description: z.string().nullish(),
     isActive: z.boolean().default(true),
 });
@@ -46,7 +45,6 @@ export async function POST(request: NextRequest) {
         const position = await prisma.position.create({
             data: {
                 name: body.name,
-                level: body.level || "STAFF",
                 isActive: body.isActive,
             },
         });
@@ -69,7 +67,7 @@ export async function PUT(request: NextRequest) {
     try {
         const result = await validateBody(request, positionSchema);
         if ("error" in result) return result.error;
-        const { id, name, level, isActive } = result.data;
+        const { id, name, isActive } = result.data;
 
         if (!id) {
             return NextResponse.json({ error: "ID jabatan diperlukan." }, { status: 400 });
@@ -79,7 +77,6 @@ export async function PUT(request: NextRequest) {
             where: { id },
             data: {
                 name,
-                level: level || undefined,
                 isActive,
             },
         });

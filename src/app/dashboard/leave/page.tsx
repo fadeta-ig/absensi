@@ -351,38 +351,62 @@ export default function LeaveManagementPage() {
                                 </span>
                             </div>
 
-                            {/* Date Editing */}
-                            <div className="bg-[var(--secondary)] p-4 rounded-lg space-y-3">
-                                <p className="form-label">Periode Cuti</p>
+                            {/* Original Request Info (Read Only) */}
+                            <div className="bg-[var(--secondary)]/30 p-4 rounded-lg border border-[var(--border)] border-dashed space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase flex items-center gap-1.5">
+                                        <Calendar className="w-3 h-3" /> Permohonan Karyawan
+                                    </p>
+                                    <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                                        {calculateDays(selectedLeave.startDate, selectedLeave.endDate)} Hari
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-[10px] text-[var(--text-muted)]">Tanggal Mulai</p>
+                                        <p className="text-xs font-semibold">{formatIndonesianDate(selectedLeave.startDate)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-[var(--text-muted)]">Tanggal Selesai</p>
+                                        <p className="text-xs font-semibold">{formatIndonesianDate(selectedLeave.endDate)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Date Editing (Approved Period) */}
+                            <div className="bg-[var(--primary)]/5 p-4 rounded-lg border border-[var(--primary)]/20 space-y-3">
+                                <p className="text-[10px] font-bold text-[var(--primary)] uppercase flex items-center gap-1.5">
+                                    <CheckCircle className="w-3 h-3" /> Periode Disetujui (Partial Approval)
+                                </p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-[10px] text-[var(--text-muted)] mb-1 block">Tanggal Mulai</label>
+                                        <label className="text-[10px] text-[var(--text-muted)] mb-1 block uppercase font-medium">Ubah Mulai</label>
                                         <input
                                             type="date"
-                                            className="form-input"
+                                            className="form-input text-xs"
                                             value={editStartDate}
                                             onChange={(e) => setEditStartDate(e.target.value)}
                                             readOnly={selectedLeave.status !== "pending"}
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] text-[var(--text-muted)] mb-1 block">Tanggal Selesai</label>
+                                        <label className="text-[10px] text-[var(--text-muted)] mb-1 block uppercase font-medium">Ubah Selesai</label>
                                         <input
                                             type="date"
-                                            className="form-input"
+                                            className="form-input text-xs"
                                             value={editEndDate}
                                             onChange={(e) => setEditEndDate(e.target.value)}
                                             readOnly={selectedLeave.status !== "pending"}
                                         />
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                                    <span className="text-xs font-medium text-[var(--text-secondary)]">Durasi akhir</span>
+                                <div className="flex items-center justify-between pt-2 border-t border-[var(--primary)]/10">
+                                    <span className="text-xs font-medium text-[var(--text-secondary)]">Durasi Realisasi</span>
                                     <span className="text-lg font-bold text-[var(--primary)]">{calculateDays(editStartDate, editEndDate)} Hari</span>
                                 </div>
                                 {selectedLeave.status === "pending" && (
-                                    <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                                        <Info className="w-3 h-3" /> Ubah tanggal untuk menyetujui sebagian (partial approval).
+                                    <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1 italic">
+                                        <Info className="w-3 h-3 text-[var(--primary)]" /> Atasan dapat mengubah tanggal di atas jika cuti hanya disetujui sebagian.
                                     </p>
                                 )}
                             </div>

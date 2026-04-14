@@ -25,10 +25,15 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Data pengguna Anda tidak ditemukan." }, { status: 404 });
         }
 
-        const employees = (await getVisibleEmployees(requester)).map((e) => {
+        const employees = (await getVisibleEmployees(requester)).map((e: any) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { password, faceDescriptor, ...safe } = e;
-            return safe;
+            return {
+                ...safe,
+                department: e.departmentRel?.name || "-",
+                division: e.divisionRel?.name || "-",
+                position: e.positionRel?.name || "-",
+            };
         });
 
         return NextResponse.json(employees);

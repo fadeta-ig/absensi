@@ -16,7 +16,9 @@ const bulkRowSchema = z.object({
     division: z.string().nullable().optional(),
     position: z.string().min(1, "Posisi wajib diisi"),
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee / hr / ga" }),
-    level: z.string().optional(),
+    departmentId: z.string().optional(),
+    divisionId: z.string().optional(),
+    positionId: z.string().optional(),
     joinDate: z.string().min(1, "Tanggal bergabung wajib diisi"),
     basicSalary: z.number().min(0).optional().default(0),
     totalLeave: z.number().min(0).optional().default(12),
@@ -132,14 +134,13 @@ export async function validateImport(buffer: ArrayBuffer): Promise<ValidationRep
 
     // Fetch reference data for cross-validation
     const [departments, divisions, positions, existingEmployees] = await Promise.all([
-        prisma.department.findMany({ where: { isActive: true }, select: { name: true } }),
-        prisma.division.findMany({ where: { isActive: true }, select: { name: true } }),
-        prisma.position.findMany({ where: { isActive: true }, select: { name: true, level: true } }),
+        prisma.department.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+        prisma.division.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+        prisma.position.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
         prisma.employee.findMany({ select: { employeeId: true, email: true } }),
     ]);
 
-    const deptNames = new Set(departments.map(d => d.name.toLowerCase()));
-    const divNames = new Set(divisions.map(d => d.name.toLowerCase()));
+
     const existingIds = new Set(existingEmployees.map(e => e.employeeId));
     const existingEmails = new Set(existingEmployees.map(e => e.email.toLowerCase()));
 
@@ -190,21 +191,30 @@ export async function validateImport(buffer: ArrayBuffer): Promise<ValidationRep
         }
 
         // Referential checks
-        if (!deptNames.has(row.department.toLowerCase())) {
+        const deptRecord = departments.find(d => d.name.toLowerCase() === row.department.toLowerCase());
+        if (!deptRecord) {
             errors.push({ row: rowNum, field: "department", message: `Departemen "${row.department}" tidak ada di master data.` });
             hasError = true;
+        } else {
+            row.departmentId = deptRecord.id;
         }
-        if (row.division && !divNames.has(row.division.toLowerCase())) {
+
+        const divRecord = row.division ? divisions.find(d => d.name.toLowerCase() === row.division?.toLowerCase()) : null;
+        if (row.division && !divRecord) {
             errors.push({ row: rowNum, field: "division", message: `Divisi "${row.division}" tidak ada di master data.` });
             hasError = true;
+        } else if (divRecord) {
+            row.divisionId = divRecord.id;
         }
+
         const posRecord = positions.find(p => p.name.toLowerCase() === row.position.toLowerCase());
         if (!posRecord) {
             errors.push({ row: rowNum, field: "position", message: `Posisi "${row.position}" tidak ada di master data.` });
             hasError = true;
         } else {
-            row.level = posRecord.level || "STAFF"; // Silently set the correct level from master data!
+            row.positionId = posRecord.id;
         }
+
         if (row.managerId && !existingIds.has(row.managerId) && !fileIds.has(row.managerId)) {
             errors.push({ row: rowNum, field: "managerId", message: `Atasan ID "${row.managerId}" tidak ditemukan.` });
             hasError = true;
@@ -262,11 +272,10 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
                         email: row.email,
                         phone: row.phone,
                         gender: row.gender,
-                        department: row.department,
-                        division: row.division || null,
-                        position: row.position,
+                        departmentId: row.departmentId!,
+                        divisionId: row.divisionId || null,
+                        positionId: row.positionId!,
                         role: row.role,
-                        level: row.level,
                         joinDate: new Date(row.joinDate + "T00:00:00.000Z"),
                         basicSalary: row.basicSalary ?? 0,
                         totalLeave: row.totalLeave ?? 12,

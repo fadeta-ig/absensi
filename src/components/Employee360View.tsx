@@ -57,20 +57,18 @@ export function Employee360View({
                     </Link>
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <h1 className="text-xl font-bold text-[var(--text-primary)]">{employee.name}</h1>
+                            <p className="text-xl font-bold text-slate-800">{employee.name}</p>
+                            <p className="text-sm font-medium text-slate-500">{employee.positionRel?.name} • {employee.departmentRel?.name}</p>
                             <span className={`badge ${employee.isActive ? "badge-success" : "badge-error"}`}>
                                 {employee.isActive ? "Active" : "Inactive"}
                             </span>
                         </div>
-                        <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                            {employee.position} · {employee.department}
-                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="text-right hidden md:block">
                         <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Level</p>
-                        <p className="text-sm font-bold text-[var(--text-primary)]">{employee.level}</p>
+                        <p className="text-sm font-bold text-[var(--text-primary)]">{employee.levelRel?.name}</p>
                     </div>
                     <div className="w-9 h-9 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-xs font-bold">
                         {employee.name.charAt(0)}
@@ -98,9 +96,9 @@ export function Employee360View({
                         </div>
                         <div className="p-5 space-y-4">
                             <InfoRow label="Employee ID" value={employee.employeeId} icon={UserIcon} />
-                            <InfoRow label="Department" value={employee.department} icon={Building2} />
-                            <InfoRow label="Division" value={employee.division || "-"} />
-                            <InfoRow label="Position" value={employee.position} />
+                            <InfoRow label="Department" value={employee.departmentRel?.name || "-"} icon={Building2} />
+                            <InfoRow label="Division" value={employee.divisionRel?.name || "-"} />
+                            <InfoRow label="Position" value={employee.positionRel?.name || "-"} />
                             <InfoRow label="Reports To" value={(employee as any).manager?.name || "None"} />
                         </div>
                     </div>
@@ -119,7 +117,7 @@ export function Employee360View({
                                         <div key={ps.id} className="group p-3 rounded-lg border border-dashed border-[var(--border)] hover:border-green-200 hover:bg-green-50/30 transition-all flex justify-between items-center">
                                             <div>
                                                 <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-tight">{ps.period}</p>
-                                                <p className="text-xs font-semibold text-[var(--text-secondary)]">Net Take Home</p>
+                                                <span className="text-xs font-semibold text-blue-700">Level 360</span>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-sm font-bold text-green-600">Rp {ps.netSalary.toLocaleString()}</p>

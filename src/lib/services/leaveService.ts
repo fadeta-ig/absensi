@@ -124,8 +124,8 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
             where: { id },
             data: {
                 ...(data.status !== undefined && { status: data.status }),
-                ...(data.startDate !== undefined && { startDate: data.startDate }),
-                ...(data.endDate !== undefined && { endDate: data.endDate }),
+                ...(data.startDate !== undefined && { startDate: new Date(data.startDate) }),
+                ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
                 ...(data.reason !== undefined && { reason: data.reason }),
             },
         });

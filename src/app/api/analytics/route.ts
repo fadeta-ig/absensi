@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
         // Get all data in parallel for performance
         const [employees, todayAttendance, allLeaves, allVisits, allOvertime, recentAttendance] = await Promise.all([
-            prisma.employee.findMany({ where: { isActive: true }, select: { employeeId: true, name: true, department: true } }),
+            prisma.employee.findMany({ where: { isActive: true }, select: { employeeId: true, name: true, departmentRel: { select: { name: true } } } }),
             prisma.attendanceRecord.findMany({ where: { date: { gte: todayStart, lt: todayEnd } } }),
             prisma.leaveRequest.findMany(),
             prisma.visitReport.findMany(),
@@ -55,9 +55,10 @@ export async function GET(request: NextRequest) {
         const deptMap: Record<string, { total: number; presentToday: number }> = {};
         const todayIds = new Set(todayAttendance.filter((a) => a.status === "present" || a.status === "late").map((a) => a.employeeId));
         for (const emp of employees) {
-            if (!deptMap[emp.department]) deptMap[emp.department] = { total: 0, presentToday: 0 };
-            deptMap[emp.department].total++;
-            if (todayIds.has(emp.employeeId)) deptMap[emp.department].presentToday++;
+            const deptName = emp.departmentRel?.name || "Unknown";
+            if (!deptMap[deptName]) deptMap[deptName] = { total: 0, presentToday: 0 };
+            deptMap[deptName].total++;
+            if (todayIds.has(emp.employeeId)) deptMap[deptName].presentToday++;
         }
         const departmentStats = Object.entries(deptMap).map(([department, data]) => ({
             department,

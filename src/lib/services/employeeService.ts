@@ -15,15 +15,10 @@ export async function getEmployees(): Promise<Employee[]> {
 }
 
 export async function getVisibleEmployees(requester: Employee): Promise<Employee[]> {
-    const { level, employeeId, department, division, role } = requester;
+    const { employeeId, role } = requester;
 
-    // CEO, HR, and GA can see all active employees
-    if (level === "CEO" || level === "HR" || role === "hr") {
-        return getEmployees();
-    }
-
-    // GA sees all active employees (for asset assignment dropdown)
-    if (role === "ga") {
+    // HR and GA can see all active employees
+    if (role === "hr" || role === "ga") {
         const rows = await prisma.employee.findMany({
             where: { isActive: true },
             include: {
@@ -31,60 +26,58 @@ export async function getVisibleEmployees(requester: Employee): Promise<Employee
                 payrollComponents: { include: { component: true } },
                 manager: true,
                 subordinates: true,
+                departmentRel: true,
+                divisionRel: true,
+                positionRel: true,
             },
             orderBy: { name: "asc" },
         });
         return rows as unknown as Employee[];
     }
 
-    // GM sees everyone in their department
-    if (level === "GM") {
-        const rows = await prisma.employee.findMany({
-            where: { department },
-            include: {
-                locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } },
-                manager: true,
-                subordinates: true
-            },
-            orderBy: { name: "asc" }
-        });
-        return rows as unknown as Employee[];
-    }
-
-    // Manager sees everyone in their division
-    if (level === "MANAGER") {
-        const rows = await prisma.employee.findMany({
-            where: { division },
-            include: {
-                locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } },
-                manager: true,
-                subordinates: true
-            },
-            orderBy: { name: "asc" }
-        });
-        return rows as unknown as Employee[];
-    }
-
-    // Custom levels, Supervisors, and Staff implicitly fall back to this:
-    // They can see themselves and any formal direct subordinates (Atasan Langsung).
-    const rows = await prisma.employee.findMany({
-        where: {
-            OR: [
-                { managerId: employeeId },
-                { employeeId: employeeId }
-            ]
-        },
+    // Normal employees see themselves and their entire downstream hierarchy (1 .. N)
+    const self = await prisma.employee.findUnique({
+        where: { employeeId },
         include: {
             locations: { select: { id: true, name: true } },
             payrollComponents: { include: { component: true } },
             manager: true,
-            subordinates: true
-        },
-        orderBy: { name: "asc" }
+            subordinates: true,
+            departmentRel: true,
+            divisionRel: true,
+            positionRel: true,
+        }
     });
-    return rows as unknown as Employee[];
+
+    if (!self) return [];
+    
+    // Breadth-First Search queue to collect all subordinates recursively
+    const visibleEmployees: Employee[] = [self as unknown as Employee];
+    const queue = [employeeId];
+    
+    while(queue.length > 0) {
+        const currentManagerId = queue.shift()!;
+        const subs = await prisma.employee.findMany({
+            where: { managerId: currentManagerId, isActive: true },
+            include: {
+                locations: { select: { id: true, name: true } },
+                payrollComponents: { include: { component: true } },
+                manager: true,
+                subordinates: true,
+                departmentRel: true,
+                divisionRel: true,
+                positionRel: true,
+            },
+            orderBy: { name: "asc" }
+        });
+
+        for (const sub of subs) {
+            visibleEmployees.push(sub as unknown as Employee);
+            queue.push(sub.employeeId);
+        }
+    }
+
+    return visibleEmployees;
 }
 
 export async function getEmployeeById(id: string): Promise<Employee | undefined> {
@@ -104,11 +97,10 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             name: data.name,
             email: data.email,
             phone: data.phone,
-            department: data.department,
-            division: data.division,
-            position: data.position,
+            departmentId: data.departmentId,
+            divisionId: data.divisionId,
+            positionId: data.positionId,
             role: data.role,
-            level: data.level || "STAFF",
             managerId: data.managerId || null,
             password: data.password,
             joinDate: data.joinDate ? new Date(data.joinDate + "T00:00:00.000Z") : new Date(),
@@ -149,11 +141,10 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.name !== undefined && { name: data.name }),
                 ...(data.email !== undefined && { email: data.email }),
                 ...(data.phone !== undefined && { phone: data.phone }),
-                ...(data.department !== undefined && { department: data.department }),
-                ...(data.division !== undefined && { division: data.division }),
-                ...(data.position !== undefined && { position: data.position }),
+                ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
+                ...(data.divisionId !== undefined && { divisionId: data.divisionId }),
+                ...(data.positionId !== undefined && { positionId: data.positionId }),
                 ...(data.role !== undefined && { role: data.role }),
-                ...(data.level !== undefined && { level: data.level }),
                 ...(data.managerId !== undefined && { managerId: data.managerId || null }),
                 ...(data.password !== undefined && { password: data.password }),
                 ...(data.joinDate !== undefined && { joinDate: new Date(data.joinDate + "T00:00:00.000Z") }),

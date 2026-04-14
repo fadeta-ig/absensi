@@ -15,14 +15,7 @@ interface Employee {
     isActive: boolean;
 }
 
-const LEVEL_COLORS: Record<string, string> = {
-    CEO: "background:#6d28d9;color:#fff",
-    GM: "background:#7c3aed;color:#fff",
-    MANAGER: "background:#2563eb;color:#fff",
-    SUPERVISOR: "background:#0891b2;color:#fff",
-    HR: "background:#059669;color:#fff",
-    STAFF: "background:#6b7280;color:#fff",
-};
+
 
 export default function MonitoringPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -119,17 +112,7 @@ export default function MonitoringPage() {
                                 <span style={{ color: "var(--text-muted)" }}>Department</span>
                                 <span style={{ fontWeight: "500", color: "var(--text-primary)" }}>{e.department}</span>
                             </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <span style={{ color: "var(--text-muted)" }}>Level</span>
-                                <span style={{
-                                    fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "9999px",
-                                    ...(LEVEL_COLORS[e.level]
-                                        ? Object.fromEntries(LEVEL_COLORS[e.level].split(";").map(s => s.split(":") as [string, string]))
-                                        : { background: "#e5e7eb", color: "#374151" })
-                                }}>
-                                    {e.level}
-                                </span>
-                            </div>
+
                         </div>
 
                         {/* Action */}
