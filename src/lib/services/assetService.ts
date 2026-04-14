@@ -81,9 +81,15 @@ export async function createAsset(data: {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
             // Generate assetCode: HP-001, LT-042, NUM-023
+            // Use the highest existing code to avoid race condition collisions
             const prefix = data.category === "HANDPHONE" ? "HP" : data.category === "LAPTOP" ? "LT" : "NUM";
-            const count = await prisma.asset.count({ where: { category: data.category as never } });
-            const assetCode = `${prefix}-${String(count + 1 + attempt).padStart(3, "0")}`;
+            const lastAsset = await prisma.asset.findFirst({
+                where: { category: data.category as never },
+                orderBy: { assetCode: "desc" },
+                select: { assetCode: true },
+            });
+            const lastNum = lastAsset ? parseInt(lastAsset.assetCode.split("-")[1] ?? "0", 10) : 0;
+            const assetCode = `${prefix}-${String(lastNum + 1 + attempt).padStart(3, "0")}`;
 
             const holderType = (data.holderType ?? "GA_POOL") as never;
             // Derive AssetStatus dari HolderType yang dipilih

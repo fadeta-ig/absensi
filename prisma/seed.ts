@@ -337,8 +337,16 @@ async function main() {
     console.log(`✅ Positions seeded: ${positionsMap.size}`);
 
     // ── 4. Employees ─────────────────────────────────────────────────────────
-    const hashedDefault = await bcrypt.hash("wig-absensi-default-pass", 10);
-    const hashedAdmin = await bcrypt.hash("123", 10);
+    // Generate cryptographically random passwords — NEVER use hardcoded passwords
+    const { randomBytes } = await import("crypto");
+    const generatePassword = () => randomBytes(9).toString("base64url"); // 12 chars, URL-safe
+    const adminPassword = generatePassword();
+    const gaPassword = generatePassword();
+    const defaultPassword = generatePassword();
+
+    const hashedDefault = await bcrypt.hash(defaultPassword, 10);
+    const hashedAdmin = await bcrypt.hash(adminPassword, 10);
+    const hashedGA = await bcrypt.hash(gaPassword, 10);
 
     // Admin HR (akun sistem — WIG001)
     await prisma.employee.create({
@@ -375,7 +383,7 @@ async function main() {
             position: "Staff",
             role: "ga",
             level: "STAFF",
-            password: hashedAdmin,
+            password: hashedGA,
             joinDate: new Date("2024-01-01"),
             totalLeave: 12,
             usedLeave: 0,
@@ -415,6 +423,15 @@ async function main() {
     }
 
     console.log(`✅ Employees seeded: WIG001 (Admin HR), WIG002 (Admin GA), + ${KARYAWAN.length} karyawan aktif`);
+
+    // ╔════════════════════════════════════════════════════════════════╗
+    // ║  CREDENTIALS — CATAT DENGAN AMAN, TIDAK DITAMPILKAN LAGI    ║
+    // ╚════════════════════════════════════════════════════════════════╝
+    console.log("\n🔐 ═══ GENERATED CREDENTIALS (simpan di tempat aman!) ═══");
+    console.log(`   WIG001 (Admin HR)  → Password: ${adminPassword}`);
+    console.log(`   WIG002 (Admin GA)  → Password: ${gaPassword}`);
+    console.log(`   All employees      → Password: ${defaultPassword}`);
+    console.log("   ⚠️  Segera ubah password setelah login pertama!\n");
 
     // ── 5. News ──────────────────────────────────────────────────────────────
     await prisma.newsItem.create({

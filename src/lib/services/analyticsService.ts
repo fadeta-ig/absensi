@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } from "@/types";
+import { calculateWorkingDays } from "./leaveService";
 
 export type Employee360Data = {
     employee: Employee;
@@ -15,21 +16,6 @@ export type Employee360Data = {
     recentLeaves: LeaveRequest[];
     recentPayslips: PayslipRecord[];
 };
-
-/**
- * Hitung total hari cuti yang sudah dipakai berdasarkan leave requests yang approved.
- * Fungsi ini HANYA membaca data (read-only) — tidak ada side effect ke database.
- */
-function calculateUsedLeave(
-    approvedLeaves: { startDate: Date | string; endDate: Date | string }[]
-): number {
-    return approvedLeaves.reduce((sum, l) => {
-        const s = new Date(l.startDate);
-        const e = new Date(l.endDate);
-        const diff = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return sum + Math.max(0, diff);
-    }, 0);
-}
 
 /**
  * Ambil semua data analitik 360° untuk satu karyawan.
@@ -104,7 +90,23 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
     const attendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0;
 
     // Hitung usedLeave dari data aktual — TIDAK mengupdate DB
-    const realUsedLeave = calculateUsedLeave(approvedLeaves);
+    // Resolve shift offDays for accurate calculation
+    const offDays = new Set<number>([0]); // default: Minggu
+    if (employee.shiftId) {
+        const shift = await prisma.workShift.findUnique({
+            where: { id: employee.shiftId },
+            include: { days: true },
+        });
+        if (shift) {
+            offDays.clear();
+            for (const d of shift.days) {
+                if (d.isOff) offDays.add(d.dayOfWeek);
+            }
+        }
+    }
+    const realUsedLeave = approvedLeaves.reduce(
+        (sum, l) => sum + calculateWorkingDays(l.startDate, l.endDate, offDays), 0
+    );
 
     return {
         employee: employee as unknown as Employee,

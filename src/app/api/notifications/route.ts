@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
-
-const toDateStr = (d: Date | string): string =>
-    d instanceof Date ? d.toISOString().split("T")[0] : String(d);
+import { toWIBDateString, getWIBHoursMinutes } from "@/lib/timezone";
+import { toDateString } from "@/lib/utils";
 
 interface Notification {
     id: string;
@@ -24,7 +23,7 @@ export async function GET(request: NextRequest) {
     if (session.role !== "hr") return forbiddenResponse();
 
     try {
-        const today = new Date().toISOString().split("T")[0];
+        const today = toWIBDateString();
         const notifications: Notification[] = [];
 
         // Pending leave requests
@@ -44,7 +43,7 @@ export async function GET(request: NextRequest) {
                 title: "Pengajuan Cuti",
                 message: `${emp?.name || l.employeeId} mengajukan cuti ${l.type}`,
                 href: "/dashboard/leave",
-                time: toDateStr(l.createdAt),
+                time: toDateString(l.createdAt),
             });
         }
 
@@ -65,7 +64,7 @@ export async function GET(request: NextRequest) {
                 title: "Laporan Kunjungan",
                 message: `${emp?.name || v.employeeId} → ${v.clientName}`,
                 href: "/dashboard/visits",
-                time: toDateStr(v.createdAt),
+                time: toDateString(v.createdAt),
             });
         }
 
@@ -84,20 +83,19 @@ export async function GET(request: NextRequest) {
                 id: `overtime-${o.id}`,
                 type: "overtime",
                 title: "Pengajuan Lembur",
-                message: `${emp?.name || o.employeeId} — ${o.hours}h (${toDateStr(o.date)})`,
+                message: `${emp?.name || o.employeeId} — ${o.hours}h (${toDateString(o.date)})`,
                 href: "/dashboard/overtime",
-                time: toDateStr(o.createdAt),
+                time: toDateString(o.createdAt),
             });
         }
 
         // Employees not yet present today
         const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
         const todayEnd = new Date(todayStart.getTime() + 86400000);
-        const todayStr = todayStart.toISOString().split("T")[0];
+        const todayStr = toWIBDateString();
         const todayAttendance = await prisma.attendanceRecord.findMany({ where: { date: { gte: todayStart, lt: todayEnd } } });
         const presentIds = new Set(todayAttendance.map((a) => a.employeeId));
-        const now = new Date();
-        const hour = now.getHours();
+        const { hours: hour } = getWIBHoursMinutes();
 
         if (hour >= 9) {
             const absentEmployees = await prisma.employee.findMany({

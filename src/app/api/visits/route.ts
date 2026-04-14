@@ -9,6 +9,7 @@ import {
     deleteVisitReport,
 } from "@/lib/services/visitService";
 import { visitCreateSchema, visitUpdateSchema } from "@/lib/validations/validationSchemas";
+import { toWIBDateString } from "@/lib/timezone";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
         const visit = await createVisitReport({
             ...body,
             employeeId: session.employeeId,
-            date: new Date().toISOString().split("T")[0],
+            date: toWIBDateString(),
             status: "pending",
             createdAt: new Date().toISOString(),
         });

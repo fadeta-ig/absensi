@@ -50,12 +50,20 @@ export async function POST(request: NextRequest) {
         if ("error" in result) return result.error;
         const body = result.data;
 
-        // Use a more secure default password or handle via invitation
-        const hashedPassword = await bcrypt.hash("wig-absensi-default-pass", 12);
+        // Generate random password for new employee
+        const { randomBytes } = await import("crypto");
+        const plainPassword = randomBytes(9).toString("base64url");
+        const hashedPassword = await bcrypt.hash(plainPassword, 12);
 
         const employee = await createEmployee({
             ...body,
             password: hashedPassword,
+        });
+
+        // Send password via email (fire-and-forget)
+        const { sendPasswordEmail } = await import("@/lib/services/emailService");
+        sendPasswordEmail(employee.email, employee.name, plainPassword).catch(() => {
+            logger.warn("Gagal kirim email password untuk karyawan baru", { employeeId: employee.employeeId });
         });
 
         logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.employeeId });

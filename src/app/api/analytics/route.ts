@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
-
-/** Konversi Date object dari Prisma ke string YYYY-MM-DD */
-const toDateStr = (d: Date | string): string =>
-    d instanceof Date ? d.toISOString().split("T")[0] : String(d);
+import { toWIBDateString } from "@/lib/timezone";
+import { toDateString } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
@@ -43,8 +41,8 @@ export async function GET(request: NextRequest) {
         for (let i = 6; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
-            const dateStr = d.toISOString().split("T")[0];
-            const dayRecords = recentAttendance.filter((a) => toDateStr(a.date) === dateStr);
+            const dateStr = toWIBDateString(d);
+            const dayRecords = recentAttendance.filter((a) => toDateString(a.date) === dateStr);
             weeklyAttendance.push({
                 date: dateStr,
                 present: dayRecords.filter((a) => a.status === "present").length,
@@ -71,7 +69,7 @@ export async function GET(request: NextRequest) {
         const approvedOvertime = allOvertime.filter((o) => o.status === "approved");
         const otMap: Record<string, number> = {};
         for (const ot of approvedOvertime) {
-            const key = toDateStr(ot.date);
+            const key = toDateString(ot.date);
             otMap[key] = (otMap[key] || 0) + ot.hours;
         }
         const monthlyOvertime = Object.entries(otMap)
@@ -88,7 +86,7 @@ export async function GET(request: NextRequest) {
             activities.push({
                 type: "leave",
                 message: `${emp?.name || l.employeeId} mengajukan cuti (${l.status})`,
-                time: toDateStr(l.createdAt),
+                time: toDateString(l.createdAt),
             });
         }
         for (const v of allVisits.slice(0, 5)) {
@@ -96,7 +94,7 @@ export async function GET(request: NextRequest) {
             activities.push({
                 type: "visit",
                 message: `${emp?.name || v.employeeId} kunjungan ke ${v.clientName} (${v.status})`,
-                time: toDateStr(v.createdAt),
+                time: toDateString(v.createdAt),
             });
         }
         for (const o of allOvertime.slice(0, 5)) {
@@ -104,7 +102,7 @@ export async function GET(request: NextRequest) {
             activities.push({
                 type: "overtime",
                 message: `${emp?.name || o.employeeId} lembur ${o.hours}h (${o.status})`,
-                time: toDateStr(o.createdAt),
+                time: toDateString(o.createdAt),
             });
         }
 

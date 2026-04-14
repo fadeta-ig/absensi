@@ -47,7 +47,7 @@ export async function createSession(employee: Employee, rememberMe: boolean = fa
     cookieStore.set("session", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "strict",
         maxAge: maxAge,
         path: "/",
     });

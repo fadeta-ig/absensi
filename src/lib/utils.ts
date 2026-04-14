@@ -9,11 +9,13 @@ export function cn(...inputs: ClassValue[]) {
 // Single source of truth — menggantikan d2s, dateStr, timeStr, toDateStr
 // yang sebelumnya diduplikasi di 5+ service files.
 
-/** Convert Date/string → "YYYY-MM-DD". Returns "" for null/undefined. */
+/** Convert Date/string → "YYYY-MM-DD" in WIB timezone. Returns "" for null/undefined. */
 export function toDateString(d: Date | string | null | undefined): string {
     if (!d) return "";
-    if (d instanceof Date) return d.toISOString().split("T")[0];
-    return String(d).split("T")[0];
+    const date = d instanceof Date ? d : new Date(d);
+    if (isNaN(date.getTime())) return "";
+    // Use WIB (Asia/Jakarta) to avoid UTC date-shift between 00:00-06:59 WIB
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
 }
 
 /** Convert Date/string → full ISO string. Returns null for null/undefined. */
@@ -33,11 +35,12 @@ export function toTimeString(d: Date | string | null | undefined): string {
     return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-/** Convert Date/string → "YYYY-MM-DD" for display, returns "-" for null (export-friendly). */
+/** Convert Date/string → "YYYY-MM-DD" for display (WIB), returns "-" for null. */
 export function toDateDisplay(d: Date | string | null | undefined): string {
     if (!d) return "-";
-    if (d instanceof Date) return d.toISOString().split("T")[0];
-    return String(d);
+    const date = d instanceof Date ? d : new Date(d);
+    if (isNaN(date.getTime())) return "-";
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
 }
 
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

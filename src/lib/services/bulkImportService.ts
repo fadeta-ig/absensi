@@ -38,11 +38,7 @@ export interface ValidationReport {
     totalRows: number;
 }
 
-export interface ImportResult {
-    created: number;
-    failed: number;
-    errors: RowError[];
-}
+// ImportResult is defined below in the executeImport section (includes credentials field)
 
 // ─── Column Header Mapping ─────────────────────────────────
 const COLUMN_MAP: Record<string, keyof BulkRowInput> = {
@@ -231,6 +227,14 @@ export async function validateImport(buffer: ArrayBuffer): Promise<ValidationRep
 }
 
 // ─── Execute Import ─────────────────────────────────────────
+export interface ImportResult {
+    created: number;
+    failed: number;
+    errors: { row: number; field: string; message: string }[];
+    /** Generated credentials for Excel export (Option C) */
+    credentials?: { employeeId: string; name: string; email: string; password: string }[];
+}
+
 export async function executeImport(buffer: ArrayBuffer, performedBy: string): Promise<ImportResult> {
     const report = await validateImport(buffer);
 
@@ -238,13 +242,20 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
         return { created: 0, failed: report.totalRows, errors: report.errors };
     }
 
-    const DEFAULT_PASSWORD = "wig-absensi-default-pass";
-    const hashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 12);
+    const { randomBytes } = await import("crypto");
+    const generatePassword = () => randomBytes(9).toString("base64url"); // 12 chars, URL-safe
+
+    // Generate unique password per employee
+    const employeePasswords = report.validRows.map((row) => ({
+        row,
+        plainPassword: generatePassword(),
+    }));
 
     try {
         const result = await prisma.$transaction(async (tx) => {
-            const createPromises = report.validRows.map((row) =>
-                tx.employee.create({
+            const createPromises = employeePasswords.map(async ({ row, plainPassword }) => {
+                const hashedPassword = await bcrypt.hash(plainPassword, 12);
+                return tx.employee.create({
                     data: {
                         employeeId: row.employeeId,
                         name: row.name,
@@ -265,14 +276,30 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
                         password: hashedPassword,
                         bypassLocation: false,
                     },
-                })
-            );
+                });
+            });
 
             return Promise.all(createPromises);
         });
 
+        // Fire-and-forget: send password emails to each employee
+        const { sendPasswordEmail } = await import("./emailService");
+        for (const { row, plainPassword } of employeePasswords) {
+            sendPasswordEmail(row.email, row.name, plainPassword).catch(() => {
+                logger.warn("Bulk import: gagal kirim email password", { employeeId: row.employeeId });
+            });
+        }
+
+        // Build credentials list for Excel export (Option C backup)
+        const credentials = employeePasswords.map(({ row, plainPassword }) => ({
+            employeeId: row.employeeId,
+            name: row.name,
+            email: row.email,
+            password: plainPassword,
+        }));
+
         logger.info("Bulk import berhasil", { count: result.length, performedBy });
-        return { created: result.length, failed: report.errors.length, errors: report.errors };
+        return { created: result.length, failed: report.errors.length, errors: report.errors, credentials };
     } catch (err) {
         logger.error("Bulk import gagal", { error: err, performedBy });
         throw err;

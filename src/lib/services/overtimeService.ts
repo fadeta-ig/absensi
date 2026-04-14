@@ -76,7 +76,7 @@ export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRe
         const baseDateStr = data.date
             ? String(data.date)
             : existing?.date
-                ? new Date(existing.date).toISOString().split("T")[0]
+                ? toDateString(existing.date)
                 : "";
 
         const row = await prisma.overtimeRequest.update({

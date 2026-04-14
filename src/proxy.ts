@@ -22,8 +22,9 @@ const GA_PREFIX = "/ga";
 
 // ─── Session Helper ───────────────────────────────────────────
 /**
+ * @mirror Canonical source: src/lib/auth.ts → SessionPayload
  * Duplicated from @/lib/auth — cannot import in Edge Runtime.
- * @see src/lib/auth.ts SessionPayload (canonical source of truth)
+ * Jika mengubah field di auth.ts, update juga di sini.
  */
 interface SessionPayload {
     id: string;

@@ -65,10 +65,16 @@ export default function LoginPage() {
       // Small delay to ensure cookie is properly set before navigation
       await new Promise((r) => setTimeout(r, 200));
 
-      if (data.role === "hr") {
-        router.push("/dashboard");
-      } else {
-        router.push("/employee");
+      switch (data.role) {
+        case "hr":
+          router.push("/dashboard");
+          break;
+        case "ga":
+          router.push("/ga");
+          break;
+        default:
+          router.push("/employee");
+          break;
       }
     } catch {
       setError("Terjadi kesalahan koneksi");

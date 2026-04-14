@@ -10,7 +10,12 @@ export const loginSchema = z.object({
 
 export const changePasswordSchema = z.object({
     currentPassword: z.string().min(1, "Password saat ini harus diisi"),
-    newPassword: z.string().min(8, "Password baru minimal 8 karakter"),
+    newPassword: z
+        .string()
+        .min(8, "Password baru minimal 8 karakter")
+        .regex(/[A-Z]/, "Password harus mengandung minimal 1 huruf besar")
+        .regex(/[0-9]/, "Password harus mengandung minimal 1 angka")
+        .regex(/[^A-Za-z0-9]/, "Password harus mengandung minimal 1 simbol"),
 });
 
 export const sendPasswordSchema = z.object({
@@ -24,9 +29,15 @@ const locationSchema = z.object({
     lng: z.number({ message: "Longitude harus berupa angka" }),
 });
 
+/** Max photo size ~2MB base64 (prevents DB bloat / DoS). */
+const MAX_PHOTO_LENGTH = 2_800_000; // ~2MB file → ~2.7MB base64
+
 export const attendanceSchema = z.object({
+    /** Optional karena employees dengan bypassLocation=true tidak kirim lokasi. Validasi conditional di route handler. */
     location: locationSchema.optional(),
-    photo: z.string().min(1, "Foto absensi wajib disertakan untuk keperluan face recognition"),
+    photo: z.string()
+        .min(1, "Foto absensi wajib disertakan untuk keperluan face recognition")
+        .max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)"),
 });
 
 /* ───────────────────── Employee ───────────────────── */
@@ -51,7 +62,10 @@ export const employeeCreateSchema = z.object({
     bypassLocation: z.boolean().optional().default(false),
     locations: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
     basicSalary: z.number().optional().default(0),
-    payrollComponents: z.array(z.any()).optional().default([]),
+    payrollComponents: z.array(z.object({
+        componentId: z.string().min(1, "Component ID wajib diisi"),
+        amount: z.number().min(0, "Amount tidak boleh negatif"),
+    })).optional().default([]),
     avatarUrl: z.string().nullable().optional(),
 });
 
@@ -80,7 +94,10 @@ export const employeeUpdateSchema = z.object({
     locations: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
     // Payroll
     basicSalary: z.number().min(0).optional(),
-    payrollComponents: z.array(z.any()).optional(),
+    payrollComponents: z.array(z.object({
+        componentId: z.string().min(1),
+        amount: z.number().min(0),
+    })).optional(),
     // Foto profil
     avatarUrl: z.string().nullable().optional(),
     // ⛔ DILARANG via schema ini: password, faceDescriptor, employeeId
@@ -139,7 +156,7 @@ export const visitCreateSchema = z.object({
     purpose: z.string().min(1, "Tujuan kunjungan harus diisi"),
     result: z.string().nullable().optional(),
     location: locationSchema.nullable().optional(),
-    photo: z.string().nullable().optional(),
+    photo: z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)").nullable().optional(),
     notes: z.string().nullable().optional(),
 });
 

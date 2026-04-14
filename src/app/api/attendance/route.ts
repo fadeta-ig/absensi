@@ -9,6 +9,7 @@ import {
 } from "@/lib/services/attendanceService";
 import { prisma } from "@/lib/prisma";
 import { calculateDistance } from "@/lib/utils";
+import { toWIBDateString, getWIBHoursMinutes, getWIBDayOfWeek } from "@/lib/timezone";
 import { attendanceSchema } from "@/lib/validations/validationSchemas";
 import logger from "@/lib/logger";
 
@@ -53,12 +54,14 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, attendanceSchema);
         if ("error" in result) return result.error;
         const body = result.data;
+        // Photo validation is enforced by attendanceSchema (min(1) + max(2.8MB))
+        //
+        // ⚠️ KNOWN LIMITATION: Face verification saat ini hanya dilakukan client-side
+        // via face-api.js. Server menerima foto tanpa re-verifikasi descriptor.
+        // TODO: Implementasi server-side face descriptor verification memerlukan
+        // @tensorflow/tfjs-node + model loading. Tracked as future enhancement.
 
-        if (!body.photo) {
-            return NextResponse.json({ error: "Foto absensi wajib disertakan (Face Recognition mandatory)." }, { status: 400 });
-        }
-
-        const today = new Date().toISOString().split("T")[0];
+        const today = toWIBDateString();
 
         // Fetch employee settings with proper typing
         const employee = await prisma.employee.findUnique({
@@ -102,7 +105,9 @@ export async function POST(request: NextRequest) {
 
         // ── Resolve shift early (needed for both clock-in and clock-out) ──
         const now = new Date();
-        const todayDay = now.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+        const todayDay = getWIBDayOfWeek(now);
+        const { hours: nowH, minutes: nowM } = getWIBHoursMinutes(now);
+        const clockMinutes = nowH * 60 + nowM;
 
         let shift = null;
         if (employee.shiftId) {
@@ -132,7 +137,7 @@ export async function POST(request: NextRequest) {
             if (shift && todaySchedule && !todaySchedule.isOff) {
                 const [endH, endM] = todaySchedule.endTime.split(":").map(Number);
                 const shiftEndMinutes = endH * 60 + endM;
-                const clockOutMinutes = now.getHours() * 60 + now.getMinutes();
+                const clockOutMinutes = clockMinutes;
 
                 const earliestOut = shiftEndMinutes - (shift.earlyCheckOut ?? 0);
                 if (clockOutMinutes < earliestOut) {
@@ -175,7 +180,7 @@ export async function POST(request: NextRequest) {
             const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
             const shiftStartMinutes = shiftHour * 60 + shiftMin;
             const earliestIn = shiftStartMinutes - (shift.earlyCheckIn ?? 0);
-            const clockInMinutes = now.getHours() * 60 + now.getMinutes();
+            const clockInMinutes = clockMinutes;
 
             if (clockInMinutes < earliestIn) {
                 return NextResponse.json(
@@ -193,12 +198,11 @@ export async function POST(request: NextRequest) {
             const tolerance = shift.lateCheckIn ?? 0;
             const deadlineMinutes = shiftStartMinutes + tolerance;
 
-            const clockInMinutes = now.getHours() * 60 + now.getMinutes();
-            if (clockInMinutes > deadlineMinutes) {
+            if (clockMinutes > deadlineMinutes) {
                 status = "late";
             }
         } else if (!shift) {
-            if (now.getHours() > 9) {
+            if (nowH > 9) {
                 status = "late";
             }
         }
