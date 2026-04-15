@@ -79,7 +79,7 @@ async function main() {
     console.log("✅ Divisions: 4");
 
     // Departments
-    await prisma.department.create({ data: { name: "HRGA & IT",  isActive: true, divisionId: divHRGA.id } });
+    const deptHR = await prisma.department.create({ data: { name: "HRGA & IT",  isActive: true, divisionId: divHRGA.id } });
     await prisma.department.create({ data: { name: "Operation",  isActive: true, divisionId: divOps.id  } });
     await prisma.department.create({ data: { name: "Supply Chain Management", isActive: true, divisionId: divOps.id } });
     await prisma.department.create({ data: { name: "Creative Marketing", isActive: true, divisionId: divSales.id } });
@@ -87,10 +87,10 @@ async function main() {
     console.log("✅ Departments: 5");
 
     // Positions
-    await prisma.position.create({ data: { name: "Manager",  isActive: true } });
+    const posManager = await prisma.position.create({ data: { name: "Manager",  isActive: true } });
     await prisma.position.create({ data: { name: "Staff",    isActive: true } });
     await prisma.position.create({ data: { name: "Supervisor", isActive: true } });
-    await prisma.position.create({ data: { name: "General Affairs Staff", isActive: true } });
+    const posGA = await prisma.position.create({ data: { name: "General Affairs Staff", isActive: true } });
     console.log("✅ Positions: 4");
 
     // ── 4. Admin accounts ────────────────────────────────────────────────────
@@ -104,9 +104,9 @@ async function main() {
             name: "Admin HR",
             email: "hr@wig.co.id",
             phone: "",
-            departmentId: "HRGA & IT",
-            divisionId: "HRGA & IT",
-            positionId: "Manager",
+            departmentId: deptHR.id,
+            divisionId: divHRGA.id,
+            positionId: posManager.id,
             role: "hr",
             password: hashedAdmin,
             joinDate: new Date("2024-01-01"),
@@ -126,9 +126,9 @@ async function main() {
             name: "Admin GA",
             email: "ga@wig.co.id",
             phone: "",
-            departmentId: "HRGA & IT",
-            divisionId: "Operation and Supply Chain Management",
-            positionId: "General Affairs Staff",
+            departmentId: deptHR.id,
+            divisionId: divOps.id,
+            positionId: posGA.id,
             role: "ga",
             password: hashedAdmin,
             joinDate: new Date("2024-01-01"),
