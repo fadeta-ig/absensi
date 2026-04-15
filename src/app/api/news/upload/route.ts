@@ -24,16 +24,25 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "File tidak ditemukan." }, { status: 400 });
         }
 
-        // Validate file type (images only for news)
-        const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+        // Validate file type (images and documents for news)
+        const allowedTypes = [
+            "image/jpeg", "image/png", "image/webp", "image/gif",
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ];
         if (!allowedTypes.includes(file.type)) {
-            return NextResponse.json({ error: "Format file tidak didukung. Gunakan JPG, PNG, WEBP, atau GIF." }, { status: 400 });
+            return NextResponse.json({ error: "Format file tidak didukung. Gunakan Gambar atau Dokumen (PDF, Word, Excel, PPT)." }, { status: 400 });
         }
 
-        // Validate file size (max 5MB)
-        const MAX_SIZE = 5 * 1024 * 1024;
+        // Validate file size (max 10MB)
+        const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
-            return NextResponse.json({ error: "Ukuran file terlalu besar (maksimal 5MB)." }, { status: 400 });
+            return NextResponse.json({ error: "Ukuran file terlalu besar (maksimal 10MB)." }, { status: 400 });
         }
 
         // Ensure upload directory exists

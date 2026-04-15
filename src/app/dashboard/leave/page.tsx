@@ -325,9 +325,9 @@ export default function LeaveManagementPage() {
             {/* Detail Modal */}
             {isModalOpen && selectedLeave && (
                 <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
-                    <div className="modal-content !max-w-lg !p-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content !max-w-lg !p-0 overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
                         {/* Modal Header */}
-                        <div className="bg-[var(--primary)] p-6 text-white">
+                        <div className="bg-[var(--primary)] p-6 text-white shrink-0">
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-semibold uppercase tracking-widest opacity-70">Detail Pengajuan</p>
@@ -341,7 +341,7 @@ export default function LeaveManagementPage() {
                         </div>
 
                         {/* Modal Body */}
-                        <div className="p-6 space-y-5">
+                        <div className="p-6 space-y-5 overflow-y-auto flex-1">
                             {/* Status Badge */}
                             <div className="flex items-center justify-between">
                                 <span className="form-label">Status Saat Ini</span>
@@ -450,7 +450,7 @@ export default function LeaveManagementPage() {
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="p-6 border-t border-[var(--border)] bg-[var(--secondary)]/50">
+                        <div className="p-6 border-t border-[var(--border)] bg-[var(--secondary)]/50 shrink-0">
                             {selectedLeave.status === "pending" ? (
                                 <div className="flex gap-3">
                                     <button

@@ -127,10 +127,13 @@ export default function EmployeeHomePage() {
                 ) : (
                     <div className="space-y-2">
                         {news.slice(0, 3).map((item) => (
-                            <div key={item.id} className="card px-4 py-3 hover:shadow-md transition-shadow cursor-pointer">
+                            <Link href="/employee/news" key={item.id} className="card px-4 py-3 hover:shadow-md transition-shadow cursor-pointer block">
                                 <p className="text-sm font-medium text-[var(--text-primary)]">{item.title}</p>
-                            </div>
+                            </Link>
                         ))}
+                        <Link href="/employee/news" className="text-xs font-bold text-[var(--primary)] hover:underline block text-center mt-3 mb-1">
+                            Lihat Semua Berita
+                        </Link>
                     </div>
                 )}
             </div>
