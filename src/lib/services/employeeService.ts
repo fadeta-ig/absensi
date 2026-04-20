@@ -1,20 +1,38 @@
 import { prisma } from "../prisma";
 import { Employee } from "@/types";
+import { Prisma } from "@prisma/client";
+import logger from "@/lib/logger";
 
-export async function getEmployees(): Promise<Employee[]> {
+// Tipe relasi komprehensif dari Prisma langsung (Strict Type)
+export type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
+    include: {
+        locations: { select: { id: true; name: true } };
+        payrollComponents: { include: { component: true } };
+        manager: true;
+        subordinates: true;
+        departmentRel: true;
+        divisionRel: true;
+        positionRel: true;
+    };
+}>;
+
+export async function getEmployees(): Promise<EmployeeWithRelations[]> {
     const rows = await prisma.employee.findMany({
         include: {
             locations: { select: { id: true, name: true } },
             payrollComponents: { include: { component: true } },
             manager: true,
-            subordinates: true
+            subordinates: true,
+            departmentRel: true,
+            divisionRel: true,
+            positionRel: true,
         },
         orderBy: { name: "asc" }
     });
-    return rows as unknown as Employee[];
+    return rows;
 }
 
-export async function getVisibleEmployees(requester: Employee): Promise<Employee[]> {
+export async function getVisibleEmployees(requester: { employeeId: string; role: string }): Promise<EmployeeWithRelations[]> {
     const { employeeId, role } = requester;
 
     // HR and GA can see all active employees
@@ -32,7 +50,7 @@ export async function getVisibleEmployees(requester: Employee): Promise<Employee
             },
             orderBy: { name: "asc" },
         });
-        return rows as unknown as Employee[];
+        return rows;
     }
 
     // Normal employees see themselves and their entire downstream hierarchy (1 .. N)
@@ -52,7 +70,11 @@ export async function getVisibleEmployees(requester: Employee): Promise<Employee
     if (!self) return [];
     
     // Breadth-First Search queue to collect all subordinates recursively
-    const visibleEmployees: Employee[] = [self as unknown as Employee];
+    // Mencegah Infinite Loop (Circular Hierarchy) menggunakan visitedIds set
+    const visibleEmployees: EmployeeWithRelations[] = [self];
+    const visitedIds = new Set<string>();
+    visitedIds.add(employeeId);
+
     const queue = [employeeId];
     
     while(queue.length > 0) {
@@ -72,25 +94,53 @@ export async function getVisibleEmployees(requester: Employee): Promise<Employee
         });
 
         for (const sub of subs) {
-            visibleEmployees.push(sub as unknown as Employee);
-            queue.push(sub.employeeId);
+            // Evaluasi Circular Reference
+            if (!visitedIds.has(sub.employeeId)) {
+                visitedIds.add(sub.employeeId);
+                visibleEmployees.push(sub);
+                queue.push(sub.employeeId);
+            } else {
+                logger.warn("Circular Hierarchy terdeteksi", { managerId: currentManagerId, subordinateId: sub.employeeId });
+            }
         }
     }
 
     return visibleEmployees;
 }
 
-export async function getEmployeeById(id: string): Promise<Employee | undefined> {
-    const row = await prisma.employee.findUnique({ where: { id } });
-    return (row as unknown as Employee) ?? undefined;
+export async function getEmployeeById(id: string): Promise<EmployeeWithRelations | null> {
+    const row = await prisma.employee.findUnique({ 
+        where: { id },
+        include: {
+            locations: { select: { id: true, name: true } },
+            payrollComponents: { include: { component: true } },
+            manager: true,
+            subordinates: true,
+            departmentRel: true,
+            divisionRel: true,
+            positionRel: true,
+        }
+    });
+    return row;
 }
 
-export async function getEmployeeByEmployeeId(employeeId: string): Promise<Employee | undefined> {
-    const row = await prisma.employee.findUnique({ where: { employeeId } });
-    return (row as unknown as Employee) ?? undefined;
+export async function getEmployeeByEmployeeId(employeeId: string): Promise<EmployeeWithRelations | null> {
+    const row = await prisma.employee.findUnique({ 
+        where: { employeeId },
+        include: {
+            locations: { select: { id: true, name: true } },
+            payrollComponents: { include: { component: true } },
+            manager: true,
+            subordinates: true,
+            departmentRel: true,
+            divisionRel: true,
+            positionRel: true,
+        }
+    });
+    return row;
 }
 
-export async function createEmployee(data: Omit<Employee, "id">): Promise<Employee> {
+export async function createEmployee(data: Omit<Employee, "id">): Promise<EmployeeWithRelations> {
     const row = await prisma.employee.create({
         data: {
             employeeId: data.employeeId,
@@ -117,7 +167,7 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             } : undefined,
 
             payrollComponents: data.payrollComponents ? {
-                create: data.payrollComponents.map(c => ({
+                create: data.payrollComponents.map((c: any) => ({
                     componentId: c.componentId,
                     amount: c.amount
                 }))
@@ -127,13 +177,16 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             locations: { select: { id: true, name: true } },
             payrollComponents: { include: { component: true } },
             manager: true,
-            subordinates: true
+            subordinates: true,
+            departmentRel: true,
+            divisionRel: true,
+            positionRel: true,
         }
     });
-    return row as unknown as Employee;
+    return row;
 }
 
-export async function updateEmployee(id: string, data: Partial<Employee>): Promise<Employee | null> {
+export async function updateEmployee(id: string, data: Partial<Employee>): Promise<EmployeeWithRelations | null> {
     try {
         const row = await prisma.employee.update({
             where: { id },
@@ -165,7 +218,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.payrollComponents !== undefined && {
                     payrollComponents: {
                         deleteMany: {},
-                        create: data.payrollComponents.map(c => ({
+                        create: data.payrollComponents.map((c: any) => ({
                             componentId: c.componentId,
                             amount: c.amount
                         }))
@@ -176,13 +229,16 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 locations: { select: { id: true, name: true } },
                 payrollComponents: { include: { component: true } },
                 manager: true,
-                subordinates: true
+                subordinates: true,
+                departmentRel: true,
+                divisionRel: true,
+                positionRel: true,
             }
         });
-        return row as unknown as Employee;
+        return row;
     } catch (err) {
-        console.error("[updateEmployee Error]:", err);
-        return null;
+        logger.error("updateEmployee Gagal", { id, error: err instanceof Error ? err.message : String(err) });
+        throw new Error("Gagal memperbarui data karyawan. Silakan periksa kembali constraint database.");
     }
 }
 
@@ -190,7 +246,8 @@ export async function deleteEmployee(id: string): Promise<boolean> {
     try {
         await prisma.employee.delete({ where: { id } });
         return true;
-    } catch {
-        return false;
+    } catch (err: any) {
+        logger.error("deleteEmployee Gagal", { id, code: err?.code, message: err?.message });
+        throw new Error("Penghapusan ditolak. Karyawan ini mungkin masih memiliki riwayat absensi, gaji, atau peminjaman yang tak terhapus (onDelete: Restrict). Disarankan menonaktifkan status karyawan (isActive: false) alih-alih menghapus data permanen.");
     }
 }

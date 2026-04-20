@@ -141,12 +141,14 @@ export async function PUT(request: NextRequest) {
         }
 
         if (isHoliday !== undefined) updateData.isHoliday = isHoliday;
-        if (approvedHours !== undefined) updateData.approvedHours = approvedHours;
+        if (session.role === "hr" && approvedHours !== undefined) {
+            updateData.approvedHours = approvedHours;
+        }
 
         // Auto-calculate overtime pay when approving
         if (status === "approved") {
             const effectiveHours = approvedHours ?? existing.hours;
-            const effectiveIsHoliday = isHoliday ?? (existing as any).isHoliday ?? false;
+            const effectiveIsHoliday = isHoliday ?? (existing && "isHoliday" in existing ? Boolean(existing.isHoliday) : false);
 
             // Fetch employee salary + fixed allowances
             const employee = await prisma.employee.findUnique({

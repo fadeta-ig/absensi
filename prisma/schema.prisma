@@ -96,7 +96,7 @@ model AttendanceRecord {
   clockOutPhoto    String?   @map("clock_out_photo") @db.LongText
   status           String    @default("present")
   notes            String?   @db.Text
-  employee         Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee         Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@unique([employeeId, date])
   @@map("attendance_records")
@@ -113,7 +113,7 @@ model PayslipRecord {
   netSalary   Float    @map("net_salary")
   issuedDate  DateTime @map("issued_date")
   notes       String?  @db.Text
-  employee    Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee    Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "payslip_records_employee_id_fkey")
   @@map("payslip_records")
@@ -156,7 +156,7 @@ model LeaveRequest {
   status     String   @default("pending")
   createdAt  DateTime @default(now()) @map("created_at")
   attachment String?  @db.LongText
-  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "leave_requests_employee_id_fkey")
   @@map("leave_requests")
@@ -201,7 +201,7 @@ model OvertimeRequest {
   reason        String   @db.Text
   status        String   @default("pending")
   createdAt     DateTime @default(now()) @map("created_at")
-  employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "overtime_requests_employee_id_fkey")
   @@map("overtime_requests")
@@ -345,7 +345,7 @@ model Asset {
 model AssetHistory {
   id             String      @id @default(uuid())
   assetId        String      @map("asset_id")
-  asset          Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset          Asset       @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   fromHolderType HolderType? @map("from_holder_type")
   fromName       String?     @map("from_name")
