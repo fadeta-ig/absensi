@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { payslipCreateSchema } from "@/lib/validations/validationSchemas";
 import { getPayslips, createPayslip } from "@/lib/services/payslipService";

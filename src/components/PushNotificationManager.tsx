@@ -47,11 +47,10 @@ export default function PushNotificationManager() {
                 return;
             }
 
-            const swReg = await navigator.serviceWorker.getRegistration();
+            let swReg = await navigator.serviceWorker.getRegistration();
             if (!swReg) {
-                toast("Service worker belum siap. Harap refresh halaman.", "error");
-                setLoading(false);
-                return;
+                // Force registration if next-pwa hasn't done it yet
+                swReg = await navigator.serviceWorker.register('/sw.js');
             }
 
             const registration = await navigator.serviceWorker.ready;

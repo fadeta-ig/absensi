@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { getEmployeeByEmployeeId } from "./services/employeeService";
@@ -16,7 +16,7 @@ if (!JWT_SECRET || JWT_SECRET.length < 16) {
 const SECRET = new TextEncoder().encode(JWT_SECRET);
 
 /** Session payload stored in JWT */
-export interface SessionPayload {
+export interface SessionPayload extends JWTPayload {
     id: string;
     employeeId: string;
     name: string;
@@ -109,5 +109,5 @@ export async function verifyLogin(
     }
 
     logger.info("Login successful", { employeeId: employee.employeeId });
-    return employee;
+    return employee as unknown as Employee;
 }
