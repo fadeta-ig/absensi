@@ -18,7 +18,14 @@ type Asset = {
     status: "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED" | "COMPANY_OWNED";
     holderType: "EMPLOYEE" | "FORMER_EMPLOYEE" | "TEAM" | "GA_POOL" | "COMPANY_OWNED";
     assignedToName: string | null;
+    assignedToId: string | null;
     assignedAt: string | null;
+    assignedEmployee: {
+        employeeId: string;
+        name: string;
+        department: string;
+        position: string;
+    } | null;
     nomorIndosat: string | null;
     expiredDate: string | null;
     keterangan: string | null;
@@ -131,6 +138,7 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         kondisi: "BAIK" as "BAIK" | "KURANG_BAIK" | "RUSAK",
         holderType: "GA_POOL" as string,
         assignedToName: "",
+        assignedToId: "",
         nomorIndosat: "",
         expiredDate: "",
         keterangan: "",
@@ -153,8 +161,8 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     }, []);
 
     const set = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
-    // Reset nama pemegang saat ganti tipe
-    const setHolderType = (val: string) => setForm(prev => ({ ...prev, holderType: val, assignedToName: "" }));
+    // Reset nama & id saat ganti tipe
+    const setHolderType = (val: string) => setForm(prev => ({ ...prev, holderType: val, assignedToName: "", assignedToId: "" }));
 
     const needsName = form.holderType !== "GA_POOL" && form.holderType !== "COMPANY_OWNED";
     const isEmployeeDropdown = form.holderType === "EMPLOYEE";
@@ -175,6 +183,7 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                     kondisi: form.kondisi,
                     holderType: form.holderType,
                     assignedToName: needsName ? form.assignedToName : null,
+                    assignedToId: isEmployeeDropdown && form.assignedToId ? form.assignedToId : null,
                     nomorIndosat: isNomor ? (form.nomorIndosat || null) : null,
                     expiredDate: isNomor ? (form.expiredDate || null) : null,
                     keterangan: form.keterangan || null,
@@ -239,14 +248,21 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                                 {empLoading && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>Memuat...</span>}
                             </label>
                             <select
-                                value={form.assignedToName}
-                                onChange={e => set("assignedToName", e.target.value)}
+                                value={form.assignedToId}
+                                onChange={e => {
+                                    const selectedEmp = employees.find(emp => emp.employeeId === e.target.value);
+                                    if (selectedEmp) {
+                                        setForm(prev => ({ ...prev, assignedToId: selectedEmp.employeeId, assignedToName: selectedEmp.name }));
+                                    } else {
+                                        setForm(prev => ({ ...prev, assignedToId: "", assignedToName: "" }));
+                                    }
+                                }}
                                 style={{ ...inputStyle, height: "auto", padding: "8px 10px" }}
                                 disabled={empLoading}
                             >
                                 <option value="">-- Pilih Karyawan --</option>
                                 {employees.map(emp => (
-                                    <option key={emp.employeeId} value={emp.name}>
+                                    <option key={emp.employeeId} value={emp.employeeId}>
                                         {emp.name}{emp.position ? ` — ${emp.position}` : ""}
                                     </option>
                                 ))}
@@ -307,6 +323,7 @@ function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => void; onDone: () => void }) {
     const [holderType, setHolderType] = useState<string>(asset.holderType === "GA_POOL" ? "EMPLOYEE" : "GA_POOL");
     const [toName, setToName] = useState("");
+    const [toEmployeeId, setToEmployeeId] = useState("");
     const [kondisi, setKondisi] = useState(asset.kondisi);
     const [notes, setNotes] = useState("");
     const [loading, setLoading] = useState(false);
@@ -337,7 +354,14 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
             const res = await fetch("/api/assets/assign", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ assetId: asset.id, toHolderType: holderType, toName: isReturning ? null : toName, kondisi, notes }),
+                body: JSON.stringify({ 
+                    assetId: asset.id, 
+                    toHolderType: holderType, 
+                    toName: isReturning ? null : toName, 
+                    toEmployeeId: holderType === "EMPLOYEE" ? toEmployeeId : null,
+                    kondisi, 
+                    notes 
+                }),
             });
             if (!res.ok) { const e = await res.json(); setError(e.error ?? "Gagal"); return; }
             onDone();
@@ -357,7 +381,7 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
                 </p>
                 <div style={fieldStyle}>
                     <label style={labelStyle}>Aksi</label>
-                    <select value={holderType} onChange={e => { setHolderType(e.target.value); setToName(""); }} style={inputStyle}>
+                    <select value={holderType} onChange={e => { setHolderType(e.target.value); setToName(""); setToEmployeeId(""); }} style={inputStyle}>
                         <option value="EMPLOYEE">Assign ke Karyawan Aktif</option>
                         <option value="FORMER_EMPLOYEE">Assign ke Mantan Karyawan</option>
                         <option value="TEAM">Assign ke Tim</option>
@@ -373,14 +397,23 @@ function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => 
                             {empLoading && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>Memuat data karyawan...</span>}
                         </label>
                         <select
-                            value={toName}
-                            onChange={e => setToName(e.target.value)}
+                            value={toEmployeeId}
+                            onChange={e => {
+                                const selectedEmp = employees.find(emp => emp.employeeId === e.target.value);
+                                if (selectedEmp) {
+                                    setToEmployeeId(selectedEmp.employeeId);
+                                    setToName(selectedEmp.name);
+                                } else {
+                                    setToEmployeeId("");
+                                    setToName("");
+                                }
+                            }}
                             style={{ ...inputStyle, height: "auto", padding: "8px 10px" }}
                             disabled={empLoading}
                         >
                             <option value="">-- Pilih Karyawan --</option>
                             {employees.map(emp => (
-                                <option key={emp.employeeId} value={emp.name}>
+                                <option key={emp.employeeId} value={emp.employeeId}>
                                     {emp.name}{emp.position ? ` — ${emp.position}` : ""}
                                 </option>
                             ))}
@@ -743,12 +776,23 @@ function AssetsPageInner() {
                                         <td style={tdStyle}><KondisiBadge kondisi={a.kondisi} /></td>
                                         <td style={tdStyle}><StatusBadge status={a.status} /></td>
                                         <td style={tdStyle}>
-                                            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                                <HolderIcon holderType={a.holderType} />
-                                                <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal" }}>
-                                                    {a.assignedToName ?? "GA"}
-                                                </span>
-                                            </span>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <div style={{ padding: 4, background: "#f3f4f6", borderRadius: 6, display: "flex" }}>
+                                                    <HolderIcon holderType={a.holderType} />
+                                                </div>
+                                                <div>
+                                                    <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal", fontWeight: 500 }}>
+                                                        {a.assignedEmployee ? 
+                                                            a.assignedEmployee.name : 
+                                                            (a.assignedToName ?? "GA — Tersedia")}
+                                                    </span>
+                                                    {a.assignedEmployee && (
+                                                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                                                            {a.assignedEmployee.department} — {a.assignedEmployee.position}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td style={tdStyle}>
                                             <div style={{ display: "flex", gap: 5 }}>

@@ -12,7 +12,11 @@ import {
     User as UserIcon,
     Building2,
     CalendarDays,
-    ArrowUpRight
+    ArrowUpRight,
+    Package,
+    Smartphone,
+    Laptop,
+    Phone
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -30,6 +34,7 @@ interface Employee360ViewProps {
     recentVisits: VisitReport[];
     recentLeaves: LeaveRequest[];
     recentPayslips: PayslipRecord[];
+    assignedAssets: any[];
     backLink: string;
 }
 
@@ -40,6 +45,7 @@ export function Employee360View({
     recentVisits,
     recentLeaves,
     recentPayslips,
+    assignedAssets,
     backLink
 }: Employee360ViewProps) {
     const [activeTab, setActiveTab] = useState("attendance");
@@ -77,11 +83,12 @@ export function Employee360View({
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <StatCard label="Kehadiran" value={`${stats.attendanceRate.toFixed(1)}%`} sub="Rata-rata" icon={Activity} color="text-blue-600" bg="bg-blue-500/10" />
                 <StatCard label="Terlambat" value={stats.lateCount.toString()} sub="Kejadian" icon={Clock} color="text-orange-600" bg="bg-orange-500/10" />
                 <StatCard label="Kunjungan" value={stats.visitCount.toString()} sub="Laporan" icon={MapPin} color="text-green-600" bg="bg-green-500/10" />
                 <StatCard label="Sisa Cuti" value={`${stats.leaveRemaining} Hari`} sub={`${stats.leaveUsed} hari terpakai`} icon={CalendarDays} color="text-[var(--primary)]" bg="bg-[var(--primary)]/10" />
+                <StatCard label="Aset Dipegang" value={assignedAssets.length.toString()} sub="Aset aktif" icon={Package} color="text-purple-600" bg="bg-purple-500/10" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -142,7 +149,8 @@ export function Employee360View({
                         {[
                             { id: "attendance", label: "Absensi" },
                             { id: "visits", label: "Kunjungan" },
-                            { id: "leave", label: "Cuti" },
+                            { id: "leaves", label: "Cuti" },
+                            { id: "assets", label: "Aset" },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -220,7 +228,7 @@ export function Employee360View({
                     )}
 
                     {/* Tab Content: Leave */}
-                    {activeTab === "leave" && (
+                    {activeTab === "leaves" && (
                         <div className="card overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="data-table">
@@ -253,6 +261,53 @@ export function Employee360View({
                                             </tr>
                                         )) : (
                                             <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada riwayat cuti</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tab Content: Assets */}
+                    {activeTab === "assets" && (
+                        <div className="card overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Aset</th>
+                                            <th>Kategori</th>
+                                            <th className="text-right">Kondisi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {assignedAssets.length > 0 ? assignedAssets.map(a => (
+                                            <tr key={a.id}>
+                                                <td>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                                                            {a.category === "HANDPHONE" ? <Smartphone size={16} /> : 
+                                                             a.category === "LAPTOP" ? <Laptop size={16} /> : 
+                                                             a.category === "NOMOR_HP" ? <Phone size={16} /> : 
+                                                             <Package size={16} />}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-semibold text-slate-800 text-sm">{a.name}</p>
+                                                            <p className="font-mono text-xs text-slate-500 mt-0.5">{a.assetCode}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span className="badge badge-info">{a.category}</span>
+                                                </td>
+                                                <td className="text-right">
+                                                    <span className={`badge ${a.kondisi === "BAIK" ? "badge-success" : a.kondisi === "KURANG_BAIK" ? "badge-warning" : "badge-error"}`}>
+                                                        {a.kondisi.replace("_", " ")}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Karyawan ini tidak memegang aset perusahaan</td></tr>
                                         )}
                                     </tbody>
                                 </table>

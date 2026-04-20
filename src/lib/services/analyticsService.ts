@@ -1,5 +1,6 @@
 import { prisma } from "../prisma";
 import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } from "@/types";
+import { AssetWithHistory } from "./assetService";
 import { calculateWorkingDays } from "./leaveService";
 
 export type Employee360Data = {
@@ -15,6 +16,7 @@ export type Employee360Data = {
     recentVisits: VisitReport[];
     recentLeaves: LeaveRequest[];
     recentPayslips: PayslipRecord[];
+    assignedAssets: AssetWithHistory[];
 };
 
 /**
@@ -39,7 +41,7 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
     if (!employee) return null;
 
     // Query utama dijalankan paralel
-    const [attendance, visits, leaves, payslips, approvedLeaves] = await Promise.all([
+    const [attendance, visits, leaves, payslips, approvedLeaves, assignedAssetsData] = await Promise.all([
         prisma.attendanceRecord.findMany({
             where: { employeeId: employee.employeeId },
             orderBy: { date: "desc" },
@@ -64,6 +66,11 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
         prisma.leaveRequest.findMany({
             where: { employeeId: employee.employeeId, status: "approved" },
             select: { startDate: true, endDate: true },
+        }),
+        // Ambil aset yang saat ini dipegang oleh karyawan
+        prisma.asset.findMany({
+            where: { assignedToId: employee.employeeId },
+            orderBy: { createdAt: "desc" },
         }),
     ]);
 
@@ -122,5 +129,6 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
         recentVisits: visits as unknown as VisitReport[],
         recentLeaves: leaves as unknown as LeaveRequest[],
         recentPayslips: payslips as unknown as PayslipRecord[],
+        assignedAssets: assignedAssetsData as unknown as AssetWithHistory[],
     };
 }

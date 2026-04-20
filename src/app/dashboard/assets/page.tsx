@@ -19,6 +19,14 @@ type Asset = {
     status: "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED";
     holderType: "EMPLOYEE" | "FORMER_EMPLOYEE" | "TEAM" | "GA_POOL";
     assignedToName: string | null;
+    assignedToId: string | null;
+    assignedAt: string | null;
+    assignedEmployee: {
+        employeeId: string;
+        name: string;
+        department: string;
+        position: string;
+    } | null;
     nomorIndosat: string | null;
     expiredDate: string | null;
     keterangan: string | null;
@@ -388,12 +396,27 @@ function HrAssetsPageInner() {
                                             <td style={{ padding: "10px 14px" }}><KondisiBadge kondisi={a.kondisi} /></td>
                                             <td style={{ padding: "10px 14px" }}><StatusBadge status={a.status} /></td>
                                             <td style={{ padding: "10px 14px" }}>
-                                                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                                    <HolderIcon holderType={a.holderType} />
-                                                    <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal" }}>
-                                                        {a.assignedToName ?? "GA"}
-                                                    </span>
-                                                </span>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                    <div style={{ padding: 4, background: "#f3f4f6", borderRadius: 6, display: "flex" }}>
+                                                        <HolderIcon holderType={a.holderType} />
+                                                    </div>
+                                                    <div>
+                                                        {a.assignedEmployee ? (
+                                                            <a href={`/dashboard/employees/${a.assignedEmployee.employeeId}/360-view`} style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }} className="hover:underline">
+                                                                {a.assignedEmployee.name}
+                                                            </a>
+                                                        ) : (
+                                                            <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal", fontWeight: 500 }}>
+                                                                {a.assignedToName ?? "GA — Tersedia"}
+                                                            </span>
+                                                        )}
+                                                        {a.assignedEmployee && (
+                                                            <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                                                                {a.assignedEmployee.department} — {a.assignedEmployee.position}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td style={{ padding: "10px 14px" }}>
                                                 <button

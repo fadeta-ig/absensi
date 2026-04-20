@@ -1,6 +1,14 @@
 import { prisma } from "../prisma";
 import logger from "@/lib/logger";
 
+/** Info karyawan yang ter-link ke aset via FK */
+export type AssignedEmployeeInfo = {
+    employeeId: string;
+    name: string;
+    department: string;
+    position: string;
+};
+
 export type AssetWithHistory = {
     id: string;
     assetCode: string;
@@ -12,6 +20,7 @@ export type AssetWithHistory = {
     assignedToName: string | null;
     assignedToId: string | null;
     assignedAt: string | null;
+    assignedEmployee: AssignedEmployeeInfo | null;
     nomorIndosat: string | null;
     expiredDate: string | null;
     keterangan: string | null;
@@ -19,8 +28,21 @@ export type AssetWithHistory = {
     updatedAt: string;
 };
 
+/** Prisma include untuk relasi employee yang di-assign */
+const ASSIGNED_TO_INCLUDE = {
+    assignedTo: {
+        select: {
+            employeeId: true,
+            name: true,
+            departmentRel: { select: { name: true } },
+            positionRel: { select: { name: true } },
+        },
+    },
+} as const;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toAsset(row: any): AssetWithHistory {
+    const emp = row.assignedTo ?? null;
     return {
         id: row.id,
         assetCode: row.assetCode,
@@ -32,6 +54,12 @@ function toAsset(row: any): AssetWithHistory {
         assignedToName: row.assignedToName ?? null,
         assignedToId: row.assignedToId ?? null,
         assignedAt: row.assignedAt ? new Date(row.assignedAt).toISOString() : null,
+        assignedEmployee: emp ? {
+            employeeId: emp.employeeId,
+            name: emp.name,
+            department: emp.departmentRel?.name ?? "-",
+            position: emp.positionRel?.name ?? "-",
+        } : null,
         nomorIndosat: row.nomorIndosat ?? null,
         expiredDate: row.expiredDate ? new Date(row.expiredDate).toISOString() : null,
         keterangan: row.keterangan ?? null,
@@ -52,6 +80,7 @@ export async function getAssets(options?: { includeCompanyOwned?: boolean; categ
     }
     const rows = await prisma.asset.findMany({
         where,
+        include: ASSIGNED_TO_INCLUDE,
         orderBy: [{ category: "asc" }, { assetCode: "asc" }],
     });
     return rows.map(toAsset);
@@ -59,9 +88,22 @@ export async function getAssets(options?: { includeCompanyOwned?: boolean; categ
 
 /** GET satu aset by ID */
 export async function getAssetById(id: string): Promise<AssetWithHistory | null> {
-    const row = await prisma.asset.findUnique({ where: { id } });
+    const row = await prisma.asset.findUnique({
+        where: { id },
+        include: ASSIGNED_TO_INCLUDE,
+    });
     if (!row) return null;
     return toAsset(row);
+}
+
+/** GET semua aset yang dipegang oleh satu karyawan */
+export async function getAssetsByEmployeeId(employeeId: string): Promise<AssetWithHistory[]> {
+    const rows = await prisma.asset.findMany({
+        where: { assignedToId: employeeId },
+        include: ASSIGNED_TO_INCLUDE,
+        orderBy: [{ category: "asc" }, { assetCode: "asc" }],
+    });
+    return rows.map(toAsset);
 }
 
 /** CREATE aset baru — with retry for asset code collision */
@@ -261,7 +303,7 @@ export async function retireAsset(id: string, performedBy: string): Promise<bool
 
     await prisma.asset.update({
         where: { id },
-        data: { status: "RETIRED", holderType: "GA_POOL", assignedToName: null, assignedAt: null },
+        data: { status: "RETIRED", holderType: "GA_POOL", assignedToName: null, assignedToId: null, assignedAt: null },
     });
 
     logger.info("Aset di-retire", { assetCode: existing.assetCode, performedBy });
