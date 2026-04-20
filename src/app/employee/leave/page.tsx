@@ -113,7 +113,12 @@ export default function LeavePage() {
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">Ajukan dan pantau pengajuan cuti</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+                <button 
+                    className="btn btn-primary" 
+                    onClick={() => setShowForm(!showForm)}
+                    disabled={(balance.total - balance.used) <= 0}
+                    title={(balance.total - balance.used) <= 0 ? "Sisa cuti Anda telah habis" : ""}
+                >
                     <Send className="w-4 h-4" /> Ajukan Cuti
                 </button>
             </div>
@@ -133,6 +138,19 @@ export default function LeavePage() {
                     <p className="text-xs text-[var(--text-muted)] mt-1">Sisa</p>
                 </div>
             </div>
+
+            {/* Balances Warning Alerts */}
+            { (balance.total - balance.used) <= 0 ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3 text-red-600 font-medium text-sm">
+                    <XCircle className="w-5 h-5 flex-shrink-0" />
+                    <span>Sisa cuti Anda telah habis. Anda tidak dapat mengajukan cuti baru tahun ini.</span>
+                </div>
+            ) : (balance.total - balance.used) <= 2 ? (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-3 text-amber-600 font-medium text-sm">
+                    <CalendarOff className="w-5 h-5 flex-shrink-0" />
+                    <span>Peringatan: Sisa cuti Anda tersisa {(balance.total - balance.used)} hari. Gunakan dengan bijak.</span>
+                </div>
+            ) : null }
 
             {/* Form */}
             {showForm && (

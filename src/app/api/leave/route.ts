@@ -56,6 +56,30 @@ export async function POST(request: NextRequest) {
             if (days < 90) {
                 return NextResponse.json({ error: "Cuti melahirkan (maternity) minimal 90 hari." }, { status: 400 });
             }
+        } else {
+            // General Leave Balance Validation
+            const { calculateWorkingDays } = await import("@/lib/services/leaveService");
+            
+            const employeeData = await prisma.employee.findUnique({
+                where: { employeeId: session.employeeId },
+                select: { totalLeave: true, usedLeave: true, shiftId: true },
+            });
+
+            if (employeeData) {
+                let offDays = new Set<number>([0]);
+                if (employeeData.shiftId) {
+                    const shift = await prisma.workShift.findUnique({ where: { id: employeeData.shiftId }, include: { days: true } });
+                    if (shift) offDays = new Set(shift.days.filter(d => d.isOff).map(d => d.dayOfWeek));
+                }
+
+                const remainingLeave = employeeData.totalLeave - employeeData.usedLeave;
+                // Asumsi pengajuan cuti akan dicancel sebelum hari berakhir, tapi strict block:
+                const requestedDays = calculateWorkingDays(body.startDate, body.endDate, offDays);
+
+                if (requestedDays > remainingLeave) {
+                    return NextResponse.json({ error: `Sisa cuti Anda tidak mencukupi. Sisa: ${remainingLeave} hari, Diajukan: ${requestedDays} hari.` }, { status: 400 });
+                }
+            }
         }
 
         const leave = await createLeaveRequest({
@@ -93,7 +117,10 @@ export async function PUT(request: NextRequest) {
 
         logger.info("Leave request updated", { leaveId: id, updatedBy: session.employeeId, status: data.status });
         return NextResponse.json(updated);
-    } catch (err) {
+    } catch (err: any) {
+        if (err instanceof Error && err.message.includes("Sisa cuti karyawan tidak mencukupi")) {
+            return NextResponse.json({ error: err.message }, { status: 400 });
+        }
         return serverErrorResponse("LeavePUT", err);
     }
 }

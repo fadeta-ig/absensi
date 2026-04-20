@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { payslipCreateSchema } from "@/lib/validations/validationSchemas";
 import { getPayslips, createPayslip } from "@/lib/services/payslipService";
 import logger from "@/lib/logger";
 
@@ -33,9 +34,10 @@ export async function POST(request: NextRequest) {
     if (session.role !== "hr") return forbiddenResponse();
 
     try {
-        // Zod validation skipped here as the body format for payslips can be complex (nested components)
-        // But we still apply rate limiting and auth guards
-        const body = await request.json();
+        const result = await validateBody(request, payslipCreateSchema);
+        if ("error" in result) return result.error;
+        const body = result.data;
+        
         const payslip = await createPayslip({
             ...body,
             issuedDate: new Date().toISOString(),

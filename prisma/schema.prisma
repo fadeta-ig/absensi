@@ -116,6 +116,7 @@ model PayslipRecord {
   employee    Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "payslip_records_employee_id_fkey")
+  @@unique([employeeId, period])
   @@map("payslip_records")
 }
 

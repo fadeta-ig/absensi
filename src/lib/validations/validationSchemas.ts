@@ -262,6 +262,25 @@ export const masterUpdateSchema = z.object({
     name: z.string().min(1, "Nama harus diisi"),
 });
 
+/* ───────────────────── Payslips ───────────────────── */
+
+export const payslipCreateSchema = z.object({
+    employeeId: z.string().min(1, "ID Karyawan wajib diisi"),
+    period: z.string().min(1, "Periode wajib diisi"),
+    basicSalary: z.number().min(0, "Gaji pokok tidak boleh negatif"),
+    allowances: z.array(z.object({
+        name: z.string(),
+        amount: z.number().min(0)
+    })).default([]),
+    deductions: z.array(z.object({
+        name: z.string(),
+        amount: z.number().min(0)
+    })).default([]),
+    overtime: z.number().min(0).default(0),
+    netSalary: z.number().min(0, "Gaji bersih tidak boleh negatif"),
+    notes: z.string().nullable().optional(),
+});
+
 // ────────────────────────────────────────────────────────────────
 // NOTE: PPh 21 and BPJS calculator schemas are defined inline in
 // their respective route handlers (src/app/api/pph21/calculate/route.ts

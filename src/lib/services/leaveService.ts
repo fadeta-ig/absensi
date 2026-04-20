@@ -106,6 +106,9 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
             }
 
             if (diff !== 0) {
+                if (diff > 0 && (existing.employee.totalLeave - existing.employee.usedLeave) < diff) {
+                    throw new Error(`Sisa cuti karyawan tidak mencukupi untuk persetujuan ini.`);
+                }
                 await prisma.employee.update({
                     where: { employeeId: existing.employeeId },
                     data: { usedLeave: { increment: diff } }

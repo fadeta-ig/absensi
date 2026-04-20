@@ -5,8 +5,18 @@ import { toDateString } from "@/lib/utils";
 
 // ─── Date helpers imported from @/lib/utils ────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toPayslipRecord(row: any): PayslipRecord {
+function toPayslipRecord(row: {
+    id: string;
+    employeeId: string;
+    period: string;
+    basicSalary: number;
+    allowances: string;
+    deductions: string;
+    overtime: number;
+    netSalary: number;
+    issuedDate: Date;
+    notes: string | null;
+}): PayslipRecord {
     return {
         id: row.id,
         employeeId: row.employeeId,
