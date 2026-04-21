@@ -88,39 +88,41 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
             }
         }
 
-        if (data.status === "approved" || (existing.status === "approved" && (data.startDate || data.endDate))) {
-            const oldDays = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
-            const newDays = calculateWorkingDays(
-                data.startDate || existing.startDate,
-                data.endDate || existing.endDate,
-                offDays
-            );
+        if (existing.type === "annual") {
+            if (data.status === "approved" || (existing.status === "approved" && (data.startDate || data.endDate))) {
+                const oldDays = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
+                const newDays = calculateWorkingDays(
+                    data.startDate || existing.startDate,
+                    data.endDate || existing.endDate,
+                    offDays
+                );
 
-            let diff = 0;
-            if (existing.status !== "approved" && data.status === "approved") {
-                // Changing from pending/rejected to approved
-                diff = newDays;
-            } else if (existing.status === "approved" && data.status !== "rejected") {
-                // Already approved, just adjusting dates
-                diff = newDays - oldDays;
-            }
-
-            if (diff !== 0) {
-                if (diff > 0 && (existing.employee.totalLeave - existing.employee.usedLeave) < diff) {
-                    throw new Error(`Sisa cuti karyawan tidak mencukupi untuk persetujuan ini.`);
+                let diff = 0;
+                if (existing.status !== "approved" && data.status === "approved") {
+                    // Changing from pending/rejected to approved
+                    diff = newDays;
+                } else if (existing.status === "approved" && data.status !== "rejected") {
+                    // Already approved, just adjusting dates
+                    diff = newDays - oldDays;
                 }
+
+                if (diff !== 0) {
+                    if (diff > 0 && (existing.employee.totalLeave - existing.employee.usedLeave) < diff) {
+                        throw new Error(`Sisa cuti karyawan tidak mencukupi untuk persetujuan ini.`);
+                    }
+                    await prisma.employee.update({
+                        where: { employeeId: existing.employeeId },
+                        data: { usedLeave: { increment: diff } }
+                    });
+                }
+            } else if (existing.status === "approved" && data.status === "rejected") {
+                // Reversing an approval
+                const days = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
                 await prisma.employee.update({
                     where: { employeeId: existing.employeeId },
-                    data: { usedLeave: { increment: diff } }
+                    data: { usedLeave: { decrement: days } }
                 });
             }
-        } else if (existing.status === "approved" && data.status === "rejected") {
-            // Reversing an approval
-            const days = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
-            await prisma.employee.update({
-                where: { employeeId: existing.employeeId },
-                data: { usedLeave: { decrement: days } }
-            });
         }
 
         const row = await prisma.leaveRequest.update({

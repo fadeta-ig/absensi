@@ -30,7 +30,7 @@ export default function LeavePage() {
         fetch("/api/leave").then((r) => r.json()).then((data) => {
             if (Array.isArray(data)) {
                 setLeaves(data);
-                const approvedLeaves = data.filter((l: LeaveRequest) => l.status === "approved");
+                const approvedLeaves = data.filter((l: LeaveRequest) => l.status === "approved" && l.type === "annual");
 
                 // Day-based calculation for balance
                 let usedDays = 0;
@@ -60,6 +60,10 @@ export default function LeavePage() {
         const reader = new FileReader();
         reader.onloadend = () => {
             setForm({ ...form, attachment: reader.result as string });
+            toast("Bukti berhasil di-upload!", "success");
+        };
+        reader.onerror = () => {
+            toast("Gagal membaca file. Silakan coba lagi.", "error");
         };
         reader.readAsDataURL(file);
     };
@@ -77,6 +81,10 @@ export default function LeavePage() {
             setLeaves((prev) => [newLeave, ...prev]);
             setShowForm(false);
             setForm({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
+            toast("Pengajuan cuti berhasil dikirim!", "success");
+        } else {
+            const errData = await res.json();
+            toast(errData.error || "Gagal mengirim pengajuan cuti", "error");
         }
         setLoading(false);
     };
@@ -116,8 +124,6 @@ export default function LeavePage() {
                 <button 
                     className="btn btn-primary" 
                     onClick={() => setShowForm(!showForm)}
-                    disabled={(balance.total - balance.used) <= 0}
-                    title={(balance.total - balance.used) <= 0 ? "Sisa cuti Anda telah habis" : ""}
                 >
                     <Send className="w-4 h-4" /> Ajukan Cuti
                 </button>
@@ -168,6 +174,9 @@ export default function LeavePage() {
                                 <option value="personal">Pribadi</option>
                                 <option value="maternity">Melahirkan</option>
                             </select>
+                            {form.type === "annual" && (balance.total - balance.used) <= 0 && (
+                                <p className="text-xs text-red-500 font-medium mt-1">* Sisa cuti tahunan habis, tidak dapat mengajukan.</p>
+                            )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
@@ -202,7 +211,7 @@ export default function LeavePage() {
                             </div>
                             <p className="text-[10px] text-[var(--text-muted)] mt-1">* Maksimal 2MB (Gunakan foto jika PDF terlalu besar)</p>
                         </div>
-                        <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+                        <button type="submit" className="btn btn-primary w-full" disabled={loading || (form.type === "annual" && (balance.total - balance.used) <= 0)}>
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             {loading ? "Mengirim..." : "Kirim Pengajuan"}
                         </button>

@@ -21,7 +21,7 @@ export default function EmployeeHomePage() {
         fetch("/api/attendance").then((r) => r.json()).then(setAttendance);
         fetch("/api/leave").then((r) => r.json()).then((data) => {
             if (Array.isArray(data)) {
-                const approvedLeaves = data.filter((l: { status: string }) => l.status === "approved");
+                const approvedLeaves = data.filter((l: { status: string; type: string }) => l.status === "approved" && l.type === "annual");
                 let usedDays = 0;
                 approvedLeaves.forEach((l: { startDate: string; endDate: string }) => {
                     const s = new Date(l.startDate);

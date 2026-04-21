@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createClientLogger } from "@/lib/clientLogger";
+import { useToast } from "@/components/Toast";
+import { useRouter } from "next/navigation";
 
 const log = createClientLogger("AttendancePage");
 
@@ -25,6 +27,8 @@ interface GpsInfo {
 }
 
 export default function AttendancePage() {
+    const toast = useToast();
+    const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -138,15 +142,15 @@ export default function AttendancePage() {
         }
 
         const canvas = canvasRef.current;
-        canvas.width = 640;
-        canvas.height = 480;
+        canvas.width = vid.videoWidth || 640;
+        canvas.height = vid.videoHeight || 480;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
             log.error("Gagal mendapatkan 2D context dari canvas");
             return;
         }
 
-        ctx.drawImage(vid, 0, 0, 640, 480);
+        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
         const photoData = canvas.toDataURL("image/jpeg", 0.8);
 
         if (!registeredDescriptor) {
@@ -221,16 +225,23 @@ export default function AttendancePage() {
 
             if (res.ok) {
                 setStatus("success");
-                setMessage(data.clockOut ? "Clock Out berhasil!" : "Clock In berhasil!");
                 setTodayRecord(data);
+                if (data.clockOut) {
+                    toast("Clock Out berhasil! Selamat beristirahat 🏠", "success");
+                } else {
+                    toast("Clock In berhasil! Selamat bekerja 💼", "success");
+                }
+                setTimeout(() => router.push("/employee"), 1500);
             } else {
                 log.error("Submit absensi ditolak server", { httpStatus: res.status, error: data.error });
                 setStatus("error");
+                toast(data.error || "Gagal melakukan absensi", "error");
                 setMessage(data.error || "Gagal submit absensi");
             }
         } catch (err) {
             log.error("Koneksi error saat submit absensi", { error: err instanceof Error ? err.message : String(err) });
             setStatus("error");
+            toast("Terjadi kesalahan koneksi. Periksa internet Anda.", "error");
             setMessage("Terjadi kesalahan koneksi");
         }
     }, [photo, gpsInfo, faceVerification.status, todayRecord]);
@@ -324,10 +335,10 @@ export default function AttendancePage() {
             {/* Camera */}
             {!isDone && (
                 <div className="card overflow-hidden">
-                    <div className="relative aspect-[4/3] bg-gray-100">
-                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} />
+                    <div className="relative w-full aspect-[4/3] sm:aspect-video bg-gray-900 rounded-t-xl overflow-hidden">
+                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: "none" }} />
                         {!streaming && !photo && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/50">
                                 <Video className="w-12 h-12 opacity-30" />
                                 <p className="text-sm">Kamera belum aktif</p>
                                 <button onClick={startCamera} className="btn btn-primary btn-sm">
@@ -336,11 +347,11 @@ export default function AttendancePage() {
                             </div>
                         )}
                         {photo && (
-                            <img src={photo} alt="Captured" className="w-full h-full object-cover" />
+                            <img src={photo} alt="Captured" className="w-full h-full object-cover" style={{ transform: "none" }} />
                         )}
                         {streaming && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-40 h-52 border-2 border-[var(--primary)]/60 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.15)]" />
+                                <div className="w-[35%] aspect-[3/4] border-2 border-[var(--primary)]/60 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.15)]" />
                             </div>
                         )}
                         <canvas ref={canvasRef} className="hidden" />

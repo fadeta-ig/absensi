@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
             if (days < 90) {
                 return NextResponse.json({ error: "Cuti melahirkan (maternity) minimal 90 hari." }, { status: 400 });
             }
-        } else {
+        } else if (body.type === "annual") {
             // General Leave Balance Validation
             const { calculateWorkingDays } = await import("@/lib/services/leaveService");
             
