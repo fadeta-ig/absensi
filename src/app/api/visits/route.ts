@@ -66,7 +66,7 @@ export async function PUT(request: NextRequest) {
     try {
         const result = await validateBody(request, visitUpdateSchema);
         if ("error" in result) return result.error;
-        const { id, status, notes, ...data } = result.data;
+        const { id, status, notes, visitEndTime, ...data } = result.data;
 
         const existing = await getVisitReportById(id);
         if (!existing) {
@@ -78,12 +78,18 @@ export async function PUT(request: NextRequest) {
             return forbiddenResponse();
         }
 
-        // Employees can only edit their own pending visits
+        // Employees can only edit their own visits
         if (session.role !== "hr") {
             if (existing.employeeId !== session.employeeId) {
                 return forbiddenResponse();
             }
-            if (existing.status !== "pending") {
+
+            // Employee boleh update visitEndTime kapan saja (pending/approved)
+            // Tapi untuk field lainnya, hanya bisa edit saat pending
+            const isEndTimeOnlyUpdate = visitEndTime !== undefined
+                && Object.keys(data).filter(k => data[k as keyof typeof data] !== undefined).length === 0;
+
+            if (existing.status !== "pending" && !isEndTimeOnlyUpdate) {
                 return NextResponse.json(
                     { error: "Tidak dapat mengubah laporan yang sudah diproses oleh HR." },
                     { status: 400 }
@@ -96,6 +102,7 @@ export async function PUT(request: NextRequest) {
             if (status !== undefined) updateData.status = status;
             if (notes !== undefined) updateData.notes = notes;
         }
+        if (visitEndTime !== undefined) updateData.visitEndTime = visitEndTime;
 
         const updated = await updateVisitReport(id, updateData);
         if (!updated) {

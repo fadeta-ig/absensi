@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import {
     MapPinned, Search, CheckCircle, XCircle, Clock,
-    Building2, Navigation, FileText, User, Filter, Eye, X
+    Building2, Navigation, FileText, User, Filter, Eye, X, Timer
 } from "lucide-react";
 
 interface VisitReport {
     id: string;
     employeeId: string;
+    employeeName?: string | null;
+    employeeDepartment?: string | null;
     date: string;
+    visitStartTime?: string | null;
+    visitEndTime?: string | null;
     clientName: string;
     clientAddress: string;
     purpose: string;
@@ -58,9 +62,11 @@ export default function DashboardVisitsPage() {
     };
 
     const filtered = visits.filter((v) => {
-        const matchSearch = v.clientName.toLowerCase().includes(search.toLowerCase()) ||
-            v.employeeId.toLowerCase().includes(search.toLowerCase()) ||
-            v.purpose.toLowerCase().includes(search.toLowerCase());
+        const searchLower = search.toLowerCase();
+        const matchSearch = v.clientName.toLowerCase().includes(searchLower) ||
+            v.employeeId.toLowerCase().includes(searchLower) ||
+            (v.employeeName || "").toLowerCase().includes(searchLower) ||
+            v.purpose.toLowerCase().includes(searchLower);
         const matchStatus = filterStatus === "all" || v.status === filterStatus;
         return matchSearch && matchStatus;
     });
@@ -70,6 +76,11 @@ export default function DashboardVisitsPage() {
         pending: visits.filter((v) => v.status === "pending").length,
         approved: visits.filter((v) => v.status === "approved").length,
         rejected: visits.filter((v) => v.status === "rejected").length,
+    };
+
+    const formatTimeRange = (start?: string | null, end?: string | null) => {
+        if (!start) return "-";
+        return end ? `${start} – ${end}` : `${start} – ...`;
     };
 
     return (
@@ -101,7 +112,7 @@ export default function DashboardVisitsPage() {
             <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                    <input type="text" className="form-input pl-10" placeholder="Cari klien, employee ID, atau tujuan..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                    <input type="text" className="form-input pl-10" placeholder="Cari nama, ID karyawan, klien, atau tujuan..." value={search} onChange={(e) => setSearch(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-[var(--text-muted)]" />
@@ -127,22 +138,23 @@ export default function DashboardVisitsPage() {
                                 <th>Klien</th>
                                 <th className="hidden md:table-cell">Tujuan</th>
                                 <th className="hidden lg:table-cell">Tanggal</th>
+                                <th className="hidden lg:table-cell">Jam</th>
                                 <th>Status</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filtered.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada kunjungan ditemukan</td></tr>
+                                <tr><td colSpan={7} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada kunjungan ditemukan</td></tr>
                             ) : (
                                 filtered.map((v) => {
                                     const cfg = STATUS_CONFIG[v.status];
                                     return (
                                         <tr key={v.id}>
-                                            <td className="font-mono text-xs">
-                                                <div className="flex items-center gap-1.5">
-                                                    <User className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                                                    {v.employeeId}
+                                            <td>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{v.employeeName || "-"}</p>
+                                                    <p className="text-[10px] font-mono text-[var(--text-muted)]">{v.employeeId}</p>
                                                 </div>
                                             </td>
                                             <td>
@@ -155,6 +167,9 @@ export default function DashboardVisitsPage() {
                                                 <p className="line-clamp-2">{v.purpose}</p>
                                             </td>
                                             <td className="hidden lg:table-cell text-xs">{v.date}</td>
+                                            <td className="hidden lg:table-cell text-xs font-mono">
+                                                {formatTimeRange(v.visitStartTime, v.visitEndTime)}
+                                            </td>
                                             <td><span className={`badge ${cfg.class}`}>{cfg.label}</span></td>
                                             <td>
                                                 <div className="flex items-center gap-1">
@@ -203,10 +218,20 @@ export default function DashboardVisitsPage() {
                             </button>
                         </div>
                         <div className="space-y-4">
+                            {/* Employee Info */}
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <User className="w-4 h-4 text-[var(--text-muted)]" />
-                                    <span className="text-sm font-mono text-[var(--text-secondary)]">{selectedVisit.employeeId}</span>
+                                <div>
+                                    <p className="text-sm font-bold text-[var(--text-primary)]">{selectedVisit.employeeName || selectedVisit.employeeId}</p>
+                                    <div className="flex items-center gap-3 mt-0.5">
+                                        <span className="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-1">
+                                            <User className="w-3 h-3" /> {selectedVisit.employeeId}
+                                        </span>
+                                        {selectedVisit.employeeDepartment && (
+                                            <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                                                <Building2 className="w-3 h-3" /> {selectedVisit.employeeDepartment}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <span className={`badge ${STATUS_CONFIG[selectedVisit.status].class}`}>
                                     {STATUS_CONFIG[selectedVisit.status].label}
@@ -238,8 +263,17 @@ export default function DashboardVisitsPage() {
                                         <p className="text-sm text-[var(--text-secondary)]">{selectedVisit.notes}</p>
                                     </div>
                                 )}
-                                <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                                    <Clock className="w-3 h-3" /> {selectedVisit.date}
+                                {/* Date & Time Row */}
+                                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> {selectedVisit.date}
+                                    </span>
+                                    {selectedVisit.visitStartTime && (
+                                        <span className="flex items-center gap-1 font-mono text-[var(--primary)] font-bold">
+                                            <Timer className="w-3 h-3" />
+                                            {formatTimeRange(selectedVisit.visitStartTime, selectedVisit.visitEndTime)}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 

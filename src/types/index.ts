@@ -135,7 +135,11 @@ export type TodoItem = {
 export type VisitReport = {
     id: string;
     employeeId: string;
+    employeeName?: string | null;
+    employeeDepartment?: string | null;
     date: string;
+    visitStartTime?: string | null;
+    visitEndTime?: string | null;
     clientName: string;
     clientAddress: string;
     purpose: string;

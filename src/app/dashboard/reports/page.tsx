@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     FileDown, FileSpreadsheet, Calendar,
     ClipboardList, MapPinned, Clock4,
@@ -24,28 +24,83 @@ const REPORT_TYPES = [
 
 export default function ReportsPage() {
     const [type, setType] = useState("attendance");
-    const [period, setPeriod] = useState(() => {
+    const [startDate, setStartDate] = useState(() => {
         const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     });
+    const [endDate, setEndDate] = useState(() => {
+        const now = new Date();
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
+    });
+    const [divisionId, setDivisionId] = useState("");
+    const [departmentId, setDepartmentId] = useState("");
+    const [employeeId, setEmployeeId] = useState("");
+
+    const [divisions, setDivisions] = useState<{ id: string, name: string }[]>([]);
+    const [departments, setDepartments] = useState<{ id: string, name: string, divisionId: string }[]>([]);
+    // NOTE: employees array from api/employees maps departmentRel to department and divisionRel to division. However, divisionId and departmentId are standard keys.
+    const [employees, setEmployees] = useState<{ employeeId: string, name: string, departmentId: string, divisionId: string }[]>([]);
+
+    useEffect(() => {
+        Promise.all([
+            fetch("/api/master/divisions").then(r => r.json()),
+            fetch("/api/master/departments").then(r => r.json()),
+            fetch("/api/employees").then(r => r.json())
+        ]).then(([divs, depts, emps]) => {
+            if (Array.isArray(divs)) setDivisions(divs);
+            if (Array.isArray(depts)) setDepartments(depts);
+            if (Array.isArray(emps)) setEmployees(emps);
+        }).catch(() => {});
+    }, []);
+
+    const filteredDepartments = divisionId ? departments.filter(d => d.divisionId === divisionId) : departments;
+    const filteredEmployees = employees.filter(e => {
+         if (departmentId && e.departmentId !== departmentId) return false;
+         if (divisionId && e.divisionId !== divisionId) return false;
+         return true;
+    });
+
+    useEffect(() => { setDepartmentId(""); setEmployeeId(""); }, [divisionId]);
+    useEffect(() => { setEmployeeId(""); }, [departmentId]);
+
     const [loading, setLoading] = useState(false);
     const [preview, setPreview] = useState<PreviewData | null>(null);
     const [error, setError] = useState("");
     const [isGrouped, setIsGrouped] = useState(false);
     const [isMatrix, setIsMatrix] = useState(true);
 
+    const buildQuery = (format: string) => {
+        const query: Record<string, string> = {
+            type, startDate, endDate, format,
+            grouped: String(isGrouped && !isMatrix), mode: isMatrix ? "matrix" : ""
+        };
+        if (divisionId) query.divisionId = divisionId;
+        if (departmentId) query.departmentId = departmentId;
+        if (employeeId) query.employeeId = employeeId;
+        return new URLSearchParams(query);
+    };
+
+    const isMatrixValid = () => {
+        if (!isMatrix) return true;
+        const days = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 3600 * 24);
+        if (days >= 31) {
+            setError("Rentang tanggal untuk Mode Matriks maksimal 31 hari.");
+            return false;
+        }
+        return true;
+    };
+
     const handlePreview = async () => {
         setLoading(true);
         setError("");
         setPreview(null);
         try {
-            const query = new URLSearchParams({
-                type,
-                period,
-                format: "json",
-                grouped: String(isGrouped && !isMatrix),
-                mode: isMatrix ? "matrix" : ""
-            });
+            if (!isMatrixValid()) {
+                setLoading(false);
+                return;
+            }
+            const query = buildQuery("json");
             const res = await fetch(`/api/export?${query.toString()}`);
             const data = await res.json();
             if (res.ok) {
@@ -63,13 +118,11 @@ export default function ReportsPage() {
         setLoading(true);
         setError("");
         try {
-            const query = new URLSearchParams({
-                type,
-                period,
-                format: format === "excel" ? "excel" : "json", // for PDF we fetch JSON and build locally
-                grouped: String(isGrouped && !isMatrix),
-                mode: isMatrix ? "matrix" : ""
-            });
+            if (!isMatrixValid()) {
+                setLoading(false);
+                return;
+            }
+            const query = buildQuery(format === "excel" ? "excel" : "json");
 
             if (format === "excel") {
                 const res = await fetch(`/api/export?${query.toString()}`);
@@ -78,7 +131,7 @@ export default function ReportsPage() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = `laporan_${type}_${period}_${isMatrix ? "matrix" : isGrouped ? "grouped" : "flat"}.xlsx`;
+                a.download = `laporan_${type}_${startDate}_${endDate}_${isMatrix ? "matrix" : isGrouped ? "grouped" : "flat"}.xlsx`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -96,8 +149,8 @@ export default function ReportsPage() {
                         body,
                         headers,
                         `REKAP ABSENSI KARYAWAN`,
-                        `Rekap_Absensi_${period}`,
-                        `Periode: ${new Date(period + "-01").toLocaleDateString("id-ID", { month: "long", year: "numeric" })} | H=Hadir, T=Terlambat, A=Alpa, C=Cuti`
+                        `Rekap_Absensi_${startDate}_${endDate}`,
+                        `Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} | H=Hadir, T=Terlambat, A=Alpa, C=Cuti`
                     );
                 } else {
                     // Fallback for simple PDF if needed, but primarily for Matrix
@@ -155,20 +208,56 @@ export default function ReportsPage() {
                 </div>
             </div>
 
-            {/* Period & Actions */}
+            {/* Filters & Actions */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] space-y-5">
+                {/* Parameter Organisasi */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Divisi (Opsional)</label>
+                        <select className="form-select h-10 w-full text-sm rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors" value={divisionId} onChange={(e) => { setDivisionId(e.target.value); setPreview(null); }}>
+                            <option value="">-- Semua Divisi --</option>
+                            {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Departemen (Opsional)</label>
+                        <select className="form-select h-10 w-full text-sm rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors disabled:opacity-50" value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setPreview(null); }} disabled={!!divisionId && filteredDepartments.length === 0}>
+                            <option value="">-- Semua Departemen --</option>
+                            {filteredDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Karyawan (Opsional)</label>
+                        <select className="form-select h-10 w-full text-sm rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors" value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setPreview(null); }}>
+                            <option value="">-- Semua Karyawan --</option>
+                            {filteredEmployees.map(e => <option key={e.employeeId} value={e.employeeId}>{e.name}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <hr className="border-gray-100" />
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                     {/* Left: Periode */}
                     <div className="flex flex-col gap-2">
                         <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5" /> Periode Laporan
+                            <Calendar className="w-3.5 h-3.5" /> Rentang Tanggal
                         </label>
-                        <input
-                            type="month"
-                            className="form-input h-11 w-full lg:w-[220px] text-sm text-gray-700 bg-white border border-gray-200 rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
-                            value={period}
-                            onChange={(e) => { setPeriod(e.target.value); setPreview(null); setError(""); }}
-                        />
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="date"
+                                className="form-input h-11 w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
+                                value={startDate}
+                                onChange={(e) => { setStartDate(e.target.value); setPreview(null); setError(""); }}
+                            />
+                            <span className="text-gray-400 text-xs font-medium">s/d</span>
+                            <input
+                                type="date"
+                                className="form-input h-11 w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
+                                value={endDate}
+                                onChange={(e) => { setEndDate(e.target.value); setPreview(null); setError(""); }}
+                            />
+                        </div>
                     </div>
 
                     {/* Middle: Mode */}
@@ -251,7 +340,7 @@ export default function ReportsPage() {
                 <FileDown className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div>
                     <p className="text-xs font-bold text-blue-700">
-                        {selectedType?.label} — {new Date(period + "-01").toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+                        {selectedType?.label} — {new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d {new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
                         {isGrouped && type === "attendance" && <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] rounded-sm uppercase">Mode Grouped</span>}
                     </p>
                     <p className="text-[10px] text-blue-600 mt-0.5 font-medium">Format: .xlsx (Excel). Pastikan periode sudah sesuai sebelum mendownload.</p>

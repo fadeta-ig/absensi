@@ -66,10 +66,12 @@ model PushSubscription {
 }
 
 model VisitReport {
-  id            String   @id @default(uuid())
-  employeeId    String   @map("employee_id")
-  date          DateTime
-  clientName    String   @map("client_name")
+  id             String    @id @default(uuid())
+  employeeId     String    @map("employee_id")
+  date           DateTime
+  visitStartTime DateTime? @map("visit_start_time")
+  visitEndTime   DateTime? @map("visit_end_time")
+  clientName     String    @map("client_name")
   clientAddress String   @map("client_address") @db.Text
   purpose       String   @db.Text
   result        String?  @db.Text

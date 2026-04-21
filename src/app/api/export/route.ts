@@ -14,13 +14,7 @@ interface ExportRow {
 // Alias for backward compatibility within this file
 const toDateStr = toDateDisplay;
 
-/** Buat Date range dari string periode YYYY-MM */
-const periodToRange = (period: string) => {
-    const [year, month] = period.split("-").map(Number);
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 1); // exclusive
-    return { gte: start, lt: end };
-};
+
 
 export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
@@ -33,23 +27,42 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const type = searchParams.get("type");
-        const period = searchParams.get("period"); // YYYY-MM
-        const format = searchParams.get("format") || "excel";
+        const startDateStr = searchParams.get("startDate");
+        const endDateStr = searchParams.get("endDate");
+        const divisionId = searchParams.get("divisionId") || undefined;
+        const departmentId = searchParams.get("departmentId") || undefined;
+        const employeeId = searchParams.get("employeeId") || undefined;
         const isGrouped = searchParams.get("grouped") === "true";
         const mode = searchParams.get("mode"); // matrix
+        const format = searchParams.get("format") || "excel";
 
-        if (!type || !period) {
-            return NextResponse.json({ error: "Parameter tipe data dan periode harus diisi." }, { status: 400 });
+        if (!type || !startDateStr || !endDateStr) {
+            return NextResponse.json({ error: "Parameter tipe data, tanggal mulai, dan selesai harus diisi." }, { status: 400 });
         }
 
-        const [year, month] = period.split("-").map(Number);
-        const daysInMonth = new Date(year, month, 0).getDate();
+        const startDate = new Date(`${startDateStr}T00:00:00`);
+        const endDate = new Date(`${endDateStr}T23:59:59`);
+        const dateRange = { gte: startDate, lte: endDate };
+
+        // Buat list tanggal untuk matrix (max 31 hari)
+        const dateList: string[] = [];
+        let curr = new Date(startDate);
+        while (curr <= endDate && dateList.length <= 31) {
+            dateList.push(curr.toISOString().split("T")[0]); // YYYY-MM-DD
+            curr.setDate(curr.getDate() + 1);
+        }
 
         const employees = await prisma.employee.findMany({
+            where: {
+                ...(divisionId ? { divisionId } : {}),
+                ...(departmentId ? { departmentId } : {}),
+                ...(employeeId ? { employeeId } : {})
+            },
             select: { employeeId: true, name: true, departmentRel: { select: { name: true } }, positionRel: { select: { name: true } } },
             orderBy: { name: "asc" }
         });
         const empMap = new Map(employees.map((e) => [e.employeeId, e]));
+        const validEmpIds = employees.map(e => e.employeeId);
 
         let rows: ExportRow[] = [];
         let sheetName = "";
@@ -57,14 +70,14 @@ export async function GET(request: NextRequest) {
 
         if (type === "attendance") {
             const records = await prisma.attendanceRecord.findMany({
-                where: { date: periodToRange(period) },
+                where: { date: dateRange, employeeId: { in: validEmpIds } },
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Absensi";
 
             if (mode === "matrix") {
                 finalHeaders = ["Nama Karyawan", "ID Karyawan", "Departemen"];
-                for (let i = 1; i <= daysInMonth; i++) finalHeaders.push(String(i));
+                for (const d of dateList) finalHeaders.push(d.split("-").slice(1).join("-")); // MM-DD
                 finalHeaders.push("Hadir", "Lambat", "Alpa");
 
                 // Horizontal Matrix: Employees as Rows, Dates as Columns
@@ -76,18 +89,18 @@ export async function GET(request: NextRequest) {
                         "Departemen": emp.departmentRel?.name || "-",
                     };
 
-                    // Fill days 1 to daysInMonth
-                    for (let d = 1; d <= daysInMonth; d++) {
-                        const dateStr = `${period}-${String(d).padStart(2, "0")}`;
-                        const record = empRecords.find((r) => toDateStr(r.date) === dateStr);
+                    // Fill days from dateList
+                    for (const d of dateList) {
+                        const colKey = d.split("-").slice(1).join("-");
+                        const record = empRecords.find((r) => toDateStr(r.date) === d);
 
                         if (record) {
                             // Use time format (HH:MM) for clock-in/out display
                             const clockIn = record.clockIn ? toTimeString(record.clockIn) : "-";
                             const clockOut = record.clockOut ? toTimeString(record.clockOut) : "-";
-                            row[String(d)] = `${clockIn}\n${clockOut}`;
+                            row[colKey] = `${clockIn}\n${clockOut}`;
                         } else {
-                            row[String(d)] = "-\n-";
+                            row[colKey] = "-\n-";
                         }
                     }
 
@@ -98,7 +111,7 @@ export async function GET(request: NextRequest) {
 
                     return row;
                 });
-                sheetName = `Rekap_Absensi_${period}`;
+                sheetName = `Rekap_Absensi_${startDateStr}_${endDateStr}`;
             } else if (isGrouped) {
                 // Group by employee
                 const groupedMap = new Map<string, typeof records>();
@@ -174,9 +187,9 @@ export async function GET(request: NextRequest) {
                 });
             }
         } else if (type === "visits") {
-            finalHeaders = ["Nama", "ID Karyawan", "Tanggal", "Nama Klien", "Alamat", "Tujuan", "Hasil", "Status"];
+            finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tanggal", "Jam Mulai", "Jam Selesai", "Nama Klien", "Alamat", "Tujuan", "Hasil", "Status"];
             const records = await prisma.visitReport.findMany({
-                where: { date: periodToRange(period) },
+                where: { date: dateRange, employeeId: { in: validEmpIds } },
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Kunjungan";
@@ -185,7 +198,10 @@ export async function GET(request: NextRequest) {
                 return {
                     "Nama": emp?.name || "-",
                     "ID Karyawan": r.employeeId,
+                    "Departemen": emp?.departmentRel?.name || "-",
                     "Tanggal": toDateStr(r.date),
+                    "Jam Mulai": r.visitStartTime ? toTimeString(r.visitStartTime) : "-",
+                    "Jam Selesai": r.visitEndTime ? toTimeString(r.visitEndTime) : "-",
                     "Nama Klien": r.clientName,
                     "Alamat": r.clientAddress,
                     "Tujuan": r.purpose,
@@ -196,7 +212,7 @@ export async function GET(request: NextRequest) {
         } else if (type === "overtime") {
             finalHeaders = ["Nama", "ID Karyawan", "Tanggal", "Jam Mulai", "Jam Selesai", "Durasi (Jam)", "Alasan", "Status"];
             const records = await prisma.overtimeRequest.findMany({
-                where: { date: periodToRange(period) },
+                where: { date: dateRange, employeeId: { in: validEmpIds } },
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Lembur";
@@ -224,7 +240,7 @@ export async function GET(request: NextRequest) {
         if (format === "preview" || format === "json") {
             return NextResponse.json({
                 sheetName,
-                period,
+                period: `${startDateStr} s/d ${endDateStr}`,
                 totalRecords: rows.length,
                 data: rows,
                 headers: finalHeaders
@@ -251,7 +267,7 @@ export async function GET(request: NextRequest) {
             return new NextResponse(excelBuffer, {
                 headers: {
                     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    "Content-Disposition": `attachment; filename="${sheetName}_${period}.xlsx"`,
+                    "Content-Disposition": `attachment; filename="${sheetName}.xlsx"`,
                 },
             });
         } else {

@@ -4,13 +4,17 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import {
     MapPinned, Plus, Camera, MapPin, Loader2, CheckCircle,
     AlertCircle, X, Building2, Navigation, FileText, Clock,
-    Video, VideoOff, Filter
+    Video, VideoOff, Filter, Timer
 } from "lucide-react";
 
 interface VisitReport {
     id: string;
     employeeId: string;
+    employeeName?: string | null;
+    employeeDepartment?: string | null;
     date: string;
+    visitStartTime?: string | null;
+    visitEndTime?: string | null;
     clientName: string;
     clientAddress: string;
     purpose: string;
@@ -39,9 +43,10 @@ export default function VisitsPage() {
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
     const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
-    const [form, setForm] = useState({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "" });
+    const [form, setForm] = useState({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "", visitStartTime: "", visitEndTime: "" });
     const [showForm, setShowForm] = useState(false);
     const [streaming, setStreaming] = useState(false);
+    const [endTimeUpdating, setEndTimeUpdating] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 6;
@@ -49,7 +54,6 @@ export default function VisitsPage() {
     useEffect(() => {
         setCurrentPage(1);
     }, [filterStatus]);
-
 
     useEffect(() => {
         fetch("/api/visits").then((r) => r.json()).then(setVisits);
@@ -60,6 +64,15 @@ export default function VisitsPage() {
             );
         }
     }, []);
+
+    // Auto-fill visitStartTime with current time
+    useEffect(() => {
+        if (showForm && !form.visitStartTime) {
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+            setForm(prev => ({ ...prev, visitStartTime: timeStr }));
+        }
+    }, [showForm, form.visitStartTime]);
 
     const startCamera = useCallback(async () => {
         try {
@@ -86,26 +99,27 @@ export default function VisitsPage() {
 
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current) return;
+        const vid = videoRef.current;
         const canvas = canvasRef.current;
-        canvas.width = 640;
-        canvas.height = 480;
+        canvas.width = vid.videoWidth || 640;
+        canvas.height = vid.videoHeight || 480;
         const ctx = canvas.getContext("2d");
         if (ctx) {
-            ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
             setPhoto(canvas.toDataURL("image/jpeg", 0.8));
             stopCamera();
         }
     }, [stopCamera]);
 
     const resetForm = () => {
-        setForm({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "" });
+        setForm({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "", visitStartTime: "", visitEndTime: "" });
         setPhoto(null);
         stopCamera();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.clientName || !form.clientAddress || !form.purpose) return;
+        if (!form.clientName || !form.clientAddress || !form.purpose || !form.visitStartTime) return;
         setLoading(true);
         setMessage(null);
 
@@ -115,6 +129,7 @@ export default function VisitsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...form,
+                    visitEndTime: form.visitEndTime || null,
                     photo,
                     location,
                 }),
@@ -135,10 +150,35 @@ export default function VisitsPage() {
         setLoading(false);
     };
 
+    const handleEndTimeUpdate = async (visitId: string, endTime: string) => {
+        setEndTimeUpdating(true);
+        try {
+            const res = await fetch("/api/visits", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: visitId, visitEndTime: endTime }),
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                setVisits((prev) => prev.map((v) => (v.id === visitId ? updated : v)));
+                setSelectedVisit(updated);
+                setMessage({ type: "success", text: "Jam selesai berhasil diperbarui!" });
+            }
+        } catch {
+            setMessage({ type: "error", text: "Gagal memperbarui jam selesai" });
+        }
+        setEndTimeUpdating(false);
+    };
+
     const filtered = filterStatus === "all" ? visits : visits.filter((v) => v.status === filterStatus);
 
     const paginatedVisits = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+
+    const formatTimeRange = (start?: string | null, end?: string | null) => {
+        if (!start) return null;
+        return end ? `${start} – ${end}` : `${start} – ...`;
+    };
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
@@ -192,6 +232,7 @@ export default function VisitsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                         {paginatedVisits.map((visit) => {
                             const cfg = STATUS_CONFIG[visit.status];
+                            const timeRange = formatTimeRange(visit.visitStartTime, visit.visitEndTime);
                             return (
                                 <div
                                     key={visit.id}
@@ -206,7 +247,7 @@ export default function VisitsPage() {
                                             <h3 className="text-[15px] font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
                                                 {visit.clientName}
                                             </h3>
-                                            <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1.5">
+                                            <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1.5 flex-wrap">
                                                 <span className="flex items-center gap-1 truncate max-w-[150px]">
                                                     <Navigation className="w-3 h-3 shrink-0" />
                                                     <span className="truncate">{visit.clientAddress}</span>
@@ -215,6 +256,12 @@ export default function VisitsPage() {
                                                     <Clock className="w-3 h-3 shrink-0" />
                                                     {visit.date}
                                                 </span>
+                                                {timeRange && (
+                                                    <span className="flex items-center gap-1 shrink-0 font-mono text-[var(--primary)] font-semibold">
+                                                        <Timer className="w-3 h-3 shrink-0" />
+                                                        {timeRange}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -275,6 +322,23 @@ export default function VisitsPage() {
                                     <span className="flex items-center gap-1"><FileText className="w-3 h-3" /> Tujuan Kunjungan</span>
                                 </label>
                                 <textarea className="form-input min-h-[60px] resize-none" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="Meeting pembahasan project..." required />
+                            </div>
+
+                            {/* Visit Time */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">
+                                        <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Jam Mulai *</span>
+                                    </label>
+                                    <input type="time" className="form-input" value={form.visitStartTime} onChange={(e) => setForm({ ...form, visitStartTime: e.target.value })} required />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label">
+                                        <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Jam Selesai</span>
+                                    </label>
+                                    <input type="time" className="form-input" value={form.visitEndTime} onChange={(e) => setForm({ ...form, visitEndTime: e.target.value })} />
+                                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5 italic">Bisa diisi nanti setelah kunjungan selesai</p>
+                                </div>
                             </div>
 
                             <div className="form-group !mb-0">
@@ -366,6 +430,30 @@ export default function VisitsPage() {
                                 </span>
                             </div>
 
+                            {/* Visit Time Info */}
+                            <div className="bg-[var(--primary)]/5 p-4 rounded-xl border border-[var(--primary)]/10">
+                                <p className="text-[11px] font-bold text-[var(--primary)] uppercase tracking-wider mb-2 flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Jam Kunjungan</p>
+                                <div className="flex items-center gap-4">
+                                    <div>
+                                        <p className="text-[10px] text-[var(--text-muted)] uppercase">Mulai</p>
+                                        <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{selectedVisit.visitStartTime || "-"}</p>
+                                    </div>
+                                    <div className="text-[var(--text-muted)]">→</div>
+                                    <div>
+                                        <p className="text-[10px] text-[var(--text-muted)] uppercase">Selesai</p>
+                                        {selectedVisit.visitEndTime ? (
+                                            <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{selectedVisit.visitEndTime}</p>
+                                        ) : (
+                                            <EndTimeInput
+                                                visitId={selectedVisit.id}
+                                                onSubmit={handleEndTimeUpdate}
+                                                loading={endTimeUpdating}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="grid gap-4 text-sm bg-[var(--background)] p-4 rounded-xl border border-[var(--border)]">
                                 <div>
                                     <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" /> Alamat</p>
@@ -411,6 +499,28 @@ export default function VisitsPage() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+/** Inline component for updating end time on a completed visit */
+function EndTimeInput({ visitId, onSubmit, loading }: { visitId: string; onSubmit: (id: string, time: string) => void; loading: boolean }) {
+    const [time, setTime] = useState(() => {
+        const now = new Date();
+        return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    });
+
+    return (
+        <div className="flex items-center gap-1.5">
+            <input type="time" className="form-input !h-8 !text-xs !w-24 !px-2 !rounded-lg" value={time} onChange={(e) => setTime(e.target.value)} />
+            <button
+                onClick={() => onSubmit(visitId, time)}
+                className="btn btn-primary btn-sm !h-8 !px-2.5 !text-[10px]"
+                disabled={loading || !time}
+            >
+                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                Simpan
+            </button>
         </div>
     );
 }

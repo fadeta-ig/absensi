@@ -160,6 +160,8 @@ export const visitCreateSchema = z.object({
     clientName: z.string().min(1, "Nama klien harus diisi"),
     clientAddress: z.string().min(1, "Alamat klien harus diisi"),
     purpose: z.string().min(1, "Tujuan kunjungan harus diisi"),
+    visitStartTime: z.string().min(1, "Jam mulai kunjungan harus diisi"),
+    visitEndTime: z.string().nullable().optional(),
     result: z.string().nullable().optional(),
     location: locationSchema.nullable().optional(),
     photo: z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)").nullable().optional(),
@@ -174,6 +176,8 @@ export const visitUpdateSchema = z.object({
     clientAddress: z.string().optional(),
     purpose: z.string().optional(),
     result: z.string().optional(),
+    visitStartTime: z.string().optional(),
+    visitEndTime: z.string().nullable().optional(),
 });
 
 /* ───────────────────── News ───────────────────── */
