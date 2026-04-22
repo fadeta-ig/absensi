@@ -238,7 +238,11 @@ export default function SettingsPage() {
                 setNewPassword("");
                 setConfirmPassword("");
             } else {
-                setMessage({ type: "error", text: data.error || "Gagal mengubah password" });
+                // Tampilkan pesan error detail dari Zod (data.details) jika ada
+                const errMessage = data.details && data.details.length > 0 
+                    ? data.details[0] 
+                    : data.error || "Gagal mengubah password";
+                setMessage({ type: "error", text: errMessage });
             }
         } catch {
             setMessage({ type: "error", text: "Terjadi kesalahan koneksi" });
