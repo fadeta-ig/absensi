@@ -49,8 +49,8 @@ export function validateGpsPosition(position: GeolocationPosition): GpsValidatio
     // Check 5: Missing altitude accuracy on device that should have it
     // Most real GPS chips provide altitudeAccuracy; mock apps often don't
     if (altitudeAccuracy === null && accuracy < 20) {
-        warnings.push("Data altitude tidak tersedia — perangkat mungkin menggunakan lokasi simulasi.");
-        // Don't invalidate — some browsers legit don't provide this
+        warnings.push("Data altitude tidak tersedia — perangkat menggunakan lokasi simulasi. Akses ditolak.");
+        isValid = false;
     }
 
     return { isValid, warnings };
