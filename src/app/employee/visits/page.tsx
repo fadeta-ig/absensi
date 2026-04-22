@@ -432,14 +432,14 @@ export default function VisitsPage() {
 
                             {/* Visit Time Info */}
                             <div className="bg-[var(--primary)]/5 p-4 rounded-xl border border-[var(--primary)]/10">
-                                <p className="text-[11px] font-bold text-[var(--primary)] uppercase tracking-wider mb-2 flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Jam Kunjungan</p>
-                                <div className="flex items-center gap-4">
+                                <p className="text-[11px] font-bold text-[var(--primary)] uppercase tracking-wider mb-3 flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Jam Kunjungan</p>
+                                <div className="grid grid-cols-[auto_1rem_1fr] items-center gap-y-1">
                                     <div>
                                         <p className="text-[10px] text-[var(--text-muted)] uppercase">Mulai</p>
                                         <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{selectedVisit.visitStartTime || "-"}</p>
                                     </div>
-                                    <div className="text-[var(--text-muted)]">→</div>
-                                    <div>
+                                    <div className="text-[var(--text-muted)] text-center">→</div>
+                                    <div className="min-w-0">
                                         <p className="text-[10px] text-[var(--text-muted)] uppercase">Selesai</p>
                                         {selectedVisit.visitEndTime ? (
                                             <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{selectedVisit.visitEndTime}</p>

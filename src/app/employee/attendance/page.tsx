@@ -307,9 +307,9 @@ export default function AttendancePage() {
 
             {/* GPS Warnings */}
             {gpsInfo && gpsInfo.warnings.length > 0 && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
+                <div className={`p-3 rounded-lg space-y-1 border ${gpsInfo.isValid ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"}`}>
                     {gpsInfo.warnings.map((w, i) => (
-                        <p key={i} className="text-xs text-red-700 flex items-start gap-1.5">
+                        <p key={i} className={`text-xs flex items-start gap-1.5 ${gpsInfo.isValid ? "text-yellow-700" : "text-red-700"}`}>
                             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                             {w}
                         </p>
@@ -336,7 +336,7 @@ export default function AttendancePage() {
             {!isDone && (
                 <div className="card overflow-hidden">
                     <div className="relative w-full aspect-[4/3] sm:aspect-video bg-gray-900 rounded-t-xl overflow-hidden">
-                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: "none" }} />
+                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: "scaleX(-1)" }} />
                         {!streaming && !photo && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/50">
                                 <Video className="w-12 h-12 opacity-30" />

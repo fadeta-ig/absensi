@@ -46,11 +46,13 @@ export function validateGpsPosition(position: GeolocationPosition): GpsValidatio
         isValid = false;
     }
 
-    // Check 5: Missing altitude accuracy on device that should have it
-    // Most real GPS chips provide altitudeAccuracy; mock apps often don't
+    // Check 5: Missing altitude accuracy heuristic
+    // Banyak browser mobile asli (Chrome Android via WiFi/BTS) tidak menyediakan
+    // altitudeAccuracy meskipun GPS valid. Hanya jadikan warning informatif,
+    // BUKAN pemblokir, agar tidak memicu false-positive pada perangkat sah.
     if (altitudeAccuracy === null && accuracy < 20) {
-        warnings.push("Data altitude tidak tersedia — perangkat menggunakan lokasi simulasi. Akses ditolak.");
-        isValid = false;
+        warnings.push("Data altitude tidak tersedia — perangkat mungkin menggunakan lokasi berbasis jaringan.");
+        // Tidak invalidate — terlalu banyak perangkat asli yang terdampak
     }
 
     return { isValid, warnings };
