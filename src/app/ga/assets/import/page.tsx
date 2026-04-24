@@ -50,8 +50,8 @@ export default function BulkImportPage() {
             .catch(() => {});
     }, []);
 
-    const downloadTemplate = () => {
-        generateBulkImportTemplate(categoryList);
+    const downloadTemplate = async () => {
+        await generateBulkImportTemplate(categoryList);
     };
 
     // Parse either CSV or XLSX files
