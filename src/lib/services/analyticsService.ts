@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
 import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } from "@/types";
-import { AssetWithHistory } from "./assetService";
+import { AssetWithHistory } from "../types/asset";
 import { calculateWorkingDays } from "./leaveService";
 
 export type Employee360Data = {

@@ -1,23 +1,55 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Phone, AlertTriangle, Clock, CheckCircle } from "lucide-react";
-
-type NomorAsset = {
-    id: string; assetCode: string; name: string;
-    nomorIndosat: string | null; expiredDate: string | null;
-    assignedToName: string | null; holderType: string;
-    kondisi: string; status: string;
-};
+import { Phone, AlertTriangle, Clock, CheckCircle, Calendar, X } from "lucide-react";
+import { AssetWithHistory } from "@/lib/types/asset";
 
 export default function NomorPage() {
-    const [nomor, setNomor] = useState<NomorAsset[]>([]);
+    const [nomor, setNomor] = useState<AssetWithHistory[]>([]);
     const [loading, setLoading] = useState(true);
+    const [updatingAsset, setUpdatingAsset] = useState<AssetWithHistory | null>(null);
+    const [newDate, setNewDate] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    const fetchNomor = async () => {
+        setLoading(true);
+        try {
+            const r = await fetch("/api/assets?category=NUM&limit=5000");
+            const data = await r.json();
+            const resultData = data.data || data; 
+            setNomor(resultData as AssetWithHistory[]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        fetch("/api/assets?category=NOMOR_HP")
-            .then(r => r.json()).then(setNomor).finally(() => setLoading(false));
+        fetchNomor();
     }, []);
+
+    const handleUpdateDate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!updatingAsset || !newDate) return;
+        setIsSaving(true);
+        try {
+            const res = await fetch(`/api/assets/${updatingAsset.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expiredDate: new Date(newDate).toISOString() })
+            });
+            if (res.ok) {
+                setUpdatingAsset(null);
+                setNewDate("");
+                fetchNomor();
+            } else {
+                alert("Gagal memperbarui masa aktif");
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const now = new Date();
     const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -34,33 +66,80 @@ export default function NomorPage() {
     const soon = nomor.filter(n => getStatus(n.expiredDate) === "soon");
     const ok = nomor.filter(n => getStatus(n.expiredDate) === "ok" || getStatus(n.expiredDate) === "unknown");
 
+    const openUpdateDialog = (asset: AssetWithHistory) => {
+        setUpdatingAsset(asset);
+        if (asset.expiredDate) {
+            const d = new Date(asset.expiredDate);
+            setNewDate(d.toISOString().split("T")[0]);
+        } else {
+            setNewDate("");
+        }
+    };
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-6 max-w-5xl mx-auto min-h-screen">
             <div>
-                <h1 style={{ fontSize: 22, fontWeight: 700 }}>Kartu SIM Indosat</h1>
-                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>Monitoring masa aktif nomor Indosat perusahaan</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-800">Kartu SIM Indosat</h1>
+                <p className="text-sm text-slate-500 mt-1">Monitoring masa aktif nomor Indosat perusahaan</p>
             </div>
 
             {/* Summary */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-                <SummaryCard icon={<AlertTriangle size={20} color="#ef4444" />} label="Sudah Expired" count={expired.length} bg="#fee2e2" />
-                <SummaryCard icon={<Clock size={20} color="#f59e0b" />} label="Akan Expired (30hr)" count={soon.length} bg="#fef3c7" />
-                <SummaryCard icon={<CheckCircle size={20} color="#10b981" />} label="Aktif" count={ok.length} bg="#d1fae5" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SummaryCard icon={<AlertTriangle className="text-red-600" />} label="Sudah Expired" count={expired.length} bg="bg-red-50 border-red-200" />
+                <SummaryCard icon={<Clock className="text-amber-600" />} label="Akan Expired (30hr)" count={soon.length} bg="bg-amber-50 border-amber-200" />
+                <SummaryCard icon={<CheckCircle className="text-emerald-600" />} label="Aktif" count={ok.length} bg="bg-emerald-50 border-emerald-200" />
             </div>
 
-            {loading ? <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" /></div> : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {loading ? (
+                <div className="flex items-center justify-center p-12">
+                    <div className="spinner" />
+                </div>
+            ) : (
+                <div className="flex flex-col gap-3">
                     {/* Expired */}
-                    {expired.length > 0 && <SectionHeader label="Sudah Expired" color="#ef4444" />}
-                    {expired.map(n => <NomorRow key={n.id} asset={n} urgency="expired" />)}
+                    {expired.length > 0 && <SectionHeader label="Sudah Expired" color="bg-red-500" />}
+                    {expired.map(n => <NomorRow key={n.id} asset={n} urgency="expired" onUpdate={() => openUpdateDialog(n)} />)}
 
                     {/* Soon */}
-                    {soon.length > 0 && <SectionHeader label="Akan Expired dalam 30 Hari" color="#f59e0b" />}
-                    {soon.map(n => <NomorRow key={n.id} asset={n} urgency="soon" />)}
+                    {soon.length > 0 && <SectionHeader label="Akan Expired dalam 30 Hari" color="bg-amber-500" />}
+                    {soon.map(n => <NomorRow key={n.id} asset={n} urgency="soon" onUpdate={() => openUpdateDialog(n)} />)}
 
                     {/* OK */}
-                    {ok.length > 0 && <SectionHeader label="Masih Aktif" color="#10b981" />}
-                    {ok.map(n => <NomorRow key={n.id} asset={n} urgency="ok" />)}
+                    {ok.length > 0 && <SectionHeader label="Masih Aktif" color="bg-emerald-500" />}
+                    {ok.map(n => <NomorRow key={n.id} asset={n} urgency="ok" onUpdate={() => openUpdateDialog(n)} />)}
+                </div>
+            )}
+
+            {/* Date Update Modal */}
+            {updatingAsset && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <Calendar size={18} className="text-blue-500" /> Perpanjang Masa Aktif
+                            </h2>
+                            <button onClick={() => setUpdatingAsset(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+                        </div>
+                        <form onSubmit={handleUpdateDate} className="p-5 flex flex-col gap-4">
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Nomor</label>
+                                <p className="text-sm font-bold text-slate-800">{updatingAsset.nomorIndosat || updatingAsset.name}</p>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">Tanggal Expired Baru</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={newDate}
+                                    onChange={e => setNewDate(e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800"
+                                />
+                            </div>
+                            <button type="submit" disabled={isSaving} className="w-full py-2 bg-slate-800 rounded-lg text-sm font-semibold text-white hover:bg-slate-700 transition-colors disabled:opacity-50 mt-2">
+                                {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>
@@ -69,45 +148,73 @@ export default function NomorPage() {
 
 function SectionHeader({ label, color }: { label: string; color: string }) {
     return (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-            <h2 style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)" }}>{label}</h2>
+        <div className="flex items-center gap-2 mt-4 mb-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${color} shrink-0`} />
+            <h2 className="text-sm font-bold text-slate-700">{label}</h2>
         </div>
     );
 }
 
 function SummaryCard({ icon, label, count, bg }: { icon: React.ReactNode; label: string; count: number; bg: string }) {
     return (
-        <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</div>
+        <div className={`bg-white border rounded-xl p-4 flex items-center gap-4 shadow-sm ${bg}`}>
+            <div className="w-10 h-10 rounded-lg bg-white/60 flex items-center justify-center shrink-0 border border-black/5">{icon}</div>
             <div>
-                <p style={{ fontSize: 22, fontWeight: 700 }}>{count}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</p>
+                <p className="text-2xl font-bold text-slate-800 leading-none">{count}</p>
+                <p className="text-xs font-medium text-slate-500 mt-1">{label}</p>
             </div>
         </div>
     );
 }
 
-function NomorRow({ asset, urgency }: { asset: NomorAsset; urgency: string }) {
-    const borderColor = urgency === "expired" ? "#ef4444" : urgency === "soon" ? "#f59e0b" : "#e5e7eb";
+function NomorRow({ asset, urgency, onUpdate }: { asset: AssetWithHistory; urgency: string; onUpdate: () => void }) {
+    const isExpired = urgency === "expired";
+    const isSoon = urgency === "soon";
+    
+    let borderColor = "border-slate-200";
+    let statusBg = "bg-emerald-100 text-emerald-700";
+    let statusText = "Aktif";
+    let dateColor = "text-slate-800";
+    
+    if (isExpired) {
+        borderColor = "border-red-300";
+        statusBg = "bg-red-100 text-red-700";
+        statusText = "Expired";
+        dateColor = "text-red-600";
+    } else if (isSoon) {
+        borderColor = "border-amber-300";
+        statusBg = "bg-amber-100 text-amber-700";
+        statusText = "Segera Expired";
+        dateColor = "text-amber-600";
+    }
+
     const expDate = asset.expiredDate ? new Date(asset.expiredDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "—";
+    const holderName = asset.assignedEmployee?.name || asset.assignedToName || (asset.holderType === "GA_POOL" ? "GA Pool" : "Perusahaan");
 
     return (
-        <div style={{ background: "white", border: `1px solid ${borderColor}`, borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#f3f4f6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Phone size={16} color="#6b7280" />
+        <div className={`bg-white border ${borderColor} rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm hover:shadow transition-shadow`}>
+            <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center border border-slate-100 shrink-0">
+                <Phone size={18} className="text-slate-400" />
             </div>
-            <div style={{ flex: 1, minWidth: 150 }}>
-                <p style={{ fontSize: 14, fontWeight: 600 }}>{asset.nomorIndosat ?? asset.name}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{asset.assignedToName ?? "GA"}</p>
+            
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-slate-800 truncate">{asset.nomorIndosat ?? asset.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{holderName}</p>
             </div>
-            <div style={{ textAlign: "right" }}>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Expired</p>
-                <p style={{ fontSize: 13, fontWeight: 600, color: urgency === "expired" ? "#ef4444" : urgency === "soon" ? "#d97706" : "var(--text-primary)" }}>{expDate}</p>
+            
+            <div className="text-left sm:text-right flex-shrink-0">
+                <p className="text-xs font-medium text-slate-400">Expired</p>
+                <p className={`text-sm font-bold ${dateColor}`}>{expDate}</p>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: urgency === "expired" ? "#fee2e2" : urgency === "soon" ? "#fef3c7" : "#d1fae5", color: urgency === "expired" ? "#ef4444" : urgency === "soon" ? "#d97706" : "#10b981" }}>
-                {urgency === "expired" ? "Expired" : urgency === "soon" ? "Segera Expired" : "Aktif"}
-            </span>
+            
+            <div className="flex-shrink-0 flex items-center gap-3">
+                <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold w-24 justify-center ${statusBg}`}>
+                    {statusText}
+                </span>
+                <button onClick={onUpdate} className="p-1.5 border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors" title="Perpanjang Masa Aktif">
+                    <Calendar size={16} />
+                </button>
+            </div>
         </div>
     );
 }

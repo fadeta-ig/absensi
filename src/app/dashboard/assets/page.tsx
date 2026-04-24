@@ -9,28 +9,13 @@ import {
     CheckCircle, Wrench, TrendingUp, AlertCircle,
 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
+import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
+import type { AssetWithHistory, AssetStatus, AssetCondition, AssetCategory } from "@/lib/types/asset";
+import type { AssetStats } from "@/lib/services/assets/queries";
 
 // ─── Types ─────────────────────────────────────────────────────
 
-type Asset = {
-    id: string; assetCode: string; name: string;
-    category: "HANDPHONE" | "LAPTOP" | "NOMOR_HP";
-    kondisi: "BAIK" | "KURANG_BAIK" | "RUSAK";
-    status: "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED";
-    holderType: "EMPLOYEE" | "FORMER_EMPLOYEE" | "TEAM" | "GA_POOL";
-    assignedToName: string | null;
-    assignedToId: string | null;
-    assignedAt: string | null;
-    assignedEmployee: {
-        employeeId: string;
-        name: string;
-        department: string;
-        position: string;
-    } | null;
-    nomorIndosat: string | null;
-    expiredDate: string | null;
-    keterangan: string | null;
-};
+type Asset = AssetWithHistory;
 
 type HistoryRow = {
     id: string; action: string;
@@ -69,10 +54,13 @@ function CategoryBadge({ cat }: { cat: string }) {
         HANDPHONE: { label: "HP", icon: <Smartphone size={11} /> },
         LAPTOP: { label: "Laptop", icon: <Laptop size={11} /> },
         NOMOR_HP: { label: "Nomor", icon: <Phone size={11} /> },
+        HP: { label: "HP", icon: <Smartphone size={11} /> },
+        LP: { label: "Laptop", icon: <Laptop size={11} /> },
+        NUM: { label: "Nomor", icon: <Phone size={11} /> },
     };
     const c = map[cat] ?? { label: cat, icon: <Package size={11} /> };
     return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#6366f1", background: "#eef2ff", padding: "2px 8px", borderRadius: 999 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#6366f1", background: "#eef2ff", padding: "2px 8px", borderRadius: 999, textTransform: "capitalize" }}>
             {c.icon}{c.label}
         </span>
     );
@@ -171,121 +159,74 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
     );
 }
 
-// ─── Stat Card ──────────────────────────────────────────────────
-
-function StatCard({ icon, label, value, bg, color }: { icon: React.ReactNode; label: string; value: number; bg: string; color: string }) {
-    return (
-        <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color }}>
-                {icon}
-            </div>
-            <div>
-                <p style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>{value}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{label}</p>
-            </div>
-        </div>
-    );
-}
-
-// ─── Filter Pill (quick filter tabs) ───────────────────────────
-
-function FilterPill({ label, icon, active, onClick, count }: { label: string; icon?: React.ReactNode; active: boolean; onClick: () => void; count: number }) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 500,
-                border: active ? "none" : "1px solid var(--border)",
-                background: active ? "var(--primary)" : "white",
-                color: active ? "white" : "var(--text-secondary)",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                transition: "all 0.15s",
-            }}
-        >
-            {icon && <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>}
-            {label}
-            <span style={{ background: active ? "rgba(255,255,255,0.25)" : "var(--secondary)", borderRadius: 999, padding: "1px 7px", fontSize: 11, fontWeight: 700, color: active ? "white" : "var(--text-secondary)" }}>
-                {count}
-            </span>
-        </button>
-    );
-}
+// Removed redundant StatCard and FilterPill local definitions (moved to @/features/ga/components/AssetStatCards)
 
 // ─── Main Inner Page ────────────────────────────────────────────
 
 function HrAssetsPageInner() {
     const searchParams = useSearchParams();
     const [assets, setAssets] = useState<Asset[]>([]);
-    const [filtered, setFiltered] = useState<Asset[]>([]);
+    const [stats, setStats] = useState<AssetStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [filterCat, setFilterCat] = useState("ALL");
     const [filterStatus, setFilterStatus] = useState("ALL");
     const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
 
-    const load = useCallback(async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/assets");
-            if (res.ok) setAssets(await res.json());
-        } finally { setLoading(false); }
-    }, []);
+            const query = new URLSearchParams();
+            if (filterCat !== "ALL") query.set("category", filterCat);
+            if (filterStatus !== "ALL") query.set("status", filterStatus);
+            if (search.trim()) query.set("search", search);
+            query.set("page", currentPage.toString());
+            query.set("limit", PAGE_SIZE.toString());
 
-    useEffect(() => { load(); }, [load]);
+            const [resAssets, resStats] = await Promise.all([
+                fetch(`/api/assets?${query.toString()}`),
+                fetch("/api/assets/stats")
+            ]);
 
-    // Sync filter dari URL
+            if (resAssets.ok) {
+                const json = await resAssets.json();
+                setAssets(json.data || []);
+                setTotalItems(json.total || 0);
+            }
+            if (resStats.ok) {
+                setStats(await resStats.json());
+            }
+        } catch (err) {
+            console.error("Failed to load GA data", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [filterCat, filterStatus, search, currentPage]);
+
     useEffect(() => {
-        const cat    = searchParams.get("category") ?? "ALL";
-        const status = searchParams.get("status")   ?? "ALL";
+        loadData();
+    }, [loadData]);
+
+    // Sync filter dari URL (Initial sync only or when params change)
+    useEffect(() => {
+        const cat = searchParams.get("category") ?? "ALL";
+        const status = searchParams.get("status") ?? "ALL";
         setFilterCat(cat);
         setFilterStatus(status);
         setCurrentPage(1);
     }, [searchParams]);
 
-    // Apply filters
-    useEffect(() => {
-        let f = [...assets];
-        if (filterCat !== "ALL")    f = f.filter(a => a.category === filterCat);
-        if (filterStatus !== "ALL") f = f.filter(a => a.status === filterStatus);
-        if (search.trim()) {
-            const q = search.toLowerCase();
-            f = f.filter(a =>
-                a.name.toLowerCase().includes(q) ||
-                a.assetCode.toLowerCase().includes(q) ||
-                (a.assignedToName ?? "").toLowerCase().includes(q) ||
-                (a.nomorIndosat ?? "").includes(q)
-            );
-        }
-        setFiltered(f);
-        setCurrentPage(1);
-    }, [assets, search, filterCat, filterStatus]);
-
-    // Stats
-    const stats = {
-        total: assets.length,
-        available: assets.filter(a => a.status === "AVAILABLE").length,
-        inUse: assets.filter(a => a.status === "IN_USE").length,
-        maintenance: assets.filter(a => a.status === "MAINTENANCE").length,
-        rusak: assets.filter(a => a.kondisi === "RUSAK").length,
-    };
-
-    const byCat = {
-        HANDPHONE: assets.filter(a => a.category === "HANDPHONE").length,
-        LAPTOP: assets.filter(a => a.category === "LAPTOP").length,
-        NOMOR_HP: assets.filter(a => a.category === "NOMOR_HP").length,
-    };
-
-    const pageItems = filtered.slice(
-        (currentPage - 1) * PAGE_SIZE,
-        currentPage * PAGE_SIZE
-    );
-
-    const pageTitle = filterCat === "HANDPHONE" ? "Aset Handphone" :
-                      filterCat === "LAPTOP"    ? "Aset Laptop"    :
-                      filterCat === "NOMOR_HP"  ? "Nomor Indosat"  :
+    const pageTitle = filterCat === "HP" ? "Aset Handphone" :
+                      filterCat === "LP" ? "Aset Laptop"    :
+                      filterCat === "NUM" ? "Nomor Indosat"  :
                       filterStatus === "AVAILABLE" ? "Stok Tersedia" :
                       "Aset Perusahaan";
+
+    const getCountForCat = (prefix: string) => {
+        return stats?.byCategory.find(c => c.prefix === prefix)?.count || 0;
+    };
 
     return (
         <div className="space-y-5">
@@ -297,18 +238,18 @@ function HrAssetsPageInner() {
                         Monitoring aset perusahaan — read only
                     </p>
                 </div>
-                <button onClick={load} style={{ height: 35, padding: "0 14px", background: "white", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)" }}>
+                <button onClick={loadData} style={{ height: 35, padding: "0 14px", background: "white", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)" }}>
                     <RefreshCw size={14} /> Refresh
                 </button>
             </div>
 
             {/* Stats Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-                <StatCard icon={<Package size={20} />}      label="Total Aset"   value={stats.total}       bg="#eef2ff"  color="#6366f1" />
-                <StatCard icon={<CheckCircle size={20} />}  label="Tersedia"     value={stats.available}   bg="#d1fae5"  color="#10b981" />
-                <StatCard icon={<TrendingUp size={20} />}   label="Digunakan"    value={stats.inUse}       bg="#dbeafe"  color="#3b82f6" />
-                <StatCard icon={<Wrench size={20} />}       label="Perbaikan"    value={stats.maintenance} bg="#fef3c7"  color="#f59e0b" />
-                <StatCard icon={<AlertCircle size={20} />}  label="Kondisi Rusak" value={stats.rusak}      bg="#fee2e2"  color="#ef4444" />
+                <StatCard icon={<Package />}      label="Total Aset"   value={stats?.total || 0}       bg="#eef2ff"  color="#6366f1" />
+                <StatCard icon={<CheckCircle />}  label="Tersedia"     value={stats?.available || 0}   bg="#d1fae5"  color="#10b981" />
+                <StatCard icon={<TrendingUp />}   label="Digunakan"    value={stats?.inUse || 0}       bg="#dbeafe"  color="#3b82f6" />
+                <StatCard icon={<Wrench />}       label="Perbaikan"    value={stats?.maintenance || 0} bg="#fef3c7"  color="#f59e0b" />
+                <StatCard icon={<AlertCircle />}  label="Kondisi Rusak" value={stats?.rusak || 0}      bg="#fee2e2"  color="#ef4444" />
             </div>
 
             {/* Info banner */}
@@ -320,12 +261,12 @@ function HrAssetsPageInner() {
             {/* Quick filter pills berdasarkan kategori */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Kategori:</span>
-                <FilterPill label="Semua" active={filterCat === "ALL" && filterStatus === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("ALL"); }} count={stats.total} />
-                <FilterPill label="Handphone" icon={<Smartphone size={12} />} active={filterCat === "HANDPHONE"} onClick={() => { setFilterCat("HANDPHONE"); setFilterStatus("ALL"); }} count={byCat.HANDPHONE} />
-                <FilterPill label="Laptop" icon={<Laptop size={12} />} active={filterCat === "LAPTOP"} onClick={() => { setFilterCat("LAPTOP"); setFilterStatus("ALL"); }} count={byCat.LAPTOP} />
-                <FilterPill label="Nomor Indosat" icon={<Phone size={12} />} active={filterCat === "NOMOR_HP"} onClick={() => { setFilterCat("NOMOR_HP"); setFilterStatus("ALL"); }} count={byCat.NOMOR_HP} />
+                <FilterPill label="Semua" active={filterCat === "ALL" && filterStatus === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("ALL"); setCurrentPage(1); }} count={stats?.total} />
+                <FilterPill label="Handphone" active={filterCat === "HP"} onClick={() => { setFilterCat("HP"); setFilterStatus("ALL"); setCurrentPage(1); }} count={getCountForCat("HP")} />
+                <FilterPill label="Laptop" active={filterCat === "LP"} onClick={() => { setFilterCat("LP"); setFilterStatus("ALL"); setCurrentPage(1); }} count={getCountForCat("LP")} />
+                <FilterPill label="Nomor Indosat" active={filterCat === "NUM"} onClick={() => { setFilterCat("NUM"); setFilterStatus("ALL"); setCurrentPage(1); }} count={getCountForCat("NUM")} />
                 <div style={{ width: 1, height: 20, background: "var(--border)", margin: "0 4px" }} />
-                <FilterPill label="Stok Tersedia" icon={<CheckCircle size={12} />} active={filterStatus === "AVAILABLE" && filterCat === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("AVAILABLE"); }} count={stats.available} />
+                <FilterPill label="Stok Tersedia" active={filterStatus === "AVAILABLE" && filterCat === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("AVAILABLE"); setCurrentPage(1); }} count={stats?.available} />
             </div>
 
             {/* Search + filter dropdown */}
@@ -347,7 +288,7 @@ function HrAssetsPageInner() {
                 </select>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-muted)" }}>
                     <Filter size={14} />
-                    <span>{filtered.length} dari {assets.length} aset</span>
+                    <span>{assets.length} dari {totalItems} aset</span>
                 </div>
             </div>
 
@@ -367,12 +308,12 @@ function HrAssetsPageInner() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pageItems.length === 0 ? (
+                                    {assets.length === 0 ? (
                                         <tr><td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--text-muted)" }}>
                                             <Package size={32} style={{ margin: "0 auto 8px", opacity: 0.25 }} />
                                             <p>{search ? `Tidak ada hasil untuk "${search}"` : "Tidak ada aset ditemukan"}</p>
                                         </td></tr>
-                                    ) : pageItems.map(a => (
+                                    ) : assets.map(a => (
                                         <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
                                             <td style={{ padding: "10px 14px" }}>
                                                 <span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
@@ -392,7 +333,7 @@ function HrAssetsPageInner() {
                                                     <span style={{ display: "block", fontSize: 11, color: "#f59e0b" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 26)}{a.keterangan.length > 26 ? "…" : ""}</span>
                                                 )}
                                             </td>
-                                            <td style={{ padding: "10px 14px" }}><CategoryBadge cat={a.category} /></td>
+                                            <td style={{ padding: "10px 14px" }}><CategoryBadge cat={a.category?.name || "LAINNYA"} /></td>
                                             <td style={{ padding: "10px 14px" }}><KondisiBadge kondisi={a.kondisi} /></td>
                                             <td style={{ padding: "10px 14px" }}><StatusBadge status={a.status} /></td>
                                             <td style={{ padding: "10px 14px" }}>
@@ -433,7 +374,7 @@ function HrAssetsPageInner() {
                         </div>
                         <Pagination
                             currentPage={currentPage}
-                            totalItems={filtered.length}
+                            totalItems={totalItems}
                             pageSize={PAGE_SIZE}
                             onPageChange={setCurrentPage}
                         />

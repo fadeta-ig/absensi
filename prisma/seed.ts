@@ -250,6 +250,7 @@ async function main() {
     await tryClear(() => prisma.pushSubscription.deleteMany({}), "pushSubscription");
     await tryClear(() => prisma.todoItem.deleteMany({}), "todoItem");
     await tryClear(() => prisma.newsItem.deleteMany({}), "newsItem");
+    await tryClear(() => prisma.assetCategory.deleteMany({}), "assetCategory");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await tryClear(() => (prisma as any).visit?.deleteMany({}), "visit");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -443,6 +444,12 @@ async function main() {
     });
     console.log("✅ News seeded");
 
+    // ── 5.5. Asset Categories ────────────────────────────────────────────────
+    const catHp = await prisma.assetCategory.create({ data: { name: "Handphone/Tablet", prefix: "HP" } });
+    const catLaptop = await prisma.assetCategory.create({ data: { name: "Laptop", prefix: "LT" } });
+    const catNum = await prisma.assetCategory.create({ data: { name: "Nomor Indosat (SIM)", prefix: "NUM" } });
+    console.log("✅ Asset Categories seeded");
+
     // ── 6. Assets: Handphone ─────────────────────────────────────────────────
     let hpCount = 0;
     for (let i = 0; i < DATA_HP.length; i++) {
@@ -455,7 +462,7 @@ async function main() {
             data: {
                 assetCode,
                 name: item.type,
-                category: "HANDPHONE",
+                categoryId: catHp.id,
                 kondisi: kondisi as never,
                 status: status as never,
                 holderType: holderType as never,
@@ -482,7 +489,7 @@ async function main() {
             data: {
                 assetCode,
                 name: item.type,
-                category: "LAPTOP",
+                categoryId: catLaptop.id,
                 kondisi: kondisi as never,
                 status: finalStatus as never,
                 holderType: holderType as never,
@@ -507,7 +514,7 @@ async function main() {
             data: {
                 assetCode,
                 name: `Nomor Indosat ${item.nomor}`,
-                category: "NOMOR_HP",
+                categoryId: catNum.id,
                 kondisi: "BAIK",
                 status: status as never,
                 holderType: holderType as never,

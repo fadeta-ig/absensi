@@ -8,19 +8,28 @@ export function sanitizeString(input: string): string {
 }
 
 /**
- * Recursively sanitize all string values in an object.
+ * Recursively sanitize all string values in an object or array.
  */
-export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
-    const result = { ...obj };
-    for (const key of Object.keys(result)) {
-        const value = result[key];
-        if (typeof value === "string") {
-            (result as Record<string, unknown>)[key] = sanitizeString(value);
-        } else if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-            (result as Record<string, unknown>)[key] = sanitizeObject(
-                value as Record<string, unknown>
-            );
-        }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function sanitizeObject<T>(obj: T): T {
+    if (Array.isArray(obj)) {
+        return obj.map((item) => typeof item === "string" ? sanitizeString(item) : sanitizeObject(item)) as unknown as T;
     }
-    return result;
+    
+    if (obj !== null && typeof obj === "object") {
+        const result: Record<string, unknown> = {};
+        for (const key of Object.keys(obj as Record<string, unknown>)) {
+            const value = (obj as Record<string, unknown>)[key];
+            if (typeof value === "string") {
+                result[key] = sanitizeString(value);
+            } else if (value !== null && typeof value === "object") {
+                result[key] = sanitizeObject(value);
+            } else {
+                result[key] = value;
+            }
+        }
+        return result as T;
+    }
+    
+    return obj;
 }

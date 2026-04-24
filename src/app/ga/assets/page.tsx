@@ -1,844 +1,423 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import {
-    Search, Plus, Filter, RefreshCw,
-    Smartphone, Laptop, Phone, Package,
-    User, Users, Building2, Archive, UserX,
-    Edit3, ArrowRightLeft, Trash2, History, X,
-    CheckCircle, Wrench, TrendingUp, AlertCircle
-} from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Search, Plus, RefreshCw, QrCode, Package, TrendingUp, CheckCircle, Wrench, AlertCircle, Download, Pencil, Trash2 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
+import { AssetWithHistory } from "@/lib/types/asset";
+import { KondisiBadge, StatusBadge, HolderIcon, CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
+import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
+import { formatRupiah } from "@/lib/utils/formatters";
 
-type Asset = {
-    id: string; assetCode: string; name: string;
-    category: "HANDPHONE" | "LAPTOP" | "NOMOR_HP";
-    kondisi: "BAIK" | "KURANG_BAIK" | "RUSAK";
-    status: "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED" | "COMPANY_OWNED";
-    holderType: "EMPLOYEE" | "FORMER_EMPLOYEE" | "TEAM" | "GA_POOL" | "COMPANY_OWNED";
-    assignedToName: string | null;
-    assignedToId: string | null;
-    assignedAt: string | null;
-    assignedEmployee: {
-        employeeId: string;
-        name: string;
-        department: string;
-        position: string;
-    } | null;
-    nomorIndosat: string | null;
-    expiredDate: string | null;
-    keterangan: string | null;
-    updatedAt: string;
+// Define AssetStats from our new deduped API
+type AssetStats = {
+    total: number;
+    available: number;
+    inUse: number;
+    maintenance: number;
+    rusak: number;
+    totalNilai: number;
 };
 
-type HistoryRow = {
-    id: string; action: string;
-    fromName: string | null; toName: string | null;
-    fromHolderType: string | null; toHolderType: string;
-    kondisiSaat: string; notes: string | null;
-    performedBy: string; createdAt: string;
-};
+export default function AssetsPage() {
+    const router = useRouter();
+    const [assets, setAssets] = useState<AssetWithHistory[]>([]);
+    const [stats, setStats] = useState<AssetStats | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [exporting, setExporting] = useState(false);
 
-// ─── Badge Helpers ──────────────────────────────────────────────
+    // Delete confirm dialog state
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; code: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
-function KondisiBadge({ kondisi }: { kondisi: string }) {
-    const map: Record<string, { label: string; color: string; bg: string }> = {
-        BAIK: { label: "Baik", color: "#10b981", bg: "#d1fae5" },
-        KURANG_BAIK: { label: "Kurang Baik", color: "#f59e0b", bg: "#fef3c7" },
-        RUSAK: { label: "Rusak", color: "#ef4444", bg: "#fee2e2" },
-    };
-    const c = map[kondisi] ?? { label: kondisi, color: "#6b7280", bg: "#f3f4f6" };
-    return <span style={{ fontSize: 11, fontWeight: 600, color: c.color, background: c.bg, padding: "2px 8px", borderRadius: 999 }}>{c.label}</span>;
-}
+    // Filters
+    const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [filterCategory, setFilterCategory] = useState("");
+    const [filterStatus, setFilterStatus] = useState("");
+    const [filterKondisi, setFilterKondisi] = useState("");
+    
+    // Pagination (Server-Side)
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const [categories, setCategories] = useState<{ id: string; name: string; prefix: string }[]>([]);
+    const PER_PAGE = 20;
 
-function StatusBadge({ status }: { status: string }) {
-    const map: Record<string, { label: string; color: string; bg: string }> = {
-        AVAILABLE: { label: "Tersedia", color: "#10b981", bg: "#d1fae5" },
-        IN_USE: { label: "Digunakan", color: "#3b82f6", bg: "#dbeafe" },
-        MAINTENANCE: { label: "Perbaikan", color: "#f59e0b", bg: "#fef3c7" },
-        RETIRED: { label: "Retired", color: "#6b7280", bg: "#f3f4f6" },
-        COMPANY_OWNED: { label: "Perusahaan", color: "#8b5cf6", bg: "#ede9fe" },
-    };
-    const c = map[status] ?? { label: status, color: "#6b7280", bg: "#f3f4f6" };
-    return <span style={{ fontSize: 11, fontWeight: 600, color: c.color, background: c.bg, padding: "2px 8px", borderRadius: 999 }}>{c.label}</span>;
-}
-
-function HolderIcon({ holderType }: { holderType: string }) {
-    const icons: Record<string, React.ReactNode> = {
-        EMPLOYEE: <User size={13} color="#3b82f6" />,
-        FORMER_EMPLOYEE: <UserX size={13} color="#ef4444" />,
-        TEAM: <Users size={13} color="#8b5cf6" />,
-        GA_POOL: <Building2 size={13} color="#10b981" />,
-        COMPANY_OWNED: <Archive size={13} color="#6b7280" />,
-    };
-    return <span style={{ display: "inline-flex", alignItems: "center" }}>{icons[holderType]}</span>;
-}
-
-function CategoryBadge({ cat }: { cat: string }) {
-    const map: Record<string, { label: string; icon: React.ReactNode }> = {
-        HANDPHONE: { label: "HP", icon: <Smartphone size={11} /> },
-        LAPTOP: { label: "Laptop", icon: <Laptop size={11} /> },
-        NOMOR_HP: { label: "Nomor", icon: <Phone size={11} /> },
-    };
-    const c = map[cat] ?? { label: cat, icon: <Package size={11} /> };
-    return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#6366f1", background: "#eef2ff", padding: "2px 8px", borderRadius: 999 }}>
-            {c.icon}{c.label}
-        </span>
-    );
-}
-
-// ─── Stat Card ──────────────────────────────────────────────────
-
-function StatCard({ icon, label, value, bg, color }: { icon: React.ReactNode; label: string; value: number; bg: string; color: string }) {
-    return (
-        <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color }}>
-                {icon}
-            </div>
-            <div>
-                <p style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>{value}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{label}</p>
-            </div>
-        </div>
-    );
-}
-
-// ─── Filter Pill (quick filter tabs) ───────────────────────────
-
-function FilterPill({ label, icon, active, onClick, count }: { label: string; icon?: React.ReactNode; active: boolean; onClick: () => void; count: number }) {
-    return (
-        <button
-            onClick={onClick}
-            style={{
-                padding: "6px 14px", borderRadius: 999, fontSize: 12, fontWeight: 500,
-                border: active ? "none" : "1px solid var(--border)",
-                background: active ? "var(--primary)" : "white",
-                color: active ? "white" : "var(--text-secondary)",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                transition: "all 0.15s",
-            }}
-        >
-            {icon && <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>}
-            {label}
-            <span style={{ background: active ? "rgba(255,255,255,0.25)" : "var(--secondary)", borderRadius: 999, padding: "1px 7px", fontSize: 11, fontWeight: 700, color: active ? "white" : "var(--text-secondary)" }}>
-                {count}
-            </span>
-        </button>
-    );
-}
-
-// ─── Modal: CREATE ──────────────────────────────────────────────
-
-function CreateModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-    const [form, setForm] = useState({
-        name: "",
-        category: "HANDPHONE" as "HANDPHONE" | "LAPTOP" | "NOMOR_HP",
-        kondisi: "BAIK" as "BAIK" | "KURANG_BAIK" | "RUSAK",
-        holderType: "GA_POOL" as string,
-        assignedToName: "",
-        assignedToId: "",
-        nomorIndosat: "",
-        expiredDate: "",
-        keterangan: "",
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    // ── Employee list dari HR master data ──────────────────────────
-    const [employees, setEmployees] = useState<{ name: string; employeeId: string; position: string }[]>([]);
-    const [empLoading, setEmpLoading] = useState(true);
-
-    useEffect(() => {
-        fetch("/api/employees")
-            .then(r => r.json())
-            .then((data: Array<{ name: string; employeeId: string; position: string; isActive?: boolean }>) => {
-                setEmployees(data.filter(e => e.isActive !== false));
-            })
-            .catch(() => setEmployees([]))
-            .finally(() => setEmpLoading(false));
+    const fetchCategories = useCallback(async () => {
+        try {
+            const res = await fetch("/api/assets/categories");
+            if (res.ok) setCategories(await res.json());
+        } catch (error) {
+            console.error("Gagal mengambil kategori", error);
+        }
     }, []);
 
-    const set = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
-    // Reset nama & id saat ganti tipe
-    const setHolderType = (val: string) => setForm(prev => ({ ...prev, holderType: val, assignedToName: "", assignedToId: "" }));
-
-    const needsName = form.holderType !== "GA_POOL" && form.holderType !== "COMPANY_OWNED";
-    const isEmployeeDropdown = form.holderType === "EMPLOYEE";
-    const isTextInput = form.holderType === "TEAM" || form.holderType === "FORMER_EMPLOYEE";
-    const isNomor = form.category === "NOMOR_HP";
-
-    const submit = async () => {
-        if (!form.name.trim()) { setError("Nama aset harus diisi"); return; }
-        if (needsName && !form.assignedToName.trim()) { setError("Nama pemegang harus diisi"); return; }
-        setLoading(true); setError("");
+    const fetchAssets = useCallback(async () => {
         try {
-            const res = await fetch("/api/assets", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: form.name,
-                    category: form.category,
-                    kondisi: form.kondisi,
-                    holderType: form.holderType,
-                    assignedToName: needsName ? form.assignedToName : null,
-                    assignedToId: isEmployeeDropdown && form.assignedToId ? form.assignedToId : null,
-                    nomorIndosat: isNomor ? (form.nomorIndosat || null) : null,
-                    expiredDate: isNomor ? (form.expiredDate || null) : null,
-                    keterangan: form.keterangan || null,
-                }),
-            });
-            if (!res.ok) { const e = await res.json(); setError(e.error ?? "Gagal membuat aset"); return; }
-            onDone();
-        } finally { setLoading(false); }
+            setLoading(true);
+            const params = new URLSearchParams();
+            if (filterCategory) params.set("category", filterCategory);
+            if (filterStatus && filterStatus !== "ALL") params.set("status", filterStatus);
+            if (filterKondisi && filterKondisi !== "ALL") params.set("kondisi", filterKondisi);
+            if (debouncedSearch) params.set("search", debouncedSearch);
+            params.set("page", String(currentPage));
+            params.set("limit", String(PER_PAGE));
+
+            const res = await fetch(`/api/assets?${params.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+                setAssets(data.data || []);
+                setTotalItems(data.total || 0);
+            }
+        } catch (error) {
+            console.error("Gagal mengambil data aset", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [filterCategory, filterStatus, filterKondisi, debouncedSearch, currentPage]);
+
+    const fetchStats = useCallback(async () => {
+        try {
+            const res = await fetch("/api/assets/stats");
+            if (res.ok) setStats(await res.json());
+        } catch (error) {
+            console.error("Gagal mengambil data statistik", error);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchAssets();
+    }, [fetchAssets]);
+
+    useEffect(() => {
+        fetchStats();
+        fetchCategories();
+    }, [fetchStats, fetchCategories]);
+
+    // Handle search debounce
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+            if (searchQuery && currentPage !== 1) {
+                setCurrentPage(1);
+            }
+        }, 300);
+        return () => clearTimeout(timeoutId);
+    }, [searchQuery]);
+
+    const handleExportCsv = async () => {
+        setExporting(true);
+        try {
+            // Fetch all matching without pagination for export
+            const params = new URLSearchParams();
+            if (filterCategory) params.set("category", filterCategory);
+            if (filterStatus) params.set("status", filterStatus);
+            if (filterKondisi) params.set("kondisi", filterKondisi);
+            if (searchQuery) params.set("search", searchQuery);
+            params.set("limit", "5000"); // large limit
+
+            const res = await fetch(`/api/assets?${params.toString()}`);
+            if (!res.ok) throw new Error("Gagal load export");
+            const data = await res.json();
+            const items: AssetWithHistory[] = data.data || [];
+
+            // Convert to CSV
+            const headers = ["Kode Aset", "Nama Aset", "Kategori", "Manufaktur", "S/N", "Kondisi", "Status", "Lokasi/Pemegang", "Tgl Beli", "Harga (Rp)"];
+            const csvRows = items.map(a => [
+                a.assetCode,
+                `"${a.name.replace(/"/g, '""')}"`,
+                a.category?.name || "-",
+                a.manufacturer || "-",
+                a.serialNumber || "-",
+                a.kondisi,
+                a.status,
+                `"${(a.assignedEmployee?.name || a.assignedToName || a.holderType).replace(/"/g, '""')}"`,
+                a.purchaseDate ? new Date(a.purchaseDate).toLocaleDateString("id-ID") : "-",
+                a.purchasePrice || 0
+            ]);
+
+            const csvContent = [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Data_Aset_WIG_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err) {
+            alert("Gagal mengexport file.");
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const totalPages = Math.ceil(totalItems / PER_PAGE);
+
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/assets/${deleteTarget.id}`, { method: "DELETE" });
+            if (res.ok) {
+                setDeleteTarget(null);
+                await fetchAssets();
+                await fetchStats();
+            } else {
+                const data = await res.json();
+                alert(data.error || "Gagal menghapus aset.");
+            }
+        } catch {
+            alert("Terjadi kesalahan koneksi.");
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     return (
-        <div style={overlayStyle}>
-            <div style={{ ...modalStyle, maxWidth: 520 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div>
-                        <h3 style={{ fontSize: 17, fontWeight: 700 }}>Tambah Aset Baru</h3>
-                        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>Kode aset akan digenerate otomatis</p>
-                    </div>
-                    <button onClick={onClose} style={iconBtnStyle}><X size={18} /></button>
+        <div className="p-6 max-w-7xl mx-auto flex flex-col gap-6 min-h-screen">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Manajemen Aset</h1>
+                    <p className="text-sm text-slate-500 mt-1">Kelola data inventaris, alokasi karyawan, dan pemeliharaan WIG.</p>
                 </div>
+                <div className="flex gap-2 w-full md:w-auto flex-wrap">
+                    <button 
+                        onClick={() => router.push("/ga/scan")}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors"
+                    >
+                        <QrCode size={16} /> Scan
+                    </button>
+                    <button 
+                        onClick={() => router.push("/ga/assets/import")}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors"
+                    >
+                        Import Massal
+                    </button>
+                    <button 
+                        disabled={exporting}
+                        onClick={handleExportCsv}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                    >
+                        <Download size={16} /> {exporting ? "Mengekspor..." : "Export CSV"}
+                    </button>
+                    <button 
+                        onClick={() => router.push("/ga/assets/create")}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-sm"
+                    >
+                        <Plus size={16} /> Tambah Aset
+                    </button>
+                </div>
+            </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
-                        <label style={labelStyle}>Nama Aset *</label>
-                        <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Contoh: iPhone 13 128GB / ThinkPad E14" style={inputStyle} />
-                    </div>
+            {/* Stats Overview */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <StatCard icon={<Package />} label="Total Aset" value={stats?.total ?? 0} bg="#f1f5f9" color="#475569" />
+                <StatCard icon={<TrendingUp />} label="Total Nilai (Rp)" value={stats?.totalNilai ? formatRupiah(stats.totalNilai) : "0"} bg="#e0f2fe" color="#0369a1" />
+                <StatCard icon={<CheckCircle />} label="Tersedia (Pool)" value={stats?.available ?? 0} bg="#d1fae5" color="#047857" />
+                <StatCard icon={<Wrench />} label="Maintenance" value={stats?.maintenance ?? 0} bg="#fef3c7" color="#b45309" />
+                <StatCard icon={<AlertCircle />} label="Kondisi Rusak" value={stats?.rusak ?? 0} bg="#fee2e2" color="#b91c1c" />
+            </div>
 
-                    <div style={fieldStyle}>
-                        <label style={labelStyle}>Kategori *</label>
-                        <select value={form.category} onChange={e => set("category", e.target.value)} style={inputStyle}>
-                            <option value="HANDPHONE">Handphone / Tablet</option>
-                            <option value="LAPTOP">Laptop</option>
-                            <option value="NOMOR_HP">Nomor Indosat (SIM)</option>
-                        </select>
-                    </div>
-
-                    <div style={fieldStyle}>
-                        <label style={labelStyle}>Kondisi *</label>
-                        <select value={form.kondisi} onChange={e => set("kondisi", e.target.value)} style={inputStyle}>
-                            <option value="BAIK">Baik</option>
-                            <option value="KURANG_BAIK">Kurang Baik</option>
-                            <option value="RUSAK">Rusak</option>
-                        </select>
-                    </div>
-
-                    <div style={fieldStyle}>
-                        <label style={labelStyle}>Pemegang Awal *</label>
-                        <select value={form.holderType} onChange={e => setHolderType(e.target.value)} style={inputStyle}>
-                            <option value="GA_POOL">GA — Brankas GA</option>
-                            <option value="EMPLOYEE">Karyawan Aktif</option>
-                            <option value="TEAM">Tim</option>
-                            <option value="FORMER_EMPLOYEE">Mantan Karyawan</option>
-                            <option value="COMPANY_OWNED">Milik Perusahaan</option>
-                        </select>
-                    </div>
-
-                    {/* Dropdown karyawan aktif (dari HR master data) */}
-                    {isEmployeeDropdown && (
-                        <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
-                            <label style={labelStyle}>
-                                Pilih Karyawan *
-                                {empLoading && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>Memuat...</span>}
-                            </label>
-                            <select
-                                value={form.assignedToId}
-                                onChange={e => {
-                                    const selectedEmp = employees.find(emp => emp.employeeId === e.target.value);
-                                    if (selectedEmp) {
-                                        setForm(prev => ({ ...prev, assignedToId: selectedEmp.employeeId, assignedToName: selectedEmp.name }));
-                                    } else {
-                                        setForm(prev => ({ ...prev, assignedToId: "", assignedToName: "" }));
-                                    }
-                                }}
-                                style={{ ...inputStyle, height: "auto", padding: "8px 10px" }}
-                                disabled={empLoading}
-                            >
-                                <option value="">-- Pilih Karyawan --</option>
-                                {employees.map(emp => (
-                                    <option key={emp.employeeId} value={emp.employeeId}>
-                                        {emp.name}{emp.position ? ` — ${emp.position}` : ""}
-                                    </option>
-                                ))}
-                            </select>
-                            {employees.length === 0 && !empLoading && (
-                                <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>⚠ Gagal memuat data karyawan dari HR</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Input manual untuk Tim atau Mantan Karyawan */}
-                    {isTextInput && (
-                        <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
-                            <label style={labelStyle}>
-                                {form.holderType === "TEAM" ? "Nama Tim *" : "Nama Mantan Karyawan *"}
-                            </label>
+            {/* Table Area */}
+            <div className="bg-white border rounded-xl shadow-sm flex flex-col flex-1 overflow-hidden relative">
+                {/* Filters */}
+                <div className="p-4 border-b bg-slate-50/30 space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4">
+                        {/* Search */}
+                        <div className="relative flex-1 font-sans">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                             <input
-                                value={form.assignedToName}
-                                onChange={e => set("assignedToName", e.target.value)}
-                                placeholder={form.holderType === "TEAM" ? "cth: Tim Warehouse / Tim Creative" : "Nama lengkap mantan karyawan"}
-                                style={inputStyle}
+                                type="text"
+                                placeholder="Cari nama, kode aset, atau S/N..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 transition-all shadow-sm"
                             />
                         </div>
-                    )}
+                        
+                        {/* Dropdowns */}
+                        <div className="flex flex-wrap gap-2">
+                            <select 
+                                value={filterCategory} 
+                                onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
+                                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                            >
+                                <option value="">Semua Kategori</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id} value={cat.prefix}>{cat.name}</option>
+                                ))}
+                            </select>
 
-                    {isNomor && <>
-                        <div style={fieldStyle}>
-                            <label style={labelStyle}>Nomor Indosat</label>
-                            <input value={form.nomorIndosat} onChange={e => set("nomorIndosat", e.target.value)} placeholder="08163344xx" style={inputStyle} />
-                        </div>
-                        <div style={fieldStyle}>
-                            <label style={labelStyle}>Tanggal Expired</label>
-                            <input type="date" value={form.expiredDate} onChange={e => set("expiredDate", e.target.value)} style={inputStyle} />
-                        </div>
-                    </>}
+                            <select 
+                                value={filterKondisi} 
+                                onChange={(e) => { setFilterKondisi(e.target.value); setCurrentPage(1); }}
+                                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                            >
+                                <option value="">Semua Kondisi</option>
+                                <option value="BAIK">Kondisi Baik</option>
+                                <option value="KURANG_BAIK">Kurang Baik</option>
+                                <option value="RUSAK">Rusak</option>
+                            </select>
 
-                    <div style={{ gridColumn: "1/-1", ...fieldStyle }}>
-                        <label style={labelStyle}>Keterangan (opsional)</label>
-                        <textarea value={form.keterangan} onChange={e => set("keterangan", e.target.value)} placeholder="Catatan kondisi, lokasi, atau informasi tambahan..." style={{ ...inputStyle, height: 72, resize: "vertical" as const }} />
+                            <button 
+                                onClick={() => {
+                                    setSearchQuery("");
+                                    setFilterCategory("");
+                                    setFilterStatus("");
+                                    setFilterKondisi("");
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 transition-colors"
+                            >
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Status Pills */}
+                    <div className="flex justify-between items-center bg-white/50 p-1.5 rounded-xl border border-slate-100">
+                        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+                            <FilterPill active={filterStatus === ""} label="Semua Status" onClick={() => { setFilterStatus(""); setCurrentPage(1); }} />
+                            <FilterPill active={filterStatus === "AVAILABLE"} label="Tersedia" onClick={() => { setFilterStatus("AVAILABLE"); setCurrentPage(1); }} />
+                            <FilterPill active={filterStatus === "IN_USE"} label="Digunakan" onClick={() => { setFilterStatus("IN_USE"); setCurrentPage(1); }} />
+                            <FilterPill active={filterStatus === "MAINTENANCE"} label="Perbaikan" onClick={() => { setFilterStatus("MAINTENANCE"); setCurrentPage(1); }} />
+                            <FilterPill active={filterStatus === "RETIRED"} label="Retired" onClick={() => { setFilterStatus("RETIRED"); setCurrentPage(1); }} />
+                        </div>
+                        
+                        <button onClick={() => { fetchAssets(); fetchStats(); }} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+                            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                        </button>
                     </div>
                 </div>
 
-                {error && <p style={{ fontSize: 13, color: "#ef4444", marginTop: 4 }}>{error}</p>}
-
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                    <button onClick={onClose} style={outlineBtnStyle}>Batal</button>
-                    <button onClick={submit} disabled={loading} style={primaryBtnStyle}>
-                        <Plus size={14} /> {loading ? "Menyimpan..." : "Tambah Aset"}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Modal: Assign ──────────────────────────────────────────────
-
-function AssignModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => void; onDone: () => void }) {
-    const [holderType, setHolderType] = useState<string>(asset.holderType === "GA_POOL" ? "EMPLOYEE" : "GA_POOL");
-    const [toName, setToName] = useState("");
-    const [toEmployeeId, setToEmployeeId] = useState("");
-    const [kondisi, setKondisi] = useState(asset.kondisi);
-    const [notes, setNotes] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    // ── Employee list from HR master data ─────────────────────────
-    const [employees, setEmployees] = useState<{ name: string; employeeId: string; position: string; department: string }[]>([]);
-    const [empLoading, setEmpLoading] = useState(true);
-
-    useEffect(() => {
-        fetch("/api/employees")
-            .then(r => r.json())
-            .then((data: Array<{ name: string; employeeId: string; position: string; department: string; isActive?: boolean }>) => {
-                setEmployees(data.filter(e => e.isActive !== false));
-            })
-            .catch(() => setEmployees([]))
-            .finally(() => setEmpLoading(false));
-    }, []);
-
-    const isReturning = holderType === "GA_POOL";
-    const needsEmployeeDropdown = holderType === "EMPLOYEE";
-    const needsTextInput = holderType === "FORMER_EMPLOYEE" || holderType === "TEAM";
-
-    const submit = async () => {
-        if (!isReturning && !toName.trim()) { setError("Nama pemegang harus diisi"); return; }
-        setLoading(true);
-        try {
-            const res = await fetch("/api/assets/assign", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    assetId: asset.id, 
-                    toHolderType: holderType, 
-                    toName: isReturning ? null : toName, 
-                    toEmployeeId: holderType === "EMPLOYEE" ? toEmployeeId : null,
-                    kondisi, 
-                    notes 
-                }),
-            });
-            if (!res.ok) { const e = await res.json(); setError(e.error ?? "Gagal"); return; }
-            onDone();
-        } finally { setLoading(false); }
-    };
-
-    return (
-        <div style={overlayStyle}>
-            <div style={modalStyle}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>Assign / Return Aset</h3>
-                    <button onClick={onClose} style={iconBtnStyle}><X size={18} /></button>
-                </div>
-                <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
-                    <strong>{asset.assetCode}</strong> — {asset.name}
-                    {asset.assignedToName && <><br />Saat ini: <strong>{asset.assignedToName}</strong></>}
-                </p>
-                <div style={fieldStyle}>
-                    <label style={labelStyle}>Aksi</label>
-                    <select value={holderType} onChange={e => { setHolderType(e.target.value); setToName(""); setToEmployeeId(""); }} style={inputStyle}>
-                        <option value="EMPLOYEE">Assign ke Karyawan Aktif</option>
-                        <option value="FORMER_EMPLOYEE">Assign ke Mantan Karyawan</option>
-                        <option value="TEAM">Assign ke Tim</option>
-                        <option value="GA_POOL">Kembalikan ke GA (Brankas)</option>
-                    </select>
-                </div>
-
-                {/* Dropdown karyawan aktif dari sistem HR */}
-                {needsEmployeeDropdown && (
-                    <div style={fieldStyle}>
-                        <label style={labelStyle}>
-                            Pilih Karyawan *
-                            {empLoading && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 6 }}>Memuat data karyawan...</span>}
-                        </label>
-                        <select
-                            value={toEmployeeId}
-                            onChange={e => {
-                                const selectedEmp = employees.find(emp => emp.employeeId === e.target.value);
-                                if (selectedEmp) {
-                                    setToEmployeeId(selectedEmp.employeeId);
-                                    setToName(selectedEmp.name);
-                                } else {
-                                    setToEmployeeId("");
-                                    setToName("");
-                                }
-                            }}
-                            style={{ ...inputStyle, height: "auto", padding: "8px 10px" }}
-                            disabled={empLoading}
-                        >
-                            <option value="">-- Pilih Karyawan --</option>
-                            {employees.map(emp => (
-                                <option key={emp.employeeId} value={emp.employeeId}>
-                                    {emp.name}{emp.position ? ` — ${emp.position}` : ""}
-                                </option>
-                            ))}
-                        </select>
-                        {employees.length === 0 && !empLoading && (
-                            <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>⚠ Gagal memuat data karyawan</p>
-                        )}
-                    </div>
-                )}
-
-                {/* Input teks manual untuk Tim atau Mantan Karyawan */}
-                {needsTextInput && (
-                    <div style={fieldStyle}>
-                        <label style={labelStyle}>
-                            {holderType === "TEAM" ? "Nama Tim *" : "Nama Mantan Karyawan *"}
-                        </label>
-                        <input
-                            value={toName}
-                            onChange={e => setToName(e.target.value)}
-                            placeholder={holderType === "TEAM" ? "cth: Tim Warehouse / Tim Creative" : "Nama lengkap mantan karyawan"}
-                            style={inputStyle}
-                        />
-                    </div>
-                )}
-
-                <div style={fieldStyle}>
-                    <label style={labelStyle}>Kondisi Saat Ini</label>
-                    <select value={kondisi} onChange={e => setKondisi(e.target.value as typeof kondisi)} style={inputStyle}>
-                        <option value="BAIK">Baik</option>
-                        <option value="KURANG_BAIK">Kurang Baik</option>
-                        <option value="RUSAK">Rusak</option>
-                    </select>
-                </div>
-                <div style={fieldStyle}>
-                    <label style={labelStyle}>Catatan (opsional)</label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Keterangan perpindahan..." style={{ ...inputStyle, height: 68, resize: "vertical" as const }} />
-                </div>
-                {error && <p style={{ fontSize: 13, color: "#ef4444", marginBottom: 8 }}>{error}</p>}
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-                    <button onClick={onClose} style={outlineBtnStyle}>Batal</button>
-                    <button onClick={submit} disabled={loading} style={primaryBtnStyle}>
-                        {loading ? "Menyimpan..." : isReturning ? "Kembalikan ke GA" : "Assign"}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Modal: Edit ────────────────────────────────────────────────
-
-function EditModal({ asset, onClose, onDone }: { asset: Asset; onClose: () => void; onDone: () => void }) {
-    const [name, setName] = useState(asset.name);
-    const [kondisi, setKondisi] = useState(asset.kondisi);
-    const [status, setStatus] = useState(asset.status);
-    const [keterangan, setKeterangan] = useState(asset.keterangan ?? "");
-    const [nomorIndosat, setNomorIndosat] = useState(asset.nomorIndosat ?? "");
-    const [expiredDate, setExpiredDate] = useState(asset.expiredDate ? asset.expiredDate.split("T")[0] : "");
-    const [loading, setLoading] = useState(false);
-
-    const submit = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(`/api/assets/${asset.id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, kondisi, status, keterangan: keterangan || null, nomorIndosat: nomorIndosat || null, expiredDate: expiredDate || null }),
-            });
-            if (res.ok) onDone();
-        } finally { setLoading(false); }
-    };
-
-    return (
-        <div style={overlayStyle}>
-            <div style={modalStyle}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>Edit Aset — {asset.assetCode}</h3>
-                    <button onClick={onClose} style={iconBtnStyle}><X size={18} /></button>
-                </div>
-                <div style={fieldStyle}><label style={labelStyle}>Nama Aset</label><input value={name} onChange={e => setName(e.target.value)} style={inputStyle} /></div>
-                <div style={fieldStyle}><label style={labelStyle}>Kondisi</label>
-                    <select value={kondisi} onChange={e => setKondisi(e.target.value as typeof kondisi)} style={inputStyle}>
-                        <option value="BAIK">Baik</option><option value="KURANG_BAIK">Kurang Baik</option><option value="RUSAK">Rusak</option>
-                    </select>
-                </div>
-                <div style={fieldStyle}><label style={labelStyle}>Status</label>
-                    <select value={status} onChange={e => setStatus(e.target.value as typeof status)} style={inputStyle}>
-                        <option value="AVAILABLE">Tersedia</option><option value="IN_USE">Digunakan</option>
-                        <option value="MAINTENANCE">Perbaikan</option><option value="COMPANY_OWNED">Milik Perusahaan</option>
-                    </select>
-                </div>
-                {asset.category === "NOMOR_HP" && <>
-                    <div style={fieldStyle}><label style={labelStyle}>Nomor Indosat</label><input value={nomorIndosat} onChange={e => setNomorIndosat(e.target.value)} style={inputStyle} /></div>
-                    <div style={fieldStyle}><label style={labelStyle}>Tanggal Expired</label><input type="date" value={expiredDate} onChange={e => setExpiredDate(e.target.value)} style={inputStyle} /></div>
-                </>}
-                <div style={fieldStyle}><label style={labelStyle}>Keterangan</label><textarea value={keterangan} onChange={e => setKeterangan(e.target.value)} style={{ ...inputStyle, height: 68, resize: "vertical" as const }} /></div>
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-                    <button onClick={onClose} style={outlineBtnStyle}>Batal</button>
-                    <button onClick={submit} disabled={loading} style={primaryBtnStyle}>{loading ? "Menyimpan..." : "Simpan"}</button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Modal: History ─────────────────────────────────────────────
-
-function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
-    const [history, setHistory] = useState<HistoryRow[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetch(`/api/assets/history?assetId=${asset.id}`)
-            .then(r => r.json()).then(setHistory).finally(() => setLoading(false));
-    }, [asset.id]);
-
-    const actionLabel: Record<string, string> = {
-        assigned: "Diberikan ke", returned: "Dikembalikan",
-        sent_to_maintenance: "Dikirim perbaikan", kondisi_changed: "Kondisi diubah", retired: "Di-retire",
-    };
-
-    return (
-        <div style={overlayStyle}>
-            <div style={{ ...modalStyle, maxWidth: 600, maxHeight: "80vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>Riwayat — {asset.assetCode}</h3>
-                    <button onClick={onClose} style={iconBtnStyle}><X size={18} /></button>
-                </div>
-                <div style={{ flex: 1, overflow: "auto" }}>
-                    {loading ? <p style={{ textAlign: "center", color: "var(--text-muted)" }}>Memuat...</p> : history.length === 0 ? (
-                        <p style={{ textAlign: "center", color: "var(--text-muted)", padding: 20 }}>Belum ada riwayat</p>
-                    ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {history.map(h => (
-                                <div key={h.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                        <strong>{actionLabel[h.action] ?? h.action}</strong>
-                                        <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{new Date(h.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
-                                    </div>
-                                    <p style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 12 }}>
-                                        {h.fromName ?? "GA"} → {h.toName ?? "GA"}
-                                    </p>
-                                    {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12 }}>📝 {h.notes}</p>}
-                                    <div style={{ marginTop: 4 }}><KondisiBadge kondisi={h.kondisiSaat} /></div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Main Page (inner — uses useSearchParams) ───────────────────
-
-const PAGE_SIZE = 20;
-
-function AssetsPageInner() {
-    const searchParams = useSearchParams();
-
-    const [assets, setAssets] = useState<Asset[]>([]);
-    const [filtered, setFiltered] = useState<Asset[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-
-    // Filter state — diinisialisasi dari URL, lalu di-sync via useEffect
-    const [filterCat, setFilterCat] = useState("ALL");
-    const [filterStatus, setFilterStatus] = useState("ALL");
-    const [filterKondisi, setFilterKondisi] = useState("ALL");
-
-    const [showCreate, setShowCreate] = useState(false);
-    const [assignTarget, setAssignTarget] = useState<Asset | null>(null);
-    const [editTarget, setEditTarget] = useState<Asset | null>(null);
-    const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
-    const [retireConfirm, setRetireConfirm] = useState<Asset | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-
-    // ── Sync state dari URL params setiap kali URL berubah ─────
-    useEffect(() => {
-        const cat    = searchParams.get("category") ?? "ALL";
-        const status = searchParams.get("status")   ?? "ALL";
-        setFilterCat(cat);
-        setFilterStatus(status);
-        setCurrentPage(1); // reset ke halaman 1 saat filter dari URL berubah
-    }, [searchParams]);
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await fetch("/api/assets");
-            if (res.ok) setAssets(await res.json());
-        } finally { setLoading(false); }
-    }, []);
-
-    useEffect(() => { load(); }, [load]);
-
-    // ── Apply filters ───────────────────────────────────────────
-    useEffect(() => {
-        let f = [...assets];
-        if (filterCat !== "ALL")    f = f.filter(a => a.category === filterCat);
-        if (filterStatus !== "ALL") f = f.filter(a => a.status === filterStatus);
-        if (filterKondisi !== "ALL") f = f.filter(a => a.kondisi === filterKondisi);
-        if (search.trim()) {
-            const q = search.toLowerCase();
-            f = f.filter(a =>
-                a.name.toLowerCase().includes(q) ||
-                a.assetCode.toLowerCase().includes(q) ||
-                (a.assignedToName ?? "").toLowerCase().includes(q) ||
-                (a.nomorIndosat ?? "").includes(q)
-            );
-        }
-        setFiltered(f);
-        setCurrentPage(1); // reset ke halaman 1 setiap filter/search berubah
-    }, [assets, search, filterCat, filterStatus, filterKondisi]);
-
-    const handleRetire = async (asset: Asset) => {
-        const res = await fetch(`/api/assets/${asset.id}`, { method: "DELETE" });
-        if (res.ok) { load(); setRetireConfirm(null); }
-    };
-
-    // Judul halaman dinamis berdasarkan filter aktif
-    const pageTitle = filterCat === "HANDPHONE" ? "Handphone" :
-                      filterCat === "LAPTOP"    ? "Laptop"    :
-                      filterCat === "NOMOR_HP"  ? "Nomor Indosat" :
-                      filterStatus === "AVAILABLE"   ? "Stok Tersedia" :
-                      filterStatus === "MAINTENANCE" ? "Dalam Perbaikan" :
-                      "Semua Aset";
-
-    // Stats
-    const stats = {
-        total: assets.length,
-        available: assets.filter(a => a.status === "AVAILABLE").length,
-        inUse: assets.filter(a => a.status === "IN_USE").length,
-        maintenance: assets.filter(a => a.status === "MAINTENANCE").length,
-        rusak: assets.filter(a => a.kondisi === "RUSAK").length,
-    };
-
-    const byCat = {
-        HANDPHONE: assets.filter(a => a.category === "HANDPHONE").length,
-        LAPTOP: assets.filter(a => a.category === "LAPTOP").length,
-        NOMOR_HP: assets.filter(a => a.category === "NOMOR_HP").length,
-    };
-
-    // Slice untuk pagination
-    const pageItems = filtered.slice(
-        (currentPage - 1) * PAGE_SIZE,
-        currentPage * PAGE_SIZE
-    );
-
-    return (
-        <div className="space-y-5">
-            {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-                <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 700 }}>{pageTitle}</h1>
-                    <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
-                        Kelola dan pantau seluruh aset perusahaan
-                    </p>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={load} style={{ height: 35, padding: "0 14px", background: "white", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)" }}>
-                        <RefreshCw size={14} /> Refresh
-                    </button>
-                    <button onClick={() => setShowCreate(true)} style={primaryBtnStyle}>
-                        <Plus size={15} /> Tambah Aset
-                    </button>
-                </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-                <StatCard icon={<Package size={20} />}      label="Total Aset"   value={stats.total}       bg="#eef2ff"  color="#6366f1" />
-                <StatCard icon={<CheckCircle size={20} />}  label="Tersedia"     value={stats.available}   bg="#d1fae5"  color="#10b981" />
-                <StatCard icon={<TrendingUp size={20} />}   label="Digunakan"    value={stats.inUse}       bg="#dbeafe"  color="#3b82f6" />
-                <StatCard icon={<Wrench size={20} />}       label="Perbaikan"    value={stats.maintenance} bg="#fef3c7"  color="#f59e0b" />
-                <StatCard icon={<AlertCircle size={20} />}  label="Kondisi Rusak" value={stats.rusak}      bg="#fee2e2"  color="#ef4444" />
-            </div>
-
-            {/* Quick filter pills berdasarkan kategori */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Kategori:</span>
-                <FilterPill label="Semua" active={filterCat === "ALL" && filterStatus === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("ALL"); }} count={stats.total} />
-                <FilterPill label="Handphone" icon={<Smartphone size={12} />} active={filterCat === "HANDPHONE"} onClick={() => { setFilterCat("HANDPHONE"); setFilterStatus("ALL"); }} count={byCat.HANDPHONE} />
-                <FilterPill label="Laptop" icon={<Laptop size={12} />} active={filterCat === "LAPTOP"} onClick={() => { setFilterCat("LAPTOP"); setFilterStatus("ALL"); }} count={byCat.LAPTOP} />
-                <FilterPill label="Nomor Indosat" icon={<Phone size={12} />} active={filterCat === "NOMOR_HP"} onClick={() => { setFilterCat("NOMOR_HP"); setFilterStatus("ALL"); }} count={byCat.NOMOR_HP} />
-                <div style={{ width: 1, height: 20, background: "var(--border)", margin: "0 4px" }} />
-                <FilterPill label="Stok Tersedia" icon={<CheckCircle size={12} />} active={filterStatus === "AVAILABLE" && filterCat === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("AVAILABLE"); }} count={stats.available} />
-            </div>
-
-            {/* Search + Select Filters */}
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-                    <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", pointerEvents: "none" }} />
-                    <input
-                        value={search} onChange={e => setSearch(e.target.value)}
-                        placeholder="Cari nama, kode, pemegang, nomor..."
-                        style={{ ...inputStyle, paddingLeft: 32, width: "100%", boxSizing: "border-box" as const }}
-                    />
-                </div>
-                <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                    <option value="ALL">Semua Kategori</option>
-                    <option value="HANDPHONE">Handphone</option>
-                    <option value="LAPTOP">Laptop</option>
-                    <option value="NOMOR_HP">Nomor HP</option>
-                </select>
-                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                    <option value="ALL">Semua Status</option>
-                    <option value="AVAILABLE">Tersedia</option>
-                    <option value="IN_USE">Digunakan</option>
-                    <option value="MAINTENANCE">Perbaikan</option>
-                    <option value="COMPANY_OWNED">Milik Perusahaan</option>
-                    <option value="RETIRED">Retired</option>
-                </select>
-                <select value={filterKondisi} onChange={e => setFilterKondisi(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                    <option value="ALL">Semua Kondisi</option>
-                    <option value="BAIK">Baik</option>
-                    <option value="KURANG_BAIK">Kurang Baik</option>
-                    <option value="RUSAK">Rusak</option>
-                </select>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-muted)" }}>
-                    <Filter size={14} /><span>{filtered.length} hasil</span>
-                </div>
-            </div>
-
-            {/* Table */}
-            <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-                {loading ? (
-                    <div style={{ textAlign: "center", padding: 40 }}><div className="spinner" /></div>
-                ) : (
-                    <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                            <thead>
-                                <tr style={{ background: "var(--secondary)" }}>
-                                    <th style={thStyle}>Kode</th>
-                                    <th style={thStyle}>Nama Aset</th>
-                                    <th style={thStyle}>Kategori</th>
-                                    <th style={thStyle}>Kondisi</th>
-                                    <th style={thStyle}>Status</th>
-                                    <th style={thStyle}>Pemegang</th>
-                                    <th style={thStyle}>Aksi</th>
+                {/* Table */}
+                <div className="overflow-x-auto flex-1">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-slate-50 border-b text-slate-500 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4 font-semibold">Kode Aset</th>
+                                <th className="px-6 py-4 font-semibold">Nama Aset</th>
+                                <th className="px-6 py-4 font-semibold w-1">Kategori</th>
+                                <th className="px-6 py-4 font-semibold w-1">Kondisi</th>
+                                <th className="px-6 py-4 font-semibold w-1">Status</th>
+                                <th className="px-6 py-4 font-semibold min-w-[200px]">Dipegang Oleh</th>
+                                <th className="px-6 py-4 font-semibold w-1 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {loading && assets.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">Memuat data secara langsung (server-side)...</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {pageItems.length === 0 ? (
-                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
-                                        {search ? `Tidak ada aset cocok dengan "${search}"` : "Tidak ada aset ditemukan"}
-                                    </td></tr>
-                                ) : pageItems.map(a => (
-                                    <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                                        <td style={tdStyle}>
-                                            <span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
-                                        </td>
-                                        <td style={{ ...tdStyle, maxWidth: 200 }}>
-                                            <span style={{ fontWeight: 500 }}>{a.name}</span>
-                                            {a.nomorIndosat && <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{a.nomorIndosat}</span>}
-                                            {a.keterangan && <span style={{ display: "block", fontSize: 11, color: "#f59e0b" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 28)}{a.keterangan.length > 28 ? "…" : ""}</span>}
-                                        </td>
-                                        <td style={tdStyle}><CategoryBadge cat={a.category} /></td>
-                                        <td style={tdStyle}><KondisiBadge kondisi={a.kondisi} /></td>
-                                        <td style={tdStyle}><StatusBadge status={a.status} /></td>
-                                        <td style={tdStyle}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <div style={{ padding: 4, background: "#f3f4f6", borderRadius: 6, display: "flex" }}>
-                                                    <HolderIcon holderType={a.holderType} />
+                            ) : assets.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">Tidak ada aset ditemukan.</td>
+                                </tr>
+                            ) : (
+                                assets.map((asset) => (
+                                    <tr 
+                                        key={asset.id} 
+                                        onClick={() => router.push(`/ga/assets/${asset.id}`)}
+                                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                                    >
+                                        <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">{asset.assetCode}</td>
+                                        <td className="px-6 py-4 font-medium text-slate-900">{asset.name}</td>
+                                        <td className="px-6 py-4"><CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} /></td>
+                                        <td className="px-6 py-4"><KondisiBadge kondisi={asset.kondisi} /></td>
+                                        <td className="px-6 py-4"><StatusBadge status={asset.status} /></td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                    <HolderIcon holderType={asset.holderType} />
                                                 </div>
-                                                <div>
-                                                    <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal", fontWeight: 500 }}>
-                                                        {a.assignedEmployee ? 
-                                                            a.assignedEmployee.name : 
-                                                            (a.assignedToName ?? "GA — Tersedia")}
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-slate-800 text-xs">
+                                                        {asset.holderType === "GA_POOL" ? "GA Pool (Tersedia)" :
+                                                         asset.holderType === "COMPANY_OWNED" ? "Milik Perusahaan (Disimpan)" :
+                                                         asset.assignedEmployee?.name || asset.assignedToName || "Tidak Diketahui"}
                                                     </span>
-                                                    {a.assignedEmployee && (
-                                                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                                                            {a.assignedEmployee.department} — {a.assignedEmployee.position}
+                                                    {asset.assignedEmployee && (
+                                                        <span className="text-[10px] text-slate-500 border-l-2 border-slate-200 pl-1.5 mt-0.5">
+                                                            {asset.assignedEmployee.department}
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={tdStyle}>
-                                            <div style={{ display: "flex", gap: 5 }}>
-                                                <button onClick={() => setEditTarget(a)} title="Edit" style={iconBtnSmall}><Edit3 size={14} /></button>
-                                                {a.status !== "RETIRED" && <button onClick={() => setAssignTarget(a)} title="Assign/Return" style={iconBtnSmall}><ArrowRightLeft size={14} /></button>}
-                                                <button onClick={() => setHistoryTarget(a)} title="Riwayat" style={iconBtnSmall}><History size={14} /></button>
-                                                {a.status !== "RETIRED" && (
-                                                    <button onClick={() => setRetireConfirm(a)} title="Retire" style={{ ...iconBtnSmall, color: "#ef4444", borderColor: "#fecaca" }}>
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                )}
+                                        {/* Aksi */}
+                                        <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button
+                                                    onClick={() => router.push(`/ga/assets/${asset.id}/edit`)}
+                                                    className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    title="Edit Aset"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteTarget({ id: asset.id, name: asset.name, code: asset.assetCode })}
+                                                    className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                    title="Hapus Aset"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Footer Pagination */}
+                {totalPages > 1 && (
+                    <div className="p-4 border-t bg-slate-50/50 flex justify-between items-center text-sm text-slate-500">
+                        <span>Menampilkan {(currentPage - 1) * PER_PAGE + 1} - {Math.min(currentPage * PER_PAGE, totalItems)} dari {totalItems} aset</span>
+                        <Pagination 
+                            currentPage={currentPage}
+                            totalItems={totalItems}
+                            pageSize={PER_PAGE}
+                            onPageChange={setCurrentPage}
+                        />
                     </div>
                 )}
-                <Pagination
-                    currentPage={currentPage}
-                    totalItems={filtered.length}
-                    pageSize={PAGE_SIZE}
-                    onPageChange={setCurrentPage}
-                />
             </div>
 
-            {/* Modals */}
-            {showCreate   && <CreateModal  onClose={() => setShowCreate(false)}   onDone={() => { setShowCreate(false);   load(); }} />}
-            {assignTarget && <AssignModal  asset={assignTarget}  onClose={() => setAssignTarget(null)}  onDone={() => { setAssignTarget(null);  load(); }} />}
-            {editTarget   && <EditModal    asset={editTarget}    onClose={() => setEditTarget(null)}    onDone={() => { setEditTarget(null);    load(); }} />}
-            {historyTarget && <HistoryModal asset={historyTarget} onClose={() => setHistoryTarget(null)} />}
-
-            {/* Retire Confirm */}
-            {retireConfirm && (
-                <div style={overlayStyle}>
-                    <div style={{ ...modalStyle, maxWidth: 380 }}>
-                        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Retire Aset?</h3>
-                        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
-                            <strong>{retireConfirm.assetCode}</strong> — {retireConfirm.name}<br />
-                            Aset akan ditandai Retired dan tidak bisa di-assign lagi.
-                        </p>
-                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                            <button onClick={() => setRetireConfirm(null)} style={outlineBtnStyle}>Batal</button>
-                            <button onClick={() => handleRetire(retireConfirm)} style={{ ...primaryBtnStyle, background: "#ef4444" }}>
-                                <Trash2 size={14} /> Retire
+            {/* Delete Confirm Dialog */}
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-slate-200">
+                        <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                                <Trash2 className="text-red-600" size={18} />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-slate-800">Hapus Aset Secara Permanen?</h3>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    Anda akan menghapus aset <span className="font-semibold text-slate-700">{deleteTarget.name}</span> ({deleteTarget.code}). 
+                                    Tindakan ini <span className="text-red-600 font-semibold">tidak dapat dibatalkan</span> dan akan menghapus semua riwayat terkait.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-6 justify-end">
+                            <button
+                                onClick={() => setDeleteTarget(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <Trash2 size={14} />
+                                {isDeleting ? "Menghapus..." : "Ya, Hapus Permanen"}
                             </button>
                         </div>
                     </div>
@@ -847,26 +426,3 @@ function AssetsPageInner() {
         </div>
     );
 }
-
-// ─── Export (wrapped dalam Suspense agar useSearchParams aman) ──
-
-export default function AssetsPage() {
-    return (
-        <Suspense fallback={<div style={{ textAlign: "center", padding: 48 }}><div className="spinner" /></div>}>
-            <AssetsPageInner />
-        </Suspense>
-    );
-}
-
-// ─── Style Constants ────────────────────────────────────────────
-const thStyle: React.CSSProperties = { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "var(--text-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" };
-const tdStyle: React.CSSProperties = { padding: "10px 14px", color: "var(--text-primary)", verticalAlign: "middle" };
-const inputStyle: React.CSSProperties = { height: 36, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, outline: "none", background: "white" };
-const fieldStyle: React.CSSProperties = { marginBottom: 12, display: "flex", flexDirection: "column", gap: 5 };
-const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" };
-const primaryBtnStyle: React.CSSProperties = { height: 36, padding: "0 16px", background: "var(--primary)", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 };
-const outlineBtnStyle: React.CSSProperties = { height: 36, padding: "0 14px", background: "white", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 };
-const iconBtnStyle: React.CSSProperties = { padding: 6, border: "none", background: "transparent", cursor: "pointer", borderRadius: 6, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" };
-const iconBtnSmall: React.CSSProperties = { ...iconBtnStyle, padding: 5, border: "1px solid var(--border)", background: "white", color: "var(--text-secondary)" };
-const overlayStyle: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
-const modalStyle: React.CSSProperties = { background: "white", borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px -10px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto" };

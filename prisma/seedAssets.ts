@@ -140,6 +140,23 @@ async function main() {
 
     let totalCreated = 0;
 
+    // Ensure categories exist
+    const catHp = await prisma.assetCategory.upsert({
+        where: { name: "Handphone/Tablet" },
+        update: {},
+        create: { name: "Handphone/Tablet", prefix: "HP" }
+    });
+    const catLaptop = await prisma.assetCategory.upsert({
+        where: { name: "Laptop" },
+        update: {},
+        create: { name: "Laptop", prefix: "LT" }
+    });
+    const catNum = await prisma.assetCategory.upsert({
+        where: { name: "Nomor Indosat (SIM)" },
+        update: {},
+        create: { name: "Nomor Indosat (SIM)", prefix: "NUM" }
+    });
+
     // ── 1. Handphone ──────────────────────────────────────────
     console.log(`📱 Seeding ${hpData.total} Handphone...`);
     for (let i = 0; i < hpData.data.length; i++) {
@@ -152,7 +169,7 @@ async function main() {
             data: {
                 assetCode,
                 name: item.type,
-                category: "HANDPHONE",
+                categoryId: catHp.id,
                 kondisi,
                 status,
                 holderType,
@@ -177,7 +194,7 @@ async function main() {
             data: {
                 assetCode,
                 name: item.type,
-                category: "LAPTOP",
+                categoryId: catLaptop.id,
                 kondisi,
                 status,
                 holderType,
@@ -202,7 +219,7 @@ async function main() {
             data: {
                 assetCode,
                 name: `Nomor Indosat 0${item.nomor_indosat}`,
-                category: "NOMOR_HP",
+                categoryId: catNum.id,
                 kondisi: "BAIK",
                 status,
                 holderType,

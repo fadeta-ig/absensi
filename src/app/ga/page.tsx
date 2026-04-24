@@ -5,6 +5,11 @@ import {
     Package, Smartphone, Laptop, Phone,
     CheckCircle, AlertCircle, Wrench, TrendingUp, Clock, AlertTriangle,
 } from "lucide-react";
+import Link from "next/link";
+import { AssetWithHistory } from "@/lib/types/asset";
+import { StatCard, CategoryStat } from "@/features/ga/components/AssetStatCards";
+import { CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
+import { formatRupiah } from "@/lib/utils/formatters";
 
 type AssetStats = {
     total: number;
@@ -12,52 +17,44 @@ type AssetStats = {
     inUse: number;
     maintenance: number;
     rusak: number;
-    byCategory: { HANDPHONE: number; LAPTOP: number; NOMOR_HP: number };
+    totalNilai: number;
+    byCategory: Array<{ name: string; prefix: string; count: number }>;
     expiringNomor: number;
+    expiringWarranty: number;
 };
 
-type RecentAsset = {
-    id: string; assetCode: string; name: string;
-    category: string; status: string; holderType: string; assignedToName: string | null;
-};
-
+// Helper for UI icons based on category prefix/name
+function getCategoryIcon(prefix: string, name: string) {
+    const p = prefix.toUpperCase();
+    const n = name.toUpperCase();
+    if (p === "LT" || n.includes("LAPTOP")) return { icon: <Laptop size={20} />, color: "#0ea5e9" };
+    if (p === "HP" || n.includes("HP") || n.includes("HANDPHONE") || n.includes("MOBILE")) return { icon: <Smartphone size={20} />, color: "#6366f1" };
+    if (p === "NUM" || n.includes("NOMOR") || n.includes("SIM") || n.includes("IDN")) return { icon: <Phone size={20} />, color: "#10b981" };
+    return { icon: <Package size={20} />, color: "#94a3b8" };
+}
 export default function GaDashboard() {
     const [stats, setStats] = useState<AssetStats | null>(null);
-    const [recent, setRecent] = useState<RecentAsset[]>([]);
+    const [recent, setRecent] = useState<AssetWithHistory[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const load = async () => {
             try {
-                const res = await fetch("/api/assets");
-                if (!res.ok) return;
-                const assets: RecentAsset[] = await res.json();
+                const [statsRes, recentRes] = await Promise.all([
+                    fetch("/api/assets/stats"),
+                    fetch("/api/assets?status=AVAILABLE&limit=8")
+                ]);
 
-                const now = new Date();
-                const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                if (statsRes.ok) {
+                    const statsData = await statsRes.json();
+                    setStats(statsData);
+                }
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const fullAssets: any[] = assets;
-
-                const s: AssetStats = {
-                    total: assets.length,
-                    available: assets.filter(a => a.status === "AVAILABLE").length,
-                    inUse: assets.filter(a => a.status === "IN_USE").length,
-                    maintenance: assets.filter(a => a.status === "MAINTENANCE").length,
-                    rusak: fullAssets.filter(a => a.kondisi === "RUSAK").length,
-                    byCategory: {
-                        HANDPHONE: assets.filter(a => a.category === "HANDPHONE").length,
-                        LAPTOP: assets.filter(a => a.category === "LAPTOP").length,
-                        NOMOR_HP: assets.filter(a => a.category === "NOMOR_HP").length,
-                    },
-                    expiringNomor: fullAssets.filter(a =>
-                        a.category === "NOMOR_HP" && a.expiredDate &&
-                        new Date(a.expiredDate) <= in30Days
-                    ).length,
-                };
-
-                setStats(s);
-                setRecent(assets.filter(a => a.status === "AVAILABLE").slice(0, 8));
+                if (recentRes.ok) {
+                    const recentData = await recentRes.json();
+                    // Since API returns { data: [...], ... } for paginated assets
+                    setRecent(recentData.data ? recentData.data.slice(0, 8) : recentData.slice(0, 8));
+                }
             } finally {
                 setLoading(false);
             }
@@ -72,63 +69,101 @@ export default function GaDashboard() {
     );
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 p-6 max-w-7xl mx-auto min-h-screen">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard GA</h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Manajemen aset perusahaan WIG</p>
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between border-b border-slate-100 pb-6">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Dashboard GA</h1>
+                    <p className="text-sm text-slate-500 mt-1">Manajemen aset perusahaan WIG</p>
+                </div>
+                <div className="mt-4 md:mt-0">
+                    <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">Operational Mode: Active</span>
+                </div>
             </div>
 
             {/* Alert expiry */}
-            {stats && stats.expiringNomor > 0 && (
-                <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <AlertTriangle size={18} color="#d97706" />
-                    <span style={{ fontSize: 14, color: "#92400e", fontWeight: 500 }}>
-                        {stats.expiringNomor} nomor Indosat akan expired dalam 30 hari ke depan
-                    </span>
-                    <a href="/ga/nomor" style={{ marginLeft: "auto", fontSize: 13, color: "#d97706", textDecoration: "underline" }}>Lihat</a>
-                </div>
-            )}
-
-            {/* Stats Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
-                <StatCard icon={<Package size={22} color="#6366f1" />} label="Total Aset" value={stats?.total ?? 0} bg="#eef2ff" />
-                <StatCard icon={<CheckCircle size={22} color="#10b981" />} label="Tersedia" value={stats?.available ?? 0} bg="#d1fae5" />
-                <StatCard icon={<TrendingUp size={22} color="#3b82f6" />} label="Digunakan" value={stats?.inUse ?? 0} bg="#dbeafe" />
-                <StatCard icon={<Wrench size={22} color="#f59e0b" />} label="Perbaikan" value={stats?.maintenance ?? 0} bg="#fef3c7" />
-                <StatCard icon={<AlertCircle size={22} color="#ef4444" />} label="Rusak" value={stats?.rusak ?? 0} bg="#fee2e2" />
+            <div className="flex flex-col gap-3">
+                {stats && stats.expiringNomor > 0 && (
+                    <div className="bg-amber-50 border border-amber-500 rounded-xl px-4 py-3 flex items-center gap-3">
+                        <AlertTriangle size={18} className="text-amber-600" />
+                        <span className="text-sm text-amber-800 font-medium">
+                            {stats.expiringNomor} nomor SIM akan expired dalam 30 hari ke depan
+                        </span>
+                        <Link href="/ga/nomor" className="ml-auto text-sm text-amber-600 underline font-medium hover:text-amber-700">Lihat</Link>
+                    </div>
+                )}
+                {stats && stats.expiringWarranty > 0 && (
+                    <div className="bg-red-50 border border-red-500 rounded-xl px-4 py-3 flex items-center gap-3">
+                        <AlertCircle size={18} className="text-red-700" />
+                        <span className="text-sm text-red-800 font-medium">
+                            Peringatan: {stats.expiringWarranty} aset akan habis masa garansinya bulan ini!
+                        </span>
+                        <Link href="/ga/assets" className="ml-auto text-sm text-red-700 underline font-medium hover:text-red-800">Lihat</Link>
+                    </div>
+                )}
             </div>
 
-            {/* Category breakdown */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-                <CategoryCard icon={<Smartphone size={20} color="#6366f1" />} label="Handphone" count={stats?.byCategory.HANDPHONE ?? 0} />
-                <CategoryCard icon={<Laptop size={20} color="#0ea5e9" />} label="Laptop" count={stats?.byCategory.LAPTOP ?? 0} />
-                <CategoryCard icon={<Phone size={20} color="#10b981" />} label="Nomor Indosat" count={stats?.byCategory.NOMOR_HP ?? 0} />
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <StatCard icon={<Package />} label="Total Aset" value={stats?.total ?? 0} bg="#eef2ff" color="#6366f1" />
+                <StatCard icon={<TrendingUp />} label="Total Kapital" value={stats?.totalNilai ? formatRupiah(stats.totalNilai) : "Rp 0"} bg="#e0f2fe" color="#0284c7" />
+                <StatCard icon={<CheckCircle />} label="Tersedia" value={stats?.available ?? 0} bg="#d1fae5" color="#10b981" />
+                <StatCard icon={<Clock />} label="Digunakan" value={stats?.inUse ?? 0} bg="#dbeafe" color="#3b82f6" />
+                <StatCard icon={<Wrench />} label="Perbaikan" value={stats?.maintenance ?? 0} bg="#fef3c7" color="#f59e0b" />
+                <StatCard icon={<AlertCircle />} label="Rusak" value={stats?.rusak ?? 0} bg="#fee2e2" color="#ef4444" />
+            </div>
+
+            {/* Category breakdown (Synchronized with DB) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {stats?.byCategory.map((cat, idx) => {
+                    const { icon, color } = getCategoryIcon(cat.prefix, cat.name);
+                    return (
+                        <CategoryStat 
+                            key={idx}
+                            icon={icon}
+                            color={color}
+                            label={cat.name} 
+                            count={cat.count} 
+                        />
+                    );
+                })}
             </div>
 
             {/* Stok Available */}
-            <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
-                <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h2 style={{ fontSize: 15, fontWeight: 600 }}>Aset Tersedia di GA</h2>
-                    <a href="/ga/assets?filter=available" style={{ fontSize: 13, color: "var(--primary)", textDecoration: "none" }}>Lihat semua →</a>
+            <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)]">
+                <div className="px-5 py-4 border-b flex justify-between items-center">
+                    <h2 className="text-[15px] font-semibold text-slate-800">Aset Tersedia di GA</h2>
+                    <Link href="/ga/assets?status=AVAILABLE" className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Lihat semua &rarr;</Link>
                 </div>
-                <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                        <thead>
-                            <tr style={{ background: "var(--secondary)" }}>
-                                <th style={thStyle}>Kode</th>
-                                <th style={thStyle}>Nama Aset</th>
-                                <th style={thStyle}>Kategori</th>
+                <div className="overflow-x-auto">
+                    <table className="w-full whitespace-nowrap text-left text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th className="px-6 py-4 font-semibold">Kode Aset</th>
+                                <th className="px-6 py-4 font-semibold">Nama Aset</th>
+                                <th className="px-6 py-4 font-semibold">Kategori</th>
+                                <th className="px-6 py-4 font-semibold">Tipe Entitas</th>
+                                <th className="px-6 py-4 text-right">Aksi</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-100">
                             {recent.length === 0 ? (
-                                <tr><td colSpan={3} style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>Tidak ada aset tersedia</td></tr>
-                            ) : recent.map(a => (
-                                <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                                    <td style={tdStyle}><span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span></td>
-                                    <td style={tdStyle}>{a.name}</td>
-                                    <td style={tdStyle}><CategoryBadge cat={a.category} /></td>
+                                <tr><td colSpan={5} className="text-center py-6 text-slate-400">Tidak ada aset tersedia saat ini.</td></tr>
+                            ) : recent.map(asset => (
+                                <tr key={asset.id} className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-600">{asset.assetCode}</td>
+                                    <td className="px-6 py-4 font-medium text-slate-800">{asset.name}</td>
+                                    <td className="px-6 py-4">
+                                        <CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} />
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-md font-medium border border-slate-200">
+                                            {asset.holderType === "GA_POOL" ? "GA Pool" : "Company"}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -139,37 +174,6 @@ export default function GaDashboard() {
     );
 }
 
-function StatCard({ icon, label, value, bg }: { icon: React.ReactNode; label: string; value: number; bg: string }) {
-    return (
-        <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>{icon}</div>
-            <p style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1 }}>{value}</p>
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</p>
-        </div>
-    );
-}
 
-function CategoryCard({ icon, label, count }: { icon: React.ReactNode; label: string; count: number }) {
-    return (
-        <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-            {icon}
-            <div>
-                <p style={{ fontSize: 18, fontWeight: 700 }}>{count}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</p>
-            </div>
-        </div>
-    );
-}
 
-function CategoryBadge({ cat }: { cat: string }) {
-    const map: Record<string, { label: string; color: string; bg: string }> = {
-        HANDPHONE: { label: "HP", color: "#6366f1", bg: "#eef2ff" },
-        LAPTOP: { label: "Laptop", color: "#0ea5e9", bg: "#e0f2fe" },
-        NOMOR_HP: { label: "Nomor", color: "#10b981", bg: "#d1fae5" },
-    };
-    const c = map[cat] ?? { label: cat, color: "#6b7280", bg: "#f3f4f6" };
-    return <span style={{ fontSize: 11, fontWeight: 600, color: c.color, background: c.bg, padding: "2px 8px", borderRadius: 999 }}>{c.label}</span>;
-}
 
-const thStyle: React.CSSProperties = { padding: "10px 16px", textAlign: "left", fontWeight: 600, color: "var(--text-muted)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em" };
-const tdStyle: React.CSSProperties = { padding: "10px 16px", color: "var(--text-primary)" };

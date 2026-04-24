@@ -287,10 +287,15 @@ model Location {
 
 // ─── Asset Management ──────────────────────────────────────────
 
-enum AssetCategory {
-  HANDPHONE
-  LAPTOP
-  NOMOR_HP
+model AssetCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  prefix      String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  assets      Asset[]
+
+  @@map("asset_categories")
 }
 
 enum AssetKondisi {
@@ -319,7 +324,18 @@ model Asset {
   id             String        @id @default(uuid())
   assetCode      String        @unique @map("asset_code")
   name           String
-  category       AssetCategory
+  
+  categoryId     String        @map("category_id")
+  categoryRel    AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  serialNumber   String?       @map("serial_number")
+  imei           String?       @map("imei")
+  manufacturer   String?
+  modelName      String?       @map("model_name")
+  
+  purchaseDate   DateTime?     @map("purchase_date")
+  purchasePrice  Float?        @map("purchase_price")
+  warrantyExpiry DateTime?     @map("warranty_expiry")
   kondisi        AssetKondisi  @default(BAIK)
   status         AssetStatus   @default(AVAILABLE)
   holderType     HolderType    @default(GA_POOL) @map("holder_type")
@@ -339,8 +355,10 @@ model Asset {
 
   assignedTo     Employee?     @relation(fields: [assignedToId], references: [employeeId])
   histories      AssetHistory[]
+  inspections    AssetInspection[]
 
   @@index([assignedToId], map: "assets_assigned_to_id_fkey")
+  @@index([categoryId], map: "assets_category_id_fkey")
 
   @@map("assets")
 }
@@ -364,4 +382,24 @@ model AssetHistory {
   createdAt      DateTime     @default(now()) @map("created_at")
 
   @@map("asset_histories")
+}
+
+// ─── Asset Inspection (Checklist Inspeksi GA) ────────────────────
+
+model AssetInspection {
+  id            String       @id @default(uuid())
+  assetId       String       @map("asset_id")
+  asset         Asset        @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  kondisiSaat   AssetKondisi @map("kondisi_saat")
+
+  /// JSON: record of checklist items e.g. {"layar":true,"body":false}
+  checklistJson String       @map("checklist_json") @db.Text
+
+  notes         String?      @db.Text
+  performedBy   String       @map("performed_by") // employeeId GA
+  inspectedAt   DateTime     @default(now()) @map("inspected_at")
+
+  @@index([assetId], map: "asset_inspections_asset_id_fkey")
+  @@map("asset_inspections")
 }

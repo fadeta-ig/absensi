@@ -2,21 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Phone, Package } from "lucide-react";
+import { LayoutDashboard, Phone, Package, QrCode } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
 
 const GA_NAV_ITEMS: NavItem[] = [
     { href: "/ga", icon: LayoutDashboard, label: "Dashboard" },
     {
         icon: Package,
-        label: "Manajemen Aset",
+        label: "Data Master",
         subItems: [
-            { href: "/ga/assets", label: "Semua Aset" },
-            { href: "/ga/assets?category=HANDPHONE", label: "Handphone" },
-            { href: "/ga/assets?category=LAPTOP", label: "Laptop" },
-            { href: "/ga/assets?category=NOMOR_HP", label: "Nomor Indosat" },
-            { href: "/ga/assets?status=AVAILABLE", label: "Stok Tersedia" },
-            { href: "/ga/assets?status=MAINTENANCE", label: "Dalam Perbaikan" },
+            { href: "/ga/categories", label: "Master Kategori" },
+            { href: "/ga/assets", label: "Master Aset" },
+        ],
+    },
+    {
+        icon: QrCode,
+        label: "Operasional QR",
+        subItems: [
+            { href: "/ga/scan", label: "Scan / Pindai QR" },
+            { href: "/ga/assets/print", label: "Cetak Label QR" },
         ],
     },
     { href: "/ga/nomor", icon: Phone, label: "Kartu SIM Expiry" },
