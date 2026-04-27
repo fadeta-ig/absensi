@@ -47,22 +47,13 @@ const navItems: NavItem[] = [
     },
     { href: "/dashboard/reports", icon: FileDown, label: "Laporan" },
     { href: "/dashboard/news", icon: Megaphone, label: "WIG News" },
-    {
-        label: "Aset Perusahaan",
-        icon: Package,
-        subItems: [
-            { href: "/dashboard/assets", label: "Semua Aset" },
-            { href: "/dashboard/assets?category=HANDPHONE", label: "Handphone" },
-            { href: "/dashboard/assets?category=LAPTOP", label: "Laptop" },
-            { href: "/dashboard/assets?category=NOMOR_HP", label: "Nomor Indosat" },
-        ],
-    },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const [user, setUser] = useState<AppShellUser | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
+    const [categories, setCategories] = useState<{ id: string; name: string; prefix: string }[]>([]);
     const fetchedRef = useRef(false);
 
     useEffect(() => {
@@ -71,11 +62,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         const checkAuth = async () => {
             try {
-                const res = await fetch("/api/auth/me", { credentials: "same-origin" });
-                if (!res.ok) { router.replace("/"); return; }
-                const data = await res.json();
+                const [meRes, catRes] = await Promise.all([
+                    fetch("/api/auth/me", { credentials: "same-origin" }),
+                    fetch("/api/assets/categories")
+                ]);
+
+                if (!meRes.ok) { router.replace("/"); return; }
+                const data = await meRes.json();
                 if (data.role !== "hr") { router.replace("/employee"); return; }
                 setUser(data);
+
+                if (catRes.ok) {
+                    const catData = await catRes.json();
+                    setCategories(catData);
+                }
             } catch {
                 router.replace("/");
             } finally {
@@ -95,10 +95,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return <AppShellLoading message="Memuat Dashboard..." />;
     }
 
+    // Susun item menu dinamis
+    const dynamicNavItems: NavItem[] = [
+        ...navItems,
+        {
+            label: "Aset Perusahaan",
+            icon: Package,
+            subItems: [
+                { href: "/dashboard/assets", label: "Semua Aset" },
+                ...categories.map(cat => ({
+                    href: `/dashboard/assets?category=${cat.prefix}`,
+                    label: cat.name
+                }))
+            ],
+        }
+    ];
+
     return (
         <AppShell
             user={user}
-            navItems={navItems}
+            navItems={dynamicNavItems}
             brandTitle="WIG HR"
             brandSubtitle="Admin Panel"
             mobileTitle="WIG HR"

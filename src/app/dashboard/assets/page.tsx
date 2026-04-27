@@ -10,8 +10,10 @@ import {
 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
-import type { AssetWithHistory, AssetStatus, AssetCondition, AssetCategory } from "@/lib/types/asset";
+import type { AssetWithHistory, AssetStatus, AssetCondition } from "@/lib/types/asset";
 import type { AssetStats } from "@/lib/services/assets/queries";
+
+type AssetCategoryParams = { id: string; name: string; prefix: string };
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -50,18 +52,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function CategoryBadge({ cat }: { cat: string }) {
-    const map: Record<string, { label: string; icon: React.ReactNode }> = {
-        HANDPHONE: { label: "HP", icon: <Smartphone size={11} /> },
-        LAPTOP: { label: "Laptop", icon: <Laptop size={11} /> },
-        NOMOR_HP: { label: "Nomor", icon: <Phone size={11} /> },
-        HP: { label: "HP", icon: <Smartphone size={11} /> },
-        LP: { label: "Laptop", icon: <Laptop size={11} /> },
-        NUM: { label: "Nomor", icon: <Phone size={11} /> },
-    };
-    const c = map[cat] ?? { label: cat, icon: <Package size={11} /> };
     return (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#6366f1", background: "#eef2ff", padding: "2px 8px", borderRadius: 999, textTransform: "capitalize" }}>
-            {c.icon}{c.label}
+            <Package size={11} />{cat}
         </span>
     );
 }
@@ -167,6 +160,7 @@ function HrAssetsPageInner() {
     const searchParams = useSearchParams();
     const [assets, setAssets] = useState<Asset[]>([]);
     const [stats, setStats] = useState<AssetStats | null>(null);
+    const [categories, setCategories] = useState<AssetCategoryParams[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [filterCat, setFilterCat] = useState("ALL");
@@ -185,9 +179,10 @@ function HrAssetsPageInner() {
             query.set("page", currentPage.toString());
             query.set("limit", PAGE_SIZE.toString());
 
-            const [resAssets, resStats] = await Promise.all([
+            const [resAssets, resStats, resCats] = await Promise.all([
                 fetch(`/api/assets?${query.toString()}`),
-                fetch("/api/assets/stats")
+                fetch("/api/assets/stats"),
+                fetch("/api/assets/categories")
             ]);
 
             if (resAssets.ok) {
@@ -197,6 +192,9 @@ function HrAssetsPageInner() {
             }
             if (resStats.ok) {
                 setStats(await resStats.json());
+            }
+            if (resCats.ok) {
+                setCategories(await resCats.json());
             }
         } catch (err) {
             console.error("Failed to load GA data", err);
@@ -218,11 +216,10 @@ function HrAssetsPageInner() {
         setCurrentPage(1);
     }, [searchParams]);
 
-    const pageTitle = filterCat === "HP" ? "Aset Handphone" :
-                      filterCat === "LP" ? "Aset Laptop"    :
-                      filterCat === "NUM" ? "Nomor Indosat"  :
-                      filterStatus === "AVAILABLE" ? "Stok Tersedia" :
-                      "Aset Perusahaan";
+    const catPill = categories.find(c => c.prefix === filterCat);
+    const pageTitle = filterCat === "ALL" && filterStatus === "AVAILABLE" ? "Stok Tersedia" :
+                      catPill ? `Aset ${catPill.name}` :
+                      "Semua Aset Perusahaan";
 
     const getCountForCat = (prefix: string) => {
         return stats?.byCategory.find(c => c.prefix === prefix)?.count || 0;
@@ -262,9 +259,15 @@ function HrAssetsPageInner() {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Kategori:</span>
                 <FilterPill label="Semua" active={filterCat === "ALL" && filterStatus === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("ALL"); setCurrentPage(1); }} count={stats?.total} />
-                <FilterPill label="Handphone" active={filterCat === "HP"} onClick={() => { setFilterCat("HP"); setFilterStatus("ALL"); setCurrentPage(1); }} count={getCountForCat("HP")} />
-                <FilterPill label="Laptop" active={filterCat === "LP"} onClick={() => { setFilterCat("LP"); setFilterStatus("ALL"); setCurrentPage(1); }} count={getCountForCat("LP")} />
-                <FilterPill label="Nomor Indosat" active={filterCat === "NUM"} onClick={() => { setFilterCat("NUM"); setFilterStatus("ALL"); setCurrentPage(1); }} count={getCountForCat("NUM")} />
+                {categories.map(cat => (
+                    <FilterPill 
+                        key={cat.prefix} 
+                        label={cat.name} 
+                        active={filterCat === cat.prefix} 
+                        onClick={() => { setFilterCat(cat.prefix); setFilterStatus("ALL"); setCurrentPage(1); }} 
+                        count={getCountForCat(cat.prefix)} 
+                    />
+                ))}
                 <div style={{ width: 1, height: 20, background: "var(--border)", margin: "0 4px" }} />
                 <FilterPill label="Stok Tersedia" active={filterStatus === "AVAILABLE" && filterCat === "ALL"} onClick={() => { setFilterCat("ALL"); setFilterStatus("AVAILABLE"); setCurrentPage(1); }} count={stats?.available} />
             </div>
