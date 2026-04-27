@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
             }
         });
 
-        return new NextResponse(buffer, {
+        return new NextResponse(buffer as unknown as BodyInit, {
             headers: {
                 "Content-Type": "image/png",
                 "Cache-Control": "public, max-age=3600", // Kurangi ke 1 jam agar perubahan target URL segera terasa

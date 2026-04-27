@@ -21,8 +21,6 @@ export type AssetFormData = {
     purchasePrice: string;
     warrantyExpiry: string;
     keterangan: string;
-    nomorIndosat: string;
-    expiredDate: string;
 };
 
 type AssetFormProps = {
@@ -54,8 +52,6 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
         purchasePrice: initialData?.purchasePrice || "",
         warrantyExpiry: initialData?.warrantyExpiry || "",
         keterangan: initialData?.keterangan || "",
-        nomorIndosat: initialData?.nomorIndosat || "",
-        expiredDate: initialData?.expiredDate || "",
     });
 
     useEffect(() => {
@@ -121,8 +117,6 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
         }));
     };
 
-    const selectedCategory = categories.find(c => c.id === formData.categoryId);
-    const isPhoneNum = selectedCategory?.prefix === "NUM";
 
     if (loadingParams) return <div className="p-6 text-sm text-slate-500">Memuat konfigurasi form...</div>;
 
@@ -187,23 +181,7 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
                 </div>
             </div>
 
-            {isPhoneNum && (
-                <>
-                    <div className="p-6 border-y bg-slate-50/50">
-                        <h2 className="text-md font-semibold text-slate-800">Detail Kartu SIM</h2>
-                    </div>
-                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Nomor Telepon</label>
-                            <input type="text" name="nomorIndosat" value={formData.nomorIndosat} onChange={handleChange} placeholder="+62..." className="w-full font-mono px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Masa Aktif Terakhir</label>
-                            <input type="date" name="expiredDate" value={formData.expiredDate} onChange={handleChange} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
-                        </div>
-                    </div>
-                </>
-            )}
+
 
             <div className="p-6 border-y bg-slate-50/50">
                 <h2 className="text-md font-semibold text-slate-800">Status & Penyerahan</h2>

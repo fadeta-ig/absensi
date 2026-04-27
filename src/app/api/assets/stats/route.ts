@@ -12,8 +12,10 @@ export async function GET(request: NextRequest) {
     if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
 
     try {
+        const { searchParams } = new URL(request.url);
+        const excludeCategory = searchParams.get("excludeCategory") ?? undefined;
         const includeCompanyOwned = session.role === "ga";
-        const stats = await getAssetStats(includeCompanyOwned);
+        const stats = await getAssetStats(includeCompanyOwned, excludeCategory);
         return NextResponse.json(stats);
     } catch (err) {
         return serverErrorResponse("AssetStatsGET", err);

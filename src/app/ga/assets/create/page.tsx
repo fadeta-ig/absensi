@@ -29,8 +29,6 @@ export default function CreateAssetPage() {
             purchaseDate: data.purchaseDate || null,
             purchasePrice: data.purchasePrice ? parseFloat(data.purchasePrice) : null,
             warrantyExpiry: data.warrantyExpiry || null,
-            nomorIndosat: data.nomorIndosat || null,
-            expiredDate: data.expiredDate || null,
         };
 
         try {

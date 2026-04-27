@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const category = searchParams.get("category") ?? undefined;
+        const excludeCategory = searchParams.get("excludeCategory") ?? undefined;
         const status = searchParams.get("status") ?? undefined;
         const kondisi = searchParams.get("kondisi") ?? undefined;
         const search = searchParams.get("search") ?? undefined;
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
 
         // HR tidak melihat COMPANY_OWNED
         const includeCompanyOwned = session.role === "ga";
-        const result = await getAssets({ includeCompanyOwned, category, status, kondisi, search, page, limit });
+        const result = await getAssets({ includeCompanyOwned, category, excludeCategory, status, kondisi, search, page, limit });
 
         return NextResponse.json(result);
     } catch (err) {

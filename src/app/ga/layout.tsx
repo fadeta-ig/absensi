@@ -23,7 +23,7 @@ const GA_NAV_ITEMS: NavItem[] = [
             { href: "/ga/assets/print", label: "Cetak Label QR" },
         ],
     },
-    { href: "/ga/nomor", icon: Phone, label: "Kartu SIM Expiry" },
+    { href: "/ga/sim", icon: Phone, label: "Manajemen SIM" },
 ];
 
 export default function GaLayout({ children }: { children: React.ReactNode }) {

@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 export type GetAssetsOptions = {
     includeCompanyOwned?: boolean;
     category?: string;
+    excludeCategory?: string;
     status?: string;
     kondisi?: string;
     search?: string;
@@ -53,6 +54,8 @@ export async function getAssets(options?: GetAssetsOptions): Promise<PaginatedAs
 
     if (options?.category) {
         where.categoryRel = { prefix: options.category };
+    } else if (options?.excludeCategory) {
+        where.categoryRel = { prefix: { not: options.excludeCategory } };
     }
 
     if (options?.status) {
@@ -149,8 +152,12 @@ export async function getAssetHistory(assetId: string): Promise<AssetHistoryRow[
 /**
  * Mengambil statistik agregat aset (tanpa fetch seluruh row).
  */
-export async function getAssetStats(includeCompanyOwned = false): Promise<AssetStats> {
+export async function getAssetStats(includeCompanyOwned = false, excludeCategoryPrefix?: string): Promise<AssetStats> {
     const baseWhere: Prisma.AssetWhereInput = includeCompanyOwned ? {} : { status: { not: "COMPANY_OWNED" } };
+    
+    if (excludeCategoryPrefix) {
+        baseWhere.categoryRel = { prefix: { not: excludeCategoryPrefix } };
+    }
 
     const now = new Date();
     const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);

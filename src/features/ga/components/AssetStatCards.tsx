@@ -10,7 +10,7 @@ export function StatCard({ icon, label, value, bg, color }: { icon: React.ReactN
                 className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105" 
                 style={{ backgroundColor: bg, color: color }}
             >
-                {React.cloneElement(icon as React.ReactElement, { size: 24, strokeWidth: 2 })}
+                {React.cloneElement(icon as React.ReactElement<{ size?: number; strokeWidth?: number }>, { size: 24, strokeWidth: 2 })}
             </div>
             <div className="min-w-0">
                 <div className="text-xs text-slate-500 font-semibold mb-0.5">{label}</div>

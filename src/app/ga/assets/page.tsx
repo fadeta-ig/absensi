@@ -62,6 +62,7 @@ export default function AssetsPage() {
             if (debouncedSearch) params.set("search", debouncedSearch);
             params.set("page", String(currentPage));
             params.set("limit", String(PER_PAGE));
+            params.set("excludeCategory", "NUM");
 
             const res = await fetch(`/api/assets?${params.toString()}`);
             if (res.ok) {
@@ -78,7 +79,7 @@ export default function AssetsPage() {
 
     const fetchStats = useCallback(async () => {
         try {
-            const res = await fetch("/api/assets/stats");
+            const res = await fetch("/api/assets/stats?excludeCategory=NUM");
             if (res.ok) setStats(await res.json());
         } catch (error) {
             console.error("Gagal mengambil data statistik", error);
@@ -114,6 +115,7 @@ export default function AssetsPage() {
             if (filterStatus) params.set("status", filterStatus);
             if (filterKondisi) params.set("kondisi", filterKondisi);
             if (searchQuery) params.set("search", searchQuery);
+            params.set("excludeCategory", "NUM");
             params.set("limit", "5000"); // large limit
 
             const res = await fetch(`/api/assets?${params.toString()}`);
@@ -309,6 +311,12 @@ export default function AssetsPage() {
                         <Download size={16} /> {exporting ? "Mengekspor..." : "Export XLSX"}
                     </button>
                     <button 
+                        onClick={() => router.push("/ga/sim")}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors shadow-sm"
+                    >
+                        Kelola Kartu SIM
+                    </button>
+                    <button 
                         onClick={() => router.push("/ga/assets/create")}
                         className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-sm"
                     >
@@ -351,7 +359,7 @@ export default function AssetsPage() {
                                 className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
                             >
                                 <option value="">Semua Kategori</option>
-                                {categories.map(cat => (
+                                {categories.filter(c => c.prefix !== "NUM").map(cat => (
                                     <option key={cat.id} value={cat.prefix}>{cat.name}</option>
                                 ))}
                             </select>
