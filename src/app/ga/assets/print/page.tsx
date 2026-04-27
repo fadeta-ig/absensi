@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, CheckSquare, Square, Search, Filter } from "lucide-react";
+import QRCode from "react-qr-code";
 import { AssetWithHistory } from "@/lib/types/asset";
 
 export default function PrintLabelsPage() {
@@ -271,14 +272,19 @@ function QrLabel({ asset }: { asset: AssetWithHistory }) {
             <div style={{
                 background: "#f8fafc",
                 borderRadius: "8px",
-                padding: "4px",
+                padding: "6px",
                 border: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
             }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={`/api/assets/qr?assetId=${asset.id}&v=2`}
-                    alt="QR Code"
-                    style={{ width: "2.9cm", height: "2.9cm", display: "block" }}
+                <QRCode
+                    value={typeof window !== "undefined" ? `${window.location.origin}/scan/${asset.id}` : ""}
+                    size={98}
+                    level="M"
+                    fgColor="#000000"
+                    bgColor="#f8fafc"
+                    style={{ width: "2.8cm", height: "2.8cm", display: "block" }}
                 />
             </div>
 
