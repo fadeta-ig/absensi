@@ -62,14 +62,22 @@ export async function createAssetInspection(data: {
     const asset = await prisma.asset.findUnique({ where: { id: data.assetId } });
     if (!asset) throw new Error("Aset tidak ditemukan");
 
+    const itemsPayload = Object.entries(data.checklist).map(([key, val]) => ({
+        itemName: key,
+        isPass: val
+    }));
+
     const inspection = await prisma.assetInspection.create({
         data: {
             assetId: data.assetId,
             kondisiSaat: data.kondisiSaat as never,
-            checklistJson: JSON.stringify(data.checklist),
             notes: data.notes ?? null,
             performedBy: data.performedBy,
+            checklistItems: {
+                create: itemsPayload
+            }
         },
+        include: { checklistItems: true }
     });
 
     if (asset.kondisi !== data.kondisiSaat) {
@@ -89,7 +97,10 @@ export async function createAssetInspection(data: {
         id: inspection.id,
         assetId: inspection.assetId,
         kondisiSaat: inspection.kondisiSaat as AssetCondition,
-        checklist: JSON.parse(inspection.checklistJson) as InspectionChecklist,
+        checklist: inspection.checklistItems.reduce((acc: any, curr: any) => {
+            acc[curr.itemName] = curr.isPass;
+            return acc;
+        }, {} as InspectionChecklist),
         notes: inspection.notes,
         performedBy: inspection.performedBy,
         inspectedAt: new Date(inspection.inspectedAt).toISOString(),
@@ -103,12 +114,16 @@ export async function getAssetInspections(assetId: string): Promise<InspectionRe
     const rows = await prisma.assetInspection.findMany({
         where: { assetId },
         orderBy: { inspectedAt: "desc" },
+        include: { checklistItems: true }
     });
-    return rows.map(r => ({
+    return rows.map((r: any) => ({
         id: r.id,
         assetId: r.assetId,
         kondisiSaat: r.kondisiSaat as AssetCondition,
-        checklist: JSON.parse(r.checklistJson) as InspectionChecklist,
+        checklist: r.checklistItems.reduce((acc: any, curr: any) => {
+            acc[curr.itemName] = curr.isPass;
+            return acc;
+        }, {} as InspectionChecklist),
         notes: r.notes,
         performedBy: r.performedBy,
         inspectedAt: new Date(r.inspectedAt).toISOString(),

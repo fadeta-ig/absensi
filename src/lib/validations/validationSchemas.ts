@@ -285,6 +285,21 @@ export const payslipCreateSchema = z.object({
     notes: z.string().nullable().optional(),
 });
 
+/* ───────────────────── Attendance Correction ───────────────────── */
+
+export const attendanceCorrectionCreateSchema = z.object({
+    targetDate: z.string().min(1, "Tanggal target harus diisi"),
+    proposedClockIn: z.string().nullable().optional(),
+    proposedClockOut: z.string().nullable().optional(),
+    reason: z.string().min(1, "Alasan harus diisi"),
+    attachmentUrl: z.string().nullable().optional()
+});
+
+export const attendanceCorrectionUpdateSchema = z.object({
+    id: z.string().min(1, "ID harus diisi"),
+    status: z.enum(["APPROVED", "REJECTED"]),
+});
+
 // ────────────────────────────────────────────────────────────────
 // NOTE: PPh 21 and BPJS calculator schemas are defined inline in
 // their respective route handlers (src/app/api/pph21/calculate/route.ts

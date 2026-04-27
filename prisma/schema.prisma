@@ -46,6 +46,8 @@ model Employee {
   locations         Location[]                 @relation("employeelocations")
   pushSubscriptions PushSubscription[]
   assignedAssets    Asset[]
+  attendanceCorrections AttendanceCorrection[] @relation("CorrectionRequester")
+  correctionApprovals   AttendanceCorrection[] @relation("CorrectionApprover")
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -109,8 +111,7 @@ model PayslipRecord {
   employeeId  String   @map("employee_id")
   period      String
   basicSalary Float    @map("basic_salary")
-  allowances  String   @db.LongText
-  deductions  String   @db.LongText
+  items       PayslipItem[]
   overtime    Float    @default(0)
   netSalary   Float    @map("net_salary")
   issuedDate  DateTime @map("issued_date")
@@ -120,6 +121,55 @@ model PayslipRecord {
   @@index([employeeId], map: "payslip_records_employee_id_fkey")
   @@unique([employeeId, period])
   @@map("payslip_records")
+}
+
+enum PayslipItemType {
+  ALLOWANCE
+  DEDUCTION
+}
+
+model PayslipItem {
+  id              String          @id @default(uuid())
+  payslipId       String          @map("payslip_record_id")
+  type            PayslipItemType
+  name            String
+  amount          Float
+  
+  payslipRecord   PayslipRecord   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+  @@index([payslipId], map: "idx_payslip_items_payslip_id")
+  @@map("payslip_items")
+}
+
+enum AssessmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AttendanceCorrection {
+  id                String           @id @default(uuid())
+  employeeId        String           @map("employee_id")
+  targetDate        DateTime         @map("target_date")
+  
+  proposedClockIn   DateTime?        @map("proposed_clock_in") 
+  proposedClockOut  DateTime?        @map("proposed_clock_out")
+  
+  reason            String           @db.Text
+  attachmentUrl     String?          @map("attachment_url")
+  
+  status            AssessmentStatus @default(PENDING)
+  assignedManagerId String?          @map("assigned_manager_id")
+  
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  employee          Employee         @relation("CorrectionRequester", fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  manager           Employee?        @relation("CorrectionApprover", fields: [assignedManagerId], references: [employeeId])
+
+  @@index([employeeId], map: "idx_attendance_corrections_employee_id")
+  @@index([assignedManagerId], map: "idx_attendance_corrections_manager_id")
+  @@map("attendance_corrections")
 }
 
 model WorkShift {
@@ -393,8 +443,7 @@ model AssetInspection {
 
   kondisiSaat   AssetKondisi @map("kondisi_saat")
 
-  /// JSON: record of checklist items e.g. {"layar":true,"body":false}
-  checklistJson String       @map("checklist_json") @db.Text
+  checklistItems InspectionChecklistItem[]
 
   notes         String?      @db.Text
   performedBy   String       @map("performed_by") // employeeId GA
@@ -402,4 +451,17 @@ model AssetInspection {
 
   @@index([assetId], map: "asset_inspections_asset_id_fkey")
   @@map("asset_inspections")
+}
+
+model InspectionChecklistItem {
+  id              String          @id @default(uuid())
+  inspectionId    String          @map("inspection_id")
+  itemName        String
+  isPass          Boolean         @default(true)
+  notes           String?         @db.Text
+  
+  inspection      AssetInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId], map: "idx_inspection_items_inspection_id")
+  @@map("inspection_checklist_items")
 }

@@ -21,9 +21,10 @@ interface Division { id: string; name: string; }
 interface Department { id: string; name: string; divisionId: string; division?: { name: string } }
 interface AllowanceItem { name: string; amount: number; }
 interface MasterComponent { id: string; name: string; type: string; defaultAmount: number; isActive: boolean; }
+interface PayslipItem { type: "ALLOWANCE" | "DEDUCTION"; name: string; amount: number; }
 interface Payslip {
     id: string; employeeId: string; period: string; basicSalary: number;
-    allowances: AllowanceItem[]; deductions: AllowanceItem[];
+    items: PayslipItem[];
     overtime: number; netSalary: number; issuedDate: string; notes?: string;
 }
 
@@ -109,6 +110,9 @@ export default function PayrollPage() {
     const totalDeductions = deductions.reduce((s, d) => s + d.amount, 0);
     const netSalary = form.basicSalary + totalAllowances + form.overtime - totalDeductions;
 
+    const getItemsAllowances = (items: PayslipItem[] | undefined) => items ? items.filter(i => i.type === "ALLOWANCE") : [];
+    const getItemsDeductions = (items: PayslipItem[] | undefined) => items ? items.filter(i => i.type === "DEDUCTION") : [];
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -186,9 +190,9 @@ export default function PayrollPage() {
             name: getEmpName(p.employeeId),
             period: p.period,
             basicSalary: p.basicSalary,
-            allowances: Array.isArray(p.allowances) ? p.allowances.reduce((s: number, a: AllowanceItem) => s + a.amount, 0) : 0,
+            allowances: getItemsAllowances(p.items).reduce((s: number, a: PayslipItem) => s + a.amount, 0),
             overtime: p.overtime,
-            deductions: Array.isArray(p.deductions) ? p.deductions.reduce((s: number, d: AllowanceItem) => s + d.amount, 0) : 0,
+            deductions: getItemsDeductions(p.items).reduce((s: number, d: PayslipItem) => s + d.amount, 0),
             netSalary: p.netSalary,
             issuedDate: p.issuedDate,
         }));
@@ -279,8 +283,8 @@ export default function PayrollPage() {
             period: p.period,
             basicSalary: p.basicSalary,
             overtime: p.overtime,
-            allowances: Array.isArray(p.allowances) ? p.allowances : [],
-            deductions: Array.isArray(p.deductions) ? p.deductions : [],
+            allowances: getItemsAllowances(p.items),
+            deductions: getItemsDeductions(p.items),
             netSalary: p.netSalary,
             issuedDate: p.issuedDate,
             notes: p.notes,
@@ -604,14 +608,14 @@ export default function PayrollPage() {
                                     <span className="text-[var(--text-secondary)]">Gaji Pokok</span>
                                     <span className="font-semibold">{fmt(selected.basicSalary)}</span>
                                 </div>
-                                {selected.allowances.length > 0 && selected.allowances.map((a, i) => (
+                                {getItemsAllowances(selected.items).length > 0 && getItemsAllowances(selected.items).map((a, i) => (
                                     <div key={`a-${i}`} className="flex justify-between text-sm py-1 pl-3">
                                         <span className="text-[var(--text-secondary)]">{a.name}</span>
                                         <span className="font-medium text-green-600">+{fmt(a.amount)}</span>
                                     </div>
                                 ))}
                                 {selected.overtime > 0 && <div className="flex justify-between text-sm py-1.5"><span className="text-[var(--text-secondary)]">Lembur</span><span className="font-medium text-green-600">+{fmt(selected.overtime)}</span></div>}
-                                {selected.deductions.length > 0 && selected.deductions.map((d, i) => (
+                                {getItemsDeductions(selected.items).length > 0 && getItemsDeductions(selected.items).map((d, i) => (
                                     <div key={`d-${i}`} className="flex justify-between text-sm py-1 pl-3">
                                         <span className="text-[var(--text-secondary)]">{d.name}</span>
                                         <span className="font-medium text-red-600">-{fmt(d.amount)}</span>

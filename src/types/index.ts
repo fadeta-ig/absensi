@@ -67,17 +67,37 @@ export type AttendanceRecord = {
     notes?: string | null;
 };
 
+export type PayslipItem = {
+    id?: string;
+    type: "ALLOWANCE" | "DEDUCTION";
+    name: string;
+    amount: number;
+};
+
 export type PayslipRecord = {
     id: string;
     employeeId: string;
     period: string;
     basicSalary: number;
-    allowances: { name: string; amount: number }[];
-    deductions: { name: string; amount: number }[];
+    items: PayslipItem[];
     overtime: number;
     netSalary: number;
     issuedDate: string;
     notes?: string | null;
+};
+
+export type AttendanceCorrection = {
+    id: string;
+    employeeId: string;
+    targetDate: string;
+    proposedClockIn?: string | null;
+    proposedClockOut?: string | null;
+    reason: string;
+    attachmentUrl?: string | null;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    assignedManagerId?: string | null;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type WorkShiftDay = {

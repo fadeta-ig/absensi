@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ClipboardList, Search, Calendar, Filter, UserCheck, UserX, Download, FileSpreadsheet, Building2, Layers, ChevronLeft, ChevronRight } from "lucide-react";
+import { ClipboardList, Search, Calendar, Filter, UserCheck, UserX, Download, FileSpreadsheet, Building2, Layers, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Check } from "lucide-react";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
 
 interface Employee {
@@ -43,6 +43,13 @@ export default function AttendanceMonitorPage() {
     const [divFilter, setDivFilter] = useState("all");
     const [search, setSearch] = useState("");
 
+    // Tabs
+    const [activeTab, setActiveTab] = useState<"log" | "corrections">("log");
+    const [corrections, setCorrections] = useState<any[]>([]);
+
+    // Correction modal
+    const [processingId, setProcessingId] = useState<string | null>(null);
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -50,6 +57,9 @@ export default function AttendanceMonitorPage() {
     useEffect(() => {
         fetch("/api/attendance").then((r) => r.json()).then((d) => {
             if (Array.isArray(d)) setRecords(d);
+        });
+        fetch("/api/attendance/correction").then((r) => r.json()).then((d) => {
+            if (Array.isArray(d)) setCorrections(d);
         });
         fetch("/api/employees").then((r) => r.json()).then((d) => {
             if (Array.isArray(d)) setEmployees(d);
@@ -187,6 +197,30 @@ export default function AttendanceMonitorPage() {
         );
     };
 
+    const handleCorrectionAction = async (id: string, s: "APPROVED" | "REJECTED") => {
+        setProcessingId(id);
+        try {
+            const res = await fetch("/api/attendance/correction", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id, status: s })
+            });
+            if (res.ok) {
+                // Refresh data
+                setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
+                fetch("/api/attendance").then((r) => r.json()).then((d) => {
+                    if (Array.isArray(d)) setRecords(d);
+                });
+            } else {
+                alert("Gagal memproses pengajuan");
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -207,7 +241,28 @@ export default function AttendanceMonitorPage() {
                 </div>
             </div>
 
-            {/* Summary */}
+            {/* Tab Navigators */}
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-max">
+                <button
+                    onClick={() => setActiveTab("log")}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === "log" ? "bg-white text-[var(--primary)] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    Log Absensi Utama
+                </button>
+                <button
+                    onClick={() => setActiveTab("corrections")}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "corrections" ? "bg-white text-[var(--primary)] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                    Persetujuan Koreksi
+                    {corrections.filter(c => c.status === "PENDING").length > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{corrections.filter(c => c.status === "PENDING").length}</span>
+                    )}
+                </button>
+            </div>
+
+            {activeTab === "log" && (
+                <>
+                {/* Summary */}
             <div className="grid grid-cols-3 gap-4">
                 <div className="card p-4 text-center">
                     <UserCheck className="w-5 h-5 text-green-600 mx-auto mb-2" />
@@ -433,6 +488,78 @@ export default function AttendanceMonitorPage() {
                     )}
                 </div>
             </div>
+            </>
+            )}
+
+            {activeTab === "corrections" && (
+                <div className="card overflow-hidden shadow-sm">
+                    <div className="p-4 border-b bg-gray-50/50">
+                        <h2 className="text-lg font-bold">Daftar Pengajuan Susulan Karyawan</h2>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="data-table">
+                            <thead className="bg-[#F9FAFB]">
+                                <tr>
+                                    <th>Karyawan</th>
+                                    <th>Target Tanggal</th>
+                                    <th>Waktu Pengajuan</th>
+                                    <th>Alasan</th>
+                                    <th>Status</th>
+                                    <th className="text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {corrections.length === 0 ? (
+                                    <tr><td colSpan={6} className="text-center py-10 text-gray-400 italic">Tidak ada pengajuan koreksi masuk.</td></tr>
+                                ) : (
+                                    corrections.map(c => {
+                                        const ei = getEmpInfo(c.employeeId);
+                                        return (
+                                            <tr key={c.id}>
+                                                <td><div className="font-bold">{ei.name}</div><div className="text-xs text-gray-500">{c.employeeId}</div></td>
+                                                <td className="font-medium text-sm">{c.targetDate}</td>
+                                                <td className="font-mono text-sm tracking-tight text-blue-600">
+                                                    {(c.proposedClockIn ? new Date(c.proposedClockIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
+                                                    {" - "}
+                                                    {(c.proposedClockOut ? new Date(c.proposedClockOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
+                                                </td>
+                                                <td className="text-sm max-w-[200px] truncate" title={c.reason}>{c.reason}</td>
+                                                <td>
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status === "PENDING" ? "bg-orange-100 text-orange-700" : c.status === "APPROVED" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                                        {c.status}
+                                                    </span>
+                                                </td>
+                                                <td className="text-center">
+                                                    {c.status === "PENDING" ? (
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <button 
+                                                                onClick={() => handleCorrectionAction(c.id, "APPROVED")} 
+                                                                disabled={processingId === c.id}
+                                                                className="p-1 px-3 bg-green-500 text-white rounded-md text-xs font-bold hover:bg-green-600 disabled:opacity-50"
+                                                            >
+                                                                Terima
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleCorrectionAction(c.id, "REJECTED")} 
+                                                                disabled={processingId === c.id}
+                                                                className="p-1 px-3 bg-red-500 text-white rounded-md text-xs font-bold hover:bg-red-600 disabled:opacity-50"
+                                                            >
+                                                                Tolak
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic">Selesai</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        )
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

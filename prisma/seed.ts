@@ -261,6 +261,9 @@ async function main() {
     await tryClear(() => (prisma as any).overtimeRequest?.deleteMany({}), "overtimeRequest");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await tryClear(() => (prisma as any).payslip?.deleteMany({}), "payslip");
+    await tryClear(() => (prisma as any).attendanceCorrection?.deleteMany({}), "attendanceCorrection");
+    await tryClear(() => (prisma as any).payslipItem?.deleteMany({}), "payslipItem");
+    await tryClear(() => (prisma as any).inspectionChecklistItem?.deleteMany({}), "inspectionChecklistItem");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await tryClear(() => (prisma as any).employeePayrollComponent?.deleteMany({}), "employeePayrollComponent");
     await tryClear(() => prisma.employee.deleteMany({}), "employee");

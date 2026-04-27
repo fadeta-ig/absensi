@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { FileText, Download, X, Eye } from "lucide-react";
 import { exportPayslipPdf } from "@/lib/export";
 
-interface AllowanceItem { name: string; amount: number; }
+interface PayslipItem { type: "ALLOWANCE" | "DEDUCTION"; name: string; amount: number; }
 interface Payslip {
     id: string; employeeId: string; period: string;
-    basicSalary: number; allowances: AllowanceItem[]; deductions: AllowanceItem[];
+    basicSalary: number; items: PayslipItem[];
     overtime: number; netSalary: number; issuedDate: string; notes?: string;
 }
 
@@ -26,15 +26,11 @@ export default function PayslipPage() {
 
     const fmt = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 
-    const totalAllowances = (items: AllowanceItem[]) => {
-        if (!Array.isArray(items)) return typeof items === "number" ? items : 0;
-        return items.reduce((s, a) => s + a.amount, 0);
-    };
+    const allowances = (items: PayslipItem[]) => items.filter(i => i.type === "ALLOWANCE");
+    const deductions = (items: PayslipItem[]) => items.filter(i => i.type === "DEDUCTION");
 
-    const totalDeductions = (items: AllowanceItem[]) => {
-        if (!Array.isArray(items)) return typeof items === "number" ? items : 0;
-        return items.reduce((s, d) => s + d.amount, 0);
-    };
+    const totalAllowances = (items: PayslipItem[]) => allowances(items).reduce((s, a) => s + a.amount, 0);
+    const totalDeductions = (items: PayslipItem[]) => deductions(items).reduce((s, d) => s + d.amount, 0);
 
     const handleDownloadPdf = (p: Payslip) => {
         exportPayslipPdf({
@@ -42,8 +38,8 @@ export default function PayslipPage() {
             period: p.period,
             basicSalary: p.basicSalary,
             overtime: p.overtime,
-            allowances: Array.isArray(p.allowances) ? p.allowances : [],
-            deductions: Array.isArray(p.deductions) ? p.deductions : [],
+            allowances: (p.items || []).filter(i => i.type === "ALLOWANCE"),
+            deductions: (p.items || []).filter(i => i.type === "DEDUCTION"),
             netSalary: p.netSalary,
             issuedDate: p.issuedDate,
             notes: p.notes,
@@ -124,10 +120,10 @@ export default function PayslipPage() {
                                 </div>
 
                                 {/* Allowances */}
-                                {Array.isArray(selected.allowances) && selected.allowances.length > 0 && (
+                                {allowances(selected.items || []).length > 0 && (
                                     <>
                                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-3">Tunjangan</p>
-                                        {selected.allowances.map((a, i) => (
+                                        {allowances(selected.items).map((a, i) => (
                                             <div key={`a-${i}`} className="flex justify-between text-sm py-1 pl-3">
                                                 <span className="text-[var(--text-secondary)]">{a.name}</span>
                                                 <span className="font-medium text-green-600">+{fmt(a.amount)}</span>
@@ -135,7 +131,7 @@ export default function PayslipPage() {
                                         ))}
                                         <div className="flex justify-between text-sm py-1 pl-3 border-t border-dashed border-[var(--border)]">
                                             <span className="text-[var(--text-secondary)] font-medium">Subtotal Tunjangan</span>
-                                            <span className="font-semibold text-green-600">+{fmt(totalAllowances(selected.allowances))}</span>
+                                            <span className="font-semibold text-green-600">+{fmt(totalAllowances(selected.items))}</span>
                                         </div>
                                     </>
                                 )}
@@ -148,10 +144,10 @@ export default function PayslipPage() {
                                 )}
 
                                 {/* Deductions */}
-                                {Array.isArray(selected.deductions) && selected.deductions.length > 0 && (
+                                {deductions(selected.items || []).length > 0 && (
                                     <>
                                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mt-3">Potongan</p>
-                                        {selected.deductions.map((d, i) => (
+                                        {deductions(selected.items).map((d, i) => (
                                             <div key={`d-${i}`} className="flex justify-between text-sm py-1 pl-3">
                                                 <span className="text-[var(--text-secondary)]">{d.name}</span>
                                                 <span className="font-medium text-red-600">-{fmt(d.amount)}</span>
@@ -159,7 +155,7 @@ export default function PayslipPage() {
                                         ))}
                                         <div className="flex justify-between text-sm py-1 pl-3 border-t border-dashed border-[var(--border)]">
                                             <span className="text-[var(--text-secondary)] font-medium">Subtotal Potongan</span>
-                                            <span className="font-semibold text-red-600">-{fmt(totalDeductions(selected.deductions))}</span>
+                                            <span className="font-semibold text-red-600">-{fmt(totalDeductions(selected.items))}</span>
                                         </div>
                                     </>
                                 )}
