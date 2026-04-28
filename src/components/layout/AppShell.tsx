@@ -161,46 +161,49 @@ export default function AppShell({
             <aside className={`fixed left-0 top-0 bottom-0 bg-white border-r border-[var(--border)] flex flex-col z-[200] transition-all duration-300 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"} w-64 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
 
                 {/* Brand */}
-                <div className={`p-4 flex items-center border-b border-[var(--border)] ${sidebarCollapsed ? "lg:justify-center" : "justify-between"}`}>
-                    <div className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                        <div className="w-9 h-9 relative shrink-0">
+                <div className={`p-4 flex items-center border-b border-[var(--border)] min-h-[64px] relative transition-all ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
+                    <div className={`flex items-center gap-3 w-full ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                        <div className="w-8 h-8 relative shrink-0">
                             <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
                         </div>
-                        <div>
-                            <h2 className="text-sm font-bold text-[var(--text-primary)]">{brandTitle}</h2>
-                            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">{brandSubtitle}</p>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-sm font-bold text-[var(--text-primary)] truncate">{brandTitle}</h2>
+                            <p className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest truncate">{brandSubtitle}</p>
                         </div>
                     </div>
+
                     {/* Icon-only logo saat collapsed */}
-                    <div className={`w-9 h-9 relative shrink-0 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
+                    <div className={`w-8 h-8 relative shrink-0 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
                         <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
                     </div>
-                    {/* Toggle collapse (desktop) */}
+
+                    {/* Toggle collapse (desktop) - Floating Button */}
                     <button
                         onClick={toggleCollapse}
                         title={sidebarCollapsed ? "Buka Sidebar" : "Tutup Sidebar"}
-                        className={`hidden lg:flex w-7 h-7 items-center justify-center rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)] transition-all duration-200 ${sidebarCollapsed ? "lg:mt-2" : ""}`}
+                        className="hidden lg:flex absolute -right-3 top-5 w-6 h-6 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary)] shadow-sm z-[210] transition-colors"
                     >
-                        {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-300 ${sidebarCollapsed ? "" : "rotate-180"}`} />
                     </button>
+
                     {/* Close button (mobile) */}
                     <button
                         onClick={() => setSidebarOpen(false)}
-                        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-md hover:bg-[var(--secondary)] transition-colors"
+                        className="lg:hidden absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-md hover:bg-[var(--secondary)] transition-colors"
                     >
                         <X className="w-4 h-4 text-[var(--text-secondary)]" />
                     </button>
                 </div>
 
                 {/* User info */}
-                <div className={`p-4 border-b border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-sm font-bold shrink-0">
+                <div className={`p-4 border-b border-[var(--border)] transition-all ${sidebarCollapsed ? "lg:p-3 lg:flex lg:justify-center" : ""}`}>
+                    <div className={`flex items-center gap-3 w-full ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
+                        <div className={`rounded-full bg-[var(--primary)] flex items-center justify-center text-white font-bold shrink-0 transition-all ${sidebarCollapsed ? "w-9 h-9 text-xs" : "w-10 h-10 text-sm"}`}>
                             {user.name.charAt(0)}
                         </div>
-                        <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                        <div className={`min-w-0 flex-1 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                             <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{user.employeeId}</p>
+                            <p className="text-xs text-[var(--text-muted)] truncate">{user.employeeId}</p>
                         </div>
                     </div>
                 </div>
