@@ -88,7 +88,7 @@ export default function SettingsPage() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: 640, height: 480 },
+                video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
             });
 
             if (videoRef.current) {

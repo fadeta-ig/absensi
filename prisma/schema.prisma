@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
 }
 
 datasource db {
@@ -406,9 +407,11 @@ model Asset {
   assignedTo     Employee?     @relation(fields: [assignedToId], references: [employeeId])
   histories      AssetHistory[]
   inspections    AssetInspection[]
+  maintenances   AssetMaintenance[]
 
   @@index([assignedToId], map: "assets_assigned_to_id_fkey")
   @@index([categoryId], map: "assets_category_id_fkey")
+  @@fulltext([name, assetCode, serialNumber])
 
   @@map("assets")
 }
@@ -464,4 +467,26 @@ model InspectionChecklistItem {
 
   @@index([inspectionId], map: "idx_inspection_items_inspection_id")
   @@map("inspection_checklist_items")
+}
+
+// ─── Asset Maintenance (Log Servis & Vendor) ─────────────────────
+
+model AssetMaintenance {
+  id               String   @id @default(uuid())
+  assetId          String   @map("asset_id")
+  vendorName       String   @map("vendor_name")
+  cost             Float    @default(0)
+  startDate        DateTime @map("start_date")
+  estimatedEndDate DateTime? @map("estimated_end_date")
+  actualEndDate    DateTime? @map("actual_end_date")
+  status           String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, CANCELLED
+  notes            String?  @db.Text
+  attachmentUrl    String?  @map("attachment_url") // Opsional: Bukti Invoice/Nota
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  asset            Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId], map: "idx_asset_maintenance_asset_id")
+  @@map("asset_maintenances")
 }

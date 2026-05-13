@@ -24,7 +24,7 @@ const log = createClientLogger("FaceRecognition");
  */
 const DEFAULT_THRESHOLD = (() => {
     const envVal = parseFloat(process.env.NEXT_PUBLIC_FACE_THRESHOLD ?? "");
-    return (!isNaN(envVal) && envVal > 0 && envVal < 1) ? envVal : 0.65;
+    return (!isNaN(envVal) && envVal > 0 && envVal < 1) ? envVal : 0.68; // Diperlonggar dari 0.65 ke 0.68 untuk toleransi kamera buram
 })();
 
 /** Threshold aktif — export agar bisa digunakan di UI */
@@ -88,8 +88,9 @@ export async function detectFaceDescriptor(
     }
 
     try {
+        const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 }); // Lebih toleran untuk kamera buram
         const detection = await faceapi
-            .detectSingleFace(input)
+            .detectSingleFace(input, options)
             .withFaceLandmarks()
             .withFaceDescriptor();
 

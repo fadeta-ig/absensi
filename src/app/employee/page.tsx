@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, ChevronRight } from "lucide-react";
+import { 
+    Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, 
+    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard
+} from "lucide-react";
 import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
 
@@ -40,123 +43,151 @@ export default function EmployeeHomePage() {
     const today = new Date().toISOString().split("T")[0];
     const todayRecord = attendance.find((a) => a.date === today);
 
-    const formatTime = (iso?: string) => {
-        if (!iso) return "--:--";
-        return new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-    };
-
     const getStatusLabel = (s: string) => {
-        switch (s) { case "present": return "Hadir"; case "late": return "Terlambat"; default: return s; }
+        switch (s) { case "present": return "Hadir Tepat Waktu"; case "late": return "Terlambat"; default: return s; }
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            {/* Welcome */}
-            <div className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-light,#9B1B30)] rounded-xl p-6 text-white shadow-lg">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                    <div>
-                        <p className="text-white/80 text-sm">Selamat datang kembali,</p>
-                        <h1 className="text-2xl font-bold mt-1">{user?.name ?? "..."}</h1>
-                        <p className="text-white/70 text-xs mt-1">
-                            {currentTime.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                        </p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-3xl font-extrabold font-mono tabular-nums">
-                            {currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </p>
-                    </div>
+        <div className="w-full max-w-md mx-auto space-y-6 pb-12 pt-4 px-2">
+            
+            {/* Header section */}
+            <div className="flex items-end justify-between px-2">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                        {currentTime.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}
+                    </p>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                        {user?.name?.split(' ')[0] ?? "Sobat"}
+                    </h1>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                    <span className="text-2xl font-bold font-mono tracking-tighter text-slate-900 leading-none">
+                        {currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                 </div>
             </div>
 
-            {/* Notification CTA Banner */}
             <PushNotificationManager />
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="card p-5 flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-[var(--primary)]" />
+            {/* Quick Record CTA */}
+            <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100 flex items-center justify-between transition-transform active:scale-[0.98]">
+                <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${todayRecord ? "bg-slate-50 text-slate-400" : "bg-black text-white"}`}>
+                        <Clock className="w-6 h-6 stroke-[2]" />
                     </div>
                     <div>
-                        <p className="text-xs text-[var(--text-muted)]">Status Hari Ini</p>
-                        <div className="flex items-center gap-2">
-                            <p className="text-lg font-bold text-[var(--text-primary)]">
-                                {todayRecord ? getStatusLabel(todayRecord.status) : "Belum Absen"}
-                            </p>
-                            {!todayRecord?.clockOut && (
-                                <Link
-                                    href="/employee/attendance"
-                                    className="p-1 hover:bg-[var(--primary)]/10 rounded transition-colors"
-                                    title={!todayRecord?.clockIn ? "Lakukan Clock In" : "Lakukan Clock Out"}
-                                >
-                                    <ChevronRight className="w-4 h-4 text-[var(--primary)]" />
-                                </Link>
-                            )}
-                        </div>
+                        <p className="text-sm font-bold text-slate-900">
+                            {todayRecord ? getStatusLabel(todayRecord.status) : "Belum Absen"}
+                        </p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">
+                            {todayRecord?.clockIn 
+                                ? `Masuk: ${new Date(todayRecord.clockIn).toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})}` 
+                                : "Ketuk untuk lapor kehadiran"}
+                        </p>
                     </div>
                 </div>
-                <div className="card p-5 flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-lg bg-green-500/10 flex items-center justify-center">
-                        <CalendarOff className="w-5 h-5 text-green-600" />
+                {!todayRecord?.clockOut && (
+                    <Link href="/employee/attendance" className="flex items-center justify-center w-10 h-10 bg-slate-50 rounded-full hover:bg-slate-100 transition-colors">
+                        <ChevronRight className="w-5 h-5 text-slate-600" />
+                    </Link>
+                )}
+            </div>
+
+            {/* Grid Summary */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+                        <TrendingUp className="w-4 h-4 stroke-[2.5]" />
                     </div>
-                    <div>
-                        <p className="text-xs text-[var(--text-muted)]">Sisa Cuti</p>
-                        <p className="text-lg font-bold text-[var(--text-primary)]">{leaveBalance.total - leaveBalance.used} hari</p>
-                    </div>
+                    <p className="text-2xl font-bold text-slate-900">
+                        {attendance.filter(a => a.status === "present" || a.status === "late").length}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-500 mt-1">Total Kehadiran</p>
                 </div>
-                <div className="card p-5 flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-blue-600" />
+                <div className="bg-white rounded-2xl p-5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center mb-4">
+                        <CalendarOff className="w-4 h-4 stroke-[2.5]" />
                     </div>
-                    <div>
-                        <p className="text-xs text-[var(--text-muted)]">Total Kehadiran</p>
-                        <p className="text-lg font-bold text-[var(--text-primary)]">{attendance.filter(a => a.status === "present" || a.status === "late").length} hari</p>
-                    </div>
+                    <p className="text-2xl font-bold text-slate-900">
+                        {leaveBalance.total - leaveBalance.used}
+                    </p>
+                    <p className="text-xs font-semibold text-slate-500 mt-1">Sisa Hari Cuti</p>
                 </div>
             </div>
 
-            {/* News */}
-            <div className="space-y-3">
-                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Newspaper className="w-4 h-4 text-[var(--primary)]" />
-                    Berita Terbaru
+            {/* Quick Actions Menu */}
+            <div className="bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100 overflow-hidden">
+                <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-5 pt-5 pb-2">
+                    Jalan Pintas
                 </h2>
-                {news.length === 0 ? (
-                    <div className="card p-6 text-center text-sm text-[var(--text-muted)]">Tidak ada berita</div>
-                ) : (
-                    <div className="space-y-2">
-                        {news.slice(0, 3).map((item) => (
-                            <Link href="/employee/news" key={item.id} className="card px-4 py-3 hover:shadow-md transition-shadow cursor-pointer block">
-                                <p className="text-sm font-medium text-[var(--text-primary)]">{item.title}</p>
-                            </Link>
-                        ))}
-                        <Link href="/employee/news" className="text-xs font-bold text-[var(--primary)] hover:underline block text-center mt-3 mb-1">
-                            Lihat Semua Berita
+                <div className="flex flex-col">
+                    <Link href="/employee/leave" className="flex items-center justify-between px-5 py-4 hover:bg-slate-50/80 transition-colors">
+                        <div className="flex items-center gap-4">
+                            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                                <LogIn className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <span className="text-sm font-semibold text-slate-800">Pengajuan Cuti</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                    </Link>
+                    <div className="h-px bg-slate-50 mx-5"></div>
+                    <Link href="/employee/payslip" className="flex items-center justify-between px-5 py-4 hover:bg-slate-50/80 transition-colors">
+                        <div className="flex items-center gap-4">
+                            <div className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center">
+                                <Receipt className="w-4 h-4 text-teal-600" />
+                            </div>
+                            <span className="text-sm font-semibold text-slate-800">Slip Gaji</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                    </Link>
+                    <div className="h-px bg-slate-50 mx-5"></div>
+                    <Link href="/employee/attendance-history" className="flex items-center justify-between px-5 py-4 hover:bg-slate-50/80 transition-colors">
+                        <div className="flex items-center gap-4">
+                            <div className="w-8 h-8 rounded-full bg-sky-50 flex items-center justify-center">
+                                <ClipboardList className="w-4 h-4 text-sky-600" />
+                            </div>
+                            <span className="text-sm font-semibold text-slate-800">Riwayat Terakhir</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300" />
+                    </Link>
+                </div>
+            </div>
+
+            {/* Announcements */}
+            <div className="bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                    <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Bell className="w-3.5 h-3.5" /> Informasi
+                    </h2>
+                    {news.length > 3 && (
+                        <Link href="/employee/news" className="text-[10px] font-bold text-slate-400 hover:text-slate-800 uppercase tracking-wide">
+                            Lihat Semua
                         </Link>
+                    )}
+                </div>
+                
+                {news.length === 0 ? (
+                    <div className="p-6 text-center">
+                        <p className="text-sm font-medium text-slate-400">Tidak ada pengaduan/informasi aktif.</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col">
+                        {news.slice(0, 3).map((item, index) => (
+                            <div key={item.id}>
+                                <Link href={`/employee/news/${item.id}`} className="block px-5 py-4 hover:bg-slate-50 transition-colors">
+                                    <div className="flex gap-4 items-start">
+                                        <div className="w-2 h-2 mt-1.5 rounded-full bg-rose-400 shrink-0"></div>
+                                        <p className="text-sm font-medium text-slate-800 leading-snug line-clamp-2">{item.title}</p>
+                                    </div>
+                                </Link>
+                                {index !== news.length - 1 && <div className="h-px bg-slate-50 mx-5"></div>}
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
 
-            {/* Recent Attendance */}
-            <div className="space-y-3">
-                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <ClipboardList className="w-4 h-4 text-[var(--primary)]" />
-                    Riwayat Kehadiran
-                </h2>
-                <Link href="/employee/attendance-history" className="card p-5 flex items-center justify-between hover:shadow-md transition-shadow group">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center group-hover:bg-[var(--primary)]/20 transition-colors">
-                            <ClipboardList className="w-5 h-5 text-[var(--primary)]" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-semibold text-[var(--text-primary)]">Lihat Riwayat Kehadiran</p>
-                            <p className="text-xs text-[var(--text-muted)]">Filter berdasarkan hari, bulan, atau tahun</p>
-                        </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
-                </Link>
-            </div>
         </div>
     );
 }
+

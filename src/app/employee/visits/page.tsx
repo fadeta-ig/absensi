@@ -77,7 +77,7 @@ export default function VisitsPage() {
     const startCamera = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: 640, height: 480 },
+                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
             });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;

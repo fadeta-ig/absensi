@@ -75,23 +75,16 @@ export default function PushNotificationManager() {
     }, []);
 
     return (
-        <div className="bg-gradient-to-br from-amber-50 to-orange-100 border border-orange-200 rounded-xl p-5 shadow-sm relative overflow-hidden">
-            {/* Decorative background circle */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-300/30 rounded-full blur-3xl"></div>
-            
-            <div className="relative flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-orange-200/60 flex items-center justify-center shrink-0 shadow-inner">
-                    <Sun className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                    <h3 className="text-base font-bold text-orange-900 flex items-center gap-2">
-                        {greeting} - Happy Shine On You <Sparkles className="w-4 h-4 text-orange-500" />
-                    </h3>
-                    <p className="text-xs text-orange-800 mt-1 leading-relaxed max-w-md">
-                        {motivation}
-                    </p>
-                </div>
-            </div>
+        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] border border-slate-100 mb-2">
+            <h3 className="text-[15px] font-semibold text-slate-900 mb-2 tracking-tight flex items-baseline gap-2">
+                {greeting} 
+                <span className="font-serif italic font-normal text-slate-500 text-[13px] tracking-wide">
+                    Happy Shine On You
+                </span>
+            </h3>
+            <p className="text-[13px] text-slate-600 leading-loose font-medium opacity-90">
+                {motivation}
+            </p>
         </div>
     );
 }

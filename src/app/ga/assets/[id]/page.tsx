@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, use, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
     ArrowLeft, Edit3, ArrowRightLeft, Package, QrCode,
     History, ClipboardCheck, Trash2, Download, Clock,
@@ -24,13 +24,27 @@ type InspectionRow = {
     inspectedAt: string;
 };
 
-type TabKey = "spec" | "history" | "inspections";
+type TabKey = "spec" | "history" | "inspections" | "maintenance";
+
+type MaintenanceRow = {
+    id: string;
+    assetId: string;
+    vendorName: string;
+    cost: number;
+    startDate: string;
+    estimatedEndDate: string | null;
+    actualEndDate: string | null;
+    status: "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+    notes: string | null;
+    attachmentUrl: string | null;
+    createdAt: string;
+};
 
 // ─── Page ───────────────────────────────────────────────────────
 
-export default function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
+function AssetDetailContent({ id }: { id: string }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [asset, setAsset] = useState<AssetWithHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -41,6 +55,10 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
     const [inspections, setInspections] = useState<InspectionRow[]>([]);
     const [historyLoaded, setHistoryLoaded] = useState(false);
     const [inspLoaded, setInspLoaded] = useState(false);
+
+    // Maintenance
+    const [maintenances, setMaintenances] = useState<MaintenanceRow[]>([]);
+    const [maintLoaded, setMaintLoaded] = useState(false);
 
     // Retire dialog
     const [showRetire, setShowRetire] = useState(false);
@@ -53,6 +71,19 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         kondisi: "BAIK",
         notes: "",
         chk: { "Fisik & Body": true, "Fungsi/Sistem": true, "Kelengkapan": true }
+    });
+
+    // Maintenance dialog
+    const [showMaintenance, setShowMaintenance] = useState(false);
+    const [submittingMaint, setSubmittingMaint] = useState(false);
+    const [maintData, setMaintData] = useState({
+        vendorName: "",
+        cost: 0,
+        startDate: new Date().toISOString().split("T")[0],
+        estimatedEndDate: "",
+        status: "IN_PROGRESS",
+        notes: "",
+        attachmentUrl: ""
     });
 
     const fetchAsset = useCallback(async () => {
@@ -75,6 +106,18 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
 
     useEffect(() => { fetchAsset(); }, [fetchAsset]);
 
+    // Handle incoming tab from URL params
+    useEffect(() => {
+        const tab = searchParams.get("tab");
+        if (tab === "inspections") {
+            setActiveTab("inspections");
+            setShowInspection(true);
+        } else if (tab === "maintenance") {
+            setActiveTab("maintenance");
+            setShowMaintenance(true);
+        }
+    }, [searchParams]);
+
     // Lazy-load history & inspections when tab switches
     useEffect(() => {
         if (activeTab === "history" && !historyLoaded) {
@@ -87,7 +130,12 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
                 .then(r => r.ok ? r.json() : [])
                 .then(data => { setInspections(data); setInspLoaded(true); });
         }
-    }, [activeTab, id, historyLoaded, inspLoaded]);
+        if (activeTab === "maintenance" && !maintLoaded) {
+            fetch(`/api/assets/${id}/maintenance`)
+                .then(r => r.ok ? r.json() : [])
+                .then(data => { setMaintenances(data); setMaintLoaded(true); });
+        }
+    }, [activeTab, id, historyLoaded, inspLoaded, maintLoaded]);
 
     const handleRetire = async () => {
         setRetiring(true);
@@ -131,6 +179,39 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         }
     };
 
+    const handleMaintenanceSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSubmittingMaint(true);
+        try {
+            const res = await fetch(`/api/assets/${id}/maintenance`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    vendorName: maintData.vendorName,
+                    cost: Number(maintData.cost),
+                    startDate: maintData.startDate,
+                    estimatedEndDate: maintData.estimatedEndDate || null,
+                    status: maintData.status,
+                    notes: maintData.notes,
+                    attachmentUrl: maintData.attachmentUrl || null
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setMaintenances([data, ...maintenances]);
+                setShowMaintenance(false);
+                setMaintData({ vendorName: "", cost: 0, startDate: new Date().toISOString().split("T")[0], estimatedEndDate: "", status: "IN_PROGRESS", notes: "", attachmentUrl: "" });
+                fetchAsset(); // refresh to update asset status if changed
+            } else {
+                alert("Gagal menyimpan data maintenance");
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setSubmittingMaint(false);
+        }
+    };
+
     if (loading) return <div className="p-6">Memuat aset...</div>;
     if (!asset) return <div className="p-6">Aset tidak ditemukan.</div>;
 
@@ -145,6 +226,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         { key: "spec", label: "Spesifikasi", icon: Package },
         { key: "history", label: "Riwayat Mutasi", icon: History },
         { key: "inspections", label: "Inspeksi", icon: ClipboardCheck },
+        { key: "maintenance", label: "Servis & Perawatan", icon: Wrench },
     ];
 
     return (
@@ -259,6 +341,10 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
                             {activeTab === "inspections" && (
                                 <InspectionTab inspections={inspections} loaded={inspLoaded} onAdd={() => setShowInspection(true)} />
                             )}
+
+                            {activeTab === "maintenance" && (
+                                <MaintenanceTab maintenances={maintenances} loaded={maintLoaded} onAdd={() => setShowMaintenance(true)} />
+                            )}
                         </div>
                     </div>
                 </div>
@@ -364,7 +450,71 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
                    </div>
                </div>
             )}
+
+            {/* Maintenance Dialog */}
+            {showMaintenance && (
+               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                   <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+                       <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Wrench size={20} className="text-slate-500"/> Catat Maintenance/Servis</h2>
+                       </div>
+                       <form onSubmit={handleMaintenanceSubmit} className="p-6 flex flex-col gap-5 overflow-y-auto">
+                           <div>
+                               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Nama Vendor / Tempat Servis *</label>
+                               <input type="text" required value={maintData.vendorName} onChange={e => setMaintData(prev => ({...prev, vendorName: e.target.value}))} placeholder="Contoh: iColor Service Center" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                               <div>
+                                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Tanggal Mulai *</label>
+                                   <input type="date" required value={maintData.startDate} onChange={e => setMaintData(prev => ({...prev, startDate: e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                               </div>
+                               <div>
+                                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Estimasi Selesai</label>
+                                   <input type="date" value={maintData.estimatedEndDate} onChange={e => setMaintData(prev => ({...prev, estimatedEndDate: e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                               </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4">
+                               <div>
+                                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Estimasi Biaya (Rp)</label>
+                                   <input type="number" min="0" value={maintData.cost} onChange={e => setMaintData(prev => ({...prev, cost: Number(e.target.value)}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                               </div>
+                               <div>
+                                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Status Progres</label>
+                                   <select required value={maintData.status} onChange={e => setMaintData(prev => ({...prev, status: e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800">
+                                       <option value="IN_PROGRESS">Sedang Dikerjakan</option>
+                                       <option value="COMPLETED">Selesai</option>
+                                       <option value="CANCELLED">Dibatalkan</option>
+                                   </select>
+                               </div>
+                           </div>
+                           <div>
+                               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Keluhan / Catatan</label>
+                               <textarea value={maintData.notes} onChange={e => setMaintData(prev => ({...prev, notes: e.target.value}))} rows={2} placeholder="Kerusakan pada baterai kembung..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                           </div>
+                           <div>
+                               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">Link / Upload Nota (Opsional)</label>
+                               <input type="text" value={maintData.attachmentUrl} onChange={e => setMaintData(prev => ({...prev, attachmentUrl: e.target.value}))} placeholder="Link Google Drive foto nota..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                           </div>
+                           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 shrink-0">
+                               <button type="button" onClick={() => setShowMaintenance(false)} className="px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Batal</button>
+                               <button type="submit" disabled={submittingMaint} className="px-4 py-2 bg-slate-800 rounded-lg text-sm font-semibold text-white hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+                                   {submittingMaint ? "Menyimpan" : "Simpan Data"}
+                               </button>
+                           </div>
+                       </form>
+                   </div>
+               </div>
+            )}
         </div>
+    );
+}
+
+export default function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params);
+    return (
+        <Suspense fallback={<div className="p-6">Loading...</div>}>
+            <AssetDetailContent id={id} />
+        </Suspense>
     );
 }
 
@@ -468,6 +618,65 @@ function InspectionTab({ inspections, loaded, onAdd }: { inspections: Inspection
                 );
             })}
         </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Maintenance Tab ─────────────────────────────────────────────
+
+function MaintenanceTab({ maintenances, loaded, onAdd }: { maintenances: MaintenanceRow[]; loaded: boolean; onAdd: () => void }) {
+    if (!loaded) return <div className="py-8 text-center text-slate-400 text-sm">Memuat riwayat servis...</div>;
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-end">
+                <button onClick={onAdd} className="bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-700 transition-colors">
+                    <Wrench size={14} /> Catat Servis/Maintenance
+                </button>
+            </div>
+            {maintenances.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-sm">Belum ada catatan servis/perawatan.</div>
+            ) : (
+                <div className="space-y-3">
+                    {maintenances.map(maint => {
+                        const isDone = maint.status === "COMPLETED";
+                        const isCancel = maint.status === "CANCELLED";
+                        return (
+                            <div key={maint.id} className="p-4 rounded-lg border border-slate-100 hover:bg-slate-50/50 transition-colors flex flex-col gap-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${isDone ? "bg-emerald-50 border-emerald-100 text-emerald-600" : isCancel ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-amber-50 border-amber-100 text-amber-600"}`}>
+                                            <Wrench size={16} />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-semibold text-slate-800 block">{maint.vendorName}</span>
+                                            <span className="text-[10px] text-slate-500">Mulai: {new Date(maint.startDate).toLocaleDateString("id-ID")}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className={`text-xs font-bold px-2 py-0.5 rounded-full inline-flex ${isDone ? "bg-emerald-100 text-emerald-700" : isCancel ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700"}`}>
+                                            {maint.status === "IN_PROGRESS" ? "Proses Servis" : maint.status === "COMPLETED" ? "Selesai" : "Dibatalkan"}
+                                        </div>
+                                        <div className="text-sm font-bold text-slate-800 mt-1">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(maint.cost)}</div>
+                                    </div>
+                                </div>
+                                {maint.notes && (
+                                    <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                        {maint.notes}
+                                    </div>
+                                )}
+                                {maint.attachmentUrl && (
+                                    <div className="text-right">
+                                        <a href={maint.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-semibold text-indigo-600 hover:underline">
+                                            Lihat Bukti/Nota →
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );
