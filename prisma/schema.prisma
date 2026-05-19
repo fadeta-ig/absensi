@@ -49,6 +49,7 @@ model Employee {
   assignedAssets    Asset[]
   attendanceCorrections AttendanceCorrection[] @relation("CorrectionRequester")
   correctionApprovals   AttendanceCorrection[] @relation("CorrectionApprover")
+  letterRequests        LetterRequest[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -489,4 +490,36 @@ model AssetMaintenance {
 
   @@index([assetId], map: "idx_asset_maintenance_asset_id")
   @@map("asset_maintenances")
+}
+
+// ─── Employee Self-Service ────────────────────────────────────────
+
+enum LetterType {
+  SK_KERJA
+  KET_PENGHASILAN
+  KET_MASIH_BEKERJA
+  BPJS
+}
+
+enum LetterStatus {
+  PENDING     // Baru diajukan
+  PROCESSING  // Sedang diproses HR
+  READY       // Siap diambil
+  REJECTED    // Ditolak
+}
+
+model LetterRequest {
+  id         String       @id @default(uuid())
+  employeeId String       @map("employee_id")
+  type       LetterType
+  purpose    String       @db.Text
+  status     LetterStatus @default(PENDING)
+  notes      String?      @db.Text
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  employee   Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+
+  @@index([employeeId], map: "idx_letter_requests_employee_id")
+  @@map("letter_requests")
 }

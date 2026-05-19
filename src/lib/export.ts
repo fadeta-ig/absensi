@@ -2,6 +2,11 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+/** Interface untuk mengakses data lastAutoTable yang diinjeksikan oleh plugin jspdf-autotable */
+interface JsPDFWithAutoTable extends jsPDF {
+    lastAutoTable: { finalY: number };
+}
+
 // ============== Excel Export ==============
 export function exportToExcel(
     data: Record<string, string | number>[],
@@ -184,8 +189,7 @@ export function exportPayslipPdf(payslip: PayslipData) {
         margin: { left: margin, right: margin },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    y = (doc as any).lastAutoTable.finalY + 3;
+    y = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 3;
 
     // Net salary
     doc.setFillColor(128, 0, 32);
@@ -296,7 +300,7 @@ export function exportToPdfMatrix(
         }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
     // Legend / Footer
     doc.setFontSize(7);

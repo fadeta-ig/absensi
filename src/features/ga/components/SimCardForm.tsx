@@ -54,8 +54,8 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
                 ]);
 
                 if (catRes.ok) {
-                    const data = await catRes.json();
-                    const numCat = data.find((c: any) => c.prefix === "NUM");
+                    const data = await catRes.json() as { id: string; prefix: string; name: string }[];
+                    const numCat = data.find((c) => c.prefix === "NUM");
                     if (numCat) setSimCategoryId(numCat.id);
                 }
 
@@ -125,7 +125,7 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
     };
 
     if (loadingParams) return <div className="p-6 text-sm text-slate-500">Memuat konfigurasi form...</div>;
-    if (!simCategoryId && mode === "create") return <div className="p-6 text-sm text-red-500 font-bold">Kategori 'NUM' tidak ditemukan di database.</div>;
+    if (!simCategoryId && mode === "create") return <div className="p-6 text-sm text-red-500 font-bold">Kategori &apos;NUM&apos; tidak ditemukan di database.</div>;
 
     return (
         <form onSubmit={handleSubmit} className="bg-white border rounded-xl shadow-sm overflow-hidden animate-in fade-in">

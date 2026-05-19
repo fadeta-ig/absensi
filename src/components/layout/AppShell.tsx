@@ -89,14 +89,12 @@ export default function AppShell({
         return true;
     }, [pathname, searchParams]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    // Lazy initializer — membaca localStorage saat pertama render saja untuk menghindari setState-in-effect
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return localStorage.getItem(storageKey) === "true";
+    });
     const [openMenus, setOpenMenus] = useState<string[]>([]);
-
-    // Restore collapsed state dari localStorage
-    useEffect(() => {
-        const saved = localStorage.getItem(storageKey);
-        if (saved === "true") setSidebarCollapsed(true);
-    }, [storageKey]);
 
     // Auto-expand sub-menu jika sub-item aktif (termasuk URL dengan query params)
     useEffect(() => {

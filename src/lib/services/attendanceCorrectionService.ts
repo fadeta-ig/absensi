@@ -1,12 +1,14 @@
 import { prisma } from "../prisma";
 import logger from "@/lib/logger";
 import { AttendanceCorrection } from "@/types";
-import { updateAttendance, createAttendance, getAttendanceByDate } from "./attendanceService";
+import { Prisma } from "@prisma/client";
 import { toDateString } from "@/lib/utils";
+
+type AttendanceCorrectionRow = Prisma.AttendanceCorrectionGetPayload<Record<string, never>>;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-function toCorrectionDTO(row: any): AttendanceCorrection {
+function toCorrectionDTO(row: AttendanceCorrectionRow): AttendanceCorrection {
     return {
         id: row.id,
         employeeId: row.employeeId,
@@ -15,7 +17,7 @@ function toCorrectionDTO(row: any): AttendanceCorrection {
         proposedClockOut: row.proposedClockOut ? new Date(row.proposedClockOut).toISOString() : null,
         reason: row.reason,
         attachmentUrl: row.attachmentUrl,
-        status: row.status,
+        status: row.status as AttendanceCorrection["status"],
         assignedManagerId: row.assignedManagerId,
         createdAt: new Date(row.createdAt).toISOString(),
         updatedAt: new Date(row.updatedAt).toISOString()

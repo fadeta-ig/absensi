@@ -8,7 +8,7 @@ declare module 'next-pwa' {
         scope?: string;
         sw?: string;
         skipWaiting?: boolean;
-        [key: string]: any;
+        [key: string]: unknown;
     }
 
     function withPWA(config: PWAConfig): (nextConfig: NextConfig) => NextConfig;

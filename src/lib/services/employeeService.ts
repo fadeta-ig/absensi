@@ -167,7 +167,7 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
             } : undefined,
 
             payrollComponents: data.payrollComponents ? {
-                create: data.payrollComponents.map((c: any) => ({
+                create: data.payrollComponents.map((c) => ({
                     componentId: c.componentId,
                     amount: c.amount
                 }))
@@ -218,7 +218,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.payrollComponents !== undefined && {
                     payrollComponents: {
                         deleteMany: {},
-                        create: data.payrollComponents.map((c: any) => ({
+                        create: data.payrollComponents.map((c) => ({
                             componentId: c.componentId,
                             amount: c.amount
                         }))
@@ -246,8 +246,9 @@ export async function deleteEmployee(id: string): Promise<boolean> {
     try {
         await prisma.employee.delete({ where: { id } });
         return true;
-    } catch (err: any) {
-        logger.error("deleteEmployee Gagal", { id, code: err?.code, message: err?.message });
+    } catch (err: unknown) {
+        const prismaErr = err as { code?: string; message?: string };
+        logger.error("deleteEmployee Gagal", { id, code: prismaErr?.code, message: prismaErr?.message });
         throw new Error("Penghapusan ditolak. Karyawan ini mungkin masih memiliki riwayat absensi, gaji, atau peminjaman yang tak terhapus (onDelete: Restrict). Disarankan menonaktifkan status karyawan (isActive: false) alih-alih menghapus data permanen.");
     }
 }

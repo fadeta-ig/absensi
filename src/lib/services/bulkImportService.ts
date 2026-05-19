@@ -78,7 +78,7 @@ function mapRow(raw: Record<string, unknown>): Record<string, unknown> {
     const mapped: Record<string, unknown> = {};
 
     for (const [header, field] of Object.entries(COLUMN_MAP)) {
-        let value = raw[header];
+        const value = raw[header];
 
         // Handle number columns
         if (field === "basicSalary" || field === "totalLeave") {

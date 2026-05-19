@@ -1,7 +1,19 @@
 import { prisma } from "../../prisma";
 import logger from "@/lib/logger";
+import { Prisma } from "@prisma/client";
 import { AssetCondition, AssetStatus, HolderType } from "@/lib/types/asset";
 import { PublicAssetInfo, InspectionResult, InspectionChecklist } from "./types";
+
+/** Tipe Prisma untuk baris checklist inspeksi */
+type ChecklistItemRow = { itemName: string; isPass: boolean };
+
+/** Reducer aman untuk mengkonversi array checklist ke object InspectionChecklist */
+function buildChecklist(items: ChecklistItemRow[]): InspectionChecklist {
+    return items.reduce<InspectionChecklist>((acc, curr) => {
+        acc[curr.itemName] = curr.isPass;
+        return acc;
+    }, {});
+}
 
 /**
  * Mengambil informasi publik aset (hanya field aman).
@@ -97,10 +109,7 @@ export async function createAssetInspection(data: {
         id: inspection.id,
         assetId: inspection.assetId,
         kondisiSaat: inspection.kondisiSaat as AssetCondition,
-        checklist: inspection.checklistItems.reduce((acc: any, curr: any) => {
-            acc[curr.itemName] = curr.isPass;
-            return acc;
-        }, {} as InspectionChecklist),
+        checklist: buildChecklist(inspection.checklistItems),
         notes: inspection.notes,
         performedBy: inspection.performedBy,
         inspectedAt: new Date(inspection.inspectedAt).toISOString(),
@@ -116,14 +125,12 @@ export async function getAssetInspections(assetId: string): Promise<InspectionRe
         orderBy: { inspectedAt: "desc" },
         include: { checklistItems: true }
     });
-    return rows.map((r: any) => ({
+    type InspectionRow = Prisma.AssetInspectionGetPayload<{ include: { checklistItems: true } }>;
+    return rows.map((r: InspectionRow) => ({
         id: r.id,
         assetId: r.assetId,
         kondisiSaat: r.kondisiSaat as AssetCondition,
-        checklist: r.checklistItems.reduce((acc: any, curr: any) => {
-            acc[curr.itemName] = curr.isPass;
-            return acc;
-        }, {} as InspectionChecklist),
+        checklist: buildChecklist(r.checklistItems),
         notes: r.notes,
         performedBy: r.performedBy,
         inspectedAt: new Date(r.inspectedAt).toISOString(),

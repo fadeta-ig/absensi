@@ -1,11 +1,19 @@
 import { prisma } from "../prisma";
 import { OvertimeRequest } from "@/types";
+import { Prisma } from "@prisma/client";
 import { toDateString, toTimeString } from "@/lib/utils";
 
 // ─── Date helpers imported from @/lib/utils ────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toOvertimeRequest(row: any): OvertimeRequest {
+/** Tipe Prisma OvertimeRequest mentah tanpa relasi */
+type PrismaOvertimeRow = Prisma.OvertimeRequestGetPayload<Record<string, never>>;
+
+/** Tipe Prisma OvertimeRequest dengan relasi employee */
+export type OvertimeRequestWithEmployee = Prisma.OvertimeRequestGetPayload<{
+    include: { employee: { select: { name: true; employeeId: true } } };
+}>;
+
+function toOvertimeRequest(row: PrismaOvertimeRow): OvertimeRequest {
     return {
         id: row.id,
         employeeId: row.employeeId,
@@ -24,7 +32,7 @@ function toOvertimeRequest(row: any): OvertimeRequest {
 
 // ─── Service Functions ────────────────────────────────────────
 
-export async function getOvertimeRequests(employeeId?: string): Promise<any[]> {
+export async function getOvertimeRequests(employeeId?: string): Promise<(OvertimeRequest & { employee?: { name: string; employeeId: string } })[]> {
     const rows = await prisma.overtimeRequest.findMany({
         where: employeeId ? { employeeId } : undefined,
         include: {
@@ -34,8 +42,7 @@ export async function getOvertimeRequests(employeeId?: string): Promise<any[]> {
         },
         orderBy: { createdAt: "desc" },
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return rows.map((r: any) => ({ ...toOvertimeRequest(r), employee: r.employee }));
+    return rows.map((r) => ({ ...toOvertimeRequest(r), employee: r.employee }));
 }
 
 export async function getOvertimeRequestById(id: string): Promise<OvertimeRequest | undefined> {

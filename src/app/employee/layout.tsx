@@ -7,17 +7,22 @@ import {
     Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
+import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
+
 
 const navItems: NavItem[] = [
     { href: "/employee", icon: Home, label: "Beranda" },
     { href: "/employee/attendance", icon: Camera, label: "Absensi" },
     { href: "/employee/attendance-history", icon: ClipboardList, label: "Riwayat" },
+    { href: "/employee/attendance/correction", icon: FileText, label: "Koreksi" },
     { href: "/employee/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/employee/overtime", icon: Clock4, label: "Lembur" },
     { href: "/employee/payslip", icon: FileText, label: "Slip Gaji" },
     { href: "/employee/leave", icon: CalendarOff, label: "Cuti" },
+    { href: "/employee/documents", icon: FileText, label: "Dokumen" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
+    { href: "/employee/profile", icon: Settings, label: "Profil" },
     { href: "/employee/settings", icon: Settings, label: "Pengaturan" },
 ];
 
@@ -119,6 +124,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             storageKey="employee-sidebar-collapsed"
             onLogout={handleLogout}
             extraNav={monitoringNav}
+            mobileHeaderRight={<EmployeeNotificationPanel />}
             mobileBottomNav={
                 <MobileBottomNav
                     items={navItems}

@@ -90,7 +90,7 @@ export async function generateBulkImportTemplate(categories: CategoryInfo[]) {
         { width: 12 }
     ];
 
-    const addGuideRow = (data: any[], styleType: "title" | "section" | "labelValue" | "prefix" | "normal" | "empty") => {
+    const addGuideRow = (data: (string | number)[], styleType: "title" | "section" | "labelValue" | "prefix" | "normal" | "empty") => {
         const row = wsGuide.addRow(data);
         if (styleType === "title") {
             wsGuide.mergeCells(`A${row.number}:D${row.number}`);

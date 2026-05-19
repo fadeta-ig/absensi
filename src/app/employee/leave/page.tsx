@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
+import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon, Check } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { formatIndonesianDate } from "@/lib/utils";
 
@@ -258,6 +258,43 @@ export default function LeavePage() {
                                             </span>
                                         </div>
                                         <p className="text-xs text-[var(--text-secondary)]">{l.reason}</p>
+
+                                        {/* ── Status Timeline ── */}
+                                        <div className="flex items-center gap-1 pt-1 border-t border-[var(--border)]">
+                                            {[
+                                                { label: "Diajukan", done: true },
+                                                { label: "Ditinjau", done: l.status !== "pending" },
+                                                { label: l.status === "approved" ? "Disetujui" : l.status === "rejected" ? "Ditolak" : "Keputusan", done: l.status === "approved" || l.status === "rejected" },
+                                            ].map((step, idx, arr) => (
+                                                <div key={step.label} className="flex items-center flex-1">
+                                                    <div className="flex flex-col items-center gap-0.5 flex-1">
+                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
+                                                            step.done
+                                                                ? (l.status === "rejected" && idx === 2 ? "bg-red-500 text-white" : "bg-green-500 text-white")
+                                                                : "bg-gray-100 text-gray-400"
+                                                        }`}>
+                                                            {step.done
+                                                                ? <Check className="w-2.5 h-2.5" />
+                                                                : <span className="text-[8px] font-bold">{idx + 1}</span>
+                                                            }
+                                                        </div>
+                                                        <p className={`text-[9px] font-semibold text-center leading-tight ${
+                                                            step.done
+                                                                ? (l.status === "rejected" && idx === 2 ? "text-red-500" : "text-green-600")
+                                                                : "text-gray-400"
+                                                        }`}>
+                                                            {step.label}
+                                                        </p>
+                                                    </div>
+                                                    {idx < arr.length - 1 && (
+                                                        <div className={`h-px flex-1 mx-0.5 mb-3 ${step.done ? "bg-green-300" : "bg-gray-200"}`} />
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-[var(--text-muted)]">
+                                            Diajukan: {new Date(l.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                        </p>
                                     </div>
                                 );
                             })}

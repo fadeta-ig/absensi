@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { z } from "zod";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 const maintenanceCreateSchema = z.object({
     vendorName: z.string().min(1, "Nama vendor wajib diisi"),
@@ -14,14 +14,15 @@ const maintenanceCreateSchema = z.object({
     attachmentUrl: z.string().optional().nullable(),
 });
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
 
     try {
+        const { id } = await params;
         const records = await prisma.assetMaintenance.findMany({
-            where: { assetId: params.id },
+            where: { assetId: id },
             orderBy: { startDate: "desc" },
         });
         return NextResponse.json(records);
@@ -30,18 +31,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "ga") return forbiddenResponse();
 
     try {
+        const { id } = await params;
         const body = await validateBody(request, maintenanceCreateSchema);
         if ("error" in body) return body.error;
 
         const record = await prisma.assetMaintenance.create({
             data: {
-                assetId: params.id,
+                assetId: id,
                 vendorName: body.data.vendorName,
                 cost: body.data.cost,
                 startDate: new Date(body.data.startDate),
@@ -56,15 +58,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         // Optional: Jika IN_PROGRESS, mungkin update status asset menjadi MAINTENANCE
         if (body.data.status === "IN_PROGRESS") {
             await prisma.asset.update({
-                where: { id: params.id },
+                where: { id },
                 data: { status: "MAINTENANCE" }
             });
         } else if (body.data.status === "COMPLETED") {
             // Kita kembalikan ke AVAILABLE jika sebelumnya MAINTENANCE
-            const asset = await prisma.asset.findUnique({ where: { id: params.id } });
+            const asset = await prisma.asset.findUnique({ where: { id } });
             if (asset && asset.status === "MAINTENANCE") {
                 await prisma.asset.update({
-                    where: { id: params.id },
+                    where: { id },
                     data: { status: "AVAILABLE" }
                 });
             }

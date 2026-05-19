@@ -1,8 +1,33 @@
 import { prisma } from "../prisma";
 import { LeaveRequest } from "@/types";
+import { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
 
-export async function getLeaveRequests(employeeId?: string): Promise<any[]> {
+/** Tipe inferensi Prisma untuk LeaveRequest beserta relasi employee-nya */
+export type LeaveRequestWithEmployee = Prisma.LeaveRequestGetPayload<{
+    include: {
+        employee: {
+            select: { name: true; employeeId: true; totalLeave: true; usedLeave: true };
+        };
+    };
+}>;
+
+/** Mapper aman: mengkonversi Date fields Prisma menjadi string ISO untuk LeaveRequest */
+function toLeaveRequest(row: Prisma.LeaveRequestGetPayload<Record<string, never>>): LeaveRequest {
+    return {
+        id: row.id,
+        employeeId: row.employeeId,
+        type: row.type as LeaveRequest["type"],
+        startDate: row.startDate instanceof Date ? row.startDate.toISOString().split("T")[0] : String(row.startDate),
+        endDate: row.endDate instanceof Date ? row.endDate.toISOString().split("T")[0] : String(row.endDate),
+        reason: row.reason,
+        status: row.status as LeaveRequest["status"],
+        attachment: row.attachment ?? null,
+        createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    };
+}
+
+export async function getLeaveRequests(employeeId?: string): Promise<LeaveRequestWithEmployee[]> {
     const rows = await prisma.leaveRequest.findMany({
         where: employeeId ? { employeeId } : undefined,
         include: {
@@ -34,7 +59,7 @@ export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promis
             // createdAt: @default(now()) — tidak perlu diisi
         },
     });
-    return row as unknown as LeaveRequest;
+    return toLeaveRequest(row);
 }
 
 /**
@@ -134,7 +159,7 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
                 ...(data.reason !== undefined && { reason: data.reason }),
             },
         });
-        return row as unknown as LeaveRequest;
+        return toLeaveRequest(row);
     } catch (err) {
         logger.error("Gagal update leave request", { id, error: err });
         return null;
