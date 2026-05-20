@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarOff, MapPinned, Clock4, UserX } from "lucide-react";
+import { Bell, CalendarOff, MapPinned, Clock4, UserX, FileText } from "lucide-react";
 
 interface Notification {
     id: string;
-    type: "leave" | "visit" | "overtime" | "absent";
+    type: "leave" | "visit" | "overtime" | "absent" | "letter";
     title: string;
     message: string;
     href: string;
@@ -18,6 +18,7 @@ const TYPE_ICON = {
     visit: MapPinned,
     overtime: Clock4,
     absent: UserX,
+    letter: FileText,
 };
 
 const TYPE_COLOR = {
@@ -25,6 +26,7 @@ const TYPE_COLOR = {
     visit: "text-blue-500 bg-blue-50",
     overtime: "text-purple-500 bg-purple-50",
     absent: "text-red-500 bg-red-50",
+    letter: "text-teal-500 bg-teal-50",
 };
 
 export default function NotificationCenter() {

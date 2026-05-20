@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Activity } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Activity, RefreshCw } from "lucide-react";
 import { CalendarOff } from "lucide-react";
 import LeaveCalendar from "@/components/LeaveCalendar";
 import StatsGrid from "@/components/dashboard/StatsGrid";
@@ -41,14 +41,50 @@ export default function DashboardPage() {
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [news, setNews] = useState<NewsItem[]>([]);
     const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const fetchAllData = useCallback(async () => {
+        try {
+            const [empRes, attRes, leaveRes, newsRes, analyticsRes] = await Promise.all([
+                fetch("/api/employees"),
+                fetch("/api/attendance"),
+                fetch("/api/leave"),
+                fetch("/api/news"),
+                fetch("/api/analytics"),
+            ]);
+
+            const [empData, attData, leaveData, newsData, analyticsData] = await Promise.all([
+                empRes.json(),
+                attRes.json(),
+                leaveRes.json(),
+                newsRes.json(),
+                analyticsRes.json(),
+            ]);
+
+            if (Array.isArray(empData)) setEmployees(empData);
+            if (Array.isArray(attData)) setAttendance(attData);
+            if (Array.isArray(leaveData)) setLeaves(leaveData);
+            if (Array.isArray(newsData)) setNews(newsData);
+            if (analyticsData?.summary) setAnalytics(analyticsData);
+            setLastUpdated(new Date());
+        } catch { /* silent refresh failure */ }
+    }, []);
 
     useEffect(() => {
-        fetch("/api/employees").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setEmployees(d); }).catch(() => { });
-        fetch("/api/attendance").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setAttendance(d); }).catch(() => { });
-        fetch("/api/leave").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setLeaves(d); }).catch(() => { });
-        fetch("/api/news").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setNews(d); }).catch(() => { });
-        fetch("/api/analytics").then((r) => r.json()).then((d) => { if (d?.summary) setAnalytics(d); }).catch(() => { });
-    }, []);
+        fetchAllData();
+
+        // Auto-refresh every 30 seconds, skip if tab is inactive
+        intervalRef.current = setInterval(() => {
+            if (document.visibilityState === "visible") {
+                fetchAllData();
+            }
+        }, 30000);
+
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, [fetchAllData]);
 
     // ─── Derived State ────────────────────────────────────────
     const today = toWIBDateString();
@@ -78,11 +114,21 @@ export default function DashboardPage() {
                         {now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                     <div className="px-3 py-1.5 bg-[var(--primary)]/10 rounded-full flex items-center gap-1.5">
                         <Activity className="w-3.5 h-3.5 text-[var(--primary)]" />
                         <span className="text-xs font-semibold text-[var(--primary)]">Sistem Aktif</span>
                     </div>
+                    <button
+                        onClick={fetchAllData}
+                        className="px-3 py-1.5 bg-[var(--secondary)] rounded-full flex items-center gap-1.5 hover:bg-[var(--border)] transition-colors"
+                        title="Refresh sekarang"
+                    >
+                        <RefreshCw className="w-3 h-3 text-[var(--text-muted)]" />
+                        <span className="text-[10px] font-medium text-[var(--text-muted)]">
+                            {lastUpdated.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                    </button>
                 </div>
             </div>
 

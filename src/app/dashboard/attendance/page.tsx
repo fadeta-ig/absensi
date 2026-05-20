@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ClipboardList, Search, Calendar, Filter, UserCheck, UserX, Download, FileSpreadsheet, Building2, Layers, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Check } from "lucide-react";
+import { ClipboardList, Search, Calendar, Filter, UserCheck, UserX, Download, FileSpreadsheet, Building2, Layers, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Check, Camera, X } from "lucide-react";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
 
 interface Employee {
@@ -18,6 +18,8 @@ interface AttendanceRecord {
     date: string;
     clockIn?: string;
     clockOut?: string;
+    clockInPhoto?: string | null;
+    clockOutPhoto?: string | null;
     status: string;
 }
 
@@ -49,6 +51,9 @@ export default function AttendanceMonitorPage() {
 
     // Correction modal
     const [processingId, setProcessingId] = useState<string | null>(null);
+
+    // Photo preview modal
+    const [photoPreview, setPhotoPreview] = useState<{ url: string; label: string } | null>(null);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -379,13 +384,14 @@ export default function AttendanceMonitorPage() {
                                 <th className="w-32">Tanggal</th>
                                 <th className="w-24">Clock In</th>
                                 <th className="w-24">Clock Out</th>
+                                <th className="w-20 text-center hidden md:table-cell">Foto</th>
                                 <th className="w-32 text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--border)]">
                             {paginatedRecords.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="text-center py-12 text-[var(--text-muted)] italic">
+                                    <td colSpan={8} className="text-center py-12 text-[var(--text-muted)] italic">
                                         Tidak ada data absensi ditemukan untuk kriteria ini.
                                     </td>
                                 </tr>
@@ -411,6 +417,36 @@ export default function AttendanceMonitorPage() {
                                             </td>
                                             <td className="text-sm font-medium text-orange-600">
                                                 {formatTime(r.clockOut)}
+                                            </td>
+                                            <td className="hidden md:table-cell">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    {r.clockInPhoto ? (
+                                                        <button
+                                                            onClick={() => setPhotoPreview({ url: r.clockInPhoto!, label: `Clock In — ${info.name} (${r.date})` })}
+                                                            className="w-8 h-8 rounded-md overflow-hidden border border-blue-200 hover:border-blue-400 transition-colors cursor-pointer"
+                                                            title="Lihat foto masuk"
+                                                        >
+                                                            <img src={r.clockInPhoto} alt="In" className="w-full h-full object-cover" />
+                                                        </button>
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center">
+                                                            <Camera className="w-3 h-3 text-gray-300" />
+                                                        </div>
+                                                    )}
+                                                    {r.clockOutPhoto ? (
+                                                        <button
+                                                            onClick={() => setPhotoPreview({ url: r.clockOutPhoto!, label: `Clock Out — ${info.name} (${r.date})` })}
+                                                            className="w-8 h-8 rounded-md overflow-hidden border border-orange-200 hover:border-orange-400 transition-colors cursor-pointer"
+                                                            title="Lihat foto pulang"
+                                                        >
+                                                            <img src={r.clockOutPhoto} alt="Out" className="w-full h-full object-cover" />
+                                                        </button>
+                                                    ) : (
+                                                        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center">
+                                                            <Camera className="w-3 h-3 text-gray-300" />
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="text-center">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${r.status === "present" ? "bg-green-100 text-green-700" :
@@ -557,6 +593,27 @@ export default function AttendanceMonitorPage() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Photo Preview Modal */}
+            {photoPreview && (
+                <div className="modal-overlay" onClick={() => setPhotoPreview(null)}>
+                    <div className="modal-content !max-w-lg" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2 className="modal-title text-sm">{photoPreview.label}</h2>
+                            <button className="modal-close" onClick={() => setPhotoPreview(null)}>
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="flex justify-center">
+                            <img
+                                src={photoPreview.url}
+                                alt={photoPreview.label}
+                                className="max-w-full max-h-[60vh] rounded-xl object-contain"
+                            />
+                        </div>
                     </div>
                 </div>
             )}

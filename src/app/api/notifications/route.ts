@@ -7,7 +7,7 @@ import { toDateString } from "@/lib/utils";
 
 interface Notification {
     id: string;
-    type: "leave" | "visit" | "overtime" | "absent";
+    type: "leave" | "visit" | "overtime" | "absent" | "letter";
     title: string;
     message: string;
     href: string;
@@ -113,6 +113,27 @@ export async function GET(request: NextRequest) {
                     time: todayStr,
                 });
             }
+        }
+
+        // Pending letter requests
+        const pendingLetters = await prisma.letterRequest.findMany({
+            where: { status: "PENDING" },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+        });
+        for (const lr of pendingLetters) {
+            const emp = await prisma.employee.findUnique({
+                where: { employeeId: lr.employeeId },
+                select: { name: true },
+            });
+            notifications.push({
+                id: `letter-${lr.id}`,
+                type: "letter",
+                title: "Permintaan Surat",
+                message: `${emp?.name || lr.employeeId} mengajukan ${lr.type.replace(/_/g, " ")}`,
+                href: "/dashboard/letter-requests",
+                time: toDateString(lr.createdAt),
+            });
         }
 
         // Sort by time descending

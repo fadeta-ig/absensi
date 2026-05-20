@@ -149,9 +149,6 @@ export default function AppShell({
                 </div>
                 <div className="flex items-center gap-1">
                     {mobileHeaderRight}
-                    <div className="w-8 h-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-xs font-bold">
-                        {user.name.charAt(0)}
-                    </div>
                 </div>
             </header>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Wallet, Send, Loader2, Plus, Trash2, FileText, Eye, X, Download, FileSpreadsheet, CheckCircle2, AlertCircle, Search, Filter } from "lucide-react";
+import { Wallet, Send, Loader2, Plus, Trash2, FileText, Eye, X, Download, FileSpreadsheet, CheckCircle2, AlertCircle, Search, Filter, Zap } from "lucide-react";
 import { exportToExcel, exportPayslipPdf } from "@/lib/export";
 
 interface Employee {
@@ -55,6 +55,11 @@ export default function PayrollPage() {
     const [success, setSuccess] = useState("");
 
     const [overtimeRequests, setOvertimeRequests] = useState<{ employeeId: string; date: string; overtimePay: number; status: string }[]>([]);
+
+    // Bulk payslip state
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [bulkLoading, setBulkLoading] = useState(false);
+    const [bulkResult, setBulkResult] = useState<{ created: number; skipped: number; message: string } | null>(null);
 
     useEffect(() => {
         fetch("/api/employees").then((r) => r.json()).then(setEmployees);
@@ -276,6 +281,45 @@ export default function PayrollPage() {
         });
     };
 
+    const handleBulkGenerate = () => {
+        setBulkResult(null);
+        setShowBulkModal(true);
+    };
+
+    const confirmBulk = async () => {
+        setBulkLoading(true);
+        setBulkResult(null);
+        try {
+            const toGenerate = filteredRecapEmployees
+                .filter((e) => !payslips.some((p) => p.employeeId === e.employeeId && p.period === selectedPeriod))
+                .map((e) => e.employeeId);
+
+            if (toGenerate.length === 0) {
+                setBulkResult({ created: 0, skipped: filteredRecapEmployees.length, message: "Semua karyawan sudah memiliki slip gaji untuk periode ini." });
+                setBulkLoading(false);
+                return;
+            }
+
+            const res = await fetch("/api/payslips/bulk", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ period: selectedPeriod, employeeIds: toGenerate }),
+            });
+
+            const data = await res.json() as { created: number; skipped: number; message: string };
+            setBulkResult(data);
+
+            if (res.ok && data.created > 0) {
+                const freshPayslips = await fetch("/api/payslips").then((r) => r.json());
+                if (Array.isArray(freshPayslips)) setPayslips(freshPayslips);
+            }
+        } catch {
+            setBulkResult({ created: 0, skipped: 0, message: "Terjadi kesalahan koneksi." });
+        } finally {
+            setBulkLoading(false);
+        }
+    };
+
     const handlePayslipPdf = (p: Payslip) => {
         exportPayslipPdf({
             employeeId: p.employeeId,
@@ -358,6 +402,9 @@ export default function PayrollPage() {
             {tab === "recap" && (
                 <div className="space-y-4">
                     <div className="flex justify-end gap-2">
+                        <button onClick={handleBulkGenerate} className="btn btn-primary btn-sm" disabled={filteredRecapEmployees.length === 0}>
+                            <Zap className="w-3.5 h-3.5" /> Generate Massal
+                        </button>
                         <button onClick={handleExportRecapExcel} className="btn btn-secondary btn-sm" disabled={filteredRecapEmployees.length === 0}>
                             <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
                         </button>
@@ -587,6 +634,85 @@ export default function PayrollPage() {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Bulk Generate Modal */}
+            {showBulkModal && (
+                <div className="modal-overlay" onClick={() => { if (!bulkLoading) setShowBulkModal(false); }}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2 className="modal-title">Generate Slip Gaji Massal</h2>
+                            <button className="modal-close" onClick={() => setShowBulkModal(false)} disabled={bulkLoading}>
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {!bulkResult ? (
+                                <>
+                                    <div className="bg-[var(--secondary)] rounded-xl p-4 space-y-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-[var(--text-secondary)]">Periode</span>
+                                            <span className="font-bold text-[var(--text-primary)]">{selectedPeriod}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-[var(--text-secondary)]">Total Karyawan</span>
+                                            <span className="font-bold text-[var(--text-primary)]">{filteredRecapEmployees.length}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-[var(--text-secondary)]">Sudah Terbit</span>
+                                            <span className="font-bold text-green-600">
+                                                {filteredRecapEmployees.filter((e) => payslips.some((p) => p.employeeId === e.employeeId && p.period === selectedPeriod)).length}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-sm border-t border-[var(--border)] pt-2 mt-2">
+                                            <span className="text-[var(--text-secondary)]">Akan Diproses</span>
+                                            <span className="font-extrabold text-[var(--primary)]">
+                                                {filteredRecapEmployees.filter((e) => !payslips.some((p) => p.employeeId === e.employeeId && p.period === selectedPeriod)).length}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                        <p className="text-xs text-amber-700">
+                                            Slip gaji akan dihitung otomatis dari gaji pokok, komponen payroll, dan lembur yang sudah disetujui. Karyawan yang sudah memiliki slip gaji untuk periode ini akan dilewati.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <button className="btn btn-secondary flex-1" onClick={() => setShowBulkModal(false)} disabled={bulkLoading}>Batal</button>
+                                        <button className="btn btn-primary flex-1" onClick={confirmBulk} disabled={bulkLoading}>
+                                            {bulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                                            {bulkLoading ? "Memproses..." : "Generate Sekarang"}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className={`flex items-center gap-3 p-4 rounded-xl ${bulkResult.created > 0 ? "bg-green-50 border border-green-200" : "bg-orange-50 border border-orange-200"}`}>
+                                        {bulkResult.created > 0 ? (
+                                            <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0" />
+                                        ) : (
+                                            <AlertCircle className="w-6 h-6 text-orange-600 shrink-0" />
+                                        )}
+                                        <div>
+                                            <p className="text-sm font-bold text-[var(--text-primary)]">{bulkResult.message}</p>
+                                            {bulkResult.created > 0 && (
+                                                <p className="text-xs text-[var(--text-muted)] mt-1">
+                                                    {bulkResult.created} slip dibuat • {bulkResult.skipped} dilewati
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-primary w-full" onClick={() => { setShowBulkModal(false); setTab("history"); }}>
+                                        Lihat Riwayat
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 

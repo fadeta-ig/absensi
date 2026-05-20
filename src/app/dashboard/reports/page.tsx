@@ -122,9 +122,9 @@ export default function ReportsPage() {
                 setLoading(false);
                 return;
             }
-            const query = buildQuery(format === "excel" ? "excel" : "json");
 
             if (format === "excel") {
+                const query = buildQuery("excel");
                 const res = await fetch(`/api/export?${query.toString()}`);
                 if (!res.ok) throw new Error("Gagal mengunduh");
                 const blob = await res.blob();
@@ -137,14 +137,16 @@ export default function ReportsPage() {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             } else {
-                // PDF Export
+                // PDF: fetch JSON data then generate PDF client-side
+                const query = buildQuery("json");
                 const res = await fetch(`/api/export?${query.toString()}`);
                 const result = await res.json();
                 if (!res.ok) throw new Error(result.error || "Gagal mengambil data untuk PDF");
 
-                if (isMatrix) {
+                if (isMatrix && type === "attendance") {
+                    // Matrix PDF
                     const headers = result.headers || Object.keys(result.data[0]);
-                    const body = result.data.map((r: any) => headers.map((h: string) => r[h]));
+                    const body = result.data.map((r: Record<string, string | number>) => headers.map((h: string) => r[h]));
                     exportToPdfMatrix(
                         body,
                         headers,
@@ -153,12 +155,27 @@ export default function ReportsPage() {
                         `Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} | H=Hadir, T=Terlambat, A=Alpa, C=Cuti`
                     );
                 } else {
-                    // Fallback for simple PDF if needed, but primarily for Matrix
-                    setError("PDF saat ini hanya didukung untuk Mode Matriks.");
+                    // Flat/Table PDF for all types
+                    const headers = result.headers || Object.keys(result.data[0] || {});
+                    const body = result.data.map((r: Record<string, string | number>) => headers.map((h: string) => r[h] ?? "-"));
+                    const titleMap: Record<string, string> = {
+                        attendance: "LAPORAN ABSENSI KARYAWAN",
+                        visits:     "LAPORAN KUNJUNGAN BISNIS",
+                        overtime:   "LAPORAN LEMBUR KARYAWAN",
+                    };
+                    const { exportToPdfTable: expPdf } = await import("@/lib/export");
+                    expPdf(
+                        body,
+                        headers,
+                        titleMap[type] || "LAPORAN",
+                        `Laporan_${type}_${startDate}_${endDate}`,
+                        `Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} | Total: ${result.totalRecords} baris`
+                    );
                 }
             }
-        } catch (err: any) {
-            setError(err.message || "Gagal mendownload file");
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Gagal mendownload file";
+            setError(message);
         }
         setLoading(false);
     };
@@ -295,13 +312,9 @@ export default function ReportsPage() {
                             <button onClick={() => handleDownload("excel")} className="flex-1 flex items-center justify-center gap-2 h-[42px] bg-[#800020] hover:bg-[#600018] text-white text-[13px] font-semibold rounded-[10px] shadow-[0_2px_8px_rgba(128,0,32,0.25)] transition-colors" disabled={loading}>
                                 <FileSpreadsheet className="w-4 h-4" /> Excel
                             </button>
-                            {isMatrix && type === "attendance" ? (
-                                <button onClick={() => handleDownload("pdf")} className="flex-1 flex items-center justify-center gap-2 h-[42px] bg-[#FFF5F5] hover:bg-[#FFEBEB] border border-[#FFE0E0] text-[#800020] text-[13px] font-semibold rounded-[10px] transition-colors" disabled={loading}>
+                            <button onClick={() => handleDownload("pdf")} className="flex-1 flex items-center justify-center gap-2 h-[42px] bg-[#FFF5F5] hover:bg-[#FFEBEB] border border-[#FFE0E0] text-[#800020] text-[13px] font-semibold rounded-[10px] transition-colors" disabled={loading}>
                                     <FileText className="w-4 h-4" /> PDF
                                 </button>
-                            ) : (
-                                <div className="flex-1" />
-                            )}
                         </div>
                     </div>
                 </div>

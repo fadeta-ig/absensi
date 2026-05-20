@@ -210,7 +210,7 @@ export async function GET(request: NextRequest) {
                 };
             });
         } else if (type === "overtime") {
-            finalHeaders = ["Nama", "ID Karyawan", "Tanggal", "Jam Mulai", "Jam Selesai", "Durasi (Jam)", "Alasan", "Status"];
+            finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tanggal", "Jam Mulai", "Jam Selesai", "Durasi (Jam)", "Hari Libur", "Alasan", "Status"];
             const records = await prisma.overtimeRequest.findMany({
                 where: { date: dateRange, employeeId: { in: validEmpIds } },
                 orderBy: { date: "asc" },
@@ -221,10 +221,12 @@ export async function GET(request: NextRequest) {
                 return {
                     "Nama": emp?.name || "-",
                     "ID Karyawan": r.employeeId,
+                    "Departemen": emp?.departmentRel?.name || "-",
                     "Tanggal": toDateStr(r.date),
-                    "Jam Mulai": toDateStr(r.startTime),
-                    "Jam Selesai": toDateStr(r.endTime),
+                    "Jam Mulai": toTimeString(r.startTime),
+                    "Jam Selesai": toTimeString(r.endTime),
                     "Durasi (Jam)": r.hours,
+                    "Hari Libur": r.isHoliday ? "Ya" : "Tidak",
                     "Alasan": r.reason,
                     "Status": r.status === "approved" ? "Disetujui" : r.status === "rejected" ? "Ditolak" : "Menunggu",
                 };

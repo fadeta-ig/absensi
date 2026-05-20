@@ -26,25 +26,49 @@ const navItems: NavItem[] = [
     { href: "/employee/settings", icon: Settings, label: "Pengaturan" },
 ];
 
-// Mobile bottom nav — 5 item pertama
 function MobileBottomNav({ items, pathname, onNavigate }: {
     items: NavItem[];
     pathname: string;
     onNavigate: (href: string) => void;
 }) {
+    // Custom mobile order: Beranda, Riwayat, Absensi (tengah), Koreksi, Kunjungan
+    const mobileItems = [
+        items.find(i => i.href === "/employee"),
+        items.find(i => i.href === "/employee/attendance-history"),
+        items.find(i => i.href === "/employee/attendance"),
+        items.find(i => i.href === "/employee/attendance/correction"),
+        items.find(i => i.href === "/employee/visits"),
+    ];
+
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] flex items-center justify-around py-2 z-50 lg:hidden safe-area-bottom">
-            {items.slice(0, 5).map((item) => {
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] flex items-end justify-around pb-2 pt-1 z-50 lg:hidden safe-area-bottom px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+            {mobileItems.map((item, i) => {
+                if (!item) return null;
                 const isActive = pathname === item.href;
                 const Icon = item.icon;
+                const isCenter = i === 2; // Absensi
+
+                if (isCenter) {
+                    return (
+                        <div key={item.href} className="relative -top-5">
+                            <button
+                                onClick={() => onNavigate(item.href!)}
+                                className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-[#800020] text-white shadow-lg shadow-[#800020]/30 border-4 border-white transition-transform active:scale-95"
+                            >
+                                <Icon className="w-6 h-6" />
+                            </button>
+                        </div>
+                    );
+                }
+
                 return (
                     <button
                         key={item.href}
                         onClick={() => onNavigate(item.href!)}
-                        className="flex flex-col items-center gap-0.5 py-1 px-2 min-w-[56px]"
+                        className="flex flex-col items-center gap-1 py-1 px-1 min-w-[64px]"
                     >
-                        <Icon className={`w-5 h-5 ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`} />
-                        <span className={`text-[10px] font-medium ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>
+                        <Icon className={`w-5 h-5 ${isActive ? "text-[#800020]" : "text-gray-400"}`} />
+                        <span className={`text-[10px] font-semibold ${isActive ? "text-[#800020]" : "text-gray-400"}`}>
                             {item.label}
                         </span>
                     </button>
