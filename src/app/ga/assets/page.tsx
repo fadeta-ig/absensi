@@ -164,13 +164,13 @@ export default function AssetsPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Manajemen Aset</h1>
-                    <p className="text-sm text-slate-500 mt-1">Kelola data inventaris, alokasi karyawan, dan pemeliharaan WIG.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Manajemen Aset</h1>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">Kelola data inventaris, alokasi karyawan, dan pemeliharaan WIG.</p>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto flex-wrap">
                     <button 
                         onClick={() => router.push("/ga/scan")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--card)] border border-[var(--border)] text-[var(--text-secondary)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--secondary)] transition-colors"
                     >
                         <QrCode size={16} /> Scan
                     </button>
@@ -195,7 +195,7 @@ export default function AssetsPage() {
                     </button>
                     <button 
                         onClick={() => router.push("/ga/assets/create")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors shadow-sm"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors shadow-sm"
                     >
                         <Plus size={16} /> Tambah Aset
                     </button>
@@ -212,19 +212,19 @@ export default function AssetsPage() {
             </div>
 
             {/* Table Area */}
-            <div className="bg-white border rounded-xl shadow-sm flex flex-col flex-1 overflow-hidden relative">
+            <div className="bg-[var(--card)] border rounded-xl shadow-sm flex flex-col flex-1 overflow-hidden relative">
                 {/* Filters */}
-                <div className="p-4 border-b bg-slate-50/30 space-y-4">
+                <div className="p-4 border-b bg-[var(--secondary)]/30 space-y-4">
                     <div className="flex flex-col md:flex-row gap-4">
                         {/* Search */}
                         <div className="relative flex-1 font-sans">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={16} />
                             <input
                                 type="text"
                                 placeholder="Cari nama, kode aset, atau S/N..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 transition-all shadow-sm"
+                                className="w-full pl-9 pr-4 py-2 bg-[var(--card)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-all shadow-sm"
                             />
                         </div>
                         
@@ -233,7 +233,7 @@ export default function AssetsPage() {
                             <select 
                                 value={filterCategory} 
                                 onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
-                                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                                className="px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
                             >
                                 <option value="">Semua Kategori</option>
                                 {categories.filter(c => c.prefix !== "NUM").map(cat => (
@@ -244,7 +244,7 @@ export default function AssetsPage() {
                             <select 
                                 value={filterKondisi} 
                                 onChange={(e) => { setFilterKondisi(e.target.value); setCurrentPage(1); }}
-                                className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                                className="px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
                             >
                                 <option value="">Semua Kondisi</option>
                                 <option value="BAIK">Kondisi Baik</option>
@@ -260,7 +260,7 @@ export default function AssetsPage() {
                                     setFilterKondisi("");
                                     setCurrentPage(1);
                                 }}
-                                className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-600 transition-colors"
+                                className="px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-red-600 transition-colors"
                             >
                                 Reset
                             </button>
@@ -268,7 +268,7 @@ export default function AssetsPage() {
                     </div>
 
                     {/* Status Pills */}
-                    <div className="flex justify-between items-center bg-white/50 p-1.5 rounded-xl border border-slate-100">
+                    <div className="flex justify-between items-center bg-[var(--card)]/50 p-1.5 rounded-xl border border-[var(--border)]">
                         <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
                             <FilterPill active={filterStatus === ""} label="Semua Status" onClick={() => { setFilterStatus(""); setCurrentPage(1); }} />
                             <FilterPill active={filterStatus === "AVAILABLE"} label="Tersedia" onClick={() => { setFilterStatus("AVAILABLE"); setCurrentPage(1); }} />
@@ -277,7 +277,7 @@ export default function AssetsPage() {
                             <FilterPill active={filterStatus === "RETIRED"} label="Retired" onClick={() => { setFilterStatus("RETIRED"); setCurrentPage(1); }} />
                         </div>
                         
-                        <button onClick={() => { fetchAssets(); fetchStats(); }} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+                        <button onClick={() => { fetchAssets(); fetchStats(); }} className="p-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
                             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
                         </button>
                     </div>
@@ -286,7 +286,7 @@ export default function AssetsPage() {
                 {/* Table */}
                 <div className="overflow-x-auto flex-1">
                     <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-slate-50 border-b text-slate-500 text-xs uppercase tracking-wider">
+                        <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider">
                             <tr>
                                 <th className="px-6 py-4 font-semibold">Kode Aset</th>
                                 <th className="px-6 py-4 font-semibold">Nama Aset</th>
@@ -300,37 +300,37 @@ export default function AssetsPage() {
                         <tbody className="divide-y divide-slate-100">
                             {loading && assets.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">Memuat data secara langsung (server-side)...</td>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data secara langsung (server-side)...</td>
                                 </tr>
                             ) : assets.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">Tidak ada aset ditemukan.</td>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada aset ditemukan.</td>
                                 </tr>
                             ) : (
                                 assets.map((asset) => (
                                     <tr 
                                         key={asset.id} 
                                         onClick={() => router.push(`/ga/assets/${asset.id}`)}
-                                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                                        className="hover:bg-[var(--secondary)]/80 transition-colors cursor-pointer group"
                                     >
-                                        <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-600 group-hover:text-slate-900 transition-colors">{asset.assetCode}</td>
-                                        <td className="px-6 py-4 font-medium text-slate-900">{asset.name}</td>
+                                        <td className="px-6 py-4 font-mono text-xs font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{asset.assetCode}</td>
+                                        <td className="px-6 py-4 font-medium text-[var(--text-primary)]">{asset.name}</td>
                                         <td className="px-6 py-4"><CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} /></td>
                                         <td className="px-6 py-4"><KondisiBadge kondisi={asset.kondisi} /></td>
                                         <td className="px-6 py-4"><StatusBadge status={asset.status} /></td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--secondary)] flex items-center justify-center border border-[var(--border)]">
                                                     <HolderIcon holderType={asset.holderType} />
                                                 </div>
                                                 <div className="flex flex-col">
-                                                    <span className="font-medium text-slate-800 text-xs">
+                                                    <span className="font-medium text-[var(--text-primary)] text-xs">
                                                         {asset.holderType === "GA_POOL" ? "GA Pool (Tersedia)" :
                                                          asset.holderType === "COMPANY_OWNED" ? "Milik Perusahaan (Disimpan)" :
                                                          asset.assignedEmployee?.name || asset.assignedToName || "Tidak Diketahui"}
                                                     </span>
                                                     {asset.assignedEmployee && (
-                                                        <span className="text-[10px] text-slate-500 border-l-2 border-slate-200 pl-1.5 mt-0.5">
+                                                        <span className="text-[10px] text-[var(--text-secondary)] border-l-2 border-[var(--border)] pl-1.5 mt-0.5">
                                                             {asset.assignedEmployee.department}
                                                         </span>
                                                     )}
@@ -342,14 +342,14 @@ export default function AssetsPage() {
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => router.push(`/ga/assets/${asset.id}/edit`)}
-                                                    className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                                                     title="Edit Aset"
                                                 >
                                                     <Pencil size={14} />
                                                 </button>
                                                 <button
                                                     onClick={() => setDeleteTarget({ id: asset.id, name: asset.name, code: asset.assetCode })}
-                                                    className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors"
                                                     title="Hapus Aset"
                                                 >
                                                     <Trash2 size={14} />
@@ -365,7 +365,7 @@ export default function AssetsPage() {
 
                 {/* Footer Pagination */}
                 {totalPages > 1 && (
-                    <div className="p-4 border-t bg-slate-50/50 flex justify-between items-center text-sm text-slate-500">
+                    <div className="p-4 border-t bg-[var(--secondary)]/50 flex justify-between items-center text-sm text-[var(--text-secondary)]">
                         <span>Menampilkan {(currentPage - 1) * PER_PAGE + 1} - {Math.min(currentPage * PER_PAGE, totalItems)} dari {totalItems} aset</span>
                         <Pagination 
                             currentPage={currentPage}
@@ -380,15 +380,15 @@ export default function AssetsPage() {
             {/* Delete Confirm Dialog */}
             {deleteTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-slate-200">
+                    <div className="bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-[var(--border)]">
                         <div className="flex items-start gap-4">
                             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                                 <Trash2 className="text-red-600" size={18} />
                             </div>
                             <div>
-                                <h3 className="text-base font-bold text-slate-800">Hapus Aset Secara Permanen?</h3>
-                                <p className="text-sm text-slate-500 mt-1">
-                                    Anda akan menghapus aset <span className="font-semibold text-slate-700">{deleteTarget.name}</span> ({deleteTarget.code}). 
+                                <h3 className="text-base font-bold text-[var(--text-primary)]">Hapus Aset Secara Permanen?</h3>
+                                <p className="text-sm text-[var(--text-secondary)] mt-1">
+                                    Anda akan menghapus aset <span className="font-semibold text-[var(--text-secondary)]">{deleteTarget.name}</span> ({deleteTarget.code}). 
                                     Tindakan ini <span className="text-red-600 font-semibold">tidak dapat dibatalkan</span> dan akan menghapus semua riwayat terkait.
                                 </p>
                             </div>
@@ -397,7 +397,7 @@ export default function AssetsPage() {
                             <button
                                 onClick={() => setDeleteTarget(null)}
                                 disabled={isDeleting}
-                                className="px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] bg-[var(--secondary)] hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 Batal
                             </button>

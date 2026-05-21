@@ -126,7 +126,7 @@ export default function OvertimeCalculatorPage() {
                                 onClick={() => setIsHoliday(false)}
                                 className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all ${!isHoliday
                                     ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                                    : "bg-white text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--primary)]"
+                                    : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--primary)]"
                                     }`}
                             >
                                 Hari Kerja
@@ -135,7 +135,7 @@ export default function OvertimeCalculatorPage() {
                                 onClick={() => setIsHoliday(true)}
                                 className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all ${isHoliday
                                     ? "bg-orange-500 text-white border-orange-500"
-                                    : "bg-white text-[var(--text-secondary)] border-[var(--border)] hover:border-orange-500"
+                                    : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-orange-500"
                                     }`}
                             >
                                 Hari Libur / Istirahat
@@ -153,7 +153,7 @@ export default function OvertimeCalculatorPage() {
                                         onClick={() => setWorkDaySystem(sys)}
                                         className={`flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold border transition-all ${workDaySystem === sys
                                             ? "bg-[var(--primary)] text-white border-[var(--primary)]"
-                                            : "bg-white text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--primary)]"
+                                            : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--primary)]"
                                             }`}
                                     >
                                         {sys} Hari Kerja

@@ -47,10 +47,10 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
                             ))}
                         </div>
                         {totalPages > 1 && (
-                            <div className="p-2 border-t border-[var(--border)] flex justify-between items-center bg-slate-50/50 mt-auto">
-                                <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="text-[10px] font-bold px-2.5 py-1.5 text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40 transition-colors">Prev</button>
-                                <span className="text-[10px] text-gray-500 font-medium">Hal {page} / {totalPages}</span>
-                                <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="text-[10px] font-bold px-2.5 py-1.5 text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40 transition-colors">Next</button>
+                            <div className="p-2 border-t border-[var(--border)] flex justify-between items-center bg-[var(--secondary)]/50 mt-auto">
+                                <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="text-[10px] font-bold px-2.5 py-1.5 text-[var(--text-secondary)] bg-[var(--card)] border border-[var(--border)] rounded hover:bg-[var(--secondary)] disabled:opacity-40 transition-colors">Prev</button>
+                                <span className="text-[10px] text-[var(--text-secondary)] font-medium">Hal {page} / {totalPages}</span>
+                                <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="text-[10px] font-bold px-2.5 py-1.5 text-[var(--text-secondary)] bg-[var(--card)] border border-[var(--border)] rounded hover:bg-[var(--secondary)] disabled:opacity-40 transition-colors">Next</button>
                             </div>
                         )}
                     </>

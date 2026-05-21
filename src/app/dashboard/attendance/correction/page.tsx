@@ -77,7 +77,7 @@ export default function CorrectionPage() {
             APPROVED: { color: "bg-green-100 text-green-700", label: "Disetujui", icon: CheckCircle2 },
             REJECTED: { color: "bg-red-100 text-red-700", label: "Ditolak", icon: XCircle },
         };
-        const st = map[s] || { color: "bg-gray-100 text-gray-700", label: s, icon: AlertCircle };
+        const st = map[s] || { color: "bg-[var(--secondary)] text-[var(--text-secondary)]", label: s, icon: AlertCircle };
         const Icon = st.icon;
         return (
             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${st.color}`}>
@@ -115,7 +115,7 @@ export default function CorrectionPage() {
                             <div>
                                 <label className="block text-sm font-medium mb-1">Tanggal Absensi *</label>
                                 <div className="relative">
-                                    <Calendar className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                                    <Calendar className="w-4 h-4 absolute left-3 top-3 text-[var(--text-muted)]" />
                                     <input type="date" className="form-input pl-10" required value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
                                 </div>
                             </div>
@@ -124,14 +124,14 @@ export default function CorrectionPage() {
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Jam Masuk</label>
                                     <div className="relative">
-                                        <Clock className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                                        <Clock className="w-4 h-4 absolute left-3 top-3 text-[var(--text-muted)]" />
                                         <input type="time" className="form-input text-sm pl-9" value={proposedClockIn} onChange={(e) => setProposedClockIn(e.target.value)} />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Jam Pulang</label>
                                     <div className="relative">
-                                        <Clock className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                                        <Clock className="w-4 h-4 absolute left-3 top-3 text-[var(--text-muted)]" />
                                         <input type="time" className="form-input text-sm pl-9" value={proposedClockOut} onChange={(e) => setProposedClockOut(e.target.value)} />
                                     </div>
                                 </div>
@@ -153,7 +153,7 @@ export default function CorrectionPage() {
                 {/* History Section */}
                 <div className="lg:col-span-2">
                     <div className="card h-full">
-                        <div className="p-4 border-b border-[var(--border)] bg-gray-50/50">
+                        <div className="p-4 border-b border-[var(--border)] bg-[var(--secondary)]/50">
                             <h2 className="text-lg font-bold">Riwayat Pengajuan Anda</h2>
                         </div>
                         <div className="p-0 overflow-x-auto">
@@ -169,7 +169,7 @@ export default function CorrectionPage() {
                                 <tbody>
                                     {history.length === 0 ? (
                                         <tr>
-                                            <td colSpan={4} className="text-center py-8 text-gray-500 italic">Belum ada riwayat pengajuan.</td>
+                                            <td colSpan={4} className="text-center py-8 text-[var(--text-secondary)] italic">Belum ada riwayat pengajuan.</td>
                                         </tr>
                                     ) : (
                                         history.map(item => (

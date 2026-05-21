@@ -23,7 +23,7 @@ const TYPE_COLORS: Record<string, string> = {
     sick: "bg-red-100 text-red-700 border-red-200",
     personal: "bg-yellow-100 text-yellow-700 border-yellow-200",
     maternity: "bg-purple-100 text-purple-700 border-purple-200",
-    default: "bg-slate-100 text-slate-700 border-slate-200",
+    default: "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -81,7 +81,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
 
     return (
         <div className="card overflow-hidden">
-            <div className="p-4 border-b border-[var(--border)] flex items-center justify-between bg-slate-50/50">
+            <div className="p-4 border-b border-[var(--border)] flex items-center justify-between bg-[var(--secondary)]/50">
                 <div className="flex items-center gap-2">
                     <CalendarIcon className="w-4 h-4 text-[var(--primary)]" />
                     <h3 className="font-bold text-sm text-[var(--text-primary)]">Kalender Cuti</h3>
@@ -99,7 +99,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                 </div>
             </div>
 
-            <div className="grid grid-cols-7 border-b border-[var(--border)] bg-slate-50/30">
+            <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--secondary)]/30">
                 {["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((d) => (
                     <div key={d} className="py-2 text-center text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         {d}
@@ -113,7 +113,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                     const isToday = d.currentMonth && d.day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
 
                     return (
-                        <div key={i} className={`min-h-[60px] p-1.5 transition-colors ${d.currentMonth ? "bg-white" : "bg-slate-50/50"}`}>
+                        <div key={i} className={`min-h-[60px] p-1.5 transition-colors ${d.currentMonth ? "bg-[var(--card)]" : "bg-[var(--secondary)]/50"}`}>
                             <div className="flex justify-between items-start mb-1">
                                 <span className={`text-[11px] font-bold ${d.currentMonth ? (isToday ? "w-5 h-5 bg-[#800020] text-white rounded-full flex items-center justify-center -mt-0.5" : "text-[var(--text-primary)]") : "text-[var(--text-muted)] opacity-50"}`}>
                                     {d.day}
@@ -123,7 +123,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                                 {dateLeaves.slice(0, 2).map((l) => (
                                     <div
                                         key={l.id}
-                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium border truncate ${l.status === "approved" ? (TYPE_COLORS[l.type] || TYPE_COLORS.default) : "bg-white text-orange-600 border-orange-200"}`}
+                                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium border truncate ${l.status === "approved" ? (TYPE_COLORS[l.type] || TYPE_COLORS.default) : "bg-[var(--card)] text-orange-600 border-orange-200"}`}
                                         title={`${l.employee?.name || l.employeeId} - ${TYPE_LABELS[l.type] || l.type}`}
                                     >
                                         <div className="flex items-center gap-1">
@@ -143,7 +143,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                 })}
             </div>
 
-            <div className="p-3 bg-slate-50/50 border-t border-[var(--border)] flex flex-wrap gap-4 items-center justify-center">
+            <div className="p-3 bg-[var(--secondary)]/50 border-t border-[var(--border)] flex flex-wrap gap-4 items-center justify-center">
                 {Object.entries(TYPE_LABELS).map(([key, label]) => (
                     <div key={key} className="flex items-center gap-1.5">
                         <div className={`w-2.5 h-2.5 rounded ${TYPE_COLORS[key].split(" ")[0]}`} />
@@ -151,7 +151,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                     </div>
                 ))}
                 <div className="flex items-center gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded border border-orange-200 bg-white" />
+                    <div className="w-2.5 h-2.5 rounded border border-orange-200 bg-[var(--card)]" />
                     <span className="text-[10px] text-[var(--text-secondary)] font-medium">Pending</span>
                 </div>
             </div>

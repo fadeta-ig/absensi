@@ -71,10 +71,10 @@ export default function GaDashboard() {
     return (
         <div className="space-y-6 p-6 max-w-7xl mx-auto min-h-screen">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end md:justify-between border-b border-slate-100 pb-6">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between border-b border-[var(--border)] pb-6">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Dashboard GA</h1>
-                    <p className="text-sm text-slate-500 mt-1">Manajemen aset perusahaan WIG</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Dashboard GA</h1>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">Manajemen aset perusahaan WIG</p>
                 </div>
                 <div className="mt-4 md:mt-0">
                     <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">Operational Mode: Active</span>
@@ -130,14 +130,14 @@ export default function GaDashboard() {
             </div>
 
             {/* Stok Available */}
-            <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)]">
+            <div className="bg-[var(--card)] border border-[var(--border)]/60 rounded-2xl overflow-hidden shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)]">
                 <div className="px-5 py-4 border-b flex justify-between items-center">
-                    <h2 className="text-[15px] font-semibold text-slate-800">Aset Tersedia di GA</h2>
+                    <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">Aset Tersedia di GA</h2>
                     <Link href="/ga/assets?status=AVAILABLE" className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Lihat semua &rarr;</Link>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full whitespace-nowrap text-left text-sm">
-                        <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 text-xs uppercase tracking-wider">
+                        <thead className="bg-[var(--secondary)] border-b border-[var(--border)] text-[var(--text-secondary)] text-xs uppercase tracking-wider">
                             <tr>
                                 <th className="px-6 py-4 font-semibold">Kode Aset</th>
                                 <th className="px-6 py-4 font-semibold">Nama Aset</th>
@@ -148,16 +148,16 @@ export default function GaDashboard() {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {recent.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-6 text-slate-400">Tidak ada aset tersedia saat ini.</td></tr>
+                                <tr><td colSpan={5} className="text-center py-6 text-[var(--text-muted)]">Tidak ada aset tersedia saat ini.</td></tr>
                             ) : recent.map(asset => (
-                                <tr key={asset.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-600">{asset.assetCode}</td>
-                                    <td className="px-6 py-4 font-medium text-slate-800">{asset.name}</td>
+                                <tr key={asset.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-xs font-semibold text-[var(--text-secondary)]">{asset.assetCode}</td>
+                                    <td className="px-6 py-4 font-medium text-[var(--text-primary)]">{asset.name}</td>
                                     <td className="px-6 py-4">
                                         <CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} />
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-md font-medium border border-slate-200">
+                                        <span className="text-xs text-[var(--text-secondary)] bg-[var(--secondary)] px-2 py-1 rounded-md font-medium border border-[var(--border)]">
                                             {asset.holderType === "GA_POOL" ? "GA Pool" : "Company"}
                                         </span>
                                     </td>

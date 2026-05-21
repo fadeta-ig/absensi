@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/overtimeService";
 import { overtimeCreateSchema, overtimeUpdateSchema } from "@/lib/validations/validationSchemas";
 import { calculateOvertimePay } from "@/lib/services/overtimeCalcService";
+import { logAction } from "@/lib/services/auditService";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 
@@ -178,6 +179,13 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: "Gagal memperbarui data lembur." }, { status: 404 });
         }
 
+        if (session.role === "hr" && status) {
+            await logAction(status === "approved" ? "APPROVE" : "REJECT", "OVERTIME", session.employeeId, id, { 
+                targetEmployee: existing.employeeId,
+                hours: updateData.approvedHours || updateData.hours 
+            });
+        }
+
         logger.info("Overtime request updated", { overtimeId: id, updatedBy: session.employeeId });
         return NextResponse.json(updated);
     } catch (err) {
@@ -217,6 +225,10 @@ export async function DELETE(request: NextRequest) {
         if (!deleted) {
             return NextResponse.json({ error: "Gagal menghapus data lembur." }, { status: 404 });
         }
+
+        await logAction("DELETE", "OVERTIME", session.employeeId, id, { 
+            targetEmployee: existing.employeeId 
+        });
 
         logger.info("Overtime request deleted", { overtimeId: id, deletedBy: session.employeeId });
         return NextResponse.json({ success: true, message: "Pengajuan lembur berhasil dihapus." });

@@ -84,7 +84,7 @@ export default function NotificationCenter() {
             </button>
 
             {open && (
-                <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-xl border border-[var(--border)] z-[300] overflow-hidden animate-[fadeIn_0.15s_ease]">
+                <div className="absolute right-0 top-12 w-80 bg-[var(--card)] rounded-xl shadow-xl border border-[var(--border)] z-[300] overflow-hidden animate-[fadeIn_0.15s_ease]">
                     <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">Notifikasi</h3>
                         <span className="text-xs text-[var(--text-muted)]">{count} item</span>

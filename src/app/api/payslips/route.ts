@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { payslipCreateSchema } from "@/lib/validations/validationSchemas";
 import { getPayslips, createPayslip, deletePayslip } from "@/lib/services/payslipService";
+import { logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest) {
             issuedDate: new Date().toISOString(),
         });
 
+        await logAction("CREATE", "PAYSLIP", session.employeeId, payslip.id, { 
+            period: body.period, 
+            targetEmployee: payslip.employeeId 
+        });
         logger.info("Payslip issued", { targetEmployee: payslip.employeeId, issuedBy: session.employeeId });
         return NextResponse.json(payslip, { status: 201 });
     } catch (err) {
@@ -66,6 +71,8 @@ export async function DELETE(request: NextRequest) {
         }
 
         await deletePayslip(id);
+        
+        await logAction("DELETE", "PAYSLIP", session.employeeId, id);
         logger.info("Payslip deleted", { id, deletedBy: session.employeeId });
         return NextResponse.json({ success: true, message: "Slip gaji berhasil dihapus." });
     } catch (err) {

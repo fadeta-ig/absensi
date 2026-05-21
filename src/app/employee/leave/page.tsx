@@ -271,7 +271,7 @@ export default function LeavePage() {
                                                         <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
                                                             step.done
                                                                 ? (l.status === "rejected" && idx === 2 ? "bg-red-500 text-white" : "bg-green-500 text-white")
-                                                                : "bg-gray-100 text-gray-400"
+                                                                : "bg-[var(--secondary)] text-[var(--text-muted)]"
                                                         }`}>
                                                             {step.done
                                                                 ? <Check className="w-2.5 h-2.5" />
@@ -281,7 +281,7 @@ export default function LeavePage() {
                                                         <p className={`text-[9px] font-semibold text-center leading-tight ${
                                                             step.done
                                                                 ? (l.status === "rejected" && idx === 2 ? "text-red-500" : "text-green-600")
-                                                                : "text-gray-400"
+                                                                : "text-[var(--text-muted)]"
                                                         }`}>
                                                             {step.label}
                                                         </p>

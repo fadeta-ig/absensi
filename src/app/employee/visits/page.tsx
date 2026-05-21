@@ -236,7 +236,7 @@ export default function VisitsPage() {
                             return (
                                 <div
                                     key={visit.id}
-                                    className="card p-5 hover:border-[var(--primary)] hover:shadow-md transition-all cursor-pointer group flex flex-col h-full bg-white"
+                                    className="card p-5 hover:border-[var(--primary)] hover:shadow-md transition-all cursor-pointer group flex flex-col h-full bg-[var(--card)]"
                                     onClick={() => setSelectedVisit(visit)}
                                 >
                                     <div className="flex items-start justify-between gap-4 mb-3">
@@ -356,7 +356,7 @@ export default function VisitsPage() {
                                 <label className="form-label">
                                     <span className="flex items-center gap-1"><Camera className="w-3 h-3" /> Foto Bukti (Opsional)</span>
                                 </label>
-                                <div className="relative aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden border border-[var(--border)]">
+                                <div className="relative aspect-[4/3] bg-[var(--secondary)] rounded-lg overflow-hidden border border-[var(--border)]">
                                     <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} />
                                     {!streaming && !photo && (
                                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">

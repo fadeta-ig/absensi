@@ -237,7 +237,7 @@ export default function LetterRequestsPage() {
                                     const StatusIcon = statusCfg.icon;
 
                                     return (
-                                        <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
+                                        <tr key={req.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
                                             <td className="font-medium">
                                                 <div>
                                                     <p className="text-[var(--text-primary)]">{req.employeeName ?? req.employeeId}</p>

@@ -266,7 +266,7 @@ export default function DashboardOvertimePage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsHolidayInput(false)}
-                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${!isHolidayInput ? "bg-[var(--primary)] text-white border-[var(--primary)]" : "bg-white text-[var(--text-secondary)] border-[var(--border)]"
+                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${!isHolidayInput ? "bg-[var(--primary)] text-white border-[var(--primary)]" : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)]"
                                                     }`}
                                             >
                                                 Hari Kerja
@@ -274,7 +274,7 @@ export default function DashboardOvertimePage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsHolidayInput(true)}
-                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${isHolidayInput ? "bg-orange-500 text-white border-orange-500" : "bg-white text-[var(--text-secondary)] border-[var(--border)]"
+                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${isHolidayInput ? "bg-orange-500 text-white border-orange-500" : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)]"
                                                     }`}
                                             >
                                                 Hari Libur

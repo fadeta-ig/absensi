@@ -213,7 +213,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 <div className="lg:col-span-7 space-y-6">
                     {/* Identity Section */}
                     <div className="card p-6 space-y-5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
                             <Users className="w-4 h-4 text-[var(--primary)]" />
                             <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Identitas Pribadi</h2>
                         </div>
@@ -231,11 +231,11 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Mail className="w-3 h-3 text-slate-400" /> Email</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><Mail className="w-3 h-3 text-[var(--text-muted)]" /> Email</span></label>
                                 <input type="email" className="form-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@company.com" required />
                             </div>
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Phone className="w-3 h-3 text-slate-400" /> Telepon</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><Phone className="w-3 h-3 text-[var(--text-muted)]" /> Telepon</span></label>
                                 <input className="form-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0812..." required />
                             </div>
                         </div>
@@ -243,21 +243,21 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                     {/* Job Details Section */}
                     <div className="card p-6 space-y-5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
                             <Briefcase className="w-4 h-4 text-[var(--primary)]" />
                             <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Pekerjaan & Akses</h2>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-slate-400" /> Divisi</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Divisi</span></label>
                                 <select className="form-select" value={form.divisionId} onChange={(e) => setForm({ ...form, divisionId: e.target.value, departmentId: "" })} required>
                                     <option value="">Pilih Divisi</option>
                                     {masterDivisions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                                 </select>
                             </div>
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3.5 h-3.5 text-slate-400" /> Departemen</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Departemen</span></label>
                                 <select className="form-select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} required disabled={!form.divisionId}>
                                     <option value="">Pilih Departemen</option>
                                     {availableDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -284,7 +284,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><UserCog className="w-3.5 h-3.5 text-slate-400" /> Atasan Langsung</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><UserCog className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Atasan Langsung</span></label>
                                 <select className="form-select" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
                                     <option value="">Tidak Ada / Langsung ke CEO</option>
                                     {allEmployees
@@ -297,14 +297,14 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3 text-slate-400" /> Shift Kerja</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3 text-[var(--text-muted)]" /> Shift Kerja</span></label>
                                 <select className="form-select" value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })} required>
                                     <option value="">Pilih Shift</option>
                                     {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                             </div>
                             <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-slate-400" /> Tanggal Bergabung</span></label>
+                                <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-[var(--text-muted)]" /> Tanggal Bergabung</span></label>
                                 <input type="date" className="form-input" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} required />
                             </div>
                         </div>
@@ -336,14 +336,14 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                         <div className="form-group">
                             <label className="form-label font-bold text-blue-800">Gaji Pokok (Std)</label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rp</span>
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)]">Rp</span>
                                 <input type="number" className="form-input pl-9 border-blue-200 focus:ring-blue-500" value={form.basicSalary || ""} onChange={(e) => setForm({ ...form, basicSalary: Number(e.target.value) })} placeholder="0" />
                             </div>
                         </div>
 
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-tight">Tunjangan & Potongan Tetap</h3>
+                                <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-tight">Tunjangan & Potongan Tetap</h3>
                                 <button type="button" onClick={addPayrollComp} className="text-[10px] font-bold text-blue-600 flex items-center gap-1 hover:underline">
                                     <Plus className="w-3 h-3" /> Tambah Item
                                 </button>
@@ -351,15 +351,15 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                             <div className="space-y-3">
                                 {form.payrollComponents.length === 0 ? (
-                                    <div className="text-center py-4 border-2 border-dashed border-slate-200 rounded-lg">
-                                        <p className="text-[10px] text-slate-400 italic">Belum ada komponen tambahan</p>
+                                    <div className="text-center py-4 border-2 border-dashed border-[var(--border)] rounded-lg">
+                                        <p className="text-[10px] text-[var(--text-muted)] italic">Belum ada komponen tambahan</p>
                                     </div>
                                 ) : (
                                     form.payrollComponents.map((c, i) => (
-                                        <div key={i} className="flex items-start gap-2 p-3 bg-white rounded-lg border border-blue-100 shadow-sm">
+                                        <div key={i} className="flex items-start gap-2 p-3 bg-[var(--card)] rounded-lg border border-blue-100 shadow-sm">
                                             <div className="flex-1 space-y-2">
                                                 <select
-                                                    className="form-select text-xs h-8 !py-0 border-none bg-slate-50"
+                                                    className="form-select text-xs h-8 !py-0 border-none bg-[var(--secondary)]"
                                                     value={c.componentId}
                                                     onChange={(e) => updatePayrollComp(i, "componentId", e.target.value)}
                                                 >
@@ -368,10 +368,10 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                                                     ))}
                                                 </select>
                                                 <div className="relative">
-                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">Rp</span>
+                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)]">Rp</span>
                                                     <input
                                                         type="number"
-                                                        className="form-input text-xs h-8 pl-7 border-none bg-slate-50"
+                                                        className="form-input text-xs h-8 pl-7 border-none bg-[var(--secondary)]"
                                                         value={c.amount || ""}
                                                         onChange={(e) => updatePayrollComp(i, "amount", Number(e.target.value))}
                                                     />
@@ -389,7 +389,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
                     {/* Location Section */}
                     <div className="card p-6 space-y-5">
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
                             <div className="flex items-center gap-2">
                                 <MapPin className="w-4 h-4 text-orange-600" />
                                 <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Lokasi Absensi</h2>
@@ -411,9 +411,9 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                                                 key={loc.id}
                                                 type="button"
                                                 onClick={() => toggleLocation(loc)}
-                                                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${isSelected ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--text-primary)]" : "border-slate-100 hover:border-slate-200 text-slate-600"}`}
+                                                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${isSelected ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--text-primary)]" : "border-[var(--border)] hover:border-[var(--border)] text-[var(--text-secondary)]"}`}
                                             >
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? "bg-[var(--primary)] border-[var(--primary)] text-white" : "border-slate-300"}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? "bg-[var(--primary)] border-[var(--primary)] text-white" : "border-[var(--border)]"}`}>
                                                     {isSelected && <Check className="w-2.5 h-2.5" />}
                                                 </div>
                                                 <span className="text-xs font-medium">{loc.name}</span>

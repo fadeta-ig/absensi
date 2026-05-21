@@ -266,7 +266,7 @@ export default function AttendancePage() {
             {/* Security Status Bar */}
             <div className="grid grid-cols-2 gap-2">
                 {/* GPS Status */}
-                <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${!gpsInfo ? "bg-gray-50 text-gray-500 border-gray-200"
+                <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${!gpsInfo ? "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
                         : gpsInfo.isValid ? "bg-green-50 text-green-700 border-green-200"
                             : "bg-red-50 text-red-700 border-red-200"
                     }`}>
@@ -281,12 +281,12 @@ export default function AttendancePage() {
                 </div>
 
                 {/* Face Status */}
-                <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${faceVerification.status === "idle" ? "bg-gray-50 text-gray-500 border-gray-200"
+                <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${faceVerification.status === "idle" ? "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
                         : faceVerification.status === "match" ? "bg-green-50 text-green-700 border-green-200"
                             : faceVerification.status === "checking" ? "bg-blue-50 text-blue-600 border-blue-200"
                                 : faceVerification.status === "not_registered" ? "bg-orange-50 text-orange-600 border-orange-200"
                                     : faceVerification.status === "mismatch" ? "bg-red-50 text-red-700 border-red-200"
-                                        : "bg-gray-50 text-gray-500 border-gray-200"
+                                        : "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
                     }`}>
                     {faceVerification.status === "checking" ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                         : faceVerification.status === "match" ? <ScanFace className="w-3.5 h-3.5 shrink-0" />
@@ -335,7 +335,7 @@ export default function AttendancePage() {
             {/* Camera */}
             {!isDone && (
                 <div className="card overflow-hidden">
-                    <div className="relative w-full aspect-[4/3] sm:aspect-video bg-gray-900 rounded-t-xl overflow-hidden">
+                    <div className="relative w-full aspect-[4/3] sm:aspect-video bg-[var(--foreground)] text-[var(--background)] rounded-t-xl overflow-hidden">
                         <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: "scaleX(-1)" }} />
                         {!streaming && !photo && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/50">

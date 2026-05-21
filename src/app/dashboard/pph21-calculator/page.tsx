@@ -300,7 +300,7 @@ export default function Pph21CalculatorPage() {
                                     </p>
                                 </div>
                                 <div className="text-right">
-                                    <span className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold border ${TER_CATEGORY_INFO[result.monthly.terCategory]?.color || "bg-gray-100"}`}>
+                                    <span className={`inline-block px-3 py-1.5 rounded-full text-xs font-bold border ${TER_CATEGORY_INFO[result.monthly.terCategory]?.color || "bg-[var(--secondary)]"}`}>
                                         TER Kategori {result.monthly.terCategory}
                                     </span>
                                     <p className="text-xs mt-2 opacity-80">

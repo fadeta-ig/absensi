@@ -4,8 +4,8 @@
     "description": "Sistem Absensi Karyawan PT Wijaya Inovasi Gemilang",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#0a0a1a",
-    "theme_color": "#6366f1",
+    "background_color": "#ffffff",
+    "theme_color": "#800000",
     "orientation": "portrait",
     "icons": [
         {

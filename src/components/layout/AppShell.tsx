@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { LucideIcon, LogOut, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ export default function AppShell({
         <div className="flex min-h-screen bg-[var(--background)]">
 
             {/* ── Mobile Header ─────────────────────────────────── */}
-            <header className="fixed top-0 left-0 right-0 h-14 bg-white/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
+            <header className="fixed top-0 left-0 right-0 h-14 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
                 <button
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--secondary)] transition-colors"
@@ -153,7 +154,7 @@ export default function AppShell({
             </header>
 
             {/* ── Sidebar ───────────────────────────────────────── */}
-            <aside className={`fixed left-0 top-0 bottom-0 bg-white border-r border-[var(--border)] flex flex-col z-[200] transition-all duration-300 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"} w-64 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+            <aside className={`fixed left-0 top-0 bottom-0 bg-[var(--card)] border-r border-[var(--border)] flex flex-col z-[200] transition-all duration-300 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"} w-64 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
 
                 {/* Brand */}
                 <div className={`p-4 flex items-center border-b border-[var(--border)] min-h-[64px] relative transition-all ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
@@ -176,7 +177,7 @@ export default function AppShell({
                     <button
                         onClick={toggleCollapse}
                         title={sidebarCollapsed ? "Buka Sidebar" : "Tutup Sidebar"}
-                        className="hidden lg:flex absolute -right-3 top-5 w-6 h-6 items-center justify-center rounded-full bg-white border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary)] shadow-sm z-[210] transition-colors"
+                        className="hidden lg:flex absolute -right-3 top-5 w-6 h-6 items-center justify-center rounded-full bg-[var(--card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary)] shadow-sm z-[210] transition-colors"
                     >
                         <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-300 ${sidebarCollapsed ? "" : "rotate-180"}`} />
                     </button>
@@ -277,6 +278,11 @@ export default function AppShell({
 
                     {/* Extra nav slot (contoh: Monitoring Tim) */}
                     {extraNav}
+                    
+                    <div className={`mt-auto pt-3 flex ${sidebarCollapsed ? "justify-center" : "justify-between items-center"}`}>
+                        {!sidebarCollapsed && <span className="text-xs font-medium text-[var(--text-muted)] pl-1">Tema Tampilan</span>}
+                        <ThemeToggle />
+                    </div>
                 </nav>
 
                 {/* Logout */}

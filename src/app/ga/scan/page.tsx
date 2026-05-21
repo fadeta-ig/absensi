@@ -93,23 +93,23 @@ function ScanContent() {
 
     return (
         <div className="p-6 max-w-2xl mx-auto flex flex-col items-center gap-6 min-h-screen relative">
-            <div className="w-full flex items-center justify-between pb-4 border-b border-slate-200">
-                <button onClick={() => router.back()} className="p-2 border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+            <div className="w-full flex items-center justify-between pb-4 border-b border-[var(--border)]">
+                <button onClick={() => router.back()} className="p-2 border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--secondary)] transition-colors">
                     <ArrowLeft size={18} />
                 </button>
                 <div className="text-right">
-                    <h1 className="text-xl font-bold tracking-tight text-slate-800">Scan QR Aset</h1>
-                    <p className="text-xs text-slate-500 mt-1">Arahkan kamera ke label pintar.</p>
+                    <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">Scan QR Aset</h1>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1">Arahkan kamera ke label pintar.</p>
                 </div>
             </div>
 
-            <div className="w-full bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col items-center p-6 relative z-10">
-                <div className="bg-slate-50 border rounded-lg overflow-hidden w-full max-w-md aspect-square flex flex-col justify-center items-center relative">
+            <div className="w-full bg-[var(--card)] border rounded-xl overflow-hidden shadow-sm flex flex-col items-center p-6 relative z-10">
+                <div className="bg-[var(--secondary)] border rounded-lg overflow-hidden w-full max-w-md aspect-square flex flex-col justify-center items-center relative">
                     <div id="reader" className="w-full h-full"></div>
                     {!scanning && !scanResult && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 flex-col gap-3">
-                            <QrCode size={40} className="text-slate-300 animate-pulse" />
-                            <span className="text-sm font-semibold text-slate-500">Mempersiapkan Kamera...</span>
+                        <div className="absolute inset-0 flex items-center justify-center bg-[var(--secondary)] flex-col gap-3">
+                            <QrCode size={40} className="text-[var(--text-muted)] animate-pulse" />
+                            <span className="text-sm font-semibold text-[var(--text-secondary)]">Mempersiapkan Kamera...</span>
                         </div>
                     )}
                 </div>
@@ -128,67 +128,67 @@ function ScanContent() {
                 )}
             </div>
             
-            <p className="text-xs text-center text-slate-400 max-w-sm">Pastikan izin kamera browser telah diberikan untuk memindai QR Code.</p>
+            <p className="text-xs text-center text-[var(--text-muted)] max-w-sm">Pastikan izin kamera browser telah diberikan untuk memindai QR Code.</p>
 
             {/* Bottom Action Sheet Modal */}
             {scannedAsset && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300">
-                        <div className="p-6 border-b border-slate-100 flex items-start justify-between relative">
+                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 bg-[var(--foreground)] text-[var(--background)]/50 backdrop-blur-sm">
+                    <div className="bg-[var(--card)] w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300">
+                        <div className="p-6 border-b border-[var(--border)] flex items-start justify-between relative">
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">{scannedAsset.name}</h2>
-                                <p className="text-sm font-mono text-slate-500 mt-1">{scannedAsset.code}</p>
+                                <h2 className="text-xl font-bold text-[var(--text-primary)]">{scannedAsset.name}</h2>
+                                <p className="text-sm font-mono text-[var(--text-secondary)] mt-1">{scannedAsset.code}</p>
                                 <div className="flex gap-2 mt-2">
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{scannedAsset.status}</span>
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{scannedAsset.kondisi}</span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-secondary)]">{scannedAsset.status}</span>
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-secondary)]">{scannedAsset.kondisi}</span>
                                 </div>
                             </div>
-                            <button onClick={handleResume} className="p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-slate-200 transition-colors">
+                            <button onClick={handleResume} className="p-2 bg-[var(--secondary)] text-[var(--text-muted)] rounded-full hover:bg-slate-200 transition-colors">
                                 <X size={16} />
                             </button>
                         </div>
-                        <div className="p-6 flex flex-col gap-3 bg-slate-50">
+                        <div className="p-6 flex flex-col gap-3 bg-[var(--secondary)]">
                             <button 
                                 onClick={() => router.push(`/ga/assets/${scannedAsset.id}`)}
-                                className="w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-slate-800 hover:ring-1 hover:ring-slate-800 transition-all group"
+                                className="w-full flex items-center justify-between p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl hover:border-slate-800 hover:ring-1 hover:ring-[var(--ring)] transition-all group"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-slate-800 group-hover:text-white transition-colors">
+                                    <div className="w-10 h-10 rounded-lg bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] group-hover:bg-[var(--foreground)] text-[var(--background)] group-hover:text-white transition-colors">
                                         <Package size={20} />
                                     </div>
                                     <div className="text-left">
-                                        <div className="text-sm font-bold text-slate-800">Lihat Detail Aset</div>
-                                        <div className="text-xs text-slate-500">Cek spesifikasi dan riwayat mutasi</div>
+                                        <div className="text-sm font-bold text-[var(--text-primary)]">Lihat Detail Aset</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Cek spesifikasi dan riwayat mutasi</div>
                                     </div>
                                 </div>
                             </button>
 
                             <button 
                                 onClick={() => router.push(`/ga/assets/${scannedAsset.id}?tab=inspections`)}
-                                className="w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-emerald-600 hover:ring-1 hover:ring-emerald-600 transition-all group"
+                                className="w-full flex items-center justify-between p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl hover:border-emerald-600 hover:ring-1 hover:ring-emerald-600 transition-all group"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                                         <ClipboardCheck size={20} />
                                     </div>
                                     <div className="text-left">
-                                        <div className="text-sm font-bold text-slate-800">Lakukan Inspeksi</div>
-                                        <div className="text-xs text-slate-500">Isi checklist kondisi fisik terkini</div>
+                                        <div className="text-sm font-bold text-[var(--text-primary)]">Lakukan Inspeksi</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Isi checklist kondisi fisik terkini</div>
                                     </div>
                                 </div>
                             </button>
 
                             <button 
                                 onClick={() => router.push(`/ga/assets/${scannedAsset.id}?tab=maintenance`)}
-                                className="w-full flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-amber-600 hover:ring-1 hover:ring-amber-600 transition-all group"
+                                className="w-full flex items-center justify-between p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl hover:border-amber-600 hover:ring-1 hover:ring-amber-600 transition-all group"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
                                         <Wrench size={20} />
                                     </div>
                                     <div className="text-left">
-                                        <div className="text-sm font-bold text-slate-800">Catat Servis</div>
-                                        <div className="text-xs text-slate-500">Laporkan kerusakan atau maintenance</div>
+                                        <div className="text-sm font-bold text-[var(--text-primary)]">Catat Servis</div>
+                                        <div className="text-xs text-[var(--text-secondary)]">Laporkan kerusakan atau maintenance</div>
                                     </div>
                                 </div>
                             </button>
@@ -198,10 +198,10 @@ function ScanContent() {
             )}
             
             {loadingAsset && !scannedAsset && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                    <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4">
-                        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
-                        <p className="text-sm font-semibold text-slate-800">Mencari Data Aset...</p>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--foreground)] text-[var(--background)]/50 backdrop-blur-sm">
+                    <div className="bg-[var(--card)] p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4">
+                        <div className="w-8 h-8 border-4 border-[var(--border)] border-t-slate-800 rounded-full animate-spin"></div>
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">Mencari Data Aset...</p>
                     </div>
                 </div>
             )}

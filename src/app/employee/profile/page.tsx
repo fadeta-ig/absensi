@@ -317,7 +317,7 @@ export default function ProfilePage() {
                         { icon: Calendar,  label: "Masa Kerja",     value: calcTenure(profile.joinDate) },
                     ].map(({ icon: Icon, label, value }) => (
                         <div key={label} className="flex items-center gap-3 p-3 bg-[var(--secondary)] rounded-xl">
-                            <div className="w-7 h-7 rounded-lg bg-white border border-[var(--border)] flex items-center justify-center shrink-0">
+                            <div className="w-7 h-7 rounded-lg bg-[var(--card)] border border-[var(--border)] flex items-center justify-center shrink-0">
                                 <Icon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                             </div>
                             <div className="min-w-0">

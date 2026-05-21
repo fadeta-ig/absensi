@@ -12,7 +12,7 @@ import { useToast } from "@/components/Toast";
 // Dynamic import for the Map component to avoid SSR issues
 const LocationMap = dynamic(() => import("@/components/LocationMap"), {
     ssr: false,
-    loading: () => <div className="h-[250px] bg-slate-50 animate-pulse rounded-lg flex items-center justify-center text-xs text-slate-400">Memuat peta...</div>
+    loading: () => <div className="h-[250px] bg-[var(--secondary)] animate-pulse rounded-lg flex items-center justify-center text-xs text-[var(--text-muted)]">Memuat peta...</div>
 });
 
 const defaultCenter: [number, number] = [-6.200000, 106.816666];

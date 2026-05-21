@@ -147,7 +147,7 @@ export default function BpjsCalculatorPage() {
 
                     <div className="space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed">
                         {/* BPJS Kesehatan */}
-                        <div className="p-3 rounded-lg bg-white/60 border border-[var(--border)]/50">
+                        <div className="p-3 rounded-lg bg-[var(--card)]/60 border border-[var(--border)]/50">
                             <p className="font-bold text-[var(--text-primary)] flex items-center gap-1.5 mb-1">
                                 <Heart className="w-3.5 h-3.5 text-red-500" /> BPJS Kesehatan
                             </p>
@@ -155,7 +155,7 @@ export default function BpjsCalculatorPage() {
                         </div>
 
                         {/* BPJS Ketenagakerjaan */}
-                        <div className="p-3 rounded-lg bg-white/60 border border-[var(--border)]/50">
+                        <div className="p-3 rounded-lg bg-[var(--card)]/60 border border-[var(--border)]/50">
                             <p className="font-bold text-[var(--text-primary)] flex items-center gap-1.5 mb-1">
                                 <HardHat className="w-3.5 h-3.5 text-amber-600" /> BPJS Ketenagakerjaan
                             </p>

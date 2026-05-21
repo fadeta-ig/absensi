@@ -298,7 +298,7 @@ export default function DocumentsPage() {
                                                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
                                                                     isCompleted ? "bg-green-500 text-white" :
                                                                     isActive    ? "bg-[var(--primary)] text-white" :
-                                                                                  "bg-gray-100 text-gray-400"
+                                                                                  "bg-[var(--secondary)] text-[var(--text-muted)]"
                                                                 }`}>
                                                                     {isCompleted
                                                                         ? <Check className="w-2.5 h-2.5" />
@@ -308,7 +308,7 @@ export default function DocumentsPage() {
                                                                 <p className={`text-[9px] font-semibold text-center leading-tight ${
                                                                     isCompleted ? "text-green-600" :
                                                                     isActive    ? "text-[var(--primary)]" :
-                                                                                  "text-gray-400"
+                                                                                  "text-[var(--text-muted)]"
                                                                 }`}>
                                                                     {step.label}
                                                                 </p>

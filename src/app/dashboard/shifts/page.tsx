@@ -297,7 +297,7 @@ export default function ShiftsPage() {
                                     {form.days
                                         .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
                                         .map((day) => (
-                                            <div key={day.dayOfWeek} className={`flex items-center gap-3 px-4 py-2.5 transition-all ${day.isOff ? "bg-slate-50 opacity-60" : ""}`}>
+                                            <div key={day.dayOfWeek} className={`flex items-center gap-3 px-4 py-2.5 transition-all ${day.isOff ? "bg-[var(--secondary)] opacity-60" : ""}`}>
                                                 <span className="w-14 text-xs font-semibold text-[var(--text-secondary)] shrink-0">{DAY_LABELS[day.dayOfWeek]}</span>
                                                 <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
                                                     <input

@@ -63,8 +63,8 @@ export function Employee360View({
                     </Link>
                     <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-xl font-bold text-slate-800">{employee.name}</p>
-                            <p className="text-sm font-medium text-slate-500">{employee.positionRel?.name} • {employee.departmentRel?.name}</p>
+                            <p className="text-xl font-bold text-[var(--text-primary)]">{employee.name}</p>
+                            <p className="text-sm font-medium text-[var(--text-secondary)]">{employee.positionRel?.name} • {employee.departmentRel?.name}</p>
                             <span className={`badge ${employee.isActive ? "badge-success" : "badge-error"}`}>
                                 {employee.isActive ? "Active" : "Inactive"}
                             </span>
@@ -156,7 +156,7 @@ export function Employee360View({
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${activeTab === tab.id
-                                        ? "bg-white text-[var(--text-primary)] shadow-sm"
+                                        ? "bg-[var(--card)] text-[var(--text-primary)] shadow-sm"
                                         : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                                     }`}
                             >
@@ -285,15 +285,15 @@ export function Employee360View({
                                             <tr key={a.id}>
                                                 <td>
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                                                        <div className="w-8 h-8 rounded bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
                                                             {a.category === "HANDPHONE" ? <Smartphone size={16} /> : 
                                                              a.category === "LAPTOP" ? <Laptop size={16} /> : 
                                                              a.category === "NOMOR_HP" ? <Phone size={16} /> : 
                                                              <Package size={16} />}
                                                         </div>
                                                         <div>
-                                                            <p className="font-semibold text-slate-800 text-sm">{a.name}</p>
-                                                            <p className="font-mono text-xs text-slate-500 mt-0.5">{a.assetCode}</p>
+                                                            <p className="font-semibold text-[var(--text-primary)] text-sm">{a.name}</p>
+                                                            <p className="font-mono text-xs text-[var(--text-secondary)] mt-0.5">{a.assetCode}</p>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -340,7 +340,7 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }: { label: string,
 function InfoRow({ label, value, icon: Icon }: { label: string, value: string, icon?: any }) {
     return (
         <div className="flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded-lg bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center shrink-0 group-hover:bg-white transition-all">
+            <div className="w-8 h-8 rounded-lg bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center shrink-0 group-hover:bg-[var(--card)] transition-all">
                 {Icon ? <Icon className="h-4 w-4 text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]" /> : <div className="h-1 w-1 rounded-full bg-[var(--text-muted)]" />}
             </div>
             <div>

@@ -33,6 +33,33 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
 }
 
+.dark {
+  --background: #0D0D11;
+  --foreground: #F1EDED;
+  --card: #15151C;
+  --card-foreground: #F1EDED;
+  --primary: #9B1B30;
+  --primary-foreground: #FFFFFF;
+  --primary-light: #B42842;
+  --secondary: #1F1F2A;
+  --secondary-foreground: #E5DEDE;
+  --muted: #272736;
+  --muted-foreground: #A1A1AA;
+  --accent: #2D141C;
+  --accent-foreground: #FF8F9E;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #2D2D3D;
+  --input: #2D2D3D;
+  --ring: #9B1B30;
+  --text-primary: #F1EDED;
+  --text-secondary: #D4D4D8;
+  --text-muted: #A1A1AA;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
 /* ===== Base Reset ===== */
 *,
 *::before,
@@ -181,7 +208,7 @@ select {
 
   .form-input {
     @apply w-full px-3.5 py-2.5 text-sm rounded-lg;
-    background: white;
+    background: var(--background);
     border: 1px solid var(--input);
     color: var(--text-primary);
     transition: all 0.2s ease;
@@ -198,7 +225,7 @@ select {
 
   .form-select {
     @apply w-full px-3.5 py-2.5 text-sm rounded-lg appearance-none;
-    background: white;
+    background: var(--background);
     border: 1px solid var(--input);
     color: var(--text-primary);
     transition: all 0.2s ease;
@@ -214,7 +241,7 @@ select {
 
   .form-textarea {
     @apply w-full px-3.5 py-2.5 text-sm rounded-lg resize-y;
-    background: white;
+    background: var(--background);
     border: 1px solid var(--input);
     color: var(--text-primary);
     min-height: 100px;
@@ -264,12 +291,12 @@ select {
     letter-spacing: 0.05em;
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
-    background: rgba(245, 240, 240, 0.5);
+    background: var(--secondary);
   }
 
   .data-table td {
     @apply px-4 py-3 text-sm;
-    border-bottom: 1px solid rgba(229, 222, 222, 0.5);
+    border-bottom: 1px solid var(--border);
     color: var(--text-secondary);
   }
 
@@ -278,7 +305,7 @@ select {
   }
 
   .data-table tr:hover td {
-    background: rgba(128, 0, 32, 0.015);
+    background: var(--secondary);
   }
 
   /* Modal */

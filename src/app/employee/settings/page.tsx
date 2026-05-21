@@ -313,7 +313,7 @@ export default function SettingsPage() {
                                         <div key={s} className={`flex items-center gap-1 px-2 py-1 rounded-full transition-all ${
                                             isActive ? "bg-blue-100 text-blue-700" :
                                             isDone ? "bg-green-100 text-green-700" :
-                                            "bg-gray-100 text-gray-400"
+                                            "bg-[var(--secondary)] text-[var(--text-muted)]"
                                         }`}>
                                             {isDone ? <CheckCircle className="w-3 h-3" /> :
                                              isActive ? <Loader2 className="w-3 h-3 animate-spin" /> :
@@ -343,7 +343,7 @@ export default function SettingsPage() {
 
                     {/* ── Camera View ── */}
                     {(faceStreaming || step === "models" || step === "camera") && (
-                        <div className="relative aspect-[4/3] bg-gray-900 rounded-xl overflow-hidden">
+                        <div className="relative aspect-[4/3] bg-[var(--foreground)] text-[var(--background)] rounded-xl overflow-hidden">
                             {/* Video element — selalu di DOM saat stream aktif */}
                             <video
                                 ref={videoRef}
@@ -357,12 +357,12 @@ export default function SettingsPage() {
 
                             {/* Loading overlay — tampil saat model/kamera belum siap */}
                             {!faceStreaming && (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900">
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--foreground)] text-[var(--background)]">
                                     <div className="relative">
                                         <div className="w-16 h-16 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin" />
                                         <ScanFace className="w-6 h-6 text-blue-400 absolute inset-0 m-auto" />
                                     </div>
-                                    <p className="text-xs text-gray-400">
+                                    <p className="text-xs text-[var(--text-muted)]">
                                         {step === "models" ? "Memuat model AI deteksi wajah..." : "Mengaktifkan kamera..."}
                                     </p>
                                 </div>
@@ -546,7 +546,7 @@ export default function SettingsPage() {
                         </div>
                         {strength && (
                             <div className="mt-2">
-                                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="w-full h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden">
                                     <div className={`h-full ${strength.color} ${strength.width} rounded-full transition-all duration-300`} />
                                 </div>
                                 <p className="text-[10px] text-[var(--text-muted)] mt-1">Kekuatan: {strength.label}</p>

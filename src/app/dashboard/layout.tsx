@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems: NavItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -122,7 +123,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             mobileTitle="WIG HR"
             storageKey="sidebar-collapsed"
             onLogout={handleLogout}
-            mobileHeaderRight={<NotificationCenter />}
+            mobileHeaderRight={
+                <div className="flex items-center gap-1">
+                    <ThemeToggle />
+                    <NotificationCenter />
+                </div>
+            }
         >
             {children}
         </AppShell>

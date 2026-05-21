@@ -81,19 +81,19 @@ export default function PrintLabelsPage() {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => router.back()}
-                            className="p-2 border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                            className="p-2 border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--secondary)] transition-colors"
                         >
                             <ArrowLeft size={18} />
                         </button>
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-slate-800">Cetak Label QR</h1>
-                            <p className="text-sm text-slate-500 mt-1">Pilih aset untuk mencetak stiker QR ke kertas A4.</p>
+                            <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Cetak Label QR</h1>
+                            <p className="text-sm text-[var(--text-secondary)] mt-1">Pilih aset untuk mencetak stiker QR ke kertas A4.</p>
                         </div>
                     </div>
                     <button
                         disabled={selectedIds.size === 0}
                         onClick={handlePrint}
-                        className="flex items-center gap-2 bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                        className="flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                         <Printer size={16} />
                         Cetak {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
@@ -101,13 +101,13 @@ export default function PrintLabelsPage() {
                 </div>
 
                 {/* Asset Selector */}
-                <div className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col max-h-[500px]">
-                    <div className="px-4 py-3 border-b flex flex-col sm:flex-row gap-3 items-center bg-slate-50/60 justify-between">
+                <div className="bg-[var(--card)] border rounded-xl overflow-hidden shadow-sm flex flex-col max-h-[500px]">
+                    <div className="px-4 py-3 border-b flex flex-col sm:flex-row gap-3 items-center bg-[var(--secondary)]/60 justify-between">
                         <div className="flex gap-2 items-center w-full sm:w-auto">
                             <button
                                 onClick={toggleAll}
                                 disabled={loading}
-                                className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors disabled:opacity-50"
+                                className="flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
                             >
                                 {selectedIds.size === assets.length && assets.length > 0
                                     ? <CheckSquare size={16} className="text-indigo-600" />
@@ -121,21 +121,21 @@ export default function PrintLabelsPage() {
                         </div>
                         <div className="flex gap-2 w-full sm:w-auto">
                             <div className="relative flex-1 sm:w-48">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
                                 <input 
                                     type="text" 
                                     placeholder="Cari aset..." 
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800"
+                                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
                                 />
                             </div>
                             <div className="relative w-full sm:w-40">
-                                <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
                                 <select 
                                     value={categoryFilter}
                                     onChange={(e) => setCategoryFilter(e.target.value)}
-                                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 appearance-none"
+                                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--card)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--ring)] appearance-none"
                                 >
                                     <option value="ALL">Semua Kategori</option>
                                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -143,7 +143,7 @@ export default function PrintLabelsPage() {
                             </div>
                         </div>
                     </div>
-                    <div className="overflow-y-auto p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 bg-slate-50/40 opacity-100 transition-opacity" style={{opacity: loading ? 0.5 : 1}}>
+                    <div className="overflow-y-auto p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 bg-[var(--secondary)]/40 opacity-100 transition-opacity" style={{opacity: loading ? 0.5 : 1}}>
                         {assets.map(asset => {
                             const isSelected = selectedIds.has(asset.id);
                             return (
@@ -153,15 +153,15 @@ export default function PrintLabelsPage() {
                                     className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all ${
                                         isSelected
                                             ? "bg-indigo-50 border-indigo-300 shadow-sm ring-1 ring-indigo-500/20"
-                                            : "bg-white border-slate-200 hover:bg-slate-50"
+                                            : "bg-[var(--card)] border-[var(--border)] hover:bg-[var(--secondary)]"
                                     }`}
                                 >
-                                    <div className={isSelected ? "text-indigo-600" : "text-slate-300"}>
+                                    <div className={isSelected ? "text-indigo-600" : "text-[var(--text-muted)]"}>
                                         {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                                     </div>
                                     <div className="flex flex-col overflow-hidden">
-                                        <span className="text-xs font-bold text-slate-800 truncate">{asset.assetCode}</span>
-                                        <span className="text-[10px] text-slate-500 truncate">{asset.name}</span>
+                                        <span className="text-xs font-bold text-[var(--text-primary)] truncate">{asset.assetCode}</span>
+                                        <span className="text-[10px] text-[var(--text-secondary)] truncate">{asset.name}</span>
                                     </div>
                                 </div>
                             );
@@ -172,13 +172,13 @@ export default function PrintLabelsPage() {
                 {/* Preview Section */}
                 {selectedIds.size > 0 && (
                     <div>
-                        <p className="text-sm font-semibold text-slate-600 mb-3 uppercase tracking-wider text-xs">Preview Label</p>
+                        <p className="text-sm font-semibold text-[var(--text-secondary)] mb-3 uppercase tracking-wider text-xs">Preview Label</p>
                         <div className="flex flex-wrap gap-4">
                             {selectedAssets.slice(0, 4).map(asset => (
                                 <QrLabel key={`preview-${asset.id}`} asset={asset} />
                             ))}
                             {selectedAssets.length > 4 && (
-                                <div className="w-[148px] h-[205px] border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-sm font-semibold">
+                                <div className="w-[148px] h-[205px] border-2 border-dashed border-[var(--border)] rounded-xl flex items-center justify-center text-[var(--text-muted)] text-sm font-semibold">
                                     +{selectedAssets.length - 4} lainnya
                                 </div>
                             )}

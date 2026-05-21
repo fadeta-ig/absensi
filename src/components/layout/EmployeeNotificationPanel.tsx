@@ -134,7 +134,7 @@ export function EmployeeNotificationPanel() {
 
             {/* ── Dropdown Panel ───────────────────────────────────────────── */}
             {isOpen && (
-                <div className="absolute right-0 top-11 w-80 bg-white rounded-2xl shadow-2xl border border-[var(--border)] z-50 animate-[fadeIn_0.15s_ease] overflow-hidden">
+                <div className="absolute right-0 top-11 w-80 bg-[var(--card)] rounded-2xl shadow-2xl border border-[var(--border)] z-50 animate-[fadeIn_0.15s_ease] overflow-hidden">
                     {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--secondary)]/50">
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">

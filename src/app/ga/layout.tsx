@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutDashboard, Phone, Package, QrCode } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const GA_NAV_ITEMS: NavItem[] = [
     { href: "/ga", icon: LayoutDashboard, label: "Dashboard" },
@@ -64,6 +65,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
             mobileTitle="WIG GA"
             storageKey="ga-sidebar-collapsed"
             onLogout={handleLogout}
+            mobileHeaderRight={<ThemeToggle />}
         >
             {children}
         </AppShell>

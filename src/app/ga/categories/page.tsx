@@ -119,14 +119,14 @@ export default function CategoriesPage() {
     return (
         <div className="p-6 max-w-5xl mx-auto flex flex-col gap-6 min-h-screen">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800">Master Data Kategori</h1>
-                <p className="text-sm text-slate-500 mt-1">Kelola jenis kategori aset dan prefix kode penomoran otomatis.</p>
+                <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Master Data Kategori</h1>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">Kelola jenis kategori aset dan prefix kode penomoran otomatis.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                 {/* Form Tambah Kategori */}
-                <div className="bg-white border rounded-xl p-5 shadow-sm md:col-span-1">
-                    <div className="flex items-center gap-2 mb-4 text-slate-800 font-semibold">
+                <div className="bg-[var(--card)] border rounded-xl p-5 shadow-sm md:col-span-1">
+                    <div className="flex items-center gap-2 mb-4 text-[var(--text-primary)] font-semibold">
                         <Plus size={18} className="text-emerald-500" />
                         Tambah Kategori Baru
                     </div>
@@ -139,18 +139,18 @@ export default function CategoriesPage() {
                     
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 shrink-0">Nama Kategori</label>
+                            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5 shrink-0">Nama Kategori</label>
                             <input
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="Cth: Monitor, Tablet..."
                                 required
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 transition-shadow"
+                                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-shadow"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 shrink-0">Prefix Kode</label>
+                            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5 shrink-0">Prefix Kode</label>
                             <input
                                 type="text"
                                 value={prefix}
@@ -158,15 +158,15 @@ export default function CategoriesPage() {
                                 placeholder="Cth: MN, TAB..."
                                 required
                                 maxLength={5}
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-slate-800 transition-shadow"
+                                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-shadow"
                             />
-                            <p className="text-[10px] text-slate-400 mt-1">Akan menghasilkan kode seperti: MN-001</p>
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">Akan menghasilkan kode seperti: MN-001</p>
                         </div>
                         
                         <button
                             type="submit"
                             disabled={saving}
-                            className="w-full py-2 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors disabled:opacity-50 mt-2"
+                            className="w-full py-2 bg-[var(--foreground)] text-[var(--background)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 mt-2"
                         >
                             {saving ? "Menyimpan..." : "Simpan Kategori"}
                         </button>
@@ -174,20 +174,20 @@ export default function CategoriesPage() {
                 </div>
 
                 {/* List Kategori */}
-                <div className="bg-white border rounded-xl overflow-hidden shadow-sm md:col-span-2">
-                    <div className="px-5 py-4 border-b flex justify-between items-center bg-slate-50/50">
-                        <div className="flex items-center gap-2 font-semibold text-slate-800">
+                <div className="bg-[var(--card)] border rounded-xl overflow-hidden shadow-sm md:col-span-2">
+                    <div className="px-5 py-4 border-b flex justify-between items-center bg-[var(--secondary)]/50">
+                        <div className="flex items-center gap-2 font-semibold text-[var(--text-primary)]">
                             <Layers size={18} className="text-blue-500" />
                             Daftar Kategori
                         </div>
-                        <button onClick={fetchCategories} className="p-1.5 hover:bg-slate-100 rounded text-slate-500 transition-colors">
+                        <button onClick={fetchCategories} className="p-1.5 hover:bg-[var(--secondary)] rounded text-[var(--text-secondary)] transition-colors">
                             <RefreshCw size={16} className={loading && categories.length > 0 ? "animate-spin" : ""} />
                         </button>
                     </div>
                     
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-slate-50 border-b text-slate-500 text-xs uppercase tracking-wider">
+                            <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider">
                                 <tr>
                                     <th className="px-5 py-3 font-semibold">Kategori</th>
                                     <th className="px-5 py-3 font-semibold">Prefix</th>
@@ -198,45 +198,45 @@ export default function CategoriesPage() {
                             <tbody className="divide-y divide-slate-100">
                                 {loading && categories.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-slate-400">Memuat kategori...</td>
+                                        <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Memuat kategori...</td>
                                     </tr>
                                 ) : categories.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-slate-400">Tidak ada kategori data.</td>
+                                        <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Tidak ada kategori data.</td>
                                     </tr>
                                 ) : (
                                     categories.map((cat) => (
-                                        <tr key={cat.id} className="hover:bg-slate-50/80 transition-colors">
-                                            <td className="px-5 py-3 font-medium text-slate-800 flex items-center gap-2">
-                                                <Archive size={14} className="text-slate-400" />
+                                        <tr key={cat.id} className="hover:bg-[var(--secondary)]/80 transition-colors">
+                                            <td className="px-5 py-3 font-medium text-[var(--text-primary)] flex items-center gap-2">
+                                                <Archive size={14} className="text-[var(--text-muted)]" />
                                                 {editingId === cat.id ? (
-                                                    <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-slate-800 text-sm w-32" />
+                                                    <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm w-32" />
                                                 ) : cat.name}
                                             </td>
                                             <td className="px-5 py-3">
                                                 {editingId === cat.id ? (
-                                                    <input type="text" value={editPrefix} maxLength={5} onChange={e => setEditPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-slate-800 text-sm font-mono w-20 uppercase" />
+                                                    <input type="text" value={editPrefix} maxLength={5} onChange={e => setEditPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm font-mono w-20 uppercase" />
                                                 ) : (
                                                     <span className="font-mono text-xs font-semibold text-indigo-600 bg-indigo-50/50 px-2 rounded py-0.5">{cat.prefix}</span>
                                                 )}
                                             </td>
-                                            <td className="px-5 py-3 text-slate-500 text-center">
-                                                <span className="bg-slate-100 text-slate-600 font-semibold px-2 py-0.5 rounded-full text-xs">
+                                            <td className="px-5 py-3 text-[var(--text-secondary)] text-center">
+                                                <span className="bg-[var(--secondary)] text-[var(--text-secondary)] font-semibold px-2 py-0.5 rounded-full text-xs">
                                                     {cat._count?.assets ?? 0} Aset
                                                 </span>
                                             </td>
                                             <td className="px-5 py-3 text-right">
                                                 {editingId === cat.id ? (
                                                     <div className="flex justify-end gap-2">
-                                                        <button onClick={cancelEdit} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"><X size={16} /></button>
+                                                        <button onClick={cancelEdit} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--secondary)] rounded-lg transition-colors"><X size={16} /></button>
                                                         <button onClick={() => handleSaveEdit(cat.id)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Check size={16} /></button>
                                                     </div>
                                                 ) : (
                                                     <div className="flex justify-end gap-2">
-                                                        <button onClick={() => startEdit(cat)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                                        <button onClick={() => startEdit(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
                                                             <Edit2 size={16} />
                                                         </button>
-                                                        <button onClick={() => handleDelete(cat)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                                                        <button onClick={() => handleDelete(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
                                                             <Trash2 size={16} />
                                                         </button>
                                                     </div>

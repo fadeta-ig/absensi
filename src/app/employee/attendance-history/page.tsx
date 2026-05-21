@@ -198,7 +198,7 @@ export default function AttendanceHistoryPage() {
                             key={mode}
                             onClick={() => setFilterMode(mode)}
                             className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${filterMode === mode
-                                ? "bg-white text-[var(--primary)] shadow-sm"
+                                ? "bg-[var(--card)] text-[var(--primary)] shadow-sm"
                                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                 }`}
                         >

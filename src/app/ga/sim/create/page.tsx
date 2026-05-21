@@ -35,8 +35,8 @@ export default function SimCardCreatePage() {
     return (
         <div className="p-6 max-w-4xl mx-auto flex flex-col gap-6">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-800">Registrasi Kartu SIM Baru</h1>
-                <p className="text-sm text-slate-500 mt-1">Tambahkan nomor baru ke dalam inventaris IT & GA.</p>
+                <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Registrasi Kartu SIM Baru</h1>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">Tambahkan nomor baru ke dalam inventaris IT & GA.</p>
             </div>
             
             <SimCardForm 

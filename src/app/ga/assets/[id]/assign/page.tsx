@@ -94,12 +94,12 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
     return (
         <div className="p-6 max-w-3xl mx-auto flex flex-col gap-6 min-h-screen">
             <div className="flex items-center gap-4">
-                <button onClick={() => router.back()} className="p-2 border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                <button onClick={() => router.back()} className="p-2 border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--secondary)] transition-colors">
                     <ArrowLeft size={18} />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Serah Terima Aset</h1>
-                    <p className="text-sm text-slate-500 mt-1">{asset.assetCode} - {asset.name}</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Serah Terima Aset</h1>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">{asset.assetCode} - {asset.name}</p>
                 </div>
             </div>
 
@@ -109,16 +109,16 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="bg-white border rounded-xl shadow-sm overflow-hidden">
-                <div className="p-6 border-b bg-slate-50/50">
-                    <h2 className="text-md font-semibold text-slate-800 flex items-center gap-2">
+            <form onSubmit={handleSubmit} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden">
+                <div className="p-6 border-b bg-[var(--secondary)]/50">
+                    <h2 className="text-md font-semibold text-[var(--text-primary)] flex items-center gap-2">
                         <RefreshCcw size={18} className="text-blue-500" /> Mutasi Internal
                     </h2>
                 </div>
                 <div className="p-6 flex flex-col gap-6">
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tujuan Penyerahan</label>
-                        <select value={toHolderType} onChange={e => { setToHolderType(e.target.value); setToName(""); setToEmployeeId(""); }} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 appearance-none">
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Tujuan Penyerahan</label>
+                        <select value={toHolderType} onChange={e => { setToHolderType(e.target.value); setToName(""); setToEmployeeId(""); }} className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] appearance-none">
                             <option value="EMPLOYEE">Karyawan Aktif</option>
                             <option value="TEAM">Divisi / Tim / Divisi Virtual</option>
                             <option value="GA_POOL">Kembalikan ke GA Pool (Rak)</option>
@@ -128,21 +128,21 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
 
                     {toHolderType === "EMPLOYEE" && (
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pilih Karyawan</label>
+                            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Pilih Karyawan</label>
                             <EmployeeCombobox employees={employees} value={toEmployeeId} onChange={handleEmployeeChange} />
                         </div>
                     )}
 
                     {(toHolderType === "TEAM" || toHolderType === "FORMER_EMPLOYEE") && (
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Nama Entitas/Pihak</label>
-                            <input type="text" required value={toName} onChange={e => setToName(e.target.value)} placeholder="Contoh: Tim Creative, Budi (Resign)" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Nama Entitas/Pihak</label>
+                            <input type="text" required value={toName} onChange={e => setToName(e.target.value)} placeholder="Contoh: Tim Creative, Budi (Resign)" className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
                         </div>
                     )}
 
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Kondisi Saat Ini</label>
-                        <select value={kondisi} onChange={e => setKondisi(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 appearance-none">
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Kondisi Saat Ini</label>
+                        <select value={kondisi} onChange={e => setKondisi(e.target.value)} className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] appearance-none">
                             <option value="BAIK">Baik</option>
                             <option value="KURANG_BAIK">Kurang Baik</option>
                             <option value="RUSAK">Rusak</option>
@@ -150,13 +150,13 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Catatan Penyerahan (Opsional)</label>
-                        <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Kondisi lecet sedikit di ujung layar..." className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800" />
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Catatan Penyerahan (Opsional)</label>
+                        <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Kondisi lecet sedikit di ujung layar..." className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
                     </div>
                 </div>
 
-                <div className="p-6 border-t bg-slate-100/50 flex justify-end gap-3">
-                    <button type="button" onClick={() => router.back()} className="px-5 py-2.5 border border-slate-200 bg-white rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50">Batalkan</button>
+                <div className="p-6 border-t bg-[var(--secondary)]/50 flex justify-end gap-3">
+                    <button type="button" onClick={() => router.back()} className="px-5 py-2.5 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)]">Batalkan</button>
                     <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-600 rounded-lg text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                         <UserCheck size={16} /> {saving ? "Memproses..." : "Konfirmasi Mutasi"}
                     </button>
@@ -186,15 +186,15 @@ function EmployeeCombobox({
             <button
                 type="button"
                 onClick={() => setOpen(!open)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-800 flex justify-between items-center text-slate-700"
+                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] flex justify-between items-center text-[var(--text-secondary)]"
             >
                 {selected ? selected.name : "-- Pilih Karyawan --"}
-                <ChevronsUpDown size={14} className="text-slate-400" />
+                <ChevronsUpDown size={14} className="text-[var(--text-muted)]" />
             </button>
             {open && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
-                    <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
-                        <Search size={14} className="text-slate-400" />
+                <div className="absolute z-10 w-full mt-1 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-xl overflow-hidden">
+                    <div className="p-2 border-b border-[var(--border)] flex items-center gap-2 bg-[var(--secondary)]">
+                        <Search size={14} className="text-[var(--text-muted)]" />
                         <input
                             type="text"
                             placeholder="Cari nama karyawan..."
@@ -206,14 +206,14 @@ function EmployeeCombobox({
                     </div>
                     <div className="max-h-48 overflow-y-auto w-full flex flex-col">
                         {filtered.length === 0 ? (
-                            <div className="p-3 text-xs text-center text-slate-500">Karyawan tidak ditemukan.</div>
+                            <div className="p-3 text-xs text-center text-[var(--text-secondary)]">Karyawan tidak ditemukan.</div>
                         ) : (
                             filtered.map(emp => (
                                 <button
                                     key={emp.id}
                                     type="button"
                                     onClick={() => { onChange(emp.id); setOpen(false); setSearch(""); }}
-                                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 flex items-center justify-between border-b border-slate-50 last:border-0"
+                                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-[var(--secondary)] flex items-center justify-between border-b border-slate-50 last:border-0"
                                 >
                                     {emp.name}
                                     {value === emp.id && <Check size={14} className="text-blue-600" />}

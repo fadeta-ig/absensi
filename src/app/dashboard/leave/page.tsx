@@ -334,7 +334,7 @@ export default function LeaveManagementPage() {
                                     <h2 className="text-xl font-bold">{selectedLeave.employee?.name}</h2>
                                     <p className="text-sm opacity-80">{selectedLeave.employeeId} • {getTypeLabel(selectedLeave.type)}</p>
                                 </div>
-                                <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+                                <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--card)]/10 hover:bg-[var(--card)]/20 transition-colors">
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
@@ -414,7 +414,7 @@ export default function LeaveManagementPage() {
                             {/* Reason */}
                             <div>
                                 <p className="form-label mb-2">Alasan Pengajuan</p>
-                                <p className="text-sm text-[var(--text-secondary)] bg-white p-3 rounded-lg border border-[var(--border)] min-h-[60px]">
+                                <p className="text-sm text-[var(--text-secondary)] bg-[var(--card)] p-3 rounded-lg border border-[var(--border)] min-h-[60px]">
                                     {selectedLeave.reason}
                                 </p>
                             </div>

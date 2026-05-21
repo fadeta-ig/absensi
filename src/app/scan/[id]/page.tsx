@@ -109,13 +109,13 @@ function Badge({ label, color, bg }: { label: string; color: string; bg: string 
 
 function InfoRow({ label, value, icon: Icon }: { label: string; value: string | null | undefined; icon?: any }) {
     return (
-        <div className="flex items-center justify-between py-2.5 border-b border-slate-100 last:border-0">
-            <span className="flex items-center gap-2 text-xs font-semibold text-slate-500">
-                {Icon && <Icon size={13} className="text-slate-400" />}
+        <div className="flex items-center justify-between py-2.5 border-b border-[var(--border)] last:border-0">
+            <span className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+                {Icon && <Icon size={13} className="text-[var(--text-muted)]" />}
                 {label}
             </span>
-            <span className="text-sm font-medium text-slate-800 text-right max-w-[55%] truncate">
-                {value || <span className="text-slate-300 italic font-normal">—</span>}
+            <span className="text-sm font-medium text-[var(--text-primary)] text-right max-w-[55%] truncate">
+                {value || <span className="text-[var(--text-muted)] italic font-normal">—</span>}
             </span>
         </div>
     );
@@ -153,18 +153,18 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
     return (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-6 animate-in slide-in-from-bottom duration-200">
+            <div className="relative w-full sm:max-w-sm bg-[var(--card)] rounded-t-2xl sm:rounded-xl shadow-xl p-6 animate-in slide-in-from-bottom duration-200">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200">
-                            <ShieldCheck size={18} className="text-slate-600" />
+                        <div className="w-9 h-9 bg-[var(--secondary)] rounded-lg flex items-center justify-center border border-[var(--border)]">
+                            <ShieldCheck size={18} className="text-[var(--text-secondary)]" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold text-slate-800">Login GA</h3>
-                            <p className="text-[11px] text-slate-500">Masuk untuk inspeksi aset</p>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Login GA</h3>
+                            <p className="text-[11px] text-[var(--text-secondary)]">Masuk untuk inspeksi aset</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600">
+                    <button onClick={onClose} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                         <X size={18} />
                     </button>
                 </div>
@@ -177,31 +177,31 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">ID Karyawan</label>
+                        <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1 block">ID Karyawan</label>
                         <input
                             type="text"
                             value={employeeId}
                             onChange={e => setEmployeeId(e.target.value)}
                             required
                             placeholder="WIG-XXX"
-                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300"
+                            className="w-full px-3.5 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-[var(--text-muted)]"
                         />
                     </div>
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">Password</label>
+                        <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1 block">Password</label>
                         <input
                             type="password"
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
                             placeholder="••••••••"
-                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300"
+                            className="w-full px-3.5 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-[var(--text-muted)]"
                         />
                     </div>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="mt-2 w-full py-2.5 bg-slate-800 text-white rounded-lg text-sm font-semibold hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="mt-2 w-full py-2.5 bg-[var(--foreground)] text-[var(--background)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                         {loading ? "Memverifikasi..." : <><LogIn size={15} /> Masuk</>}
                     </button>
@@ -250,16 +250,16 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
     return (
         <div className="fixed inset-0 z-[100] flex items-end justify-center">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative w-full max-w-lg bg-white rounded-t-2xl shadow-xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-200">
+            <div className="relative w-full max-w-lg bg-[var(--card)] rounded-t-2xl shadow-xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-200">
                 {/* Header */}
                 <div className="px-5 py-4 border-b flex items-center justify-between flex-shrink-0">
                     <div>
-                        <h3 className="text-sm font-bold text-slate-800">Formulir Inspeksi</h3>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
+                        <h3 className="text-sm font-bold text-[var(--text-primary)]">Formulir Inspeksi</h3>
+                        <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                             {asset.assetCode} · {asset.name}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600">
+                    <button onClick={onClose} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                         <X size={18} />
                     </button>
                 </div>
@@ -268,7 +268,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                 <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5">
                     {/* Checklist */}
                     <div>
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">Checklist Komponen</span>
+                        <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-3">Checklist Komponen</span>
                         <div className="space-y-2">
                             {checklistItems.map(item => (
                                 <button
@@ -293,7 +293,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
 
                     {/* Kondisi */}
                     <div>
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">Penilaian Kondisi</span>
+                        <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-3">Penilaian Kondisi</span>
                         <div className="flex gap-2">
                             {(["BAIK", "KURANG_BAIK", "RUSAK"] as AssetCondition[]).map(k => {
                                 const cfg = KONDISI_MAP[k];
@@ -306,7 +306,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                                         className={`flex-1 py-2.5 rounded-lg text-xs font-semibold border-2 transition-colors ${
                                             selected
                                                 ? "text-white shadow-sm"
-                                                : "bg-white text-slate-500 border-slate-200"
+                                                : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)]"
                                         }`}
                                         style={selected ? { backgroundColor: cfg.color, borderColor: cfg.color } : undefined}
                                     >
@@ -319,19 +319,19 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
 
                     {/* Notes */}
                     <div>
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-3">Catatan</span>
+                        <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-3">Catatan</span>
                         <textarea
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
                             placeholder="Opsional — temuan fisik, rekomendasi, dll."
                             rows={3}
-                            className="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder:text-slate-300 transition-all resize-none"
+                            className="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3.5 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder:text-[var(--text-muted)] transition-all resize-none"
                         />
                     </div>
                 </form>
 
                 {/* Submit */}
-                <div className="p-5 border-t flex-shrink-0 bg-slate-50/50">
+                <div className="p-5 border-t flex-shrink-0 bg-[var(--secondary)]/50">
                     <button
                         onClick={handleSubmit as any}
                         disabled={submitting}
@@ -380,7 +380,7 @@ function ScanPageInner({ id }: { id: string }) {
     // ─ Loading
     if (loading) {
         return (
-            <div className="min-h-screen bg-white flex items-center justify-center">
+            <div className="min-h-screen bg-[var(--card)] flex items-center justify-center">
                 <div className="spinner" />
             </div>
         );
@@ -389,10 +389,10 @@ function ScanPageInner({ id }: { id: string }) {
     // ─ Not Found
     if (!asset) {
         return (
-            <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
+            <div className="min-h-screen bg-[var(--card)] flex flex-col items-center justify-center p-6 text-center">
                 <Package size={40} className="text-slate-200 mb-4" />
-                <h1 className="text-lg font-bold text-slate-800">Aset Tidak Ditemukan</h1>
-                <p className="text-sm text-slate-500 mt-1 max-w-xs">QR Code ini tidak terhubung ke aset aktif manapun.</p>
+                <h1 className="text-lg font-bold text-[var(--text-primary)]">Aset Tidak Ditemukan</h1>
+                <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-xs">QR Code ini tidak terhubung ke aset aktif manapun.</p>
             </div>
         );
     }
@@ -401,39 +401,39 @@ function ScanPageInner({ id }: { id: string }) {
     const knd = KONDISI_MAP[asset.kondisi];
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
+        <div className="min-h-screen bg-[var(--secondary)] flex flex-col">
             {/* ── Compact Header ── */}
-            <div className="bg-white border-b px-5 py-4 flex items-center gap-3">
+            <div className="bg-[var(--card)] border-b px-5 py-4 flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/assets/Logo WIG.png" alt="WIG" className="h-6 w-auto object-contain" />
                 <div className="h-4 w-px bg-slate-200" />
-                <span className="text-xs font-semibold text-slate-500">Asset Management</span>
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">Asset Management</span>
             </div>
 
             {/* ── Body ── */}
             <div className="flex-1 p-4 pb-28 max-w-lg mx-auto w-full space-y-3">
 
                 {/* Card 1: Identity */}
-                <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200">
+                            <div className="w-8 h-8 bg-[var(--secondary)] rounded-lg flex items-center justify-center border border-[var(--border)]">
                                 <CategoryIcon name={asset.categoryName} size={16} />
                             </div>
                             <div>
-                                <h1 className="text-sm font-bold text-slate-800 leading-tight">{asset.name}</h1>
-                                <span className="text-[11px] font-mono text-slate-500">{asset.assetCode}</span>
+                                <h1 className="text-sm font-bold text-[var(--text-primary)] leading-tight">{asset.name}</h1>
+                                <span className="text-[11px] font-mono text-[var(--text-secondary)]">{asset.assetCode}</span>
                             </div>
                         </div>
                         {asset.categoryName && (
-                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 uppercase tracking-wider">
+                            <span className="text-[10px] font-semibold text-[var(--text-secondary)] bg-[var(--secondary)] px-2 py-0.5 rounded-full border border-[var(--border)] uppercase tracking-wider">
                                 {asset.categoryName.replace("_", " ")}
                             </span>
                         )}
                     </div>
 
                     {/* Status Row */}
-                    <div className="px-5 py-3 flex items-center gap-2 border-b border-slate-50 bg-slate-50/30">
+                    <div className="px-5 py-3 flex items-center gap-2 border-b border-slate-50 bg-[var(--secondary)]/30">
                         <Badge label={sts.label} color={sts.color} bg={sts.bg} />
                         <Badge label={knd.label} color={knd.color} bg={knd.bg} />
                     </div>
@@ -462,26 +462,26 @@ function ScanPageInner({ id }: { id: string }) {
                 </div>
 
                 {/* Card 2: Actions */}
-                <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden">
                     <div className="px-5 py-3">
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aksi</span>
+                        <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Aksi</span>
                     </div>
 
                     {!isSuccess ? (
                         <button
                             onClick={handleInspect}
-                            className="w-full px-5 py-3.5 border-t flex items-center justify-between hover:bg-slate-50 transition-colors group"
+                            className="w-full px-5 py-3.5 border-t flex items-center justify-between hover:bg-[var(--secondary)] transition-colors group"
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center border border-indigo-100">
                                     <ClipboardCheck size={15} className="text-indigo-600" />
                                 </div>
                                 <div className="text-left">
-                                    <span className="text-sm font-semibold text-slate-800 block">Inspeksi Fisik</span>
-                                    <span className="text-[11px] text-slate-500">Login GA diperlukan</span>
+                                    <span className="text-sm font-semibold text-[var(--text-primary)] block">Inspeksi Fisik</span>
+                                    <span className="text-[11px] text-[var(--text-secondary)]">Login GA diperlukan</span>
                                 </div>
                             </div>
-                            <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+                            <ChevronRight size={16} className="text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition-colors" />
                         </button>
                     ) : (
                         <div className="px-5 py-3.5 border-t flex items-center gap-3">
@@ -490,32 +490,32 @@ function ScanPageInner({ id }: { id: string }) {
                             </div>
                             <div>
                                 <span className="text-sm font-semibold text-emerald-700 block">Inspeksi Tersimpan</span>
-                                <span className="text-[11px] text-slate-500">Data berhasil tercatat</span>
+                                <span className="text-[11px] text-[var(--text-secondary)]">Data berhasil tercatat</span>
                             </div>
                         </div>
                     )}
 
                     <button
                         onClick={() => router.push(`/ga/assets/${asset.id}`)}
-                        className="w-full px-5 py-3.5 border-t flex items-center justify-between hover:bg-slate-50 transition-colors group"
+                        className="w-full px-5 py-3.5 border-t flex items-center justify-between hover:bg-[var(--secondary)] transition-colors group"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200">
-                                <Package size={15} className="text-slate-500" />
+                            <div className="w-8 h-8 bg-[var(--secondary)] rounded-lg flex items-center justify-center border border-[var(--border)]">
+                                <Package size={15} className="text-[var(--text-secondary)]" />
                             </div>
                             <div className="text-left">
-                                <span className="text-sm font-semibold text-slate-800 block">Buka Detail</span>
-                                <span className="text-[11px] text-slate-500">Portal GA internal</span>
+                                <span className="text-sm font-semibold text-[var(--text-primary)] block">Buka Detail</span>
+                                <span className="text-[11px] text-[var(--text-secondary)]">Portal GA internal</span>
                             </div>
                         </div>
-                        <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        <ChevronRight size={16} className="text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] transition-colors" />
                     </button>
                 </div>
             </div>
 
             {/* ── Footer ── */}
-            <div className="bg-white border-t px-5 py-3 text-center">
-                <p className="text-[10px] text-slate-400 font-medium">
+            <div className="bg-[var(--card)] border-t px-5 py-3 text-center">
+                <p className="text-[10px] text-[var(--text-muted)] font-medium">
                     PT Wijaya Inovasi Gemilang · Asset Management System © 2026
                 </p>
             </div>
@@ -543,7 +543,7 @@ function ScanPageInner({ id }: { id: string }) {
 export default function ScanPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     return (
-        <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center"><div className="spinner" /></div>}>
+        <Suspense fallback={<div className="min-h-screen bg-[var(--card)] flex items-center justify-center"><div className="spinner" /></div>}>
             <ScanPageInner id={id} />
         </Suspense>
     );

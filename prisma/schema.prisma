@@ -50,10 +50,26 @@ model Employee {
   attendanceCorrections AttendanceCorrection[] @relation("CorrectionRequester")
   correctionApprovals   AttendanceCorrection[] @relation("CorrectionApprover")
   letterRequests        LetterRequest[]
+  auditLogs             AuditLog[]             @relation("UserAuditLogs")
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
   @@map("employees")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g. DELETE_PAYSLIP, APPROVE_OVERTIME
+  entity      String   // e.g. PAYSLIP, OVERTIME
+  entityId    String?  @map("entity_id")
+  details     String?  @db.LongText // JSON payload
+  performedBy String   @map("performed_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  user        Employee @relation("UserAuditLogs", fields: [performedBy], references: [employeeId], onDelete: Restrict)
+
+  @@index([performedBy], map: "idx_audit_logs_performed_by")
+  @@map("audit_logs")
 }
 
 model PushSubscription {

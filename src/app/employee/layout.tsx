@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 
 const navItems: NavItem[] = [
@@ -41,7 +42,7 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] flex items-end justify-around pb-2 pt-1 z-50 lg:hidden safe-area-bottom px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <nav className="fixed bottom-0 left-0 right-0 bg-[var(--card)] border-t border-[var(--border)] flex items-end justify-around pb-2 pt-1 z-50 lg:hidden safe-area-bottom px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
             {mobileItems.map((item, i) => {
                 if (!item) return null;
                 const isActive = pathname === item.href;
@@ -53,7 +54,7 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
                         <div key={item.href} className="relative -top-5">
                             <button
                                 onClick={() => onNavigate(item.href!)}
-                                className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-[#800020] text-white shadow-lg shadow-[#800020]/30 border-4 border-white transition-transform active:scale-95"
+                                className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/30 border-4 border-[var(--background)] transition-transform active:scale-95"
                             >
                                 <Icon className="w-6 h-6" />
                             </button>
@@ -67,8 +68,8 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
                         onClick={() => onNavigate(item.href!)}
                         className="flex flex-col items-center gap-1 py-1 px-1 min-w-[64px]"
                     >
-                        <Icon className={`w-5 h-5 ${isActive ? "text-[#800020]" : "text-gray-400"}`} />
-                        <span className={`text-[10px] font-semibold ${isActive ? "text-[#800020]" : "text-gray-400"}`}>
+                        <Icon className={`w-5 h-5 ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`} />
+                        <span className={`text-[10px] font-semibold ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>
                             {item.label}
                         </span>
                     </button>
@@ -151,7 +152,12 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             storageKey="employee-sidebar-collapsed"
             onLogout={handleLogout}
             extraNav={monitoringNav}
-            mobileHeaderRight={<EmployeeNotificationPanel />}
+            mobileHeaderRight={
+                <div className="flex items-center gap-1">
+                    <ThemeToggle />
+                    <EmployeeNotificationPanel />
+                </div>
+            }
             mobileBottomNav={
                 <MobileBottomNav
                     items={navItems}

@@ -12,6 +12,7 @@ import DepartmentStats from "@/components/dashboard/DepartmentStats";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import PendingLeaveList from "@/components/dashboard/PendingLeaveList";
 import TodayAttendance from "@/components/dashboard/TodayAttendance";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { toWIBDateString } from "@/lib/timezone";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -135,59 +136,70 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            <StatsGrid
-                activeCount={activeEmps.length}
-                totalCount={employees.length}
-                presentCount={presentCount}
-                lateCount={lateCount}
-                attendanceRate={attendanceRate}
-                today={today}
-                onLeaveCount={onLeaveToday}
-            />
+            {!analytics ? (
+                <div className="space-y-6">
+                    <Skeleton className="h-28 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                        <Skeleton className="h-64 w-full lg:col-span-3" />
+                        <Skeleton className="h-64 w-full lg:col-span-2" />
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <StatsGrid
+                        activeCount={activeEmps.length}
+                        totalCount={employees.length}
+                        presentCount={presentCount}
+                        lateCount={lateCount}
+                        attendanceRate={attendanceRate}
+                        today={today}
+                        onLeaveCount={onLeaveToday}
+                    />
 
-            {analytics && (
-                <PendingBadges
-                    pendingLeaves={analytics.summary.pendingLeaves}
-                    pendingVisits={analytics.summary.pendingVisits}
-                    pendingOvertime={analytics.summary.pendingOvertime}
-                />
+                    <PendingBadges
+                        pendingLeaves={analytics.summary.pendingLeaves}
+                        pendingVisits={analytics.summary.pendingVisits}
+                        pendingOvertime={analytics.summary.pendingOvertime}
+                    />
+
+                    <QuickMenu
+                        employeeCount={employees.length}
+                        todayAttendanceCount={todayAttendance.length}
+                        pendingLeaveCount={pendingLeaves.length}
+                        newsCount={news.length}
+                    />
+
+                    {/* Leave Calendar */}
+                    <div className="space-y-3">
+                        <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                            <CalendarOff className="w-4 h-4 text-[var(--primary)]" /> Monitoring Cuti Karyawan
+                        </h2>
+                        <LeaveCalendar leaves={leaves} />
+                    </div>
+
+                    {/* Charts Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-stretch">
+                        <WeeklyChart weeklyData={analytics.weeklyAttendance || []} />
+                        <DepartmentStats departmentStats={analytics.departmentStats || []} />
+                    </div>
+
+                    {/* Activity + Pending Leaves */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                        <ActivityFeed activities={analytics.recentActivity || []} />
+                        <PendingLeaveList leaves={pendingLeaves} getEmployeeName={getEmployeeName} />
+                    </div>
+
+                    {/* Bottom sections */}
+                    <TodayAttendance
+                        todayAttendance={todayAttendance}
+                        activeEmployees={activeEmps}
+                        employees={employees}
+                        news={news}
+                        getEmployeeName={getEmployeeName}
+                    />
+                </>
             )}
-
-            <QuickMenu
-                employeeCount={employees.length}
-                todayAttendanceCount={todayAttendance.length}
-                pendingLeaveCount={pendingLeaves.length}
-                newsCount={news.length}
-            />
-
-            {/* Leave Calendar */}
-            <div className="space-y-3">
-                <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
-                    <CalendarOff className="w-4 h-4 text-[var(--primary)]" /> Monitoring Cuti Karyawan
-                </h2>
-                <LeaveCalendar leaves={leaves} />
-            </div>
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-stretch">
-                <WeeklyChart weeklyData={analytics?.weeklyAttendance || []} />
-                <DepartmentStats departmentStats={analytics?.departmentStats || []} />
-            </div>
-
-            {/* Activity + Pending Leaves */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-                <ActivityFeed activities={analytics?.recentActivity || []} />
-                <PendingLeaveList leaves={pendingLeaves} getEmployeeName={getEmployeeName} />
-            </div>
-
-            {/* Bottom sections */}
-            <TodayAttendance
-                todayAttendance={todayAttendance}
-                activeEmployees={activeEmps}
-                employees={employees}
-                news={news}
-                getEmployeeName={getEmployeeName}
-            />
         </div>
     );
 }

@@ -40,7 +40,7 @@ export default function NewsPage() {
             case "announcement": return { label: "Pengumuman", icon: Megaphone, color: "text-[var(--primary)]", bg: "bg-[var(--primary)]/10" };
             case "event": return { label: "Acara", icon: PartyPopper, color: "text-blue-600", bg: "bg-blue-500/10" };
             case "policy": return { label: "Kebijakan", icon: BookOpen, color: "text-orange-600", bg: "bg-orange-500/10" };
-            default: return { label: "Umum", icon: Globe, color: "text-gray-600", bg: "bg-gray-500/10" };
+            default: return { label: "Umum", icon: Globe, color: "text-[var(--text-secondary)]", bg: "bg-gray-500/10" };
         }
     };
 

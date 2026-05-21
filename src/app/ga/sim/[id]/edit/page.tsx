@@ -85,12 +85,12 @@ export default function SimCardEditPage({ params }: { params: Promise<{ id: stri
     return (
         <div className="p-6 max-w-4xl mx-auto flex flex-col gap-6 min-h-screen">
             <div className="flex items-center gap-4">
-                <button onClick={() => router.back()} className="p-2 border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                <button onClick={() => router.back()} className="p-2 border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--secondary)] transition-colors">
                     <ArrowLeft size={18} />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Edit Kartu SIM</h1>
-                    <p className="text-sm text-slate-500 mt-1">Lakukan pembaruan nomor, paket data, dan masa aktif.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Edit Kartu SIM</h1>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">Lakukan pembaruan nomor, paket data, dan masa aktif.</p>
                 </div>
             </div>
 

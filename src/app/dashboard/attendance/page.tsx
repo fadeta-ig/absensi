@@ -261,16 +261,16 @@ export default function AttendanceMonitorPage() {
             </div>
 
             {/* Tab Navigators */}
-            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-max">
+            <div className="flex space-x-1 bg-[var(--secondary)] p-1 rounded-lg w-max">
                 <button
                     onClick={() => setActiveTab("log")}
-                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === "log" ? "bg-white text-[var(--primary)] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === "log" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-secondary)]"}`}
                 >
                     Log Absensi Utama
                 </button>
                 <button
                     onClick={() => setActiveTab("corrections")}
-                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "corrections" ? "bg-white text-[var(--primary)] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "corrections" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-secondary)]"}`}
                 >
                     Persetujuan Koreksi
                     {corrections.filter(c => c.status === "PENDING").length > 0 && (
@@ -413,7 +413,7 @@ export default function AttendanceMonitorPage() {
                                 paginatedRecords.map((r) => {
                                     const info = getEmpInfo(r.employeeId);
                                     return (
-                                        <tr key={r.id} className="hover:bg-gray-50/50 transition-colors">
+                                        <tr key={r.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
                                             <td className="font-mono text-xs font-semibold text-[var(--text-primary)]">
                                                 {r.employeeId}
                                             </td>
@@ -443,7 +443,7 @@ export default function AttendanceMonitorPage() {
                                                             <img src={r.clockInPhoto} alt="In" className="w-full h-full object-cover" />
                                                         </button>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center">
+                                                        <div className="w-8 h-8 rounded-md bg-[var(--secondary)] flex items-center justify-center">
                                                             <Camera className="w-3 h-3 text-gray-300" />
                                                         </div>
                                                     )}
@@ -456,7 +456,7 @@ export default function AttendanceMonitorPage() {
                                                             <img src={r.clockOutPhoto} alt="Out" className="w-full h-full object-cover" />
                                                         </button>
                                                     ) : (
-                                                        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center">
+                                                        <div className="w-8 h-8 rounded-md bg-[var(--secondary)] flex items-center justify-center">
                                                             <Camera className="w-3 h-3 text-gray-300" />
                                                         </div>
                                                     )}
@@ -489,7 +489,7 @@ export default function AttendanceMonitorPage() {
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
-                                className="p-2 rounded-md hover:bg-white hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
+                                className="p-2 rounded-md hover:bg-[var(--card)] hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
                                 title="Halaman Sebelumnya"
                             >
                                 <ChevronLeft className="w-4 h-4" />
@@ -510,7 +510,7 @@ export default function AttendanceMonitorPage() {
                                                 onClick={() => setCurrentPage(page)}
                                                 className={`min-w-[32px] h-8 flex items-center justify-center rounded-md text-sm font-bold transition-all ${currentPage === page
                                                     ? "bg-[var(--primary)] text-white shadow-md"
-                                                    : "text-[var(--text-muted)] hover:bg-white hover:text-[var(--primary)] border border-transparent hover:border-[var(--border)]"
+                                                    : "text-[var(--text-muted)] hover:bg-[var(--card)] hover:text-[var(--primary)] border border-transparent hover:border-[var(--border)]"
                                                     }`}
                                             >
                                                 {page}
@@ -529,7 +529,7 @@ export default function AttendanceMonitorPage() {
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage === totalPages}
-                                className="p-2 rounded-md hover:bg-white hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
+                                className="p-2 rounded-md hover:bg-[var(--card)] hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
                                 title="Halaman Selanjutnya"
                             >
                                 <ChevronRight className="w-4 h-4" />
@@ -543,7 +543,7 @@ export default function AttendanceMonitorPage() {
 
             {activeTab === "corrections" && (
                 <div className="card overflow-hidden shadow-sm">
-                    <div className="p-4 border-b bg-gray-50/50">
+                    <div className="p-4 border-b bg-[var(--secondary)]/50">
                         <h2 className="text-lg font-bold">Daftar Pengajuan Susulan Karyawan</h2>
                     </div>
                     <div className="overflow-x-auto">
@@ -560,13 +560,13 @@ export default function AttendanceMonitorPage() {
                             </thead>
                             <tbody>
                                 {corrections.length === 0 ? (
-                                    <tr><td colSpan={6} className="text-center py-10 text-gray-400 italic">Tidak ada pengajuan koreksi masuk.</td></tr>
+                                    <tr><td colSpan={6} className="text-center py-10 text-[var(--text-muted)] italic">Tidak ada pengajuan koreksi masuk.</td></tr>
                                 ) : (
                                     corrections.map(c => {
                                         const ei = getEmpInfo(c.employeeId);
                                         return (
                                             <tr key={c.id}>
-                                                <td><div className="font-bold">{ei.name}</div><div className="text-xs text-gray-500">{c.employeeId}</div></td>
+                                                <td><div className="font-bold">{ei.name}</div><div className="text-xs text-[var(--text-secondary)]">{c.employeeId}</div></td>
                                                 <td className="font-medium text-sm">{c.targetDate}</td>
                                                 <td className="font-mono text-sm tracking-tight text-blue-600">
                                                     {(c.proposedClockIn ? new Date(c.proposedClockIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
@@ -598,7 +598,7 @@ export default function AttendanceMonitorPage() {
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-xs text-gray-400 italic">Selesai</span>
+                                                        <span className="text-xs text-[var(--text-muted)] italic">Selesai</span>
                                                     )}
                                                 </td>
                                             </tr>

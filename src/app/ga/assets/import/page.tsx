@@ -220,11 +220,11 @@ export default function BulkImportPage() {
                 <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6 border-4 border-emerald-50">
                     <CheckCircle className="text-emerald-600" size={40} />
                 </div>
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight text-center">Registrasi Massal Berhasil!</h1>
-                <p className="text-slate-500 mt-2 text-center text-lg">{successCount} aset telah diamankan langsung ke dalam GA Pool.</p>
+                <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight text-center">Registrasi Massal Berhasil!</h1>
+                <p className="text-[var(--text-secondary)] mt-2 text-center text-lg">{successCount} aset telah diamankan langsung ke dalam GA Pool.</p>
                 <div className="mt-8 flex gap-4">
-                    <button onClick={() => router.push("/ga/assets")} className="px-6 py-3 bg-slate-800 text-white font-semibold rounded-xl shadow-md hover:bg-slate-700 transition">Lihat Tabel Aset</button>
-                    <button onClick={() => {setSuccessCount(null); clearAll();}} className="px-6 py-3 bg-white text-slate-700 font-semibold border-2 border-slate-200 rounded-xl hover:bg-slate-50 transition">Import Lagi</button>
+                    <button onClick={() => router.push("/ga/assets")} className="px-6 py-3 bg-[var(--foreground)] text-[var(--background)] text-white font-semibold rounded-xl shadow-md hover:bg-[var(--primary-light)] transition">Lihat Tabel Aset</button>
+                    <button onClick={() => {setSuccessCount(null); clearAll();}} className="px-6 py-3 bg-[var(--card)] text-[var(--text-secondary)] font-semibold border-2 border-[var(--border)] rounded-xl hover:bg-[var(--secondary)] transition">Import Lagi</button>
                 </div>
             </div>
         );
@@ -235,12 +235,12 @@ export default function BulkImportPage() {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2 border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 transition-colors">
+                    <button onClick={() => router.back()} className="p-2 border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--secondary)] transition-colors">
                         <ArrowLeft size={18} />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-800">Import Aset Massal</h1>
-                        <p className="text-sm text-slate-500 mt-1">Registrasikan puluhan aset ke GA Pool secara otomatis via CSV.</p>
+                        <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Import Aset Massal</h1>
+                        <p className="text-sm text-[var(--text-secondary)] mt-1">Registrasikan puluhan aset ke GA Pool secara otomatis via CSV.</p>
                     </div>
                 </div>
                 <button onClick={downloadTemplate} className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors">
@@ -264,13 +264,13 @@ export default function BulkImportPage() {
                 <div 
                     onDragOver={e => e.preventDefault()} 
                     onDrop={handleFileDrop}
-                    className="border-2 border-dashed border-slate-300 rounded-2xl bg-slate-50 flex flex-col items-center justify-center p-12 hover:bg-slate-100 transition-colors cursor-pointer"
+                    className="border-2 border-dashed border-[var(--border)] rounded-2xl bg-[var(--secondary)] flex flex-col items-center justify-center p-12 hover:bg-[var(--secondary)] transition-colors cursor-pointer"
                     onClick={() => fileInputRef.current?.click()}
                 >
                     <UploadCloud size={48} className="text-indigo-400 mb-4" />
-                    <h3 className="text-lg font-bold text-slate-700">Tarik &amp; Lepas File di Sini</h3>
-                    <p className="text-sm text-slate-500 mt-2 mb-1">Menerima format <span className="font-semibold text-slate-700">.xlsx</span> (direkomendasikan) atau <span className="font-semibold text-slate-700">.csv</span></p>
-                    <p className="text-xs text-slate-400 mb-6">Maksimal 300 baris aset dalam 1 kali import.</p>
+                    <h3 className="text-lg font-bold text-[var(--text-secondary)]">Tarik &amp; Lepas File di Sini</h3>
+                    <p className="text-sm text-[var(--text-secondary)] mt-2 mb-1">Menerima format <span className="font-semibold text-[var(--text-secondary)]">.xlsx</span> (direkomendasikan) atau <span className="font-semibold text-[var(--text-secondary)]">.csv</span></p>
+                    <p className="text-xs text-[var(--text-muted)] mb-6">Maksimal 300 baris aset dalam 1 kali import.</p>
                     <div className="px-6 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-sm">Pilih File dari Komputer</div>
                     <input type="file" accept=".csv,.xlsx,.xls" className="hidden" ref={fileInputRef} onChange={handleFileSelect} />
                 </div>
@@ -280,23 +280,23 @@ export default function BulkImportPage() {
             {isParsing && (
                 <div className="flex flex-col items-center py-12">
                     <div className="spinner mb-4" />
-                    <p className="text-slate-500 font-medium">Membaca dan memvalidasi struktur file...</p>
+                    <p className="text-[var(--text-secondary)] font-medium">Membaca dan memvalidasi struktur file...</p>
                 </div>
             )}
 
             {/* Preview Tabel */}
             {!isParsing && parsedData.length > 0 && (
                 <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                        <div className="px-5 py-4 border-b flex justify-between items-center bg-slate-50/50">
-                            <h2 className="text-[15px] font-semibold text-slate-800">Review Data Aset ({parsedData.length} Baris Valid)</h2>
-                            <button onClick={clearAll} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Batalkan & Ganti File">
+                    <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-sm overflow-hidden flex flex-col">
+                        <div className="px-5 py-4 border-b flex justify-between items-center bg-[var(--secondary)]/50">
+                            <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">Review Data Aset ({parsedData.length} Baris Valid)</h2>
+                            <button onClick={clearAll} className="p-2 text-[var(--text-muted)] hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Batalkan & Ganti File">
                                 <Trash2 size={18} />
                             </button>
                         </div>
                         <div className="overflow-x-auto max-h-[500px]">
                             <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-slate-50 border-b text-slate-500 text-xs uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+                                <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                     <tr>
                                         <th className="px-5 py-3 font-semibold">Tanda #</th>
                                         <th className="px-5 py-3 font-semibold">Kategori</th>
@@ -308,24 +308,24 @@ export default function BulkImportPage() {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {parsedData.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-slate-50">
-                                            <td className="px-5 py-3 text-slate-400 text-xs font-mono">{idx + 1}</td>
+                                        <tr key={idx} className="hover:bg-[var(--secondary)]">
+                                            <td className="px-5 py-3 text-[var(--text-muted)] text-xs font-mono">{idx + 1}</td>
                                             <td className="px-5 py-3"><span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{row.categoryPrefix}</span></td>
-                                            <td className="px-5 py-3 font-medium text-slate-800">{row.name}</td>
-                                            <td className="px-5 py-3 text-xs font-mono text-slate-500">{row.serialNumber || "-"}</td>
+                                            <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{row.name}</td>
+                                            <td className="px-5 py-3 text-xs font-mono text-[var(--text-secondary)]">{row.serialNumber || "-"}</td>
                                             <td className="px-5 py-3"><span className="text-[10px] font-black tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">{row.kondisi}</span></td>
-                                            <td className="px-5 py-3 text-xs text-slate-600 font-semibold italic">→ GA Pool (AVAILABLE)</td>
+                                            <td className="px-5 py-3 text-xs text-[var(--text-secondary)] font-semibold italic">→ GA Pool (AVAILABLE)</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
-                        <div className="p-5 border-t bg-slate-50 flex items-center justify-between">
-                            <div className="text-sm text-slate-600">File: <span className="font-semibold">{file?.name}</span></div>
+                        <div className="p-5 border-t bg-[var(--secondary)] flex items-center justify-between">
+                            <div className="text-sm text-[var(--text-secondary)]">File: <span className="font-semibold">{file?.name}</span></div>
                             <button
                                 onClick={handleSubmit}
                                 disabled={isSubmitting}
-                                className="px-6 py-2.5 bg-slate-800 text-white font-semibold rounded-lg shadow-sm hover:bg-slate-700 transition flex items-center gap-2 disabled:opacity-50"
+                                className="px-6 py-2.5 bg-[var(--foreground)] text-[var(--background)] text-white font-semibold rounded-lg shadow-sm hover:bg-[var(--primary-light)] transition flex items-center gap-2 disabled:opacity-50"
                             >
                                 <Send size={16} />
                                 {isSubmitting ? "Menginjeksi Database..." : "Jalankan Registrasi Massal"}

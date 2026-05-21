@@ -91,7 +91,7 @@ export default function LoginPage() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[var(--primary)]/3 rounded-full blur-[128px]" />
 
       <div className="relative z-10 w-full max-w-[420px] mx-4">
-        <div className="bg-white rounded-2xl shadow-lg border border-[var(--border)] p-8 md:p-10">
+        <div className="bg-[var(--card)] rounded-2xl shadow-lg border border-[var(--border)] p-8 md:p-10">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-16 h-16 relative mb-4">
@@ -160,7 +160,7 @@ export default function LoginPage() {
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 text-[var(--primary)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--primary)] focus:ring-2"
+                className="w-4 h-4 text-[var(--primary)] bg-[var(--secondary)] border-[var(--border)] rounded focus:ring-[var(--primary)] focus:ring-2"
                 disabled={loading}
               />
               <label htmlFor="rememberMe" className="ml-2 text-sm font-medium text-[var(--text-secondary)] select-none">

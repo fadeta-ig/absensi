@@ -227,51 +227,51 @@ export default function ReportsPage() {
             </div>
 
             {/* Filters & Actions */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] space-y-5">
+            <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] space-y-5">
                 {/* Parameter Organisasi */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Divisi (Opsional)</label>
-                        <select className="form-select h-10 w-full text-sm rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors" value={divisionId} onChange={(e) => { setDivisionId(e.target.value); setPreview(null); }}>
+                        <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Divisi (Opsional)</label>
+                        <select className="form-select h-10 w-full text-sm rounded-lg border-[var(--border)] bg-[var(--secondary)] focus:bg-[var(--card)] transition-colors" value={divisionId} onChange={(e) => { setDivisionId(e.target.value); setPreview(null); }}>
                             <option value="">-- Semua Divisi --</option>
                             {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Departemen (Opsional)</label>
-                        <select className="form-select h-10 w-full text-sm rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors disabled:opacity-50" value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setPreview(null); }} disabled={!!divisionId && filteredDepartments.length === 0}>
+                        <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Departemen (Opsional)</label>
+                        <select className="form-select h-10 w-full text-sm rounded-lg border-[var(--border)] bg-[var(--secondary)] focus:bg-[var(--card)] transition-colors disabled:opacity-50" value={departmentId} onChange={(e) => { setDepartmentId(e.target.value); setPreview(null); }} disabled={!!divisionId && filteredDepartments.length === 0}>
                             <option value="">-- Semua Departemen --</option>
                             {filteredDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </select>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Karyawan (Opsional)</label>
-                        <select className="form-select h-10 w-full text-sm rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors" value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setPreview(null); }}>
+                        <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Karyawan (Opsional)</label>
+                        <select className="form-select h-10 w-full text-sm rounded-lg border-[var(--border)] bg-[var(--secondary)] focus:bg-[var(--card)] transition-colors" value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setPreview(null); }}>
                             <option value="">-- Semua Karyawan --</option>
                             {filteredEmployees.map(e => <option key={e.employeeId} value={e.employeeId}>{e.name}</option>)}
                         </select>
                     </div>
                 </div>
 
-                <hr className="border-gray-100" />
+                <hr className="border-[var(--border)]" />
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                     {/* Left: Periode */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5" /> Rentang Tanggal
                         </label>
                         <div className="flex items-center gap-2">
                             <input
                                 type="date"
-                                className="form-input h-11 w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
+                                className="form-input h-11 w-full text-xs text-[var(--text-secondary)] bg-[var(--card)] border border-[var(--border)] rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
                                 value={startDate}
                                 onChange={(e) => { setStartDate(e.target.value); setPreview(null); setError(""); }}
                             />
-                            <span className="text-gray-400 text-xs font-medium">s/d</span>
+                            <span className="text-[var(--text-muted)] text-xs font-medium">s/d</span>
                             <input
                                 type="date"
-                                className="form-input h-11 w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
+                                className="form-input h-11 w-full text-xs text-[var(--text-secondary)] bg-[var(--card)] border border-[var(--border)] rounded-xl focus:border-[#800020] focus:ring-[#800020]/20"
                                 value={endDate}
                                 onChange={(e) => { setEndDate(e.target.value); setPreview(null); setError(""); }}
                             />
@@ -281,23 +281,23 @@ export default function ReportsPage() {
                     {/* Middle: Mode */}
                     {type === "attendance" ? (
                         <div className="flex flex-col gap-1.5 pt-0.5">
-                            <label className="text-[11px] font-bold text-slate-600 uppercase cursor-pointer flex items-center gap-2 select-none" onClick={toggleMatrix}>
+                            <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase cursor-pointer flex items-center gap-2 select-none" onClick={toggleMatrix}>
                                 <div className={`w-10 h-6 rounded-full transition-colors relative ${isMatrix ? "bg-[#800020]" : "bg-gray-300"}`}>
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isMatrix ? "translate-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]" : "shadow-[0_1px_3px_rgba(0,0,0,0.1)]"}`} />
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-[var(--card)] transition-transform ${isMatrix ? "translate-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]" : "shadow-[0_1px_3px_rgba(0,0,0,0.1)]"}`} />
                                 </div>
                                 Mode Matriks (Horizontal)
                             </label>
-                            <p className="text-[10px] text-slate-400 italic leading-tight pl-12 -mt-0.5">Baris: Karyawan, Kolom: Tanggal. Cocok untuk rekap bulanan.</p>
+                            <p className="text-[10px] text-[var(--text-muted)] italic leading-tight pl-12 -mt-0.5">Baris: Karyawan, Kolom: Tanggal. Cocok untuk rekap bulanan.</p>
 
                             {!isMatrix && (
-                                <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-gray-100">
-                                    <label className="text-[11px] font-bold text-slate-600 uppercase cursor-pointer flex items-center gap-2 select-none" onClick={() => setIsGrouped(!isGrouped)}>
+                                <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-[var(--border)]">
+                                    <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase cursor-pointer flex items-center gap-2 select-none" onClick={() => setIsGrouped(!isGrouped)}>
                                         <div className={`w-10 h-6 rounded-full transition-colors relative ${isGrouped ? "bg-[#800020]" : "bg-gray-300"}`}>
-                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${isGrouped ? "translate-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]" : "shadow-[0_1px_3px_rgba(0,0,0,0.1)]"}`} />
+                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-[var(--card)] transition-transform ${isGrouped ? "translate-x-4 shadow-[0_1px_3px_rgba(0,0,0,0.2)]" : "shadow-[0_1px_3px_rgba(0,0,0,0.1)]"}`} />
                                         </div>
                                         Rekap Per Karyawan
                                     </label>
-                                    <p className="text-[10px] text-slate-400 italic leading-tight pl-12 -mt-0.5">Tampilan vertikal dikelompokkan per nama.</p>
+                                    <p className="text-[10px] text-[var(--text-muted)] italic leading-tight pl-12 -mt-0.5">Tampilan vertikal dikelompokkan per nama.</p>
                                 </div>
                             )}
                         </div>
@@ -305,7 +305,7 @@ export default function ReportsPage() {
 
                     {/* Right: Actions */}
                     <div className="flex flex-col gap-2 md:justify-self-end w-full md:w-[280px]">
-                        <button onClick={handlePreview} className="flex items-center justify-center gap-2 w-full h-[42px] bg-[#FAF9F9] hover:bg-gray-100 border border-gray-200 text-gray-700 text-xs font-semibold rounded-[10px] transition-colors" disabled={loading}>
+                        <button onClick={handlePreview} className="flex items-center justify-center gap-2 w-full h-[42px] bg-[#FAF9F9] hover:bg-[var(--secondary)] border border-[var(--border)] text-[var(--text-secondary)] text-xs font-semibold rounded-[10px] transition-colors" disabled={loading}>
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
                             Preview
                         </button>
@@ -322,27 +322,27 @@ export default function ReportsPage() {
 
                 {/* Legend for Matrix */}
                 {isMatrix && type === "attendance" && (
-                    <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-[#FAFAFA] rounded-xl border border-gray-100">
+                    <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-[#FAFAFA] rounded-xl border border-[var(--border)]">
                         <div className="flex items-center gap-3">
                             <span className="text-[11px] font-bold text-[#800020] uppercase tracking-tight">Format Detail:</span>
-                            <div className="flex flex-col border border-gray-200 rounded p-1 bg-white scale-[0.85] origin-left shadow-sm">
+                            <div className="flex flex-col border border-[var(--border)] rounded p-1 bg-[var(--card)] scale-[0.85] origin-left shadow-sm">
                                 <span className="text-[9px] font-bold text-[#2563EB] leading-none">JAM MASUK</span>
-                                <span className="text-[9px] font-bold text-[#EA580C] leading-none border-t border-gray-100 mt-0.5 pt-0.5">JAM PULANG</span>
+                                <span className="text-[9px] font-bold text-[#EA580C] leading-none border-t border-[var(--border)] mt-0.5 pt-0.5">JAM PULANG</span>
                             </div>
                         </div>
                         <div className="hidden md:block w-px h-5 bg-gray-200 mx-1" />
                         <div className="flex flex-wrap gap-5">
                             <div className="flex items-center gap-2.5">
                                 <span className="w-6 h-6 flex items-center justify-center bg-[#EFF6FF] text-[#2563EB] text-[10px] font-bold rounded-md">H</span>
-                                <span className="text-[11px] text-gray-500">Hadir</span>
+                                <span className="text-[11px] text-[var(--text-secondary)]">Hadir</span>
                             </div>
                             <div className="flex items-center gap-2.5">
                                 <span className="w-6 h-6 flex items-center justify-center bg-[#FFF7ED] text-[#EA580C] text-[10px] font-bold rounded-md">T</span>
-                                <span className="text-[11px] text-gray-500">Terlambat</span>
+                                <span className="text-[11px] text-[var(--text-secondary)]">Terlambat</span>
                             </div>
                             <div className="flex items-center gap-2.5">
                                 <span className="w-6 h-6 flex items-center justify-center bg-[#FEF2F2] text-[#DC2626] text-[10px] font-bold rounded-md">A</span>
-                                <span className="text-[11px] text-gray-500">Alpa</span>
+                                <span className="text-[11px] text-[var(--text-secondary)]">Alpa</span>
                             </div>
                         </div>
                     </div>
@@ -376,19 +376,19 @@ export default function ReportsPage() {
                             Preview Data ({preview.totalRecords} baris)
                         </h2>
                     </div>
-                    <div className="card overflow-hidden border border-gray-100 shadow-sm">
+                    <div className="card overflow-hidden border border-[var(--border)] shadow-sm">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse min-w-[max-content]">
                                 <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                    <tr className="bg-[var(--secondary)] border-b border-[var(--border)]">
                                         {preview.headers.map((h) => (
-                                            <th key={h} className={`p-2.5 text-[10px] font-bold text-gray-500 uppercase tracking-tight border-r border-gray-100 last:border-0 ${!isNaN(Number(h)) ? "text-center w-12" : ""}`}>
+                                            <th key={h} className={`p-2.5 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-tight border-r border-[var(--border)] last:border-0 ${!isNaN(Number(h)) ? "text-center w-12" : ""}`}>
                                                 {h}
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-50 text-[11px]">
+                                <tbody className="bg-[var(--card)] divide-y divide-gray-50 text-[11px]">
                                     {preview.data.slice(0, 10).map((row, i) => (
                                         <tr key={i} className="hover:bg-blue-50/20 transition-colors">
                                             {preview.headers.map((h) => {
@@ -398,17 +398,17 @@ export default function ReportsPage() {
                                                 if (isDateCol && typeof val === "string" && val.includes("\n")) {
                                                     const [clockIn, clockOut] = val.split("\n");
                                                     return (
-                                                        <td key={h} className="p-1 border-r border-gray-100 text-center last:border-0">
+                                                        <td key={h} className="p-1 border-r border-[var(--border)] text-center last:border-0">
                                                             <div className="flex flex-col gap-0.5">
-                                                                <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockIn === "-" ? "bg-gray-50 text-gray-400" : "bg-blue-50 text-blue-700"}`}>{clockIn}</span>
-                                                                <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockOut === "-" ? "bg-gray-50 text-gray-400" : "bg-orange-50 text-orange-700"}`}>{clockOut}</span>
+                                                                <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockIn === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-blue-50 text-blue-700"}`}>{clockIn}</span>
+                                                                <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockOut === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-orange-50 text-orange-700"}`}>{clockOut}</span>
                                                             </div>
                                                         </td>
                                                     );
                                                 }
 
                                                 return (
-                                                    <td key={h} className={`p-2.5 border-r border-gray-100 last:border-0 ${h === "Nama" || h === "Nama Karyawan" ? "font-bold text-gray-900" : "text-gray-600"} ${isDateCol || h === "Hadir" || h === "Lambat" || h === "Alpa" ? "text-center" : ""}`}>
+                                                    <td key={h} className={`p-2.5 border-r border-[var(--border)] last:border-0 ${h === "Nama" || h === "Nama Karyawan" ? "font-bold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"} ${isDateCol || h === "Hadir" || h === "Lambat" || h === "Alpa" ? "text-center" : ""}`}>
                                                         {val || "-"}
                                                     </td>
                                                 );
@@ -419,8 +419,8 @@ export default function ReportsPage() {
                             </table>
                         </div>
                         {preview.totalRecords > 10 && (
-                            <div className="p-2.5 text-center border-t border-gray-100 bg-gray-50/50">
-                                <p className="text-[10px] text-gray-500 italic">Menampilkan 10 dari {preview.totalRecords} baris. Download Excel/PDF untuk data lengkap.</p>
+                            <div className="p-2.5 text-center border-t border-[var(--border)] bg-[var(--secondary)]/50">
+                                <p className="text-[10px] text-[var(--text-secondary)] italic">Menampilkan 10 dari {preview.totalRecords} baris. Download Excel/PDF untuk data lengkap.</p>
                             </div>
                         )}
                     </div>

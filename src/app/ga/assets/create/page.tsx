@@ -53,13 +53,13 @@ export default function CreateAssetPage() {
             <div className="flex items-center gap-4">
                 <button 
                     onClick={() => router.back()}
-                    className="p-2 border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                    className="p-2 border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--secondary)] transition-colors"
                 >
                     <ArrowLeft size={18} />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-800">Tambah Aset Baru</h1>
-                    <p className="text-sm text-slate-500 mt-1">Registrasi aset ke dalam sistem informasi.</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Tambah Aset Baru</h1>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">Registrasi aset ke dalam sistem informasi.</p>
                 </div>
             </div>
 

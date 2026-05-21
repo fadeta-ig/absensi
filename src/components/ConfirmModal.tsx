@@ -77,10 +77,10 @@ export default function ConfirmModal() {
 
             {/* Dialog */}
             <div
-                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-[scaleIn_0.2s_ease]"
+                className="relative bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-[scaleIn_0.2s_ease]"
                 onClick={(e) => e.stopPropagation()}
             >
-                <button onClick={close} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors" disabled={loading}>
+                <button onClick={close} className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" disabled={loading}>
                     <X className="w-4 h-4" />
                 </button>
 
@@ -89,14 +89,14 @@ export default function ConfirmModal() {
                         <AlertTriangle className="w-6 h-6" />
                     </div>
                     <div>
-                        <h3 className="text-base font-bold text-gray-900 mb-1">{state.title}</h3>
-                        <p className="text-sm text-gray-500 leading-relaxed">{state.message}</p>
+                        <h3 className="text-base font-bold text-[var(--text-primary)] mb-1">{state.title}</h3>
+                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{state.message}</p>
                     </div>
                     <div className="flex gap-3 w-full pt-1">
                         <button
                             onClick={close}
                             disabled={loading}
-                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors disabled:opacity-50"
                         >
                             {state.cancelLabel || "Batal"}
                         </button>
