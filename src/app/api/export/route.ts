@@ -231,8 +231,36 @@ export async function GET(request: NextRequest) {
                     "Status": r.status === "approved" ? "Disetujui" : r.status === "rejected" ? "Ditolak" : "Menunggu",
                 };
             });
+        } else if (type === "leave") {
+            finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tipe Cuti", "Tanggal Mulai", "Tanggal Selesai", "Durasi (Hari)", "Alasan", "Status"];
+            const records = await prisma.leaveRequest.findMany({
+                where: { createdAt: dateRange, employeeId: { in: validEmpIds } },
+                orderBy: { createdAt: "asc" },
+            });
+            sheetName = "Laporan Cuti";
+
+            const typeMap: Record<string, string> = { annual: "Tahunan", sick: "Sakit", personal: "Pribadi", maternity: "Melahirkan" };
+            const statusMap: Record<string, string> = { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" };
+
+            rows = records.map((r) => {
+                const emp = empMap.get(r.employeeId);
+                const start = r.startDate instanceof Date ? r.startDate : new Date(r.startDate);
+                const end = r.endDate instanceof Date ? r.endDate : new Date(r.endDate);
+                const duration = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                return {
+                    "Nama": emp?.name || "-",
+                    "ID Karyawan": r.employeeId,
+                    "Departemen": emp?.departmentRel?.name || "-",
+                    "Tipe Cuti": typeMap[r.type] || r.type,
+                    "Tanggal Mulai": toDateStr(r.startDate),
+                    "Tanggal Selesai": toDateStr(r.endDate),
+                    "Durasi (Hari)": duration,
+                    "Alasan": r.reason,
+                    "Status": statusMap[r.status] || r.status,
+                };
+            });
         } else {
-            return NextResponse.json({ error: "Tipe laporan tidak valid. Gunakan: attendance, visits, atau overtime." }, { status: 400 });
+            return NextResponse.json({ error: "Tipe laporan tidak valid. Gunakan: attendance, visits, overtime, atau leave." }, { status: 400 });
         }
 
         if (rows.length === 0) {

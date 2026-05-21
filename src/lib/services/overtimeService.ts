@@ -2,6 +2,14 @@ import { prisma } from "../prisma";
 import { OvertimeRequest } from "@/types";
 import { Prisma } from "@prisma/client";
 import { toDateString, toTimeString } from "@/lib/utils";
+import logger from "@/lib/logger";
+
+/** Hitung overtimePay = hours × (basicSalary / 173) × multiplier */
+function computeOvertimePay(basicSalary: number, hours: number, isHoliday: boolean): number {
+    const hourlyRate = basicSalary / 173;
+    const multiplier = isHoliday ? 2.0 : 1.5;
+    return Math.round(hourlyRate * hours * multiplier);
+}
 
 // ─── Date helpers imported from @/lib/utils ────────────────────
 
@@ -57,6 +65,18 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
     const startDateTime = new Date(`${dateStr}T${data.startTime}:00`);
     const endDateTime = new Date(`${dateStr}T${data.endTime}:00`);
 
+    // Auto-calculate overtimePay berdasarkan basicSalary karyawan
+    let overtimePay = 0;
+    const employee = await prisma.employee.findUnique({
+        where: { employeeId: data.employeeId },
+        select: { basicSalary: true },
+    });
+    if (employee && employee.basicSalary > 0) {
+        overtimePay = computeOvertimePay(employee.basicSalary, data.hours, data.isHoliday ?? false);
+    }
+
+    logger.info("Overtime request created", { employeeId: data.employeeId, hours: data.hours, overtimePay });
+
     const row = await prisma.overtimeRequest.create({
         data: {
             employeeId: data.employeeId,
@@ -64,9 +84,10 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
             startTime: startDateTime,
             endTime: endDateTime,
             hours: data.hours,
+            isHoliday: data.isHoliday ?? false,
+            overtimePay,
             reason: data.reason,
             status: data.status,
-            // createdAt: @default(now()) — tidak perlu diisi
         },
     });
     return toOvertimeRequest(row);
@@ -75,16 +96,24 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
 
 export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRequest> & Record<string, unknown>): Promise<OvertimeRequest | null> {
     try {
-        // Ambil existing record untuk tahu date jika diperlukan saat konversi startTime/endTime
-        const existing = data.startTime !== undefined || data.endTime !== undefined
-            ? await prisma.overtimeRequest.findUnique({ where: { id }, select: { date: true } })
-            : null;
+        // Ambil existing record untuk date + recalculate
+        const existing = await prisma.overtimeRequest.findUnique({
+            where: { id },
+            include: { employee: { select: { basicSalary: true } } },
+        });
+        if (!existing) return null;
 
         const baseDateStr = data.date
             ? String(data.date)
-            : existing?.date
-                ? toDateString(existing.date)
-                : "";
+            : toDateString(existing.date);
+
+        // Recalculate overtimePay saat approved dan approvedHours berubah
+        let recalculatedPay: number | undefined;
+        if (data.status === "approved" && existing.employee.basicSalary > 0) {
+            const finalHours = (data.approvedHours as number | undefined) ?? existing.hours;
+            const finalIsHoliday = (data.isHoliday as boolean | undefined) ?? existing.isHoliday;
+            recalculatedPay = computeOvertimePay(existing.employee.basicSalary, finalHours, finalIsHoliday);
+        }
 
         const row = await prisma.overtimeRequest.update({
             where: { id },
@@ -97,11 +126,12 @@ export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRe
                 ...(data.status !== undefined && { status: data.status }),
                 ...(data.approvedHours !== undefined && { approvedHours: data.approvedHours }),
                 ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
-                ...(data.overtimePay !== undefined && { overtimePay: data.overtimePay }),
+                ...(recalculatedPay !== undefined ? { overtimePay: recalculatedPay } : (data.overtimePay !== undefined && { overtimePay: data.overtimePay })),
             },
         });
         return toOvertimeRequest(row);
-    } catch {
+    } catch (err) {
+        logger.error("Gagal update overtime request", { id, error: err });
         return null;
     }
 }

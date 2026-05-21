@@ -219,6 +219,9 @@ export default function PayrollPage() {
             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
             const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
+            const empOvertime = overtimeRequests
+                .filter(o => o.employeeId === e.employeeId && o.status === "approved" && o.date.startsWith(selectedPeriod))
+                .reduce((sum, o) => sum + (o.overtimePay || 0), 0);
 
             return {
                 employeeId: e.employeeId,
@@ -228,8 +231,9 @@ export default function PayrollPage() {
                 period: selectedPeriod,
                 basicSalary: e.basicSalary,
                 allowances: empAllowances,
+                overtime: empOvertime,
                 deductions: empDeductions,
-                netSalary: e.basicSalary + empAllowances - empDeductions,
+                netSalary: e.basicSalary + empAllowances + empOvertime - empDeductions,
                 status: hasPayslip ? "Sudah Terbit" : "Belum Terbit",
             };
         });
@@ -242,6 +246,7 @@ export default function PayrollPage() {
             { key: "period", label: "Periode" },
             { key: "basicSalary", label: "Gaji Pokok" },
             { key: "allowances", label: "Total Tunjangan" },
+            { key: "overtime", label: "Lembur" },
             { key: "deductions", label: "Total Potongan" },
             { key: "netSalary", label: "Estimasi Gaji Bersih" },
             { key: "status", label: "Status" },
@@ -253,7 +258,10 @@ export default function PayrollPage() {
             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
             const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
-            const estNet = e.basicSalary + empAllowances - empDeductions;
+            const empOvertime = overtimeRequests
+                .filter(o => o.employeeId === e.employeeId && o.status === "approved" && o.date.startsWith(selectedPeriod))
+                .reduce((sum, o) => sum + (o.overtimePay || 0), 0);
+            const estNet = e.basicSalary + empAllowances + empOvertime - empDeductions;
 
             return [
                 idx + 1,
@@ -263,13 +271,14 @@ export default function PayrollPage() {
                 e.division || "-",
                 fmt(e.basicSalary),
                 fmt(empAllowances),
+                fmt(empOvertime),
                 fmt(empDeductions),
                 fmt(estNet),
                 hasPayslip ? "Sudah" : "Belum"
             ];
         });
 
-        const headers = ["No", "ID", "Nama", "Dept", "Divisi", "Gapok", "Tunj", "Pot", "Est. Bersih", "Stat"];
+        const headers = ["No", "ID", "Nama", "Dept", "Divisi", "Gapok", "Tunj", "Lembur", "Pot", "Est. Bersih", "Stat"];
         import("@/lib/export").then(m => {
             m.exportToPdfTable(
                 tableData,
@@ -421,6 +430,7 @@ export default function PayrollPage() {
                                         <th>Karyawan</th>
                                         <th>Gaji Pokok</th>
                                         <th className="hidden lg:table-cell">Tunjangan</th>
+                                        <th className="hidden lg:table-cell">Lembur</th>
                                         <th className="hidden lg:table-cell">Potongan</th>
                                         <th>Estimasi Bersih</th>
                                         <th>Status</th>
@@ -435,7 +445,10 @@ export default function PayrollPage() {
                                             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
                                             const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
                                             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
-                                            const estNet = e.basicSalary + empAllowances - empDeductions;
+                                            const empOvertime = overtimeRequests
+                                                .filter(o => o.employeeId === e.employeeId && o.status === "approved" && o.date.startsWith(selectedPeriod))
+                                                .reduce((sum, o) => sum + (o.overtimePay || 0), 0);
+                                            const estNet = e.basicSalary + empAllowances + empOvertime - empDeductions;
 
                                             return (
                                                 <tr key={e.id}>
@@ -451,6 +464,7 @@ export default function PayrollPage() {
                                                     </td>
                                                     <td>{fmt(e.basicSalary)}</td>
                                                     <td className="hidden lg:table-cell text-green-600 font-medium">+{fmt(empAllowances)}</td>
+                                                    <td className="hidden lg:table-cell text-blue-600 font-medium">{empOvertime > 0 ? `+${fmt(empOvertime)}` : "-"}</td>
                                                     <td className="hidden lg:table-cell text-red-600 font-medium">-{fmt(empDeductions)}</td>
                                                     <td className="font-bold text-[var(--text-primary)]">{fmt(estNet)}</td>
                                                     <td>
@@ -623,8 +637,21 @@ export default function PayrollPage() {
                                                 <td className="font-bold text-[var(--primary)]">{fmt(p.netSalary)}</td>
                                                 <td>
                                                     <div className="flex items-center gap-1.5">
-                                                        <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm !p-1.5 text-[var(--primary)]"><Eye className="w-3.5 h-3.5" /></button>
-                                                        <button onClick={() => handlePayslipPdf(p)} className="btn btn-ghost btn-sm !p-1.5 text-red-600"><Download className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm !p-1.5 text-[var(--primary)]" title="Lihat Detail"><Eye className="w-3.5 h-3.5" /></button>
+                                                        <button onClick={() => handlePayslipPdf(p)} className="btn btn-ghost btn-sm !p-1.5 text-red-600" title="Download PDF"><Download className="w-3.5 h-3.5" /></button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!confirm(`Hapus slip gaji ${getEmpName(p.employeeId)} periode ${p.period}?`)) return;
+                                                                const res = await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
+                                                                if (res.ok) {
+                                                                    setPayslips(prev => prev.filter(x => x.id !== p.id));
+                                                                }
+                                                            }}
+                                                            className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"
+                                                            title="Hapus Slip Gaji"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>

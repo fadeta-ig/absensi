@@ -28,6 +28,20 @@ interface MasterData {
     name: string;
 }
 
+interface AttendanceCorrection {
+    id: string;
+    employeeId: string;
+    targetDate: string;
+    proposedClockIn: string | null;
+    proposedClockOut: string | null;
+    reason: string;
+    attachmentUrl: string | null;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    assignedManagerId: string | null;
+    createdAt: string;
+    employee?: { name: string; employeeId: string };
+}
+
 export default function AttendanceMonitorPage() {
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -47,7 +61,7 @@ export default function AttendanceMonitorPage() {
 
     // Tabs
     const [activeTab, setActiveTab] = useState<"log" | "corrections">("log");
-    const [corrections, setCorrections] = useState<any[]>([]);
+    const [corrections, setCorrections] = useState<AttendanceCorrection[]>([]);
 
     // Correction modal
     const [processingId, setProcessingId] = useState<string | null>(null);

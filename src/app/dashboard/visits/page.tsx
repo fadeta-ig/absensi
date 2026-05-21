@@ -37,26 +37,28 @@ export default function DashboardVisitsPage() {
     const [filterStatus, setFilterStatus] = useState<string>("all");
     const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
     const [updating, setUpdating] = useState<string | null>(null);
+    const [approvalNotes, setApprovalNotes] = useState("");
 
     useEffect(() => {
         fetch("/api/visits").then((r) => r.json()).then(setVisits);
     }, []);
 
-    const handleStatusUpdate = async (id: string, status: "approved" | "rejected") => {
+    const handleStatusUpdate = async (id: string, status: "approved" | "rejected", notes?: string) => {
         setUpdating(id);
         try {
             const res = await fetch("/api/visits", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id, status }),
+                body: JSON.stringify({ id, status, ...(notes && { notes }) }),
             });
             if (res.ok) {
                 const updated = await res.json();
                 setVisits((prev) => prev.map((v) => (v.id === id ? updated : v)));
                 if (selectedVisit?.id === id) setSelectedVisit(updated);
+                setApprovalNotes("");
             }
-        } catch {
-            // silent
+        } catch (err) {
+            console.error("Gagal update status kunjungan:", err);
         }
         setUpdating(null);
     };
@@ -291,21 +293,33 @@ export default function DashboardVisitsPage() {
                             )}
 
                             {selectedVisit.status === "pending" && (
-                                <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
-                                    <button
-                                        onClick={() => { handleStatusUpdate(selectedVisit.id, "approved"); }}
-                                        className="btn btn-primary flex-1"
-                                        disabled={updating === selectedVisit.id}
-                                    >
-                                        <CheckCircle className="w-4 h-4" /> Setujui
-                                    </button>
-                                    <button
-                                        onClick={() => { handleStatusUpdate(selectedVisit.id, "rejected"); }}
-                                        className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
-                                        disabled={updating === selectedVisit.id}
-                                    >
-                                        <XCircle className="w-4 h-4" /> Tolak
-                                    </button>
+                                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                                    <div>
+                                        <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Catatan HR (opsional)</label>
+                                        <textarea
+                                            className="form-textarea text-sm"
+                                            rows={2}
+                                            value={approvalNotes}
+                                            onChange={(e) => setApprovalNotes(e.target.value)}
+                                            placeholder="Tambahkan catatan untuk karyawan..."
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => { handleStatusUpdate(selectedVisit.id, "approved", approvalNotes || undefined); }}
+                                            className="btn btn-primary flex-1"
+                                            disabled={updating === selectedVisit.id}
+                                        >
+                                            <CheckCircle className="w-4 h-4" /> Setujui
+                                        </button>
+                                        <button
+                                            onClick={() => { handleStatusUpdate(selectedVisit.id, "rejected", approvalNotes || undefined); }}
+                                            className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
+                                            disabled={updating === selectedVisit.id}
+                                        >
+                                            <XCircle className="w-4 h-4" /> Tolak
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>

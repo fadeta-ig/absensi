@@ -47,6 +47,43 @@ export async function getLeaveRequests(employeeId?: string): Promise<LeaveReques
 
 export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promise<LeaveRequest> {
     logger.info("Pengajuan cuti baru", { employeeId: data.employeeId, type: data.type, startDate: data.startDate, endDate: data.endDate });
+
+    // Pre-check: validasi saldo cuti untuk tipe annual
+    if (data.type === "annual") {
+        const employee = await prisma.employee.findUnique({
+            where: { employeeId: data.employeeId },
+            select: { totalLeave: true, usedLeave: true, shiftId: true },
+        });
+
+        if (!employee) {
+            throw new Error("Data karyawan tidak ditemukan.");
+        }
+
+        // Resolve offDays dari shift karyawan
+        const offDays = new Set<number>([0]); // default: Minggu
+        if (employee.shiftId) {
+            const shift = await prisma.workShift.findUnique({
+                where: { id: employee.shiftId },
+                include: { days: true },
+            });
+            if (shift) {
+                offDays.clear();
+                for (const d of shift.days) {
+                    if (d.isOff) offDays.add(d.dayOfWeek);
+                }
+            }
+        }
+
+        const requestedDays = calculateWorkingDays(data.startDate, data.endDate, offDays);
+        const remainingLeave = employee.totalLeave - employee.usedLeave;
+
+        if (requestedDays > remainingLeave) {
+            throw new Error(
+                `Sisa cuti tahunan tidak mencukupi. Sisa: ${remainingLeave} hari, dibutuhkan: ${requestedDays} hari kerja.`
+            );
+        }
+    }
+
     const row = await prisma.leaveRequest.create({
         data: {
             employeeId: data.employeeId,

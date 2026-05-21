@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
     FileDown, FileSpreadsheet, Calendar,
-    ClipboardList, MapPinned, Clock4,
+    ClipboardList, MapPinned, Clock4, CalendarOff,
     Loader2, AlertCircle, Download, Eye, FileText, CheckSquare
 } from "lucide-react";
 import { exportToExcel, exportToPdfMatrix } from "@/lib/export";
@@ -20,6 +20,7 @@ const REPORT_TYPES = [
     { value: "attendance", label: "Laporan Absensi", icon: ClipboardList, description: "Data kehadiran karyawan per periode" },
     { value: "visits", label: "Laporan Kunjungan", icon: MapPinned, description: "Data kunjungan bisnis per periode" },
     { value: "overtime", label: "Laporan Lembur", icon: Clock4, description: "Data pengajuan lembur per periode" },
+    { value: "leave", label: "Laporan Cuti", icon: CalendarOff, description: "Data pengajuan cuti karyawan per periode" },
 ];
 
 export default function ReportsPage() {

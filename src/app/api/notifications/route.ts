@@ -23,67 +23,57 @@ export async function GET(request: NextRequest) {
     if (session.role !== "hr") return forbiddenResponse();
 
     try {
-        const today = toWIBDateString();
         const notifications: Notification[] = [];
 
-        // Pending leave requests
+        // Pending leave requests — include employee in single query (eliminates N+1)
         const pendingLeaves = await prisma.leaveRequest.findMany({
             where: { status: "pending" },
             orderBy: { createdAt: "desc" },
             take: 5,
+            include: { employee: { select: { name: true } } },
         });
         for (const l of pendingLeaves) {
-            const emp = await prisma.employee.findUnique({
-                where: { employeeId: l.employeeId },
-                select: { name: true },
-            });
             notifications.push({
                 id: `leave-${l.id}`,
                 type: "leave",
                 title: "Pengajuan Cuti",
-                message: `${emp?.name || l.employeeId} mengajukan cuti ${l.type}`,
+                message: `${l.employee.name} mengajukan cuti ${l.type}`,
                 href: "/dashboard/leave",
                 time: toDateString(l.createdAt),
             });
         }
 
-        // Pending visit reports
+        // Pending visit reports — include employee in single query
         const pendingVisits = await prisma.visitReport.findMany({
             where: { status: "pending" },
             orderBy: { createdAt: "desc" },
             take: 5,
+            include: { employee: { select: { name: true } } },
         });
         for (const v of pendingVisits) {
-            const emp = await prisma.employee.findUnique({
-                where: { employeeId: v.employeeId },
-                select: { name: true },
-            });
             notifications.push({
                 id: `visit-${v.id}`,
                 type: "visit",
                 title: "Laporan Kunjungan",
-                message: `${emp?.name || v.employeeId} → ${v.clientName}`,
+                message: `${v.employee.name} → ${v.clientName}`,
                 href: "/dashboard/visits",
                 time: toDateString(v.createdAt),
             });
         }
 
-        // Pending overtime
+        // Pending overtime — include employee in single query
         const pendingOvertime = await prisma.overtimeRequest.findMany({
             where: { status: "pending" },
             orderBy: { createdAt: "desc" },
             take: 5,
+            include: { employee: { select: { name: true } } },
         });
         for (const o of pendingOvertime) {
-            const emp = await prisma.employee.findUnique({
-                where: { employeeId: o.employeeId },
-                select: { name: true },
-            });
             notifications.push({
                 id: `overtime-${o.id}`,
                 type: "overtime",
                 title: "Pengajuan Lembur",
-                message: `${emp?.name || o.employeeId} — ${o.hours}h (${toDateString(o.date)})`,
+                message: `${o.employee.name} — ${o.hours}h (${toDateString(o.date)})`,
                 href: "/dashboard/overtime",
                 time: toDateString(o.createdAt),
             });
@@ -115,22 +105,19 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // Pending letter requests
+        // Pending letter requests — include employee in single query
         const pendingLetters = await prisma.letterRequest.findMany({
             where: { status: "PENDING" },
             orderBy: { createdAt: "desc" },
             take: 5,
+            include: { employee: { select: { name: true } } },
         });
         for (const lr of pendingLetters) {
-            const emp = await prisma.employee.findUnique({
-                where: { employeeId: lr.employeeId },
-                select: { name: true },
-            });
             notifications.push({
                 id: `letter-${lr.id}`,
                 type: "letter",
                 title: "Permintaan Surat",
-                message: `${emp?.name || lr.employeeId} mengajukan ${lr.type.replace(/_/g, " ")}`,
+                message: `${lr.employee.name} mengajukan ${lr.type.replace(/_/g, " ")}`,
                 href: "/dashboard/letter-requests",
                 time: toDateString(lr.createdAt),
             });

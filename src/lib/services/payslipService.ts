@@ -54,3 +54,18 @@ export async function createPayslip(data: Omit<PayslipRecord, "id" | "items"> & 
     });
     return toPayslipRecord(row);
 }
+
+export async function deletePayslip(id: string): Promise<boolean> {
+    const existing = await prisma.payslipRecord.findUnique({ where: { id } });
+    if (!existing) {
+        throw new Error("Payslip tidak ditemukan.");
+    }
+
+    await prisma.$transaction([
+        prisma.payslipItem.deleteMany({ where: { payslipId: id } }),
+        prisma.payslipRecord.delete({ where: { id } }),
+    ]);
+
+    logger.info("Payslip dihapus", { id, employeeId: existing.employeeId, period: existing.period });
+    return true;
+}

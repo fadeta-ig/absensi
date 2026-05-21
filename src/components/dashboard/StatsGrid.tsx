@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, UserCheck, AlertCircle, TrendingUp } from "lucide-react";
+import { Users, UserCheck, AlertCircle, TrendingUp, CalendarOff } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface StatItem {
@@ -19,18 +19,20 @@ interface StatsGridProps {
     lateCount: number;
     attendanceRate: number;
     today: string;
+    onLeaveCount?: number;
 }
 
-export default function StatsGrid({ activeCount, totalCount, presentCount, lateCount, attendanceRate, today }: StatsGridProps) {
+export default function StatsGrid({ activeCount, totalCount, presentCount, lateCount, attendanceRate, today, onLeaveCount = 0 }: StatsGridProps) {
     const stats: StatItem[] = [
         { label: "Total Karyawan", value: activeCount, sub: `${totalCount - activeCount} nonaktif`, icon: Users, color: "text-[var(--primary)]", bg: "bg-[var(--primary)]/10" },
         { label: "Hadir Hari Ini", value: presentCount, sub: `dari ${activeCount} aktif`, icon: UserCheck, color: "text-green-600", bg: "bg-green-500/10" },
         { label: "Terlambat", value: lateCount, sub: "hari ini", icon: AlertCircle, color: "text-orange-600", bg: "bg-orange-500/10" },
+        { label: "Cuti Hari Ini", value: onLeaveCount, sub: "karyawan", icon: CalendarOff, color: "text-violet-600", bg: "bg-violet-500/10" },
         { label: "Tingkat Kehadiran", value: `${attendanceRate}%`, sub: today, icon: TrendingUp, color: "text-blue-600", bg: "bg-blue-500/10" },
     ];
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {stats.map((s, i) => {
                 const Icon = s.icon;
                 return (

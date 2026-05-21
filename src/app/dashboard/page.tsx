@@ -94,6 +94,9 @@ export default function DashboardPage() {
     const presentCount = todayAttendance.filter((a) => a.status === "present" || a.status === "late").length;
     const lateCount = todayAttendance.filter((a) => a.status === "late").length;
     const attendanceRate = activeEmps.length > 0 ? Math.round((presentCount / activeEmps.length) * 100) : 0;
+    const onLeaveToday = leaves.filter(l =>
+        l.status === "approved" && today >= l.startDate && today <= l.endDate
+    ).length;
 
     const now = new Date();
     const greeting = now.getHours() < 12 ? "Selamat Pagi" : now.getHours() < 17 ? "Selamat Siang" : "Selamat Malam";
@@ -139,6 +142,7 @@ export default function DashboardPage() {
                 lateCount={lateCount}
                 attendanceRate={attendanceRate}
                 today={today}
+                onLeaveCount={onLeaveToday}
             />
 
             {analytics && (

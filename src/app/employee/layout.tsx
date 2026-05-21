@@ -95,7 +95,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 if (!res.ok) { router.replace("/"); return; }
                 const data = await res.json();
                 if (data.role === "hr") { router.replace("/dashboard"); return; }
-                setUser(data);
+                setUser({
+                    ...data,
+                    hasSubordinates: Array.isArray(data.subordinates) && data.subordinates.length > 0,
+                });
             } catch {
                 router.replace("/");
             } finally {
@@ -119,8 +122,8 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         return <AppShellLoading message="Memuat..." />;
     }
 
-    // Monitoring Tim hanya untuk level non-STAFF
-    const monitoringNav = user.level && user.level !== "STAFF" ? (
+    // Monitoring Tim hanya untuk karyawan yang punya bawahan (berdasarkan pohon managerId)
+    const monitoringNav = user.hasSubordinates ? (
         <div className="mt-4 pt-4 border-t border-[var(--border)]">
             <p className="text-[10px] font-bold text-[var(--text-muted)] px-3 mb-2 uppercase tracking-widest">
                 Management

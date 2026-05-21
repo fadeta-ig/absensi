@@ -59,7 +59,7 @@ export default function DashboardOvertimePage() {
                 setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)));
                 if (selectedReq?.id === id) setSelectedReq({ ...selectedReq, ...updated });
             }
-        } catch { /* silent */ }
+        } catch (err) { console.error("Gagal update status lembur:", err); }
         setUpdating(null);
     };
 

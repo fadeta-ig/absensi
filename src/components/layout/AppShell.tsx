@@ -11,7 +11,7 @@ export interface AppShellUser {
     name: string;
     employeeId: string;
     role: string;
-    level?: string;
+    hasSubordinates?: boolean;
 }
 
 export interface NavSubItem {
