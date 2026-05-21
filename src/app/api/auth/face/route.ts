@@ -47,6 +47,22 @@ export async function POST(request: NextRequest) {
 
         const { descriptor } = result.data;
 
+        const employee = await prisma.employee.findUnique({
+            where: { employeeId: session.employeeId },
+            select: { faceDescriptor: true },
+        });
+
+        if (!employee) {
+            return NextResponse.json({ error: "Karyawan tidak ditemukan" }, { status: 404 });
+        }
+
+        if (employee.faceDescriptor) {
+            return NextResponse.json(
+                { error: "Wajah sudah terdaftar. Hubungi HR untuk mereset data wajah Anda." },
+                { status: 403 }
+            );
+        }
+
         const isValidNumbers = descriptor.every(
             (v: number) => typeof v === "number" && !isNaN(v)
         );
@@ -76,6 +92,10 @@ export async function DELETE(request: NextRequest) {
     try {
         const session = await getSession();
         if (!session) return unauthorizedResponse();
+        
+        if (session.role !== "hr") {
+            return NextResponse.json({ error: "Hanya HR yang dapat menghapus data wajah." }, { status: 403 });
+        }
 
         await prisma.employee.update({
             where: { employeeId: session.employeeId },

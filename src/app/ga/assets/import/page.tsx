@@ -306,7 +306,7 @@ export default function BulkImportPage() {
                                         <th className="px-5 py-3 font-semibold">Status Masa Depan</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-[var(--border)]">
                                     {parsedData.map((row, idx) => (
                                         <tr key={idx} className="hover:bg-[var(--secondary)]">
                                             <td className="px-5 py-3 text-[var(--text-muted)] text-xs font-mono">{idx + 1}</td>

@@ -86,8 +86,13 @@ export default function BulkImportModal({ isOpen, onClose, onImportComplete }: P
             formData.append("mode", "validate");
 
             const res = await fetch("/api/employees/import", { method: "POST", body: formData });
-            const data: ValidationReport = await res.json();
-            setReport(data);
+            const data = await res.json();
+            
+            if (!res.ok) {
+                setReport({ validRows: [], errors: [{ row: 0, field: "-", message: data.error || "Gagal memvalidasi file." }], totalRows: 0 });
+            } else {
+                setReport(data);
+            }
             setStep("validation");
         } catch {
             setReport({ validRows: [], errors: [{ row: 0, field: "-", message: "Gagal memvalidasi file." }], totalRows: 0 });
@@ -105,12 +110,17 @@ export default function BulkImportModal({ isOpen, onClose, onImportComplete }: P
             formData.append("mode", "execute");
 
             const res = await fetch("/api/employees/import", { method: "POST", body: formData });
-            const data: ImportResult = await res.json();
+            const data = await res.json();
+            
+            if (!res.ok) {
+                throw new Error(data.error || "Terjadi kesalahan saat import.");
+            }
+            
             setResult(data);
             setStep("result");
             onImportComplete();
-        } catch {
-            setResult({ created: 0, failed: report?.totalRows ?? 0, errors: [{ row: 0, field: "-", message: "Terjadi kesalahan server." }] });
+        } catch (err: unknown) {
+            setResult({ created: 0, failed: report?.totalRows ?? 0, errors: [{ row: 0, field: "-", message: err instanceof Error ? err.message : "Terjadi kesalahan server." }] });
             setStep("result");
         }
         setLoading(false);

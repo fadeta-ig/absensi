@@ -1,5 +1,9 @@
 import { prisma } from "../prisma";
 import { NewsItem } from "@/types";
+import { unlink } from "fs/promises";
+import path from "path";
+
+const getUploadDir = () => path.join(process.cwd(), "public");
 
 export async function getNews(): Promise<NewsItem[]> {
     const rows = await prisma.newsItem.findMany({
@@ -26,6 +30,16 @@ export async function createNews(data: Omit<NewsItem, "id">): Promise<NewsItem> 
 
 export async function updateNews(id: string, data: Partial<NewsItem>): Promise<NewsItem | null> {
     try {
+        if (data.mediaUrl !== undefined) {
+            const oldRow = await prisma.newsItem.findUnique({ where: { id }, select: { mediaUrl: true } });
+            if (oldRow?.mediaUrl && oldRow.mediaUrl !== data.mediaUrl) {
+                const oldFilePath = path.join(getUploadDir(), oldRow.mediaUrl);
+                try {
+                    await unlink(oldFilePath);
+                } catch { /* ignore if file not found */ }
+            }
+        }
+
         const row = await prisma.newsItem.update({
             where: { id },
             data: {
@@ -45,6 +59,14 @@ export async function updateNews(id: string, data: Partial<NewsItem>): Promise<N
 
 export async function deleteNews(id: string): Promise<boolean> {
     try {
+        const oldRow = await prisma.newsItem.findUnique({ where: { id }, select: { mediaUrl: true } });
+        if (oldRow?.mediaUrl) {
+            const oldFilePath = path.join(getUploadDir(), oldRow.mediaUrl);
+            try {
+                await unlink(oldFilePath);
+            } catch { /* ignore if file not found */ }
+        }
+
         await prisma.newsItem.delete({ where: { id } });
         return true;
     } catch {
