@@ -16,6 +16,7 @@ import {
     Settings2,
     Package,
     FileText,
+    ShieldAlert,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
@@ -48,6 +49,7 @@ const navItems: NavItem[] = [
         ],
     },
     { href: "/dashboard/reports", icon: FileDown, label: "Laporan" },
+    { href: "/dashboard/audit", icon: ShieldAlert, label: "Audit Trail" },
     { href: "/dashboard/news", icon: Megaphone, label: "WIG News" },
     { href: "/dashboard/letter-requests", icon: FileText, label: "Surat Karyawan" },
 ];
