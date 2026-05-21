@@ -51,6 +51,7 @@ model Employee {
   correctionApprovals   AttendanceCorrection[] @relation("CorrectionApprover")
   letterRequests        LetterRequest[]
   auditLogs             AuditLog[]             @relation("UserAuditLogs")
+  assetTickets          AssetTicket[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -425,6 +426,7 @@ model Asset {
   histories      AssetHistory[]
   inspections    AssetInspection[]
   maintenances   AssetMaintenance[]
+  tickets        AssetTicket[]
 
   @@index([assignedToId], map: "assets_assigned_to_id_fkey")
   @@index([categoryId], map: "assets_category_id_fkey")
@@ -538,4 +540,40 @@ model LetterRequest {
 
   @@index([employeeId], map: "idx_letter_requests_employee_id")
   @@map("letter_requests")
+}
+
+// ─── Asset Ticketing (Employee <-> GA) ─────────────────────────
+
+enum TicketType {
+  NEW_REQUEST
+  DAMAGE_REPORT
+}
+
+enum TicketStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  RESOLVED
+}
+
+model AssetTicket {
+  id          String       @id @default(uuid())
+  ticketCode  String       @unique @map("ticket_code")
+  employeeId  String       @map("employee_id")
+  type        TicketType
+  assetId     String?      @map("asset_id")
+  title       String
+  description String       @db.Text
+  status      TicketStatus @default(PENDING)
+  gaResponse  String?      @map("ga_response") @db.Text
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  employee    Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
+  asset       Asset?       @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId], map: "asset_tickets_employee_id_fkey")
+  @@index([assetId], map: "asset_tickets_asset_id_fkey")
+  @@map("asset_tickets")
 }
