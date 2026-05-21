@@ -80,6 +80,16 @@ export async function POST(request: NextRequest) {
         });
 
         logger.info("Overtime request created", { employeeId: session.employeeId, overtimeId: overtime.id });
+
+        // Audit Trail Injection
+        await logAction(
+            "CREATE_OVERTIME",
+            "OVERTIME_REQUEST",
+            session.employeeId,
+            overtime.id,
+            { date, startTime, endTime, hours }
+        ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
+
         return NextResponse.json(overtime, { status: 201 });
     } catch (err) {
         return serverErrorResponse("OvertimePOST", err);

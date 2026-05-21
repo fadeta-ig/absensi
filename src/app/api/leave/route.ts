@@ -4,6 +4,7 @@ import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getLeaveRequests, createLeaveRequest, updateLeaveRequest } from "@/lib/services/leaveService";
 import { leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validationSchemas";
 import { prisma } from "@/lib/prisma";
+import { logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -90,6 +91,16 @@ export async function POST(request: NextRequest) {
         });
 
         logger.info("Leave request created", { employeeId: session.employeeId, leaveId: leave.id });
+
+        // Audit Trail Injection
+        await logAction(
+            "CREATE_LEAVE",
+            "LEAVE_REQUEST",
+            session.employeeId,
+            leave.id,
+            { type: body.type, startDate: body.startDate, endDate: body.endDate }
+        ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
+
         return NextResponse.json(leave, { status: 201 });
     } catch (err) {
         return serverErrorResponse("LeavePOST", err);
@@ -116,6 +127,16 @@ export async function PUT(request: NextRequest) {
         }
 
         logger.info("Leave request updated", { leaveId: id, updatedBy: session.employeeId, status: data.status });
+
+        // Audit Trail Injection
+        await logAction(
+            `UPDATE_LEAVE_${data.status?.toUpperCase() || 'UNKNOWN'}`,
+            "LEAVE_REQUEST",
+            session.employeeId,
+            id,
+            data
+        ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
+
         return NextResponse.json(updated);
     } catch (err: any) {
         if (err instanceof Error && err.message.includes("Sisa cuti karyawan tidak mencukupi")) {

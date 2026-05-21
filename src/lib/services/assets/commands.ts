@@ -4,6 +4,7 @@ import logger from "@/lib/logger";
 import { AssetWithHistory } from "@/lib/types/asset";
 import { toAsset, AssetRowRaw } from "./mappers";
 import { ASSIGNED_TO_INCLUDE } from "./constants";
+import { logAction } from "../auditService";
 
 /**
  * Menciptakan entitas aset baru dengan logika pembuatan kode otomatis.
@@ -91,6 +92,15 @@ export async function createAsset(data: {
                     },
                 });
             }
+
+            // Audit Trail Injection
+            await logAction(
+                "CREATE_ASSET",
+                "ASSET",
+                performedBy,
+                assetCode,
+                { name: data.name, categoryId: data.categoryId }
+            ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
 
             logger.info("Aset dibuat", { assetCode, name: data.name, performedBy });
             return toAsset(row);
@@ -267,6 +277,15 @@ export async function deleteAsset(id: string, performedBy: string): Promise<bool
         prisma.assetInspection.deleteMany({ where: { assetId: id } }),
         prisma.asset.delete({ where: { id } }),
     ]);
+
+    // Audit Trail Injection
+    await logAction(
+        "DELETE_ASSET",
+        "ASSET",
+        performedBy,
+        existing.assetCode,
+        { assetId: id }
+    ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
 
     logger.warn("Aset DIHAPUS PERMANEN", { assetCode: existing.assetCode, performedBy });
     return true;

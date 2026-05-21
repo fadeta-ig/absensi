@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
+import { logAction } from "@/lib/services/auditService";
 import { z } from "zod";
 
 const ticketUpdateSchema = z.object({
@@ -57,6 +58,15 @@ export async function PUT(request: NextRequest) {
                 gaResponse: gaResponse || null,
             }
         });
+
+        // Audit Trail Injection
+        await logAction(
+            `UPDATE_TICKET_${status}`,
+            "ASSET_TICKET",
+            session.employeeId,
+            ticket.ticketCode,
+            { newStatus: status, response: gaResponse }
+        );
 
         return NextResponse.json(ticket);
     } catch (err) {
