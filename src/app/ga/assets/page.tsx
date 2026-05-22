@@ -176,7 +176,7 @@ export default function AssetsPage() {
                     </button>
                     <button 
                         onClick={() => router.push("/ga/assets/import")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
                     >
                         Import Massal
                     </button>
@@ -195,7 +195,7 @@ export default function AssetsPage() {
                     </button>
                     <button 
                         onClick={() => router.push("/ga/assets/create")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors shadow-sm"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors shadow-sm"
                     >
                         <Plus size={16} /> Tambah Aset
                     </button>
@@ -416,3 +416,4 @@ export default function AssetsPage() {
         </div>
     );
 }
+

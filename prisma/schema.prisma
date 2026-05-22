@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearch", "fullTextIndex"]
 }
 
@@ -9,48 +9,48 @@ datasource db {
 }
 
 model Employee {
-  id                String                     @id @default(uuid())
-  employeeId        String                     @unique @map("employee_id")
-  name              String
-  email             String                     @unique
-  phone             String
-  departmentId      String                     @map("department_id")
-  divisionId        String?                    @map("division_id")
-  positionId        String                     @map("position_id")
+  id           String  @id @default(uuid())
+  employeeId   String  @unique @map("employee_id")
+  name         String
+  email        String  @unique
+  phone        String
+  departmentId String  @map("department_id")
+  divisionId   String? @map("division_id")
+  positionId   String  @map("position_id")
 
-  departmentRel     Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  divisionRel       Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  positionRel       Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  role              String                     @default("employee")
-  gender            String                     @default("Laki-Laki")
-  password          String
-  faceDescriptor    String?                    @map("face_descriptor") @db.LongText
-  joinDate          DateTime                   @map("join_date")
-  totalLeave        Int                        @default(12) @map("total_leave")
-  usedLeave         Int                        @default(0) @map("used_leave")
-  avatarUrl         String?                    @map("avatar_url") @db.LongText
-  isActive          Boolean                    @default(true) @map("is_active")
-  shiftId           String?                    @map("shift_id")
-  bypassLocation    Boolean                    @default(false) @map("bypass_location")
-  basicSalary       Float                      @default(0) @map("basic_salary")
-  managerId         String?                    @map("manager_id")
-  attendances       AttendanceRecord[]
-  payrollComponents EmployeePayrollComponent[]
-  manager           Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
-  subordinates      Employee[]                 @relation("Hierarchy")
-  shift             WorkShift?                 @relation(fields: [shiftId], references: [id])
-  leaves            LeaveRequest[]
-  overtimes         OvertimeRequest[]
-  payslips          PayslipRecord[]
-  todos             TodoItem[]
-  visits            VisitReport[]
-  locations         Location[]                 @relation("employeelocations")
-  pushSubscriptions PushSubscription[]
-  assignedAssets    Asset[]
-  attendanceCorrections AttendanceCorrection[] @relation("CorrectionRequester")
-  correctionApprovals   AttendanceCorrection[] @relation("CorrectionApprover")
+  departmentRel         Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel           Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  positionRel           Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  role                  String                     @default("employee")
+  gender                String                     @default("Laki-Laki")
+  password              String
+  faceDescriptor        String?                    @map("face_descriptor") @db.LongText
+  joinDate              DateTime                   @map("join_date")
+  totalLeave            Int                        @default(12) @map("total_leave")
+  usedLeave             Int                        @default(0) @map("used_leave")
+  avatarUrl             String?                    @map("avatar_url") @db.LongText
+  isActive              Boolean                    @default(true) @map("is_active")
+  shiftId               String?                    @map("shift_id")
+  bypassLocation        Boolean                    @default(false) @map("bypass_location")
+  basicSalary           Float                      @default(0) @map("basic_salary")
+  managerId             String?                    @map("manager_id")
+  attendances           AttendanceRecord[]
+  payrollComponents     EmployeePayrollComponent[]
+  manager               Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
+  subordinates          Employee[]                 @relation("Hierarchy")
+  shift                 WorkShift?                 @relation(fields: [shiftId], references: [id])
+  leaves                LeaveRequest[]
+  overtimes             OvertimeRequest[]
+  payslips              PayslipRecord[]
+  todos                 TodoItem[]
+  visits                VisitReport[]
+  locations             Location[]                 @relation("employeelocations")
+  pushSubscriptions     PushSubscription[]
+  assignedAssets        Asset[]
+  attendanceCorrections AttendanceCorrection[]     @relation("CorrectionRequester")
+  correctionApprovals   AttendanceCorrection[]     @relation("CorrectionApprover")
   letterRequests        LetterRequest[]
-  auditLogs             AuditLog[]             @relation("UserAuditLogs")
+  auditLogs             AuditLog[]                 @relation("UserAuditLogs")
   assetTickets          AssetTicket[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
@@ -60,14 +60,14 @@ model Employee {
 
 model AuditLog {
   id          String   @id @default(uuid())
-  action      String   // e.g. DELETE_PAYSLIP, APPROVE_OVERTIME
-  entity      String   // e.g. PAYSLIP, OVERTIME
+  action      String // e.g. DELETE_PAYSLIP, APPROVE_OVERTIME
+  entity      String // e.g. PAYSLIP, OVERTIME
   entityId    String?  @map("entity_id")
   details     String?  @db.LongText // JSON payload
   performedBy String   @map("performed_by")
   createdAt   DateTime @default(now()) @map("created_at")
-  
-  user        Employee @relation("UserAuditLogs", fields: [performedBy], references: [employeeId], onDelete: Restrict)
+
+  user Employee @relation("UserAuditLogs", fields: [performedBy], references: [employeeId], onDelete: Restrict)
 
   @@index([performedBy], map: "idx_audit_logs_performed_by")
   @@map("audit_logs")
@@ -93,15 +93,15 @@ model VisitReport {
   visitStartTime DateTime? @map("visit_start_time")
   visitEndTime   DateTime? @map("visit_end_time")
   clientName     String    @map("client_name")
-  clientAddress String   @map("client_address") @db.Text
-  purpose       String   @db.Text
-  result        String?  @db.Text
-  location      String?  @db.LongText
-  photo         String?  @db.LongText
-  status        String   @default("pending")
-  notes         String?  @db.Text
-  createdAt     DateTime @default(now()) @map("created_at")
-  employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  clientAddress  String    @map("client_address") @db.Text
+  purpose        String    @db.Text
+  result         String?   @db.Text
+  location       String?   @db.LongText
+  photo          String?   @db.LongText
+  status         String    @default("pending")
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  employee       Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "visit_reports_employee_id_fkey")
   @@map("visit_reports")
@@ -126,19 +126,19 @@ model AttendanceRecord {
 }
 
 model PayslipRecord {
-  id          String   @id @default(uuid())
-  employeeId  String   @map("employee_id")
+  id          String        @id @default(uuid())
+  employeeId  String        @map("employee_id")
   period      String
-  basicSalary Float    @map("basic_salary")
+  basicSalary Float         @map("basic_salary")
   items       PayslipItem[]
-  overtime    Float    @default(0)
-  netSalary   Float    @map("net_salary")
-  issuedDate  DateTime @map("issued_date")
-  notes       String?  @db.Text
-  employee    Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
+  overtime    Float         @default(0)
+  netSalary   Float         @map("net_salary")
+  issuedDate  DateTime      @map("issued_date")
+  notes       String?       @db.Text
+  employee    Employee      @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
-  @@index([employeeId], map: "payslip_records_employee_id_fkey")
   @@unique([employeeId, period])
+  @@index([employeeId], map: "payslip_records_employee_id_fkey")
   @@map("payslip_records")
 }
 
@@ -148,13 +148,13 @@ enum PayslipItemType {
 }
 
 model PayslipItem {
-  id              String          @id @default(uuid())
-  payslipId       String          @map("payslip_record_id")
-  type            PayslipItemType
-  name            String
-  amount          Float
-  
-  payslipRecord   PayslipRecord   @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  id        String          @id @default(uuid())
+  payslipId String          @map("payslip_record_id")
+  type      PayslipItemType
+  name      String
+  amount    Float
+
+  payslipRecord PayslipRecord @relation(fields: [payslipId], references: [id], onDelete: Cascade)
 
   @@index([payslipId], map: "idx_payslip_items_payslip_id")
   @@map("payslip_items")
@@ -167,24 +167,24 @@ enum AssessmentStatus {
 }
 
 model AttendanceCorrection {
-  id                String           @id @default(uuid())
-  employeeId        String           @map("employee_id")
-  targetDate        DateTime         @map("target_date")
-  
-  proposedClockIn   DateTime?        @map("proposed_clock_in") 
-  proposedClockOut  DateTime?        @map("proposed_clock_out")
-  
-  reason            String           @db.Text
-  attachmentUrl     String?          @map("attachment_url")
-  
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  targetDate DateTime @map("target_date")
+
+  proposedClockIn  DateTime? @map("proposed_clock_in")
+  proposedClockOut DateTime? @map("proposed_clock_out")
+
+  reason        String  @db.Text
+  attachmentUrl String? @map("attachment_url")
+
   status            AssessmentStatus @default(PENDING)
   assignedManagerId String?          @map("assigned_manager_id")
-  
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
 
-  employee          Employee         @relation("CorrectionRequester", fields: [employeeId], references: [employeeId], onDelete: Cascade)
-  manager           Employee?        @relation("CorrectionApprover", fields: [assignedManagerId], references: [employeeId])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  employee Employee  @relation("CorrectionRequester", fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  manager  Employee? @relation("CorrectionApprover", fields: [assignedManagerId], references: [employeeId])
 
   @@index([employeeId], map: "idx_attendance_corrections_employee_id")
   @@index([assignedManagerId], map: "idx_attendance_corrections_manager_id")
@@ -280,14 +280,14 @@ model OvertimeRequest {
 }
 
 model Department {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  code        String?  @unique
-  description String?  @db.Text
-  divisionId  String   @map("division_id")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  division    Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid())
+  name        String     @unique
+  code        String?    @unique
+  description String?    @db.Text
+  divisionId  String     @map("division_id")
+  isActive    Boolean    @default(true) @map("is_active")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  division    Division   @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   employees   Employee[] @relation("EmployeeDepartment")
 
   @@index([divisionId], map: "departments_division_id_fkey")
@@ -306,10 +306,10 @@ model Division {
 }
 
 model Position {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String     @id @default(uuid())
+  name      String     @unique
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
   employees Employee[] @relation("EmployeePosition")
 
   @@map("positions")
@@ -357,12 +357,12 @@ model Location {
 // ─── Asset Management ──────────────────────────────────────────
 
 model AssetCategory {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  prefix      String
-  createdAt   DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid())
+  name      String   @unique
+  prefix    String
+  createdAt DateTime @default(now()) @map("created_at")
 
-  assets      Asset[]
+  assets Asset[]
 
   @@map("asset_categories")
 }
@@ -374,71 +374,70 @@ enum AssetKondisi {
 }
 
 enum AssetStatus {
-  AVAILABLE      // Di GA pool — siap dipinjamkan
-  IN_USE         // Sedang dipegang seseorang
-  MAINTENANCE    // Sedang diperbaiki
-  RETIRED        // Tidak layak pakai
-  COMPANY_OWNED  // Milik perusahaan (ex-lelang), hidden dari HR
+  AVAILABLE // Di GA pool — siap dipinjamkan
+  IN_USE // Sedang dipegang seseorang
+  MAINTENANCE // Sedang diperbaiki
+  RETIRED // Tidak layak pakai
+  COMPANY_OWNED // Milik perusahaan (ex-lelang), hidden dari HR
 }
 
 enum HolderType {
-  EMPLOYEE        // Karyawan aktif
+  EMPLOYEE // Karyawan aktif
   FORMER_EMPLOYEE // Mantan karyawan (nama tetap disimpan)
-  TEAM            // Dipegang tim (Warehouse, Creative, dll)
-  GA_POOL         // Di brankas GA — aset bebas
-  COMPANY_OWNED   // Milik perusahaan
+  TEAM // Dipegang tim (Warehouse, Creative, dll)
+  GA_POOL // Di brankas GA — aset bebas
+  COMPANY_OWNED // Milik perusahaan
 }
 
 model Asset {
-  id             String        @id @default(uuid())
-  assetCode      String        @unique @map("asset_code")
-  name           String
-  
-  categoryId     String        @map("category_id")
-  categoryRel    AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  id        String @id @default(uuid())
+  assetCode String @unique @map("asset_code")
+  name      String
 
-  serialNumber   String?       @map("serial_number")
-  imei           String?       @map("imei")
-  manufacturer   String?
-  modelName      String?       @map("model_name")
-  
-  purchaseDate   DateTime?     @map("purchase_date")
-  purchasePrice  Float?        @map("purchase_price")
-  warrantyExpiry DateTime?     @map("warranty_expiry")
-  kondisi        AssetKondisi  @default(BAIK)
-  status         AssetStatus   @default(AVAILABLE)
-  holderType     HolderType    @default(GA_POOL) @map("holder_type")
+  categoryId  String        @map("category_id")
+  categoryRel AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  serialNumber String? @map("serial_number")
+  imei         String? @map("imei")
+  manufacturer String?
+  modelName    String? @map("model_name")
+
+  purchaseDate   DateTime?    @map("purchase_date")
+  purchasePrice  Float?       @map("purchase_price")
+  warrantyExpiry DateTime?    @map("warranty_expiry")
+  kondisi        AssetKondisi @default(BAIK)
+  status         AssetStatus  @default(AVAILABLE)
+  holderType     HolderType   @default(GA_POOL) @map("holder_type")
 
   // Pemegang saat ini (nullable = di GA pool)
-  assignedToName String?       @map("assigned_to_name")
-  assignedToId   String?       @map("assigned_to_id")
-  assignedAt     DateTime?     @map("assigned_at")
+  assignedToName String?   @map("assigned_to_name")
+  assignedToId   String?   @map("assigned_to_id")
+  assignedAt     DateTime? @map("assigned_at")
 
   // Khusus kategori NOMOR_HP — SIM card fisik Indosat
-  nomorIndosat   String?       @map("nomor_indosat")
-  expiredDate    DateTime?     @map("expired_date")
+  nomorIndosat String?   @map("nomor_indosat")
+  expiredDate  DateTime? @map("expired_date")
 
-  keterangan     String?       @db.Text
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  keterangan String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  assignedTo     Employee?     @relation(fields: [assignedToId], references: [employeeId])
-  histories      AssetHistory[]
-  inspections    AssetInspection[]
-  maintenances   AssetMaintenance[]
-  tickets        AssetTicket[]
+  assignedTo   Employee?          @relation(fields: [assignedToId], references: [employeeId])
+  histories    AssetHistory[]
+  inspections  AssetInspection[]
+  maintenances AssetMaintenance[]
+  tickets      AssetTicket[]
 
   @@index([assignedToId], map: "assets_assigned_to_id_fkey")
   @@index([categoryId], map: "assets_category_id_fkey")
   @@fulltext([name, assetCode, serialNumber])
-
   @@map("assets")
 }
 
 model AssetHistory {
-  id             String      @id @default(uuid())
-  assetId        String      @map("asset_id")
-  asset          Asset       @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  id      String @id @default(uuid())
+  assetId String @map("asset_id")
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
   fromHolderType HolderType? @map("from_holder_type")
   fromName       String?     @map("from_name")
@@ -446,43 +445,61 @@ model AssetHistory {
   toName         String?     @map("to_name")
 
   // "assigned" | "returned" | "sent_to_maintenance" | "kondisi_changed" | "retired"
-  action         String
-  kondisiSaat    AssetKondisi @map("kondisi_saat")
-  notes          String?      @db.Text
+  action      String
+  kondisiSaat AssetKondisi @map("kondisi_saat")
+  notes       String?      @db.Text
 
-  performedBy    String       @map("performed_by") // employeeId GA
-  createdAt      DateTime     @default(now()) @map("created_at")
+  performedBy String   @map("performed_by") // employeeId GA
+  createdAt   DateTime @default(now()) @map("created_at")
+  bastDocuments AssetBastDocument[]
 
   @@map("asset_histories")
+}
+
+// ─── Asset BAST (Berita Acara Serah Terima) ─────────────────────
+
+model AssetBastDocument {
+  id           String       @id @default(uuid())
+  historyId    String       @map("history_id")
+  fileData     Bytes        @db.MediumBlob @map("file_data")
+  mimeType     String       @map("mime_type")
+  fileName     String       @map("file_name")
+  uploadedBy   String       @map("uploaded_by") // employeeId of GA
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  history      AssetHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+
+  @@index([historyId], map: "idx_bast_documents_history_id")
+  @@map("asset_bast_documents")
 }
 
 // ─── Asset Inspection (Checklist Inspeksi GA) ────────────────────
 
 model AssetInspection {
-  id            String       @id @default(uuid())
-  assetId       String       @map("asset_id")
-  asset         Asset        @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  id      String @id @default(uuid())
+  assetId String @map("asset_id")
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Restrict)
 
-  kondisiSaat   AssetKondisi @map("kondisi_saat")
+  kondisiSaat AssetKondisi @map("kondisi_saat")
 
   checklistItems InspectionChecklistItem[]
 
-  notes         String?      @db.Text
-  performedBy   String       @map("performed_by") // employeeId GA
-  inspectedAt   DateTime     @default(now()) @map("inspected_at")
+  notes       String?  @db.Text
+  performedBy String   @map("performed_by") // employeeId GA
+  inspectedAt DateTime @default(now()) @map("inspected_at")
 
   @@index([assetId], map: "asset_inspections_asset_id_fkey")
   @@map("asset_inspections")
 }
 
 model InspectionChecklistItem {
-  id              String          @id @default(uuid())
-  inspectionId    String          @map("inspection_id")
-  itemName        String
-  isPass          Boolean         @default(true)
-  notes           String?         @db.Text
-  
-  inspection      AssetInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  id           String  @id @default(uuid())
+  inspectionId String  @map("inspection_id")
+  itemName     String
+  isPass       Boolean @default(true)
+  notes        String? @db.Text
+
+  inspection AssetInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 
   @@index([inspectionId], map: "idx_inspection_items_inspection_id")
   @@map("inspection_checklist_items")
@@ -491,20 +508,20 @@ model InspectionChecklistItem {
 // ─── Asset Maintenance (Log Servis & Vendor) ─────────────────────
 
 model AssetMaintenance {
-  id               String   @id @default(uuid())
-  assetId          String   @map("asset_id")
-  vendorName       String   @map("vendor_name")
-  cost             Float    @default(0)
-  startDate        DateTime @map("start_date")
+  id               String    @id @default(uuid())
+  assetId          String    @map("asset_id")
+  vendorName       String    @map("vendor_name")
+  cost             Float     @default(0)
+  startDate        DateTime  @map("start_date")
   estimatedEndDate DateTime? @map("estimated_end_date")
   actualEndDate    DateTime? @map("actual_end_date")
-  status           String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, CANCELLED
-  notes            String?  @db.Text
-  attachmentUrl    String?  @map("attachment_url") // Opsional: Bukti Invoice/Nota
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  status           String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, CANCELLED
+  notes            String?   @db.Text
+  attachmentUrl    String?   @map("attachment_url") // Opsional: Bukti Invoice/Nota
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  asset            Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([assetId], map: "idx_asset_maintenance_asset_id")
   @@map("asset_maintenances")
@@ -520,10 +537,10 @@ enum LetterType {
 }
 
 enum LetterStatus {
-  PENDING     // Baru diajukan
-  PROCESSING  // Sedang diproses HR
-  READY       // Siap diambil
-  REJECTED    // Ditolak
+  PENDING // Baru diajukan
+  PROCESSING // Sedang diproses HR
+  READY // Siap diambil
+  REJECTED // Ditolak
 }
 
 model LetterRequest {
@@ -536,7 +553,7 @@ model LetterRequest {
   createdAt  DateTime     @default(now()) @map("created_at")
   updatedAt  DateTime     @updatedAt @map("updated_at")
 
-  employee   Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "idx_letter_requests_employee_id")
   @@map("letter_requests")
@@ -570,8 +587,8 @@ model AssetTicket {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  employee    Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
-  asset       Asset?       @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
+  asset    Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([employeeId], map: "asset_tickets_employee_id_fkey")
   @@index([assetId], map: "asset_tickets_asset_id_fkey")

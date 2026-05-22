@@ -1,0 +1,72 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { prisma } from "@/lib/prisma";
+import logger from "@/lib/logger";
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const rateLimited = checkApiRateLimit(request.headers);
+    if (rateLimited) return rateLimited;
+
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    // Only GA or HR can delete BAST
+    if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
+
+    try {
+        const id = (await params).id;
+        
+        const bastDoc = await prisma.assetBastDocument.findUnique({
+            where: { id }
+        });
+
+        if (!bastDoc) {
+            return NextResponse.json({ error: "Dokumen BAST tidak ditemukan" }, { status: 404 });
+        }
+
+        // Hapus record dari DB
+        // fileData otomatis terhapus karena merupakan field di record ini
+        await prisma.assetBastDocument.delete({
+            where: { id }
+        });
+
+        logger.info("BAST document deleted", { bastId: id, deletedBy: session.employeeId });
+
+        // Audit log
+        await prisma.auditLog.create({
+            data: {
+                action: "DELETE_BAST",
+                entity: "ASSET_BAST",
+                entityId: id,
+                details: JSON.stringify({ fileName: bastDoc.fileName }),
+                performedBy: session.employeeId
+            }
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (err) {
+        return serverErrorResponse("BASTDelete", err);
+    }
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const id = (await params).id;
+        const doc = await prisma.assetBastDocument.findUnique({
+            where: { id }
+        });
+
+        if (!doc || !doc.fileData) {
+            return new NextResponse("File tidak ditemukan", { status: 404 });
+        }
+
+        return new NextResponse(doc.fileData, {
+            headers: {
+                "Content-Type": doc.mimeType || "application/octet-stream",
+                "Content-Disposition": `inline; filename="${doc.fileName}"`
+            }
+        });
+    } catch (err) {
+        return serverErrorResponse("BASTGet", err);
+    }
+}

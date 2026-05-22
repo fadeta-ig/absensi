@@ -223,7 +223,7 @@ export default function BulkImportPage() {
                 <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight text-center">Registrasi Massal Berhasil!</h1>
                 <p className="text-[var(--text-secondary)] mt-2 text-center text-lg">{successCount} aset telah diamankan langsung ke dalam GA Pool.</p>
                 <div className="mt-8 flex gap-4">
-                    <button onClick={() => router.push("/ga/assets")} className="px-6 py-3 bg-[var(--foreground)] text-[var(--background)] text-white font-semibold rounded-xl shadow-md hover:bg-[var(--primary-light)] transition">Lihat Tabel Aset</button>
+                    <button onClick={() => router.push("/ga/assets")} className="px-6 py-3 bg-[var(--foreground)] text-[var(--background)] font-semibold rounded-xl shadow-md hover:bg-[var(--primary-light)] transition">Lihat Tabel Aset</button>
                     <button onClick={() => {setSuccessCount(null); clearAll();}} className="px-6 py-3 bg-[var(--card)] text-[var(--text-secondary)] font-semibold border-2 border-[var(--border)] rounded-xl hover:bg-[var(--secondary)] transition">Import Lagi</button>
                 </div>
             </div>
@@ -325,7 +325,7 @@ export default function BulkImportPage() {
                             <button
                                 onClick={handleSubmit}
                                 disabled={isSubmitting}
-                                className="px-6 py-2.5 bg-[var(--foreground)] text-[var(--background)] text-white font-semibold rounded-lg shadow-sm hover:bg-[var(--primary-light)] transition flex items-center gap-2 disabled:opacity-50"
+                                className="px-6 py-2.5 bg-[var(--foreground)] text-[var(--background)] font-semibold rounded-lg shadow-sm hover:bg-[var(--primary-light)] transition flex items-center gap-2 disabled:opacity-50"
                             >
                                 <Send size={16} />
                                 {isSubmitting ? "Menginjeksi Database..." : "Jalankan Registrasi Massal"}
@@ -337,3 +337,4 @@ export default function BulkImportPage() {
         </div>
     );
 }
+

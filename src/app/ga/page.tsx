@@ -77,7 +77,7 @@ export default function GaDashboard() {
                     <p className="text-sm text-[var(--text-secondary)] mt-1">Manajemen aset perusahaan WIG</p>
                 </div>
                 <div className="mt-4 md:mt-0">
-                    <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">Operational Mode: Active</span>
+                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-100">Operational Mode: Active</span>
                 </div>
             </div>
 
@@ -162,7 +162,7 @@ export default function GaDashboard() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
+                                        <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
                                     </td>
                                 </tr>
                             ))}

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
     ArrowLeft, Edit3, ArrowRightLeft, Package, QrCode,
     History, ClipboardCheck, Trash2, Download, Clock,
-    ArrowRight, CheckCircle, AlertCircle, Wrench, UserCheck
+    ArrowRight, CheckCircle, AlertCircle, Wrench, UserCheck, Upload, FileText, Loader2
 } from "lucide-react";
 import { AssetWithHistory, AssetHistoryRow, AssetCondition } from "@/lib/types/asset";
 import { KondisiBadge, StatusBadge, CategoryBadge, HolderIcon } from "@/features/ga/components/badges/AssetBadges";
@@ -118,12 +118,19 @@ function AssetDetailContent({ id }: { id: string }) {
         }
     }, [searchParams]);
 
+    const fetchHistory = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/assets/history?assetId=${id}`);
+            if (res.ok) setHistory(await res.json());
+        } catch (err) {
+            console.error(err);
+        }
+    }, [id]);
+
     // Lazy-load history & inspections when tab switches
     useEffect(() => {
         if (activeTab === "history" && !historyLoaded) {
-            fetch(`/api/assets/history?assetId=${id}`)
-                .then(r => r.ok ? r.json() : [])
-                .then(data => { setHistory(data); setHistoryLoaded(true); });
+            fetchHistory().then(() => setHistoryLoaded(true));
         }
         if (activeTab === "inspections" && !inspLoaded) {
             fetch(`/api/assets/${id}/inspect`)
@@ -246,10 +253,10 @@ function AssetDetailContent({ id }: { id: string }) {
                     </div>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto">
-                    <button onClick={() => router.push(`/ga/assets/${id}/assign`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors">
+                    <button onClick={() => router.push(`/ga/assets/${id}/assign`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors">
                         <ArrowRightLeft size={16} /> Serah Terima
                     </button>
-                    <button onClick={() => router.push(`/ga/assets/${id}/edit`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors">
+                    <button onClick={() => router.push(`/ga/assets/${id}/edit`)} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors">
                         <Edit3 size={16} /> Edit
                     </button>
                 </div>
@@ -335,7 +342,7 @@ function AssetDetailContent({ id }: { id: string }) {
                             )}
 
                             {activeTab === "history" && (
-                                <HistoryTab history={history} loaded={historyLoaded} />
+                                <HistoryTab history={history} loaded={historyLoaded} onRefresh={fetchHistory} />
                             )}
 
                             {activeTab === "inspections" && (
@@ -362,7 +369,7 @@ function AssetDetailContent({ id }: { id: string }) {
                             </div>
                         )}
                         <p className="text-xs text-[var(--text-secondary)]">Scan QR Code ini untuk akses mandiri via perangkat cerdas.</p>
-                        <button onClick={() => window.open(qrUrl || "")} className="mt-4 text-xs font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors">
+                        <button onClick={() => window.open(qrUrl || "")} className="mt-4 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1.5 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
                             Buka Gambar Bersih
                         </button>
                     </div>
@@ -419,7 +426,7 @@ function AssetDetailContent({ id }: { id: string }) {
                        <form onSubmit={handleInspect} className="p-6 flex flex-col gap-5">
                            <div>
                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Kondisi Fisik Saat Ini</label>
-                               <select required value={inspData.kondisi} onChange={e => setInspData(prev => ({...prev, kondisi: e.target.value as AssetCondition}))} className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]">
+                               <select required value={inspData.kondisi} onChange={e => setInspData(prev => ({...prev, kondisi: e.target.value as AssetCondition}))} className="form-input">
                                    <option value="BAIK">Baik</option>
                                    <option value="KURANG_BAIK">Kurang Baik</option>
                                    <option value="RUSAK">Rusak</option>
@@ -438,11 +445,11 @@ function AssetDetailContent({ id }: { id: string }) {
                            </div>
                            <div>
                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Catatan Tambahan</label>
-                               <textarea value={inspData.notes} onChange={e => setInspData(prev => ({...prev, notes: e.target.value}))} rows={3} placeholder="Ada kerusakan spesifik?" className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                               <textarea value={inspData.notes} onChange={e => setInspData(prev => ({...prev, notes: e.target.value}))} rows={3} placeholder="Ada kerusakan spesifik?" className="form-input" />
                            </div>
                            <div className="flex justify-end gap-3 pt-2">
                                <button type="button" onClick={() => setShowInspection(false)} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors">Batal</button>
-                               <button type="submit" disabled={submittingInsp} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold text-white hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
+                               <button type="submit" disabled={submittingInsp} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold  hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
                                    {submittingInsp ? "Menyimpan" : "Simpan Inspeksi"}
                                </button>
                            </div>
@@ -461,26 +468,26 @@ function AssetDetailContent({ id }: { id: string }) {
                        <form onSubmit={handleMaintenanceSubmit} className="p-6 flex flex-col gap-5 overflow-y-auto">
                            <div>
                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Nama Vendor / Tempat Servis *</label>
-                               <input type="text" required value={maintData.vendorName} onChange={e => setMaintData(prev => ({...prev, vendorName: e.target.value}))} placeholder="Contoh: iColor Service Center" className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                               <input type="text" required value={maintData.vendorName} onChange={e => setMaintData(prev => ({...prev, vendorName: e.target.value}))} placeholder="Contoh: iColor Service Center" className="form-input" />
                            </div>
                            <div className="grid grid-cols-2 gap-4">
                                <div>
                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Tanggal Mulai *</label>
-                                   <input type="date" required value={maintData.startDate} onChange={e => setMaintData(prev => ({...prev, startDate: e.target.value}))} className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                                   <input type="date" required value={maintData.startDate} onChange={e => setMaintData(prev => ({...prev, startDate: e.target.value}))} className="form-input" />
                                </div>
                                <div>
                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Estimasi Selesai</label>
-                                   <input type="date" value={maintData.estimatedEndDate} onChange={e => setMaintData(prev => ({...prev, estimatedEndDate: e.target.value}))} className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                                   <input type="date" value={maintData.estimatedEndDate} onChange={e => setMaintData(prev => ({...prev, estimatedEndDate: e.target.value}))} className="form-input" />
                                </div>
                            </div>
                            <div className="grid grid-cols-2 gap-4">
                                <div>
                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Estimasi Biaya (Rp)</label>
-                                   <input type="number" min="0" value={maintData.cost} onChange={e => setMaintData(prev => ({...prev, cost: Number(e.target.value)}))} className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                                   <input type="number" min="0" value={maintData.cost} onChange={e => setMaintData(prev => ({...prev, cost: Number(e.target.value)}))} className="form-input" />
                                </div>
                                <div>
                                    <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Status Progres</label>
-                                   <select required value={maintData.status} onChange={e => setMaintData(prev => ({...prev, status: e.target.value}))} className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]">
+                                   <select required value={maintData.status} onChange={e => setMaintData(prev => ({...prev, status: e.target.value}))} className="form-input">
                                        <option value="IN_PROGRESS">Sedang Dikerjakan</option>
                                        <option value="COMPLETED">Selesai</option>
                                        <option value="CANCELLED">Dibatalkan</option>
@@ -489,15 +496,15 @@ function AssetDetailContent({ id }: { id: string }) {
                            </div>
                            <div>
                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Keluhan / Catatan</label>
-                               <textarea value={maintData.notes} onChange={e => setMaintData(prev => ({...prev, notes: e.target.value}))} rows={2} placeholder="Kerusakan pada baterai kembung..." className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                               <textarea value={maintData.notes} onChange={e => setMaintData(prev => ({...prev, notes: e.target.value}))} rows={2} placeholder="Kerusakan pada baterai kembung..." className="form-input" />
                            </div>
                            <div>
                                <label className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 block">Link / Upload Nota (Opsional)</label>
-                               <input type="text" value={maintData.attachmentUrl} onChange={e => setMaintData(prev => ({...prev, attachmentUrl: e.target.value}))} placeholder="Link Google Drive foto nota..." className="w-full px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                               <input type="text" value={maintData.attachmentUrl} onChange={e => setMaintData(prev => ({...prev, attachmentUrl: e.target.value}))} placeholder="Link Google Drive foto nota..." className="form-input" />
                            </div>
                            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)] shrink-0">
                                <button type="button" onClick={() => setShowMaintenance(false)} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors">Batal</button>
-                               <button type="submit" disabled={submittingMaint} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold text-white hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
+                               <button type="submit" disabled={submittingMaint} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold  hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
                                    {submittingMaint ? "Menyimpan" : "Simpan Data"}
                                </button>
                            </div>
@@ -520,7 +527,46 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
 
 // ─── History Tab ────────────────────────────────────────────────
 
-function HistoryTab({ history, loaded }: { history: AssetHistoryRow[]; loaded: boolean }) {
+function HistoryTab({ history, loaded, onRefresh }: { history: AssetHistoryRow[]; loaded: boolean; onRefresh: () => void }) {
+    const [uploadingId, setUploadingId] = useState<string | null>(null);
+
+    const handleUploadBast = async (e: React.ChangeEvent<HTMLInputElement>, historyId: string) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingId(historyId);
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("historyId", historyId);
+
+        try {
+            const res = await fetch("/api/assets/bast", { method: "POST", body: formData });
+            if (res.ok) {
+                onRefresh();
+            } else {
+                const data = await res.json();
+                alert(data.error || "Gagal upload BAST");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Terjadi kesalahan jaringan.");
+        } finally {
+            setUploadingId(null);
+            e.target.value = ""; // reset input
+        }
+    };
+
+    const handleDeleteBast = async (bastId: string) => {
+        if (!confirm("Hapus dokumen BAST ini?")) return;
+        try {
+            const res = await fetch(`/api/assets/bast/${bastId}`, { method: "DELETE" });
+            if (res.ok) onRefresh();
+            else alert("Gagal menghapus BAST");
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     if (!loaded) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Memuat riwayat...</div>;
     if (history.length === 0) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Belum ada riwayat mutasi.</div>;
 
@@ -537,25 +583,64 @@ function HistoryTab({ history, loaded }: { history: AssetHistoryRow[]; loaded: b
             {history.map(h => {
                 const cfg = ACTION_CONFIG[h.action] ?? { icon: Clock, label: h.action, color: "text-[var(--text-secondary)] bg-[var(--secondary)] border-[var(--border)]" };
                 const Icon = cfg.icon;
+                const requiresBast = h.action === "assigned" || h.action === "returned";
+
                 return (
-                    <div key={h.id} className="flex gap-3 p-3 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)]/50 transition-colors">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 ${cfg.color}`}>
-                            <Icon size={16} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-semibold text-[var(--text-primary)]">{cfg.label}</span>
-                                <KondisiBadge kondisi={h.kondisiSaat} />
+                    <div key={h.id} className="flex flex-col p-3 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)]/50 transition-colors">
+                        <div className="flex gap-3 w-full">
+                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center border shrink-0 ${cfg.color}`}>
+                                <Icon size={16} />
                             </div>
-                            <div className="text-xs text-[var(--text-secondary)] mt-1">
-                                {h.fromName ?? "GA Pool"} <span className="mx-1">→</span> {h.toName ?? "GA Pool"}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-semibold text-[var(--text-primary)]">{cfg.label}</span>
+                                    <KondisiBadge kondisi={h.kondisiSaat} />
+                                </div>
+                                <div className="text-xs text-[var(--text-secondary)] mt-1">
+                                    {h.fromName ?? "GA Pool"} <span className="mx-1">→</span> {h.toName ?? "GA Pool"}
+                                </div>
+                                {h.notes && <p className="text-xs text-[var(--text-muted)] mt-1 italic">{h.notes}</p>}
                             </div>
-                            {h.notes && <p className="text-xs text-[var(--text-muted)] mt-1 italic">{h.notes}</p>}
+                            <div className="text-right shrink-0">
+                                <span className="text-[10px] text-[var(--text-muted)] block">{new Date(h.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                <span className="text-[10px] text-[var(--text-muted)] block">{h.performedBy}</span>
+                            </div>
                         </div>
-                        <div className="text-right shrink-0">
-                            <span className="text-[10px] text-[var(--text-muted)] block">{new Date(h.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
-                            <span className="text-[10px] text-[var(--text-muted)] block">{h.performedBy}</span>
-                        </div>
+
+                        {/* BAST Section */}
+                        {requiresBast && (
+                            <div className="mt-3 pl-12 border-t border-dashed border-[var(--border)] pt-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Dokumen BAST</span>
+                                    <label className="cursor-pointer flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2.5 py-1 rounded hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
+                                        {uploadingId === h.id ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                        {h.bastDocuments && h.bastDocuments.length > 0 ? "Upload Revisi" : "Upload BAST"}
+                                        <input type="file" className="hidden" accept=".pdf,image/png,image/jpeg" onChange={(e) => handleUploadBast(e, h.id)} disabled={uploadingId === h.id} />
+                                    </label>
+                                </div>
+                                
+                                {h.bastDocuments && h.bastDocuments.length > 0 ? (
+                                    <div className="flex flex-col gap-1.5 mt-2">
+                                        {h.bastDocuments.map((doc, idx) => (
+                                            <div key={doc.id} className="flex items-center justify-between bg-[var(--card)] border border-[var(--border)] p-2 rounded text-xs group">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <FileText size={14} className="text-indigo-500 shrink-0" />
+                                                    <a href={`/api/assets/bast/${doc.id}`} target="_blank" rel="noopener noreferrer" className="font-medium text-[var(--text-primary)] hover:text-indigo-600 hover:underline truncate">
+                                                        {doc.fileName}
+                                                    </a>
+                                                    {idx === 0 && <span className="shrink-0 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">Terbaru</span>}
+                                                </div>
+                                                <button onClick={() => handleDeleteBast(doc.id)} className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-red-500 shrink-0 transition-all p-1">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-xs text-[var(--text-muted)] italic">Belum ada dokumen BAST yang diunggah.</div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 );
             })}
@@ -571,7 +656,7 @@ function InspectionTab({ inspections, loaded, onAdd }: { inspections: Inspection
     return (
         <div className="space-y-4">
             <div className="flex justify-end">
-                <button onClick={onAdd} className="bg-[var(--foreground)] text-[var(--background)] text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--primary-light)] transition-colors">
+                <button onClick={onAdd} className="bg-[var(--foreground)] text-[var(--background)] px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--primary-light)] transition-colors">
                     <ClipboardCheck size={14} /> Catat Inspeksi Baru
                 </button>
             </div>
@@ -587,7 +672,7 @@ function InspectionTab({ inspections, loaded, onAdd }: { inspections: Inspection
                     <div key={ins.id} className="p-4 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)]/50 transition-colors">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${allOk ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-amber-50 border-amber-100 text-amber-600"}`}>
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${allOk ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20 text-amber-600 dark:text-amber-400"}`}>
                                     {allOk ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                                 </div>
                                 <div>
@@ -631,7 +716,7 @@ function MaintenanceTab({ maintenances, loaded, onAdd }: { maintenances: Mainten
     return (
         <div className="space-y-4">
             <div className="flex justify-end">
-                <button onClick={onAdd} className="bg-[var(--foreground)] text-[var(--background)] text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--primary-light)] transition-colors">
+                <button onClick={onAdd} className="bg-[var(--foreground)] text-[var(--background)] px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--primary-light)] transition-colors">
                     <Wrench size={14} /> Catat Servis/Maintenance
                 </button>
             </div>
@@ -646,7 +731,7 @@ function MaintenanceTab({ maintenances, loaded, onAdd }: { maintenances: Mainten
                             <div key={maint.id} className="p-4 rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)]/50 transition-colors flex flex-col gap-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${isDone ? "bg-emerald-50 border-emerald-100 text-emerald-600" : isCancel ? "bg-[var(--secondary)] border-[var(--border)] text-[var(--text-muted)]" : "bg-amber-50 border-amber-100 text-amber-600"}`}>
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${isDone ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400" : isCancel ? "bg-[var(--secondary)] border-[var(--border)] text-[var(--text-muted)]" : "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20 text-amber-600 dark:text-amber-400"}`}>
                                             <Wrench size={16} />
                                         </div>
                                         <div>

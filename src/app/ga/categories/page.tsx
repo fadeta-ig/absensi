@@ -146,7 +146,7 @@ export default function CategoriesPage() {
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="Cth: Monitor, Tablet..."
                                 required
-                                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-shadow"
+                                className="form-input transition-shadow"
                             />
                         </div>
                         <div>
@@ -158,7 +158,7 @@ export default function CategoriesPage() {
                                 placeholder="Cth: MN, TAB..."
                                 required
                                 maxLength={5}
-                                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-shadow"
+                                className="form-input uppercase focus:outline-none focus:ring-2 focus:ring-[var(--ring)] transition-shadow"
                             />
                             <p className="text-[10px] text-[var(--text-muted)] mt-1">Akan menghasilkan kode seperti: MN-001</p>
                         </div>
@@ -166,7 +166,7 @@ export default function CategoriesPage() {
                         <button
                             type="submit"
                             disabled={saving}
-                            className="w-full py-2 bg-[var(--foreground)] text-[var(--background)] text-white rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 mt-2"
+                            className="w-full py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 mt-2"
                         >
                             {saving ? "Menyimpan..." : "Simpan Kategori"}
                         </button>
@@ -217,7 +217,7 @@ export default function CategoriesPage() {
                                                 {editingId === cat.id ? (
                                                     <input type="text" value={editPrefix} maxLength={5} onChange={e => setEditPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm font-mono w-20 uppercase" />
                                                 ) : (
-                                                    <span className="font-mono text-xs font-semibold text-indigo-600 bg-indigo-50/50 px-2 rounded py-0.5">{cat.prefix}</span>
+                                                    <span className="font-mono text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10/50 px-2 rounded py-0.5">{cat.prefix}</span>
                                                 )}
                                             </td>
                                             <td className="px-5 py-3 text-[var(--text-secondary)] text-center">
@@ -253,3 +253,4 @@ export default function CategoriesPage() {
         </div>
     );
 }
+

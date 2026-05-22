@@ -64,4 +64,5 @@ export type AssetHistoryRow = {
     notes: string | null;
     performedBy: string;
     createdAt: string;
+    bastDocuments?: { id: string; fileName: string; uploadedBy: string; createdAt: string }[];
 };

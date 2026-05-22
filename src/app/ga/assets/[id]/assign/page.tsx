@@ -118,7 +118,7 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
                 <div className="p-6 flex flex-col gap-6">
                     <div>
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Tujuan Penyerahan</label>
-                        <select value={toHolderType} onChange={e => { setToHolderType(e.target.value); setToName(""); setToEmployeeId(""); }} className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] appearance-none">
+                        <select value={toHolderType} onChange={e => { setToHolderType(e.target.value); setToName(""); setToEmployeeId(""); }} className="form-input appearance-none">
                             <option value="EMPLOYEE">Karyawan Aktif</option>
                             <option value="TEAM">Divisi / Tim / Divisi Virtual</option>
                             <option value="GA_POOL">Kembalikan ke GA Pool (Rak)</option>
@@ -136,13 +136,13 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
                     {(toHolderType === "TEAM" || toHolderType === "FORMER_EMPLOYEE") && (
                         <div>
                             <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Nama Entitas/Pihak</label>
-                            <input type="text" required value={toName} onChange={e => setToName(e.target.value)} placeholder="Contoh: Tim Creative, Budi (Resign)" className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                            <input type="text" required value={toName} onChange={e => setToName(e.target.value)} placeholder="Contoh: Tim Creative, Budi (Resign)" className="form-input" />
                         </div>
                     )}
 
                     <div>
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Kondisi Saat Ini</label>
-                        <select value={kondisi} onChange={e => setKondisi(e.target.value)} className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] appearance-none">
+                        <select value={kondisi} onChange={e => setKondisi(e.target.value)} className="form-input appearance-none">
                             <option value="BAIK">Baik</option>
                             <option value="KURANG_BAIK">Kurang Baik</option>
                             <option value="RUSAK">Rusak</option>
@@ -151,7 +151,7 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
 
                     <div>
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Catatan Penyerahan (Opsional)</label>
-                        <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Kondisi lecet sedikit di ujung layar..." className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]" />
+                        <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Kondisi lecet sedikit di ujung layar..." className="form-input" />
                     </div>
                 </div>
 
@@ -186,7 +186,7 @@ function EmployeeCombobox({
             <button
                 type="button"
                 onClick={() => setOpen(!open)}
-                className="w-full px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)] flex justify-between items-center text-[var(--text-secondary)]"
+                className="form-input flex justify-between items-center text-[var(--text-secondary)]"
             >
                 {selected ? selected.name : "-- Pilih Karyawan --"}
                 <ChevronsUpDown size={14} className="text-[var(--text-muted)]" />

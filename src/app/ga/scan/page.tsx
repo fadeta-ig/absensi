@@ -153,7 +153,7 @@ function ScanContent() {
                                 className="w-full flex items-center justify-between p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl hover:border-slate-800 hover:ring-1 hover:ring-[var(--ring)] transition-all group"
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] group-hover:bg-[var(--foreground)] text-[var(--background)] group-hover:text-white transition-colors">
+                                    <div className="w-10 h-10 rounded-lg bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] group-hover:bg-[var(--foreground)] text-[var(--background)] group-hover: transition-colors">
                                         <Package size={20} />
                                     </div>
                                     <div className="text-left">

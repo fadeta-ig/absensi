@@ -93,7 +93,7 @@ export default function PrintLabelsPage() {
                     <button
                         disabled={selectedIds.size === 0}
                         onClick={handlePrint}
-                        className="flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                        className="flex items-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
                     >
                         <Printer size={16} />
                         Cetak {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
@@ -328,3 +328,4 @@ function QrLabel({ asset }: { asset: AssetWithHistory }) {
         </div>
     );
 }
+

@@ -159,7 +159,7 @@ export default function SimCardDashboardPage() {
                     </button>
                     <button 
                         onClick={() => router.push("/ga/sim/create")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors shadow-sm"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--foreground)] text-[var(--background)] px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors shadow-sm"
                     >
                         <Plus size={16} /> Registrasi SIM
                     </button>
@@ -317,3 +317,4 @@ export default function SimCardDashboardPage() {
         </div>
     );
 }
+

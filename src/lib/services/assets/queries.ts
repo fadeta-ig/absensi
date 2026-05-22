@@ -132,6 +132,12 @@ export async function getAssetsByEmployeeId(employeeId: string): Promise<AssetWi
 export async function getAssetHistory(assetId: string): Promise<AssetHistoryRow[]> {
     const rows = await prisma.assetHistory.findMany({
         where: { assetId },
+        include: { 
+            bastDocuments: { 
+                select: { id: true, fileName: true, uploadedBy: true, createdAt: true, mimeType: true },
+                orderBy: { createdAt: "desc" } 
+            } 
+        },
         orderBy: { createdAt: "desc" },
     });
     return rows.map(r => ({
@@ -146,6 +152,12 @@ export async function getAssetHistory(assetId: string): Promise<AssetHistoryRow[
         notes: r.notes,
         performedBy: r.performedBy,
         createdAt: new Date(r.createdAt).toISOString(),
+        bastDocuments: r.bastDocuments.map(b => ({
+            id: b.id,
+            fileName: b.fileName,
+            uploadedBy: b.uploadedBy,
+            createdAt: new Date(b.createdAt).toISOString(),
+        })),
     }));
 }
 
