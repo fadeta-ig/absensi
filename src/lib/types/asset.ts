@@ -30,8 +30,6 @@ export type AssetWithHistory = {
     assignedToId: string | null;
     assignedAt: string | null;
     assignedEmployee: AssignedEmployeeInfo | null;
-    nomorIndosat: string | null;
-    expiredDate: string | null;
     keterangan: string | null;
     
     // Identifikasi Perangkat

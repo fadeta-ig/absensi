@@ -95,8 +95,8 @@ export async function resolveCorrection(id: string, status: "APPROVED" | "REJECT
 
         if (status === "APPROVED") {
             const dateStr = toDateString(record.targetDate);
-            const d = new Date(dateStr);
-            const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const [year, month, day] = dateStr.split("-").map(Number);
+            const start = new Date(year, month - 1, day);
             const end = new Date(start.getTime() + 86400000);
 
             const attendance = await tx.attendanceRecord.findFirst({

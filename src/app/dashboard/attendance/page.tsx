@@ -1,46 +1,15 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ClipboardList, Search, Calendar, Filter, UserCheck, UserX, Download, FileSpreadsheet, Building2, Layers, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, Check, Camera, X } from "lucide-react";
+import { ClipboardList, Download, FileSpreadsheet, X } from "lucide-react";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
 
-interface Employee {
-    id: string;
-    employeeId: string;
-    name: string;
-    department: string;
-    division?: string | null;
-}
-
-interface AttendanceRecord {
-    id: string;
-    employeeId: string;
-    date: string;
-    clockIn?: string;
-    clockOut?: string;
-    clockInPhoto?: string | null;
-    clockOutPhoto?: string | null;
-    status: string;
-}
-
-interface MasterData {
-    id: string;
-    name: string;
-}
-
-interface AttendanceCorrection {
-    id: string;
-    employeeId: string;
-    targetDate: string;
-    proposedClockIn: string | null;
-    proposedClockOut: string | null;
-    reason: string;
-    attachmentUrl: string | null;
-    status: "PENDING" | "APPROVED" | "REJECTED";
-    assignedManagerId: string | null;
-    createdAt: string;
-    employee?: { name: string; employeeId: string };
-}
+import { AttendanceSummary } from "./components/AttendanceSummary";
+import { AttendanceFilters } from "./components/AttendanceFilters";
+import { AttendanceLogTab } from "./components/AttendanceLogTab";
+import { AttendanceCorrectionTab } from "./components/AttendanceCorrectionTab";
+import { Employee, AttendanceRecord, MasterData, AttendanceCorrection } from "./types";
+import { useCallback } from "react";
 
 export default function AttendanceMonitorPage() {
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
@@ -96,14 +65,14 @@ export default function AttendanceMonitorPage() {
         setCurrentPage(1);
     }, [startDate, endDate, statusFilter, deptFilter, divFilter, search]);
 
-    const getEmpInfo = (empId: string) => {
+    const getEmpInfo = useCallback((empId: string) => {
         const emp = employees.find((e) => e.employeeId === empId);
         return {
             name: emp?.name || empId,
             department: emp?.department || "-",
             division: emp?.division || "-",
         };
-    };
+    }, [employees]);
 
     const formatTime = (timeStr?: string) => {
         if (!timeStr) return "--:--";
@@ -281,334 +250,44 @@ export default function AttendanceMonitorPage() {
 
             {activeTab === "log" && (
                 <>
-                {/* Summary */}
-            <div className="grid grid-cols-3 gap-4">
-                <div className="card p-4 text-center">
-                    <UserCheck className="w-5 h-5 text-green-600 mx-auto mb-2" />
-                    <p className="text-2xl font-extrabold text-green-600">{summaryData.present}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Hadir</p>
-                </div>
-                <div className="card p-4 text-center">
-                    <UserX className="w-5 h-5 text-orange-500 mx-auto mb-2" />
-                    <p className="text-2xl font-extrabold text-orange-500">{summaryData.late}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Terlambat</p>
-                </div>
-                <div className="card p-4 text-center">
-                    <ClipboardList className="w-5 h-5 text-blue-600 mx-auto mb-2" />
-                    <p className="text-2xl font-extrabold text-blue-600">{summaryData.total}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Total Record</p>
-                </div>
-            </div>
+                    <AttendanceSummary
+                        present={summaryData.present}
+                        late={summaryData.late}
+                        total={summaryData.total}
+                    />
 
-            {/* Filters Section */}
-            <div className="card p-5 space-y-4">
-                <div className="flex flex-wrap gap-4">
-                    {/* Search */}
-                    <div className="relative flex-1 min-w-[300px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                        <input
-                            className="form-input pl-10 h-11"
-                            placeholder="Cari ID atau nama karyawan..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                    </div>
+                    <AttendanceFilters
+                        search={search} setSearch={setSearch}
+                        startDate={startDate} setStartDate={setStartDate}
+                        endDate={endDate} setEndDate={setEndDate}
+                        deptFilter={deptFilter} setDeptFilter={setDeptFilter}
+                        divFilter={divFilter} setDivFilter={setDivFilter}
+                        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+                        departments={departments} divisions={divisions}
+                    />
 
-                    {/* Date Range */}
-                    <div className="flex items-center gap-2 flex-1 min-w-[300px]">
-                        <div className="relative flex-1">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                            <input
-                                type="date"
-                                className="form-input pl-10 h-11"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                title="Tanggal Mulai"
-                            />
-                        </div>
-                        <span className="text-[var(--text-muted)] font-medium">s/d</span>
-                        <div className="relative flex-1">
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                            <input
-                                type="date"
-                                className="form-input pl-10 h-11"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                title="Tanggal Selesai"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap gap-4">
-                    {/* Dept Filter */}
-                    <div className="relative flex-1 min-w-[200px]">
-                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                        <select
-                            className="form-select pl-10 h-11"
-                            value={deptFilter}
-                            onChange={(e) => setDeptFilter(e.target.value)}
-                        >
-                            <option value="all">Semua Departemen</option>
-                            {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Div Filter */}
-                    <div className="relative flex-1 min-w-[200px]">
-                        <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                        <select
-                            className="form-select pl-10 h-11"
-                            value={divFilter}
-                            onChange={(e) => setDivFilter(e.target.value)}
-                        >
-                            <option value="all">Semua Divisi</option>
-                            {divisions.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                        </select>
-                    </div>
-
-                    {/* Status Filter */}
-                    <div className="relative flex-1 min-w-[200px]">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                        <select
-                            className="form-select pl-10 h-11"
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="all">Semua Status</option>
-                            <option value="present">Hadir</option>
-                            <option value="late">Terlambat</option>
-                            <option value="absent">Alpa</option>
-                            <option value="leave">Cuti</option>
-                            <option value="sick">Sakit</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            {/* Table */}
-            <div className="card overflow-hidden border border-[var(--border)] shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead className="bg-[#F9FAFB]">
-                            <tr>
-                                <th className="w-32">ID Karyawan</th>
-                                <th>Nama</th>
-                                <th className="hidden lg:table-cell">Departemen</th>
-                                <th className="w-32">Tanggal</th>
-                                <th className="w-24">Clock In</th>
-                                <th className="w-24">Clock Out</th>
-                                <th className="w-20 text-center hidden md:table-cell">Foto</th>
-                                <th className="w-32 text-center">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border)]">
-                            {paginatedRecords.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="text-center py-12 text-[var(--text-muted)] italic">
-                                        Tidak ada data absensi ditemukan untuk kriteria ini.
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedRecords.map((r) => {
-                                    const info = getEmpInfo(r.employeeId);
-                                    return (
-                                        <tr key={r.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
-                                            <td className="font-mono text-xs font-semibold text-[var(--text-primary)]">
-                                                {r.employeeId}
-                                            </td>
-                                            <td className="font-medium text-[var(--text-primary)]">
-                                                {info.name}
-                                            </td>
-                                            <td className="hidden lg:table-cell text-xs text-[var(--text-secondary)]">
-                                                {info.department}
-                                            </td>
-                                            <td className="text-sm text-[var(--text-secondary)]">
-                                                {r.date}
-                                            </td>
-                                            <td className="text-sm font-medium text-blue-600">
-                                                {formatTime(r.clockIn)}
-                                            </td>
-                                            <td className="text-sm font-medium text-orange-600">
-                                                {formatTime(r.clockOut)}
-                                            </td>
-                                            <td className="hidden md:table-cell">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    {r.clockInPhoto ? (
-                                                        <button
-                                                            onClick={() => setPhotoPreview({ url: r.clockInPhoto!, label: `Clock In — ${info.name} (${r.date})` })}
-                                                            className="w-8 h-8 rounded-md overflow-hidden border border-blue-200 hover:border-blue-400 transition-colors cursor-pointer"
-                                                            title="Lihat foto masuk"
-                                                        >
-                                                            <img src={r.clockInPhoto} alt="In" className="w-full h-full object-cover" />
-                                                        </button>
-                                                    ) : (
-                                                        <div className="w-8 h-8 rounded-md bg-[var(--secondary)] flex items-center justify-center">
-                                                            <Camera className="w-3 h-3 text-gray-300" />
-                                                        </div>
-                                                    )}
-                                                    {r.clockOutPhoto ? (
-                                                        <button
-                                                            onClick={() => setPhotoPreview({ url: r.clockOutPhoto!, label: `Clock Out — ${info.name} (${r.date})` })}
-                                                            className="w-8 h-8 rounded-md overflow-hidden border border-orange-200 hover:border-orange-400 transition-colors cursor-pointer"
-                                                            title="Lihat foto pulang"
-                                                        >
-                                                            <img src={r.clockOutPhoto} alt="Out" className="w-full h-full object-cover" />
-                                                        </button>
-                                                    ) : (
-                                                        <div className="w-8 h-8 rounded-md bg-[var(--secondary)] flex items-center justify-center">
-                                                            <Camera className="w-3 h-3 text-gray-300" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="text-center">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${r.status === "present" ? "bg-green-100 text-green-700" :
-                                                    r.status === "late" ? "bg-orange-100 text-orange-700" :
-                                                        r.status === "absent" ? "bg-red-100 text-red-700" :
-                                                            "bg-blue-100 text-blue-700"
-                                                    }`}>
-                                                    {statusLabel(r.status)}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination Controls */}
-                <div className="px-6 py-4 bg-[#F9FAFB] border-t border-[var(--border)] flex items-center justify-between">
-                    <div className="text-xs font-medium text-[var(--text-muted)]">
-                        Menampilkan <span className="text-[var(--text-primary)]">{(currentPage - 1) * itemsPerPage + 1}</span> - <span className="text-[var(--text-primary)]">{Math.min(currentPage * itemsPerPage, filtered.length)}</span> dari <span className="text-[var(--text-primary)] font-bold">{filtered.length}</span> data
-                    </div>
-                    {totalPages > 1 && (
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="p-2 rounded-md hover:bg-[var(--card)] hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
-                                title="Halaman Sebelumnya"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-
-                            <div className="flex items-center">
-                                {[...Array(totalPages)].map((_, i) => {
-                                    const page = i + 1;
-                                    // Only show current, first, last, and neighbors
-                                    if (
-                                        page === 1 ||
-                                        page === totalPages ||
-                                        (page >= currentPage - 1 && page <= currentPage + 1)
-                                    ) {
-                                        return (
-                                            <button
-                                                key={page}
-                                                onClick={() => setCurrentPage(page)}
-                                                className={`min-w-[32px] h-8 flex items-center justify-center rounded-md text-sm font-bold transition-all ${currentPage === page
-                                                    ? "bg-[var(--primary)] text-white shadow-md"
-                                                    : "text-[var(--text-muted)] hover:bg-[var(--card)] hover:text-[var(--primary)] border border-transparent hover:border-[var(--border)]"
-                                                    }`}
-                                            >
-                                                {page}
-                                            </button>
-                                        );
-                                    } else if (
-                                        page === currentPage - 2 ||
-                                        page === currentPage + 2
-                                    ) {
-                                        return <span key={page} className="px-1 text-[var(--text-muted)]">...</span>;
-                                    }
-                                    return null;
-                                })}
-                            </div>
-
-                            <button
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                                className="p-2 rounded-md hover:bg-[var(--card)] hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
-                                title="Halaman Selanjutnya"
-                            >
-                                <ChevronRight className="w-4 h-4" />
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-            </>
+                    <AttendanceLogTab
+                        paginatedRecords={paginatedRecords}
+                        filteredLength={filtered.length}
+                        currentPage={currentPage}
+                        itemsPerPage={itemsPerPage}
+                        totalPages={totalPages}
+                        setCurrentPage={setCurrentPage}
+                        getEmpInfo={getEmpInfo}
+                        formatTime={formatTime}
+                        statusLabel={statusLabel}
+                        setPhotoPreview={setPhotoPreview}
+                    />
+                </>
             )}
 
             {activeTab === "corrections" && (
-                <div className="card overflow-hidden shadow-sm">
-                    <div className="p-4 border-b bg-[var(--secondary)]/50">
-                        <h2 className="text-lg font-bold">Daftar Pengajuan Susulan Karyawan</h2>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead className="bg-[#F9FAFB]">
-                                <tr>
-                                    <th>Karyawan</th>
-                                    <th>Target Tanggal</th>
-                                    <th>Waktu Pengajuan</th>
-                                    <th>Alasan</th>
-                                    <th>Status</th>
-                                    <th className="text-center">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {corrections.length === 0 ? (
-                                    <tr><td colSpan={6} className="text-center py-10 text-[var(--text-muted)] italic">Tidak ada pengajuan koreksi masuk.</td></tr>
-                                ) : (
-                                    corrections.map(c => {
-                                        const ei = getEmpInfo(c.employeeId);
-                                        return (
-                                            <tr key={c.id}>
-                                                <td><div className="font-bold">{ei.name}</div><div className="text-xs text-[var(--text-secondary)]">{c.employeeId}</div></td>
-                                                <td className="font-medium text-sm">{c.targetDate}</td>
-                                                <td className="font-mono text-sm tracking-tight text-blue-600">
-                                                    {(c.proposedClockIn ? new Date(c.proposedClockIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
-                                                    {" - "}
-                                                    {(c.proposedClockOut ? new Date(c.proposedClockOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
-                                                </td>
-                                                <td className="text-sm max-w-[200px] truncate" title={c.reason}>{c.reason}</td>
-                                                <td>
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status === "PENDING" ? "bg-orange-100 text-orange-700" : c.status === "APPROVED" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                                                        {c.status}
-                                                    </span>
-                                                </td>
-                                                <td className="text-center">
-                                                    {c.status === "PENDING" ? (
-                                                        <div className="flex items-center justify-center gap-2">
-                                                            <button 
-                                                                onClick={() => handleCorrectionAction(c.id, "APPROVED")} 
-                                                                disabled={processingId === c.id}
-                                                                className="p-1 px-3 bg-green-500 text-white rounded-md text-xs font-bold hover:bg-green-600 disabled:opacity-50"
-                                                            >
-                                                                Terima
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleCorrectionAction(c.id, "REJECTED")} 
-                                                                disabled={processingId === c.id}
-                                                                className="p-1 px-3 bg-red-500 text-white rounded-md text-xs font-bold hover:bg-red-600 disabled:opacity-50"
-                                                            >
-                                                                Tolak
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-[var(--text-muted)] italic">Selesai</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        )
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <AttendanceCorrectionTab
+                    corrections={corrections}
+                    processingId={processingId}
+                    getEmpInfo={getEmpInfo}
+                    handleCorrectionAction={handleCorrectionAction}
+                />
             )}
 
             {/* Photo Preview Modal */}

@@ -11,8 +11,6 @@ const assetCreateSchema = z.object({
     holderType: z.enum(["EMPLOYEE", "FORMER_EMPLOYEE", "TEAM", "GA_POOL", "COMPANY_OWNED"]).optional().default("GA_POOL"),
     assignedToName: z.string().nullable().optional(),
     assignedToId: z.string().nullable().optional(),
-    nomorIndosat: z.string().nullable().optional(),
-    expiredDate: z.string().nullable().optional(),
     keterangan: z.string().nullable().optional(),
     serialNumber: z.string().nullable().optional(),
     imei: z.string().nullable().optional(),

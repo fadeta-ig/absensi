@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { Prisma } from "@prisma/client";
 import { TodoItem } from "@/types";
+import logger from "@/lib/logger";
 
 /** Mapper aman: mengkonversi objek Prisma TodoItem (Date) ke domain type (string ISO) */
 function toTodoItem(row: Prisma.TodoItemGetPayload<Record<string, never>>): TodoItem {
@@ -43,7 +44,8 @@ export async function updateTodo(id: string, data: Partial<TodoItem>): Promise<T
             },
         });
         return toTodoItem(row);
-    } catch {
+    } catch (error) {
+        logger.error("Failed to update todo", { id, error });
         return null;
     }
 }
@@ -52,7 +54,8 @@ export async function deleteTodo(id: string): Promise<boolean> {
     try {
         await prisma.todoItem.delete({ where: { id } });
         return true;
-    } catch {
+    } catch (error) {
+        logger.error("Failed to delete todo", { id, error });
         return false;
     }
 }

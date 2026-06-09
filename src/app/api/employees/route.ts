@@ -10,6 +10,7 @@ import {
     deleteEmployee,
 } from "@/lib/services/employeeService";
 import { employeeCreateSchema, employeeUpdateSchema } from "@/lib/validations/validationSchemas";
+import { logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
         });
 
         logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.employeeId });
+        await logAction("CREATE", "Employee", session.employeeId, employee.id, { employeeId: employee.employeeId, name: employee.name });
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...safe } = employee;
@@ -111,6 +113,7 @@ export async function PUT(request: NextRequest) {
         }
 
         logger.info("Employee updated", { targetId: updated.employeeId, updatedBy: session.employeeId });
+        await logAction("UPDATE", "Employee", session.employeeId, updated.id, data);
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...safe } = updated;
@@ -144,6 +147,8 @@ export async function DELETE(request: NextRequest) {
         }
 
         logger.info("Employee deleted", { employeeId: id, deletedBy: session.employeeId });
+        await logAction("DELETE", "Employee", session.employeeId, id);
+        
         return NextResponse.json({ success: true, message: "Data karyawan berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("EmployeesDELETE", err);

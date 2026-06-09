@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
-import { validateImport, executeImport } from "@/lib/services/bulkImportService";
+import { validateImport, executeImport } from "@/lib/services/bulk-import";
 import logger from "@/lib/logger";
 
 export async function POST(request: NextRequest) {

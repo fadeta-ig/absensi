@@ -2,6 +2,27 @@ import { prisma } from "../prisma";
 import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } from "@/types";
 import { AssetWithHistory } from "../types/asset";
 import { calculateWorkingDays } from "./leaveService";
+import { toDateString, toISOOrNull } from "@/lib/utils";
+
+// --- Internal Mappers ---
+function mapEmployee(row: any): Employee {
+    return { ...row, createdAt: toISOOrNull(row.createdAt)!, updatedAt: toISOOrNull(row.updatedAt)! };
+}
+function mapAttendance(row: any): AttendanceRecord {
+    return { ...row, date: toDateString(row.date), clockIn: toISOOrNull(row.clockIn), clockOut: toISOOrNull(row.clockOut) };
+}
+function mapVisit(row: any): VisitReport {
+    return { ...row, date: toDateString(row.date), createdAt: toDateString(row.createdAt) };
+}
+function mapLeave(row: any): LeaveRequest {
+    return { ...row, startDate: toDateString(row.startDate), endDate: toDateString(row.endDate), appliedAt: toISOOrNull(row.appliedAt)! };
+}
+function mapPayslip(row: any): PayslipRecord {
+    return { ...row, generatedAt: toISOOrNull(row.generatedAt)! };
+}
+function mapAsset(row: any): AssetWithHistory {
+    return { ...row, purchaseDate: toDateString(row.purchaseDate), warrantyExpiry: toDateString(row.warrantyExpiry), createdAt: toISOOrNull(row.createdAt)!, updatedAt: toISOOrNull(row.updatedAt)! };
+}
 
 export type Employee360Data = {
     employee: Employee;
@@ -116,19 +137,18 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
     );
 
     return {
-        employee: employee as unknown as Employee,
+        employee: mapEmployee(employee),
         stats: {
             attendanceRate,
             lateCount: lateDays,
             visitCount: totalVisits,
             leaveUsed: realUsedLeave,
-            // Gunakan nilai aktual dari perhitungan, bukan dari field yang mungkin drift
             leaveRemaining: Math.max(0, employee.totalLeave - realUsedLeave),
         },
-        recentAttendance: attendance as unknown as AttendanceRecord[],
-        recentVisits: visits as unknown as VisitReport[],
-        recentLeaves: leaves as unknown as LeaveRequest[],
-        recentPayslips: payslips as unknown as PayslipRecord[],
-        assignedAssets: assignedAssetsData as unknown as AssetWithHistory[],
+        recentAttendance: attendance.map(mapAttendance),
+        recentVisits: visits.map(mapVisit),
+        recentLeaves: leaves.map(mapLeave),
+        recentPayslips: payslips.map(mapPayslip),
+        assignedAssets: assignedAssetsData.map(mapAsset),
     };
 }

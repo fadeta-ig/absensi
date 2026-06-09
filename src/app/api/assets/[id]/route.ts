@@ -13,8 +13,6 @@ const assetUpdateSchema = z.object({
     assignedToId: z.string().nullable().optional(),
     assignedToName: z.string().nullable().optional(),
     keterangan: z.string().nullable().optional(),
-    nomorIndosat: z.string().nullable().optional(),
-    expiredDate: z.string().nullable().optional(),
     serialNumber: z.string().nullable().optional(),
     imei: z.string().nullable().optional(),
     manufacturer: z.string().nullable().optional(),

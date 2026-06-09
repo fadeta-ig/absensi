@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-    Database, Plus, Pencil, Trash2, X, Loader2,
-    Building2, Briefcase, ChevronRight, AlertCircle, Check, Layers, MapPin, Target, Search
+    Database, Plus, X, Loader2,
+    Building2, Briefcase, AlertCircle, Check, Layers, MapPin, Target, Search
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useConfirm } from "@/components/ConfirmModal";
@@ -17,39 +17,11 @@ const LocationMap = dynamic(() => import("@/components/LocationMap"), {
 
 const defaultCenter: [number, number] = [-6.200000, 106.816666];
 
-interface Department {
-    id: string;
-    name: string;
-    code: string | null;
-    description: string | null;
-    divisionId: string;
-    isActive: boolean;
-    division: { name: string };
-}
-
-interface Division {
-    id: string;
-    name: string;
-    isActive: boolean;
-    _count?: { departments: number };
-}
-
-interface Position {
-    id: string;
-    name: string;
-    isActive: boolean;
-}
-
-interface Location {
-    id: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    radius: number;
-    isActive: boolean;
-}
-
-type Tab = "departments" | "divisions" | "positions" | "locations";
+import { DepartmentTab } from "./components/DepartmentTab";
+import { DivisionTab } from "./components/DivisionTab";
+import { PositionTab } from "./components/PositionTab";
+import { LocationTab } from "./components/LocationTab";
+import { Department, Division, Position, Location, Tab } from "./types";
 
 export default function MasterDataPage() {
     const [tab, setTab] = useState<Tab>("departments");
@@ -452,206 +424,19 @@ export default function MasterDataPage() {
             )}
 
             {!loading && tab === "departments" && (
-                <div className="card overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Kode</th>
-                                    <th>Nama Departemen</th>
-                                    <th>Divisi</th>
-                                    <th>Status</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {departments.length === 0 ? (
-                                    <tr><td colSpan={5} className="text-center py-12 text-[var(--text-muted)]">Belum ada data departemen</td></tr>
-                                ) : (
-                                    departments.map((dept) => (
-                                        <tr key={dept.id}>
-                                            <td className="font-mono text-xs font-bold text-[var(--primary)]">{dept.code || "-"}</td>
-                                            <td>
-                                                <div className="font-semibold text-[var(--text-primary)]">{dept.name}</div>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                                                    <Layers className="w-3.5 h-3.5 opacity-50" />
-                                                    {dept.division?.name || "-"}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${dept.isActive ? "badge-success" : "badge-error"}`}>
-                                                    {dept.isActive ? "Aktif" : "Non-aktif"}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => handleEditDept(dept)} className="btn btn-ghost btn-sm !p-1.5 text-blue-600 hover:bg-blue-50">
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => handleDeleteDept(dept.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:bg-red-50">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <DepartmentTab departments={departments} onEdit={handleEditDept} onDelete={handleDeleteDept} />
             )}
 
             {!loading && tab === "divisions" && (
-                <div className="card overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Nama Divisi</th>
-                                    <th>Departemen</th>
-                                    <th>Status</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {divisions.length === 0 ? (
-                                    <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">Belum ada data divisi</td></tr>
-                                ) : (
-                                    divisions.map((div) => (
-                                        <tr key={div.id}>
-                                            <td>
-                                                <div className="font-semibold text-[var(--text-primary)]">{div.name}</div>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                                                    {div._count?.departments || 0} Departemen
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${div.isActive ? "badge-success" : "badge-error"}`}>
-                                                    {div.isActive ? "Aktif" : "Non-aktif"}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => handleEditDiv(div)} className="btn btn-ghost btn-sm !p-1.5 text-blue-600 hover:bg-blue-50">
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => handleDeleteDiv(div.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:bg-red-50">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <DivisionTab divisions={divisions} onEdit={handleEditDiv} onDelete={handleDeleteDiv} />
             )}
 
             {!loading && tab === "positions" && (
-                <div className="card overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Nama Jabatan</th>
-                                    <th>Status</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {positions.length === 0 ? (
-                                    <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">Belum ada data jabatan</td></tr>
-                                ) : (
-                                    positions.map((pos) => (
-                                        <tr key={pos.id}>
-                                            <td>
-                                                <div className="font-semibold text-[var(--text-primary)]">{pos.name}</div>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${pos.isActive ? "badge-success" : "badge-error"}`}>
-                                                    {pos.isActive ? "Aktif" : "Non-aktif"}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => handleEditPos(pos)} className="btn btn-ghost btn-sm !p-1.5 text-blue-600 hover:bg-blue-50">
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => handleDeletePos(pos.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:bg-red-50">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <PositionTab positions={positions} onEdit={handleEditPos} onDelete={handleDeletePos} />
             )}
 
             {!loading && tab === "locations" && (
-                <div className="card overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Nama Lokasi</th>
-                                    <th>Koordinat</th>
-                                    <th>Radius</th>
-                                    <th>Status</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {locations.length === 0 ? (
-                                    <tr><td colSpan={5} className="text-center py-12 text-[var(--text-muted)]">Belum ada data lokasi</td></tr>
-                                ) : (
-                                    locations.map((loc) => (
-                                        <tr key={loc.id}>
-                                            <td>
-                                                <div className="font-semibold text-[var(--text-primary)]">{loc.name}</div>
-                                            </td>
-                                            <td>
-                                                <div className="text-xs font-mono text-[var(--text-secondary)]">
-                                                    {loc.latitude}, {loc.longitude}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] rounded-full font-medium">
-                                                    {loc.radius}m
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${loc.isActive ? "badge-success" : "badge-error"}`}>
-                                                    {loc.isActive ? "Aktif" : "Non-aktif"}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => handleEditLoc(loc)} className="btn btn-ghost btn-sm !p-1.5 text-blue-600 hover:bg-blue-50">
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => handleDeleteLoc(loc.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:bg-red-50">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <LocationTab locations={locations} onEdit={handleEditLoc} onDelete={handleDeleteLoc} />
             )}
 
             {/* Modal */}

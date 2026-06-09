@@ -323,15 +323,6 @@ function HrAssetsPageInner() {
                                             </td>
                                             <td style={{ padding: "10px 14px", maxWidth: 220 }}>
                                                 <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{a.name}</span>
-                                                {a.nomorIndosat && (
-                                                    <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>{a.nomorIndosat}</span>
-                                                )}
-                                                {a.expiredDate && (() => {
-                                                    const exp = new Date(a.expiredDate);
-                                                    const now = new Date();
-                                                    const color = exp < now ? "#ef4444" : exp < new Date(now.getTime() + 30 * 86400000) ? "#f59e0b" : "#6b7280";
-                                                    return <span style={{ display: "block", fontSize: 11, color }}>Exp: {exp.toLocaleDateString("id-ID", { month: "short", year: "numeric" })}</span>;
-                                                })()}
                                                 {a.keterangan && (
                                                     <span style={{ display: "block", fontSize: 11, color: "#f59e0b" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 26)}{a.keterangan.length > 26 ? "…" : ""}</span>
                                                 )}

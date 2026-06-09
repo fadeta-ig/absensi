@@ -1,5 +1,15 @@
 import { prisma } from "../prisma";
 import { WorkShift } from "@/types";
+import logger from "@/lib/logger";
+import { toISOOrNull } from "@/lib/utils";
+
+function mapWorkShift(row: any): WorkShift {
+    return {
+        ...row,
+        createdAt: toISOOrNull(row.createdAt)!,
+        updatedAt: toISOOrNull(row.updatedAt)!,
+    };
+}
 
 /** Fetches all shifts with their day schedules */
 export async function getShifts(): Promise<WorkShift[]> {
@@ -7,7 +17,7 @@ export async function getShifts(): Promise<WorkShift[]> {
         orderBy: { name: "asc" },
         include: { days: { orderBy: { dayOfWeek: "asc" } } },
     });
-    return rows as unknown as WorkShift[];
+    return rows.map(mapWorkShift);
 }
 
 interface ShiftDayInput {
@@ -50,7 +60,7 @@ export async function createShift(data: CreateShiftInput): Promise<WorkShift> {
         },
         include: { days: { orderBy: { dayOfWeek: "asc" } } },
     });
-    return row as unknown as WorkShift;
+    return mapWorkShift(row);
 }
 
 export async function updateShift(id: string, data: Partial<CreateShiftInput>): Promise<WorkShift | null> {
@@ -86,8 +96,9 @@ export async function updateShift(id: string, data: Partial<CreateShiftInput>): 
             },
             include: { days: { orderBy: { dayOfWeek: "asc" } } },
         });
-        return row as unknown as WorkShift;
-    } catch {
+        return mapWorkShift(row);
+    } catch (error) {
+        logger.error("Failed to update shift", { id, error });
         return null;
     }
 }
@@ -96,7 +107,8 @@ export async function deleteShift(id: string): Promise<boolean> {
     try {
         await prisma.workShift.delete({ where: { id } });
         return true;
-    } catch {
+    } catch (error) {
+        logger.error("Failed to delete shift", { id, error });
         return false;
     }
 }

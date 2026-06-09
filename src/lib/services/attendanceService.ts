@@ -26,10 +26,11 @@ function toAttendanceRecord(row: any): AttendanceRecord {
     };
 }
 
-/** Buat Date range untuk query 1 hari penuh berdasarkan string YYYY-MM-DD */
+/** Buat Date range untuk query 1 hari penuh berdasarkan string YYYY-MM-DD secara spesifik tanpa UTC offset */
 function dayRange(dateString: string) {
-    const d = new Date(dateString);
-    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const [year, month, day] = dateString.split("-").map(Number);
+    // Month is 0-indexed in JS Date
+    const start = new Date(year, month - 1, day);
     const end = new Date(start.getTime() + 86400000);
     return { gte: start, lt: end };
 }

@@ -4,12 +4,7 @@ import { Prisma } from "@prisma/client";
 import { toDateString, toTimeString } from "@/lib/utils";
 import logger from "@/lib/logger";
 
-/** Hitung overtimePay = hours × (basicSalary / 173) × multiplier */
-function computeOvertimePay(basicSalary: number, hours: number, isHoliday: boolean): number {
-    const hourlyRate = basicSalary / 173;
-    const multiplier = isHoliday ? 2.0 : 1.5;
-    return Math.round(hourlyRate * hours * multiplier);
-}
+import { calculateOvertimePay } from "./overtimeCalcService";
 
 // ─── Date helpers imported from @/lib/utils ────────────────────
 
@@ -72,7 +67,11 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
         select: { basicSalary: true },
     });
     if (employee && employee.basicSalary > 0) {
-        overtimePay = computeOvertimePay(employee.basicSalary, data.hours, data.isHoliday ?? false);
+        overtimePay = calculateOvertimePay({
+            monthlySalary: employee.basicSalary,
+            hours: data.hours,
+            isHoliday: data.isHoliday ?? false,
+        }).totalPay;
     }
 
     logger.info("Overtime request created", { employeeId: data.employeeId, hours: data.hours, overtimePay });
@@ -112,7 +111,11 @@ export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRe
         if (data.status === "approved" && existing.employee.basicSalary > 0) {
             const finalHours = (data.approvedHours as number | undefined) ?? existing.hours;
             const finalIsHoliday = (data.isHoliday as boolean | undefined) ?? existing.isHoliday;
-            recalculatedPay = computeOvertimePay(existing.employee.basicSalary, finalHours, finalIsHoliday);
+            recalculatedPay = calculateOvertimePay({
+                monthlySalary: existing.employee.basicSalary,
+                hours: finalHours,
+                isHoliday: finalIsHoliday,
+            }).totalPay;
         }
 
         const row = await prisma.overtimeRequest.update({
@@ -141,7 +144,8 @@ export async function deleteOvertimeRequest(id: string): Promise<boolean> {
     try {
         await prisma.overtimeRequest.delete({ where: { id } });
         return true;
-    } catch {
+    } catch (error) {
+        logger.error("Gagal delete overtime request", { id, error });
         return false;
     }
 }

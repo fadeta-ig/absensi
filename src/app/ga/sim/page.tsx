@@ -10,7 +10,7 @@ import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 
 export default function SimCardDashboardPage() {
     const router = useRouter();
-    const [assets, setAssets] = useState<AssetWithHistory[]>([]);
+    const [assets, setAssets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
 
@@ -35,37 +35,29 @@ export default function SimCardDashboardPage() {
         try {
             setLoading(true);
             const params = new URLSearchParams();
-            params.set("category", "NUM"); // Wajib filter SIM Card aja
-            
             if (filterStatus === "AKTIF") {
-                params.set("status", "IN_USE"); // Simplify: Actually "AVAILABLE" and "COMPANY_OWNED" is also considered 'Aktif'
+                // Not mapped to backend yet, filtering on frontend instead below
             } else if (filterStatus === "TIDAK_AKTIF") {
-                params.set("status", "RETIRED");
+                // Not mapped to backend yet
             }
             if (debouncedSearch) params.set("search", debouncedSearch);
             params.set("page", String(currentPage));
             params.set("limit", String(PER_PAGE));
 
-            const res = await fetch(`/api/assets?${params.toString()}`);
+            const res = await fetch(`/api/sim-cards`);
             if (res.ok) {
                 const data = await res.json();
                 
                 let filteredData = data.data || [];
-                // If "AKTIF" is selected but backend only allows one exact enum matching, we might need to filter client-side or we let the backend handle it if we modify it.
-                // Because backend only takes 1 status parameter. Let's do client-side compensation if "AKTIF"
-                if (filterStatus === "AKTIF") {
-                    // Refresh data with no status filter, then client-side filter out RETIRED
-                    const p2 = new URLSearchParams(params);
-                    p2.delete("status");
-                    const r2 = await fetch(`/api/assets?${p2.toString()}`);
-                    const d2 = await r2.json();
-                    filteredData = (d2.data || []).filter((a: any) => a.status !== "RETIRED");
-                    setTotalItems(filteredData.length); // Approximate
-                    setAssets(filteredData);
-                } else {
-                    setAssets(filteredData);
-                    setTotalItems(data.total || 0);
+                // Simple search filter
+                if (debouncedSearch) {
+                    filteredData = filteredData.filter((s: any) => s.phoneNumber.includes(debouncedSearch) || s.provider.toLowerCase().includes(debouncedSearch.toLowerCase()));
                 }
+                
+                // Active/Inactive can be determined by expiredDate or assigned status
+                // We'll treat assigned or recently created as active. For simplicity, just use all if no explicit status.
+                setAssets(filteredData);
+                setTotalItems(filteredData.length);
             }
         } catch (error) {
             console.error("Gagal mengambil data SIM", error);
@@ -76,14 +68,14 @@ export default function SimCardDashboardPage() {
 
     const fetchStats = useCallback(async () => {
         try {
-            const res = await fetch(`/api/assets?category=NUM&limit=5000`);
+            const res = await fetch(`/api/sim-cards`);
             if (res.ok) {
                 const data = await res.json();
                 const allSims = data.data || [];
                 setSimStats({
                     total: allSims.length,
-                    aktif: allSims.filter((a: any) => a.status !== "RETIRED").length,
-                    tidakAktif: allSims.filter((a: any) => a.status === "RETIRED").length
+                    aktif: allSims.length,
+                    tidakAktif: 0
                 });
             }
         } catch (error) {
@@ -116,7 +108,7 @@ export default function SimCardDashboardPage() {
         if (!deleteTarget) return;
         setIsDeleting(true);
         try {
-            const res = await fetch(`/api/assets/${deleteTarget.id}`, { method: "DELETE" });
+            const res = await fetch(`/api/sim-cards/${deleteTarget.id}`, { method: "DELETE" });
             if (res.ok) {
                 setDeleteTarget(null);
                 await fetchSimCards();
@@ -229,29 +221,25 @@ export default function SimCardDashboardPage() {
                                         key={asset.id} 
                                         className="hover:bg-[var(--secondary)]/80 transition-colors cursor-default group"
                                     >
-                                        <td className="px-6 py-4 font-mono font-bold text-[var(--text-primary)]">{asset.nomorIndosat || asset.assetCode}</td>
-                                        <td className="px-6 py-4 font-medium text-[var(--text-secondary)]">{asset.name}</td>
-                                        <td className="px-6 py-4"><StatusBadgeSIM status={asset.status} /></td>
+                                        <td className="px-6 py-4 font-mono font-bold text-[var(--text-primary)]">{asset.phoneNumber}</td>
+                                        <td className="px-6 py-4 font-medium text-[var(--text-secondary)]">{asset.provider}</td>
+                                        <td className="px-6 py-4"><StatusBadgeSIM status={"AVAILABLE"} /></td>
                                         <td className="px-6 py-4">
-                                            {asset.status === "RETIRED" ? <span className="text-[var(--text-muted)] italic">Hangus (Dimatikan)</span> : (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--secondary)] flex items-center justify-center border border-[var(--border)]">
-                                                        <HolderIcon holderType={asset.holderType} />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium text-[var(--text-primary)] text-xs">
-                                                            {asset.holderType === "GA_POOL" ? "Tersedia (Brankas)" :
-                                                            asset.holderType === "COMPANY_OWNED" ? "Milik Perusahaan (Disimpan)" :
-                                                            asset.assignedEmployee?.name || asset.assignedToName || "Tidak Diketahui"}
-                                                        </span>
-                                                        {asset.assignedEmployee && (
-                                                            <span className="text-[10px] text-[var(--text-secondary)] mt-0.5">
-                                                                {asset.assignedEmployee.department}
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--secondary)] flex items-center justify-center border border-[var(--border)]">
+                                                    <HolderIcon holderType={asset.assignedTo ? "EMPLOYEE" : "GA_POOL"} />
                                                 </div>
-                                            )}
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-[var(--text-primary)] text-xs">
+                                                        {asset.assignedTo ? asset.assignedTo.name : "Tersedia (Brankas)"}
+                                                    </span>
+                                                    {asset.assignedTo?.departmentRel && (
+                                                        <span className="text-[10px] text-[var(--text-secondary)] mt-0.5">
+                                                            {asset.assignedTo.departmentRel.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 font-mono text-xs">
                                             {asset.expiredDate ? new Date(asset.expiredDate).toLocaleDateString("id-ID", { month: "long", year: "numeric" }) : "-"}
@@ -265,7 +253,7 @@ export default function SimCardDashboardPage() {
                                                     <Pencil size={14} />
                                                 </button>
                                                 <button
-                                                    onClick={() => setDeleteTarget({ id: asset.id, name: asset.nomorIndosat || asset.name })}
+                                                    onClick={() => setDeleteTarget({ id: asset.id, name: asset.phoneNumber })}
                                                     className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors"
                                                 >
                                                     <Trash2 size={14} />

@@ -247,6 +247,7 @@ async function main() {
 
     await tryClear(() => prisma.assetHistory.deleteMany({}), "assetHistory");
     await tryClear(() => prisma.asset.deleteMany({}), "asset");
+    await tryClear(() => prisma.simCard.deleteMany({}), "simCard");
     await tryClear(() => prisma.pushSubscription.deleteMany({}), "pushSubscription");
     await tryClear(() => prisma.todoItem.deleteMany({}), "todoItem");
     await tryClear(() => prisma.newsItem.deleteMany({}), "newsItem");
@@ -505,27 +506,24 @@ async function main() {
     }
     console.log(`✅ Aset Laptop: ${ltCount} item`);
 
-    // ── 8. Assets: Nomor HP ──────────────────────────────────────────────────
     let numCount = 0;
     for (let i = 0; i < DATA_NOMOR.length; i++) {
         const item = DATA_NOMOR[i];
-        const { holderType, assignedToName, status } = mapPIC(item.pic);
-        const assetCode = `NUM-${String(i + 1).padStart(3, "0")}`;
         const expiredDate = parseExpiredDate(item.expired);
+        
+        let assignedToId = null;
+        if (item.pic !== "GA(General Affairs)" && !item.pic.startsWith("Tim ")) {
+            const emp = await prisma.employee.findFirst({ where: { name: item.pic } });
+            if (emp) assignedToId = emp.employeeId;
+        }
 
-        await prisma.asset.create({
+        await prisma.simCard.create({
             data: {
-                assetCode,
-                name: `Nomor Indosat ${item.nomor}`,
-                categoryId: catNum.id,
-                kondisi: "BAIK",
-                status: status as never,
-                holderType: holderType as never,
-                assignedToName,
-                assignedAt: assignedToName ? new Date("2024-01-01") : null,
-                nomorIndosat: item.nomor,
+                phoneNumber: item.nomor,
+                provider: "Indosat Ooredoo",
                 expiredDate,
-                keterangan: null,
+                assignedToId,
+                notes: null,
             },
         });
         numCount++;

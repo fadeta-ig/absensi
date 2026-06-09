@@ -1,35 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-    MapPinned, Search, CheckCircle, XCircle, Clock,
-    Building2, Navigation, FileText, User, Filter, Eye, X, Timer
-} from "lucide-react";
+import { MapPinned, Search, Filter } from "lucide-react";
 
-interface VisitReport {
-    id: string;
-    employeeId: string;
-    employeeName?: string | null;
-    employeeDepartment?: string | null;
-    date: string;
-    visitStartTime?: string | null;
-    visitEndTime?: string | null;
-    clientName: string;
-    clientAddress: string;
-    purpose: string;
-    result?: string | null;
-    location?: { lat: number; lng: number } | null;
-    photo?: string | null;
-    status: "pending" | "approved" | "rejected";
-    notes?: string | null;
-    createdAt: string;
-}
-
-const STATUS_CONFIG = {
-    pending: { label: "Menunggu", class: "badge-warning" },
-    approved: { label: "Disetujui", class: "badge-success" },
-    rejected: { label: "Ditolak", class: "badge-error" },
-};
+import { VisitListTable } from "./components/VisitListTable";
+import { VisitDetailModal } from "./components/VisitDetailModal";
+import { VisitReport, STATUS_CONFIG } from "./types";
 
 export default function DashboardVisitsPage() {
     const [visits, setVisits] = useState<VisitReport[]>([]);
@@ -131,200 +107,25 @@ export default function DashboardVisitsPage() {
             </div>
 
             {/* Table */}
-            <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Karyawan</th>
-                                <th>Klien</th>
-                                <th className="hidden md:table-cell">Tujuan</th>
-                                <th className="hidden lg:table-cell">Tanggal</th>
-                                <th className="hidden lg:table-cell">Jam</th>
-                                <th>Status</th>
-                                <th>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada kunjungan ditemukan</td></tr>
-                            ) : (
-                                filtered.map((v) => {
-                                    const cfg = STATUS_CONFIG[v.status];
-                                    return (
-                                        <tr key={v.id}>
-                                            <td>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{v.employeeName || "-"}</p>
-                                                    <p className="text-[10px] font-mono text-[var(--text-muted)]">{v.employeeId}</p>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div>
-                                                    <p className="font-medium text-[var(--text-primary)] text-sm">{v.clientName}</p>
-                                                    <p className="text-[10px] text-[var(--text-muted)] line-clamp-1">{v.clientAddress}</p>
-                                                </div>
-                                            </td>
-                                            <td className="hidden md:table-cell text-xs text-[var(--text-secondary)] max-w-[200px]">
-                                                <p className="line-clamp-2">{v.purpose}</p>
-                                            </td>
-                                            <td className="hidden lg:table-cell text-xs">{v.date}</td>
-                                            <td className="hidden lg:table-cell text-xs font-mono">
-                                                {formatTimeRange(v.visitStartTime, v.visitEndTime)}
-                                            </td>
-                                            <td><span className={`badge ${cfg.class}`}>{cfg.label}</span></td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => setSelectedVisit(v)} className="btn btn-ghost btn-sm !p-1.5" title="Detail">
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    {v.status === "pending" && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleStatusUpdate(v.id, "approved")}
-                                                                className="btn btn-ghost btn-sm !p-1.5 text-green-600 hover:!bg-green-50"
-                                                                disabled={updating === v.id}
-                                                                title="Setujui"
-                                                            >
-                                                                <CheckCircle className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleStatusUpdate(v.id, "rejected")}
-                                                                className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"
-                                                                disabled={updating === v.id}
-                                                                title="Tolak"
-                                                            >
-                                                                <XCircle className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <VisitListTable
+                filtered={filtered}
+                updating={updating}
+                setSelectedVisit={setSelectedVisit}
+                handleStatusUpdate={handleStatusUpdate}
+                formatTimeRange={formatTimeRange}
+            />
 
             {/* Detail Modal */}
             {selectedVisit && (
-                <div className="modal-overlay" onClick={() => setSelectedVisit(null)}>
-                    <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Detail Kunjungan</h2>
-                            <button className="modal-close" onClick={() => setSelectedVisit(null)}>
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="space-y-4">
-                            {/* Employee Info */}
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-bold text-[var(--text-primary)]">{selectedVisit.employeeName || selectedVisit.employeeId}</p>
-                                    <div className="flex items-center gap-3 mt-0.5">
-                                        <span className="text-[10px] font-mono text-[var(--text-muted)] flex items-center gap-1">
-                                            <User className="w-3 h-3" /> {selectedVisit.employeeId}
-                                        </span>
-                                        {selectedVisit.employeeDepartment && (
-                                            <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
-                                                <Building2 className="w-3 h-3" /> {selectedVisit.employeeDepartment}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <span className={`badge ${STATUS_CONFIG[selectedVisit.status].class}`}>
-                                    {STATUS_CONFIG[selectedVisit.status].label}
-                                </span>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div>
-                                    <p className="text-xs text-[var(--text-muted)] mb-1 flex items-center gap-1"><Building2 className="w-3 h-3" /> Klien</p>
-                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{selectedVisit.clientName}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-[var(--text-muted)] mb-1 flex items-center gap-1"><Navigation className="w-3 h-3" /> Alamat</p>
-                                    <p className="text-sm text-[var(--text-secondary)]">{selectedVisit.clientAddress}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-[var(--text-muted)] mb-1 flex items-center gap-1"><FileText className="w-3 h-3" /> Tujuan</p>
-                                    <p className="text-sm text-[var(--text-secondary)]">{selectedVisit.purpose}</p>
-                                </div>
-                                {selectedVisit.result && (
-                                    <div>
-                                        <p className="text-xs text-[var(--text-muted)] mb-1">Hasil</p>
-                                        <p className="text-sm text-[var(--text-secondary)]">{selectedVisit.result}</p>
-                                    </div>
-                                )}
-                                {selectedVisit.notes && (
-                                    <div>
-                                        <p className="text-xs text-[var(--text-muted)] mb-1">Catatan</p>
-                                        <p className="text-sm text-[var(--text-secondary)]">{selectedVisit.notes}</p>
-                                    </div>
-                                )}
-                                {/* Date & Time Row */}
-                                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
-                                    <span className="flex items-center gap-1">
-                                        <Clock className="w-3 h-3" /> {selectedVisit.date}
-                                    </span>
-                                    {selectedVisit.visitStartTime && (
-                                        <span className="flex items-center gap-1 font-mono text-[var(--primary)] font-bold">
-                                            <Timer className="w-3 h-3" />
-                                            {formatTimeRange(selectedVisit.visitStartTime, selectedVisit.visitEndTime)}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            {selectedVisit.photo && (
-                                <div className="rounded-lg overflow-hidden border border-[var(--border)]">
-                                    <img src={selectedVisit.photo} alt="Bukti kunjungan" className="w-full object-cover max-h-[300px]" />
-                                </div>
-                            )}
-
-                            {selectedVisit.location && (
-                                <div className="text-xs text-[var(--text-muted)] flex items-center gap-1">
-                                    <Navigation className="w-3 h-3" />
-                                    Lokasi: {selectedVisit.location.lat.toFixed(6)}, {selectedVisit.location.lng.toFixed(6)}
-                                </div>
-                            )}
-
-                            {selectedVisit.status === "pending" && (
-                                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
-                                    <div>
-                                        <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">Catatan HR (opsional)</label>
-                                        <textarea
-                                            className="form-textarea text-sm"
-                                            rows={2}
-                                            value={approvalNotes}
-                                            onChange={(e) => setApprovalNotes(e.target.value)}
-                                            placeholder="Tambahkan catatan untuk karyawan..."
-                                        />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => { handleStatusUpdate(selectedVisit.id, "approved", approvalNotes || undefined); }}
-                                            className="btn btn-primary flex-1"
-                                            disabled={updating === selectedVisit.id}
-                                        >
-                                            <CheckCircle className="w-4 h-4" /> Setujui
-                                        </button>
-                                        <button
-                                            onClick={() => { handleStatusUpdate(selectedVisit.id, "rejected", approvalNotes || undefined); }}
-                                            className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
-                                            disabled={updating === selectedVisit.id}
-                                        >
-                                            <XCircle className="w-4 h-4" /> Tolak
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <VisitDetailModal
+                    selectedVisit={selectedVisit}
+                    setSelectedVisit={setSelectedVisit}
+                    updating={updating}
+                    approvalNotes={approvalNotes}
+                    setApprovalNotes={setApprovalNotes}
+                    handleStatusUpdate={handleStatusUpdate}
+                    formatTimeRange={formatTimeRange}
+                />
             )}
         </div>
     );

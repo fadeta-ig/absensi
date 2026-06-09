@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { VisitReport } from "@/types";
 import { toDateString, toTimeString } from "@/lib/utils";
+import logger from "@/lib/logger";
 
 // ─── Employee include fragment ──────────────────────────────────
 const employeeInclude = {
@@ -38,12 +39,12 @@ function toVisitReport(row: any): VisitReport {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-/** Convert "HH:MM" time string to a full DateTime (today's date + time) for DB storage */
-function timeStringToDateTime(timeStr: string): Date {
+/** Convert "HH:MM" time string to a full DateTime based on a reference date */
+function timeStringToDateTime(dateRef: Date | string, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(":").map(Number);
-    const now = new Date();
-    now.setHours(hours, minutes, 0, 0);
-    return now;
+    const baseDate = new Date(dateRef);
+    baseDate.setHours(hours, minutes, 0, 0);
+    return baseDate;
 }
 
 // ─── Service Functions ────────────────────────────────────────
@@ -71,8 +72,8 @@ export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<
         data: {
             employeeId: data.employeeId,
             date: new Date(data.date),
-            visitStartTime: data.visitStartTime ? timeStringToDateTime(data.visitStartTime) : undefined,
-            visitEndTime: data.visitEndTime ? timeStringToDateTime(data.visitEndTime) : undefined,
+            visitStartTime: data.visitStartTime ? timeStringToDateTime(data.date, data.visitStartTime) : undefined,
+            visitEndTime: data.visitEndTime ? timeStringToDateTime(data.date, data.visitEndTime) : undefined,
             clientName: data.clientName,
             clientAddress: data.clientAddress,
             purpose: data.purpose,
@@ -89,6 +90,13 @@ export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<
 
 export async function updateVisitReport(id: string, data: Partial<VisitReport>): Promise<VisitReport | null> {
     try {
+        let baseDate = data.date ? new Date(data.date) : undefined;
+        if (!baseDate && (data.visitStartTime || data.visitEndTime)) {
+            const existing = await prisma.visitReport.findUnique({ where: { id }, select: { date: true } });
+            if (existing) baseDate = existing.date;
+            else baseDate = new Date();
+        }
+
         const row = await prisma.visitReport.update({
             where: { id },
             data: {
@@ -96,8 +104,8 @@ export async function updateVisitReport(id: string, data: Partial<VisitReport>):
                 ...(data.clientAddress !== undefined && { clientAddress: data.clientAddress }),
                 ...(data.purpose !== undefined && { purpose: data.purpose }),
                 ...(data.result !== undefined && { result: data.result }),
-                ...(data.visitStartTime !== undefined && { visitStartTime: data.visitStartTime ? timeStringToDateTime(data.visitStartTime) : null }),
-                ...(data.visitEndTime !== undefined && { visitEndTime: data.visitEndTime ? timeStringToDateTime(data.visitEndTime) : null }),
+                ...(data.visitStartTime !== undefined && { visitStartTime: data.visitStartTime ? timeStringToDateTime(baseDate!, data.visitStartTime) : null }),
+                ...(data.visitEndTime !== undefined && { visitEndTime: data.visitEndTime ? timeStringToDateTime(baseDate!, data.visitEndTime) : null }),
                 ...(data.location !== undefined && { location: data.location ? JSON.stringify(data.location) : null }),
                 ...(data.photo !== undefined && { photo: data.photo }),
                 ...(data.status !== undefined && { status: data.status }),
@@ -106,7 +114,8 @@ export async function updateVisitReport(id: string, data: Partial<VisitReport>):
             include: employeeInclude,
         });
         return toVisitReport(row);
-    } catch {
+    } catch (error) {
+        logger.error("Failed to update visit report", { id, error });
         return null;
     }
 }
@@ -115,7 +124,8 @@ export async function deleteVisitReport(id: string): Promise<boolean> {
     try {
         await prisma.visitReport.delete({ where: { id } });
         return true;
-    } catch {
+    } catch (error) {
+        logger.error("Failed to delete visit report", { id, error });
         return false;
     }
 }

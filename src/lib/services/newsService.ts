@@ -2,14 +2,23 @@ import { prisma } from "../prisma";
 import { NewsItem } from "@/types";
 import { unlink } from "fs/promises";
 import path from "path";
+import logger from "@/lib/logger";
+import { toISOOrNull } from "@/lib/utils";
 
 const getUploadDir = () => path.join(process.cwd(), "public");
+
+function mapNewsItem(row: any): NewsItem {
+    return {
+        ...row,
+        createdAt: toISOOrNull(row.createdAt)!
+    };
+}
 
 export async function getNews(): Promise<NewsItem[]> {
     const rows = await prisma.newsItem.findMany({
         orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
     });
-    return rows as unknown as NewsItem[];
+    return rows.map(mapNewsItem);
 }
 
 export async function createNews(data: Omit<NewsItem, "id">): Promise<NewsItem> {
@@ -25,7 +34,7 @@ export async function createNews(data: Omit<NewsItem, "id">): Promise<NewsItem> 
             mediaName: data.mediaName ?? null,
         },
     });
-    return row as unknown as NewsItem;
+    return mapNewsItem(row);
 }
 
 export async function updateNews(id: string, data: Partial<NewsItem>): Promise<NewsItem | null> {
@@ -36,7 +45,9 @@ export async function updateNews(id: string, data: Partial<NewsItem>): Promise<N
                 const oldFilePath = path.join(getUploadDir(), oldRow.mediaUrl);
                 try {
                     await unlink(oldFilePath);
-                } catch { /* ignore if file not found */ }
+                } catch (error) {
+                    logger.warn("Old news media not found for deletion", { path: oldFilePath, error });
+                }
             }
         }
 
@@ -51,8 +62,9 @@ export async function updateNews(id: string, data: Partial<NewsItem>): Promise<N
                 ...(data.mediaName !== undefined && { mediaName: data.mediaName }),
             },
         });
-        return row as unknown as NewsItem;
-    } catch {
+        return mapNewsItem(row);
+    } catch (error) {
+        logger.error("Failed to update news", { id, error });
         return null;
     }
 }
@@ -64,12 +76,15 @@ export async function deleteNews(id: string): Promise<boolean> {
             const oldFilePath = path.join(getUploadDir(), oldRow.mediaUrl);
             try {
                 await unlink(oldFilePath);
-            } catch { /* ignore if file not found */ }
+            } catch (error) {
+                logger.warn("Old news media not found for deletion", { path: oldFilePath, error });
+            }
         }
 
         await prisma.newsItem.delete({ where: { id } });
         return true;
-    } catch {
+    } catch (error) {
+        logger.error("Failed to delete news", { id, error });
         return false;
     }
 }

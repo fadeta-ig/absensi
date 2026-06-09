@@ -16,8 +16,6 @@ export async function createAsset(data: {
     holderType?: string;
     assignedToName?: string | null;
     assignedToId?: string | null;
-    nomorIndosat?: string | null;
-    expiredDate?: string | null;
     keterangan?: string | null;
     serialNumber?: string | null;
     imei?: string | null;
@@ -63,8 +61,6 @@ export async function createAsset(data: {
                     assignedToName: data.assignedToName ?? null,
                     assignedToId: (holderType === "EMPLOYEE" && data.assignedToId) ? data.assignedToId : null,
                     assignedAt: data.assignedToName ? new Date() : null,
-                    nomorIndosat: data.nomorIndosat ?? null,
-                    expiredDate: data.expiredDate ? new Date(data.expiredDate) : null,
                     keterangan: data.keterangan ?? null,
                     serialNumber: data.serialNumber ?? null,
                     imei: data.imei ?? null,
@@ -129,8 +125,6 @@ export async function updateAsset(id: string, data: {
     name?: string;
     kondisi?: string;
     keterangan?: string | null;
-    nomorIndosat?: string | null;
-    expiredDate?: string | null;
     categoryId?: string;
     serialNumber?: string | null;
     imei?: string | null;
@@ -152,10 +146,6 @@ export async function updateAsset(id: string, data: {
                 ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
                 ...(data.kondisi !== undefined && { kondisi: data.kondisi as never }),
                 ...(data.keterangan !== undefined && { keterangan: data.keterangan }),
-                ...(data.nomorIndosat !== undefined && { nomorIndosat: data.nomorIndosat }),
-                ...(data.expiredDate !== undefined && {
-                    expiredDate: data.expiredDate ? new Date(data.expiredDate) : null,
-                }),
                 ...(data.serialNumber !== undefined && { serialNumber: data.serialNumber }),
                 ...(data.imei !== undefined && { imei: data.imei }),
                 ...(data.manufacturer !== undefined && { manufacturer: data.manufacturer }),

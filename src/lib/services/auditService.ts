@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import logger from "@/lib/logger";
 
 export async function logAction(
     action: string,
     entity: string,
     performedBy: string,
     entityId?: string,
-    details?: any
+    details?: Record<string, unknown> | unknown[] | string | number | boolean
 ) {
     try {
         await prisma.auditLog.create({
@@ -19,6 +20,6 @@ export async function logAction(
         });
     } catch (error) {
         // We log the error but don't throw it to prevent breaking the main operation
-        console.error("[Audit Service] Failed to log action:", error);
+        logger.error("[Audit Service] Failed to log action:", { error });
     }
 }

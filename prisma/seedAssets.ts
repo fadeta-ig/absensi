@@ -211,23 +211,21 @@ async function main() {
     console.log(`📞 Seeding ${nomorData.total} Nomor Indosat...`);
     for (let i = 0; i < nomorData.data.length; i++) {
         const item = nomorData.data[i];
-        const { holderType, assignedToName, status } = resolveHolder(item.pic, "");
-        const assetCode = `NUM-${String(i + 1).padStart(3, "0")}`;
         const expiredDate = parseExpiredDate(item.note_expired_date || "");
+        
+        let assignedToId = null;
+        if (item.pic !== "GA(General Affairs)" && !item.pic.startsWith("Tim ")) {
+            const emp = await prisma.employee.findFirst({ where: { name: item.pic } });
+            if (emp) assignedToId = emp.employeeId;
+        }
 
-        await prisma.asset.create({
+        await prisma.simCard.create({
             data: {
-                assetCode,
-                name: `Nomor Indosat 0${item.nomor_indosat}`,
-                categoryId: catNum.id,
-                kondisi: "BAIK",
-                status,
-                holderType,
-                assignedToName,
-                assignedAt: assignedToName ? new Date() : null,
-                nomorIndosat: `0${item.nomor_indosat}`,
+                phoneNumber: `0${item.nomor_indosat}`,
+                provider: "Indosat Ooredoo",
                 expiredDate: expiredDate ?? null,
-                keterangan: item.note_expired_date ? `Expired: ${item.note_expired_date}` : null,
+                assignedToId,
+                notes: item.note_expired_date ? `Expired: ${item.note_expired_date}` : null,
             },
         });
         totalCreated++;

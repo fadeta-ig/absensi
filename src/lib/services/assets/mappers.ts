@@ -45,8 +45,6 @@ export function toAsset(row: AssetRowRaw): AssetWithHistory {
             department: emp.departmentRel?.name ?? "-",
             position: emp.positionRel?.name ?? "-",
         } : null,
-        nomorIndosat: row.nomorIndosat ?? null,
-        expiredDate: row.expiredDate ? new Date(row.expiredDate).toISOString() : null,
         keterangan: row.keterangan ?? null,
         serialNumber: row.serialNumber ?? null,
         imei: row.imei ?? null,

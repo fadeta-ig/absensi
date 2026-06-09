@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import { jwtVerify, JWTPayload } from "jose";
 
 // ─── Route Groups ─────────────────────────────────────────────
 const HR_ONLY_PREFIX = "/dashboard";
@@ -26,7 +26,7 @@ const GA_PREFIX = "/ga";
  * Duplicated from @/lib/auth — cannot import in Edge Runtime.
  * Jika mengubah field di auth.ts, update juga di sini.
  */
-interface SessionPayload {
+interface SessionPayload extends JWTPayload {
     id: string;
     employeeId: string;
     name: string;
@@ -47,7 +47,7 @@ async function getSession(request: NextRequest): Promise<SessionPayload | null> 
     try {
         const secret = new TextEncoder().encode(jwtSecret);
         const { payload } = await jwtVerify(token, secret);
-        return payload as unknown as SessionPayload;
+        return payload as SessionPayload;
     } catch {
         // Token expired, invalid signature, atau malformed
         return null;

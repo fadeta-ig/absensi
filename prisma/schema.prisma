@@ -52,6 +52,8 @@ model Employee {
   letterRequests        LetterRequest[]
   auditLogs             AuditLog[]                 @relation("UserAuditLogs")
   assetTickets          AssetTicket[]
+  simCards              SimCard[]
+  documents             EmployeeDocument[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -414,10 +416,6 @@ model Asset {
   assignedToId   String?   @map("assigned_to_id")
   assignedAt     DateTime? @map("assigned_at")
 
-  // Khusus kategori NOMOR_HP — SIM card fisik Indosat
-  nomorIndosat String?   @map("nomor_indosat")
-  expiredDate  DateTime? @map("expired_date")
-
   keterangan String?  @db.Text
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -593,4 +591,50 @@ model AssetTicket {
   @@index([employeeId], map: "asset_tickets_employee_id_fkey")
   @@index([assetId], map: "asset_tickets_asset_id_fkey")
   @@map("asset_tickets")
+}
+
+// ─── SIM Cards ──────────────────────────────────────────────────
+
+model SimCard {
+  id           String    @id @default(uuid())
+  phoneNumber  String    @unique @map("phone_number")
+  provider     String    @default("Indosat")
+  expiredDate  DateTime? @map("expired_date")
+  assignedToId String?   @map("assigned_to_id")
+  assignedAt   DateTime? @map("assigned_at")
+  notes        String?   @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  assignedTo   Employee? @relation(fields: [assignedToId], references: [employeeId], onDelete: SetNull)
+
+  @@index([assignedToId])
+  @@map("sim_cards")
+}
+
+// ─── Employee Documents ─────────────────────────────────────────
+
+enum DocumentType {
+  KTP
+  NPWP
+  BPJS_KES
+  BPJS_TK
+  IJAZAH
+  KARTU_KELUARGA
+  OTHER
+}
+
+model EmployeeDocument {
+  id           String       @id @default(uuid())
+  employeeId   String       @map("employee_id")
+  type         DocumentType
+  title        String
+  fileUrl      String       @map("file_url")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  employee     Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employee_documents")
 }

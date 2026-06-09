@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { getEmployeeByEmployeeId } from "./services/employeeService";
 import { Employee } from "@/types";
 import logger from "@/lib/logger";
+import { toDateString } from "@/lib/utils";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -109,5 +110,9 @@ export async function verifyLogin(
     }
 
     logger.info("Login successful", { employeeId: employee.employeeId });
-    return employee as unknown as Employee;
+    return {
+        ...employee,
+        joinDate: toDateString(employee.joinDate),
+        faceDescriptor: employee.faceDescriptor ? JSON.parse(employee.faceDescriptor) : undefined
+    } as unknown as Employee;
 }

@@ -1,31 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-    Users, Mail, Phone, Building, Briefcase, Calendar,
-    Clock, Layers, MapPin, Wallet, Plus, Trash2,
-    Loader2, Check, ArrowLeft, Shield, UserCog
-} from "lucide-react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Employee, EmployeePayrollComponent } from "@/types";
+import { Employee } from "@/types";
 import { useToast } from "@/components/Toast";
-
-interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
-interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
-interface Location { id: string; name: string; }
-interface Division { id: string; name: string; }
-interface Department { id: string; name: string; divisionId: string; division?: { name: string } }
-interface Position { id: string; name: string; }
-interface MasterPayrollComponent { id: string; name: string; type: "earning" | "deduction"; defaultAmount: number; isActive: boolean; }
-
-/** Type lokal untuk payrollComponent di state form — belum punya id/employeeId sebelum disimpan */
-type FormPayrollComponent = {
-    id?: string;
-    employeeId?: string;
-    componentId: string;
-    amount: number;
-    component?: MasterPayrollComponent;
-};
+import { Department, Division, FormPayrollComponent, Location, MasterPayrollComponent, Position, WorkShift, FormState } from "./employee-form/types";
+import { IdentitySection } from "./employee-form/IdentitySection";
+import { JobSection } from "./employee-form/JobSection";
+import { PayrollSection } from "./employee-form/PayrollSection";
+import { LocationSection } from "./employee-form/LocationSection";
 
 
 interface Props {
@@ -48,7 +32,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
     const [masterPayroll, setMasterPayroll] = useState<MasterPayrollComponent[]>([]);
     const [allEmployees, setAllEmployees] = useState<{ employeeId: string; name: string }[]>([]);
 
-    const [form, setForm] = useState({
+    const [form, setForm] = useState<FormState>({
         employeeId: initialData?.employeeId || "",
         name: initialData?.name || "",
         email: initialData?.email || "",
@@ -87,17 +71,17 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 setMasterLocations(l);
                 setShifts(s);
                 setMasterPayroll(m);
-                if (Array.isArray(emps)) setAllEmployees(emps.map((e: any) => ({ employeeId: e.employeeId, name: e.name })));
+                if (Array.isArray(emps)) setAllEmployees(emps.map((e: { employeeId: string; name: string }) => ({ employeeId: e.employeeId, name: e.name })));
 
                 // Set default shift if creating new
                 if (!isEdit && !form.shiftId) {
-                    const def = s.find((x: any) => x.isDefault);
+                    const def = s.find((x: WorkShift) => x.isDefault);
                     if (def) setForm(f => ({ ...f, shiftId: def.id }));
                 }
 
                 // Initialize payroll components if creating new
                 if (!isEdit && form.payrollComponents.length === 0) {
-                    const comps = m.filter((x: any) => x.isActive).map((x: any) => ({
+                    const comps = m.filter((x: MasterPayrollComponent) => x.isActive).map((x: MasterPayrollComponent) => ({
                         componentId: x.id,
                         amount: x.defaultAmount,
                         component: x
@@ -111,6 +95,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
             }
         };
         load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEdit]);
 
     const selectedDivision = masterDivisions.find(v => v.id === form.divisionId);
@@ -137,7 +122,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 const error = await res.json();
                 toast(error.error || "Gagal menyimpan data karyawan.", "error");
             }
-        } catch (err) {
+        } catch {
             toast("Kesalahan koneksi ke server.", "error");
         } finally {
             setLoading(false);
@@ -169,11 +154,11 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         });
     };
 
-    const updatePayrollComp = (idx: number, field: string, value: any) => {
+    const updatePayrollComp = (idx: number, field: string, value: string | number) => {
         const next = [...form.payrollComponents];
         if (field === "componentId") {
             const comp = masterPayroll.find(p => p.id === value);
-            next[idx] = { ...next[idx], componentId: value, amount: comp?.defaultAmount || 0, component: comp };
+            next[idx] = { ...next[idx], componentId: value as string, amount: comp?.defaultAmount || 0, component: comp };
         } else {
             next[idx] = { ...next[idx], [field]: value };
         }
@@ -211,227 +196,35 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column (Identity & Job) */}
                 <div className="lg:col-span-7 space-y-6">
-                    {/* Identity Section */}
-                    <div className="card p-6 space-y-5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
-                            <Users className="w-4 h-4 text-[var(--primary)]" />
-                            <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Identitas Pribadi</h2>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label">ID Karyawan</label>
-                                <input className="form-input" value={form.employeeId} onChange={(e) => setForm({ ...form, employeeId: e.target.value })} placeholder="ID25000001" required />
-                            </div>
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Nama Lengkap</label>
-                                <input className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nama Lengkap" required />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Mail className="w-3 h-3 text-[var(--text-muted)]" /> Email</span></label>
-                                <input type="email" className="form-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@company.com" required />
-                            </div>
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Phone className="w-3 h-3 text-[var(--text-muted)]" /> Telepon</span></label>
-                                <input className="form-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0812..." required />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Job Details Section */}
-                    <div className="card p-6 space-y-5">
-                        <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
-                            <Briefcase className="w-4 h-4 text-[var(--primary)]" />
-                            <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Pekerjaan & Akses</h2>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Divisi</span></label>
-                                <select className="form-select" value={form.divisionId} onChange={(e) => setForm({ ...form, divisionId: e.target.value, departmentId: "" })} required>
-                                    <option value="">Pilih Divisi</option>
-                                    {masterDivisions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Building className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Departemen</span></label>
-                                <select className="form-select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })} required disabled={!form.divisionId}>
-                                    <option value="">Pilih Departemen</option>
-                                    {availableDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Jabatan</label>
-                                <select className="form-select" value={form.positionId} onChange={(e) => setForm({ ...form, positionId: e.target.value, managerId: "" })} required>
-                                    <option value="">Pilih Jabatan</option>
-                                    {masterPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Role Sistem</label>
-                                <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" })}>
-                                    <option value="employee">Employee (User)</option>
-                                    <option value="hr">HR (Manager)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><UserCog className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Atasan Langsung</span></label>
-                                <select className="form-select" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
-                                    <option value="">Tidak Ada / Langsung ke CEO</option>
-                                    {allEmployees
-                                        .filter(e => e.employeeId !== (initialData?.employeeId || ""))
-                                        .map(e => <option key={e.employeeId} value={e.employeeId}>{e.name} ({e.employeeId})</option>)
-                                    }
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3 text-[var(--text-muted)]" /> Shift Kerja</span></label>
-                                <select className="form-select" value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })} required>
-                                    <option value="">Pilih Shift</option>
-                                    {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="form-group !mb-0">
-                                <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-[var(--text-muted)]" /> Tanggal Bergabung</span></label>
-                                <input type="date" className="form-input" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} required />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Jatah Cuti / Tahun</label>
-                                <input type="number" className="form-input" value={form.totalLeave} onChange={(e) => setForm({ ...form, totalLeave: Number(e.target.value) })} />
-                            </div>
-                            <div className="flex items-end pb-2">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="w-4 h-4 rounded text-[var(--primary)]" />
-                                    <span className="text-sm font-medium">Karyawan Aktif</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                    <IdentitySection form={form} setForm={setForm} />
+                    <JobSection
+                        form={form}
+                        setForm={setForm}
+                        masterDivisions={masterDivisions}
+                        availableDepartments={availableDepartments}
+                        masterPositions={masterPositions}
+                        allEmployees={allEmployees}
+                        shifts={shifts}
+                        initialData={initialData}
+                    />
                 </div>
 
                 {/* Right Column (Payroll & Locations) */}
                 <div className="lg:col-span-5 space-y-6">
-                    {/* Payroll Section */}
-                    <div className="card p-6 space-y-5 bg-blue-50/30 border-blue-100">
-                        <div className="flex items-center gap-2 pb-2 border-b border-blue-100">
-                            <Wallet className="w-4 h-4 text-blue-600" />
-                            <h2 className="text-sm font-bold uppercase tracking-wider text-blue-900">Pengaturan Payroll</h2>
-                        </div>
-
-                        <div className="form-group">
-                            <label className="form-label font-bold text-blue-800">Gaji Pokok (Std)</label>
-                            <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--text-muted)]">Rp</span>
-                                <input type="number" className="form-input pl-9 border-blue-200 focus:ring-blue-500" value={form.basicSalary || ""} onChange={(e) => setForm({ ...form, basicSalary: Number(e.target.value) })} placeholder="0" />
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-tight">Tunjangan & Potongan Tetap</h3>
-                                <button type="button" onClick={addPayrollComp} className="text-[10px] font-bold text-blue-600 flex items-center gap-1 hover:underline">
-                                    <Plus className="w-3 h-3" /> Tambah Item
-                                </button>
-                            </div>
-
-                            <div className="space-y-3">
-                                {form.payrollComponents.length === 0 ? (
-                                    <div className="text-center py-4 border-2 border-dashed border-[var(--border)] rounded-lg">
-                                        <p className="text-[10px] text-[var(--text-muted)] italic">Belum ada komponen tambahan</p>
-                                    </div>
-                                ) : (
-                                    form.payrollComponents.map((c, i) => (
-                                        <div key={i} className="flex items-start gap-2 p-3 bg-[var(--card)] rounded-lg border border-blue-100 shadow-sm">
-                                            <div className="flex-1 space-y-2">
-                                                <select
-                                                    className="form-select text-xs h-8 !py-0 border-none bg-[var(--secondary)]"
-                                                    value={c.componentId}
-                                                    onChange={(e) => updatePayrollComp(i, "componentId", e.target.value)}
-                                                >
-                                                    {masterPayroll.map(p => (
-                                                        <option key={p.id} value={p.id}>{p.name} ({p.type === "earning" ? "+" : "-"})</option>
-                                                    ))}
-                                                </select>
-                                                <div className="relative">
-                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--text-muted)]">Rp</span>
-                                                    <input
-                                                        type="number"
-                                                        className="form-input text-xs h-8 pl-7 border-none bg-[var(--secondary)]"
-                                                        value={c.amount || ""}
-                                                        onChange={(e) => updatePayrollComp(i, "amount", Number(e.target.value))}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <button type="button" onClick={() => removePayrollComp(i)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Location Section */}
-                    <div className="card p-6 space-y-5">
-                        <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-                            <div className="flex items-center gap-2">
-                                <MapPin className="w-4 h-4 text-orange-600" />
-                                <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Lokasi Absensi</h2>
-                            </div>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" checked={form.bypassLocation} onChange={(e) => setForm({ ...form, bypassLocation: e.target.checked })} className="w-3.5 h-3.5 rounded text-orange-600" />
-                                <span className="text-xs font-semibold text-orange-700">Bypass</span>
-                            </label>
-                        </div>
-
-                        {!form.bypassLocation && (
-                            <div className="space-y-3">
-                                <p className="text-[10px] text-[var(--text-muted)] italic leading-relaxed">Pilih satu atau beberapa lokasi kerja untuk karyawan ini.</p>
-                                <div className="grid grid-cols-1 gap-2">
-                                    {masterLocations.map(loc => {
-                                        const isSelected = form.locations.some(l => l.id === loc.id);
-                                        return (
-                                            <button
-                                                key={loc.id}
-                                                type="button"
-                                                onClick={() => toggleLocation(loc)}
-                                                className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${isSelected ? "border-[var(--primary)] bg-[var(--primary)]/5 text-[var(--text-primary)]" : "border-[var(--border)] hover:border-[var(--border)] text-[var(--text-secondary)]"}`}
-                                            >
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? "bg-[var(--primary)] border-[var(--primary)] text-white" : "border-[var(--border)]"}`}>
-                                                    {isSelected && <Check className="w-2.5 h-2.5" />}
-                                                </div>
-                                                <span className="text-xs font-medium">{loc.name}</span>
-                                            </button>
-                                        );
-                                    })}
-                                    {masterLocations.length === 0 && (
-                                        <p className="text-xs text-red-500 font-medium py-2">Belum ada data lokasi di Master Data.</p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        {form.bypassLocation && (
-                            <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 text-center">
-                                <p className="text-xs text-orange-800 font-medium">Bypass aktif: Karyawan dapat absen dari mana saja.</p>
-                            </div>
-                        )}
-                    </div>
+                    <PayrollSection
+                        form={form}
+                        setForm={setForm}
+                        masterPayroll={masterPayroll}
+                        addPayrollComp={addPayrollComp}
+                        removePayrollComp={removePayrollComp}
+                        updatePayrollComp={updatePayrollComp}
+                    />
+                    <LocationSection
+                        form={form}
+                        setForm={setForm}
+                        masterLocations={masterLocations}
+                        toggleLocation={toggleLocation}
+                    />
                 </div>
             </div>
         </form>

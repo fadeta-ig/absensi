@@ -16,25 +16,16 @@ export default function SimCardEditPage({ params }: { params: Promise<{ id: stri
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const res = await fetch(`/api/assets/${id}`);
+                const res = await fetch(`/api/sim-cards/${id}`);
                 if (!res.ok) throw new Error("SIM Card tidak ditemukan");
                 
-                const asset: AssetWithHistory = await res.json();
-                
-                if (asset.category?.prefix !== "NUM") {
-                    throw new Error("Asset ini bukan tipe Kartu SIM. Silahkan kembali ke form Aset umum.");
-                }
+                const asset = await res.json();
 
                 setInitialData({
-                    name: asset.name,
-                    categoryId: asset.categoryId,
-                    kondisi: asset.kondisi,
-                    status: asset.status,
-                    holderType: asset.holderType,
+                    provider: asset.provider,
                     assignedToId: asset.assignedToId || "",
-                    assignedToName: asset.assignedToName || "",
-                    keterangan: asset.keterangan || "",
-                    nomorIndosat: asset.nomorIndosat || "",
+                    notes: asset.notes || "",
+                    phoneNumber: asset.phoneNumber || "",
                     expiredDate: asset.expiredDate ? asset.expiredDate.split('T')[0] : "",
                 });
 
@@ -51,20 +42,15 @@ export default function SimCardEditPage({ params }: { params: Promise<{ id: stri
         setSaving(true);
 
         const payload = {
-            name: data.name,
-            categoryId: data.categoryId,
-            kondisi: data.kondisi,
-            status: data.status,
-            holderType: data.holderType,
-            assignedToId: data.holderType === "EMPLOYEE" ? data.assignedToId : null,
-            assignedToName: data.holderType === "GA_POOL" ? null : data.assignedToName,
-            keterangan: data.keterangan || null,
-            nomorIndosat: data.nomorIndosat || null,
+            provider: data.provider,
+            phoneNumber: data.phoneNumber,
             expiredDate: data.expiredDate || null,
+            assignedToId: data.assignedToId || null,
+            notes: data.notes || null,
         };
 
         try {
-            const res = await fetch(`/api/assets/${id}`, {
+            const res = await fetch(`/api/sim-cards/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),

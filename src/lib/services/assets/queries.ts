@@ -190,10 +190,8 @@ export async function getAssetStats(includeCompanyOwned = false, excludeCategory
             where: baseWhere,
             _count: { id: true },
         }),
-        prisma.asset.count({
+        prisma.simCard.count({
             where: {
-                ...baseWhere,
-                categoryRel: { prefix: "NUM" },
                 expiredDate: { lte: in30Days },
             },
         }),
