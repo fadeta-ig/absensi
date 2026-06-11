@@ -43,40 +43,57 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-[var(--card)] border-t border-[var(--border)] flex items-end justify-around pb-2 pt-1 z-50 lg:hidden safe-area-bottom px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-            {mobileItems.map((item, i) => {
-                if (!item) return null;
-                const isActive = pathname === item.href;
-                const Icon = item.icon;
-                const isCenter = i === 2; // Absensi
+        <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden safe-area-bottom pointer-events-none px-4 pb-6">
+            <nav className="pointer-events-auto bg-white/60 dark:bg-[#121212]/60 backdrop-blur-2xl backdrop-saturate-[1.8] border border-white/40 dark:border-white/10 rounded-[2rem] flex items-center justify-around pb-2 pt-2 px-2 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.6)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] relative">
+                
+                {/* Ambient liquid glow behind the nav */}
+                <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-r from-primary/10 via-transparent to-accent/10 blur-xl -z-10" />
 
-                if (isCenter) {
+                {mobileItems.map((item, i) => {
+                    if (!item) return null;
+                    const isActive = pathname === item.href;
+                    const Icon = item.icon;
+                    const isCenter = i === 2; // Absensi
+
+                    if (isCenter) {
+                        return (
+                            <div key={item.href} className="relative -top-7">
+                                {/* Glowing liquid aura for center button */}
+                                <div className="absolute inset-0 bg-primary/40 blur-xl rounded-full scale-125 animate-pulse" />
+                                <button
+                                    onClick={() => onNavigate(item.href!)}
+                                    className="relative flex flex-col items-center justify-center w-[68px] h-[68px] rounded-full bg-gradient-to-tr from-primary-700 via-primary to-primary-light text-white shadow-[0_8px_20px_rgba(128,0,32,0.4),inset_0_2px_4px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.2)] border border-white/20 transition-all duration-300 active:scale-95 hover:scale-105"
+                                >
+                                    <Icon className="w-8 h-8 drop-shadow-md" />
+                                </button>
+                            </div>
+                        );
+                    }
+
                     return (
-                        <div key={item.href} className="relative -top-5">
-                            <button
-                                onClick={() => onNavigate(item.href!)}
-                                className="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] shadow-lg shadow-[var(--primary)]/30 border-4 border-[var(--background)] transition-transform active:scale-95"
-                            >
-                                <Icon className="w-6 h-6" />
-                            </button>
-                        </div>
+                        <button
+                            key={item.href}
+                            onClick={() => onNavigate(item.href!)}
+                            className="group relative flex flex-col items-center gap-1.5 py-2 px-3 min-w-[64px] transition-all duration-300"
+                        >
+                            {/* Active pill glassmorphism background */}
+                            {isActive && (
+                                <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] transition-opacity duration-300" />
+                            )}
+                            
+                            {/* Icon with 3D lift on active/hover */}
+                            <div className="relative z-10 transition-transform duration-300 ease-out group-hover:-translate-y-1">
+                                <Icon className={`w-5 h-5 transition-colors duration-300 ${isActive ? "text-primary drop-shadow-sm" : "text-gray-500 dark:text-gray-400 group-hover:text-primary/70"}`} />
+                            </div>
+                            
+                            <span className={`text-[10px] font-semibold relative z-10 transition-colors duration-300 ${isActive ? "text-primary" : "text-gray-500 dark:text-gray-400"}`}>
+                                {item.label}
+                            </span>
+                        </button>
                     );
-                }
-
-                return (
-                    <button
-                        key={item.href}
-                        onClick={() => onNavigate(item.href!)}
-                        className="flex flex-col items-center gap-1 py-1 px-1 min-w-[64px]"
-                    >
-                        <Icon className={`w-5 h-5 ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`} />
-                        <span className={`text-[10px] font-semibold ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>
-                            {item.label}
-                        </span>
-                    </button>
-                );
-            })}
-        </nav>
+                })}
+            </nav>
+        </div>
     );
 }
 

@@ -1,8 +1,6 @@
 /**
- * Script Generator Buku Panduan Sistem HRIS — WIG Attendance
- *
- * Menggunakan jsPDF untuk generate PDF langsung.
- * Jalankan: npx tsx docs/generate-guideline.ts
+ * Script Generator Buku Panduan Sistem HRIS — WIG Attendance (Enterprise Edition)
+ * Comprehensive, Strictly Typed, & Modular Generation Engine.
  */
 
 import { jsPDF } from "jspdf";
@@ -10,900 +8,940 @@ import path from "path";
 
 const OUTPUT_PATH = path.resolve(__dirname, "Buku_Panduan_WIG_Attendance.pdf");
 
-// ─── Helpers ─────────────────────────────────────────────────────────
+// ─── TYPES & INTERFACES ─────────────────────────────────────────────
 
-function addHeader(doc: jsPDF, title: string, yStart: number): number {
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(128, 0, 0); // Maroon
-    doc.text(title, 14, yStart);
-    doc.setDrawColor(128, 0, 0);
-    doc.line(14, yStart + 2, 196, yStart + 2);
-    return yStart + 10;
+type ContentBlock =
+    | { type: "paragraph"; text: string[] }
+    | { type: "bullet"; items: string[] }
+    | { type: "numbered"; items: string[] };
+
+interface Section {
+    title: string;
+    type: "chapter" | "subchapter";
+    content: ContentBlock[];
 }
 
-function addSubHeader(doc: jsPDF, title: string, y: number): number {
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(60, 60, 60);
-    doc.text(title, 14, y);
-    return y + 7;
-}
+// ─── THE CONTENT ARCHITECTURE ────────────────────────────────────────
 
-function addBody(doc: jsPDF, lines: string[], yStart: number): number {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(40, 40, 40);
-    let y = yStart;
-    for (const line of lines) {
-        if (y > 275) {
-            doc.addPage();
-            y = 20;
-        }
-        doc.text(line, 18, y);
-        y += 5.5;
+const manualData: Section[] = [
+    // ════ BAB 1 ════
+    {
+        title: "1. EXECUTIVE SUMMARY & KEUNGGULAN SISTEM",
+        type: "chapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "WIG Attendance System bukan sekadar alat pencatat kehadiran, melainkan sebuah Enterprise HRIS (Human Resource Information System) terpadu.",
+                    "Sistem ini dirancang untuk menjawab tantangan operasional HR dan GA modern dengan mengotomatisasi proses manual, mengeliminasi fraud (kecurangan) karyawan, dan memastikan kepatuhan pajak."
+                ]
+            },
+            {
+                type: "bullet",
+                items: [
+                    "Zero-Fraud Attendance: Dilengkapi Face Recognition AI dan Anti-Fake GPS untuk memastikan kehadiran 100% akurat.",
+                    "Auto-Payroll & Tax Compliance: Perhitungan gaji terintegrasi PPh 21 (TER) dan BPJS yang sepenuhnya otomatis.",
+                    "General Affairs (GA) Portal: Manajemen Aset, Peringatan Garansi/SIM Expired, dan Sistem Tiketing terpusat.",
+                    "Employee Empowerment: Portal mandiri transparan yang mengurangi pertanyaan repetitif ke HR hingga 80%.",
+                    "Scalable Architecture: Dibangun dengan teknologi mutakhir (Next.js 15+, Node.js) menjamin stabilitas korporat."
+                ]
+            }
+        ]
+    },
+    // ════ BAB 2 ════
+    {
+        title: "2. PERSYARATAN & ARSITEKTUR SISTEM",
+        type: "chapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Sistem berbasis Cloud dan PWA (Progressive Web App) ini mengusung konsep Zero-Install. Pengguna hanya membutuhkan web browser untuk mengakses semua fitur enterprise."
+                ]
+            },
+            {
+                type: "bullet",
+                items: [
+                    "Browser Modern: Mendukung penuh Google Chrome, Safari, Firefox, dan Microsoft Edge versi terbaru.",
+                    "Akses Perangkat: Kompatibel di Smartphone, Tablet, maupun Desktop/Laptop.",
+                    "Perangkat Keras: Membutuhkan kamera depan yang berfungsi dengan baik untuk Face Recognition.",
+                    "Lokasi (GPS): Mewajibkan layanan lokasi aktif pada perangkat untuk validasi Geofencing.",
+                    "Konektivitas: Memerlukan koneksi internet yang stabil (4G/5G/Wi-Fi)."
+                ]
+            }
+        ]
+    },
+    // ════ BAB 3 ════
+    {
+        title: "3. PORTAL KARYAWAN (EMPLOYEE SELF-SERVICE)",
+        type: "chapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Portal Employee dirancang untuk kemandirian karyawan. Mengusung antarmuka yang modern, bersih, dan intuitif, karyawan memiliki kendali atas absensi, tugas, dan benefit mereka."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.1. Beranda (Dashboard KPI Pribadi)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Menyajikan ringkasan kinerja harian karyawan secara visual."
+                ]
+            },
+            {
+                type: "bullet",
+                items: [
+                    "Melihat informasi status absensi hari ini (Jam Clock-In dan Clock-Out).",
+                    "Melihat total sisa cuti tahunan secara real-time.",
+                    "Membaca pengumuman penting yang di-pin oleh HRD di bagian atas layar."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.2. Absensi (Face Recognition & GPS)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Fitur inti dengan perlindungan Anti-Fraud. Karyawan wajib melakukan ini setiap hari kerja."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Absensi (ikon sidik jari / kamera di navigasi utama).",
+                    "Sistem akan meminta izin Kamera dan Lokasi (Klik Allow / Izinkan).",
+                    "Posisikan wajah menghadap layar (pastikan pencahayaan cukup).",
+                    "Sistem memvalidasi wajah dan memastikan lokasi GPS berada di radius Geofence kantor.",
+                    "Jika validasi GPS dan Biometrik (Match) berhasil, klik tombol Clock-In / Clock-Out.",
+                    "Sistem merekam data dengan akurasi detik."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.3. Riwayat Absensi",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Riwayat Absensi.",
+                    "Gunakan filter bulan/tahun untuk melihat rekap kehadiran lampau.",
+                    "Karyawan dapat melihat apakah status kehadiran mereka Hadir, Terlambat (Late), atau Tidak Hadir."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.4. Permintaan Surat Keterangan (Dokumen)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Fitur interaktif bagi karyawan untuk mengajukan permohonan surat-surat administratif ke departemen HR tanpa perlu tatap muka."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Dokumen & Surat di navigasi kiri.",
+                    "Klik tombol 'Minta Surat' untuk membuka Form Permintaan.",
+                    "Pilih Jenis Surat yang dibutuhkan: Surat Keterangan Kerja, Keterangan Penghasilan, Surat Masih Aktif Bekerja, atau Keterangan BPJS.",
+                    "Isi Tujuan Penggunaan Surat secara spesifik (Contoh: 'Untuk pengajuan KPR di Bank BCA').",
+                    "Klik 'Kirim Permintaan ke HR'.",
+                    "Pantau status secara real-time melalui Timeline (Menunggu -> Diproses -> Siap Diambil) beserta catatan dari tim HR."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.5. Pengajuan Cuti",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Cuti, lalu klik 'Ajukan Cuti Baru'.",
+                    "Pilih jenis cuti: Tahunan, Pribadi, Sakit, atau Melahirkan.",
+                    "Tentukan rentang tanggal (Tanggal Mulai dan Tanggal Selesai).",
+                    "Isi deskripsi atau alasan cuti.",
+                    "Khusus Cuti Sakit, karyawan wajib mengunggah Surat Keterangan Dokter (PDF/JPG).",
+                    "Klik Kirim. Status akan berubah menjadi 'Pending' menunggu persetujuan HR."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.6. Monitoring Karyawan (Untuk Supervisor)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Fitur eksklusif bagi Karyawan yang memiliki jabatan manajerial atau supervisor."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Monitoring.",
+                    "Supervisor dapat melihat daftar bawahan satu divisi.",
+                    "Melihat status kehadiran bawahan hari ini secara real-time (Hadir, Belum Absen, Cuti)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.7. Pembacaan WIG News",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu News/Berita.",
+                    "Pilih artikel atau kebijakan perusahaan terbaru untuk dibaca selengkapnya.",
+                    "Sistem melacak log bahwa karyawan telah membaca pengumuman penting tersebut."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.8. Pengajuan Lembur",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Lembur (Overtime).",
+                    "Klik Ajukan Lembur Baru.",
+                    "Tentukan Jam Mulai dan Jam Selesai.",
+                    "Sistem otomatis mengidentifikasi apakah lembur jatuh di Hari Kerja atau Hari Libur.",
+                    "Tulis rincian pekerjaan yang dilakukan.",
+                    "Klik Ajukan. Sistem akan meneruskannya ke HR."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.9. Melihat Slip Gaji",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Payslip (Slip Gaji).",
+                    "Sistem akan meminta ulang kata sandi (Password) demi privasi.",
+                    "Pilih periode bulan dan tahun yang ingin dilihat.",
+                    "Sistem menampilkan rincian: Gaji Pokok, Tunjangan, Potongan, BPJS, PPh21, dan Take Home Pay.",
+                    "Karyawan dapat mengunduh slip tersebut menjadi file PDF yang sah."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.10. Pengaturan Profil, Face ID, & Password",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Pusat manajemen keamanan dan kendali akun personal karyawan."
+                ]
+            },
+            {
+                type: "bullet",
+                items: [
+                    "Cara Ubah Password (Kata Sandi): Buka menu Settings. Pada tab Password, masukkan kata sandi lama Anda untuk verifikasi. Kemudian masukkan kata sandi baru (kombinasi huruf dan angka), dan klik Simpan. Anda akan otomatis keluar (logout) dan harus masuk kembali dengan kata sandi baru.",
+                    "Cara Daftar Biometrik (Face ID): Buka tab Face ID. Sistem akan meminta izin akses kamera. Posisikan wajah Anda tepat di area pemindaian hingga garis indikator berwarna hijau. Data wajah akan dikunci secara kriptografis dan merupakan syarat mutlak agar Anda bisa melakukan Absensi.",
+                    "Perbarui Data Pribadi: Buka menu Profil. Anda dapat memperbarui foto profil, nomor kontak darurat, atau alamat domisili agar data pusat di HR selalu mutakhir."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.11. Manajemen To-Do List Pribadi",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu To-Do List.",
+                    "Klik Tambah Tugas. Isi judul tugas dan tenggat waktu (deadline).",
+                    "Tandai checkbox jika tugas telah selesai. Sistem mencoret tugas secara otomatis (strikethrough)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.12. Laporan Kunjungan Klien (Visits)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Bagi divisi Sales atau operasional lapangan."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Kunjungan (Visits).",
+                    "Klik Buat Laporan. Isi Nama Klien, Agenda, dan Hasil Kunjungan.",
+                    "Sistem menangkap lokasi GPS (latitude/longitude) secara otomatis.",
+                    "Unggah foto bukti kunjungan (selfie dengan klien atau foto gedung).",
+                    "Kirim. HR dapat memverifikasi laporan tersebut di Dashboard Admin."
+                ]
+            }
+        ]
+    },
+    {
+        title: "3.13. Manajemen Aset & Laporan Kerusakan (Aset Saya)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Integrasi Portal Karyawan dengan sistem General Affairs (GA)."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Aset Saya (Assets).",
+                    "Karyawan dapat melihat daftar seluruh aset perusahaan (Laptop, HP, Kendaraan) yang saat ini sedang dipegang/dipinjamkan kepada mereka.",
+                    "Peminjaman Baru: Klik 'Request Aset Baru' (Contoh: meminta Mouse Wireless).",
+                    "Lapor Kendala: Jika laptop rusak, klik tombol Lapor Kendala pada aset tersebut, dan isi detail kerusakan. Tim GA akan menerima tiket tersebut untuk diproses."
+                ]
+            }
+        ]
+    },
+    // ════ BAB 4 ════
+    {
+        title: "4. PORTAL DASHBOARD HR (SUPERADMIN)",
+        type: "chapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Ruang kendali utama (Command Center) bagi HR Manager untuk mengawasi operasional, menyetujui birokrasi, dan mengeksekusi penggajian (Payroll)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.1. Analitik KPI Dashboard",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Akses rute `/dashboard`.",
+                    "Sistem menampilkan grafik statistik kehadiran real-time: Jumlah Hadir, Terlambat, Izin, dan Absen.",
+                    "Pantau daftar persetujuan tertunda (Pending Approvals) langsung dari halaman utama."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.2. Manajemen Absensi & Koreksi",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Attendance.",
+                    "Filter berdasarkan nama karyawan atau tanggal.",
+                    "Jika karyawan lupa Clock-Out, HR dapat melakukan Edit/Koreksi Data.",
+                    "Lihat foto bukti absensi dan keakuratan GPS di peta terintegrasi (Leaflet Maps)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.3. Audit Trail (Log Aktivitas)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Sistem mencatat setiap perubahan data untuk akuntabilitas tinggi."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Audit Trail.",
+                    "Pantau tabel log yang berisi detail: Siapa yang mengubah data, Waktu perubahan, dan Aksi (Create/Update/Delete).",
+                    "Gunakan log ini saat melakukan investigasi kesalahan entri data."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.4. Kalkulator BPJS",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu BPJS Calculator.",
+                    "Masukkan Gaji Pokok karyawan.",
+                    "Pilih tingkat risiko pekerjaan (untuk persentase JKK).",
+                    "Sistem menampilkan simulasi presisi potongan BPJS Kesehatan dan Ketenagakerjaan (porsi Perusahaan vs Karyawan)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.5. Manajemen Karyawan (Data 360°)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Fitur krusial bagi HR untuk melakukan 'Onboarding' karyawan baru secara digital dan komprehensif."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Employees di Dashboard.",
+                    "Cara Registrasi Karyawan Baru: Klik tombol 'Tambah Karyawan'.",
+                    "Isi Profil Dasar: Masukkan ID Karyawan (NIK), Nama Lengkap, Email perusahaan, dan Nomor Handphone.",
+                    "Tentukan Hierarki Organisasi: Pilih Departemen, lalu pilih Divisi, dan Jabatan (Master Data harus sudah dibuat sebelumnya).",
+                    "Konfigurasi Akses Absensi: Pilih Lokasi Geofence utama karyawan tersebut, atau aktifkan toggle 'Bypass Lokasi' jika ia adalah pekerja Remote (WFH).",
+                    "Assign Shift: Tetapkan Jadwal Shift Kerja default untuk kalkulasi jam masuk dan keluar secara matematis.",
+                    "Pemberian Akses Login: HR membuatkan Kata Sandi Awal (Password). Karyawan bisa langsung login detik itu juga, dan sistem akan mengimbau karyawan untuk segera mengganti kata sandi dan mendaftarkan Face ID secara mandiri."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.6. Manajemen & Persetujuan Cuti",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Leave.",
+                    "Lihat daftar pengajuan berstatus Pending.",
+                    "Klik Detail. Baca alasan, periksa saldo cuti karyawan, dan buka lampiran surat sakit jika ada.",
+                    "Klik Approve atau Reject. Jika Approve, saldo cuti karyawan otomatis berkurang."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.7. Permohonan Surat Keterangan (Letter Requests)",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Letter Requests.",
+                    "Tinjau permohonan karyawan yang meminta Surat Keterangan Kerja, Slip Gaji Cap Basah, atau Surat Visa.",
+                    "Setelah surat dibuat secara fisik/digital, HR dapat mengupdate statusnya menjadi Completed (Selesai)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.8. Master Data (Departemen, Divisi, Jabatan, Lokasi)",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Master Data.",
+                    "Tambahkan Departemen (misal: Teknologi).",
+                    "Tambahkan Divisi dan kaitkan dengan Departemen (misal: Software Engineering -> Teknologi).",
+                    "Lokasi (Geofence): Tambahkan lokasi kantor, set koordinat latitude/longitude, dan atur radius toleransi (misal 50 meter)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.9. Master Payroll (Tunjangan & Potongan)",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Master Payroll.",
+                    "Tambahkan Komponen: Pilih apakah ini Tunjangan (Allowance) atau Potongan (Deduction).",
+                    "Atur nominal default. Komponen ini akan muncul saat menyusun slip gaji."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.10. CMS WIG News",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu News.",
+                    "Klik Tulis Berita Baru. Masukkan Judul dan Konten Editor (Rich Text).",
+                    "Tentukan apakah berita ini Penting (Pinned).",
+                    "Klik Publish. Berita akan seketika muncul di dashboard seluruh karyawan."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.11. Manajemen Lembur & Kalkulator PP35",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Overtime.",
+                    "Review pengajuan lembur. Sistem telah menghitung berapa jam valid lembur tersebut.",
+                    "Approve lembur. Buka Overtime Calculator untuk melihat simulasi upah lembur resmi berdasarkan PP 35 Tahun 2021 (Hari Kerja vs Hari Libur)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.12. Enterprise Payroll (Slip Gaji)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Engine kalkulasi gaji otomatis terpadu."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Payroll, klik Generate Slip Gaji.",
+                    "Pilih Karyawan. Sistem akan menarik Gaji Pokok secara otomatis.",
+                    "Tambahkan nilai Lembur (diambil dari rekap overtime bulan tersebut).",
+                    "Tambahkan komponen potongan/tunjangan tambahan.",
+                    "Sistem secara matematis mengkalkulasi Gaji Bersih (Take Home Pay).",
+                    "Klik Terbitkan. Slip Gaji langsung tersedia di aplikasi karyawan."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.13. Kalkulator PPh 21 TER",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu PPh 21 Calculator.",
+                    "Pilih status Penghasilan Tidak Kena Pajak (PTKP), misalnya TK/0, K/1, dll.",
+                    "Masukkan Gaji Bruto.",
+                    "Sistem akan mencocokkan dengan tabel TER DJP terbaru dan menghasilkan nilai pajak yang harus dipotong bulan ini."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.14. Reporting & Export Data",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Reports.",
+                    "Pilih jenis laporan: Absensi, Payroll, Cuti, atau Karyawan.",
+                    "Atur rentang tanggal (Date Range).",
+                    "Klik Export to Excel (.xlsx) atau Export to PDF untuk kebutuhan audit."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.15. Manajemen Shift Kerja Dinamis",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Shifts.",
+                    "Buat Shift Baru (misal: Shift Malam).",
+                    "Tentukan jam masuk, jam keluar, dan rentang toleransi keterlambatan (Grace Period).",
+                    "Assign Shift ini ke karyawan spesifik yang bekerja malam."
+                ]
+            }
+        ]
+    },
+    {
+        title: "4.16. Persetujuan Laporan Kunjungan",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Visits.",
+                    "Periksa laporan dari tim lapangan. Tinjau foto, baca catatan, dan lihat validitas titik GPS.",
+                    "Tandai sebagai Validated (Tervalidasi) jika laporan sesuai prosedur."
+                ]
+            }
+        ]
+    },
+    // ════ BAB 5 ════
+    {
+        title: "5. PORTAL GA (GENERAL AFFAIRS)",
+        type: "chapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Portal General Affairs dirancang khusus untuk manajemen aset, armada kendaraan, fasilitas gedung, hingga layanan Helpdesk spesifik departemen GA."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.1. Dashboard Statistik Aset & Expiry",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka rute `/ga`.",
+                    "Dashboard menyajikan Metrik Total Kapital Aset dan Persentase Aset Rusak.",
+                    "Alert Expiry: Sistem menampilkan peringatan otomatis jika ada aset yang masa garansinya hampir habis (dalam 30 hari) atau jika STNK Kendaraan/Nomor SIM Card akan expired."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.2. Manajemen Aset Fisik & Digital",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Assets.",
+                    "Klik Register Aset. Masukkan Kode Aset, Nama Aset (misal: Laptop Lenovo X1), dan Nilai Aset (Harga Beli).",
+                    "Assign Aset: Pilih apakah aset ini dialokasikan ke GA Pool (Gudang) atau langsung dipinjamkan (Assigned) ke spesifik Karyawan.",
+                    "Ubah Status: Update status secara berkala (Available, In Use, Maintenance, Broken, Disposed)."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.3. Kategori Aset",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Categories.",
+                    "Buat kategori baru dengan Prefix kode unik (Misal: 'LT' untuk Laptop, 'MBL' untuk Mobil).",
+                    "Setiap aset yang diregister di kategori ini akan mendapatkan kode SKU otomatis, misal LT-2026-001."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.4. Fitur Pemindaian Barcode (Scan QR)",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Scan melalui perangkat seluler (Smartphone).",
+                    "Arahkan kamera ke stiker QR Code yang menempel di aset fisik.",
+                    "Sistem otomatis mengarahkan GA ke halaman Detail Aset tersebut, mempermudah audit fisik (Stock Opname) tanpa harus mengetik manual."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.5. Manajemen Nomor & SIM Card",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu SIM & Numbers.",
+                    "Daftarkan kartu perdana korporat atau nomor internet.",
+                    "Isi tanggal kadaluwarsa (Expired Date).",
+                    "Sistem akan memancarkan alert merah di Dashboard jika paket data atau masa aktif nomor mendekati habis."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.6. Helpdesk & Ticketing System GA",
+        type: "subchapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Buka menu Tickets.",
+                    "Tim GA menerima laporan masuk dari karyawan terkait kerusakan fasilitas (AC mati, kursi rusak, plafon bocor).",
+                    "Klik Investigate (Proses Tiket). Update estimasi waktu perbaikan agar pelapor mendapatkan notifikasi.",
+                    "Setelah vendor menyelesaikan perbaikan, ubah status tiket menjadi Closed."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.7. Upload BAST (Berita Acara Serah Terima)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Digitalisasi dokumen serah terima fisik."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Saat tim GA meminjamkan aset (Assign Asset) kepada Karyawan, GA wajib mencetak dokumen BAST yang telah ditandatangani kedua belah pihak.",
+                    "Buka Riwayat Aset (Asset History), lalu unggah file PDF/Scan BAST tersebut sebagai bukti hukum yang sah bahwa karyawan telah menerima barang dalam kondisi baik."
+                ]
+            }
+        ]
+    },
+    {
+        title: "5.8. Inspeksi & Audit Aset (Checklist)",
+        type: "subchapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Fitur pencegahan depresiasi aset (Preventive Maintenance)."
+                ]
+            },
+            {
+                type: "numbered",
+                items: [
+                    "Secara berkala, GA melakukan pengecekan fisik aset.",
+                    "Buka menu Inspeksi Aset.",
+                    "Isi Checklist parameter (Misal: Apakah layar tergores? Apakah baterai bocor?).",
+                    "Tentukan kondisi akhir aset (Baik/Kurang Baik/Rusak) berdasarkan hasil inspeksi agar pembukuan nilai aset tetap mutakhir."
+                ]
+            }
+        ]
+    },
+    // ════ BAB 6 ════
+    {
+        title: "6. KEAMANAN TINGKAT ENTERPRISE (ZERO-TRUST)",
+        type: "chapter",
+        content: [
+            {
+                type: "paragraph",
+                text: [
+                    "Infrastruktur keamanan WIG HRIS dibangun di atas paradigma Zero-Trust, dimana setiap interaksi diverifikasi secara ketat."
+                ]
+            },
+            {
+                type: "bullet",
+                items: [
+                    "Algoritma Face-API.js: Membaca puluhan titik biometrik (landmarks) wajah secara offline di sisi browser untuk mempercepat proses tanpa lag.",
+                    "Liveness Detection: Fitur anti-spoofing mendeteksi kedalaman bayangan sehingga absensi menggunakan foto cetak atau video dari HP lain akan tertolak.",
+                    "Mock Location Blocker: Logic internal menghentikan paksa transaksi absensi jika SDK mendeteksi penggunaan Fake GPS, Mock Location, atau VPN perubah IP.",
+                    "JWT & HTTP-Only Cookies: Sesi login dienkripsi dan diamankan dari serangan XSS (Cross-Site Scripting) pencurian token."
+                ]
+            }
+        ]
+    },
+    // ════ BAB 7 ════
+    {
+        title: "7. FREQUENTLY ASKED QUESTIONS (FAQ)",
+        type: "chapter",
+        content: [
+            {
+                type: "numbered",
+                items: [
+                    "Q: Apakah staf di lapangan (Sales) harus absen di kantor pusat? \nA: Tidak. HR dapat mendaftarkan lokasi Geofence klien, atau mengaktifkan fitur 'Bypass Location' khusus bagi staf lapangan yang memiliki mobilitas tak tertebak.",
+                    "Q: Bagaimana jika Karyawan mengganti Handphone? \nA: Akun karyawan aman. Namun untuk pertama kalinya, mereka harus didaftarkan ulang (Reset Face ID) oleh HR jika keamanan perusahaan mengadopsi kebijakan strict 1-Device.",
+                    "Q: Apakah slip gaji terjamin kerahasiaannya? \nA: Ya. Setiap slip gaji di-render secara privat di layar perangkat dan mewajibkan karyawan memasukkan Password ulang (Two-Step Authentication) sebelum membuka dokumen slip.",
+                    "Q: Bagaimana jika internet terputus saat absensi? \nA: Aplikasi dibangun dengan teknologi PWA. Saat online kembali, data akan disinkronisasi. Karyawan juga dapat menggunakan kuota seluler (4G/5G) pribadi karena konsumsi data sistem yang sangat kecil."
+                ]
+            }
+        ]
     }
-    return y;
-}
+];
 
-function addBullet(doc: jsPDF, items: string[], yStart: number, indent = 22): number {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(40, 40, 40);
-    let y = yStart;
-    for (const item of items) {
-        if (y > 275) {
-            doc.addPage();
-            y = 20;
-        }
-        doc.text("•", indent - 4, y);
-        const splitText = doc.splitTextToSize(item, 170);
-        doc.text(splitText, indent, y);
-        y += splitText.length * 5.5;
-    }
-    return y;
-}
-
-function addNumbered(doc: jsPDF, items: string[], yStart: number): number {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(40, 40, 40);
-    let y = yStart;
-    items.forEach((item, index) => {
-        if (y > 275) {
-            doc.addPage();
-            y = 20;
-        }
-        const num = `${index + 1}.`;
-        doc.text(num, 18, y);
-        const splitText = doc.splitTextToSize(item, 168);
-        doc.text(splitText, 24, y);
-        y += splitText.length * 5.5;
-    });
-    return y;
-}
-
-function addSpacer(y: number, size = 5): number {
-    return y + size;
-}
-
-function checkPage(doc: jsPDF, y: number, needed = 40): number {
-    if (y > 280 - needed) {
-        doc.addPage();
-        return 20;
-    }
-    return y;
-}
-
-// ─── Page Number Footer ──────────────────────────────────────────────
-
-function addPageNumbers(doc: jsPDF) {
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(150, 150, 150);
-        doc.text(`Halaman ${i} dari ${pageCount}`, 105, 290, { align: "center" });
-        doc.text("PT Wijaya Inovasi Gemilang — Dokumen Internal", 105, 294, { align: "center" });
-    }
-}
-
-// ─── Main ────────────────────────────────────────────────────────────
+// ─── RENDERING ENGINE ────────────────────────────────────────────────
 
 function generateGuideline() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     let y = 0;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // COVER PAGE
-    // ═══════════════════════════════════════════════════════════════════
-    doc.setFillColor(128, 0, 0); // Maroon
+    // ── Helper Internal ──
+    const drawHeader = (title: string, yPos: number): number => {
+        doc.setFontSize(18);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(105, 15, 30); // Enterprise Maroon
+        doc.text(title, 14, yPos);
+        doc.setDrawColor(105, 15, 30);
+        doc.setLineWidth(0.5);
+        doc.line(14, yPos + 3, 196, yPos + 3);
+        return yPos + 14;
+    };
+
+    const drawSubHeader = (title: string, yPos: number): number => {
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 30, 30);
+        doc.text(title, 14, yPos);
+        return yPos + 8;
+    };
+
+    const checkPage = (currentY: number, neededSpace: number): number => {
+        if (currentY > 280 - neededSpace) {
+            doc.addPage();
+            return 20;
+        }
+        return currentY;
+    };
+
+    // ════ COVER PAGE ════
+    doc.setFillColor(15, 23, 42); // Elegant Dark Slate
     doc.rect(0, 0, 210, 297, "F");
 
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(32);
+    doc.setFontSize(38);
     doc.setFont("helvetica", "bold");
-    doc.text("BUKU PANDUAN", 105, 100, { align: "center" });
-    doc.setFontSize(24);
-    doc.text("WIG Attendance System", 105, 115, { align: "center" });
+    doc.text("ENTERPRISE HRIS PLATFORM", 105, 100, { align: "center" });
 
-    doc.setFontSize(12);
+    doc.setFontSize(20);
     doc.setFont("helvetica", "normal");
-    doc.text("Human Resource Information System (HRIS)", 105, 135, { align: "center" });
-    doc.text("PT Wijaya Inovasi Gemilang", 105, 143, { align: "center" });
+    doc.text("Buku Panduan, Operasional & Fitur", 105, 115, { align: "center" });
 
-    doc.setDrawColor(255, 255, 255);
-    doc.setLineWidth(0.5);
-    doc.line(60, 155, 150, 155);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(200, 200, 200);
+    doc.text("Solusi Pengelolaan SDM, Payroll, dan Aset (GA) Terintegrasi", 105, 135, { align: "center" });
 
-    doc.setFontSize(10);
-    doc.text("Versi 1.0", 105, 170, { align: "center" });
-    doc.text("Februari 2026", 105, 177, { align: "center" });
-    doc.text("Dokumen Internal — Hak Cipta Dilindungi", 105, 250, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("WIG Attendance System", 105, 145, { align: "center" });
 
-    // ═══════════════════════════════════════════════════════════════════
-    // DAFTAR ISI
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "DAFTAR ISI", y);
-    y = addSpacer(y);
+    doc.setDrawColor(200, 160, 50); // Gold Accent
+    doc.setLineWidth(1);
+    doc.line(40, 155, 170, 155);
 
-    const tocItems = [
-        "1. Pendahuluan",
-        "2. Persyaratan Sistem",
-        "3. Login & Autentikasi",
-        "4. Panel Karyawan (Employee Portal)",
-        "   4.1. Beranda",
-        "   4.2. Absensi (Clock In / Clock Out)",
-        "   4.3. Riwayat Absensi",
-        "   4.4. Laporan Kunjungan",
-        "   4.5. Pengajuan Lembur",
-        "   4.6. Slip Gaji",
-        "   4.7. Pengajuan Cuti",
-        "   4.8. Berita & Pengumuman",
-        "   4.9. To-Do List",
-        "   4.10. Pengaturan (Password & Face ID)",
-        "   4.11. Helpdesk & Knowledge Base",
-        "5. Dashboard HR (Admin Panel)",
-        "   5.1. Dashboard Utama & KPI",
-        "   5.2. Manajemen Absensi",
-        "   5.3. Manajemen Kunjungan",
-        "   5.4. Manajemen Cuti",
-        "   5.5. Master Data (Departemen, Divisi, Jabatan, Lokasi)",
-        "   5.6. Manajemen Karyawan",
-        "   5.7. Manajemen Jam Kerja (Shift)",
-        "   5.8. Manajemen Lembur",
-        "   5.9. Payroll (Slip Gaji & Rekapitulasi)",
-        "   5.10. Pengaturan Komponen Payroll",
-        "   5.11. Kalkulator PPh 21",
-        "   5.12. Kalkulator BPJS",
-        "   5.13. Laporan & Export",
-        "   5.14. WIG News",
-        "   5.15. Helpdesk & Manajemen SLA",
-        "   5.16. Manajemen Knowledge Base",
-        "6. Fitur Keamanan",
-        "   6.1. Verifikasi Wajah (Face Recognition)",
-        "   6.2. Validasi GPS Anti-Fake",
-        "   6.3. Geofencing Multi-Lokasi",
-        "7. Frequently Asked Questions (FAQ)",
-    ];
-
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(40, 40, 40);
-    for (const item of tocItems) {
-        doc.text(item, 18, y);
-        y += 6;
-        if (y > 275) { doc.addPage(); y = 20; }
+    doc.setTextColor(180, 180, 180);
+    doc.text("Disusun Komprehensif Untuk Eksekutif, HR Manager & Tim GA", 105, 170, { align: "center" });
+    doc.text("Februari 2026 | Versi 3.0 (Ultimate Edition)", 105, 177, { align: "center" });
+
+    doc.setFontSize(9);
+    doc.text("PT Wijaya Inovasi Gemilang — Confidential & Proprietary", 105, 280, { align: "center" });
+
+    // ════ DAFTAR ISI (TOC) ════
+    doc.addPage();
+    y = 20;
+    y = drawHeader("DAFTAR ISI", y);
+    y += 5;
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 50);
+
+    manualData.forEach((section) => {
+        if (section.type === "chapter") {
+            y = checkPage(y, 10);
+            doc.setFont("helvetica", "bold");
+            doc.text(section.title, 14, y);
+            y += 7;
+        } else {
+            y = checkPage(y, 8);
+            doc.setFont("helvetica", "normal");
+            doc.text(section.title, 20, y);
+            y += 6;
+        }
+    });
+
+    // ════ ENGINE LOOP (CONTENT GENERATION) ════
+    manualData.forEach((section) => {
+        if (section.type === "chapter") {
+            doc.addPage();
+            y = 20;
+            y = drawHeader(section.title, y);
+        } else {
+            y = checkPage(y, 25);
+            y += 5;
+            y = drawSubHeader(section.title, y);
+        }
+
+        section.content.forEach((block) => {
+            doc.setFontSize(10.5);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(60, 60, 60);
+
+            if (block.type === "paragraph") {
+                block.text.forEach((textLine) => {
+                    y = checkPage(y, 10);
+                    const splitText = doc.splitTextToSize(textLine, 175);
+                    doc.text(splitText, 16, y);
+                    y += splitText.length * 5.5 + 2;
+                });
+            } else if (block.type === "bullet") {
+                block.items.forEach((item) => {
+                    y = checkPage(y, 10);
+                    doc.text("•", 18, y);
+                    const splitText = doc.splitTextToSize(item, 168);
+                    doc.text(splitText, 24, y);
+                    y += splitText.length * 5.5 + 2;
+                });
+            } else if (block.type === "numbered") {
+                block.items.forEach((item, index) => {
+                    y = checkPage(y, 10);
+                    const numStr = `${index + 1}.`;
+                    doc.text(numStr, 18, y);
+                    
+                    // Allow multi-line answers in FAQ (split by \n inside item)
+                    const chunks = item.split("\n");
+                    chunks.forEach((chunk, cIdx) => {
+                        const splitText = doc.splitTextToSize(chunk, 168);
+                        if (cIdx === 0) {
+                            doc.text(splitText, 24, y);
+                        } else {
+                            // Indent new lines
+                            doc.text(splitText, 24, y);
+                        }
+                        y += splitText.length * 5.5 + 1;
+                    });
+                    y += 2;
+                });
+            }
+            y += 3; // Gap after block
+        });
+    });
+
+    // ════ FOOTER PAGINATION ════
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        // Skip cover
+        if (i === 1) continue; 
+        
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Halaman ${i} dari ${pageCount}`, 105, 290, { align: "center" });
+        doc.text("PT Wijaya Inovasi Gemilang | WIG HRIS Ultimate Edition", 105, 294, { align: "center" });
     }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 1: PENDAHULUAN
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "1. PENDAHULUAN", y);
-    y = addSpacer(y);
-    y = addBody(doc, [
-        "WIG Attendance System adalah platform HRIS (Human Resource Information System) berbasis",
-        "web yang dikembangkan untuk PT Wijaya Inovasi Gemilang. Sistem ini dirancang untuk",
-        "mengotomatisasi dan menyederhanakan pengelolaan sumber daya manusia, mulai dari",
-        "pencatatan kehadiran hingga perhitungan payroll.",
-    ], y);
-    y = addSpacer(y, 4);
-    y = addSubHeader(doc, "Tujuan Sistem", y);
-    y = addBullet(doc, [
-        "Mencatat kehadiran karyawan secara real-time dengan validasi GPS dan Face Recognition.",
-        "Mengelola pengajuan cuti, lembur, dan kunjungan klien secara digital.",
-        "Menghitung gaji bulanan termasuk PPh 21 (TER) dan iuran BPJS secara otomatis.",
-        "Menyediakan dashboard analitik untuk HR dalam memantau KPI kehadiran.",
-        "Menyediakan portal mandiri bagi karyawan untuk mengakses informasi pribadi.",
-    ], y);
-    y = addSpacer(y, 4);
-    y = addSubHeader(doc, "Peran Pengguna (Role)", y);
-    y = addBullet(doc, [
-        "HR Administrator — Akses penuh ke seluruh fitur manajemen melalui Dashboard HR.",
-        "Karyawan (Employee) — Akses terbatas ke portal karyawan untuk absensi, cuti, slip gaji, dll.",
-    ], y);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 2: PERSYARATAN SISTEM
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "2. PERSYARATAN SISTEM", y);
-    y = addSpacer(y);
-    y = addSubHeader(doc, "Perangkat Pengguna", y);
-    y = addBullet(doc, [
-        "Browser modern: Google Chrome (versi 90+), Mozilla Firefox, Safari, atau Microsoft Edge.",
-        "Perangkat dengan kamera (untuk fitur Face Recognition dan selfie absensi).",
-        "GPS aktif pada perangkat (untuk validasi lokasi absensi).",
-        "Koneksi internet stabil.",
-        "Sistem mendukung desktop dan mobile (responsive design).",
-    ], y);
-    y = addSpacer(y, 4);
-    y = addSubHeader(doc, "Infrastruktur Server", y);
-    y = addBullet(doc, [
-        "Node.js runtime (versi 18+).",
-        "Database MySQL.",
-        "Framework: Next.js 15+ dengan Prisma ORM.",
-    ], y);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 3: LOGIN & AUTENTIKASI
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "3. LOGIN & AUTENTIKASI", y);
-    y = addSpacer(y);
-    y = addBody(doc, [
-        "Halaman login adalah pintu masuk utama ke sistem. Semua pengguna (HR dan Karyawan)",
-        "menggunakan halaman yang sama untuk login.",
-    ], y);
-    y = addSpacer(y, 4);
-    y = addSubHeader(doc, "Langkah-langkah Login", y);
-    y = addNumbered(doc, [
-        "Buka aplikasi WIG Attendance di browser.",
-        "Masukkan ID Karyawan (contoh: ID25000001) pada kolom yang tersedia.",
-        "Masukkan Password yang telah diberikan oleh HR.",
-        "Klik tombol \"Masuk\".",
-        "Sistem akan secara otomatis mengarahkan ke halaman yang sesuai:",
-    ], y);
-    y = addBullet(doc, [
-        "HR Administrator → Dashboard HR (/dashboard)",
-        "Karyawan → Portal Karyawan (/employee)",
-    ], y, 30);
-    y = addSpacer(y, 4);
-    y = addSubHeader(doc, "Lupa Password", y);
-    y = addBody(doc, [
-        "Jika lupa password, hubungi HR Administrator. HR dapat mengirimkan password baru",
-        "melalui fitur email yang terintegrasi dalam sistem.",
-    ], y);
-    y = addSpacer(y, 4);
-    y = addSubHeader(doc, "Keamanan Sesi", y);
-    y = addBullet(doc, [
-        "Sesi login menggunakan JWT (JSON Web Token) yang disimpan dalam HTTP-only cookie.",
-        "Sesi akan otomatis berakhir setelah periode waktu tertentu.",
-        "Klik \"Keluar\" di sidebar untuk logout secara manual.",
-    ], y);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 4: PANEL KARYAWAN
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "4. PANEL KARYAWAN (Employee Portal)", y);
-    y = addSpacer(y);
-    y = addBody(doc, [
-        "Portal Karyawan adalah area mandiri yang dapat diakses oleh setiap karyawan setelah login.",
-        "Navigasi tersedia melalui sidebar di desktop atau bottom navigation di mobile.",
-    ], y);
-
-    // 4.1 Beranda
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "4.1. Beranda", y);
-    y = addBody(doc, [
-        "Halaman utama yang menampilkan ringkasan informasi karyawan hari ini.",
-    ], y);
-    y = addBullet(doc, [
-        "Status Absensi Hari Ini — menampilkan jam clock-in dan clock-out.",
-        "Sisa Cuti — jumlah cuti tahunan yang masih tersedia.",
-        "Berita Terbaru — daftar pengumuman perusahaan terkini.",
-        "Quick Actions — shortcut cepat ke fitur absensi dan cuti.",
-    ], y);
-
-    // 4.2 Absensi
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 70);
-    y = addSubHeader(doc, "4.2. Absensi (Clock In / Clock Out)", y);
-    y = addBody(doc, [
-        "Fitur utama untuk mencatat kehadiran. Menggunakan validasi multi-faktor.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Proses Clock In:"], y);
-    y = addNumbered(doc, [
-        "Buka menu \"Absensi\" dari navigasi.",
-        "Izinkan akses kamera dan lokasi jika diminta oleh browser.",
-        "Sistem otomatis memilih kamera terbaik (mendukung kamera belakang/ultrawide).",
-        "Sistem menampilkan layar kamera — posisikan wajah di area yang ditandai.",
-        "Sistem memvalidasi: (a) Verifikasi wajah, (b) Lokasi GPS, (c) Anti-fake GPS.",
-        "Jika semua validasi berhasil, klik tombol \"Clock In\".",
-        "Foto selfie dan lokasi GPS akan tercatat otomatis.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Proses Clock Out:"], y);
-    y = addNumbered(doc, [
-        "Buka kembali menu \"Absensi\".",
-        "Sistem mendeteksi bahwa Anda sudah clock-in hari ini.",
-        "Ulangi proses selfie dan validasi yang sama.",
-        "Klik tombol \"Clock Out\" — waktu keluar tercatat.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = checkPage(doc, y, 30);
-    y = addSubHeader(doc, "   Status Kehadiran", y);
-    y = addBullet(doc, [
-        "Hadir (Present) — Clock in sebelum batas waktu shift.",
-        "Terlambat (Late) — Clock in melebihi batas toleransi keterlambatan.",
-        "Tidak Hadir (Absent) — Tidak ada catatan clock-in pada hari kerja.",
-        "Cuti (Leave) — Terdapat persetujuan cuti yang aktif.",
-    ], y);
-
-    // 4.3 Riwayat Absensi
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 40);
-    y = addSubHeader(doc, "4.3. Riwayat Absensi", y);
-    y = addBody(doc, [
-        "Menampilkan daftar seluruh catatan kehadiran karyawan dalam format tabel.",
-    ], y);
-    y = addBullet(doc, [
-        "Tanggal, jam masuk, jam keluar, dan status kehadiran.",
-        "Filter berdasarkan periode waktu.",
-        "Tampilan lokasi clock-in/clock-out pada peta (jika tersedia).",
-    ], y);
-
-    // 4.4 Kunjungan
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "4.4. Laporan Kunjungan", y);
-    y = addBody(doc, [
-        "Fitur untuk mencatat laporan kunjungan kerja dengan desain UI card modern.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Membuat & Melihat Laporan:"], y);
-    y = addNumbered(doc, [
-        "Buka menu \"Kunjungan\" untuk melihat daftar card kunjungan secara rapi.",
-        "Klik \"Tambah Kunjungan\" dan isi Nama Klien, Alamat, Tujuan, Hasil, Catatan.",
-        "Ambil foto bukti kunjungan. Lokasi GPS akan tercatat otomatis.",
-        "Klik \"Simpan\". Laporan akan masuk berstatus \"Pending\".",
-        "Klik tombol \"Action Detail\" pada card untuk melihat detail di dalam modal pop-up.",
-    ], y);
-
-    // 4.5 Lembur
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "4.5. Pengajuan Lembur", y);
-    y = addBody(doc, [
-        "Pengajuan lembur terintegrasi dengan kalkulasi lembur standar PP 35/2021.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Mengajukan Lembur:"], y);
-    y = addNumbered(doc, [
-        "Buka menu \"Lembur\" dan klik \"Ajukan Lembur\".",
-        "Isi: Tanggal, Jam Mulai, Jam Selesai, serta centang jika hari libur/istirahat.",
-        "Isi Alasan/Deskripsi Pekerjaan.",
-        "Total jam lembur dihitung otomatis secara akurat oleh sistem.",
-        "Klik \"Kirim\" — pengajuan masuk antrian persetujuan HR.",
-    ], y);
-    y = addBullet(doc, [
-        "Status: Pending → Approved / Rejected.",
-    ], y);
-
-    // 4.6 Slip Gaji
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 40);
-    y = addSubHeader(doc, "4.6. Slip Gaji", y);
-    y = addBody(doc, [
-        "Karyawan dapat melihat rincian slip gaji yang telah diterbitkan oleh HR.",
-    ], y);
-    y = addBullet(doc, [
-        "Periode gaji, gaji pokok, tunjangan, potongan, lembur, dan gaji bersih.",
-        "Rincian komponen tunjangan dan potongan ditampilkan secara detail.",
-        "HR menerbitkan slip gaji setiap bulan melalui modul Payroll.",
-    ], y);
-
-    // 4.7 Cuti
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 60);
-    y = addSubHeader(doc, "4.7. Pengajuan Cuti", y);
-    y = addBody(doc, ["Cara Mengajukan Cuti:"], y);
-    y = addNumbered(doc, [
-        "Buka menu \"Cuti\".",
-        "Klik \"Ajukan Cuti\".",
-        "Pilih Jenis Cuti: Tahunan, Sakit, Pribadi, atau Melahirkan.",
-        "Pilih Tanggal Mulai dan Tanggal Selesai.",
-        "Isi alasan cuti.",
-        "Upload bukti/lampiran (PDF atau foto) - wajib untuk cuti sakit.",
-        "Klik \"Kirim Pengajuan\".",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBullet(doc, [
-        "Jatah cuti tahunan: 12 hari per tahun (default).",
-        "Sisa cuti ditampilkan di halaman cuti dan beranda.",
-        "Saat cuti disetujui, saldo cuti terpakai otomatis bertambah.",
-    ], y);
-
-    // 4.8 Berita
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 30);
-    y = addSubHeader(doc, "4.8. Berita & Pengumuman", y);
-    y = addBody(doc, [
-        "Menampilkan berita dan pengumuman perusahaan yang diterbitkan oleh HR.",
-    ], y);
-    y = addBullet(doc, [
-        "Kategori: Pengumuman, Event, Kebijakan, Umum.",
-        "Berita yang di-pin akan selalu tampil di atas.",
-        "Mendukung lampiran media (gambar).",
-    ], y);
-
-    // 4.9 To-Do
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 30);
-    y = addSubHeader(doc, "4.9. To-Do List", y);
-    y = addBody(doc, [
-        "Catatan tugas pribadi untuk setiap karyawan.",
-    ], y);
-    y = addBullet(doc, [
-        "Tambah, edit, tandai selesai, dan hapus tugas.",
-        "Data tersimpan di server — dapat diakses dari perangkat manapun.",
-    ], y);
-
-    // 4.10 Pengaturan
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "4.10. Pengaturan (Password & Face ID)", y);
-    y = addBody(doc, ["Fitur pengaturan akun karyawan:"], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["A. Ubah Password:"], y);
-    y = addNumbered(doc, [
-        "Masukkan password lama.",
-        "Masukkan password baru (minimal 6 karakter).",
-        "Konfirmasi password baru.",
-        "Klik \"Simpan\" — password langsung diperbarui.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["B. Registrasi Wajah (Face ID):"], y);
-    y = addNumbered(doc, [
-        "Klik \"Daftarkan Wajah\".",
-        "Izinkan akses kamera.",
-        "Posisikan wajah menghadap kamera dengan jelas.",
-        "Sistem mengambil data biometrik wajah dan menyimpannya.",
-        "Face ID digunakan untuk verifikasi saat absensi.",
-    ], y);
-
-    // 4.11 Helpdesk & Knowledge Base
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 60);
-    y = addSubHeader(doc, "4.11. Helpdesk & Knowledge Base (Pusat Bantuan)", y);
-    y = addBody(doc, [
-        "Fasilitas mandiri untuk mencari solusi teknis atau melaporkan kendala ke HR/IT.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["A. Knowledge Base (Artikel Bantuan):"], y);
-    y = addBullet(doc, [
-        "Buka menu \"Knowledge Base\".",
-        "Cari artikel panduan menggunakan fitur pencarian atau jelajahi kategori.",
-        "Berikan feedback (bermanfaat/tidak) di akhir artikel.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["B. Tiket Bantuan (Helpdesk):"], y);
-    y = addNumbered(doc, [
-        "Jika artikel tidak membantu, buka menu \"Tiket Saya\" dan buat tiket baru.",
-        "Pilih Kategori Kendala, Prioritas, dan jelaskan detail masalah.",
-        "Tiket dikirim dan Anda dapat memantau status serta chat langsung dengan tim HR.",
-    ], y);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 5: DASHBOARD HR
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "5. DASHBOARD HR (Admin Panel)", y);
-    y = addSpacer(y);
-    y = addBody(doc, [
-        "Dashboard HR adalah pusat kendali bagi HR Administrator untuk mengelola seluruh aspek",
-        "sumber daya manusia. Hanya pengguna dengan role \"hr\" yang dapat mengakses area ini.",
-    ], y);
-
-    // 5.1 Dashboard Utama
-    y = addSpacer(y, 6);
-    y = addSubHeader(doc, "5.1. Dashboard Utama & KPI", y);
-    y = addBody(doc, [
-        "Halaman dashboard profesional dengan card KPI seragam dan navigasi mulus:",
-    ], y);
-    y = addBullet(doc, [
-        "Total Karyawan, Hadir, Terlambat, Cuti/Lembur/Kunjungan Pending.",
-        "Grafik Distribusi per Departemen.",
-        "Aktivitas Terbaru — Daftar panjang didukung fitur paginasi agar halaman rapi.",
-        "Kalender Cuti Ringkas — Tampilan kalender yang lebih padat (compact view).",
-    ], y);
-
-    // 5.2 Manajemen Absensi
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "5.2. Manajemen Absensi", y);
-    y = addBody(doc, [
-        "HR dapat melihat dan mengelola seluruh catatan kehadiran karyawan.",
-    ], y);
-    y = addBullet(doc, [
-        "Tabel daftar semua record absensi (tanggal, karyawan, jam masuk/keluar, status).",
-        "Filter berdasarkan karyawan, tanggal, atau status.",
-        "Lihat detail lokasi GPS dan foto selfie pada setiap record.",
-        "Edit/koreksi record absensi jika diperlukan (misal: karyawan lupa clock-out).",
-    ], y);
-
-    // 5.3 Kunjungan
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 40);
-    y = addSubHeader(doc, "5.3. Manajemen Kunjungan", y);
-    y = addBullet(doc, [
-        "Melihat semua laporan kunjungan dari seluruh karyawan.",
-        "Mengubah status kunjungan: Pending → Disetujui / Ditolak.",
-        "Melihat foto bukti dan lokasi GPS kunjungan.",
-        "Menambahkan catatan review.",
-    ], y);
-
-    // 5.4 Cuti
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "5.4. Manajemen Cuti", y);
-    y = addBody(doc, ["Cara Approve/Reject Cuti:"], y);
-    y = addNumbered(doc, [
-        "Buka menu \"Cuti\" di sidebar.",
-        "Daftar pengajuan cuti ditampilkan dengan filter status (Pending/Approved/Rejected).",
-        "Klik pada pengajuan yang ingin direview.",
-        "Review detail: karyawan, jenis cuti, tanggal, alasan, dan lampiran bukti.",
-        "Klik \"Setujui\" atau \"Tolak\".",
-        "Jika disetujui, saldo cuti karyawan otomatis berkurang sesuai jumlah hari.",
-    ], y);
-
-    // 5.5 Master Data
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 80);
-    y = addSubHeader(doc, "5.5. Master Data", y);
-    y = addBody(doc, [
-        "Pusat pengelolaan data referensi organisasi. Terdiri dari 4 tab:",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["A. Departemen:"], y);
-    y = addBullet(doc, [
-        "Tambah, edit, dan hapus departemen (contoh: IT, Marketing, Finance).",
-        "Setiap departemen memiliki nama, kode, dan deskripsi.",
-        "Status aktif/nonaktif menentukan apakah departemen muncul di dropdown karyawan.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = checkPage(doc, y, 30);
-    y = addBody(doc, ["B. Divisi:"], y);
-    y = addBullet(doc, [
-        "Divisi berelasi ke departemen (misal: Departemen IT → Divisi Development, Divisi Infra).",
-        "CRUD lengkap dengan pilihan departemen.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = checkPage(doc, y, 30);
-    y = addBody(doc, ["C. Jabatan:"], y);
-    y = addBullet(doc, [
-        "Daftar posisi/jabatan di perusahaan (misal: Staff, Supervisor, Manager).",
-        "Digunakan sebagai referensi saat menambah karyawan baru.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = checkPage(doc, y, 40);
-    y = addBody(doc, ["D. Lokasi Absensi (Geofencing):"], y);
-    y = addBullet(doc, [
-        "Tentukan titik-titik lokasi kantor/kerja yang valid untuk absensi.",
-        "Setiap lokasi memiliki: nama, koordinat GPS (latitude/longitude), dan radius (meter).",
-        "Karyawan hanya dapat absensi jika berada dalam radius lokasi yang ditentukan.",
-        "Mendukung multi-lokasi — karyawan tertentu dapat di-assign ke lokasi tertentu.",
-        "Terdapat fitur deteksi lokasi otomatis dan pencarian alamat.",
-    ], y);
-
-    // 5.6 Karyawan
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 60);
-    y = addSubHeader(doc, "5.6. Manajemen Karyawan", y);
-    y = addBody(doc, [
-        "Halaman CRUD lengkap untuk mengelola data karyawan.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Menambah Karyawan Baru:"], y);
-    y = addNumbered(doc, [
-        "Klik tombol \"Tambah Karyawan\".",
-        "Isi data: ID Karyawan, Nama, Email, No. Telepon, Departemen, Divisi, Jabatan.",
-        "Pilih Role: Employee atau HR.",
-        "Set password awal.",
-        "Tentukan tanggal bergabung dan jatah cuti.",
-        "Assign shift kerja dan lokasi absensi.",
-        "Opsi: Bypass Lokasi (untuk karyawan remote/WFH).",
-        "Klik \"Simpan\".",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBullet(doc, [
-        "Edit dan nonaktifkan karyawan yang sudah resign.",
-        "Kirim password via email langsung dari sistem.",
-    ], y);
-
-    // 5.7 Shift
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 60);
-    y = addSubHeader(doc, "5.7. Manajemen Jam Kerja (Shift)", y);
-    y = addBody(doc, [
-        "Konfigurasi jadwal kerja fleksibel per hari dalam seminggu.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Membuat Shift Baru:"], y);
-    y = addNumbered(doc, [
-        "Klik \"Tambah Shift\".",
-        "Beri nama shift (contoh: Shift Reguler, Shift Malam).",
-        "Untuk setiap hari (Senin-Minggu), atur:",
-    ], y);
-    y = addBullet(doc, [
-        "Jam Masuk dan Jam Keluar.",
-        "Tandai sebagai \"Libur\" jika hari tersebut tidak bekerja.",
-    ], y, 30);
-    y = addNumbered(doc, [
-        "Atur toleransi: Terlambat Masuk, Lebih Awal Masuk, Terlambat Keluar, Lebih Awal Keluar (menit).",
-        "Tandai sebagai \"Default\" jika ingin menjadi shift utama.",
-        "Klik \"Simpan\".",
-    ], y);
-    y = addBullet(doc, [
-        "Shift yang di-assign ke karyawan menentukan status hadir/terlambat secara otomatis.",
-    ], y);
-
-    // 5.8 Lembur
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 60);
-    y = addSubHeader(doc, "5.8. Manajemen Lembur & Kalkulator PP 35/2021", y);
-    y = addBullet(doc, [
-        "Lihat pengajuan lembur dengan deteksi otomatis Hari Kerja/Libur.",
-        "Sistem menghitung upah lembur otomatis berdasarkan aturan PP 35/2021.",
-        "Approve atau reject pengajuan (jam lembur dapat diedit HR sebelum disetujui).",
-        "Kalkulator Lembur Manual: Tersedia di Master Payroll untuk simulasi instan.",
-    ], y);
-
-    // 5.9 Payroll
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 90);
-    y = addSubHeader(doc, "5.9. Payroll (Slip Gaji & Rekapitulasi)", y);
-    y = addBody(doc, [
-        "Modul komprehensif untuk mengelola, menerbitkan slip gaji, dan melihat",
-        "rekapitulasi payroll bulanan serta riwayat penggajian perusahaan.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["A. Cara Membuat Slip Gaji:"], y);
-    y = addNumbered(doc, [
-        "Buka menu \"Payroll\" dan pilih tab \"Buat Slip Gaji\".",
-        "Pilih karyawan.",
-        "Isi komponen, tunjangan, potongan. Nilai lembur ditarik otomatis dari pengajuan.",
-        "Gaji Bersih dihitung otomatis oleh sistem.",
-        "Pilih periode dan tanggal terbit lalu klik \"Terbitkan\".",
-    ], y);
-    y = addSpacer(y, 3);
-    y = checkPage(doc, y, 40);
-    y = addBody(doc, ["B. Rekapitulasi & Riwayat Payroll:"], y);
-    y = addBullet(doc, [
-        "Menampilkan ringkasan total gaji serta detail histori gaji karyawan.",
-        "Advanced Filtering: Dinamis berdasarkan Nama, Departemen, & Divisi.",
-        "Export Laporan: Export file secara profesional ke format PDF & Excel (.xlsx).",
-    ], y);
-
-    // 5.10 Pengaturan Payroll
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 40);
-    y = addSubHeader(doc, "5.10. Pengaturan Komponen Payroll", y);
-    y = addBody(doc, [
-        "Kelola daftar komponen tunjangan dan potongan yang dapat digunakan saat membuat slip gaji.",
-    ], y);
-    y = addBullet(doc, [
-        "Tipe: Tunjangan (Allowance) atau Potongan (Deduction).",
-        "Setiap komponen memiliki: nama, tipe, jumlah default, dan status aktif.",
-        "Komponen yang tidak aktif tidak muncul saat pembuatan slip gaji.",
-        "Contoh Tunjangan: Tunjangan Makan, Transport, Jabatan.",
-        "Contoh Potongan: BPJS, Pinjaman, Keterlambatan.",
-    ], y);
-
-    // 5.11 PPh 21
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 70);
-    y = addSubHeader(doc, "5.11. Kalkulator PPh 21 (TER)", y);
-    y = addBody(doc, [
-        "Kalkulator pajak penghasilan berdasarkan PP 58/2023 & PMK 168/2023.",
-        "Menggunakan metode Tarif Efektif Rata-rata (TER) untuk Jan–Nov",
-        "dan tarif progresif Pasal 17 untuk perhitungan Desember.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Menggunakan:"], y);
-    y = addNumbered(doc, [
-        "Masukkan Penghasilan Bruto Bulanan.",
-        "Pilih Status PTKP (TK/0, TK/1, K/0, K/1, K/2, K/3, dsb).",
-        "Pilih Masa Pajak (bulan 1–12).",
-        "Klik \"Hitung\" — sistem menampilkan:",
-    ], y);
-    y = addBullet(doc, [
-        "Tarif TER yang berlaku (berdasarkan kategori A/B/C).",
-        "PPh 21 bulanan (Jan–Nov).",
-        "PPh 21 Desember (tarif progresif — biaya jabatan, PTKP, PKP).",
-        "Total PPh 21 setahun dan tarif efektif tahunan.",
-        "Rincian breakdown tarif progresif.",
-    ], y, 30);
-
-    // 5.12 BPJS
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 70);
-    y = addSubHeader(doc, "5.12. Kalkulator BPJS", y);
-    y = addBody(doc, [
-        "Kalkulator iuran BPJS Kesehatan dan BPJS Ketenagakerjaan.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Program yang dihitung:"], y);
-    y = addBullet(doc, [
-        "BPJS Kesehatan: 5% (4% perusahaan + 1% karyawan), cap Rp12.000.000.",
-        "JHT (Jaminan Hari Tua): 5,7% (3,7% perusahaan + 2% karyawan).",
-        "JKK (Jaminan Kecelakaan Kerja): 0,24%–1,74% (sepenuhnya perusahaan, berdasarkan risiko).",
-        "JKM (Jaminan Kematian): 0,3% (sepenuhnya perusahaan).",
-        "JP (Jaminan Pensiun): 3% (2% perusahaan + 1% karyawan), cap Rp10.547.400.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Menggunakan:"], y);
-    y = addNumbered(doc, [
-        "Masukkan Gaji Bruto Bulanan.",
-        "Pilih Tingkat Risiko JKK (1-5).",
-        "Klik \"Hitung\" — hasil menampilkan rincian per program dan total.",
-    ], y);
-
-    // 5.13 Laporan
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 40);
-    y = addSubHeader(doc, "5.13. Laporan & Export", y);
-    y = addBody(doc, [
-        "Fitur untuk mengekspor data dalam format PDF atau Excel.",
-    ], y);
-    y = addBullet(doc, [
-        "Export Laporan Absensi — rekap kehadiran per periode.",
-        "Export Data Karyawan — daftar lengkap karyawan aktif.",
-        "Export Laporan Cuti — rekap pengajuan dan penggunaan cuti.",
-        "Export Payroll — rekap histori dan rekapitulasi penggajian.",
-        "Format tersedia: PDF (jsPDF) dan Excel (xlsx).",
-    ], y);
-
-    // 5.14 News
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "5.14. WIG News", y);
-    y = addBody(doc, [
-        "Modul untuk mempublikasikan berita dan pengumuman perusahaan.",
-    ], y);
-    y = addSpacer(y, 3);
-    y = addBody(doc, ["Cara Membuat Berita:"], y);
-    y = addNumbered(doc, [
-        "Klik \"Buat Berita Baru\".",
-        "Isi: Judul, Konten, Kategori (Pengumuman/Event/Kebijakan/Umum).",
-        "Upload media/gambar (opsional).",
-        "Centang \"Sematkan\" jika ingin berita selalu tampil di atas.",
-        "Klik \"Publikasikan\".",
-    ], y);
-
-    // 5.15 Helpdesk & Manajemen SLA
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 60);
-    y = addSubHeader(doc, "5.15. Helpdesk & Manajemen SLA", y);
-    y = addBody(doc, [
-        "Pusat pengelolaan tiket bantuan dari karyawan berstandar SLA.",
-    ], y);
-    y = addBullet(doc, [
-        "Pantau tiket dengan status (Open, In Progress, Closed) dan live chat.",
-        "Pemantauan SLA: First Response (batas respons awal) & Resolution Due.",
-        "SLA berjalan di Jam Bisnis. Tiket otomatis dilabeli Breached jika telat.",
-    ], y);
-
-    // 5.16 Manajemen Knowledge Base
-    y = addSpacer(y, 6);
-    y = checkPage(doc, y, 50);
-    y = addSubHeader(doc, "5.16. Manajemen Knowledge Base", y);
-    y = addBody(doc, [
-        "Fitur CMS untuk dokumentasi dan panduan mandiri perusahaan.",
-    ], y);
-    y = addBullet(doc, [
-        "Kelola kategori (HR, IT, dll) dan buat artikel berbasis Rich Text.",
-        "Lihat statistik artikel, seperti jumlah View dan persentase Helpful.",
-    ], y);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 6: FITUR KEAMANAN
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "6. FITUR KEAMANAN", y);
-    y = addSpacer(y);
-
-    y = addSubHeader(doc, "6.1. Verifikasi Wajah (Face Recognition)", y);
-    y = addBody(doc, [
-        "Sistem menggunakan library face-api.js untuk AI-based face recognition.",
-    ], y);
-    y = addBullet(doc, [
-        "Karyawan wajib mendaftarkan wajah di menu Pengaturan sebelum dapat clock-in.",
-        "Saat clock-in, sistem membandingkan wajah real-time dengan data yang tersimpan.",
-        "Status verifikasi: Match (cocok), Mismatch (tidak cocok), Not Registered (belum daftar).",
-        "Threshold kecocokan diatur untuk meminimalkan false positive.",
-    ], y);
-    y = addSpacer(y, 6);
-
-    y = addSubHeader(doc, "6.2. Validasi GPS Anti-Fake", y);
-    y = addBody(doc, [
-        "Sistem mendeteksi penggunaan fake GPS/location spoofing.",
-    ], y);
-    y = addBullet(doc, [
-        "Memeriksa akurasi GPS — akurasi terlalu rendah menghasilkan peringatan.",
-        "Mendeteksi pola yang mencurigakan (perubahan lokasi instan, akurasi sempurna).",
-        "Peringatan ditampilkan kepada karyawan dan dicatat oleh sistem.",
-    ], y);
-    y = addSpacer(y, 6);
-
-    y = checkPage(doc, y, 40);
-    y = addSubHeader(doc, "6.3. Geofencing Multi-Lokasi", y);
-    y = addBody(doc, [
-        "Setiap lokasi kerja dikonfigurasi dengan koordinat dan radius.",
-    ], y);
-    y = addBullet(doc, [
-        "HR menentukan titik lokasi dan radius yang valid (di Master Data > Lokasi).",
-        "Karyawan di-assign ke satu atau lebih lokasi yang diizinkan.",
-        "Saat clock-in, sistem menghitung jarak karyawan ke semua lokasi yang di-assign.",
-        "Jika karyawan berada di luar semua radius, clock-in akan ditolak.",
-        "Opsi Bypass: HR dapat mengaktifkan bypass lokasi untuk karyawan remote/WFH.",
-    ], y);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // BAB 7: FAQ
-    // ═══════════════════════════════════════════════════════════════════
-    doc.addPage();
-    y = 20;
-    y = addHeader(doc, "7. FREQUENTLY ASKED QUESTIONS (FAQ)", y);
-    y = addSpacer(y);
-
-    const faqs = [
-        { q: "Q: Saya lupa password, bagaimana cara membukanya?", a: "A: Hubungi HR Administrator. HR dapat mengirimkan password baru ke email Anda melalui fitur sistem." },
-        { q: "Q: Clock-in saya ditolak karena lokasi tidak valid, padahal saya di kantor?", a: "A: Pastikan GPS aktif dan akurasi tinggi. Coba matikan dan nyalakan ulang GPS. Jika masih gagal, hubungi HR untuk dibuatkan bypass lokasi sementara." },
-        { q: "Q: Wajah saya tidak terdeteksi saat absensi?", a: "A: Pastikan pencahayaan cukup dan wajah menghadap kamera dengan jelas. Jika masih gagal, daftarkan ulang wajah di menu Pengaturan." },
-        { q: "Q: Saya lupa clock-out, apa yang harus dilakukan?", a: "A: Hubungi HR untuk koreksi data. HR dapat mengedit record absensi melalui Dashboard." },
-        { q: "Q: Berapa jatah cuti saya?", a: "A: Secara default, setiap karyawan mendapat 12 hari cuti tahunan. Sisa cuti dapat dilihat di halaman Beranda atau Cuti di portal karyawan." },
-        { q: "Q: Bagaimana cara melihat slip gaji?", a: "A: Buka menu \"Slip Gaji\" di portal karyawan. Slip gaji diterbitkan setiap bulan oleh HR." },
-        { q: "Q: Apakah sistem bisa diakses di HP?", a: "A: Ya, sistem mendukung Progressive Web App (PWA). Anda bisa mengakses melalui browser mobile atau menginstalnya sebagai aplikasi dari browser." },
-    ];
-
-    for (const faq of faqs) {
-        y = checkPage(doc, y, 25);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(128, 0, 0);
-        const qLines = doc.splitTextToSize(faq.q, 178);
-        doc.text(qLines, 14, y);
-        y += qLines.length * 5.5;
-
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(40, 40, 40);
-        const aLines = doc.splitTextToSize(faq.a, 174);
-        doc.text(aLines, 18, y);
-        y += aLines.length * 5.5 + 5;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // FOOTER / PAGE NUMBERS
-    // ═══════════════════════════════════════════════════════════════════
-    addPageNumbers(doc);
 
     // Save
     doc.save(OUTPUT_PATH);
-    console.log(`✅ PDF berhasil dibuat: ${OUTPUT_PATH}`);
+    console.log(`✅ Ultimate Comprehensive PDF berhasil dibuat: ${OUTPUT_PATH}`);
 }
 
 generateGuideline();
