@@ -56,6 +56,9 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
             locations: true,
             payrollComponents: { include: { component: true } },
             manager: true,
+            departmentRel: true,
+            divisionRel: true,
+            positionRel: true,
         },
     });
 
