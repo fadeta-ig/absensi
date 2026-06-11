@@ -57,6 +57,23 @@ export async function POST(request: NextRequest) {
             if (days < 90) {
                 return NextResponse.json({ error: "Cuti melahirkan (maternity) minimal 90 hari." }, { status: 400 });
             }
+        } else if (body.type === "paternity") {
+            const employeeData = await prisma.employee.findUnique({
+                where: { employeeId: session.employeeId },
+                select: { gender: true },
+            });
+
+            if (employeeData?.gender !== "Laki-Laki") {
+                return NextResponse.json({ error: "Cuti 'paternity' hanya berlaku untuk karyawan Laki-Laki." }, { status: 400 });
+            }
+
+            const start = new Date(body.startDate).getTime();
+            const end = new Date(body.endDate).getTime();
+            const days = (end - start) / (1000 * 60 * 60 * 24) + 1; // inclusive
+
+            if (days > 3) {
+                return NextResponse.json({ error: "Cuti mendampingi istri melahirkan (paternity) maksimal 3 hari." }, { status: 400 });
+            }
         } else if (body.type === "annual") {
             // General Leave Balance Validation
             const { calculateWorkingDays } = await import("@/lib/services/leaveService");
@@ -119,7 +136,7 @@ export async function PUT(request: NextRequest) {
         const result = await validateBody(request, leaveUpdateSchema);
         if ("error" in result) return result.error;
 
-        const { id, ...data } = result.data as { id: string } & Record<string, any>;
+        const { id, ...data } = result.data as { id: string } & Record<string, unknown>;
 
         const updated = await updateLeaveRequest(id, data);
         if (!updated) {
@@ -130,7 +147,7 @@ export async function PUT(request: NextRequest) {
 
         // Audit Trail Injection
         await logAction(
-            `UPDATE_LEAVE_${data.status?.toUpperCase() || 'UNKNOWN'}`,
+            `UPDATE_LEAVE_${typeof data.status === 'string' ? data.status.toUpperCase() : 'UNKNOWN'}`,
             "LEAVE_REQUEST",
             session.employeeId,
             id,
@@ -138,7 +155,7 @@ export async function PUT(request: NextRequest) {
         ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
 
         return NextResponse.json(updated);
-    } catch (err: any) {
+    } catch (err: unknown) {
         if (err instanceof Error && err.message.includes("Sisa cuti karyawan tidak mencukupi")) {
             return NextResponse.json({ error: err.message }, { status: 400 });
         }

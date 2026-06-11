@@ -220,6 +220,10 @@ export async function assignAsset(id: string, payload: {
         throw new Error(`Aset tidak dapat ditugaskan karena berstatus ${existing.status}`);
     }
 
+    if (existing.status === "IN_USE" && payload.toHolderType !== "GA_POOL") {
+        throw new Error("Aset masih digunakan karyawan lain. Kembalikan ke GA Pool terlebih dahulu.");
+    }
+
     const isReturning = payload.toHolderType === "GA_POOL";
     const newStatus = isReturning ? "AVAILABLE" : "IN_USE";
 
@@ -357,12 +361,33 @@ export async function createBulkAssets(payloads: Array<{
             }
         }
 
-        // To create relations nicely (history requires assetId which isn't generated in createMany)
-        // We either do create loops, or createMany, then query them back to createHistory.
-        // Doing a sequential create is safer, considering bulk payloads are typically < 200 items.
-        for (const assetData of assetsToCreate) {
-            await tx.asset.create({ data: assetData });
-            totalInserted++;
+        if (assetsToCreate.length > 0) {
+            await tx.asset.createMany({ data: assetsToCreate });
+            
+            // Retrieve created assets to get their IDs for history creation
+            const assetCodes = assetsToCreate.map(a => a.assetCode);
+            const createdAssets = await tx.asset.findMany({
+                where: { assetCode: { in: assetCodes } },
+                select: { id: true, assetCode: true, kondisi: true }
+            });
+
+            for (const asset of createdAssets) {
+                historyToCreate.push({
+                    assetId: asset.id,
+                    fromHolderType: "GA_POOL",
+                    toHolderType: "GA_POOL",
+                    action: "assigned",
+                    kondisiSaat: asset.kondisi as never,
+                    notes: "Initial assignment via bulk import",
+                    performedBy
+                });
+            }
+
+            if (historyToCreate.length > 0) {
+                await tx.assetHistory.createMany({ data: historyToCreate });
+            }
+            
+            totalInserted = createdAssets.length;
         }
     }, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

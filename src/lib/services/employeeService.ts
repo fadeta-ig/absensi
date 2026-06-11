@@ -188,6 +188,41 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
 
 export async function updateEmployee(id: string, data: Partial<Employee>): Promise<EmployeeWithRelations | null> {
     try {
+        if (data.managerId !== undefined && data.managerId !== null) {
+            const existingEmployee = await prisma.employee.findUnique({
+                where: { id },
+                select: { employeeId: true }
+            });
+
+            if (existingEmployee) {
+                // Prevent self-assignment
+                if (data.managerId === existingEmployee.employeeId) {
+                    throw new Error("Karyawan tidak dapat menjadi atasan untuk dirinya sendiri.");
+                }
+
+                // DFS Cycle Detection
+                let currentManagerId: string | null = data.managerId;
+                const visited = new Set<string>();
+
+                while (currentManagerId) {
+                    if (visited.has(currentManagerId)) {
+                        throw new Error("Hierarki melingkar terdeteksi. Silakan periksa kembali struktur atasan.");
+                    }
+                    visited.add(currentManagerId);
+
+                    if (currentManagerId === existingEmployee.employeeId) {
+                        throw new Error("Perubahan atasan ini akan menyebabkan hierarki melingkar (Circular Hierarchy).");
+                    }
+
+                    const managerRow = await prisma.employee.findUnique({
+                        where: { employeeId: currentManagerId },
+                        select: { managerId: true }
+                    });
+                    currentManagerId = managerRow?.managerId || null;
+                }
+            }
+        }
+
         const row = await prisma.employee.update({
             where: { id },
             data: {

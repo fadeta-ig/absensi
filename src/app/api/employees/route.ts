@@ -66,18 +66,22 @@ export async function POST(request: NextRequest) {
             password: hashedPassword,
         });
 
-        // Send password via email (fire-and-forget)
-        const { sendPasswordEmail } = await import("@/lib/services/emailService");
-        sendPasswordEmail(employee.email, employee.name, plainPassword).catch(() => {
-            logger.warn("Gagal kirim email password untuk karyawan baru", { employeeId: employee.employeeId });
-        });
+        // Send password via email (Synchronous with try/catch for reliability)
+        let emailWarning = false;
+        try {
+            const { sendPasswordEmail } = await import("@/lib/services/emailService");
+            await sendPasswordEmail(employee.email, employee.name, plainPassword);
+        } catch (emailErr) {
+            logger.warn("Gagal kirim email password untuk karyawan baru", { employeeId: employee.employeeId, error: emailErr });
+            emailWarning = true;
+        }
 
         logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.employeeId });
         await logAction("CREATE", "Employee", session.employeeId, employee.id, { employeeId: employee.employeeId, name: employee.name });
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...safe } = employee;
-        return NextResponse.json(safe, { status: 201 });
+        return NextResponse.json({ ...safe, _emailWarning: emailWarning }, { status: 201 });
     } catch (err: any) {
         if (err?.code === "P2002") {
             return NextResponse.json({ error: "ID Karyawan sudah terdaftar. Gunakan ID lain." }, { status: 400 });

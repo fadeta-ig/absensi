@@ -106,7 +106,7 @@ export type EmployeeUpdatePayload = z.infer<typeof employeeUpdateSchema>;
 /* ───────────────────── Leave ───────────────────── */
 
 export const leaveRequestSchema = z.object({
-    type: z.enum(["annual", "sick", "personal", "maternity"], {
+    type: z.enum(["annual", "sick", "personal", "maternity", "paternity"], {
         message: "Tipe cuti tidak valid",
     }),
     startDate: z.string().min(1, "Tanggal mulai harus diisi"),

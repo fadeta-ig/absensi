@@ -115,7 +115,12 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 body: JSON.stringify(body),
             });
             if (res.ok) {
-                toast(isEdit ? "Data karyawan berhasil diperbarui!" : "Karyawan baru berhasil ditambahkan!", "success");
+                const data = await res.json();
+                if (data._emailWarning) {
+                    toast("Karyawan ditambahkan, namun gagal mengirim email password. Silakan kirim manual.", "warning");
+                } else {
+                    toast(isEdit ? "Data karyawan berhasil diperbarui!" : "Karyawan baru berhasil ditambahkan!", "success");
+                }
                 router.push("/dashboard/employees");
                 router.refresh();
             } else {

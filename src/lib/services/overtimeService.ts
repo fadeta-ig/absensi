@@ -60,6 +60,11 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
     const startDateTime = new Date(`${dateStr}T${data.startTime}:00`);
     const endDateTime = new Date(`${dateStr}T${data.endTime}:00`);
 
+    // Rollover check: jika jam selesai < jam mulai, asumsikan lewat tengah malam
+    if (endDateTime < startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1);
+    }
+
     // Auto-calculate overtimePay berdasarkan basicSalary karyawan
     let overtimePay = 0;
     const employee = await prisma.employee.findUnique({
@@ -123,7 +128,14 @@ export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRe
             data: {
                 ...(data.date !== undefined && { date: new Date(baseDateStr) }),
                 ...(data.startTime !== undefined && { startTime: new Date(`${baseDateStr}T${data.startTime}:00`) }),
-                ...(data.endTime !== undefined && { endTime: new Date(`${baseDateStr}T${data.endTime}:00`) }),
+                ...(data.endTime !== undefined && { 
+                    endTime: (() => {
+                        const s = data.startTime ? new Date(`${baseDateStr}T${data.startTime}:00`) : existing.startTime;
+                        const e = new Date(`${baseDateStr}T${data.endTime}:00`);
+                        if (e < s) e.setDate(e.getDate() + 1);
+                        return e;
+                    })() 
+                }),
                 ...(data.hours !== undefined && { hours: data.hours }),
                 ...(data.reason !== undefined && { reason: data.reason }),
                 ...(data.status !== undefined && { status: data.status }),

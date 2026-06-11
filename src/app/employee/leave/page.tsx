@@ -90,7 +90,7 @@ export default function LeavePage() {
     };
 
     const getTypeLabel = (t: string) => {
-        switch (t) { case "annual": return "Tahunan"; case "sick": return "Sakit"; case "personal": return "Pribadi"; case "maternity": return "Melahirkan"; default: return t; }
+        switch (t) { case "annual": return "Tahunan"; case "sick": return "Sakit"; case "personal": return "Pribadi"; case "maternity": return "Melahirkan"; case "paternity": return "Paternity (Ayah)"; default: return t; }
     };
 
     const getStatusInfo = (s: string) => {
@@ -173,6 +173,7 @@ export default function LeavePage() {
                                 <option value="sick">Sakit</option>
                                 <option value="personal">Pribadi</option>
                                 <option value="maternity">Melahirkan</option>
+                                <option value="paternity">Paternity (Istri Melahirkan)</option>
                             </select>
                             {form.type === "annual" && (balance.total - balance.used) <= 0 && (
                                 <p className="text-xs text-red-500 font-medium mt-1">* Sisa cuti tahunan habis, tidak dapat mengajukan.</p>

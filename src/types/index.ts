@@ -123,7 +123,7 @@ export type WorkShift = {
 export type LeaveRequest = {
     id: string;
     employeeId: string;
-    type: "annual" | "sick" | "personal" | "maternity";
+    type: "annual" | "sick" | "personal" | "maternity" | "paternity";
     startDate: string;
     endDate: string;
     reason: string;
