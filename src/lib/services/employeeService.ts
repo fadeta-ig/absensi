@@ -214,7 +214,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                         throw new Error("Perubahan atasan ini akan menyebabkan hierarki melingkar (Circular Hierarchy).");
                     }
 
-                    const managerRow = await prisma.employee.findUnique({
+                    const managerRow: { managerId: string | null } | null = await prisma.employee.findUnique({
                         where: { employeeId: currentManagerId },
                         select: { managerId: true }
                     });
