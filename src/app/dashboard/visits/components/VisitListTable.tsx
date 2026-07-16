@@ -1,17 +1,18 @@
-import { CheckCircle, Eye, XCircle } from "lucide-react";
+import { CheckCircle, Eye, XCircle, LogIn, LogOut } from "lucide-react";
 import { VisitReport, STATUS_CONFIG } from "../types";
 
 interface Props {
     filtered: VisitReport[];
     updating: string | null;
     setSelectedVisit: (v: VisitReport | null) => void;
-    handleStatusUpdate: (id: string, status: "approved" | "rejected") => void;
-    formatTimeRange: (start?: string | null, end?: string | null) => string;
+    handleStatusUpdate: (id: string, status: "approved" | "rejected", reason?: string) => void;
 }
 
 export function VisitListTable({
-    filtered, updating, setSelectedVisit, handleStatusUpdate, formatTimeRange
+    filtered, updating, setSelectedVisit, handleStatusUpdate
 }: Props) {
+    const canApprove = (status: string) => ["clocked_out", "pending_approval"].includes(status);
+
     return (
         <div className="card overflow-hidden">
             <div className="overflow-x-auto">
@@ -22,14 +23,15 @@ export function VisitListTable({
                             <th>Klien</th>
                             <th className="hidden md:table-cell">Tujuan</th>
                             <th className="hidden lg:table-cell">Tanggal</th>
-                            <th className="hidden lg:table-cell">Jam</th>
+                            <th className="hidden lg:table-cell">Clock In</th>
+                            <th className="hidden lg:table-cell">Clock Out</th>
                             <th>Status</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filtered.length === 0 ? (
-                            <tr><td colSpan={7} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada kunjungan ditemukan</td></tr>
+                            <tr><td colSpan={8} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada kunjungan ditemukan</td></tr>
                         ) : (
                             filtered.map((v) => {
                                 const cfg = STATUS_CONFIG[v.status];
@@ -52,7 +54,18 @@ export function VisitListTable({
                                         </td>
                                         <td className="hidden lg:table-cell text-xs">{v.date}</td>
                                         <td className="hidden lg:table-cell text-xs font-mono">
-                                            {formatTimeRange(v.visitStartTime, v.visitEndTime)}
+                                            {v.clockInTime ? (
+                                                <span className="flex items-center gap-1 text-blue-600">
+                                                    <LogIn className="w-3 h-3" /> {v.clockInTime}
+                                                </span>
+                                            ) : "-"}
+                                        </td>
+                                        <td className="hidden lg:table-cell text-xs font-mono">
+                                            {v.clockOutTime ? (
+                                                <span className="flex items-center gap-1 text-orange-600">
+                                                    <LogOut className="w-3 h-3" /> {v.clockOutTime}
+                                                </span>
+                                            ) : "-"}
                                         </td>
                                         <td><span className={`badge ${cfg.class}`}>{cfg.label}</span></td>
                                         <td>
@@ -60,7 +73,7 @@ export function VisitListTable({
                                                 <button onClick={() => setSelectedVisit(v)} className="btn btn-ghost btn-sm !p-1.5" title="Detail">
                                                     <Eye className="w-3.5 h-3.5" />
                                                 </button>
-                                                {v.status === "pending" && (
+                                                {canApprove(v.status) && (
                                                     <>
                                                         <button
                                                             onClick={() => handleStatusUpdate(v.id, "approved")}
@@ -71,7 +84,12 @@ export function VisitListTable({
                                                             <CheckCircle className="w-3.5 h-3.5" />
                                                         </button>
                                                         <button
-                                                            onClick={() => handleStatusUpdate(v.id, "rejected")}
+                                                            onClick={() => {
+                                                                const reason = prompt("Alasan penolakan (wajib):");
+                                                                if (reason && reason.trim()) {
+                                                                    handleStatusUpdate(v.id, "rejected", reason.trim());
+                                                                }
+                                                            }}
                                                             className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"
                                                             disabled={updating === v.id}
                                                             title="Tolak"

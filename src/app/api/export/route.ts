@@ -193,6 +193,14 @@ export async function GET(request: NextRequest) {
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Kunjungan";
+            const statusMap: Record<string, string> = {
+                draft: "Draft",
+                clocked_in: "Clock In",
+                clocked_out: "Clock Out",
+                pending_approval: "Menunggu",
+                approved: "Disetujui",
+                rejected: "Ditolak"
+            };
             rows = records.map((r) => {
                 const emp = empMap.get(r.employeeId);
                 return {
@@ -200,13 +208,13 @@ export async function GET(request: NextRequest) {
                     "ID Karyawan": r.employeeId,
                     "Departemen": emp?.departmentRel?.name || "-",
                     "Tanggal": toDateStr(r.date),
-                    "Jam Mulai": r.visitStartTime ? toTimeString(r.visitStartTime) : "-",
-                    "Jam Selesai": r.visitEndTime ? toTimeString(r.visitEndTime) : "-",
+                    "Jam Mulai": r.clockInTime ? toTimeString(r.clockInTime) : "-",
+                    "Jam Selesai": r.clockOutTime ? toTimeString(r.clockOutTime) : "-",
                     "Nama Klien": r.clientName,
                     "Alamat": r.clientAddress,
                     "Tujuan": r.purpose,
                     "Hasil": r.result || "-",
-                    "Status": r.status === "approved" ? "Disetujui" : r.status === "rejected" ? "Ditolak" : "Menunggu",
+                    "Status": statusMap[r.status] || r.status,
                 };
             });
         } else if (type === "overtime") {

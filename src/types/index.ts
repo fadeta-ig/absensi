@@ -152,22 +152,29 @@ export type TodoItem = {
     createdAt: string;
 };
 
+export type VisitStatus = "draft" | "clocked_in" | "clocked_out" | "pending_approval" | "approved" | "rejected";
+
 export type VisitReport = {
     id: string;
     employeeId: string;
     employeeName?: string | null;
     employeeDepartment?: string | null;
     date: string;
-    visitStartTime?: string | null;
-    visitEndTime?: string | null;
+    clockInTime?: string | null;
+    clockOutTime?: string | null;
     clientName: string;
     clientAddress: string;
     purpose: string;
     result?: string | null;
-    location?: { lat: number; lng: number } | null;
-    photo?: string | null;
-    status: "pending" | "approved" | "rejected";
+    visitLocation?: { lat: number; lng: number } | null;
+    visitRadius: number;
+    clockInLocation?: { lat: number; lng: number } | null;
+    clockOutLocation?: { lat: number; lng: number } | null;
+    clockInPhotos?: string[] | null;
+    clockOutPhotos?: string[] | null;
+    status: VisitStatus;
     notes?: string | null;
+    rejectionReason?: string | null;
     createdAt: string;
 };
 

@@ -42,10 +42,12 @@ export function forbiddenResponse(): NextResponse {
  */
 export async function validateBody<T>(
     request: Request,
-    schema: ZodSchema<T>
+    schema: ZodSchema<T>,
+    /** Pre-parsed body — pass this to skip request.json() when body was already consumed. */
+    preParsedBody?: unknown
 ): Promise<{ data: T } | { error: NextResponse }> {
     try {
-        const raw = await request.json();
+        const raw = preParsedBody ?? await request.json();
         // Sanitize semua string values dari HTML tags untuk mencegah XSS
         const body = typeof raw === "object" && raw !== null
             ? sanitizeObject(raw as Record<string, unknown>)

@@ -1,6 +1,6 @@
 import { prisma } from "../prisma";
-import { VisitReport } from "@/types";
-import { toDateString, toTimeString } from "@/lib/utils";
+import { VisitReport, VisitStatus } from "@/types";
+import { toDateString } from "@/lib/utils";
 import logger from "@/lib/logger";
 
 // ─── Employee include fragment ──────────────────────────────────
@@ -13,6 +13,24 @@ const employeeInclude = {
     },
 } as const;
 
+// ─── JSON Helpers ───────────────────────────────────────────────
+
+function parseJsonField<T>(raw: string | null | undefined): T | null {
+    if (!raw) return null;
+    try {
+        return typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch {
+        return null;
+    }
+}
+
+function toTimeDisplay(d: Date | string | null | undefined): string | null {
+    if (!d) return null;
+    const date = d instanceof Date ? d : new Date(d);
+    if (isNaN(date.getTime())) return null;
+    return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toVisitReport(row: any): VisitReport {
     return {
@@ -21,33 +39,26 @@ function toVisitReport(row: any): VisitReport {
         employeeName: row.employee?.name ?? null,
         employeeDepartment: row.employee?.departmentRel?.name ?? null,
         date: toDateString(row.date),
-        visitStartTime: row.visitStartTime ? toTimeString(row.visitStartTime) : null,
-        visitEndTime: row.visitEndTime ? toTimeString(row.visitEndTime) : null,
+        clockInTime: toTimeDisplay(row.clockInTime),
+        clockOutTime: toTimeDisplay(row.clockOutTime),
         clientName: row.clientName,
         clientAddress: row.clientAddress,
         purpose: row.purpose,
         result: row.result ?? null,
-        location: row.location
-            ? (typeof row.location === "string" ? JSON.parse(row.location) : row.location)
-            : null,
-        photo: row.photo ?? null,
-        status: row.status as VisitReport["status"],
+        visitLocation: parseJsonField<{ lat: number; lng: number }>(row.visitLocation),
+        visitRadius: row.visitRadius ?? 300,
+        clockInLocation: parseJsonField<{ lat: number; lng: number }>(row.clockInLocation),
+        clockOutLocation: parseJsonField<{ lat: number; lng: number }>(row.clockOutLocation),
+        clockInPhotos: parseJsonField<string[]>(row.clockInPhotos),
+        clockOutPhotos: parseJsonField<string[]>(row.clockOutPhotos),
+        status: row.status as VisitStatus,
         notes: row.notes ?? null,
+        rejectionReason: row.rejectionReason ?? null,
         createdAt: toDateString(row.createdAt),
     };
 }
 
-// ─── Helpers ────────────────────────────────────────────────────
-
-/** Convert "HH:MM" time string to a full DateTime based on a reference date */
-function timeStringToDateTime(dateRef: Date | string, timeStr: string): Date {
-    const [hours, minutes] = timeStr.split(":").map(Number);
-    const baseDate = new Date(dateRef);
-    baseDate.setHours(hours, minutes, 0, 0);
-    return baseDate;
-}
-
-// ─── Service Functions ────────────────────────────────────────
+// ─── Query Functions ────────────────────────────────────────────
 
 export async function getVisitReports(employeeId?: string): Promise<VisitReport[]> {
     const rows = await prisma.visitReport.findMany({
@@ -67,34 +78,51 @@ export async function getVisitReportById(id: string): Promise<VisitReport | unde
     return toVisitReport(row);
 }
 
-export async function createVisitReport(data: Omit<VisitReport, "id">): Promise<VisitReport> {
+// ─── Draft CRUD ─────────────────────────────────────────────────
+
+interface CreateDraftInput {
+    employeeId: string;
+    clientName: string;
+    clientAddress: string;
+    purpose: string;
+    visitLocation: { lat: number; lng: number };
+    visitRadius?: number;
+    notes?: string | null;
+}
+
+export async function createVisitDraft(data: CreateDraftInput): Promise<VisitReport> {
     const row = await prisma.visitReport.create({
         data: {
             employeeId: data.employeeId,
-            date: new Date(data.date),
-            visitStartTime: data.visitStartTime ? timeStringToDateTime(data.date, data.visitStartTime) : undefined,
-            visitEndTime: data.visitEndTime ? timeStringToDateTime(data.date, data.visitEndTime) : undefined,
+            date: new Date(),
             clientName: data.clientName,
             clientAddress: data.clientAddress,
             purpose: data.purpose,
-            result: data.result,
-            location: data.location ? JSON.stringify(data.location) : undefined,
-            photo: data.photo,
-            status: data.status,
-            notes: data.notes,
+            visitLocation: JSON.stringify(data.visitLocation),
+            visitRadius: data.visitRadius ?? 300,
+            notes: data.notes ?? null,
+            status: "draft",
         },
         include: employeeInclude,
     });
     return toVisitReport(row);
 }
 
-export async function updateVisitReport(id: string, data: Partial<VisitReport>): Promise<VisitReport | null> {
+interface UpdateDraftInput {
+    clientName?: string;
+    clientAddress?: string;
+    purpose?: string;
+    visitLocation?: { lat: number; lng: number };
+    visitRadius?: number;
+    notes?: string | null;
+}
+
+export async function updateVisitDraft(id: string, data: UpdateDraftInput): Promise<VisitReport | null> {
     try {
-        let baseDate = data.date ? new Date(data.date) : undefined;
-        if (!baseDate && (data.visitStartTime || data.visitEndTime)) {
-            const existing = await prisma.visitReport.findUnique({ where: { id }, select: { date: true } });
-            if (existing) baseDate = existing.date;
-            else baseDate = new Date();
+        const existing = await prisma.visitReport.findUnique({ where: { id }, select: { status: true } });
+        if (!existing || existing.status !== "draft") {
+            logger.warn("Attempted to update non-draft visit", { id, currentStatus: existing?.status });
+            return null;
         }
 
         const row = await prisma.visitReport.update({
@@ -103,25 +131,160 @@ export async function updateVisitReport(id: string, data: Partial<VisitReport>):
                 ...(data.clientName !== undefined && { clientName: data.clientName }),
                 ...(data.clientAddress !== undefined && { clientAddress: data.clientAddress }),
                 ...(data.purpose !== undefined && { purpose: data.purpose }),
-                ...(data.result !== undefined && { result: data.result }),
-                ...(data.visitStartTime !== undefined && { visitStartTime: data.visitStartTime ? timeStringToDateTime(baseDate!, data.visitStartTime) : null }),
-                ...(data.visitEndTime !== undefined && { visitEndTime: data.visitEndTime ? timeStringToDateTime(baseDate!, data.visitEndTime) : null }),
-                ...(data.location !== undefined && { location: data.location ? JSON.stringify(data.location) : null }),
-                ...(data.photo !== undefined && { photo: data.photo }),
-                ...(data.status !== undefined && { status: data.status }),
+                ...(data.visitLocation !== undefined && { visitLocation: JSON.stringify(data.visitLocation) }),
+                ...(data.visitRadius !== undefined && { visitRadius: data.visitRadius }),
                 ...(data.notes !== undefined && { notes: data.notes }),
             },
             include: employeeInclude,
         });
         return toVisitReport(row);
     } catch (error) {
-        logger.error("Failed to update visit report", { id, error });
+        logger.error("Failed to update visit draft", { id, error });
         return null;
     }
 }
 
+// ─── Clock In ───────────────────────────────────────────────────
+
+interface ClockInInput {
+    location: { lat: number; lng: number };
+    photos: string[];
+}
+
+export async function clockInVisit(id: string, data: ClockInInput): Promise<VisitReport | null> {
+    try {
+        const existing = await prisma.visitReport.findUnique({
+            where: { id },
+            select: { status: true, visitLocation: true, visitRadius: true },
+        });
+
+        if (!existing || existing.status !== "draft") {
+            logger.warn("Clock in failed: invalid status", { id, currentStatus: existing?.status });
+            return null;
+        }
+
+        const row = await prisma.visitReport.update({
+            where: { id },
+            data: {
+                clockInTime: new Date(),
+                clockInLocation: JSON.stringify(data.location),
+                clockInPhotos: JSON.stringify(data.photos),
+                status: "clocked_in",
+            },
+            include: employeeInclude,
+        });
+        return toVisitReport(row);
+    } catch (error) {
+        logger.error("Failed to clock in visit", { id, error });
+        return null;
+    }
+}
+
+// ─── Clock Out ──────────────────────────────────────────────────
+
+interface ClockOutInput {
+    location: { lat: number; lng: number };
+    photos: string[];
+    result?: string | null;
+}
+
+export async function clockOutVisit(id: string, data: ClockOutInput): Promise<VisitReport | null> {
+    try {
+        const existing = await prisma.visitReport.findUnique({
+            where: { id },
+            select: { status: true, visitLocation: true, visitRadius: true },
+        });
+
+        if (!existing || existing.status !== "clocked_in") {
+            logger.warn("Clock out failed: invalid status", { id, currentStatus: existing?.status });
+            return null;
+        }
+
+        const row = await prisma.visitReport.update({
+            where: { id },
+            data: {
+                clockOutTime: new Date(),
+                clockOutLocation: JSON.stringify(data.location),
+                clockOutPhotos: JSON.stringify(data.photos),
+                result: data.result ?? null,
+                status: "pending_approval",
+            },
+            include: employeeInclude,
+        });
+        return toVisitReport(row);
+    } catch (error) {
+        logger.error("Failed to clock out visit", { id, error });
+        return null;
+    }
+}
+
+// ─── HR Approval ────────────────────────────────────────────────
+
+export async function approveVisit(id: string): Promise<VisitReport | null> {
+    try {
+        const existing = await prisma.visitReport.findUnique({
+            where: { id },
+            select: { status: true },
+        });
+
+        if (!existing || !["clocked_out", "pending_approval"].includes(existing.status)) {
+            logger.warn("Approve failed: invalid status", { id, currentStatus: existing?.status });
+            return null;
+        }
+
+        const row = await prisma.visitReport.update({
+            where: { id },
+            data: { status: "approved" },
+            include: employeeInclude,
+        });
+        return toVisitReport(row);
+    } catch (error) {
+        logger.error("Failed to approve visit", { id, error });
+        return null;
+    }
+}
+
+export async function rejectVisit(id: string, reason: string): Promise<VisitReport | null> {
+    try {
+        const existing = await prisma.visitReport.findUnique({
+            where: { id },
+            select: { status: true },
+        });
+
+        if (!existing || !["clocked_out", "pending_approval"].includes(existing.status)) {
+            logger.warn("Reject failed: invalid status", { id, currentStatus: existing?.status });
+            return null;
+        }
+
+        const row = await prisma.visitReport.update({
+            where: { id },
+            data: {
+                status: "rejected",
+                rejectionReason: reason,
+            },
+            include: employeeInclude,
+        });
+        return toVisitReport(row);
+    } catch (error) {
+        logger.error("Failed to reject visit", { id, error });
+        return null;
+    }
+}
+
+// ─── Delete (Draft only) ────────────────────────────────────────
+
 export async function deleteVisitReport(id: string): Promise<boolean> {
     try {
+        const existing = await prisma.visitReport.findUnique({
+            where: { id },
+            select: { status: true },
+        });
+
+        if (!existing || existing.status !== "draft") {
+            logger.warn("Delete failed: can only delete drafts", { id, currentStatus: existing?.status });
+            return false;
+        }
+
         await prisma.visitReport.delete({ where: { id } });
         return true;
     } catch (error) {

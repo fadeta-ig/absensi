@@ -1,221 +1,152 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import {
-    MapPinned, Plus, Camera, MapPin, Loader2, CheckCircle,
-    AlertCircle, X, Building2, Navigation, FileText, Clock,
-    Video, VideoOff, Filter, Timer
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { MapPinned, Plus, Filter, CheckCircle, AlertCircle } from "lucide-react";
+import { VisitReport, VisitStatus } from "@/types";
+import { VISIT_FILTER_OPTIONS, VISIT_STATUS_CONFIG } from "./visitTypes";
+import { VisitCard } from "./components/VisitCard";
+import { CreateDraftModal } from "./components/CreateDraftModal";
+import { ClockInModal } from "./components/ClockInModal";
+import { ClockOutModal } from "./components/ClockOutModal";
+import { VisitDetailModal } from "./components/VisitDetailModal";
 
-interface VisitReport {
-    id: string;
-    employeeId: string;
-    employeeName?: string | null;
-    employeeDepartment?: string | null;
-    date: string;
-    visitStartTime?: string | null;
-    visitEndTime?: string | null;
-    clientName: string;
-    clientAddress: string;
-    purpose: string;
-    result?: string | null;
-    location?: { lat: number; lng: number } | null;
-    photo?: string | null;
-    status: "pending" | "approved" | "rejected";
-    notes?: string | null;
-    createdAt: string;
-}
+type ModalState =
+    | { type: "none" }
+    | { type: "create_draft" }
+    | { type: "clock_in"; visit: VisitReport }
+    | { type: "clock_out"; visit: VisitReport }
+    | { type: "detail"; visit: VisitReport };
 
-const STATUS_CONFIG = {
-    pending: { label: "Menunggu", class: "badge-warning", color: "text-yellow-700 bg-yellow-50 border-yellow-200" },
-    approved: { label: "Disetujui", class: "badge-success", color: "text-green-700 bg-green-50 border-green-200" },
-    rejected: { label: "Ditolak", class: "badge-error", color: "text-red-700 bg-red-50 border-red-200" },
-};
+const ITEMS_PER_PAGE = 6;
 
 export default function VisitsPage() {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
     const [visits, setVisits] = useState<VisitReport[]>([]);
-    const [photo, setPhoto] = useState<string | null>(null);
-    const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [filterStatus, setFilterStatus] = useState<VisitStatus | "all">("all");
+    const [modal, setModal] = useState<ModalState>({ type: "none" });
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-    const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
-    const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
-    const [form, setForm] = useState({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "", visitStartTime: "", visitEndTime: "" });
-    const [showForm, setShowForm] = useState(false);
-    const [streaming, setStreaming] = useState(false);
-    const [endTimeUpdating, setEndTimeUpdating] = useState(false);
-
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 6;
 
     useEffect(() => {
         setCurrentPage(1);
     }, [filterStatus]);
 
     useEffect(() => {
-        fetch("/api/visits").then((r) => r.json()).then(setVisits);
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-                () => setMessage({ type: "error", text: "Gagal mendapatkan lokasi. Aktifkan GPS." })
-            );
-        }
+        fetch("/api/visits")
+            .then((r) => r.json())
+            .then(setVisits)
+            .catch(() => setMessage({ type: "error", text: "Gagal memuat data kunjungan." }));
     }, []);
 
-    // Auto-fill visitStartTime with current time
+    // Auto-hide message after 5 seconds
     useEffect(() => {
-        if (showForm && !form.visitStartTime) {
-            const now = new Date();
-            const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-            setForm(prev => ({ ...prev, visitStartTime: timeStr }));
-        }
-    }, [showForm, form.visitStartTime]);
+        if (!message) return;
+        const timer = setTimeout(() => setMessage(null), 5000);
+        return () => clearTimeout(timer);
+    }, [message]);
 
-    const startCamera = useCallback(async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-            });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                setStreaming(true);
-            }
-        } catch {
-            setMessage({ type: "error", text: "Gagal mengakses kamera." });
-        }
-    }, []);
-
-    const stopCamera = useCallback(() => {
-        if (videoRef.current?.srcObject) {
-            const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-            tracks.forEach((t) => t.stop());
-            videoRef.current.srcObject = null;
-            setStreaming(false);
-        }
-    }, []);
-
-    const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current) return;
-        const vid = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = vid.videoWidth || 640;
-        canvas.height = vid.videoHeight || 480;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-            setPhoto(canvas.toDataURL("image/jpeg", 0.8));
-            stopCamera();
-        }
-    }, [stopCamera]);
-
-    const resetForm = () => {
-        setForm({ clientName: "", clientAddress: "", purpose: "", result: "", notes: "", visitStartTime: "", visitEndTime: "" });
-        setPhoto(null);
-        stopCamera();
+    const updateVisitInList = (updated: VisitReport) => {
+        setVisits((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!form.clientName || !form.clientAddress || !form.purpose || !form.visitStartTime) return;
-        setLoading(true);
-        setMessage(null);
+    const handleCreated = (visit: VisitReport) => {
+        setVisits((prev) => [visit, ...prev]);
+        setMessage({ type: "success", text: "Draft kunjungan berhasil dibuat!" });
+    };
 
+    const handleClockIn = (updated: VisitReport) => {
+        updateVisitInList(updated);
+        setMessage({ type: "success", text: "Clock In berhasil!" });
+    };
+
+    const handleClockOut = (updated: VisitReport) => {
+        updateVisitInList(updated);
+        setMessage({ type: "success", text: "Clock Out berhasil! Menunggu persetujuan HR." });
+    };
+
+    const handleDelete = async (visit: VisitReport) => {
+        if (!confirm("Hapus draft kunjungan ini?")) return;
         try {
-            const res = await fetch("/api/visits", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ...form,
-                    visitEndTime: form.visitEndTime || null,
-                    photo,
-                    location,
-                }),
-            });
-            const data = await res.json();
-
+            const res = await fetch(`/api/visits?id=${visit.id}`, { method: "DELETE" });
             if (res.ok) {
-                setVisits((prev) => [data, ...prev]);
-                setShowForm(false);
-                resetForm();
-                setMessage({ type: "success", text: "Laporan kunjungan berhasil dikirim!" });
+                setVisits((prev) => prev.filter((v) => v.id !== visit.id));
+                setMessage({ type: "success", text: "Draft kunjungan berhasil dihapus." });
             } else {
-                setMessage({ type: "error", text: data.error || "Gagal mengirim laporan" });
+                const data = await res.json();
+                setMessage({ type: "error", text: data.error || "Gagal menghapus draft." });
             }
         } catch {
-            setMessage({ type: "error", text: "Terjadi kesalahan koneksi" });
+            setMessage({ type: "error", text: "Terjadi kesalahan koneksi." });
         }
-        setLoading(false);
-    };
-
-    const handleEndTimeUpdate = async (visitId: string, endTime: string) => {
-        setEndTimeUpdating(true);
-        try {
-            const res = await fetch("/api/visits", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: visitId, visitEndTime: endTime }),
-            });
-            if (res.ok) {
-                const updated = await res.json();
-                setVisits((prev) => prev.map((v) => (v.id === visitId ? updated : v)));
-                setSelectedVisit(updated);
-                setMessage({ type: "success", text: "Jam selesai berhasil diperbarui!" });
-            }
-        } catch {
-            setMessage({ type: "error", text: "Gagal memperbarui jam selesai" });
-        }
-        setEndTimeUpdating(false);
     };
 
     const filtered = filterStatus === "all" ? visits : visits.filter((v) => v.status === filterStatus);
-
     const paginatedVisits = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
 
-    const formatTimeRange = (start?: string | null, end?: string | null) => {
-        if (!start) return null;
-        return end ? `${start} – ${end}` : `${start} – ...`;
-    };
+    // Status counts
+    const statusCounts: Record<string, number> = { all: visits.length };
+    for (const opt of VISIT_FILTER_OPTIONS) {
+        if (opt.key !== "all") {
+            statusCounts[opt.key] = visits.filter((v) => v.status === opt.key).length;
+        }
+    }
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+            {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                         <MapPinned className="w-5 h-5 text-[var(--primary)]" />
                         Kunjungan Dinas
                     </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">Laporan kunjungan dinas luar</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Buat draft, clock in, dan clock out kunjungan
+                    </p>
                 </div>
-                <button className="btn btn-primary" onClick={() => { setShowForm(true); resetForm(); }}>
-                    <Plus className="w-4 h-4" /> Buat Laporan
+                <button
+                    className="btn btn-primary"
+                    onClick={() => setModal({ type: "create_draft" })}
+                >
+                    <Plus className="w-4 h-4" /> Buat Draft
                 </button>
             </div>
 
             {/* Message */}
             {message && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${message.type === "success" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    {message.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <div
+                    className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${
+                        message.type === "success"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                    }`}
+                >
+                    {message.type === "success" ? (
+                        <CheckCircle className="w-4 h-4 shrink-0" />
+                    ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
                     {message.text}
                 </div>
             )}
 
             {/* Filter */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
                 <Filter className="w-4 h-4 text-[var(--text-muted)]" />
-                {["all", "pending", "approved", "rejected"].map((s) => (
+                {VISIT_FILTER_OPTIONS.map((opt) => (
                     <button
-                        key={s}
-                        onClick={() => setFilterStatus(s as "all" | "pending" | "approved" | "rejected")}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filterStatus === s
-                            ? "bg-[var(--primary)] text-white"
-                            : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
-                            }`}
+                        key={opt.key}
+                        onClick={() => setFilterStatus(opt.key)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                            filterStatus === opt.key
+                                ? "bg-[var(--primary)] text-white"
+                                : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
+                        }`}
                     >
-                        {s === "all" ? "Semua" : STATUS_CONFIG[s as keyof typeof STATUS_CONFIG].label}
+                        {opt.label}
+                        {statusCounts[opt.key] > 0 && (
+                            <span className="ml-1 opacity-70">({statusCounts[opt.key]})</span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -224,303 +155,77 @@ export default function VisitsPage() {
             {filtered.length === 0 ? (
                 <div className="card p-12 text-center border-dashed">
                     <MapPinned className="w-12 h-12 text-[var(--border)] mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-[var(--text-primary)]">Belum ada laporan</h3>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">Laporan kunjungan Anda akan tampil di sini</p>
+                    <h3 className="text-lg font-medium text-[var(--text-primary)]">Belum ada kunjungan</h3>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Buat draft kunjungan untuk memulai
+                    </p>
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {paginatedVisits.map((visit) => {
-                            const cfg = STATUS_CONFIG[visit.status];
-                            const timeRange = formatTimeRange(visit.visitStartTime, visit.visitEndTime);
-                            return (
-                                <div
-                                    key={visit.id}
-                                    className="card p-5 hover:border-[var(--primary)] hover:shadow-md transition-all cursor-pointer group flex flex-col h-full bg-[var(--card)]"
-                                    onClick={() => setSelectedVisit(visit)}
-                                >
-                                    <div className="flex items-start justify-between gap-4 mb-3">
-                                        <div className="w-10 h-10 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
-                                            <Building2 className="w-5 h-5" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-[15px] font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
-                                                {visit.clientName}
-                                            </h3>
-                                            <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1.5 flex-wrap">
-                                                <span className="flex items-center gap-1 truncate max-w-[150px]">
-                                                    <Navigation className="w-3 h-3 shrink-0" />
-                                                    <span className="truncate">{visit.clientAddress}</span>
-                                                </span>
-                                                <span className="flex items-center gap-1 shrink-0">
-                                                    <Clock className="w-3 h-3 shrink-0" />
-                                                    {visit.date}
-                                                </span>
-                                                {timeRange && (
-                                                    <span className="flex items-center gap-1 shrink-0 font-mono text-[var(--primary)] font-semibold">
-                                                        <Timer className="w-3 h-3 shrink-0" />
-                                                        {timeRange}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-auto pt-3 border-t border-[var(--border)] flex items-center justify-between">
-                                        <span className={`badge ${cfg.class} px-3 py-1 text-[11px] font-bold`}>{cfg.label}</span>
-                                        <span className="text-xs font-bold text-[var(--primary)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 translate-x-2 group-hover:translate-x-0">
-                                            Lihat Detail &rarr;
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {paginatedVisits.map((visit) => (
+                            <VisitCard
+                                key={visit.id}
+                                visit={visit}
+                                onSelect={(v) => setModal({ type: "detail", visit: v })}
+                                onClockIn={(v) => setModal({ type: "clock_in", visit: v })}
+                                onClockOut={(v) => setModal({ type: "clock_out", visit: v })}
+                                onDelete={handleDelete}
+                            />
+                        ))}
                     </div>
 
                     {filtered.length > ITEMS_PER_PAGE && (
                         <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)]">
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Prev</button>
-                            <span className="text-xs font-medium text-[var(--text-muted)]">Halaman {currentPage} dari {totalPages}</span>
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next</button>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                disabled={currentPage === 1}
+                                onClick={() => setCurrentPage((p) => p - 1)}
+                            >
+                                Prev
+                            </button>
+                            <span className="text-xs font-medium text-[var(--text-muted)]">
+                                Halaman {currentPage} dari {totalPages}
+                            </span>
+                            <button
+                                className="btn btn-secondary btn-sm"
+                                disabled={currentPage === totalPages}
+                                onClick={() => setCurrentPage((p) => p + 1)}
+                            >
+                                Next
+                            </button>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Form Modal */}
-            {showForm && (
-                <div className="modal-overlay" onClick={() => { setShowForm(false); stopCamera(); if (message?.type === 'error') setMessage(null); }}>
-                    <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2 className="modal-title">Laporan Kunjungan Baru</h2>
-                            <button className="modal-close" onClick={() => { setShowForm(false); stopCamera(); if (message?.type === 'error') setMessage(null); }}>
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        {message && message.type === "error" && (
-                            <div className="mb-4 flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                {message.text}
-                            </div>
-                        )}
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div className="form-group !mb-0">
-                                <label className="form-label">
-                                    <span className="flex items-center gap-1"><Building2 className="w-3 h-3" /> Nama Klien / Perusahaan</span>
-                                </label>
-                                <input className="form-input" value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} placeholder="PT Contoh Sukses" required />
-                            </div>
-
-                            <div className="form-group !mb-0">
-                                <label className="form-label">
-                                    <span className="flex items-center gap-1"><Navigation className="w-3 h-3" /> Alamat Kunjungan</span>
-                                </label>
-                                <textarea className="form-input min-h-[60px] resize-none" value={form.clientAddress} onChange={(e) => setForm({ ...form, clientAddress: e.target.value })} placeholder="Jl. Contoh No. 123, Jakarta" required />
-                            </div>
-
-                            <div className="form-group !mb-0">
-                                <label className="form-label">
-                                    <span className="flex items-center gap-1"><FileText className="w-3 h-3" /> Tujuan Kunjungan</span>
-                                </label>
-                                <textarea className="form-input min-h-[60px] resize-none" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="Meeting pembahasan project..." required />
-                            </div>
-
-                            {/* Visit Time */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="form-group !mb-0">
-                                    <label className="form-label">
-                                        <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Jam Mulai *</span>
-                                    </label>
-                                    <input type="time" className="form-input" value={form.visitStartTime} onChange={(e) => setForm({ ...form, visitStartTime: e.target.value })} required />
-                                </div>
-                                <div className="form-group !mb-0">
-                                    <label className="form-label">
-                                        <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Jam Selesai</span>
-                                    </label>
-                                    <input type="time" className="form-input" value={form.visitEndTime} onChange={(e) => setForm({ ...form, visitEndTime: e.target.value })} />
-                                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5 italic">Bisa diisi nanti setelah kunjungan selesai</p>
-                                </div>
-                            </div>
-
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Hasil Kunjungan (Opsional)</label>
-                                <textarea className="form-input min-h-[60px] resize-none" value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} placeholder="Deal approved, follow-up minggu depan..." />
-                            </div>
-
-                            <div className="form-group !mb-0">
-                                <label className="form-label">Catatan (Opsional)</label>
-                                <input className="form-input" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Catatan tambahan..." />
-                            </div>
-
-                            {/* Photo */}
-                            <div className="form-group !mb-0">
-                                <label className="form-label">
-                                    <span className="flex items-center gap-1"><Camera className="w-3 h-3" /> Foto Bukti (Opsional)</span>
-                                </label>
-                                <div className="relative aspect-[4/3] bg-[var(--secondary)] rounded-lg overflow-hidden border border-[var(--border)]">
-                                    <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} />
-                                    {!streaming && !photo && (
-                                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
-                                            <Video className="w-8 h-8 opacity-30" />
-                                            <button type="button" onClick={startCamera} className="btn btn-secondary btn-sm">
-                                                <Camera className="w-3.5 h-3.5" /> Aktifkan Kamera
-                                            </button>
-                                        </div>
-                                    )}
-                                    {photo && <img src={photo} alt="Captured" className="w-full h-full object-cover" />}
-                                    <canvas ref={canvasRef} className="hidden" />
-                                </div>
-                                <div className="flex gap-2 mt-2">
-                                    {streaming && (
-                                        <>
-                                            <button type="button" onClick={capturePhoto} className="btn btn-primary btn-sm flex-1">
-                                                <Camera className="w-3.5 h-3.5" /> Ambil Foto
-                                            </button>
-                                            <button type="button" onClick={stopCamera} className="btn btn-secondary btn-sm">
-                                                <VideoOff className="w-3.5 h-3.5" />
-                                            </button>
-                                        </>
-                                    )}
-                                    {photo && (
-                                        <button type="button" onClick={() => { setPhoto(null); startCamera(); }} className="btn btn-secondary btn-sm">
-                                            Ulangi
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Location Info */}
-                            <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                                <MapPin className="w-3.5 h-3.5" />
-                                {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "Mendapatkan lokasi..."}
-                            </div>
-
-                            <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPinned className="w-4 h-4" />}
-                                Kirim Laporan
-                            </button>
-                        </form>
-                    </div>
-                </div>
+            {/* Modals */}
+            {modal.type === "create_draft" && (
+                <CreateDraftModal
+                    onClose={() => setModal({ type: "none" })}
+                    onCreated={handleCreated}
+                />
             )}
-
-            {/* Detail Modal */}
-            {selectedVisit && (
-                <div className="modal-overlay" onClick={() => setSelectedVisit(null)}>
-                    <div className="modal-content max-w-lg p-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="bg-[var(--secondary)] p-5 border-b border-[var(--border)] flex items-center justify-between">
-                            <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                                <FileText className="w-5 h-5 text-[var(--primary)]" />
-                                Detail Kunjungan
-                            </h2>
-                            <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--destructive)] hover:text-white text-[var(--text-secondary)] transition-colors" onClick={() => setSelectedVisit(null)}>
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <h3 className="text-xl font-bold text-[var(--text-primary)]">{selectedVisit.clientName}</h3>
-                                    <p className="text-sm text-[var(--text-muted)] mt-1 flex items-center gap-1">
-                                        <Clock className="w-4 h-4" /> {selectedVisit.date}
-                                    </p>
-                                </div>
-                                <span className={`badge ${STATUS_CONFIG[selectedVisit.status].class} text-xs px-2.5 py-1.5`}>
-                                    {STATUS_CONFIG[selectedVisit.status].label}
-                                </span>
-                            </div>
-
-                            {/* Visit Time Info */}
-                            <div className="bg-[var(--primary)]/5 p-4 rounded-xl border border-[var(--primary)]/10">
-                                <p className="text-[11px] font-bold text-[var(--primary)] uppercase tracking-wider mb-3 flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" /> Jam Kunjungan</p>
-                                <div className="grid grid-cols-[auto_1rem_1fr] items-center gap-y-1">
-                                    <div>
-                                        <p className="text-[10px] text-[var(--text-muted)] uppercase">Mulai</p>
-                                        <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{selectedVisit.visitStartTime || "-"}</p>
-                                    </div>
-                                    <div className="text-[var(--text-muted)] text-center">→</div>
-                                    <div className="min-w-0">
-                                        <p className="text-[10px] text-[var(--text-muted)] uppercase">Selesai</p>
-                                        {selectedVisit.visitEndTime ? (
-                                            <p className="text-lg font-bold font-mono text-[var(--text-primary)]">{selectedVisit.visitEndTime}</p>
-                                        ) : (
-                                            <EndTimeInput
-                                                visitId={selectedVisit.id}
-                                                onSubmit={handleEndTimeUpdate}
-                                                loading={endTimeUpdating}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid gap-4 text-sm bg-[var(--background)] p-4 rounded-xl border border-[var(--border)]">
-                                <div>
-                                    <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" /> Alamat</p>
-                                    <p className="text-[var(--text-primary)] font-medium leading-relaxed">{selectedVisit.clientAddress}</p>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[var(--border)]">
-                                    <div>
-                                        <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Tujuan</p>
-                                        <p className="text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">{selectedVisit.purpose}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Hasil</p>
-                                        <p className="text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">{selectedVisit.result || "-"}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {selectedVisit.notes && (
-                                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                                    <p className="text-[11px] font-bold text-yellow-700 uppercase tracking-wider mb-1 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Catatan HR</p>
-                                    <p className="text-yellow-800 text-sm italic leading-relaxed">{selectedVisit.notes}</p>
-                                </div>
-                            )}
-
-                            {selectedVisit.photo && (
-                                <div>
-                                    <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5"><Camera className="w-3.5 h-3.5" /> Bukti Kunjungan</p>
-                                    <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--secondary)]">
-                                        <img src={selectedVisit.photo} alt="Foto Kunjungan" className="w-full h-auto object-cover max-h-[400px]" />
-                                    </div>
-                                </div>
-                            )}
-
-                            {selectedVisit.location && (
-                                <div>
-                                    <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Koordinat GPS</p>
-                                    <div className="text-xs font-mono bg-[var(--secondary)] p-3 rounded-lg border border-[var(--border)] text-[var(--text-secondary)] inline-flex">
-                                        {selectedVisit.location.lat}, {selectedVisit.location.lng}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+            {modal.type === "clock_in" && (
+                <ClockInModal
+                    visit={modal.visit}
+                    onClose={() => setModal({ type: "none" })}
+                    onClockIn={handleClockIn}
+                />
             )}
-        </div>
-    );
-}
-
-/** Inline component for updating end time on a completed visit */
-function EndTimeInput({ visitId, onSubmit, loading }: { visitId: string; onSubmit: (id: string, time: string) => void; loading: boolean }) {
-    const [time, setTime] = useState(() => {
-        const now = new Date();
-        return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    });
-
-    return (
-        <div className="flex items-center gap-1.5">
-            <input type="time" className="form-input !h-8 !text-xs !w-24 !px-2 !rounded-lg" value={time} onChange={(e) => setTime(e.target.value)} />
-            <button
-                onClick={() => onSubmit(visitId, time)}
-                className="btn btn-primary btn-sm !h-8 !px-2.5 !text-[10px]"
-                disabled={loading || !time}
-            >
-                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                Simpan
-            </button>
+            {modal.type === "clock_out" && (
+                <ClockOutModal
+                    visit={modal.visit}
+                    onClose={() => setModal({ type: "none" })}
+                    onClockOut={handleClockOut}
+                />
+            )}
+            {modal.type === "detail" && (
+                <VisitDetailModal
+                    visit={modal.visit}
+                    onClose={() => setModal({ type: "none" })}
+                />
+            )}
         </div>
     );
 }

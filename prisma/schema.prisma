@@ -92,18 +92,31 @@ model VisitReport {
   id             String    @id @default(uuid())
   employeeId     String    @map("employee_id")
   date           DateTime
-  visitStartTime DateTime? @map("visit_start_time")
-  visitEndTime   DateTime? @map("visit_end_time")
+  clockInTime    DateTime? @map("clock_in_time")
+  clockOutTime   DateTime? @map("clock_out_time")
   clientName     String    @map("client_name")
   clientAddress  String    @map("client_address") @db.Text
   purpose        String    @db.Text
   result         String?   @db.Text
-  location       String?   @db.LongText
-  photo          String?   @db.LongText
-  status         String    @default("pending")
-  notes          String?   @db.Text
-  createdAt      DateTime  @default(now()) @map("created_at")
-  employee       Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+
+  // Titik lokasi tujuan kunjungan (JSON: {lat, lng})
+  visitLocation    String? @map("visit_location") @db.LongText
+  visitRadius      Float   @default(300) @map("visit_radius")
+
+  // Lokasi GPS saat clock in & clock out (JSON: {lat, lng})
+  clockInLocation  String? @map("clock_in_location") @db.LongText
+  clockOutLocation String? @map("clock_out_location") @db.LongText
+
+  // Foto bukti kunjungan (JSON array of base64 strings)
+  clockInPhotos    String? @map("clock_in_photos") @db.LongText
+  clockOutPhotos   String? @map("clock_out_photos") @db.LongText
+
+  // Status: draft | clocked_in | clocked_out | pending_approval | approved | rejected
+  status           String  @default("draft")
+  notes            String? @db.Text
+  rejectionReason  String? @map("rejection_reason") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+  employee         Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "visit_reports_employee_id_fkey")
   @@map("visit_reports")

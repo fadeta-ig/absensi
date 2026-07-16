@@ -154,30 +154,54 @@ export const overtimeUpdateSchema = z.object({
     isHoliday: z.boolean().optional(),
 });
 
-/* ───────────────────── Visit ───────────────────── */
-
-export const visitCreateSchema = z.object({
+export const visitDraftSchema = z.object({
     clientName: z.string().min(1, "Nama klien harus diisi"),
     clientAddress: z.string().min(1, "Alamat klien harus diisi"),
     purpose: z.string().min(1, "Tujuan kunjungan harus diisi"),
-    visitStartTime: z.string().min(1, "Jam mulai kunjungan harus diisi"),
-    visitEndTime: z.string().nullable().optional(),
-    result: z.string().nullable().optional(),
-    location: locationSchema.nullable().optional(),
-    photo: z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)").nullable().optional(),
+    visitLocation: locationSchema,
+    visitRadius: z.number().min(50).max(1000).optional().default(300),
     notes: z.string().nullable().optional(),
 });
 
-export const visitUpdateSchema = z.object({
+export const visitClockInSchema = z.object({
+    id: z.string().min(1, "ID kunjungan harus diisi"),
+    location: locationSchema,
+    photos: z.array(
+        z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)")
+    ).min(2, "Minimal 2 foto bukti kunjungan"),
+});
+
+export const visitClockOutSchema = z.object({
+    id: z.string().min(1, "ID kunjungan harus diisi"),
+    location: locationSchema,
+    photos: z.array(
+        z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)")
+    ).min(2, "Minimal 2 foto bukti kunjungan"),
+    result: z.string().nullable().optional(),
+});
+
+export const visitUpdateDraftSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-    status: z.enum(["pending", "approved", "rejected"]).optional(),
-    notes: z.string().optional(),
-    clientName: z.string().optional(),
-    clientAddress: z.string().optional(),
-    purpose: z.string().optional(),
-    result: z.string().optional(),
-    visitStartTime: z.string().optional(),
-    visitEndTime: z.string().nullable().optional(),
+    clientName: z.string().min(1).optional(),
+    clientAddress: z.string().min(1).optional(),
+    purpose: z.string().min(1).optional(),
+    visitLocation: locationSchema.optional(),
+    visitRadius: z.number().min(50).max(1000).optional(),
+    notes: z.string().nullable().optional(),
+});
+
+export const visitApprovalSchema = z.object({
+    id: z.string().min(1, "ID harus diisi"),
+    status: z.enum(["approved", "rejected"]),
+    rejectionReason: z.string().nullable().optional(),
+}).refine(data => {
+    if (data.status === "rejected") {
+        return !!data.rejectionReason && data.rejectionReason.trim().length > 0;
+    }
+    return true;
+}, {
+    message: "Alasan penolakan wajib diisi jika menolak kunjungan",
+    path: ["rejectionReason"],
 });
 
 /* ───────────────────── News ───────────────────── */
