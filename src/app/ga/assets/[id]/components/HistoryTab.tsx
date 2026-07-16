@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { UserCheck, ArrowRight, Trash2, Wrench, AlertCircle, Clock, Upload, Loader2, FileText } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { AssetHistoryRow } from "@/lib/types/asset";
 import { KondisiBadge } from "@/features/ga/components/badges/AssetBadges";
 
@@ -46,7 +47,7 @@ export function HistoryTab({ history, loaded, onRefresh }: { history: AssetHisto
     if (!loaded) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Memuat riwayat...</div>;
     if (history.length === 0) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Belum ada riwayat mutasi.</div>;
 
-    const ACTION_CONFIG: Record<string, { icon: any; label: string; color: string }> = {
+    const ACTION_CONFIG: Record<string, { icon: LucideIcon; label: string; color: string }> = {
         assigned: { icon: UserCheck, label: "Diserahkan", color: "text-blue-600 bg-blue-50 border-blue-100" },
         returned: { icon: ArrowRight, label: "Dikembalikan", color: "text-emerald-600 bg-emerald-50 border-emerald-100" },
         retired: { icon: Trash2, label: "Di-retire", color: "text-red-600 bg-red-50 border-red-100" },

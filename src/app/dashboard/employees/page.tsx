@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Users, Plus, Search, Pencil, Trash2, X, Loader2, Clock, Mail, Phone, Building, Briefcase, Calendar, Key, Layers, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Users, Plus, Search, Pencil, X, Loader2, Key, Layers, Upload, UserCheck, UserX } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import BulkImportModal from "@/components/BulkImportModal";
+import EmployeeStatusModal from "@/components/EmployeeStatusModal";
 
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
@@ -17,25 +18,56 @@ export default function EmployeesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [shifts, setShifts] = useState<WorkShift[]>([]);
     const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+    const [loadingEmployees, setLoadingEmployees] = useState(true);
     const [sendingPassword, setSendingPassword] = useState<string | null>(null);
     const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [showImportModal, setShowImportModal] = useState(false);
+    const [statusEmployee, setStatusEmployee] = useState<Employee | null>(null);
 
     const DAY_LABELS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
+    const fetchEmployees = useCallback(async () => {
+        setLoadingEmployees(true);
+        try {
+            const response = await fetch("/api/employees?status=all");
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Gagal memuat data karyawan.");
+            setEmployees(Array.isArray(data) ? data : []);
+        } catch (error) {
+            setEmployees([]);
+            setPasswordMsg({ type: "error", text: error instanceof Error ? error.message : "Gagal memuat data karyawan." });
+        } finally {
+            setLoadingEmployees(false);
+        }
+    }, []);
+
     useEffect(() => {
-        fetch("/api/employees").then((r) => r.json()).then(setEmployees);
+        void fetchEmployees();
         fetch("/api/shifts").then((r) => r.json()).then((data: WorkShift[]) => {
             setShifts(data);
         });
-    }, []);
+    }, [fetchEmployees]);
 
-    const filtered = employees.filter((e) =>
-        e.name.toLowerCase().includes(search.toLowerCase()) ||
-        e.employeeId.toLowerCase().includes(search.toLowerCase()) ||
-        e.department.toLowerCase().includes(search.toLowerCase()) ||
-        (e.division && e.division.toLowerCase().includes(search.toLowerCase()))
-    );
+    const counts = useMemo(() => ({
+        all: employees.length,
+        active: employees.filter((employee) => employee.isActive).length,
+        inactive: employees.filter((employee) => !employee.isActive).length,
+    }), [employees]);
+
+    const filtered = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        return employees.filter((employee) => {
+            const matchesStatus = statusFilter === "all"
+                || (statusFilter === "active" ? employee.isActive : !employee.isActive);
+            const matchesSearch = !query
+                || employee.name.toLowerCase().includes(query)
+                || employee.employeeId.toLowerCase().includes(query)
+                || employee.department.toLowerCase().includes(query)
+                || Boolean(employee.division?.toLowerCase().includes(query));
+            return matchesStatus && matchesSearch;
+        });
+    }, [employees, search, statusFilter]);
 
     const getShiftName = (sId?: string) => {
         if (!sId) return "-";
@@ -62,19 +94,6 @@ export default function EmployeesPage() {
     };
 
     const confirm = useConfirm();
-
-    const handleDelete = async (id: string) => {
-        confirm({
-            title: "Hapus Karyawan",
-            message: "Yakin ingin menghapus karyawan ini? Data tidak dapat dikembalikan.",
-            variant: "danger",
-            confirmLabel: "Ya, Hapus",
-            onConfirm: async () => {
-                const res = await fetch(`/api/employees?id=${id}`, { method: "DELETE" });
-                if (res.ok) setEmployees((prev) => prev.filter((e) => e.id !== id));
-            },
-        });
-    };
 
     const handleSendPassword = async (emp: Employee) => {
         confirm({
@@ -113,7 +132,7 @@ export default function EmployeesPage() {
                         <Users className="w-5 h-5 text-[var(--primary)]" />
                         Manajemen Karyawan
                     </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">{employees.length} karyawan terdaftar</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">{counts.all} karyawan terdaftar · {counts.active} aktif · {counts.inactive} nonaktif</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <button className="btn btn-secondary border border-[var(--border)]" onClick={() => setShowImportModal(true)}>
@@ -135,10 +154,28 @@ export default function EmployeesPage() {
                 </div>
             )}
 
-            {/* Search */}
-            <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                <input type="text" className="form-input pl-10" placeholder="Cari nama, ID, departemen, atau divisi..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            {/* Search and status filters */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="relative w-full max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                    <input type="text" className="form-input pl-10" placeholder="Cari nama, ID, departemen, atau divisi..." value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <div className="flex w-fit rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 p-1">
+                    {([
+                        { key: "all", label: "Semua", count: counts.all },
+                        { key: "active", label: "Aktif", count: counts.active },
+                        { key: "inactive", label: "Nonaktif", count: counts.inactive },
+                    ] as const).map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setStatusFilter(item.key)}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${statusFilter === item.key ? "bg-[var(--card)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"}`}
+                        >
+                            {item.label} <span className="ml-1 opacity-70">{item.count}</span>
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Table */}
@@ -158,11 +195,13 @@ export default function EmployeesPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada karyawan ditemukan</td></tr>
+                            {loadingEmployees ? (
+                                <tr><td colSpan={8} className="text-center py-10 text-sm text-[var(--text-muted)]"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Memuat karyawan...</td></tr>
+                            ) : filtered.length === 0 ? (
+                                <tr><td colSpan={8} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada karyawan ditemukan</td></tr>
                             ) : (
                                 filtered.map((e) => (
-                                    <tr key={e.id}>
+                                    <tr key={e.id} className={!e.isActive ? "opacity-75" : undefined}>
                                         <td className="font-mono text-xs">{e.employeeId}</td>
                                         <td className="font-medium text-[var(--text-primary)]">
                                             <div className="flex items-center gap-2">
@@ -220,7 +259,14 @@ export default function EmployeesPage() {
                                                     <Layers className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button onClick={() => handleEdit(e)} className="btn btn-ghost btn-sm !p-1.5"><Pencil className="w-3.5 h-3.5" /></button>
-                                                <button onClick={() => handleDelete(e.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStatusEmployee(e)}
+                                                    className={`btn btn-ghost btn-sm !p-1.5 ${e.isActive ? "text-red-600 hover:!bg-red-50" : "text-emerald-600 hover:!bg-emerald-50"}`}
+                                                    title={e.isActive ? "Nonaktifkan karyawan" : "Aktifkan kembali"}
+                                                >
+                                                    {e.isActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -235,10 +281,21 @@ export default function EmployeesPage() {
                 isOpen={showImportModal}
                 onClose={() => setShowImportModal(false)}
                 onImportComplete={() => {
-                    // Refetch employees after successful import
-                    fetch("/api/employees").then((r) => r.json()).then(setEmployees);
+                    void fetchEmployees();
                 }}
             />
+
+            {statusEmployee && (
+                <EmployeeStatusModal
+                    employee={statusEmployee}
+                    onClose={() => setStatusEmployee(null)}
+                    onSuccess={async (message) => {
+                        setStatusEmployee(null);
+                        setPasswordMsg({ type: "success", text: message });
+                        await fetchEmployees();
+                    }}
+                />
+            )}
         </div>
     );
 }

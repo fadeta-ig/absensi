@@ -52,6 +52,7 @@ export async function generateTemplate(): Promise<Buffer> {
         "Cuti Tahunan": 12,
         "Atasan (ID)": "",
         "Status Aktif": "Ya",
+        "Alasan Status": "Isi minimal 5 karakter jika Status Aktif = Tidak",
     });
 
     // Style the example row data

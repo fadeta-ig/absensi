@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
         // Buat list tanggal untuk matrix (max 31 hari)
         const dateList: string[] = [];
-        let curr = new Date(startDate);
+        const curr = new Date(startDate);
         while (curr <= endDate && dateList.length <= 31) {
             dateList.push(curr.toISOString().split("T")[0]); // YYYY-MM-DD
             curr.setDate(curr.getDate() + 1);

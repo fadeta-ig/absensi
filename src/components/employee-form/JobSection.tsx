@@ -51,9 +51,10 @@ export function JobSection({
                 </div>
                 <div className="form-group !mb-0">
                     <label className="form-label">Role Sistem</label>
-                    <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" })}>
+                    <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" | "ga" })}>
                         <option value="employee">Employee (User)</option>
                         <option value="hr">HR (Manager)</option>
+                        <option value="ga">GA (Asset Management)</option>
                     </select>
                 </div>
             </div>
@@ -85,16 +86,13 @@ export function JobSection({
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="form-group !mb-0">
                     <label className="form-label">Jatah Cuti / Tahun</label>
                     <input type="number" className="form-input" value={form.totalLeave} onChange={(e) => setForm({ ...form, totalLeave: Number(e.target.value) })} />
                 </div>
-                <div className="flex items-end pb-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="w-4 h-4 rounded text-[var(--primary)]" />
-                        <span className="text-sm font-medium">Karyawan Aktif</span>
-                    </label>
+                <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3 text-xs text-blue-700">
+                    Status aktif/nonaktif dikelola dari halaman Manajemen Karyawan agar alasan dan riwayatnya tercatat.
                 </div>
             </div>
         </div>

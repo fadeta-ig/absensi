@@ -6,13 +6,35 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { createRequire } from "node:module";
 
 const prisma = new PrismaClient();
 
+type AssetSource = {
+    total: number;
+    data: Array<{
+        type: string;
+        pic: string;
+        kondisi: string;
+        keterangan?: string;
+    }>;
+};
+
+type SimSource = {
+    total: number;
+    data: Array<{
+        nomor_indosat: string | number;
+        pic: string;
+        note_expired_date?: string;
+    }>;
+};
+
+const loadSource = createRequire(import.meta.url);
+const hpData = loadSource("../dataPerusahaan/data_hp_pegawai.json") as AssetSource;
+const laptopData = loadSource("../dataPerusahaan/data_laptop_pegawai.json") as AssetSource;
+const nomorData = loadSource("../dataPerusahaan/data_nomor_hp_pegawai.json") as SimSource;
+
 // ─── Data Source ─────────────────────────────────────────────
-const hpData = require("../dataPerusahaan/data_hp_pegawai.json");
-const laptopData = require("../dataPerusahaan/data_laptop_pegawai.json");
-const nomorData = require("../dataPerusahaan/data_nomor_hp_pegawai.json");
 
 // ─── Helpers ─────────────────────────────────────────────────
 

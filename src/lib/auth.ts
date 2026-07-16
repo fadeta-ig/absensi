@@ -5,6 +5,7 @@ import { getEmployeeByEmployeeId } from "./services/employeeService";
 import { Employee } from "@/types";
 import logger from "@/lib/logger";
 import { toDateString } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -24,6 +25,7 @@ export interface SessionPayload extends JWTPayload {
     role: "employee" | "hr" | "ga";
     departmentId: string;
     divisionId?: string | null;
+    sessionVersion: number;
 }
 
 /**
@@ -40,6 +42,7 @@ export async function createSession(employee: Employee, rememberMe: boolean = fa
         role: employee.role,
         departmentId: employee.departmentId,
         divisionId: employee.divisionId,
+        sessionVersion: employee.sessionVersion,
     } satisfies SessionPayload)
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
@@ -70,6 +73,63 @@ export async function getSession(): Promise<SessionPayload | null> {
     } catch {
         return null;
     }
+}
+
+/**
+ * Resolve a JWT session against the current employee record.
+ * The database is authoritative for active status, role, and session revocation.
+ */
+export async function getActiveSession(): Promise<SessionPayload | null> {
+    const session = await getSession();
+    if (!session) return null;
+
+    const employee = await prisma.employee.findUnique({
+        where: { id: session.id },
+        select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            role: true,
+            departmentId: true,
+            divisionId: true,
+            isActive: true,
+            sessionVersion: true,
+        },
+    });
+
+    const tokenVersion = typeof session.sessionVersion === "number" ? session.sessionVersion : 0;
+    const roleIsValid = employee?.role === "employee" || employee?.role === "hr" || employee?.role === "ga";
+
+    if (
+        !employee ||
+        !employee.isActive ||
+        !roleIsValid ||
+        employee.employeeId !== session.employeeId ||
+        employee.sessionVersion !== tokenVersion
+    ) {
+        logger.warn("Session rejected by current employee state", {
+            employeeId: session.employeeId,
+            reason: !employee
+                ? "employee_not_found"
+                : !employee.isActive
+                    ? "employee_inactive"
+                    : employee.sessionVersion !== tokenVersion
+                        ? "session_revoked"
+                        : "identity_or_role_invalid",
+        });
+        return null;
+    }
+
+    return {
+        ...session,
+        id: employee.id,
+        employeeId: employee.employeeId,
+        name: employee.name,
+        role: employee.role,
+        departmentId: employee.departmentId,
+        divisionId: employee.divisionId,
+        sessionVersion: employee.sessionVersion,
+    } as SessionPayload;
 }
 
 /**

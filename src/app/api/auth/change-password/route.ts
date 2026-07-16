@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import { getEmployeeByEmployeeId, updateEmployee } from "@/lib/services/employeeService";
 import { checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
-import { unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { changePasswordSchema } from "@/lib/validations/validationSchemas";
 import { sendPasswordChangedEmail } from "@/lib/services/emailService";
 import bcrypt from "bcryptjs";
@@ -12,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
+        const session = await requireAuth();
         if (!session) return unauthorizedResponse();
 
         const result = await validateBody(request, changePasswordSchema);
@@ -44,10 +43,12 @@ export async function POST(request: NextRequest) {
             console.error("Gagal mengirim email reset: ", e);
         });
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
-            message: "Password berhasil diubah",
+            message: "Password berhasil diubah. Silakan login kembali.",
         });
+        response.cookies.delete("session");
+        return response;
     } catch (err) {
         return serverErrorResponse("ChangePassword", err);
     }

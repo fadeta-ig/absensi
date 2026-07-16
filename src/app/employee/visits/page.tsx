@@ -27,10 +27,6 @@ export default function VisitsPage() {
     const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [filterStatus]);
-
-    useEffect(() => {
         fetch("/api/visits")
             .then((r) => r.json())
             .then((data) => {
@@ -155,7 +151,7 @@ export default function VisitsPage() {
                 {VISIT_FILTER_OPTIONS.map((opt) => (
                     <button
                         key={opt.key}
-                        onClick={() => setFilterStatus(opt.key)}
+                        onClick={() => { setFilterStatus(opt.key); setCurrentPage(1); }}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                             filterStatus === opt.key
                                 ? "bg-[var(--primary)] text-white"

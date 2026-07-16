@@ -73,7 +73,7 @@ export default function DashboardPage() {
     }, []);
 
     useEffect(() => {
-        fetchAllData();
+        const initialFetchTimer = setTimeout(() => void fetchAllData(), 0);
 
         // Auto-refresh every 30 seconds, skip if tab is inactive
         intervalRef.current = setInterval(() => {
@@ -83,6 +83,7 @@ export default function DashboardPage() {
         }, 30000);
 
         return () => {
+            clearTimeout(initialFetchTimer);
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
     }, [fetchAllData]);

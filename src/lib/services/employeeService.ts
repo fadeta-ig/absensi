@@ -3,51 +3,52 @@ import { Employee } from "@/types";
 import { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
 
+const employeeRelations = {
+    locations: { select: { id: true, name: true } },
+    payrollComponents: { include: { component: true } },
+    manager: { select: { id: true, employeeId: true, name: true, isActive: true } },
+    subordinates: { select: { id: true, employeeId: true, name: true, isActive: true } },
+    departmentRel: true,
+    divisionRel: true,
+    positionRel: true,
+} satisfies Prisma.EmployeeInclude;
+
 // Tipe relasi komprehensif dari Prisma langsung (Strict Type)
 export type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
-    include: {
-        locations: { select: { id: true; name: true } };
-        payrollComponents: { include: { component: true } };
-        manager: true;
-        subordinates: true;
-        departmentRel: true;
-        divisionRel: true;
-        positionRel: true;
-    };
+    include: typeof employeeRelations;
 }>;
 
 export async function getEmployees(): Promise<EmployeeWithRelations[]> {
     const rows = await prisma.employee.findMany({
-        include: {
-            locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } },
-            manager: true,
-            subordinates: true,
-            departmentRel: true,
-            divisionRel: true,
-            positionRel: true,
-        },
+        include: employeeRelations,
         orderBy: { name: "asc" }
     });
     return rows;
 }
 
-export async function getVisibleEmployees(requester: { employeeId: string; role: string }): Promise<EmployeeWithRelations[]> {
+export type EmployeeStatusFilter = "active" | "inactive" | "all";
+
+export async function getVisibleEmployees(
+    requester: { employeeId: string; role: string },
+    status: EmployeeStatusFilter = "active"
+): Promise<EmployeeWithRelations[]> {
     const { employeeId, role } = requester;
 
-    // HR and GA can see all active employees
-    if (role === "hr" || role === "ga") {
+    // HR may explicitly request inactive/all records for employee master data.
+    if (role === "hr") {
+        const rows = await prisma.employee.findMany({
+            where: status === "all" ? undefined : { isActive: status === "active" },
+            include: employeeRelations,
+            orderBy: { name: "asc" },
+        });
+        return rows;
+    }
+
+    // GA operational selectors only receive active employees.
+    if (role === "ga") {
         const rows = await prisma.employee.findMany({
             where: { isActive: true },
-            include: {
-                locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } },
-                manager: true,
-                subordinates: true,
-                departmentRel: true,
-                divisionRel: true,
-                positionRel: true,
-            },
+            include: employeeRelations,
             orderBy: { name: "asc" },
         });
         return rows;
@@ -56,15 +57,7 @@ export async function getVisibleEmployees(requester: { employeeId: string; role:
     // Normal employees see themselves and their entire downstream hierarchy (1 .. N)
     const self = await prisma.employee.findUnique({
         where: { employeeId },
-        include: {
-            locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } },
-            manager: true,
-            subordinates: true,
-            departmentRel: true,
-            divisionRel: true,
-            positionRel: true,
-        }
+        include: employeeRelations,
     });
 
     if (!self) return [];
@@ -81,15 +74,7 @@ export async function getVisibleEmployees(requester: { employeeId: string; role:
         const currentManagerId = queue.shift()!;
         const subs = await prisma.employee.findMany({
             where: { managerId: currentManagerId, isActive: true },
-            include: {
-                locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } },
-                manager: true,
-                subordinates: true,
-                departmentRel: true,
-                divisionRel: true,
-                positionRel: true,
-            },
+            include: employeeRelations,
             orderBy: { name: "asc" }
         });
 
@@ -111,15 +96,7 @@ export async function getVisibleEmployees(requester: { employeeId: string; role:
 export async function getEmployeeById(id: string): Promise<EmployeeWithRelations | null> {
     const row = await prisma.employee.findUnique({ 
         where: { id },
-        include: {
-            locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } },
-            manager: true,
-            subordinates: true,
-            departmentRel: true,
-            divisionRel: true,
-            positionRel: true,
-        }
+        include: employeeRelations,
     });
     return row;
 }
@@ -127,20 +104,14 @@ export async function getEmployeeById(id: string): Promise<EmployeeWithRelations
 export async function getEmployeeByEmployeeId(employeeId: string): Promise<EmployeeWithRelations | null> {
     const row = await prisma.employee.findUnique({ 
         where: { employeeId },
-        include: {
-            locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } },
-            manager: true,
-            subordinates: true,
-            departmentRel: true,
-            divisionRel: true,
-            positionRel: true,
-        }
+        include: employeeRelations,
     });
     return row;
 }
 
-export async function createEmployee(data: Omit<Employee, "id">): Promise<EmployeeWithRelations> {
+export async function createEmployee(
+    data: Omit<Employee, "id" | "sessionVersion" | "statusChangedAt">
+): Promise<EmployeeWithRelations> {
     const row = await prisma.employee.create({
         data: {
             employeeId: data.employeeId,
@@ -173,15 +144,7 @@ export async function createEmployee(data: Omit<Employee, "id">): Promise<Employ
                 }))
             } : undefined,
         },
-        include: {
-            locations: { select: { id: true, name: true } },
-            payrollComponents: { include: { component: true } },
-            manager: true,
-            subordinates: true,
-            departmentRel: true,
-            divisionRel: true,
-            positionRel: true,
-        }
+        include: employeeRelations,
     });
     return row;
 }
@@ -239,10 +202,12 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.totalLeave !== undefined && { totalLeave: data.totalLeave }),
                 ...(data.usedLeave !== undefined && { usedLeave: data.usedLeave }),
                 ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
-                ...(data.isActive !== undefined && { isActive: data.isActive }),
                 ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
                 ...(data.bypassLocation !== undefined && { bypassLocation: data.bypassLocation }),
                 ...(data.basicSalary !== undefined && { basicSalary: data.basicSalary }),
+                ...((data.password !== undefined || data.role !== undefined) && {
+                    sessionVersion: { increment: 1 },
+                }),
 
                 ...(data.locations !== undefined && {
                     locations: {
@@ -260,15 +225,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                     }
                 }),
             },
-            include: {
-                locations: { select: { id: true, name: true } },
-                payrollComponents: { include: { component: true } },
-                manager: true,
-                subordinates: true,
-                departmentRel: true,
-                divisionRel: true,
-                positionRel: true,
-            }
+            include: employeeRelations,
         });
         return row;
     } catch (err) {

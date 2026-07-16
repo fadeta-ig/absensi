@@ -2,6 +2,17 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+interface LegacyPayslipRow {
+    id: string;
+    allowances: string | null;
+    deductions: string | null;
+}
+
+interface LegacyInspectionRow {
+    id: string;
+    checklist_json: string | null;
+}
+
 async function main() {
     console.log("🚀 Starting Data Migration: JSON to Relational...");
 
@@ -9,7 +20,7 @@ async function main() {
     try {
         // Karena kolom lama telah dihapus dari schema.prisma, kita gunakan raw query
         // ke tabel mysql secara mentah sebelum "db push / migrate" menghapus kolomnya secara betulan
-        const payslips: any[] = await prisma.$queryRawUnsafe(`SELECT id, allowances, deductions FROM payslip_records`);
+        const payslips = await prisma.$queryRawUnsafe<LegacyPayslipRow[]>(`SELECT id, allowances, deductions FROM payslip_records`);
         
         let migratedPayslipCount = 0;
         for (const p of payslips) {
@@ -37,7 +48,7 @@ async function main() {
 
     // 2. Migrate Inspections
     try {
-        const inspections: any[] = await prisma.$queryRawUnsafe(`SELECT id, checklist_json FROM asset_inspections`);
+        const inspections = await prisma.$queryRawUnsafe<LegacyInspectionRow[]>(`SELECT id, checklist_json FROM asset_inspections`);
         
         let migratedInspectionCount = 0;
         for (const i of inspections) {

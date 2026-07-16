@@ -22,11 +22,10 @@ export interface FormState {
     departmentId: string;
     divisionId: string;
     positionId: string;
-    role: "employee" | "hr" | string;
+    role: "employee" | "hr" | "ga";
     joinDate: string;
     totalLeave: number;
     usedLeave: number;
-    isActive: boolean;
     shiftId: string;
     bypassLocation: boolean;
     locations: { id: string; name: string }[];

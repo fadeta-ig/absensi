@@ -33,6 +33,7 @@ interface SessionPayload extends JWTPayload {
     departmentId: string;
     divisionId?: string | null;
     role: "employee" | "hr" | "ga";
+    sessionVersion?: number;
 }
 
 async function getSession(request: NextRequest): Promise<SessionPayload | null> {

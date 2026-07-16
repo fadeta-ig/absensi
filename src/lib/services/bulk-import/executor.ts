@@ -24,7 +24,7 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
         const result = await prisma.$transaction(async (tx) => {
             const createPromises = employeePasswords.map(async ({ row, plainPassword }) => {
                 const hashedPassword = await bcrypt.hash(plainPassword, 12);
-                return tx.employee.create({
+                const employee = await tx.employee.create({
                     data: {
                         employeeId: row.employeeId,
                         name: row.name,
@@ -41,10 +41,26 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
                         usedLeave: 0,
                         managerId: row.managerId || null,
                         isActive: row.isActive ?? true,
+                        statusChangedAt: row.isActive === false ? new Date() : null,
                         password: hashedPassword,
                         bypassLocation: false,
                     },
                 });
+
+                if (row.isActive === false) {
+                    await tx.employeeStatusHistory.create({
+                        data: {
+                            employeeId: employee.employeeId,
+                            wasActive: true,
+                            isActive: false,
+                            reason: row.statusReason!,
+                            effectiveDate: new Date(`${row.joinDate}T00:00:00.000Z`),
+                            changedBy: performedBy,
+                        },
+                    });
+                }
+
+                return employee;
             });
 
             return Promise.all(createPromises);
@@ -52,14 +68,14 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
 
         // Fire-and-forget: send password emails to each employee
         const { sendPasswordEmail } = await import("../emailService");
-        for (const { row, plainPassword } of employeePasswords) {
+        for (const { row, plainPassword } of employeePasswords.filter(({ row }) => row.isActive !== false)) {
             sendPasswordEmail(row.email, row.name, plainPassword).catch(() => {
                 logger.warn("Bulk import: gagal kirim email password", { employeeId: row.employeeId });
             });
         }
 
         // Build credentials list for Excel export (Option C backup)
-        const credentials = employeePasswords.map(({ row, plainPassword }) => ({
+        const credentials = employeePasswords.filter(({ row }) => row.isActive !== false).map(({ row, plainPassword }) => ({
             employeeId: row.employeeId,
             name: row.name,
             email: row.email,

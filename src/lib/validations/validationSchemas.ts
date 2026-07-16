@@ -54,7 +54,6 @@ export const employeeCreateSchema = z.object({
     role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee, hr, atau ga" }),
     managerId: z.string().nullable().optional(),
     joinDate: z.string().min(1, "Tanggal bergabung harus diisi"),
-    isActive: z.boolean().optional().default(true),
     totalLeave: z.number().optional().default(12),
     usedLeave: z.number().optional().default(0),
     shiftId: z.string().nullable().optional(),
@@ -83,7 +82,6 @@ export const employeeUpdateSchema = z.object({
     managerId: z.string().nullable().optional(),
     // Kepegawaian
     joinDate: z.string().optional(),
-    isActive: z.boolean().optional(),
     totalLeave: z.number().min(0).optional(),
     usedLeave: z.number().min(0).optional(),
     bypassLocation: z.boolean().optional(),
@@ -102,6 +100,16 @@ export const employeeUpdateSchema = z.object({
 });
 // Tipe untuk route handler agar tidak perlu cast 'as any'
 export type EmployeeUpdatePayload = z.infer<typeof employeeUpdateSchema>;
+
+export const employeeStatusChangeSchema = z.object({
+    isActive: z.boolean(),
+    reason: z.string()
+        .trim()
+        .min(5, "Alasan perubahan status minimal 5 karakter")
+        .max(1000, "Alasan perubahan status maksimal 1000 karakter"),
+    effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal efektif harus berformat YYYY-MM-DD"),
+    reassignManagerId: z.string().min(1).nullable().optional(),
+});
 
 /* ───────────────────── Leave ───────────────────── */
 

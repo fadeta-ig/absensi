@@ -58,7 +58,7 @@ export async function PUT(request: NextRequest) {
         const result = await validateBody(request, newsUpdateSchema);
         if ("error" in result) return result.error;
 
-        const { id, ...data } = result.data as { id: string } & Record<string, any>;
+        const { id, ...data } = result.data;
 
         const updated = await updateNews(id, data);
         if (!updated) {

@@ -1,14 +1,12 @@
 import { prisma } from "../prisma";
 import { WorkShift } from "@/types";
 import logger from "@/lib/logger";
-import { toISOOrNull } from "@/lib/utils";
+import { Prisma } from "@prisma/client";
 
-function mapWorkShift(row: any): WorkShift {
-    return {
-        ...row,
-        createdAt: toISOOrNull(row.createdAt)!,
-        updatedAt: toISOOrNull(row.updatedAt)!,
-    };
+type WorkShiftWithDays = Prisma.WorkShiftGetPayload<{ include: { days: true } }>;
+
+function mapWorkShift(row: WorkShiftWithDays): WorkShift {
+    return row;
 }
 
 /** Fetches all shifts with their day schedules */
@@ -34,7 +32,7 @@ interface CreateShiftInput {
     earlyCheckIn?: number;
     lateCheckOut?: number;
     earlyCheckOut?: number;
-    days: ShiftDayInput[];
+    days?: ShiftDayInput[];
 }
 
 export async function createShift(data: CreateShiftInput): Promise<WorkShift> {
@@ -50,7 +48,7 @@ export async function createShift(data: CreateShiftInput): Promise<WorkShift> {
             lateCheckOut: data.lateCheckOut ?? 0,
             earlyCheckOut: data.earlyCheckOut ?? 0,
             days: {
-                create: data.days.map((d) => ({
+                create: (data.days ?? []).map((d) => ({
                     dayOfWeek: d.dayOfWeek,
                     startTime: d.startTime,
                     endTime: d.endTime,

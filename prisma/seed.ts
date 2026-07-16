@@ -20,24 +20,26 @@ async function main() {
     await tryClear(() => prisma.newsItem.deleteMany({}), "newsItem");
     await tryClear(() => prisma.assetCategory.deleteMany({}), "assetCategory");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).visit?.deleteMany({}), "visit");
+    await tryClear(() => prisma.visitReport.deleteMany({}), "visitReport");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).attendance?.deleteMany({}), "attendance");
+    await tryClear(() => prisma.attendanceRecord.deleteMany({}), "attendanceRecord");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).leaveRequest?.deleteMany({}), "leaveRequest");
+    await tryClear(() => prisma.leaveRequest.deleteMany({}), "leaveRequest");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).overtimeRequest?.deleteMany({}), "overtimeRequest");
+    await tryClear(() => prisma.overtimeRequest.deleteMany({}), "overtimeRequest");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).payslip?.deleteMany({}), "payslip");
-    await tryClear(() => (prisma as any).attendanceCorrection?.deleteMany({}), "attendanceCorrection");
-    await tryClear(() => (prisma as any).payslipItem?.deleteMany({}), "payslipItem");
-    await tryClear(() => (prisma as any).inspectionChecklistItem?.deleteMany({}), "inspectionChecklistItem");
+    await tryClear(() => prisma.payslipItem.deleteMany({}), "payslipItem");
+    await tryClear(() => prisma.payslipRecord.deleteMany({}), "payslipRecord");
+    await tryClear(() => prisma.attendanceCorrection.deleteMany({}), "attendanceCorrection");
+    await tryClear(() => prisma.inspectionChecklistItem.deleteMany({}), "inspectionChecklistItem");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).employeePayrollComponent?.deleteMany({}), "employeePayrollComponent");
+    await tryClear(() => prisma.employeePayrollComponent.deleteMany({}), "employeePayrollComponent");
+    await tryClear(() => prisma.employeeStatusHistory.deleteMany({}), "employeeStatusHistory");
+    await tryClear(() => prisma.auditLog.deleteMany({}), "auditLog");
     await tryClear(() => prisma.employee.updateMany({ data: { managerId: null } }), "employee manager nullify");
     await tryClear(() => prisma.employee.deleteMany({}), "employee");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await tryClear(() => (prisma as any).workShiftDay?.deleteMany({}), "workShiftDay");
+    await tryClear(() => prisma.workShiftDay.deleteMany({}), "workShiftDay");
     await tryClear(() => prisma.workShift.deleteMany({}), "workShift");
     await tryClear(() => prisma.department.deleteMany({}), "department");
     await tryClear(() => prisma.division.deleteMany({}), "division");

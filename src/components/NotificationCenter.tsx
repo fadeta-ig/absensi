@@ -48,9 +48,12 @@ export default function NotificationCenter() {
     }, []);
 
     useEffect(() => {
-        fetchNotifications();
+        const initialFetchTimer = setTimeout(() => void fetchNotifications(), 0);
         const interval = setInterval(fetchNotifications, 60000);
-        return () => clearInterval(interval);
+        return () => {
+            clearTimeout(initialFetchTimer);
+            clearInterval(interval);
+        };
     }, [fetchNotifications]);
 
     // Close dropdown on outside click

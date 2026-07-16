@@ -253,7 +253,7 @@ export default function GATicketsPage() {
                                 <select 
                                     className="form-select"
                                     value={newStatus}
-                                    onChange={(e) => setNewStatus(e.target.value as any)}
+                                    onChange={(e) => setNewStatus(e.target.value as TicketData["status"])}
                                 >
                                     <option value="PENDING">PENDING (Menunggu)</option>
                                     <option value="IN_PROGRESS">IN PROGRESS (Sedang Diproses)</option>

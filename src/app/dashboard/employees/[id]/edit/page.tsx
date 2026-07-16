@@ -12,11 +12,13 @@ export default function EditEmployeePage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch("/api/employees").then(r => r.json()).then(data => {
-            const emp = data.find((e: any) => e.id === id);
-            setEmployee(emp);
-            setLoading(false);
-        });
+        fetch("/api/employees?status=all")
+            .then(r => r.json())
+            .then((data: Employee[]) => {
+                const emp = Array.isArray(data) ? data.find((item) => item.id === id) : undefined;
+                setEmployee(emp ?? null);
+            })
+            .finally(() => setLoading(false));
     }, [id]);
 
     if (loading) return (

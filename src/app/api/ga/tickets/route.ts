@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
-import { unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
+import { forbiddenResponse, requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { logAction } from "@/lib/services/auditService";
 import { z } from "zod";
 
@@ -17,10 +16,9 @@ export async function GET(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
-        if (!session || (session.role !== "ga" && session.role !== "hr")) {
-            return unauthorizedResponse();
-        }
+        const session = await requireAuth();
+        if (!session) return unauthorizedResponse();
+        if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
 
         const tickets = await prisma.assetTicket.findMany({
             orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -41,10 +39,9 @@ export async function PUT(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
-        if (!session || (session.role !== "ga" && session.role !== "hr")) {
-            return unauthorizedResponse();
-        }
+        const session = await requireAuth();
+        if (!session) return unauthorizedResponse();
+        if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
 
         const result = await validateBody(request, ticketUpdateSchema);
         if ("error" in result) return result.error;

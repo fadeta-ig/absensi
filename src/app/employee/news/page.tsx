@@ -24,10 +24,6 @@ export default function NewsPage() {
     const ITEMS_PER_PAGE = 5;
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [filter]);
-
-    useEffect(() => {
         fetch("/api/news").then((r) => r.json()).then(setNews);
     }, []);
 
@@ -69,7 +65,7 @@ export default function NewsPage() {
                 {filters.map((f) => (
                     <button
                         key={f.key}
-                        onClick={() => setFilter(f.key)}
+                        onClick={() => { setFilter(f.key); setCurrentPage(1); }}
                         className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${filter === f.key
                             ? "bg-[var(--primary)] text-white shadow-sm"
                             : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"

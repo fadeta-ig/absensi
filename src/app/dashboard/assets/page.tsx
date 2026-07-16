@@ -131,7 +131,7 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                                                         {" → "}
                                                         <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{h.toName ?? "GA"}</span>
                                                     </p>
-                                                    {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>"{h.notes}"</p>}
+                                                    {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>&ldquo;{h.notes}&rdquo;</p>}
                                                 </div>
                                                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                                                     <KondisiBadge kondisi={h.kondisiSaat} />

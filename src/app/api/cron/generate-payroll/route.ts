@@ -3,6 +3,13 @@ import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 import { calculateAllBpjs } from "@/lib/services/bpjsService";
 import { calculateMonthlyPph21, type Pph21Input } from "@/lib/services/pph21Service";
+import type { PayslipItemType } from "@prisma/client";
+
+interface PayrollItemInput {
+    type: PayslipItemType;
+    name: string;
+    amount: number;
+}
 
 export async function GET(req: Request) {
     const authHeader = req.headers.get("authorization");
@@ -46,7 +53,7 @@ export async function GET(req: Request) {
                 if (existing) continue;
 
                 // 1. Gather Allowances & Deductions
-                const items: any[] = [];
+                const items: PayrollItemInput[] = [];
                 let totalAllowance = 0;
                 let totalDeduction = 0;
 

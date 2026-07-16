@@ -18,46 +18,69 @@ model Employee {
   divisionId   String? @map("division_id")
   positionId   String  @map("position_id")
 
-  departmentRel         Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  divisionRel           Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  positionRel           Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  role                  String                     @default("employee")
-  gender                String                     @default("Laki-Laki")
-  password              String
-  faceDescriptor        String?                    @map("face_descriptor") @db.LongText
-  joinDate              DateTime                   @map("join_date")
-  totalLeave            Int                        @default(12) @map("total_leave")
-  usedLeave             Int                        @default(0) @map("used_leave")
-  avatarUrl             String?                    @map("avatar_url") @db.LongText
-  isActive              Boolean                    @default(true) @map("is_active")
-  shiftId               String?                    @map("shift_id")
-  bypassLocation        Boolean                    @default(false) @map("bypass_location")
-  basicSalary           Float                      @default(0) @map("basic_salary")
-  managerId             String?                    @map("manager_id")
-  attendances           AttendanceRecord[]
-  payrollComponents     EmployeePayrollComponent[]
-  manager               Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
-  subordinates          Employee[]                 @relation("Hierarchy")
-  shift                 WorkShift?                 @relation(fields: [shiftId], references: [id])
-  leaves                LeaveRequest[]
-  overtimes             OvertimeRequest[]
-  payslips              PayslipRecord[]
-  todos                 TodoItem[]
-  visits                VisitReport[]
-  locations             Location[]                 @relation("employeelocations")
-  pushSubscriptions     PushSubscription[]
-  assignedAssets        Asset[]
-  attendanceCorrections AttendanceCorrection[]     @relation("CorrectionRequester")
-  correctionApprovals   AttendanceCorrection[]     @relation("CorrectionApprover")
-  letterRequests        LetterRequest[]
-  auditLogs             AuditLog[]                 @relation("UserAuditLogs")
-  assetTickets          AssetTicket[]
-  simCards              SimCard[]
-  documents             EmployeeDocument[]
+  departmentRel          Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel            Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  positionRel            Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  role                   String                     @default("employee")
+  gender                 String                     @default("Laki-Laki")
+  password               String
+  faceDescriptor         String?                    @map("face_descriptor") @db.LongText
+  joinDate               DateTime                   @map("join_date")
+  totalLeave             Int                        @default(12) @map("total_leave")
+  usedLeave              Int                        @default(0) @map("used_leave")
+  avatarUrl              String?                    @map("avatar_url") @db.LongText
+  isActive               Boolean                    @default(true) @map("is_active")
+  sessionVersion         Int                        @default(0) @map("session_version")
+  statusChangedAt        DateTime?                  @map("status_changed_at")
+  shiftId                String?                    @map("shift_id")
+  bypassLocation         Boolean                    @default(false) @map("bypass_location")
+  basicSalary            Float                      @default(0) @map("basic_salary")
+  managerId              String?                    @map("manager_id")
+  attendances            AttendanceRecord[]
+  payrollComponents      EmployeePayrollComponent[]
+  manager                Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
+  subordinates           Employee[]                 @relation("Hierarchy")
+  shift                  WorkShift?                 @relation(fields: [shiftId], references: [id])
+  leaves                 LeaveRequest[]
+  overtimes              OvertimeRequest[]
+  payslips               PayslipRecord[]
+  todos                  TodoItem[]
+  visits                 VisitReport[]
+  locations              Location[]                 @relation("employeelocations")
+  pushSubscriptions      PushSubscription[]
+  assignedAssets         Asset[]
+  attendanceCorrections  AttendanceCorrection[]     @relation("CorrectionRequester")
+  correctionApprovals    AttendanceCorrection[]     @relation("CorrectionApprover")
+  letterRequests         LetterRequest[]
+  auditLogs              AuditLog[]                 @relation("UserAuditLogs")
+  statusHistories        EmployeeStatusHistory[]    @relation("EmployeeStatusSubject")
+  statusChangesPerformed EmployeeStatusHistory[]    @relation("EmployeeStatusActor")
+  assetTickets           AssetTicket[]
+  simCards               SimCard[]
+  documents              EmployeeDocument[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
+  @@index([isActive], map: "idx_employees_is_active")
   @@map("employees")
+}
+
+model EmployeeStatusHistory {
+  id            String   @id @default(uuid())
+  employeeId    String   @map("employee_id")
+  wasActive     Boolean  @map("was_active")
+  isActive      Boolean  @map("is_active")
+  reason        String   @db.Text
+  effectiveDate DateTime @map("effective_date")
+  changedBy     String   @map("changed_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation("EmployeeStatusSubject", fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  actor    Employee @relation("EmployeeStatusActor", fields: [changedBy], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([employeeId, createdAt], map: "idx_employee_status_history_subject_created")
+  @@index([changedBy], map: "idx_employee_status_history_actor")
+  @@map("employee_status_histories")
 }
 
 model AuditLog {
@@ -89,35 +112,35 @@ model PushSubscription {
 }
 
 model VisitReport {
-  id             String    @id @default(uuid())
-  employeeId     String    @map("employee_id")
-  date           DateTime
-  clockInTime    DateTime? @map("clock_in_time")
-  clockOutTime   DateTime? @map("clock_out_time")
-  clientName     String    @map("client_name")
-  clientAddress  String    @map("client_address") @db.Text
-  purpose        String    @db.Text
-  result         String?   @db.Text
+  id            String    @id @default(uuid())
+  employeeId    String    @map("employee_id")
+  date          DateTime
+  clockInTime   DateTime? @map("clock_in_time")
+  clockOutTime  DateTime? @map("clock_out_time")
+  clientName    String    @map("client_name")
+  clientAddress String    @map("client_address") @db.Text
+  purpose       String    @db.Text
+  result        String?   @db.Text
 
   // Titik lokasi tujuan kunjungan (JSON: {lat, lng})
-  visitLocation    String? @map("visit_location") @db.LongText
-  visitRadius      Float   @default(300) @map("visit_radius")
+  visitLocation String? @map("visit_location") @db.LongText
+  visitRadius   Float   @default(300) @map("visit_radius")
 
   // Lokasi GPS saat clock in & clock out (JSON: {lat, lng})
   clockInLocation  String? @map("clock_in_location") @db.LongText
   clockOutLocation String? @map("clock_out_location") @db.LongText
 
   // Foto bukti kunjungan (JSON array of base64 strings)
-  clockInPhotos    String? @map("clock_in_photos") @db.LongText
-  clockOutPhotos   String? @map("clock_out_photos") @db.LongText
+  clockInPhotos  String? @map("clock_in_photos") @db.LongText
+  clockOutPhotos String? @map("clock_out_photos") @db.LongText
 
   // Status: draft | clocked_in | clocked_out
-  status           String   @default("draft")
-  notes            String?  @db.Text
-  hrChecked        Boolean  @default(false) @map("hr_checked")
-  
-  createdAt        DateTime @default(now()) @map("created_at")
-  employee         Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  status    String  @default("draft")
+  notes     String? @db.Text
+  hrChecked Boolean @default(false) @map("hr_checked")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  employee  Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId], map: "visit_reports_employee_id_fkey")
   @@map("visit_reports")
@@ -461,8 +484,8 @@ model AssetHistory {
   kondisiSaat AssetKondisi @map("kondisi_saat")
   notes       String?      @db.Text
 
-  performedBy String   @map("performed_by") // employeeId GA
-  createdAt   DateTime @default(now()) @map("created_at")
+  performedBy   String              @map("performed_by") // employeeId GA
+  createdAt     DateTime            @default(now()) @map("created_at")
   bastDocuments AssetBastDocument[]
 
   @@map("asset_histories")
@@ -471,15 +494,15 @@ model AssetHistory {
 // ─── Asset BAST (Berita Acara Serah Terima) ─────────────────────
 
 model AssetBastDocument {
-  id           String       @id @default(uuid())
-  historyId    String       @map("history_id")
-  fileData     Bytes        @db.MediumBlob @map("file_data")
-  mimeType     String       @map("mime_type")
-  fileName     String       @map("file_name")
-  uploadedBy   String       @map("uploaded_by") // employeeId of GA
-  createdAt    DateTime     @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  historyId  String   @map("history_id")
+  fileData   Bytes    @map("file_data") @db.MediumBlob
+  mimeType   String   @map("mime_type")
+  fileName   String   @map("file_name")
+  uploadedBy String   @map("uploaded_by") // employeeId of GA
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  history      AssetHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+  history AssetHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
 
   @@index([historyId], map: "idx_bast_documents_history_id")
   @@map("asset_bast_documents")
@@ -620,7 +643,7 @@ model SimCard {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  assignedTo   Employee? @relation(fields: [assignedToId], references: [employeeId], onDelete: SetNull)
+  assignedTo Employee? @relation(fields: [assignedToId], references: [employeeId], onDelete: SetNull)
 
   @@index([assignedToId])
   @@map("sim_cards")
@@ -639,15 +662,15 @@ enum DocumentType {
 }
 
 model EmployeeDocument {
-  id           String       @id @default(uuid())
-  employeeId   String       @map("employee_id")
-  type         DocumentType
-  title        String
-  fileUrl      String       @map("file_url")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  id         String       @id @default(uuid())
+  employeeId String       @map("employee_id")
+  type       DocumentType
+  title      String
+  fileUrl    String       @map("file_url")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
 
-  employee     Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 
   @@index([employeeId])
   @@map("employee_documents")

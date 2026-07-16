@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
-import { unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { logAction } from "@/lib/services/auditService";
 import { z } from "zod";
 
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
+        const session = await requireAuth();
         if (!session) return unauthorizedResponse();
 
         const [assets, tickets] = await Promise.all([
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
+        const session = await requireAuth();
         if (!session) return unauthorizedResponse();
 
         const result = await validateBody(request, ticketSchema);

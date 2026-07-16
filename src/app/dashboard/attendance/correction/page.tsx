@@ -2,9 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { Clock, Calendar, CheckCircle2, History, XCircle, Send, AlertCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+interface AttendanceCorrectionItem {
+    id: string;
+    targetDate: string;
+    proposedClockIn: string | null;
+    proposedClockOut: string | null;
+    reason: string;
+    status: string;
+}
 
 export default function CorrectionPage() {
-    const [history, setHistory] = useState<any[]>([]);
+    const [history, setHistory] = useState<AttendanceCorrectionItem[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState<{type: "success" | "error", text: string} | null>(null);
 
@@ -64,7 +74,7 @@ export default function CorrectionPage() {
                 const err = await res.json();
                 setMessage({ type: "error", text: err.error || "Gagal mengirim pengajuan." });
             }
-        } catch (e) {
+        } catch {
             setMessage({ type: "error", text: "Terjadi kesalahan sistem." });
         } finally {
             setSubmitting(false);
@@ -72,7 +82,7 @@ export default function CorrectionPage() {
     };
 
     const statusBadge = (s: string) => {
-        const map: Record<string, {color: string, label: string, icon: any}> = {
+        const map: Record<string, {color: string, label: string, icon: LucideIcon}> = {
             PENDING: { color: "bg-orange-100 text-orange-700", label: "Menunggu", icon: Clock },
             APPROVED: { color: "bg-green-100 text-green-700", label: "Disetujui", icon: CheckCircle2 },
             REJECTED: { color: "bg-red-100 text-red-700", label: "Ditolak", icon: XCircle },

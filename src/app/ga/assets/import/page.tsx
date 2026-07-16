@@ -105,7 +105,7 @@ export default function BulkImportPage() {
     };
 
     const validateAndSetRows = (rows: ParsedRow[], f: File) => {
-        let currentErrors: string[] = [];
+        const currentErrors: string[] = [];
 
         const payloads: BulkPayload[] = [];
 

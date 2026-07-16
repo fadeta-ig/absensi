@@ -17,6 +17,8 @@ export type Employee = {
     usedLeave: number;
     avatarUrl?: string | null;
     isActive: boolean;
+    sessionVersion: number;
+    statusChangedAt?: string | null;
     shiftId?: string | null;
     bypassLocation: boolean;
     basicSalary: number;
@@ -30,6 +32,19 @@ export type Employee = {
     divisionRel?: { id: string; name: string } | null;
     positionRel?: { id: string; name: string } | null;
     levelRel?: { id: string; name: string } | null;
+    statusHistories?: EmployeeStatusHistory[];
+};
+
+export type EmployeeStatusHistory = {
+    id: string;
+    employeeId: string;
+    wasActive: boolean;
+    isActive: boolean;
+    reason: string;
+    effectiveDate: string;
+    changedBy: string;
+    createdAt: string;
+    actor?: { employeeId: string; name: string };
 };
 
 export type EmployeePayrollComponent = {

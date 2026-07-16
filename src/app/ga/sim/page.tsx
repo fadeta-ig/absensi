@@ -8,9 +8,20 @@ import { AssetWithHistory } from "@/lib/types/asset";
 import { HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 
+interface SimCardRow {
+    id: string;
+    phoneNumber: string;
+    provider: string;
+    expiredDate: string | null;
+    assignedTo: {
+        name: string;
+        departmentRel?: { name: string } | null;
+    } | null;
+}
+
 export default function SimCardDashboardPage() {
     const router = useRouter();
-    const [assets, setAssets] = useState<any[]>([]);
+    const [assets, setAssets] = useState<SimCardRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
 
@@ -46,12 +57,12 @@ export default function SimCardDashboardPage() {
 
             const res = await fetch(`/api/sim-cards`);
             if (res.ok) {
-                const data = await res.json();
+                const data = await res.json() as { data?: SimCardRow[] };
                 
                 let filteredData = data.data || [];
                 // Simple search filter
                 if (debouncedSearch) {
-                    filteredData = filteredData.filter((s: any) => s.phoneNumber.includes(debouncedSearch) || s.provider.toLowerCase().includes(debouncedSearch.toLowerCase()));
+                    filteredData = filteredData.filter((sim) => sim.phoneNumber.includes(debouncedSearch) || sim.provider.toLowerCase().includes(debouncedSearch.toLowerCase()));
                 }
                 
                 // Active/Inactive can be determined by expiredDate or assigned status
@@ -70,7 +81,7 @@ export default function SimCardDashboardPage() {
         try {
             const res = await fetch(`/api/sim-cards`);
             if (res.ok) {
-                const data = await res.json();
+                const data = await res.json() as { data?: SimCardRow[] };
                 const allSims = data.data || [];
                 setSimStats({
                     total: allSims.length,

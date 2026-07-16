@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getActiveSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { getEmployee360Data } from "@/lib/services/analyticsService";
 import { getVisibleEmployees, getEmployeeByEmployeeId } from "@/lib/services/employeeService";
@@ -6,8 +6,8 @@ import { Employee360View } from "@/components/Employee360View";
 
 export default async function Employee360ViewPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const session = await getSession();
-    if (!session) redirect("/login");
+    const session = await getActiveSession();
+    if (!session) redirect("/");
 
     // Fetch requester and data
     const requester = await getEmployeeByEmployeeId(session.employeeId);

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         if ("error" in result) return result.error;
         const body = result.data;
 
-        const shift = await createShift(body as any);
+        const shift = await createShift(body);
 
         logger.info("Work shift created", { shiftId: shift.id, name: shift.name, createdBy: session.employeeId });
         return NextResponse.json(shift, { status: 201 });
@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest) {
         const result = await validateBody(request, shiftUpdateSchema);
         if ("error" in result) return result.error;
 
-        const { id, ...data } = result.data as { id: string } & Record<string, any>;
+        const { id, ...data } = result.data;
 
         const shift = await updateShift(id, data);
         if (!shift) {

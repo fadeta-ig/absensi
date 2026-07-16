@@ -65,8 +65,8 @@ function ScanContent() {
                     } else {
                         throw new Error("Bukan QR Asset Perusahaan");
                     }
-                } catch (e: any) {
-                    setErrorMsg(e.message || "QR Code tidak valid.");
+                } catch (error: unknown) {
+                    setErrorMsg(error instanceof Error ? error.message : "QR Code tidak valid.");
                 }
             }, (error) => {});
             

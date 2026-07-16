@@ -17,7 +17,7 @@ import logger from "@/lib/logger";
 function calculateHours(startTime: string, endTime: string): number {
     const [sh, sm] = startTime.split(":").map(Number);
     const [eh, em] = endTime.split(":").map(Number);
-    let startMinutes = sh * 60 + sm;
+    const startMinutes = sh * 60 + sm;
     let endMinutes = eh * 60 + em;
     
     // Rollover: Jika jam selesai lebih kecil dari jam mulai, asumsikan lewat tengah malam (+24 jam)

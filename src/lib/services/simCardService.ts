@@ -1,5 +1,12 @@
 import { prisma } from "../prisma";
-import { SimCard } from "@prisma/client";
+
+interface SimCardInput {
+    phoneNumber: string;
+    provider: string;
+    expiredDate?: string | Date | null;
+    assignedToId?: string | null;
+    notes?: string | null;
+}
 
 export async function getSimCards() {
     return prisma.simCard.findMany({
@@ -15,7 +22,7 @@ export async function getSimCardById(id: string) {
     });
 }
 
-export async function createSimCard(data: any) {
+export async function createSimCard(data: SimCardInput) {
     return prisma.simCard.create({
         data: {
             phoneNumber: data.phoneNumber,
@@ -28,7 +35,7 @@ export async function createSimCard(data: any) {
     });
 }
 
-export async function updateSimCard(id: string, data: any) {
+export async function updateSimCard(id: string, data: Partial<SimCardInput>) {
     const existing = await prisma.simCard.findUnique({ where: { id } });
     if (!existing) return null;
 

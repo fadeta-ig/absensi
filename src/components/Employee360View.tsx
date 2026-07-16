@@ -1,6 +1,6 @@
 "use client";
 
-import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } from "@/types";
+import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord, EmployeeStatusHistory } from "@/types";
 import {
     Activity,
     Calendar,
@@ -16,10 +16,13 @@ import {
     Package,
     Smartphone,
     Laptop,
-    Phone
+    Phone,
+    History
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import type { AssetWithHistory } from "@/lib/types/asset";
 
 interface Employee360ViewProps {
     employee: Employee;
@@ -34,7 +37,8 @@ interface Employee360ViewProps {
     recentVisits: VisitReport[];
     recentLeaves: LeaveRequest[];
     recentPayslips: PayslipRecord[];
-    assignedAssets: any[];
+    assignedAssets: AssetWithHistory[];
+    statusHistory?: EmployeeStatusHistory[];
     backLink: string;
 }
 
@@ -46,6 +50,7 @@ export function Employee360View({
     recentLeaves,
     recentPayslips,
     assignedAssets,
+    statusHistory,
     backLink
 }: Employee360ViewProps) {
     const [activeTab, setActiveTab] = useState("attendance");
@@ -106,7 +111,7 @@ export function Employee360View({
                             <InfoRow label="Department" value={employee.departmentRel?.name || "-"} icon={Building2} />
                             <InfoRow label="Division" value={employee.divisionRel?.name || "-"} />
                             <InfoRow label="Position" value={employee.positionRel?.name || "-"} />
-                            <InfoRow label="Reports To" value={(employee as any).manager?.name || "None"} />
+                            <InfoRow label="Reports To" value={employee.manager?.name || "None"} />
                         </div>
                     </div>
 
@@ -151,6 +156,7 @@ export function Employee360View({
                             { id: "visits", label: "Kunjungan" },
                             { id: "leaves", label: "Cuti" },
                             { id: "assets", label: "Aset" },
+                            ...(statusHistory ? [{ id: "status", label: "Status Kerja" }] : []),
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -286,9 +292,9 @@ export function Employee360View({
                                                 <td>
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
-                                                            {a.category === "HANDPHONE" ? <Smartphone size={16} /> : 
-                                                             a.category === "LAPTOP" ? <Laptop size={16} /> : 
-                                                             a.category === "NOMOR_HP" ? <Phone size={16} /> : 
+                                                            {a.category?.prefix === "HANDPHONE" ? <Smartphone size={16} /> :
+                                                             a.category?.prefix === "LAPTOP" ? <Laptop size={16} /> :
+                                                             a.category?.prefix === "NOMOR_HP" ? <Phone size={16} /> :
                                                              <Package size={16} />}
                                                         </div>
                                                         <div>
@@ -298,7 +304,7 @@ export function Employee360View({
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span className="badge badge-info">{a.category}</span>
+                                                    <span className="badge badge-info">{a.category?.name || "Lainnya"}</span>
                                                 </td>
                                                 <td className="text-right">
                                                     <span className={`badge ${a.kondisi === "BAIK" ? "badge-success" : a.kondisi === "KURANG_BAIK" ? "badge-warning" : "badge-error"}`}>
@@ -314,13 +320,46 @@ export function Employee360View({
                             </div>
                         </div>
                     )}
+
+                    {activeTab === "status" && statusHistory && (
+                        <div className="card overflow-hidden">
+                            <div className="border-b border-[var(--border)] bg-[var(--secondary)]/40 px-5 py-4">
+                                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                                    <History className="h-4 w-4" /> Riwayat Status Kepegawaian
+                                </h3>
+                            </div>
+                            <div className="divide-y divide-[var(--border)]">
+                                {statusHistory.length > 0 ? statusHistory.map((item) => (
+                                    <div key={item.id} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`badge ${item.isActive ? "badge-success" : "badge-error"}`}>
+                                                    {item.isActive ? "Diaktifkan" : "Dinonaktifkan"}
+                                                </span>
+                                                <span className="text-xs text-[var(--text-muted)]">
+                                                    oleh {item.actor?.name || item.changedBy}
+                                                </span>
+                                            </div>
+                                            <p className="mt-2 text-sm text-[var(--text-primary)]">{item.reason}</p>
+                                        </div>
+                                        <div className="shrink-0 text-left text-[10px] text-[var(--text-muted)] sm:text-right">
+                                            <p>Efektif {new Date(item.effectiveDate).toLocaleDateString("id-ID")}</p>
+                                            <p>Dicatat {new Date(item.createdAt).toLocaleString("id-ID")}</p>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <div className="p-10 text-center text-sm text-[var(--text-muted)]">Belum ada perubahan status yang tercatat.</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-function StatCard({ label, value, sub, icon: Icon, color, bg }: { label: string, value: string, sub: string, icon: any, color: string, bg: string }) {
+function StatCard({ label, value, sub, icon: Icon, color, bg }: { label: string, value: string, sub: string, icon: LucideIcon, color: string, bg: string }) {
     return (
         <div className="card p-4">
             <div className="flex items-center gap-3">
@@ -337,7 +376,7 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }: { label: string,
     );
 }
 
-function InfoRow({ label, value, icon: Icon }: { label: string, value: string, icon?: any }) {
+function InfoRow({ label, value, icon: Icon }: { label: string, value: string, icon?: LucideIcon }) {
     return (
         <div className="flex items-center gap-3 group">
             <div className="w-8 h-8 rounded-lg bg-[var(--secondary)] border border-[var(--border)] flex items-center justify-center shrink-0 group-hover:bg-[var(--card)] transition-all">

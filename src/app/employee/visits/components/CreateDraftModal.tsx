@@ -19,34 +19,21 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
         purpose: "",
         notes: "",
     });
-    const [visitLocation, setVisitLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [visitLocation, setVisitLocation] = useState({ lat: -6.2088, lng: 106.8456 });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [mapReady, setMapReady] = useState(false);
 
     // Get current device location as initial map center
     useEffect(() => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
-                    if (!visitLocation) {
-                        setVisitLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                    }
-                    setMapReady(true);
+                    setVisitLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
                 },
-                () => {
-                    // Default to Jakarta if GPS unavailable
-                    if (!visitLocation) {
-                        setVisitLocation({ lat: -6.2088, lng: 106.8456 });
-                    }
-                    setMapReady(true);
-                }
+                () => undefined
             );
-        } else {
-            setVisitLocation({ lat: -6.2088, lng: 106.8456 });
-            setMapReady(true);
         }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleMapClick = useCallback((lat: number, lng: number) => {
         setVisitLocation({ lat, lng });
@@ -170,7 +157,7 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                         <p className="text-[10px] text-[var(--text-muted)] mb-2 italic">
                             Tap pada peta untuk menentukan lokasi tujuan kunjungan
                         </p>
-                        {mapReady && visitLocation ? (
+                        {visitLocation ? (
                             <div className="rounded-lg overflow-hidden border border-[var(--border)] h-[200px]">
                                 <LocationMap
                                     center={[visitLocation.lat, visitLocation.lng]}

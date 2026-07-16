@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         });
 
         let sentCount = 0;
-        let failedEndpoints: string[] = [];
+        const failedEndpoints: string[] = [];
 
         for (const emp of employees) {
             // Determine if today is a day off for this employee

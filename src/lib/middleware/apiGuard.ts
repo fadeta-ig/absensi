@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, type SessionPayload } from "@/lib/auth";
+import { getActiveSession, type SessionPayload } from "@/lib/auth";
 import { ZodSchema, ZodError } from "zod";
 import logger from "@/lib/logger";
 import { sanitizeObject } from "./sanitize";
@@ -11,7 +11,7 @@ export type { SessionPayload } from "@/lib/auth";
  * Verify session and return it, or null if invalid.
  */
 export async function requireAuth(): Promise<SessionPayload | null> {
-    const session = await getSession();
+    const session = await getActiveSession();
     return session as SessionPayload | null;
 }
 
@@ -19,10 +19,12 @@ export async function requireAuth(): Promise<SessionPayload | null> {
  * Standard 401 Unauthorized response.
  */
 export function unauthorizedResponse(): NextResponse {
-    return NextResponse.json(
+    const response = NextResponse.json(
         { error: "Sesi Anda telah berakhir. Silakan login kembali." },
         { status: 401 }
     );
+    response.cookies.delete("session");
+    return response;
 }
 
 /**

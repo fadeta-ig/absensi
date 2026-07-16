@@ -57,7 +57,7 @@ export async function PUT(request: NextRequest) {
         const result = await validateBody(request, todoUpdateSchema);
         if ("error" in result) return result.error;
 
-        const { id, ...data } = result.data as { id: string } & Record<string, any>;
+        const { id, ...data } = result.data;
 
         const updated = await updateTodo(id, data);
         if (!updated) {

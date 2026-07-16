@@ -3,25 +3,113 @@ import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } 
 import { AssetWithHistory } from "../types/asset";
 import { calculateWorkingDays } from "./leaveService";
 import { toDateString, toISOOrNull } from "@/lib/utils";
+import type {
+    AttendanceRecord as DbAttendanceRecord,
+    LeaveRequest as DbLeaveRequest,
+    VisitReport as DbVisitReport,
+    Prisma,
+} from "@prisma/client";
 
 // --- Internal Mappers ---
-function mapEmployee(row: any): Employee {
-    return { ...row, createdAt: toISOOrNull(row.createdAt)!, updatedAt: toISOOrNull(row.updatedAt)! };
+type Employee360Row = Prisma.EmployeeGetPayload<{
+    include: {
+        locations: true;
+        payrollComponents: { include: { component: true } };
+        manager: true;
+        departmentRel: true;
+        divisionRel: true;
+        positionRel: true;
+    };
+}>;
+
+type PayslipWithItems = Prisma.PayslipRecordGetPayload<{ include: { items: true } }>;
+type AssetWithCategory = Prisma.AssetGetPayload<{ include: { categoryRel: true } }>;
+
+function parseJson<T>(value: string | null): T | null {
+    if (!value) return null;
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return null;
+    }
 }
-function mapAttendance(row: any): AttendanceRecord {
-    return { ...row, date: toDateString(row.date), clockIn: toISOOrNull(row.clockIn), clockOut: toISOOrNull(row.clockOut) };
+
+function mapEmployee(row: Employee360Row): Employee {
+    return {
+        ...row,
+        role: row.role as Employee["role"],
+        gender: row.gender as Employee["gender"],
+        joinDate: toDateString(row.joinDate),
+        statusChangedAt: toISOOrNull(row.statusChangedAt),
+        faceDescriptor: parseJson<number[]>(row.faceDescriptor) ?? undefined,
+        manager: row.manager ? {
+            id: row.manager.id,
+            employeeId: row.manager.employeeId,
+            name: row.manager.name,
+        } : undefined,
+        locations: row.locations.map((location) => ({ id: location.id, name: location.name })),
+        payrollComponents: row.payrollComponents.map((payroll) => ({
+            ...payroll,
+            component: {
+                ...payroll.component,
+                type: payroll.component.type as "earning" | "deduction",
+            },
+        })),
+    };
 }
-function mapVisit(row: any): VisitReport {
-    return { ...row, date: toDateString(row.date), createdAt: toDateString(row.createdAt) };
+function mapAttendance(row: DbAttendanceRecord): AttendanceRecord {
+    return {
+        ...row,
+        date: toDateString(row.date),
+        clockIn: toISOOrNull(row.clockIn),
+        clockOut: toISOOrNull(row.clockOut),
+        clockInLocation: parseJson<{ lat: number; lng: number }>(row.clockInLocation),
+        clockOutLocation: parseJson<{ lat: number; lng: number }>(row.clockOutLocation),
+        status: row.status as AttendanceRecord["status"],
+    };
 }
-function mapLeave(row: any): LeaveRequest {
-    return { ...row, startDate: toDateString(row.startDate), endDate: toDateString(row.endDate), appliedAt: toISOOrNull(row.appliedAt)! };
+function mapVisit(row: DbVisitReport): VisitReport {
+    return {
+        ...row,
+        date: toDateString(row.date),
+        clockInTime: toISOOrNull(row.clockInTime),
+        clockOutTime: toISOOrNull(row.clockOutTime),
+        visitLocation: parseJson<{ lat: number; lng: number }>(row.visitLocation),
+        clockInLocation: parseJson<{ lat: number; lng: number }>(row.clockInLocation),
+        clockOutLocation: parseJson<{ lat: number; lng: number }>(row.clockOutLocation),
+        clockInPhotos: parseJson<string[]>(row.clockInPhotos),
+        clockOutPhotos: parseJson<string[]>(row.clockOutPhotos),
+        status: row.status as VisitReport["status"],
+        createdAt: toISOOrNull(row.createdAt)!,
+    };
 }
-function mapPayslip(row: any): PayslipRecord {
-    return { ...row, generatedAt: toISOOrNull(row.generatedAt)! };
+function mapLeave(row: DbLeaveRequest): LeaveRequest {
+    return {
+        ...row,
+        type: row.type as LeaveRequest["type"],
+        status: row.status as LeaveRequest["status"],
+        startDate: toDateString(row.startDate),
+        endDate: toDateString(row.endDate),
+        createdAt: toISOOrNull(row.createdAt)!,
+    };
 }
-function mapAsset(row: any): AssetWithHistory {
-    return { ...row, purchaseDate: toDateString(row.purchaseDate), warrantyExpiry: toDateString(row.warrantyExpiry), createdAt: toISOOrNull(row.createdAt)!, updatedAt: toISOOrNull(row.updatedAt)! };
+function mapPayslip(row: PayslipWithItems): PayslipRecord {
+    return {
+        ...row,
+        issuedDate: toISOOrNull(row.issuedDate)!,
+    };
+}
+function mapAsset(row: AssetWithCategory): AssetWithHistory {
+    return {
+        ...row,
+        category: row.categoryRel ? { ...row.categoryRel, createdAt: toISOOrNull(row.categoryRel.createdAt)! } : undefined,
+        purchaseDate: toDateString(row.purchaseDate),
+        warrantyExpiry: toDateString(row.warrantyExpiry),
+        assignedAt: toISOOrNull(row.assignedAt),
+        createdAt: toISOOrNull(row.createdAt)!,
+        updatedAt: toISOOrNull(row.updatedAt)!,
+        assignedEmployee: null,
+    };
 }
 
 export type Employee360Data = {
@@ -83,6 +171,7 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
         }),
         prisma.payslipRecord.findMany({
             where: { employeeId: employee.employeeId },
+            include: { items: true },
             orderBy: { period: "desc" },
             take: 3,
         }),
@@ -94,6 +183,7 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
         // Ambil aset yang saat ini dipegang oleh karyawan
         prisma.asset.findMany({
             where: { assignedToId: employee.employeeId },
+            include: { categoryRel: true },
             orderBy: { createdAt: "desc" },
         }),
     ]);

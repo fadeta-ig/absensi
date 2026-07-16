@@ -4,12 +4,22 @@ import { unlink } from "fs/promises";
 import path from "path";
 import logger from "@/lib/logger";
 import { toISOOrNull } from "@/lib/utils";
+import { Prisma } from "@prisma/client";
 
 const getUploadDir = () => path.join(process.cwd(), "public");
 
-function mapNewsItem(row: any): NewsItem {
+const NEWS_CATEGORIES: NewsItem["category"][] = ["announcement", "event", "policy", "general"];
+
+function toNewsCategory(value: string): NewsItem["category"] {
+    return NEWS_CATEGORIES.includes(value as NewsItem["category"])
+        ? value as NewsItem["category"]
+        : "general";
+}
+
+function mapNewsItem(row: Prisma.NewsItemGetPayload<Record<string, never>>): NewsItem {
     return {
         ...row,
+        category: toNewsCategory(row.category),
         createdAt: toISOOrNull(row.createdAt)!
     };
 }

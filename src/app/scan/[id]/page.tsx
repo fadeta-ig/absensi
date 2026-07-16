@@ -7,6 +7,7 @@ import {
     Package, ClipboardCheck, X, LogIn, ShieldCheck, User, Clock,
     ChevronRight, Cpu, Tag
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ function Badge({ label, color, bg }: { label: string; color: string; bg: string 
 
 // ─── Row Component (matches GA detail page SpecRow) ─────────────
 
-function InfoRow({ label, value, icon: Icon }: { label: string; value: string | null | undefined; icon?: any }) {
+function InfoRow({ label, value, icon: Icon }: { label: string; value: string | null | undefined; icon?: LucideIcon }) {
     return (
         <div className="flex items-center justify-between py-2.5 border-b border-[var(--border)] last:border-0">
             <span className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
@@ -143,8 +144,8 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
             if (!res.ok) throw new Error(data.error || "Login gagal");
             if (data.role !== "ga") throw new Error("Akses terbatas untuk tim General Affairs.");
             onSuccess();
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : "Login gagal");
         } finally {
             setLoading(false);
         }
@@ -265,7 +266,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                 </div>
 
                 {/* Content */}
-                <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5">
+                <form id="asset-inspection-form" onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5">
                     {/* Checklist */}
                     <div>
                         <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-3">Checklist Komponen</span>
@@ -333,7 +334,8 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                 {/* Submit */}
                 <div className="p-5 border-t flex-shrink-0 bg-[var(--secondary)]/50">
                     <button
-                        onClick={handleSubmit as any}
+                        type="submit"
+                        form="asset-inspection-form"
                         disabled={submitting}
                         className="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                     >
@@ -363,7 +365,9 @@ function ScanPageInner({ id }: { id: string }) {
     }, [id]);
 
     useEffect(() => {
-        if (searchParams.get("inspect") === "true" && asset) setShowSheet(true);
+        if (searchParams.get("inspect") !== "true" || !asset) return;
+        const timer = setTimeout(() => setShowSheet(true), 0);
+        return () => clearTimeout(timer);
     }, [searchParams, asset]);
 
     const handleInspect = async () => {

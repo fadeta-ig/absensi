@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import { getEmployeeByEmployeeId, updateEmployee } from "@/lib/services/employeeService";
 import { sendPasswordEmail } from "@/lib/services/emailService";
 import { checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
-import { unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sendPasswordSchema } from "@/lib/validations/validationSchemas";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -23,7 +22,7 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
+        const session = await requireAuth();
         if (!session) return unauthorizedResponse();
         if (session.role !== "hr") return forbiddenResponse();
 

@@ -34,10 +34,6 @@ export default function EmployeeOvertimePage() {
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filterStatus]);
-
     const [form, setForm] = useState({
         date: new Date().toISOString().split("T")[0],
         startTime: "17:00",
@@ -119,7 +115,7 @@ export default function EmployeeOvertimePage() {
                 {["all", "pending", "approved", "rejected"].map((s) => (
                     <button
                         key={s}
-                        onClick={() => setFilterStatus(s)}
+                        onClick={() => { setFilterStatus(s); setCurrentPage(1); }}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filterStatus === s
                             ? "bg-[var(--primary)] text-white"
                             : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"

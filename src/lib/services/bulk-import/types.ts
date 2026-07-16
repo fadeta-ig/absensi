@@ -18,6 +18,15 @@ export const bulkRowSchema = z.object({
     totalLeave: z.number().min(0).optional().default(12),
     managerId: z.string().nullable().optional(),
     isActive: z.boolean().optional().default(true),
+    statusReason: z.string().trim().max(1000).optional(),
+}).superRefine((row, context) => {
+    if (!row.isActive && (!row.statusReason || row.statusReason.length < 5)) {
+        context.addIssue({
+            code: "custom",
+            path: ["statusReason"],
+            message: "Alasan status wajib diisi minimal 5 karakter untuk karyawan nonaktif",
+        });
+    }
 });
 
 export type BulkRowInput = z.infer<typeof bulkRowSchema>;
@@ -56,6 +65,7 @@ export const COLUMN_MAP: Record<string, keyof BulkRowInput> = {
     "Cuti Tahunan": "totalLeave",
     "Atasan (ID)": "managerId",
     "Status Aktif": "isActive",
+    "Alasan Status": "statusReason",
 };
 
 export const TEMPLATE_HEADERS = Object.keys(COLUMN_MAP);

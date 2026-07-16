@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
-import { unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { faceDescriptorSchema } from "@/lib/validations/validationSchemas";
 
 /** GET — Check if current employee has a face registered */
@@ -10,7 +9,7 @@ export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
     if (rateLimited) return rateLimited;
 
-    const session = await getSession();
+    const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
     const employee = await prisma.employee.findUnique({
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
+        const session = await requireAuth();
         if (!session) return unauthorizedResponse();
 
         const result = await validateBody(request, faceDescriptorSchema);
@@ -90,7 +89,7 @@ export async function DELETE(request: NextRequest) {
     if (rateLimited) return rateLimited;
 
     try {
-        const session = await getSession();
+        const session = await requireAuth();
         if (!session) return unauthorizedResponse();
         
         if (session.role !== "hr") {
