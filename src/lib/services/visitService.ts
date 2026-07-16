@@ -53,7 +53,7 @@ function toVisitReport(row: any): VisitReport {
         clockOutPhotos: parseJsonField<string[]>(row.clockOutPhotos),
         status: row.status as VisitStatus,
         notes: row.notes ?? null,
-        rejectionReason: row.rejectionReason ?? null,
+        hrChecked: row.hrChecked ?? false,
         createdAt: toDateString(row.createdAt),
     };
 }
@@ -207,7 +207,7 @@ export async function clockOutVisit(id: string, data: ClockOutInput): Promise<Vi
                 clockOutLocation: JSON.stringify(data.location),
                 clockOutPhotos: JSON.stringify(data.photos),
                 result: data.result ?? null,
-                status: "pending_approval",
+                status: "clocked_out",
             },
             include: employeeInclude,
         });
@@ -218,55 +218,28 @@ export async function clockOutVisit(id: string, data: ClockOutInput): Promise<Vi
     }
 }
 
-// ─── HR Approval ────────────────────────────────────────────────
+// ─── HR Verification ──────────────────────────────────────────────
 
-export async function approveVisit(id: string): Promise<VisitReport | null> {
+export async function verifyVisit(id: string, isChecked: boolean): Promise<VisitReport | null> {
     try {
         const existing = await prisma.visitReport.findUnique({
             where: { id },
             select: { status: true },
         });
 
-        if (!existing || !["clocked_out", "pending_approval"].includes(existing.status)) {
-            logger.warn("Approve failed: invalid status", { id, currentStatus: existing?.status });
+        if (!existing || existing.status !== "clocked_out") {
+            logger.warn("Verify failed: invalid status", { id, currentStatus: existing?.status });
             return null;
         }
 
         const row = await prisma.visitReport.update({
             where: { id },
-            data: { status: "approved" },
+            data: { hrChecked: isChecked },
             include: employeeInclude,
         });
         return toVisitReport(row);
     } catch (error) {
-        logger.error("Failed to approve visit", { id, error });
-        return null;
-    }
-}
-
-export async function rejectVisit(id: string, reason: string): Promise<VisitReport | null> {
-    try {
-        const existing = await prisma.visitReport.findUnique({
-            where: { id },
-            select: { status: true },
-        });
-
-        if (!existing || !["clocked_out", "pending_approval"].includes(existing.status)) {
-            logger.warn("Reject failed: invalid status", { id, currentStatus: existing?.status });
-            return null;
-        }
-
-        const row = await prisma.visitReport.update({
-            where: { id },
-            data: {
-                status: "rejected",
-                rejectionReason: reason,
-            },
-            include: employeeInclude,
-        });
-        return toVisitReport(row);
-    } catch (error) {
-        logger.error("Failed to reject visit", { id, error });
+        logger.error("Failed to verify visit", { id, error });
         return null;
     }
 }

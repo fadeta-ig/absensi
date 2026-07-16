@@ -9,7 +9,7 @@ interface Props {
     selectedVisit: VisitReport;
     setSelectedVisit: (v: VisitReport | null) => void;
     updating: string | null;
-    handleStatusUpdate: (id: string, status: "approved" | "rejected", reason?: string) => void;
+    handleStatusUpdate: (id: string, isChecked: boolean) => void;
 }
 
 function PhotoGrid({ photos, label }: { photos: string[]; label: string }) {
@@ -33,9 +33,7 @@ function PhotoGrid({ photos, label }: { photos: string[]; label: string }) {
 export function VisitDetailModal({
     selectedVisit, setSelectedVisit, updating, handleStatusUpdate
 }: Props) {
-    const [rejectionReason, setRejectionReason] = useState("");
-    const [showRejectForm, setShowRejectForm] = useState(false);
-    const canApprove = ["clocked_out", "pending_approval"].includes(selectedVisit.status);
+    const isChecked = selectedVisit.hrChecked;
 
     return (
         <div className="modal-overlay" onClick={() => setSelectedVisit(null)}>
@@ -114,15 +112,7 @@ export function VisitDetailModal({
                         </div>
                     </div>
 
-                    {/* Rejection Reason */}
-                    {selectedVisit.rejectionReason && (
-                        <div className="bg-red-50 p-3 rounded-lg border border-red-200">
-                            <p className="text-[11px] font-bold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> Alasan Penolakan
-                            </p>
-                            <p className="text-red-800 text-sm italic">{selectedVisit.rejectionReason}</p>
-                        </div>
-                    )}
+
 
                     {/* Notes */}
                     {selectedVisit.notes && (
@@ -168,59 +158,16 @@ export function VisitDetailModal({
                     )}
 
                     {/* Approval Actions */}
-                    {canApprove && (
+                    {selectedVisit.status === "clocked_out" && (
                         <div className="space-y-3 pt-2 border-t border-[var(--border)]">
-                            {showRejectForm ? (
-                                <div className="space-y-2">
-                                    <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">
-                                        Alasan Penolakan (wajib)
-                                    </label>
-                                    <textarea
-                                        className="form-textarea text-sm w-full"
-                                        rows={2}
-                                        value={rejectionReason}
-                                        onChange={(e) => setRejectionReason(e.target.value)}
-                                        placeholder="Jelaskan alasan penolakan..."
-                                        required
-                                    />
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => {
-                                                if (rejectionReason.trim()) {
-                                                    handleStatusUpdate(selectedVisit.id, "rejected", rejectionReason.trim());
-                                                }
-                                            }}
-                                            className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
-                                            disabled={updating === selectedVisit.id || !rejectionReason.trim()}
-                                        >
-                                            <XCircle className="w-4 h-4" /> Konfirmasi Tolak
-                                        </button>
-                                        <button
-                                            onClick={() => { setShowRejectForm(false); setRejectionReason(""); }}
-                                            className="btn btn-secondary"
-                                        >
-                                            Batal
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleStatusUpdate(selectedVisit.id, "approved")}
-                                        className="btn btn-primary flex-1"
-                                        disabled={updating === selectedVisit.id}
-                                    >
-                                        <CheckCircle className="w-4 h-4" /> Setujui
-                                    </button>
-                                    <button
-                                        onClick={() => setShowRejectForm(true)}
-                                        className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
-                                        disabled={updating === selectedVisit.id}
-                                    >
-                                        <XCircle className="w-4 h-4" /> Tolak
-                                    </button>
-                                </div>
-                            )}
+                            <button
+                                onClick={() => handleStatusUpdate(selectedVisit.id, !isChecked)}
+                                className={`btn w-full ${isChecked ? "btn-secondary text-red-600 hover:!bg-red-50" : "btn-primary"}`}
+                                disabled={updating === selectedVisit.id}
+                            >
+                                {isChecked ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                                {isChecked ? "Batal Tandai Sudah Dicek" : "Tandai Sudah Dicek"}
+                            </button>
                         </div>
                     )}
                 </div>

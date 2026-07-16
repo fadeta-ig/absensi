@@ -193,16 +193,14 @@ export async function GET(request: NextRequest) {
                 orderBy: { date: "asc" },
             });
             sheetName = "Laporan Kunjungan";
-            const statusMap: Record<string, string> = {
-                draft: "Draft",
-                clocked_in: "Clock In",
-                clocked_out: "Clock Out",
-                pending_approval: "Menunggu",
-                approved: "Disetujui",
-                rejected: "Ditolak"
-            };
             rows = records.map((r) => {
                 const emp = empMap.get(r.employeeId);
+                
+                let statusLabel = r.status === "draft" ? "Draft" : r.status === "clocked_in" ? "Clock In" : "Clock Out";
+                if (r.status === "clocked_out") {
+                    statusLabel = r.hrChecked ? "Selesai (Sudah Dicek)" : "Selesai (Belum Dicek)";
+                }
+
                 return {
                     "Nama": emp?.name || "-",
                     "ID Karyawan": r.employeeId,
@@ -214,7 +212,7 @@ export async function GET(request: NextRequest) {
                     "Alamat": r.clientAddress,
                     "Tujuan": r.purpose,
                     "Hasil": r.result || "-",
-                    "Status": statusMap[r.status] || r.status,
+                    "Status": statusLabel,
                 };
             });
         } else if (type === "overtime") {

@@ -111,10 +111,11 @@ model VisitReport {
   clockInPhotos    String? @map("clock_in_photos") @db.LongText
   clockOutPhotos   String? @map("clock_out_photos") @db.LongText
 
-  // Status: draft | clocked_in | clocked_out | pending_approval | approved | rejected
-  status           String  @default("draft")
-  notes            String? @db.Text
-  rejectionReason  String? @map("rejection_reason") @db.Text
+  // Status: draft | clocked_in | clocked_out
+  status           String   @default("draft")
+  notes            String?  @db.Text
+  hrChecked        Boolean  @default(false) @map("hr_checked")
+  
   createdAt        DateTime @default(now()) @map("created_at")
   employee         Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
 

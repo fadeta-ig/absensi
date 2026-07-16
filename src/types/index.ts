@@ -152,7 +152,7 @@ export type TodoItem = {
     createdAt: string;
 };
 
-export type VisitStatus = "draft" | "clocked_in" | "clocked_out" | "pending_approval" | "approved" | "rejected";
+export type VisitStatus = "draft" | "clocked_in" | "clocked_out";
 
 export type VisitReport = {
     id: string;
@@ -173,8 +173,8 @@ export type VisitReport = {
     clockInPhotos?: string[] | null;
     clockOutPhotos?: string[] | null;
     status: VisitStatus;
+    hrChecked: boolean;
     notes?: string | null;
-    rejectionReason?: string | null;
     createdAt: string;
 };
 

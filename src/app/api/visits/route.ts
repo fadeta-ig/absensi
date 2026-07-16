@@ -8,8 +8,7 @@ import {
     updateVisitDraft,
     clockInVisit,
     clockOutVisit,
-    approveVisit,
-    rejectVisit,
+    verifyVisit,
     deleteVisitReport,
 } from "@/lib/services/visitService";
 import {
@@ -17,7 +16,7 @@ import {
     visitClockInSchema,
     visitClockOutSchema,
     visitUpdateDraftSchema,
-    visitApprovalSchema,
+    visitVerifySchema,
 } from "@/lib/validations/validationSchemas";
 import { calculateDistance } from "@/lib/utils";
 import logger from "@/lib/logger";
@@ -231,38 +230,33 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json(updated);
         }
 
-        // ── HR Approval ───────────────────────────────────────
-        if (action === "approve" || action === "reject") {
+        // ── HR Verification ────────────────────────────────────
+        if (action === "verify") {
             if (session.role !== "hr") return forbiddenResponse();
 
-            const result = await validateBody(request, visitApprovalSchema, body);
+            const result = await validateBody(request, visitVerifySchema, body);
             if ("error" in result) return result.error;
 
-            const { id, status, rejectionReason } = result.data;
+            const { id, hrChecked } = result.data;
 
             const existing = await getVisitReportById(id);
             if (!existing) {
                 return NextResponse.json({ error: "Kunjungan tidak ditemukan." }, { status: 404 });
             }
 
-            if (!["clocked_out", "pending_approval"].includes(existing.status)) {
+            if (existing.status !== "clocked_out") {
                 return NextResponse.json({
-                    error: "Persetujuan hanya dapat dilakukan setelah karyawan clock out.",
+                    error: "Validasi hanya dapat dilakukan setelah karyawan clock out.",
                 }, { status: 400 });
             }
 
-            let updated;
-            if (status === "approved") {
-                updated = await approveVisit(id);
-            } else {
-                updated = await rejectVisit(id, rejectionReason!);
-            }
+            const updated = await verifyVisit(id, hrChecked);
 
             if (!updated) {
-                return NextResponse.json({ error: "Gagal memproses persetujuan." }, { status: 400 });
+                return NextResponse.json({ error: "Gagal memproses validasi." }, { status: 400 });
             }
 
-            logger.info(`Visit ${status}`, { visitId: id, by: session.employeeId });
+            logger.info(`Visit verified: ${hrChecked}`, { visitId: id, by: session.employeeId });
             return NextResponse.json(updated);
         }
 

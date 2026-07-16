@@ -21,7 +21,7 @@ const ITEMS_PER_PAGE = 6;
 
 export default function VisitsPage() {
     const [visits, setVisits] = useState<VisitReport[]>([]);
-    const [filterStatus, setFilterStatus] = useState<VisitStatus | "all">("all");
+    const [filterStatus, setFilterStatus] = useState<"all" | "draft" | "clocked_in" | "unchecked" | "checked">("all");
     const [modal, setModal] = useState<ModalState>({ type: "none" });
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -33,8 +33,19 @@ export default function VisitsPage() {
     useEffect(() => {
         fetch("/api/visits")
             .then((r) => r.json())
-            .then(setVisits)
-            .catch(() => setMessage({ type: "error", text: "Gagal memuat data kunjungan." }));
+            .then((data) => {
+                if (Array.isArray(data)) {
+                    setVisits(data);
+                } else {
+                    console.error("Failed to fetch visits:", data);
+                    setVisits([]);
+                    setMessage({ type: "error", text: "Gagal memuat data kunjungan." });
+                }
+            })
+            .catch(() => {
+                setVisits([]);
+                setMessage({ type: "error", text: "Gagal memuat data kunjungan." });
+            });
     }, []);
 
     // Auto-hide message after 5 seconds
@@ -79,17 +90,25 @@ export default function VisitsPage() {
         }
     };
 
-    const filtered = filterStatus === "all" ? visits : visits.filter((v) => v.status === filterStatus);
+    const filtered = visits.filter((v) => {
+        if (filterStatus === "all") return true;
+        if (filterStatus === "draft" || filterStatus === "clocked_in") return v.status === filterStatus;
+        if (filterStatus === "unchecked") return v.status === "clocked_out" && !v.hrChecked;
+        if (filterStatus === "checked") return v.status === "clocked_out" && v.hrChecked;
+        return true;
+    });
+    
     const paginatedVisits = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
 
     // Status counts
-    const statusCounts: Record<string, number> = { all: visits.length };
-    for (const opt of VISIT_FILTER_OPTIONS) {
-        if (opt.key !== "all") {
-            statusCounts[opt.key] = visits.filter((v) => v.status === opt.key).length;
-        }
-    }
+    const statusCounts = {
+        all: visits.length,
+        draft: visits.filter((v) => v.status === "draft").length,
+        clocked_in: visits.filter((v) => v.status === "clocked_in").length,
+        unchecked: visits.filter((v) => v.status === "clocked_out" && !v.hrChecked).length,
+        checked: visits.filter((v) => v.status === "clocked_out" && v.hrChecked).length,
+    };
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
@@ -144,8 +163,8 @@ export default function VisitsPage() {
                         }`}
                     >
                         {opt.label}
-                        {statusCounts[opt.key] > 0 && (
-                            <span className="ml-1 opacity-70">({statusCounts[opt.key]})</span>
+                        {statusCounts[opt.key as keyof typeof statusCounts] > 0 && (
+                            <span className="ml-1 opacity-70">({statusCounts[opt.key as keyof typeof statusCounts]})</span>
                         )}
                     </button>
                 ))}

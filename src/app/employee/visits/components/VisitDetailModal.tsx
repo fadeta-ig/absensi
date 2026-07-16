@@ -83,9 +83,8 @@ function PhotoGrid({ photos, label }: { photos: string[]; label: string }) {
 
 export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
     const statusConfig = VISIT_STATUS_CONFIG[visit.status];
-    const statusOrder = ["draft", "clocked_in", "clocked_out", "pending_approval", "approved"];
+    const statusOrder = ["draft", "clocked_in", "clocked_out"];
     const currentIndex = statusOrder.indexOf(visit.status);
-    const isRejected = visit.status === "rejected";
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -128,31 +127,25 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                         <TimelineStep
                             label="Draft"
                             isActive={visit.status === "draft"}
-                            isDone={currentIndex > 0 || isRejected}
+                            isDone={currentIndex > 0}
                         />
                         <TimelineStep
                             label="Clock In"
                             time={visit.clockInTime}
                             isActive={visit.status === "clocked_in"}
-                            isDone={currentIndex > 1 || (isRejected && !!visit.clockInTime)}
+                            isDone={currentIndex > 1}
                         />
                         <TimelineStep
                             label="Clock Out"
                             time={visit.clockOutTime}
-                            isActive={visit.status === "clocked_out" || visit.status === "pending_approval"}
-                            isDone={currentIndex > 3 || (isRejected && !!visit.clockOutTime)}
+                            isActive={visit.status === "clocked_out"}
+                            isDone={visit.status === "clocked_out"}
                         />
-                        {isRejected ? (
+                        {visit.status === "clocked_out" && visit.hrChecked && (
                             <TimelineStep
-                                label="Ditolak"
-                                isActive={true}
-                                isDone={false}
-                            />
-                        ) : (
-                            <TimelineStep
-                                label="Disetujui"
-                                isActive={visit.status === "approved"}
-                                isDone={visit.status === "approved"}
+                                label="Sudah Dicek HR"
+                                isActive={false}
+                                isDone={true}
                             />
                         )}
                     </div>
@@ -215,17 +208,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                         </div>
                     </div>
 
-                    {/* Rejection Reason */}
-                    {visit.rejectionReason && (
-                        <div className="bg-red-50 p-4 rounded-xl border border-red-200">
-                            <p className="text-[11px] font-bold text-red-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                                <AlertCircle className="w-3.5 h-3.5" /> Alasan Penolakan
-                            </p>
-                            <p className="text-red-800 text-sm italic leading-relaxed">
-                                {visit.rejectionReason}
-                            </p>
-                        </div>
-                    )}
+
 
                     {/* HR Notes */}
                     {visit.notes && (

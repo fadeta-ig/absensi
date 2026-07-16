@@ -190,18 +190,9 @@ export const visitUpdateDraftSchema = z.object({
     notes: z.string().nullable().optional(),
 });
 
-export const visitApprovalSchema = z.object({
+export const visitVerifySchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-    status: z.enum(["approved", "rejected"]),
-    rejectionReason: z.string().nullable().optional(),
-}).refine(data => {
-    if (data.status === "rejected") {
-        return !!data.rejectionReason && data.rejectionReason.trim().length > 0;
-    }
-    return true;
-}, {
-    message: "Alasan penolakan wajib diisi jika menolak kunjungan",
-    path: ["rejectionReason"],
+    hrChecked: z.boolean(),
 });
 
 /* ───────────────────── News ───────────────────── */

@@ -5,14 +5,12 @@ interface Props {
     filtered: VisitReport[];
     updating: string | null;
     setSelectedVisit: (v: VisitReport | null) => void;
-    handleStatusUpdate: (id: string, status: "approved" | "rejected", reason?: string) => void;
+    handleStatusUpdate: (id: string, isChecked: boolean) => void;
 }
 
 export function VisitListTable({
     filtered, updating, setSelectedVisit, handleStatusUpdate
 }: Props) {
-    const canApprove = (status: string) => ["clocked_out", "pending_approval"].includes(status);
-
     return (
         <div className="card overflow-hidden">
             <div className="overflow-x-auto">
@@ -35,6 +33,8 @@ export function VisitListTable({
                         ) : (
                             filtered.map((v) => {
                                 const cfg = STATUS_CONFIG[v.status];
+                                const isChecked = v.hrChecked;
+                                
                                 return (
                                     <tr key={v.id}>
                                         <td>
@@ -67,36 +67,30 @@ export function VisitListTable({
                                                 </span>
                                             ) : "-"}
                                         </td>
-                                        <td><span className={`badge ${cfg.class}`}>{cfg.label}</span></td>
+                                        <td>
+                                            <div className="flex flex-col gap-1 items-start">
+                                                <span className={`badge ${cfg.class}`}>{cfg.label}</span>
+                                                {v.status === "clocked_out" && (
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isChecked ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                                        {isChecked ? "✓ Dicek" : "Belum Dicek"}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td>
                                             <div className="flex items-center gap-1">
                                                 <button onClick={() => setSelectedVisit(v)} className="btn btn-ghost btn-sm !p-1.5" title="Detail">
                                                     <Eye className="w-3.5 h-3.5" />
                                                 </button>
-                                                {canApprove(v.status) && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleStatusUpdate(v.id, "approved")}
-                                                            className="btn btn-ghost btn-sm !p-1.5 text-green-600 hover:!bg-green-50"
-                                                            disabled={updating === v.id}
-                                                            title="Setujui"
-                                                        >
-                                                            <CheckCircle className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                const reason = prompt("Alasan penolakan (wajib):");
-                                                                if (reason && reason.trim()) {
-                                                                    handleStatusUpdate(v.id, "rejected", reason.trim());
-                                                                }
-                                                            }}
-                                                            className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"
-                                                            disabled={updating === v.id}
-                                                            title="Tolak"
-                                                        >
-                                                            <XCircle className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </>
+                                                {v.status === "clocked_out" && (
+                                                    <button
+                                                        onClick={() => handleStatusUpdate(v.id, !isChecked)}
+                                                        className={`btn btn-ghost btn-sm !p-1.5 ${isChecked ? "text-red-500 hover:!bg-red-50" : "text-green-600 hover:!bg-green-50"}`}
+                                                        disabled={updating === v.id}
+                                                        title={isChecked ? "Batal Tandai" : "Tandai Sudah Dicek"}
+                                                    >
+                                                        {isChecked ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                                    </button>
                                                 )}
                                             </div>
                                         </td>

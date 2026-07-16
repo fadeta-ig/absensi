@@ -11,25 +11,37 @@ import { VisitReport, STATUS_CONFIG, FILTER_OPTIONS } from "./types";
 export default function DashboardVisitsPage() {
     const [visits, setVisits] = useState<VisitReport[]>([]);
     const [search, setSearch] = useState("");
-    const [filterStatus, setFilterStatus] = useState<VisitStatus | "all">("all");
+    const [filterStatus, setFilterStatus] = useState<"all" | "unchecked" | "checked">("all");
     const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
     const [updating, setUpdating] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch("/api/visits").then((r) => r.json()).then(setVisits);
+        fetch("/api/visits")
+            .then((r) => r.json())
+            .then((data) => {
+                if (Array.isArray(data)) {
+                    setVisits(data);
+                } else {
+                    console.error("Failed to fetch visits:", data);
+                    setVisits([]);
+                }
+            })
+            .catch((err) => {
+                console.error("Error fetching visits:", err);
+                setVisits([]);
+            });
     }, []);
 
-    const handleStatusUpdate = async (id: string, status: "approved" | "rejected", reason?: string) => {
+    const handleStatusUpdate = async (id: string, isChecked: boolean) => {
         setUpdating(id);
         try {
             const res = await fetch("/api/visits", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    action: status === "approved" ? "approve" : "reject",
+                    action: "verify",
                     id,
-                    status,
-                    ...(reason && { rejectionReason: reason }),
+                    hrChecked: isChecked,
                 }),
             });
             if (res.ok) {
@@ -49,16 +61,22 @@ export default function DashboardVisitsPage() {
             v.employeeId.toLowerCase().includes(searchLower) ||
             (v.employeeName || "").toLowerCase().includes(searchLower) ||
             v.purpose.toLowerCase().includes(searchLower);
-        const matchStatus = filterStatus === "all" || v.status === filterStatus;
+        let matchStatus = true;
+        if (filterStatus === "unchecked") {
+            matchStatus = !v.hrChecked;
+        } else if (filterStatus === "checked") {
+            matchStatus = v.hrChecked;
+        }
         return matchSearch && matchStatus;
     });
 
-    const statusCounts: Record<string, number> = { all: visits.length };
-    for (const opt of FILTER_OPTIONS) {
-        if (opt.key !== "all") {
-            statusCounts[opt.key] = visits.filter((v) => v.status === opt.key).length;
-        }
-    }
+    const statusCounts = {
+        all: visits.length,
+        draft: visits.filter((v) => v.status === "draft").length,
+        clocked_in: visits.filter((v) => v.status === "clocked_in").length,
+        unchecked: visits.filter((v) => v.status === "clocked_out" && !v.hrChecked).length,
+        checked: visits.filter((v) => v.status === "clocked_out" && v.hrChecked).length,
+    };
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -71,14 +89,13 @@ export default function DashboardVisitsPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {[
                     { label: "Total", count: statusCounts.all, color: "bg-blue-50 text-blue-700 border-blue-200" },
-                    { label: "Draft", count: statusCounts.draft ?? 0, color: "bg-gray-50 text-gray-700 border-gray-200" },
-                    { label: "Clock In", count: statusCounts.clocked_in ?? 0, color: "bg-sky-50 text-sky-700 border-sky-200" },
-                    { label: "Menunggu", count: (statusCounts.clocked_out ?? 0) + (statusCounts.pending_approval ?? 0), color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
-                    { label: "Disetujui", count: statusCounts.approved ?? 0, color: "bg-green-50 text-green-700 border-green-200" },
-                    { label: "Ditolak", count: statusCounts.rejected ?? 0, color: "bg-red-50 text-red-700 border-red-200" },
+                    { label: "Draft", count: statusCounts.draft, color: "bg-gray-50 text-gray-700 border-gray-200" },
+                    { label: "Clock In", count: statusCounts.clocked_in, color: "bg-sky-50 text-sky-700 border-sky-200" },
+                    { label: "Belum Dicek", count: statusCounts.unchecked, color: "bg-red-50 text-red-700 border-red-200" },
+                    { label: "Sudah Dicek", count: statusCounts.checked, color: "bg-green-50 text-green-700 border-green-200" },
                 ].map((stat) => (
                     <div key={stat.label} className={`p-3 rounded-xl border ${stat.color}`}>
                         <p className="text-2xl font-bold">{stat.count}</p>
