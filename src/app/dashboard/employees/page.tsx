@@ -10,7 +10,7 @@ interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOf
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
 interface Employee {
     id: string; employeeId: string; name: string; email: string; phone: string;
-    department: string; division?: string | null; position: string; role: string; isActive: boolean; joinDate: string; shiftId?: string;
+    department: string; division?: string | null; position: string; isActive: boolean; joinDate: string; shiftId?: string;
     bypassLocation: boolean; locations?: { id: string; name: string }[];
 }
 
@@ -241,7 +241,7 @@ export default function EmployeesPage() {
                                         <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
                                         <td>
                                             <div className="flex items-center gap-1.5">
-                                                {e.role === "employee" && e.isActive && (
+                                                {e.isActive && (
                                                     <button
                                                         onClick={() => handleSendPassword(e)}
                                                         className="btn btn-ghost btn-sm !p-1.5 text-blue-600 hover:!bg-blue-50"

@@ -4,7 +4,7 @@ import logger from "@/lib/logger";
 import { AssetWithHistory } from "@/lib/types/asset";
 import { toAsset, AssetRowRaw } from "./mappers";
 import { ASSIGNED_TO_INCLUDE } from "./constants";
-import { logAction } from "../auditService";
+import { logAction, type AuditActor } from "../auditService";
 
 /**
  * Menciptakan entitas aset baru dengan logika pembuatan kode otomatis.
@@ -24,7 +24,7 @@ export async function createAsset(data: {
     purchaseDate?: string | null;
     purchasePrice?: number | null;
     warrantyExpiry?: string | null;
-}, performedBy: string): Promise<AssetWithHistory> {
+}, performedBy: AuditActor): Promise<AssetWithHistory> {
     const MAX_RETRIES = 3;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -84,7 +84,8 @@ export async function createAsset(data: {
                         action: "assigned",
                         kondisiSaat: (data.kondisi ?? "BAIK") as never,
                         notes: "Initial assignment saat pencatatan aset",
-                        performedBy,
+                        performedBy: performedBy.identifier,
+                        performedByUserId: performedBy.userId ?? null,
                     },
                 });
             }
@@ -98,7 +99,7 @@ export async function createAsset(data: {
                 { name: data.name, categoryId: data.categoryId }
             ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
 
-            logger.info("Aset dibuat", { assetCode, name: data.name, performedBy });
+            logger.info("Aset dibuat", { assetCode, name: data.name, performedBy: performedBy.identifier });
             return toAsset(row);
         } catch (err: unknown) {
             const isPrismaUniqueError =
@@ -175,7 +176,7 @@ export async function updateAsset(id: string, data: {
 /**
  * Menghentikan penggunaan aset (Retired).
  */
-export async function retireAsset(id: string, performedBy: string): Promise<AssetWithHistory | null> {
+export async function retireAsset(id: string, performedBy: AuditActor): Promise<AssetWithHistory | null> {
     const existing = await prisma.asset.findUnique({ where: { id } });
     if (!existing) return null;
 
@@ -189,7 +190,8 @@ export async function retireAsset(id: string, performedBy: string): Promise<Asse
             action: "retired",
             kondisiSaat: existing.kondisi,
             notes: "Aset di-retire oleh GA",
-            performedBy,
+            performedBy: performedBy.identifier,
+            performedByUserId: performedBy.userId ?? null,
         },
     });
 
@@ -199,7 +201,7 @@ export async function retireAsset(id: string, performedBy: string): Promise<Asse
         include: ASSIGNED_TO_INCLUDE,
     })) as AssetRowRaw;
 
-    logger.info("Aset di-retire", { assetCode: existing.assetCode, performedBy });
+    logger.info("Aset di-retire", { assetCode: existing.assetCode, performedBy: performedBy.identifier });
     return toAsset(row);
 }
 
@@ -212,7 +214,7 @@ export async function assignAsset(id: string, payload: {
     toEmployeeId?: string | null;
     notes?: string;
     kondisi?: string;
-}, performedBy: string): Promise<AssetWithHistory | null> {
+}, performedBy: AuditActor): Promise<AssetWithHistory | null> {
     const existing = await prisma.asset.findUnique({ where: { id } });
     if (!existing) return null;
 
@@ -237,7 +239,8 @@ export async function assignAsset(id: string, payload: {
             action: isReturning ? "returned" : "assigned",
             kondisiSaat: (payload.kondisi ?? existing.kondisi) as never,
             notes: payload.notes ?? null,
-            performedBy,
+            performedBy: performedBy.identifier,
+            performedByUserId: performedBy.userId ?? null,
         },
     });
 
@@ -255,14 +258,14 @@ export async function assignAsset(id: string, payload: {
         include: ASSIGNED_TO_INCLUDE,
     })) as AssetRowRaw;
 
-    logger.info("Aset di-assign", { assetCode: existing.assetCode, to: payload.toName, performedBy });
+    logger.info("Aset di-assign", { assetCode: existing.assetCode, to: payload.toName, performedBy: performedBy.identifier });
     return toAsset(row);
 }
 
 /**
  * Menghapus aset secara permanen beserta seluruh relasi (history, inspeksi).
  */
-export async function deleteAsset(id: string, performedBy: string): Promise<boolean> {
+export async function deleteAsset(id: string, performedBy: AuditActor): Promise<boolean> {
     const existing = await prisma.asset.findUnique({ where: { id }, select: { assetCode: true } });
     if (!existing) return false;
 
@@ -281,7 +284,7 @@ export async function deleteAsset(id: string, performedBy: string): Promise<bool
         { assetId: id }
     ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
 
-    logger.warn("Aset DIHAPUS PERMANEN", { assetCode: existing.assetCode, performedBy });
+    logger.warn("Aset DIHAPUS PERMANEN", { assetCode: existing.assetCode, performedBy: performedBy.identifier });
     return true;
 }
 
@@ -296,7 +299,7 @@ export async function createBulkAssets(payloads: Array<{
     modelName?: string | null;
     serialNumber?: string | null;
     keterangan?: string | null;
-}>, performedBy: string): Promise<number> {
+}>, performedBy: AuditActor): Promise<number> {
     if (payloads.length === 0) return 0;
 
     // Resolve prefixes to Category IDs
@@ -379,7 +382,8 @@ export async function createBulkAssets(payloads: Array<{
                     action: "assigned",
                     kondisiSaat: asset.kondisi as never,
                     notes: "Initial assignment via bulk import",
-                    performedBy
+                    performedBy: performedBy.identifier,
+                    performedByUserId: performedBy.userId ?? null,
                 });
             }
 
@@ -393,6 +397,6 @@ export async function createBulkAssets(payloads: Array<{
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
-    logger.info(`Bulk import sukses: ${totalInserted} aset didaftarkan ke GA Pool`, { performedBy });
+    logger.info(`Bulk import sukses: ${totalInserted} aset didaftarkan ke GA Pool`, { performedBy: performedBy.identifier });
     return totalInserted;
 }

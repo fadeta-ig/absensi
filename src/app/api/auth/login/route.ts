@@ -3,6 +3,7 @@ import { createSession, verifyLogin } from "@/lib/auth";
 import { checkLoginRateLimit } from "@/lib/middleware/rateLimit";
 import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { loginSchema } from "@/lib/validations/validationSchemas";
+import { getLandingPath } from "@/lib/permissions";
 
 export async function POST(request: NextRequest) {
     const rateLimited = checkLoginRateLimit(request.headers);
@@ -14,20 +15,23 @@ export async function POST(request: NextRequest) {
 
         const { employeeId, password, rememberMe } = result.data;
 
-        const employee = await verifyLogin(employeeId, password);
-        if (!employee) {
+        const user = await verifyLogin(employeeId, password);
+        if (!user) {
             return NextResponse.json(
-                { error: "ID Karyawan atau password salah" },
+                { error: "Username atau password salah" },
                 { status: 401 }
             );
         }
 
-        await createSession(employee, rememberMe);
+        await createSession(user, rememberMe);
 
         return NextResponse.json({
             success: true,
-            role: employee.role,
-            name: employee.name,
+            roles: user.roles,
+            permissions: user.permissions,
+            primaryRole: user.primaryRole,
+            landingPath: getLandingPath(user),
+            name: user.name,
         });
     } catch (err) {
         return serverErrorResponse("Login", err);

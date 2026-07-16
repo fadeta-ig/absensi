@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
         const shift = await createShift(body);
 
-        logger.info("Work shift created", { shiftId: shift.id, name: shift.name, createdBy: session.employeeId });
+        logger.info("Work shift created", { shiftId: shift.id, name: shift.name, createdBy: session.username });
         return NextResponse.json(shift, { status: 201 });
     } catch (err) {
         return serverErrorResponse("ShiftsPOST", err);
@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: "Data shift tidak ditemukan." }, { status: 404 });
         }
 
-        logger.info("Work shift updated", { shiftId: id, updatedBy: session.employeeId });
+        logger.info("Work shift updated", { shiftId: id, updatedBy: session.username });
         return NextResponse.json(shift);
     } catch (err) {
         return serverErrorResponse("ShiftsPUT", err);
@@ -88,7 +88,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "Data shift tidak ditemukan." }, { status: 404 });
         }
 
-        logger.info("Work shift deleted", { shiftId: id, deletedBy: session.employeeId });
+        logger.info("Work shift deleted", { shiftId: id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Data shift berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("ShiftsDELETE", err);

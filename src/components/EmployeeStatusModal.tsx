@@ -18,7 +18,6 @@ type EmployeeSummary = {
     id: string;
     employeeId: string;
     name: string;
-    role: string;
     isActive: boolean;
 };
 

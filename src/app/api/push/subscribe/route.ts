@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
             update: {
                 p256dh: keys.p256dh,
                 auth: keys.auth,
-                employeeId: session.employeeId,
+                userId: session.userId,
             },
             create: {
                 endpoint,
                 p256dh: keys.p256dh,
                 auth: keys.auth,
-                employeeId: session.employeeId,
+                userId: session.userId,
             },
         });
 
@@ -66,7 +66,7 @@ export async function DELETE(request: NextRequest) {
 
         if (endpoint) {
             await prisma.pushSubscription.deleteMany({
-                where: { endpoint, employeeId: session.employeeId },
+                where: { endpoint, userId: session.userId },
             });
         }
 

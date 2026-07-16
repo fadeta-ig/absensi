@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
             period,
             created: createdPayslips.length,
             skipped: existingPayslips.length,
-            by: session.employeeId,
+            by: session.username,
         });
 
         return NextResponse.json({

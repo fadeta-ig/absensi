@@ -51,7 +51,6 @@ export const employeeCreateSchema = z.object({
     divisionId: z.string().nullable().optional(),
     positionId: z.string().min(1, "Position ID harus diisi"),
     gender: z.enum(["Laki-Laki", "Perempuan"]).default("Laki-Laki"),
-    role: z.enum(["employee", "hr", "ga"], { message: "Role harus employee, hr, atau ga" }),
     managerId: z.string().nullable().optional(),
     joinDate: z.string().min(1, "Tanggal bergabung harus diisi"),
     totalLeave: z.number().optional().default(12),
@@ -77,8 +76,6 @@ export const employeeUpdateSchema = z.object({
     divisionId: z.string().nullable().optional(),
     positionId: z.string().min(1).optional(),
     gender: z.enum(["Laki-Laki", "Perempuan"]).optional(),
-    // Role — hanya HR yang bisa ubah (enforced di API route)
-    role: z.enum(["employee", "hr", "ga"]).optional(),
     managerId: z.string().nullable().optional(),
     // Kepegawaian
     joinDate: z.string().optional(),
@@ -96,7 +93,7 @@ export const employeeUpdateSchema = z.object({
     })).optional(),
     // Foto profil
     avatarUrl: z.string().nullable().optional(),
-    // ⛔ DILARANG via schema ini: password, faceDescriptor, employeeId
+    // ⛔ DILARANG via schema ini: role akun, password, faceDescriptor, employeeId
 });
 // Tipe untuk route handler agar tidak perlu cast 'as any'
 export type EmployeeUpdatePayload = z.infer<typeof employeeUpdateSchema>;

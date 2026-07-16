@@ -4,7 +4,7 @@ import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getLeaveRequests, createLeaveRequest, updateLeaveRequest } from "@/lib/services/leaveService";
 import { leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validationSchemas";
 import { prisma } from "@/lib/prisma";
-import { logAction } from "@/lib/services/auditService";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
             const leaves = await getLeaveRequests();
             return NextResponse.json(leaves);
         }
+        if (!session.employeeId) return forbiddenResponse();
 
         const leaves = await getLeaveRequests(session.employeeId);
         return NextResponse.json(leaves);
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, leaveRequestSchema);
@@ -113,7 +115,7 @@ export async function POST(request: NextRequest) {
         await logAction(
             "CREATE_LEAVE",
             "LEAVE_REQUEST",
-            session.employeeId,
+            actorFromSession(session),
             leave.id,
             { type: body.type, startDate: body.startDate, endDate: body.endDate }
         ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
@@ -143,13 +145,13 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: "Permohonan cuti tidak ditemukan." }, { status: 404 });
         }
 
-        logger.info("Leave request updated", { leaveId: id, updatedBy: session.employeeId, status: data.status });
+        logger.info("Leave request updated", { leaveId: id, updatedBy: session.username, status: data.status });
 
         // Audit Trail Injection
         await logAction(
             `UPDATE_LEAVE_${typeof data.status === 'string' ? data.status.toUpperCase() : 'UNKNOWN'}`,
             "LEAVE_REQUEST",
-            session.employeeId,
+            actorFromSession(session),
             id,
             data
         ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));

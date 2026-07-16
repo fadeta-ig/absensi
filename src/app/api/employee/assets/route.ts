@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
-import { requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
-import { logAction } from "@/lib/services/auditService";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { z } from "zod";
 
 const ticketSchema = z.object({
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
+        if (!session.employeeId) return forbiddenResponse();
 
         const [assets, tickets] = await Promise.all([
             prisma.asset.findMany({
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
+        if (!session.employeeId) return forbiddenResponse();
 
         const result = await validateBody(request, ticketSchema);
         if ("error" in result) return result.error;
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest) {
         await logAction(
             `CREATE_TICKET_${type}`,
             "ASSET_TICKET",
-            session.employeeId,
+            actorFromSession(session),
             ticketCode,
             { title, assetId }
         );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
+import { logAction, SYSTEM_ACTOR } from "@/lib/services/auditService";
 
 /**
  * Endpoint for cron job to reset usedLeave to 0 every year (e.g., January 1st).
@@ -29,13 +30,8 @@ export async function GET(req: Request) {
         logger.info("[Cron] Successfully reset leave balance for active employees", { updatedCount: result.count });
         
         // Audit log for this automated action
-        await prisma.auditLog.create({
-            data: {
-                action: "RESET_LEAVE_BALANCE",
-                entity: "Employee",
-                performedBy: "SYSTEM_CRON",
-                details: JSON.stringify({ updatedCount: result.count }),
-            }
+        await logAction("RESET_LEAVE_BALANCE", "Employee", SYSTEM_ACTOR, undefined, {
+            updatedCount: result.count,
         });
 
         return NextResponse.json({

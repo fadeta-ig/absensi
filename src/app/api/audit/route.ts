@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
                 skip: offset,
                 include: {
                     user: {
-                        select: { name: true, employeeId: true }
+                        select: { displayName: true, username: true }
                     }
                 }
             }),

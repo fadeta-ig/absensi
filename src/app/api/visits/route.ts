@@ -55,10 +55,11 @@ export async function GET(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (session.role !== "hr" && !session.employeeId) return forbiddenResponse();
 
     try {
         const visits = await getVisitReports(
-            session.role === "hr" ? undefined : session.employeeId
+            session.role === "hr" ? undefined : session.employeeId ?? undefined
         );
         return NextResponse.json(visits);
     } catch (err) {
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const body = await request.json();
@@ -226,7 +228,7 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: "Gagal memperbarui draft kunjungan." }, { status: 400 });
             }
 
-            logger.info("Visit draft updated", { visitId: id, updatedBy: session.employeeId });
+            logger.info("Visit draft updated", { visitId: id, updatedBy: session.username });
             return NextResponse.json(updated);
         }
 
@@ -256,7 +258,7 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: "Gagal memproses validasi." }, { status: 400 });
             }
 
-            logger.info(`Visit verified: ${hrChecked}`, { visitId: id, by: session.employeeId });
+            logger.info(`Visit verified: ${hrChecked}`, { visitId: id, by: session.username });
             return NextResponse.json(updated);
         }
 
@@ -301,7 +303,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "Gagal menghapus kunjungan." }, { status: 404 });
         }
 
-        logger.info("Visit draft deleted", { visitId: id, deletedBy: session.employeeId });
+        logger.info("Visit draft deleted", { visitId: id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Draft kunjungan berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("VisitsDELETE", err);

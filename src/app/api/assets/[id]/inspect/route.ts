@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, ser
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { createAssetInspection, InspectionChecklist, getAssetInspections } from "@/lib/services/assetService";
 import { z } from "zod";
+import { actorFromSession } from "@/lib/services/auditService";
 
 const inspectionSchema = z.object({
     kondisiSaat: z.enum(["BAIK", "KURANG_BAIK", "RUSAK"]),
@@ -39,7 +40,7 @@ export async function POST(
             kondisiSaat,
             checklist: checklist as InspectionChecklist,
             notes: notes ?? null,
-            performedBy: session.employeeId,
+            performedBy: actorFromSession(session),
         });
 
         return NextResponse.json(inspection, { status: 201 });

@@ -28,7 +28,9 @@ describe("Auth API Endpoints", () => {
             
             expect(res.status).toBe(200);
             expect(data.success).toBe(true);
-            expect(data.role).toBe("hr");
+            expect(data.primaryRole).toBe("SUPER_ADMIN");
+            expect(data.permissions).toContain("user.manage");
+            expect(data.landingPath).toBe("/dashboard");
             expect(res.headers.get("set-cookie")).toContain("session=");
         });
 
@@ -48,7 +50,9 @@ describe("Auth API Endpoints", () => {
             const res = await fetchWithAuth("/auth/me", hrCookie, { method: "GET" });
             const data = await res.json();
             expect(res.status).toBe(200);
-            expect(data.employeeId).toBe("WIG001");
+            expect(data.username).toBe("WIG001");
+            expect(data.employeeId).toBeNull();
+            expect(data.roles).toContain("SUPER_ADMIN");
         });
 
         it("should return 401 if not logged in", async () => {

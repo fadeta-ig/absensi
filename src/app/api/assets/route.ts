@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, ser
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getAssets, createAsset } from "@/lib/services/assetService";
 import { z } from "zod";
+import { actorFromSession } from "@/lib/services/auditService";
 
 const assetCreateSchema = z.object({
     name: z.string().min(1, "Nama aset harus diisi"),
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, assetCreateSchema);
         if ("error" in result) return result.error;
 
-        const asset = await createAsset(result.data, session.employeeId);
+        const asset = await createAsset(result.data, actorFromSession(session));
         return NextResponse.json(asset, { status: 201 });
     } catch (err) {
         return serverErrorResponse("AssetsPOST", err);

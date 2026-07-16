@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, ser
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { assignAsset } from "@/lib/services/assetService";
 import { z } from "zod";
+import { actorFromSession } from "@/lib/services/auditService";
 
 const assignSchema = z.object({
     assetId: z.string().min(1, "Asset ID harus diisi"),
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
         const asset = await assignAsset(
             assetId,
             { toHolderType, toName: toName ?? null, toEmployeeId: toEmployeeId ?? null, kondisi, notes },
-            session.employeeId
+            actorFromSession(session)
         );
 
         if (!asset) return NextResponse.json({ error: "Aset tidak ditemukan" }, { status: 404 });

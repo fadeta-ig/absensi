@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(await file.arrayBuffer());
         await writeFile(filePath, buffer);
 
-        logger.info("News image uploaded", { filename: uniqueName, uploadedBy: session.employeeId });
+        logger.info("News image uploaded", { filename: uniqueName, uploadedBy: session.username });
 
         return NextResponse.json({
             url: `/uploads/news/${uniqueName}`,

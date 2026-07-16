@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const simCard = await updateSimCard(id, result.data);
         if (!simCard) return NextResponse.json({ error: "SIM Card tidak ditemukan" }, { status: 404 });
 
-        logger.info("SIM Card updated", { id: simCard.id, performedBy: session.employeeId });
+        logger.info("SIM Card updated", { id: simCard.id, performedBy: session.username });
         return NextResponse.json(simCard);
     } catch (err) {
         return serverErrorResponse("SimCardPUT", err);
@@ -68,7 +68,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         const success = await deleteSimCard(id);
         if (!success) return NextResponse.json({ error: "SIM Card tidak ditemukan" }, { status: 404 });
 
-        logger.warn("SIM Card deleted", { id, performedBy: session.employeeId });
+        logger.warn("SIM Card deleted", { id, performedBy: session.username });
         return NextResponse.json({ success: true, message: "SIM Card berhasil dihapus" });
     } catch (err) {
         return serverErrorResponse("SimCardDELETE", err);

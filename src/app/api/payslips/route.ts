@@ -3,7 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { payslipCreateSchema } from "@/lib/validations/validationSchemas";
 import { getPayslips, createPayslip, deletePayslip } from "@/lib/services/payslipService";
-import { logAction } from "@/lib/services/auditService";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(payslips);
         }
 
+        if (!session.employeeId) return forbiddenResponse();
         const payslips = await getPayslips(session.employeeId);
         return NextResponse.json(payslips);
     } catch (err) {
@@ -44,11 +45,11 @@ export async function POST(request: NextRequest) {
             issuedDate: new Date().toISOString(),
         });
 
-        await logAction("CREATE", "PAYSLIP", session.employeeId, payslip.id, { 
+        await logAction("CREATE", "PAYSLIP", actorFromSession(session), payslip.id, {
             period: body.period, 
             targetEmployee: payslip.employeeId 
         });
-        logger.info("Payslip issued", { targetEmployee: payslip.employeeId, issuedBy: session.employeeId });
+        logger.info("Payslip issued", { targetEmployee: payslip.employeeId, issuedBy: session.username });
         return NextResponse.json(payslip, { status: 201 });
     } catch (err) {
         return serverErrorResponse("PayslipsPOST", err);
@@ -72,8 +73,8 @@ export async function DELETE(request: NextRequest) {
 
         await deletePayslip(id);
         
-        await logAction("DELETE", "PAYSLIP", session.employeeId, id);
-        logger.info("Payslip deleted", { id, deletedBy: session.employeeId });
+        await logAction("DELETE", "PAYSLIP", actorFromSession(session), id);
+        logger.info("Payslip deleted", { id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Slip gaji berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("PayslipsDELETE", err);

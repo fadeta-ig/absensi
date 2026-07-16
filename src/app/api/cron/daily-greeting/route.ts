@@ -25,9 +25,12 @@ export async function POST(request: NextRequest) {
 
         // Fetch all active employees with push subscriptions + their shift
         const employees = await prisma.employee.findMany({
-            where: { isActive: true, pushSubscriptions: { some: {} } },
+            where: {
+                isActive: true,
+                userAccount: { is: { isActive: true, pushSubscriptions: { some: {} } } },
+            },
             include: {
-                pushSubscriptions: true,
+                userAccount: { include: { pushSubscriptions: true } },
                 shift: { include: { days: true } },
             },
         });
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
                 tag: `daily-greeting-${now.toISOString().split("T")[0]}`,
             });
 
-            for (const sub of emp.pushSubscriptions) {
+            for (const sub of emp.userAccount?.pushSubscriptions ?? []) {
                 try {
                     await webPush.sendNotification(
                         {

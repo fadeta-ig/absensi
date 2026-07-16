@@ -14,6 +14,8 @@ import {
     getEmployeeStatusOverview,
 } from "@/lib/services/employeeStatusService";
 import logger from "@/lib/logger";
+import { canManageHr } from "@/lib/permissions";
+import { actorFromSession } from "@/lib/services/auditService";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session)) return forbiddenResponse();
 
     try {
         const { id } = await context.params;
@@ -41,18 +43,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, employeeStatusChangeSchema);
         if ("error" in result) return result.error;
 
         const { id } = await context.params;
-        const changed = await changeEmployeeStatus(id, result.data, session.employeeId);
+        const changed = await changeEmployeeStatus(id, result.data, actorFromSession(session));
         logger.info("Employee status changed", {
             employeeId: changed.employee.employeeId,
             isActive: changed.employee.isActive,
-            changedBy: session.employeeId,
+            changedBy: session.username,
         });
 
         return NextResponse.json({

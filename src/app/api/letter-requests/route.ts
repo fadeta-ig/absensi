@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
                 })
             );
         }
+        if (!session.employeeId) return forbiddenResponse();
 
         const rows = await prisma.letterRequest.findMany({
             where: { employeeId: session.employeeId },
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const body = await request.json() as unknown;
@@ -162,7 +164,7 @@ export async function PATCH(request: NextRequest) {
             data: { status, notes: notes ?? existing.notes },
         });
 
-        logger.info("LetterRequest updated", { id, status, by: session.employeeId });
+        logger.info("LetterRequest updated", { id, status, by: session.username });
         return NextResponse.json(toLetterDTO(updated as unknown as LetterRequestRow));
     } catch (err) {
         return serverErrorResponse("LetterRequestPATCH", err);

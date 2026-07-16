@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import {
     getAttendanceRecords,
@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
             const records = await getAttendanceRecords(employeeId || undefined);
             return NextResponse.json(records);
         }
+        if (!session.employeeId) return forbiddenResponse();
 
         const records = await getAttendanceRecords(session.employeeId);
         return NextResponse.json(records);
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, attendanceSchema);

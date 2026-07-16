@@ -2,6 +2,7 @@ import { prisma } from "../prisma";
 import { Employee } from "@/types";
 import { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
+import { canManageGa, canManageHr, type AccessPrincipal } from "@/lib/permissions";
 
 const employeeRelations = {
     locations: { select: { id: true, name: true } },
@@ -29,13 +30,13 @@ export async function getEmployees(): Promise<EmployeeWithRelations[]> {
 export type EmployeeStatusFilter = "active" | "inactive" | "all";
 
 export async function getVisibleEmployees(
-    requester: { employeeId: string; role: string },
+    requester: AccessPrincipal,
     status: EmployeeStatusFilter = "active"
 ): Promise<EmployeeWithRelations[]> {
-    const { employeeId, role } = requester;
+    const employeeId = requester.employeeId;
 
     // HR may explicitly request inactive/all records for employee master data.
-    if (role === "hr") {
+    if (canManageHr(requester)) {
         const rows = await prisma.employee.findMany({
             where: status === "all" ? undefined : { isActive: status === "active" },
             include: employeeRelations,
@@ -45,7 +46,7 @@ export async function getVisibleEmployees(
     }
 
     // GA operational selectors only receive active employees.
-    if (role === "ga") {
+    if (canManageGa(requester)) {
         const rows = await prisma.employee.findMany({
             where: { isActive: true },
             include: employeeRelations,
@@ -55,6 +56,7 @@ export async function getVisibleEmployees(
     }
 
     // Normal employees see themselves and their entire downstream hierarchy (1 .. N)
+    if (!employeeId) return [];
     const self = await prisma.employee.findUnique({
         where: { employeeId },
         include: employeeRelations,
@@ -109,21 +111,27 @@ export async function getEmployeeByEmployeeId(employeeId: string): Promise<Emplo
     return row;
 }
 
-export async function createEmployee(
-    data: Omit<Employee, "id" | "sessionVersion" | "statusChangedAt">
-): Promise<EmployeeWithRelations> {
-    const row = await prisma.employee.create({
-        data: {
+export type CreateEmployeeInput = Omit<Employee, "id" | "statusChangedAt"> & {
+    passwordHash: string;
+    createdByUserId: string;
+};
+
+export async function createEmployee(data: CreateEmployeeInput): Promise<EmployeeWithRelations> {
+    return prisma.$transaction(async (tx) => {
+        const employeeRole = await tx.role.findUnique({ where: { code: "EMPLOYEE_USER" }, select: { id: true } });
+        if (!employeeRole) throw new Error("Role EMPLOYEE_USER belum dikonfigurasi.");
+
+        const row = await tx.employee.create({
+            data: {
             employeeId: data.employeeId,
             name: data.name,
             email: data.email,
             phone: data.phone,
+            gender: data.gender,
             departmentId: data.departmentId,
             divisionId: data.divisionId,
             positionId: data.positionId,
-            role: data.role,
             managerId: data.managerId || null,
-            password: data.password,
             joinDate: data.joinDate ? new Date(data.joinDate + "T00:00:00.000Z") : new Date(),
             totalLeave: data.totalLeave,
             usedLeave: data.usedLeave,
@@ -144,9 +152,28 @@ export async function createEmployee(
                 }))
             } : undefined,
         },
-        include: employeeRelations,
+            include: employeeRelations,
+        });
+
+        await tx.userAccount.create({
+            data: {
+                username: data.employeeId,
+                displayName: data.name,
+                email: data.email,
+                passwordHash: data.passwordHash,
+                employeeId: data.employeeId,
+                createdByUserId: data.createdByUserId,
+                roles: {
+                    create: {
+                        roleId: employeeRole.id,
+                        assignedByUserId: data.createdByUserId,
+                    },
+                },
+            },
+        });
+
+        return row;
     });
-    return row;
 }
 
 export async function updateEmployee(id: string, data: Partial<Employee>): Promise<EmployeeWithRelations | null> {
@@ -186,18 +213,18 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
             }
         }
 
-        const row = await prisma.employee.update({
-            where: { id },
-            data: {
+        const row = await prisma.$transaction(async (tx) => {
+            const updated = await tx.employee.update({
+                where: { id },
+                data: {
                 ...(data.name !== undefined && { name: data.name }),
                 ...(data.email !== undefined && { email: data.email }),
                 ...(data.phone !== undefined && { phone: data.phone }),
+                ...(data.gender !== undefined && { gender: data.gender }),
                 ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
                 ...(data.divisionId !== undefined && { divisionId: data.divisionId }),
                 ...(data.positionId !== undefined && { positionId: data.positionId }),
-                ...(data.role !== undefined && { role: data.role }),
                 ...(data.managerId !== undefined && { managerId: data.managerId || null }),
-                ...(data.password !== undefined && { password: data.password }),
                 ...(data.joinDate !== undefined && { joinDate: new Date(data.joinDate + "T00:00:00.000Z") }),
                 ...(data.totalLeave !== undefined && { totalLeave: data.totalLeave }),
                 ...(data.usedLeave !== undefined && { usedLeave: data.usedLeave }),
@@ -205,9 +232,6 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 ...(data.shiftId !== undefined && { shiftId: data.shiftId }),
                 ...(data.bypassLocation !== undefined && { bypassLocation: data.bypassLocation }),
                 ...(data.basicSalary !== undefined && { basicSalary: data.basicSalary }),
-                ...((data.password !== undefined || data.role !== undefined) && {
-                    sessionVersion: { increment: 1 },
-                }),
 
                 ...(data.locations !== undefined && {
                     locations: {
@@ -225,7 +249,19 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                     }
                 }),
             },
-            include: employeeRelations,
+                include: employeeRelations,
+            });
+
+            if (data.name !== undefined || data.email !== undefined) {
+                await tx.userAccount.updateMany({
+                    where: { employeeId: updated.employeeId },
+                    data: {
+                        ...(data.name !== undefined && { displayName: data.name }),
+                        ...(data.email !== undefined && { email: data.email }),
+                    },
+                });
+            }
+            return updated;
         });
         return row;
     } catch (err) {

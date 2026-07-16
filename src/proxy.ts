@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify, JWTPayload } from "jose";
+import { PERMISSIONS } from "@/lib/permissions";
 
 // ─── Route Groups ─────────────────────────────────────────────
 const HR_ONLY_PREFIX = "/dashboard";
@@ -27,12 +28,12 @@ const GA_PREFIX = "/ga";
  * Jika mengubah field di auth.ts, update juga di sini.
  */
 interface SessionPayload extends JWTPayload {
-    id: string;
-    employeeId: string;
+    userId: string;
+    username: string;
+    employeeId: string | null;
     name: string;
-    departmentId: string;
-    divisionId?: string | null;
-    role: "employee" | "hr" | "ga";
+    roles: string[];
+    permissions: string[];
     sessionVersion?: number;
 }
 
@@ -60,6 +61,7 @@ export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     const isDashboard = pathname.startsWith(HR_ONLY_PREFIX);
+    const isUserManagement = pathname.startsWith("/dashboard/users");
     const isEmployee = pathname.startsWith(EMPLOYEE_PREFIX);
     const isGa = pathname.startsWith(GA_PREFIX);
 
@@ -79,22 +81,21 @@ export async function proxy(request: NextRequest) {
     }
 
     // /dashboard/* → hanya HR
-    if (isDashboard && session.role !== "hr") {
-        if (session.role === "ga") return NextResponse.redirect(new URL(GA_PREFIX, request.url));
-        return NextResponse.redirect(new URL(EMPLOYEE_PREFIX, request.url));
-    }
+    const permissions = Array.isArray(session.permissions) ? session.permissions : [];
+    const canHr = permissions.includes(PERMISSIONS.HR_MANAGE);
+    const canGa = permissions.includes(PERMISSIONS.GA_MANAGE);
+    const canManageUsers = permissions.includes(PERMISSIONS.USER_MANAGE);
+    const canEmployee = Boolean(session.employeeId) && permissions.includes(PERMISSIONS.EMPLOYEE_SELF);
+    const landing = canHr ? HR_ONLY_PREFIX : canGa ? GA_PREFIX : canEmployee ? EMPLOYEE_PREFIX : "/";
+
+    if (isDashboard && !canHr) return NextResponse.redirect(new URL(landing, request.url));
+    if (isUserManagement && !canManageUsers) return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
 
     // /employee/* → HR dan GA diarahkan ke portal masing-masing
-    if (isEmployee && session.role !== "employee") {
-        if (session.role === "ga") return NextResponse.redirect(new URL(GA_PREFIX, request.url));
-        return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
-    }
+    if (isEmployee && !canEmployee) return NextResponse.redirect(new URL(landing, request.url));
 
     // /ga/* → hanya GA
-    if (isGa && session.role !== "ga") {
-        if (session.role === "hr") return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
-        return NextResponse.redirect(new URL(EMPLOYEE_PREFIX, request.url));
-    }
+    if (isGa && !canGa) return NextResponse.redirect(new URL(landing, request.url));
 
     return NextResponse.next();
 }

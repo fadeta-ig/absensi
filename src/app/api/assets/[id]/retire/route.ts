@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { retireAsset } from "@/lib/services/assetService";
+import { actorFromSession } from "@/lib/services/auditService";
 
 export async function POST(
     request: NextRequest,
@@ -17,7 +18,7 @@ export async function POST(
 
     try {
         const { id } = await params;
-        const asset = await retireAsset(id, session.employeeId);
+        const asset = await retireAsset(id, actorFromSession(session));
         
         if (!asset) {
             return NextResponse.json({ error: "Aset tidak ditemukan" }, { status: 404 });

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        logger.info("Position created", { id: position.id, name: position.name, createdBy: session.employeeId });
+        logger.info("Position created", { id: position.id, name: position.name, createdBy: session.username });
         return NextResponse.json(position, { status: 201 });
     } catch (err) {
         return serverErrorResponse("MasterPositionPOST", err);
@@ -81,7 +81,7 @@ export async function PUT(request: NextRequest) {
             },
         });
 
-        logger.info("Position updated", { id, updatedBy: session.employeeId });
+        logger.info("Position updated", { id, updatedBy: session.username });
         return NextResponse.json(position);
     } catch (err) {
         return serverErrorResponse("MasterPositionPUT", err);
@@ -106,7 +106,7 @@ export async function DELETE(request: NextRequest) {
 
         await prisma.position.delete({ where: { id } });
 
-        logger.info("Position deleted", { id, deletedBy: session.employeeId });
+        logger.info("Position deleted", { id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Jabatan berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("MasterPositionDELETE", err);

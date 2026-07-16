@@ -4,6 +4,7 @@ import logger from "@/lib/logger";
 import { calculateAllBpjs } from "@/lib/services/bpjsService";
 import { calculateMonthlyPph21, type Pph21Input } from "@/lib/services/pph21Service";
 import type { PayslipItemType } from "@prisma/client";
+import { logAction, SYSTEM_ACTOR } from "@/lib/services/auditService";
 
 interface PayrollItemInput {
     type: PayslipItemType;
@@ -131,13 +132,10 @@ export async function GET(req: Request) {
 
         logger.info(`[Cron Payroll] Generated ${generatedCount} payslips. Failed: ${failedEmployees.length}`);
 
-        await prisma.auditLog.create({
-            data: {
-                action: "GENERATE_PAYROLL",
-                entity: "PayslipRecord",
-                performedBy: "SYSTEM_CRON",
-                details: JSON.stringify({ period: periodStr, generated: generatedCount, failed: failedEmployees }),
-            }
+        await logAction("GENERATE_PAYROLL", "PayslipRecord", SYSTEM_ACTOR, undefined, {
+            period: periodStr,
+            generated: generatedCount,
+            failed: failedEmployees,
         });
 
         return NextResponse.json({

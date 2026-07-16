@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getEmployeeByEmployeeId, updateEmployee } from "@/lib/services/employeeService";
 import { checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
 import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { changePasswordSchema } from "@/lib/validations/validationSchemas";
 import { sendPasswordChangedEmail } from "@/lib/services/emailService";
 import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
     const rateLimited = checkSensitiveRateLimit(request.headers);
@@ -19,15 +19,18 @@ export async function POST(request: NextRequest) {
 
         const { currentPassword, newPassword } = result.data;
 
-        const employee = await getEmployeeByEmployeeId(session.employeeId);
-        if (!employee) {
+        const user = await prisma.userAccount.findUnique({
+            where: { id: session.userId },
+            select: { id: true, passwordHash: true, email: true, displayName: true },
+        });
+        if (!user) {
             return NextResponse.json(
-                { error: "Data karyawan tidak ditemukan" },
+                { error: "Akun pengguna tidak ditemukan" },
                 { status: 404 }
             );
         }
 
-        const isValid = await bcrypt.compare(currentPassword, employee.password);
+        const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
         if (!isValid) {
             return NextResponse.json(
                 { error: "Password saat ini salah" },
@@ -36,10 +39,17 @@ export async function POST(request: NextRequest) {
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 12);
-        await updateEmployee(employee.id, { password: hashedPassword });
+        await prisma.userAccount.update({
+            where: { id: user.id },
+            data: {
+                passwordHash: hashedPassword,
+                passwordChangedAt: new Date(),
+                sessionVersion: { increment: 1 },
+            },
+        });
 
         // Dispatch background email notification
-        sendPasswordChangedEmail(employee.email, employee.name).catch((e) => {
+        sendPasswordChangedEmail(user.email, user.displayName).catch((e) => {
             console.error("Gagal mengirim email reset: ", e);
         });
 

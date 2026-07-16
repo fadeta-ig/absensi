@@ -113,7 +113,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 const res = await fetch("/api/auth/me", { credentials: "same-origin" });
                 if (!res.ok) { router.replace("/"); return; }
                 const data = await res.json();
-                if (data.role === "hr") { router.replace("/dashboard"); return; }
+                if (!data.employeeId || !data.permissions?.includes("employee.self")) {
+                    router.replace(data.permissions?.includes("hr.manage") ? "/dashboard" : data.permissions?.includes("ga.manage") ? "/ga" : "/");
+                    return;
+                }
                 setUser({
                     ...data,
                     hasSubordinates: Array.isArray(data.subordinates) && data.subordinates.length > 0,

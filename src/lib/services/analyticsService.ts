@@ -37,7 +37,6 @@ function parseJson<T>(value: string | null): T | null {
 function mapEmployee(row: Employee360Row): Employee {
     return {
         ...row,
-        role: row.role as Employee["role"],
         gender: row.gender as Employee["gender"],
         joinDate: toDateString(row.joinDate),
         statusChangedAt: toISOOrNull(row.statusChangedAt),

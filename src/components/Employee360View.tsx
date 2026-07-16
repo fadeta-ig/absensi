@@ -337,7 +337,7 @@ export function Employee360View({
                                                     {item.isActive ? "Diaktifkan" : "Dinonaktifkan"}
                                                 </span>
                                                 <span className="text-xs text-[var(--text-muted)]">
-                                                    oleh {item.actor?.name || item.changedBy}
+                                                    oleh {item.actor?.displayName || item.changedByName || item.changedByIdentifier}
                                                 </span>
                                             </div>
                                             <p className="mt-2 text-sm text-[var(--text-primary)]">{item.reason}</p>

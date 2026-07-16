@@ -1,17 +1,14 @@
 import { getActiveSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { getEmployee360Data } from "@/lib/services/analyticsService";
-import { getVisibleEmployees, getEmployeeByEmployeeId } from "@/lib/services/employeeService";
+import { getVisibleEmployees } from "@/lib/services/employeeService";
 import { Employee360View } from "@/components/Employee360View";
 
 export default async function Employee360ViewPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const session = await getActiveSession();
     if (!session) redirect("/");
-
-    // Fetch requester and data
-    const requester = await getEmployeeByEmployeeId(session.employeeId);
-    if (!requester) return <div>Unauthorized</div>;
+    if (!session.employeeId) redirect("/");
 
     const data = await getEmployee360Data(id);
     if (!data) notFound();
@@ -19,7 +16,7 @@ export default async function Employee360ViewPage({ params }: { params: Promise<
     const { employee } = data;
 
     // RBAC check: Can session user see this employee?
-    const visibleEmployees = await getVisibleEmployees(requester);
+    const visibleEmployees = await getVisibleEmployees(session);
     const isAllowed = visibleEmployees.some((e) => e.id === employee.id);
 
     if (!isAllowed) return <div>Forbidden</div>;

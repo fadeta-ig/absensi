@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         if ("error" in result) return result.error;
 
         const simCard = await createSimCard(result.data);
-        logger.info("SIM Card created", { id: simCard.id, performedBy: session.employeeId });
+        logger.info("SIM Card created", { id: simCard.id, performedBy: session.username });
         return NextResponse.json(simCard, { status: 201 });
     } catch (err) {
         return serverErrorResponse("SimCardsPOST", err);

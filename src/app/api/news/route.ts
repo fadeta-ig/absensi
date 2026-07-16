@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
             createdAt: new Date().toISOString(),
         });
 
-        logger.info("News item created", { newsId: news.id, author: session.employeeId });
+        logger.info("News item created", { newsId: news.id, author: session.username });
         return NextResponse.json(news, { status: 201 });
     } catch (err) {
         return serverErrorResponse("NewsPOST", err);
@@ -65,7 +65,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: "Pengumuman tidak ditemukan." }, { status: 404 });
         }
 
-        logger.info("News item updated", { newsId: id, updatedBy: session.employeeId });
+        logger.info("News item updated", { newsId: id, updatedBy: session.username });
         return NextResponse.json(updated);
     } catch (err) {
         return serverErrorResponse("NewsPUT", err);
@@ -92,7 +92,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "Pengumuman tidak ditemukan." }, { status: 404 });
         }
 
-        logger.info("News item deleted", { newsId: id, deletedBy: session.employeeId });
+        logger.info("News item deleted", { newsId: id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Pengumuman berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("NewsDELETE", err);

@@ -3,8 +3,10 @@ import { prisma } from "../../prisma";
 import logger from "@/lib/logger";
 import { validateImport } from "./validator";
 import { ImportResult } from "./types";
+import type { AuditActor } from "@/lib/services/auditService";
+import { SYSTEM_ROLES } from "@/lib/permissions";
 
-export async function executeImport(buffer: ArrayBuffer, performedBy: string): Promise<ImportResult> {
+export async function executeImport(buffer: ArrayBuffer, performedBy: AuditActor): Promise<ImportResult> {
     const report = await validateImport(buffer);
 
     if (report.validRows.length === 0) {
@@ -15,15 +17,25 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
     const generatePassword = () => randomBytes(9).toString("base64url"); // 12 chars, URL-safe
 
     // Generate unique password per employee
-    const employeePasswords = report.validRows.map((row) => ({
-        row,
-        plainPassword: generatePassword(),
+    const employeePasswords = await Promise.all(report.validRows.map(async (row) => {
+        const plainPassword = generatePassword();
+        return {
+            row,
+            plainPassword,
+            passwordHash: await bcrypt.hash(plainPassword, 12),
+        };
     }));
 
     try {
         const result = await prisma.$transaction(async (tx) => {
-            const createPromises = employeePasswords.map(async ({ row, plainPassword }) => {
-                const hashedPassword = await bcrypt.hash(plainPassword, 12);
+            const employeeRole = await tx.role.findUnique({
+                where: { code: SYSTEM_ROLES.EMPLOYEE_USER },
+                select: { id: true },
+            });
+            if (!employeeRole) throw new Error("Role EMPLOYEE_USER belum dikonfigurasi.");
+
+            const createdEmployees = [];
+            for (const { row, passwordHash } of employeePasswords) {
                 const employee = await tx.employee.create({
                     data: {
                         employeeId: row.employeeId,
@@ -34,7 +46,6 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
                         departmentId: row.departmentId!,
                         divisionId: row.divisionId || null,
                         positionId: row.positionId!,
-                        role: row.role,
                         joinDate: new Date(row.joinDate + "T00:00:00.000Z"),
                         basicSalary: row.basicSalary ?? 0,
                         totalLeave: row.totalLeave ?? 12,
@@ -42,8 +53,25 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
                         managerId: row.managerId || null,
                         isActive: row.isActive ?? true,
                         statusChangedAt: row.isActive === false ? new Date() : null,
-                        password: hashedPassword,
                         bypassLocation: false,
+                    },
+                });
+
+                await tx.userAccount.create({
+                    data: {
+                        username: row.employeeId,
+                        displayName: row.name,
+                        email: row.email,
+                        passwordHash,
+                        employeeId: row.employeeId,
+                        isActive: row.isActive ?? true,
+                        createdByUserId: performedBy.userId ?? null,
+                        roles: {
+                            create: {
+                                roleId: employeeRole.id,
+                                assignedByUserId: performedBy.userId ?? null,
+                            },
+                        },
                     },
                 });
 
@@ -55,15 +83,18 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
                             isActive: false,
                             reason: row.statusReason!,
                             effectiveDate: new Date(`${row.joinDate}T00:00:00.000Z`),
-                            changedBy: performedBy,
+                            changedByUserId: performedBy.userId ?? null,
+                            changedByIdentifier: performedBy.identifier,
+                            changedByName: performedBy.name ?? null,
+                            changedByRole: performedBy.role ?? null,
                         },
                     });
                 }
 
-                return employee;
-            });
+                createdEmployees.push(employee);
+            }
 
-            return Promise.all(createPromises);
+            return createdEmployees;
         });
 
         // Fire-and-forget: send password emails to each employee
@@ -82,10 +113,10 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: string): P
             password: plainPassword,
         }));
 
-        logger.info("Bulk import berhasil", { count: result.length, performedBy });
+        logger.info("Bulk import berhasil", { count: result.length, performedBy: performedBy.identifier });
         return { created: result.length, failed: report.errors.length, errors: report.errors, credentials };
     } catch (err) {
-        logger.error("Bulk import gagal", { error: err, performedBy });
+        logger.error("Bulk import gagal", { error: err, performedBy: performedBy.identifier });
         throw err;
     }
 }

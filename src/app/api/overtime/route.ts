@@ -10,7 +10,7 @@ import {
 } from "@/lib/services/overtimeService";
 import { overtimeCreateSchema, overtimeUpdateSchema } from "@/lib/validations/validationSchemas";
 import { calculateOvertimePay } from "@/lib/services/overtimeCalcService";
-import { logAction } from "@/lib/services/auditService";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 
@@ -35,10 +35,11 @@ export async function GET(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (session.role !== "hr" && !session.employeeId) return forbiddenResponse();
 
     try {
         const overtime = await getOvertimeRequests(
-            session.role === "hr" ? undefined : session.employeeId
+            session.role === "hr" ? undefined : session.employeeId ?? undefined
         );
         return NextResponse.json(overtime);
     } catch (err) {
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, overtimeCreateSchema);
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
         await logAction(
             "CREATE_OVERTIME",
             "OVERTIME_REQUEST",
-            session.employeeId,
+            actorFromSession(session),
             overtime.id,
             { date, startTime, endTime, hours }
         ).catch(e => logger.error("Gagal mencatat audit log", { error: e }));
@@ -196,13 +198,13 @@ export async function PUT(request: NextRequest) {
         }
 
         if (session.role === "hr" && status) {
-            await logAction(status === "approved" ? "APPROVE" : "REJECT", "OVERTIME", session.employeeId, id, { 
+            await logAction(status === "approved" ? "APPROVE" : "REJECT", "OVERTIME", actorFromSession(session), id, {
                 targetEmployee: existing.employeeId,
                 hours: updateData.approvedHours || updateData.hours 
             });
         }
 
-        logger.info("Overtime request updated", { overtimeId: id, updatedBy: session.employeeId });
+        logger.info("Overtime request updated", { overtimeId: id, updatedBy: session.username });
         return NextResponse.json(updated);
     } catch (err) {
         return serverErrorResponse("OvertimePUT", err);
@@ -242,11 +244,11 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "Gagal menghapus data lembur." }, { status: 404 });
         }
 
-        await logAction("DELETE", "OVERTIME", session.employeeId, id, { 
+        await logAction("DELETE", "OVERTIME", actorFromSession(session), id, {
             targetEmployee: existing.employeeId 
         });
 
-        logger.info("Overtime request deleted", { overtimeId: id, deletedBy: session.employeeId });
+        logger.info("Overtime request deleted", { overtimeId: id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Pengajuan lembur berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("OvertimeDELETE", err);

@@ -22,7 +22,6 @@ export interface FormState {
     departmentId: string;
     divisionId: string;
     positionId: string;
-    role: "employee" | "hr" | "ga";
     joinDate: string;
     totalLeave: number;
     usedLeave: number;

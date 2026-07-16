@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, ser
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getAssetById, updateAsset, deleteAsset } from "@/lib/services/assetService";
 import { z } from "zod";
+import { actorFromSession } from "@/lib/services/auditService";
 
 const assetUpdateSchema = z.object({
     name: z.string().min(1).optional(),
@@ -78,7 +79,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     try {
         const { id } = await params;
-        const success = await deleteAsset(id, session.employeeId);
+        const success = await deleteAsset(id, actorFromSession(session));
         if (!success) return NextResponse.json({ error: "Aset tidak ditemukan" }, { status: 404 });
 
         return NextResponse.json({ success: true, message: "Aset berhasil dihapus" });

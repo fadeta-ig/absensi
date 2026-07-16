@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        logger.info("Division created", { id: division.id, name: division.name, createdBy: session.employeeId });
+        logger.info("Division created", { id: division.id, name: division.name, createdBy: session.username });
         return NextResponse.json(division, { status: 201 });
     } catch (err) {
         return serverErrorResponse("MasterDivisionPOST", err);
@@ -83,7 +83,7 @@ export async function PUT(request: NextRequest) {
             data: { name, isActive },
         });
 
-        logger.info("Division updated", { id, updatedBy: session.employeeId });
+        logger.info("Division updated", { id, updatedBy: session.username });
         return NextResponse.json(division);
     } catch (err) {
         return serverErrorResponse("MasterDivisionPUT", err);
@@ -108,7 +108,7 @@ export async function DELETE(request: NextRequest) {
 
         await prisma.division.delete({ where: { id } });
 
-        logger.info("Division deleted", { id, deletedBy: session.employeeId });
+        logger.info("Division deleted", { id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Divisi berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("MasterDivisionDELETE", err);

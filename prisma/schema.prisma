@@ -18,46 +18,41 @@ model Employee {
   divisionId   String? @map("division_id")
   positionId   String  @map("position_id")
 
-  departmentRel          Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  divisionRel            Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  positionRel            Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  role                   String                     @default("employee")
-  gender                 String                     @default("Laki-Laki")
-  password               String
-  faceDescriptor         String?                    @map("face_descriptor") @db.LongText
-  joinDate               DateTime                   @map("join_date")
-  totalLeave             Int                        @default(12) @map("total_leave")
-  usedLeave              Int                        @default(0) @map("used_leave")
-  avatarUrl              String?                    @map("avatar_url") @db.LongText
-  isActive               Boolean                    @default(true) @map("is_active")
-  sessionVersion         Int                        @default(0) @map("session_version")
-  statusChangedAt        DateTime?                  @map("status_changed_at")
-  shiftId                String?                    @map("shift_id")
-  bypassLocation         Boolean                    @default(false) @map("bypass_location")
-  basicSalary            Float                      @default(0) @map("basic_salary")
-  managerId              String?                    @map("manager_id")
-  attendances            AttendanceRecord[]
-  payrollComponents      EmployeePayrollComponent[]
-  manager                Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
-  subordinates           Employee[]                 @relation("Hierarchy")
-  shift                  WorkShift?                 @relation(fields: [shiftId], references: [id])
-  leaves                 LeaveRequest[]
-  overtimes              OvertimeRequest[]
-  payslips               PayslipRecord[]
-  todos                  TodoItem[]
-  visits                 VisitReport[]
-  locations              Location[]                 @relation("employeelocations")
-  pushSubscriptions      PushSubscription[]
-  assignedAssets         Asset[]
-  attendanceCorrections  AttendanceCorrection[]     @relation("CorrectionRequester")
-  correctionApprovals    AttendanceCorrection[]     @relation("CorrectionApprover")
-  letterRequests         LetterRequest[]
-  auditLogs              AuditLog[]                 @relation("UserAuditLogs")
-  statusHistories        EmployeeStatusHistory[]    @relation("EmployeeStatusSubject")
-  statusChangesPerformed EmployeeStatusHistory[]    @relation("EmployeeStatusActor")
-  assetTickets           AssetTicket[]
-  simCards               SimCard[]
-  documents              EmployeeDocument[]
+  departmentRel         Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel           Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  positionRel           Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  gender                String                     @default("Laki-Laki")
+  faceDescriptor        String?                    @map("face_descriptor") @db.LongText
+  joinDate              DateTime                   @map("join_date")
+  totalLeave            Int                        @default(12) @map("total_leave")
+  usedLeave             Int                        @default(0) @map("used_leave")
+  avatarUrl             String?                    @map("avatar_url") @db.LongText
+  isActive              Boolean                    @default(true) @map("is_active")
+  statusChangedAt       DateTime?                  @map("status_changed_at")
+  shiftId               String?                    @map("shift_id")
+  bypassLocation        Boolean                    @default(false) @map("bypass_location")
+  basicSalary           Float                      @default(0) @map("basic_salary")
+  managerId             String?                    @map("manager_id")
+  attendances           AttendanceRecord[]
+  payrollComponents     EmployeePayrollComponent[]
+  manager               Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
+  subordinates          Employee[]                 @relation("Hierarchy")
+  shift                 WorkShift?                 @relation(fields: [shiftId], references: [id])
+  leaves                LeaveRequest[]
+  overtimes             OvertimeRequest[]
+  payslips              PayslipRecord[]
+  todos                 TodoItem[]
+  visits                VisitReport[]
+  locations             Location[]                 @relation("employeelocations")
+  userAccount           UserAccount?
+  assignedAssets        Asset[]
+  attendanceCorrections AttendanceCorrection[]     @relation("CorrectionRequester")
+  correctionApprovals   AttendanceCorrection[]     @relation("CorrectionApprover")
+  letterRequests        LetterRequest[]
+  statusHistories       EmployeeStatusHistory[]    @relation("EmployeeStatusSubject")
+  assetTickets          AssetTicket[]
+  simCards              SimCard[]
+  documents             EmployeeDocument[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -65,49 +60,144 @@ model Employee {
   @@map("employees")
 }
 
-model EmployeeStatusHistory {
-  id            String   @id @default(uuid())
-  employeeId    String   @map("employee_id")
-  wasActive     Boolean  @map("was_active")
-  isActive      Boolean  @map("is_active")
-  reason        String   @db.Text
-  effectiveDate DateTime @map("effective_date")
-  changedBy     String   @map("changed_by")
-  createdAt     DateTime @default(now()) @map("created_at")
+model UserAccount {
+  id                String    @id @default(uuid())
+  username          String    @unique @db.VarChar(100)
+  displayName       String    @map("display_name")
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
+  isActive          Boolean   @default(true) @map("is_active")
+  sessionVersion    Int       @default(0) @map("session_version")
+  employeeId        String?   @unique @map("employee_id")
+  lastLoginAt       DateTime? @map("last_login_at")
+  passwordChangedAt DateTime? @map("password_changed_at")
+  createdByUserId   String?   @map("created_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  employee Employee @relation("EmployeeStatusSubject", fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
-  actor    Employee @relation("EmployeeStatusActor", fields: [changedBy], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  employee            Employee?               @relation(fields: [employeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
+  creator             UserAccount?            @relation("UserCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdUsers        UserAccount[]           @relation("UserCreator")
+  roles               UserRoleAssignment[]    @relation("UserRoles")
+  roleAssignmentsMade UserRoleAssignment[]    @relation("RoleAssigner")
+  auditLogs           AuditLog[]              @relation("UserAuditLogs")
+  statusChanges       EmployeeStatusHistory[] @relation("EmployeeStatusActor")
+  pushSubscriptions   PushSubscription[]
+  assetHistories      AssetHistory[]          @relation("AssetHistoryActor")
+  assetBastUploads    AssetBastDocument[]     @relation("AssetBastActor")
+  assetInspections    AssetInspection[]       @relation("AssetInspectionActor")
+
+  @@index([createdByUserId], map: "idx_user_accounts_created_by")
+  @@index([isActive], map: "idx_user_accounts_is_active")
+  @@map("user_accounts")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  code        String   @unique @db.VarChar(50)
+  name        String
+  description String?  @db.Text
+  isSystem    Boolean  @default(true) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       UserRoleAssignment[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique @db.VarChar(100)
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRoleAssignment {
+  userId           String   @map("user_id")
+  roleId           String   @map("role_id")
+  assignedByUserId String?  @map("assigned_by_user_id")
+  assignedAt       DateTime @default(now()) @map("assigned_at")
+
+  user       UserAccount  @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy UserAccount? @relation("RoleAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId], map: "idx_user_roles_role")
+  @@index([assignedByUserId], map: "idx_user_roles_assigned_by")
+  @@map("user_role_assignments")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId], map: "idx_role_permissions_permission")
+  @@map("role_permissions")
+}
+
+model EmployeeStatusHistory {
+  id                  String   @id @default(uuid())
+  employeeId          String   @map("employee_id")
+  wasActive           Boolean  @map("was_active")
+  isActive            Boolean  @map("is_active")
+  reason              String   @db.Text
+  effectiveDate       DateTime @map("effective_date")
+  changedByUserId     String?  @map("changed_by_user_id")
+  changedByIdentifier String   @map("changed_by")
+  changedByName       String?  @map("changed_by_name")
+  changedByRole       String?  @map("changed_by_role")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  employee Employee     @relation("EmployeeStatusSubject", fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  actor    UserAccount? @relation("EmployeeStatusActor", fields: [changedByUserId], references: [id], onDelete: SetNull)
 
   @@index([employeeId, createdAt], map: "idx_employee_status_history_subject_created")
-  @@index([changedBy], map: "idx_employee_status_history_actor")
+  @@index([changedByUserId], map: "idx_employee_status_history_actor")
   @@map("employee_status_histories")
 }
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  action      String // e.g. DELETE_PAYSLIP, APPROVE_OVERTIME
-  entity      String // e.g. PAYSLIP, OVERTIME
-  entityId    String?  @map("entity_id")
-  details     String?  @db.LongText // JSON payload
-  performedBy String   @map("performed_by")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid())
+  action          String // e.g. DELETE_PAYSLIP, APPROVE_OVERTIME
+  entity          String // e.g. PAYSLIP, OVERTIME
+  entityId        String?  @map("entity_id")
+  details         String?  @db.LongText // JSON payload
+  actorType       String   @default("USER") @map("actor_type")
+  actorUserId     String?  @map("actor_user_id")
+  actorIdentifier String   @map("performed_by")
+  actorName       String?  @map("actor_name")
+  actorRole       String?  @map("actor_role")
+  createdAt       DateTime @default(now()) @map("created_at")
 
-  user Employee @relation("UserAuditLogs", fields: [performedBy], references: [employeeId], onDelete: Restrict)
+  user UserAccount? @relation("UserAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
 
-  @@index([performedBy], map: "idx_audit_logs_performed_by")
+  @@index([actorUserId], map: "idx_audit_logs_actor_user")
+  @@index([actorIdentifier], map: "idx_audit_logs_actor_identifier")
   @@map("audit_logs")
 }
 
 model PushSubscription {
-  id         String   @id @default(uuid())
-  employeeId String   @map("employee_id")
-  endpoint   String   @unique @db.VarChar(500)
-  p256dh     String   @db.Text
-  auth       String   @db.Text
-  createdAt  DateTime @default(now()) @map("created_at")
-  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  endpoint  String      @unique @db.VarChar(500)
+  p256dh    String      @db.Text
+  auth      String      @db.Text
+  createdAt DateTime    @default(now()) @map("created_at")
+  user      UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([employeeId], map: "push_subscriptions_employee_id_fkey")
+  @@index([userId], map: "push_subscriptions_user_id_fkey")
   @@map("push_subscriptions")
 }
 
@@ -484,27 +574,33 @@ model AssetHistory {
   kondisiSaat AssetKondisi @map("kondisi_saat")
   notes       String?      @db.Text
 
-  performedBy   String              @map("performed_by") // employeeId GA
-  createdAt     DateTime            @default(now()) @map("created_at")
-  bastDocuments AssetBastDocument[]
+  performedBy       String              @map("performed_by")
+  performedByUserId String?             @map("performed_by_user_id")
+  performedByUser   UserAccount?        @relation("AssetHistoryActor", fields: [performedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime            @default(now()) @map("created_at")
+  bastDocuments     AssetBastDocument[]
 
+  @@index([performedByUserId], map: "idx_asset_histories_actor")
   @@map("asset_histories")
 }
 
 // ─── Asset BAST (Berita Acara Serah Terima) ─────────────────────
 
 model AssetBastDocument {
-  id         String   @id @default(uuid())
-  historyId  String   @map("history_id")
-  fileData   Bytes    @map("file_data") @db.MediumBlob
-  mimeType   String   @map("mime_type")
-  fileName   String   @map("file_name")
-  uploadedBy String   @map("uploaded_by") // employeeId of GA
-  createdAt  DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  historyId        String   @map("history_id")
+  fileData         Bytes    @map("file_data") @db.MediumBlob
+  mimeType         String   @map("mime_type")
+  fileName         String   @map("file_name")
+  uploadedBy       String   @map("uploaded_by")
+  uploadedByUserId String?  @map("uploaded_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  history AssetHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+  history        AssetHistory @relation(fields: [historyId], references: [id], onDelete: Cascade)
+  uploadedByUser UserAccount? @relation("AssetBastActor", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   @@index([historyId], map: "idx_bast_documents_history_id")
+  @@index([uploadedByUserId], map: "idx_bast_documents_actor")
   @@map("asset_bast_documents")
 }
 
@@ -519,11 +615,14 @@ model AssetInspection {
 
   checklistItems InspectionChecklistItem[]
 
-  notes       String?  @db.Text
-  performedBy String   @map("performed_by") // employeeId GA
-  inspectedAt DateTime @default(now()) @map("inspected_at")
+  notes             String?      @db.Text
+  performedBy       String       @map("performed_by")
+  performedByUserId String?      @map("performed_by_user_id")
+  performedByUser   UserAccount? @relation("AssetInspectionActor", fields: [performedByUserId], references: [id], onDelete: SetNull)
+  inspectedAt       DateTime     @default(now()) @map("inspected_at")
 
   @@index([assetId], map: "asset_inspections_asset_id_fkey")
+  @@index([performedByUserId], map: "idx_asset_inspections_actor")
   @@map("asset_inspections")
 }
 

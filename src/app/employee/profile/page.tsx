@@ -51,6 +51,10 @@ const ROLE_LABELS: Record<string, string> = {
     employee: "Karyawan",
     hr: "HR / Admin",
     ga: "GA",
+    EMPLOYEE_USER: "Karyawan",
+    HR_ADMIN: "Admin HR",
+    GA_ADMIN: "Admin GA",
+    SUPER_ADMIN: "Super Admin HR",
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

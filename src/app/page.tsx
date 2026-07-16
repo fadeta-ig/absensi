@@ -7,7 +7,7 @@ import { User, Lock, LogIn, Loader2, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,7 +38,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, password, rememberMe }),
+        body: JSON.stringify({ employeeId: username, password, rememberMe }),
         credentials: "same-origin",
       });
 
@@ -65,17 +65,7 @@ export default function LoginPage() {
       // Small delay to ensure cookie is properly set before navigation
       await new Promise((r) => setTimeout(r, 200));
 
-      switch (data.role) {
-        case "hr":
-          router.push("/dashboard");
-          break;
-        case "ga":
-          router.push("/ga");
-          break;
-        default:
-          router.push("/employee");
-          break;
-      }
+      router.push(data.landingPath || "/");
     } catch {
       setError("Terjadi kesalahan koneksi");
       setLoading(false);
@@ -117,17 +107,17 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-1.5">
-              <label htmlFor="employeeId" className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
-                ID Karyawan
+              <label htmlFor="username" className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
+                Username / ID Karyawan
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                 <input
-                  id="employeeId"
+                  id="username"
                   type="text"
-                  value={employeeId}
-                  onChange={(e) => setEmployeeId(e.target.value)}
-                  placeholder="Contoh: ID25000001"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Masukkan username atau ID karyawan"
                   className="w-full pl-10 pr-4 py-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20 transition-all duration-200"
                   required
                   disabled={loading}

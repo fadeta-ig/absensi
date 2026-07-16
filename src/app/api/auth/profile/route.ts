@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) {
+        return NextResponse.json({ error: "Akun ini tidak terhubung dengan data karyawan." }, { status: 403 });
+    }
 
     try {
         const employee = await prisma.employee.findUnique({
@@ -32,7 +35,6 @@ export async function GET(request: NextRequest) {
                 joinDate: true,
                 isActive: true,
                 avatarUrl: true,
-                role: true,
                 totalLeave: true,
                 usedLeave: true,
                 departmentRel: { select: { name: true } },
@@ -57,7 +59,8 @@ export async function GET(request: NextRequest) {
             joinDate:     employee.joinDate.toISOString(),
             isActive:     employee.isActive,
             avatarUrl:    employee.avatarUrl ?? null,
-            role:         employee.role,
+            role:         session.primaryRole,
+            roles:        session.roles,
             totalLeave:   employee.totalLeave,
             usedLeave:    employee.usedLeave,
             department:   employee.departmentRel?.name ?? "-",
@@ -78,6 +81,9 @@ export async function PUT(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) {
+        return NextResponse.json({ error: "Akun ini tidak terhubung dengan data karyawan." }, { status: 403 });
+    }
 
     try {
         const body = await request.json() as unknown;

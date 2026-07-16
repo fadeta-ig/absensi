@@ -3,6 +3,8 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
+import { canManageGa, canManageHr, canReadAssets } from "@/lib/permissions";
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const rateLimited = checkApiRateLimit(request.headers);
@@ -11,7 +13,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     // Only GA or HR can delete BAST
-    if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
+    if (!canManageGa(session) && !canManageHr(session)) return forbiddenResponse();
 
     try {
         const id = (await params).id;
@@ -30,17 +32,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
             where: { id }
         });
 
-        logger.info("BAST document deleted", { bastId: id, deletedBy: session.employeeId });
+        logger.info("BAST document deleted", { bastId: id, deletedBy: session.username });
 
         // Audit log
-        await prisma.auditLog.create({
-            data: {
-                action: "DELETE_BAST",
-                entity: "ASSET_BAST",
-                entityId: id,
-                details: JSON.stringify({ fileName: bastDoc.fileName }),
-                performedBy: session.employeeId
-            }
+        await logAction("DELETE_BAST", "ASSET_BAST", actorFromSession(session), id, {
+            fileName: bastDoc.fileName,
         });
 
         return NextResponse.json({ success: true });
@@ -50,6 +46,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const rateLimited = checkApiRateLimit(request.headers);
+    if (rateLimited) return rateLimited;
+
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    if (!canReadAssets(session)) return forbiddenResponse();
+
     try {
         const id = (await params).id;
         const doc = await prisma.assetBastDocument.findUnique({
@@ -63,7 +66,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         return new NextResponse(doc.fileData, {
             headers: {
                 "Content-Type": doc.mimeType || "application/octet-stream",
-                "Content-Disposition": `inline; filename="${doc.fileName}"`
+                "Content-Disposition": `inline; filename="${doc.fileName.replace(/[\r\n"]/g, "_")}"`
             }
         });
     } catch (err) {

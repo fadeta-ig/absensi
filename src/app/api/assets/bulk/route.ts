@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { createBulkAssets } from "@/lib/services/assetService";
+import { actorFromSession } from "@/lib/services/auditService";
 import { z } from "zod";
 
 const bulkAssetSchema = z.array(
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, bulkAssetSchema);
         if ("error" in result) return result.error;
 
-        const importedCount = await createBulkAssets(result.data, session.employeeId);
+        const importedCount = await createBulkAssets(result.data, actorFromSession(session));
 
         return NextResponse.json({ 
             message: "Bulk upload berhasil", 

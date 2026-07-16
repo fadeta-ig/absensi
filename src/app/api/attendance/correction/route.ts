@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
             const records = await getAllCorrections();
             return NextResponse.json(records);
         }
+        if (!session.employeeId) return forbiddenResponse();
 
         const records = await getCorrectionsByUser(session.employeeId);
         return NextResponse.json(records);
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, attendanceCorrectionCreateSchema);
@@ -62,8 +64,8 @@ export async function PATCH(request: NextRequest) {
         if ("error" in result) return result.error;
         const body = result.data;
 
-        const updated = await resolveCorrection(body.id, body.status, session.employeeId);
-        logger.info("Correction resolved", { id: body.id, status: body.status, by: session.employeeId });
+        const updated = await resolveCorrection(body.id, body.status, session.username);
+        logger.info("Correction resolved", { id: body.id, status: body.status, by: session.username });
         
         return NextResponse.json(updated);
     } catch (err) {

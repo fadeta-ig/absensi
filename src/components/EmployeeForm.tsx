@@ -40,7 +40,6 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         departmentId: initialData?.departmentId || "",
         divisionId: initialData?.divisionId || "",
         positionId: initialData?.positionId || "",
-        role: (initialData?.role || "employee") as "employee" | "hr" | "ga",
         joinDate: initialData?.joinDate || new Date().toISOString().split("T")[0],
         totalLeave: initialData?.totalLeave ?? 12,
         usedLeave: initialData?.usedLeave ?? 0,

@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 
 export async function POST(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
@@ -52,25 +53,22 @@ export async function POST(request: NextRequest) {
                 fileData: buffer,
                 mimeType: file.type,
                 fileName: file.name,
-                uploadedBy: session.employeeId
+                uploadedBy: session.username,
+                uploadedByUserId: session.userId,
             }
         });
 
-        logger.info("BAST document uploaded", { bastId: bastDoc.id, historyId, uploadedBy: session.employeeId });
+        logger.info("BAST document uploaded", { bastId: bastDoc.id, historyId, uploadedBy: session.username });
 
         // Create audit log
-        await prisma.auditLog.create({
-            data: {
-                action: "UPLOAD_BAST",
-                entity: "ASSET_HISTORY",
-                entityId: historyId,
-                details: JSON.stringify({ fileName: file.name, mimeType: file.type }),
-                performedBy: session.employeeId
-            }
+        await logAction("UPLOAD_BAST", "ASSET_HISTORY", actorFromSession(session), historyId, {
+            fileName: file.name,
+            mimeType: file.type,
         });
 
         // Hapus property fileData dari response untuk menghemat bandwidth
         const { fileData, ...responseDoc } = bastDoc;
+        void fileData;
 
         return NextResponse.json(responseDoc, { status: 201 });
     } catch (err) {

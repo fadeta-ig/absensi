@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getTodos, createTodo, updateTodo, deleteTodo } from "@/lib/services/todoService";
 import { todoCreateSchema, todoUpdateSchema } from "@/lib/validations/validationSchemas";
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const todos = await getTodos(session.employeeId);
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, todoCreateSchema);
@@ -52,6 +54,7 @@ export async function PUT(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, todoUpdateSchema);
@@ -79,6 +82,7 @@ export async function DELETE(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);

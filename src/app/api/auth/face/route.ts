@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { faceDescriptorSchema } from "@/lib/validations/validationSchemas";
+import { canManageHr } from "@/lib/permissions";
 
 /** GET — Check if current employee has a face registered */
 export async function GET(request: NextRequest) {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return NextResponse.json({ error: "Akun tidak terhubung dengan data karyawan" }, { status: 403 });
 
     const employee = await prisma.employee.findUnique({
         where: { employeeId: session.employeeId },
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
+        if (!session.employeeId) return NextResponse.json({ error: "Akun tidak terhubung dengan data karyawan" }, { status: 403 });
 
         const result = await validateBody(request, faceDescriptorSchema);
         if ("error" in result) return result.error;
@@ -91,8 +94,9 @@ export async function DELETE(request: NextRequest) {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
+        if (!session.employeeId) return NextResponse.json({ error: "Akun tidak terhubung dengan data karyawan" }, { status: 403 });
         
-        if (session.role !== "hr") {
+        if (!canManageHr(session)) {
             return NextResponse.json({ error: "Hanya HR yang dapat menghapus data wajah." }, { status: 403 });
         }
 

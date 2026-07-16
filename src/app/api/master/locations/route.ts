@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        logger.info("Location created", { id: location.id, name: location.name, createdBy: session.employeeId });
+        logger.info("Location created", { id: location.id, name: location.name, createdBy: session.username });
         return NextResponse.json(location, { status: 201 });
     } catch (err) {
         return serverErrorResponse("MasterLocationPOST", err);
@@ -84,7 +84,7 @@ export async function PUT(request: NextRequest) {
             data: { name, latitude, longitude, radius, isActive },
         });
 
-        logger.info("Location updated", { id, updatedBy: session.employeeId });
+        logger.info("Location updated", { id, updatedBy: session.username });
         return NextResponse.json(location);
     } catch (err) {
         return serverErrorResponse("MasterLocationPUT", err);
@@ -109,7 +109,7 @@ export async function DELETE(request: NextRequest) {
 
         await prisma.location.delete({ where: { id } });
 
-        logger.info("Location deleted", { id, deletedBy: session.employeeId });
+        logger.info("Location deleted", { id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Lokasi berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("MasterLocationDELETE", err);

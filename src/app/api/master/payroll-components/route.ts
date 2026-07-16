@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        logger.info("Payroll component created", { id: component.id, name: component.name, createdBy: session.employeeId });
+        logger.info("Payroll component created", { id: component.id, name: component.name, createdBy: session.username });
         return NextResponse.json(component, { status: 201 });
     } catch (err) {
         return serverErrorResponse("MasterPayrollComponentPOST", err);
@@ -92,7 +92,7 @@ export async function PUT(request: NextRequest) {
             },
         });
 
-        logger.info("Payroll component updated", { id, updatedBy: session.employeeId });
+        logger.info("Payroll component updated", { id, updatedBy: session.username });
         return NextResponse.json(component);
     } catch (err) {
         return serverErrorResponse("MasterPayrollComponentPUT", err);
@@ -117,7 +117,7 @@ export async function DELETE(request: NextRequest) {
 
         await prisma.payrollComponent.delete({ where: { id } });
 
-        logger.info("Payroll component deleted", { id, deletedBy: session.employeeId });
+        logger.info("Payroll component deleted", { id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Komponen gaji berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("MasterPayrollComponentDELETE", err);

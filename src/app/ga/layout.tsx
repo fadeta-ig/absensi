@@ -30,7 +30,7 @@ const GA_NAV_ITEMS: NavItem[] = [
 
 export default function GaLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
-    const [user, setUser] = useState<{ name: string; employeeId: string; role: string } | null>(null);
+    const [user, setUser] = useState<{ name: string; employeeId: string | null; username: string; permissions: string[] } | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -39,7 +39,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
                 const res = await fetch("/api/auth/me");
                 if (!res.ok) { router.push("/"); return; }
                 const data = await res.json();
-                if (data.role !== "ga") { router.push("/"); return; }
+                if (!data.permissions?.includes("ga.manage")) { router.push(data.permissions?.includes("hr.manage") ? "/dashboard" : "/"); return; }
                 setUser(data);
             } catch {
                 router.push("/");

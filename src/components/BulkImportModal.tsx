@@ -312,7 +312,6 @@ export default function BulkImportModal({ isOpen, onClose, onImportComplete }: P
                                                     <th>Email</th>
                                                     <th>Dept</th>
                                                     <th>Posisi</th>
-                                                    <th>Role</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -323,7 +322,6 @@ export default function BulkImportModal({ isOpen, onClose, onImportComplete }: P
                                                         <td>{String(row.email ?? "")}</td>
                                                         <td>{String(row.department ?? "")}</td>
                                                         <td>{String(row.position ?? "")}</td>
-                                                        <td>{String(row.role ?? "")}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>

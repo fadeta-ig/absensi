@@ -1,11 +1,14 @@
-import { SignJWT, jwtVerify, JWTPayload } from "jose";
+import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import { getEmployeeByEmployeeId } from "./services/employeeService";
-import { Employee } from "@/types";
 import logger from "@/lib/logger";
-import { toDateString } from "@/lib/utils";
 import { prisma } from "@/lib/prisma";
+import {
+    getPrimaryRole,
+    SYSTEM_ROLES,
+    type PermissionCode,
+    type SystemRole,
+} from "@/lib/permissions";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -17,33 +20,100 @@ if (!JWT_SECRET || JWT_SECRET.length < 16) {
 
 const SECRET = new TextEncoder().encode(JWT_SECRET);
 
-/** Session payload stored in JWT */
-export interface SessionPayload extends JWTPayload {
-    id: string;
-    employeeId: string;
-    name: string;
-    role: "employee" | "hr" | "ga";
-    departmentId: string;
-    divisionId?: string | null;
-    sessionVersion: number;
+const userAccessInclude = {
+    employee: {
+        select: {
+            id: true,
+            employeeId: true,
+            name: true,
+            email: true,
+            departmentId: true,
+            divisionId: true,
+            isActive: true,
+            subordinates: {
+                where: { isActive: true },
+                select: { employeeId: true },
+            },
+        },
+    },
+    roles: {
+        include: {
+            role: {
+                include: {
+                    permissions: { include: { permission: true } },
+                },
+            },
+        },
+    },
+} as const;
+
+type UserWithAccess = Awaited<ReturnType<typeof findUserWithAccess>>;
+
+async function findUserWithAccess(idOrUsername: { id: string } | { username: string }) {
+    return prisma.userAccount.findUnique({
+        where: idOrUsername,
+        include: userAccessInclude,
+    });
 }
 
-/**
- * Create a new session and set the JWT token as an httpOnly cookie.
- */
-export async function createSession(employee: Employee, rememberMe: boolean = false): Promise<void> {
+export interface UserPrincipal {
+    userId: string;
+    username: string;
+    name: string;
+    email: string;
+    employeeId: string | null;
+    employeeRecordId: string | null;
+    departmentId: string | null;
+    divisionId: string | null;
+    roles: SystemRole[];
+    permissions: PermissionCode[];
+    primaryRole: SystemRole;
+    /** @deprecated Compatibility projection; authorization must use permissions. */
+    role: "hr" | "ga" | "employee";
+    sessionVersion: number;
+    hasSubordinates: boolean;
+}
+
+/** Session payload stored in JWT. The database remains authoritative. */
+export interface SessionPayload extends JWTPayload, UserPrincipal {}
+
+function toPrincipal(user: NonNullable<UserWithAccess>): UserPrincipal | null {
+    const roles = user.roles.map(({ role }) => role.code) as SystemRole[];
+    const permissions = Array.from(new Set(
+        user.roles.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.code))
+    )) as PermissionCode[];
+
+    if (roles.length === 0) return null;
+    if (user.employee && !user.employee.isActive) return null;
+    if (roles.includes(SYSTEM_ROLES.EMPLOYEE_USER) && !user.employee) return null;
+
+    return {
+        userId: user.id,
+        username: user.username,
+        name: user.displayName,
+        email: user.email,
+        employeeId: user.employee?.employeeId ?? null,
+        employeeRecordId: user.employee?.id ?? null,
+        departmentId: user.employee?.departmentId ?? null,
+        divisionId: user.employee?.divisionId ?? null,
+        roles,
+        permissions,
+        primaryRole: getPrimaryRole(roles),
+        role: permissions.includes("hr.manage")
+            ? "hr"
+            : permissions.includes("ga.manage")
+                ? "ga"
+                : "employee",
+        sessionVersion: user.sessionVersion,
+        hasSubordinates: (user.employee?.subordinates.length ?? 0) > 0,
+    };
+}
+
+export async function createSession(user: UserPrincipal, rememberMe = false): Promise<void> {
     const expiresIn = rememberMe ? "30d" : "8h";
     const maxAge = rememberMe ? 30 * 24 * 60 * 60 : 8 * 60 * 60;
 
-    const token = await new SignJWT({
-        id: employee.id,
-        employeeId: employee.employeeId,
-        name: employee.name,
-        role: employee.role,
-        departmentId: employee.departmentId,
-        divisionId: employee.divisionId,
-        sessionVersion: employee.sessionVersion,
-    } satisfies SessionPayload)
+    const token = await new SignJWT({ ...user } satisfies UserPrincipal)
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
         .setExpirationTime(expiresIn)
@@ -54,14 +124,11 @@ export async function createSession(employee: Employee, rememberMe: boolean = fa
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: maxAge,
+        maxAge,
         path: "/",
     });
 }
 
-/**
- * Retrieve and verify the current session from the cookie.
- */
 export async function getSession(): Promise<SessionPayload | null> {
     const cookieStore = await cookies();
     const token = cookieStore.get("session")?.value;
@@ -69,110 +136,68 @@ export async function getSession(): Promise<SessionPayload | null> {
 
     try {
         const { payload } = await jwtVerify(token, SECRET);
+        if (typeof payload.userId !== "string") return null;
         return payload as SessionPayload;
     } catch {
         return null;
     }
 }
 
-/**
- * Resolve a JWT session against the current employee record.
- * The database is authoritative for active status, role, and session revocation.
- */
+/** Resolve the token against current account, roles, permissions, and employee status. */
 export async function getActiveSession(): Promise<SessionPayload | null> {
     const session = await getSession();
     if (!session) return null;
 
-    const employee = await prisma.employee.findUnique({
-        where: { id: session.id },
-        select: {
-            id: true,
-            employeeId: true,
-            name: true,
-            role: true,
-            departmentId: true,
-            divisionId: true,
-            isActive: true,
-            sessionVersion: true,
-        },
-    });
-
-    const tokenVersion = typeof session.sessionVersion === "number" ? session.sessionVersion : 0;
-    const roleIsValid = employee?.role === "employee" || employee?.role === "hr" || employee?.role === "ga";
-
+    const user = await findUserWithAccess({ id: session.userId });
+    const current = user?.isActive ? toPrincipal(user) : null;
     if (
-        !employee ||
-        !employee.isActive ||
-        !roleIsValid ||
-        employee.employeeId !== session.employeeId ||
-        employee.sessionVersion !== tokenVersion
+        !user ||
+        !current ||
+        user.username !== session.username ||
+        user.sessionVersion !== session.sessionVersion
     ) {
-        logger.warn("Session rejected by current employee state", {
-            employeeId: session.employeeId,
-            reason: !employee
-                ? "employee_not_found"
-                : !employee.isActive
-                    ? "employee_inactive"
-                    : employee.sessionVersion !== tokenVersion
+        logger.warn("Session rejected by current user state", {
+            username: session.username,
+            reason: !user
+                ? "user_not_found"
+                : !user.isActive
+                    ? "user_inactive"
+                    : user.sessionVersion !== session.sessionVersion
                         ? "session_revoked"
-                        : "identity_or_role_invalid",
+                        : "role_or_employee_state_invalid",
         });
         return null;
     }
 
-    return {
-        ...session,
-        id: employee.id,
-        employeeId: employee.employeeId,
-        name: employee.name,
-        role: employee.role,
-        departmentId: employee.departmentId,
-        divisionId: employee.divisionId,
-        sessionVersion: employee.sessionVersion,
-    } as SessionPayload;
+    return { ...session, ...current } as SessionPayload;
 }
 
-/**
- * Destroy the current session by deleting the cookie.
- */
 export async function destroySession(): Promise<void> {
     const cookieStore = await cookies();
     cookieStore.delete("session");
 }
 
-/**
- * Verify login credentials. Returns the employee on success, null on failure.
- * Uses constant-time comparison and does NOT leak which field was wrong.
- */
-export async function verifyLogin(
-    employeeId: string,
-    password: string
-): Promise<Employee | null> {
-    const employee = await getEmployeeByEmployeeId(employeeId);
+/** Verify a username/password without disclosing whether the account exists. */
+export async function verifyLogin(username: string, password: string): Promise<UserPrincipal | null> {
+    const user = await findUserWithAccess({ username });
 
-    if (!employee) {
-        // Constant-time: still run bcrypt to prevent timing attacks
-        await bcrypt.hash("dummy", 10);
-        logger.debug("Login attempt: employee not found");
+    if (!user) {
+        await bcrypt.hash("timing-equalizer", 10);
+        logger.debug("Login attempt rejected");
         return null;
     }
 
-    if (!employee.isActive) {
-        logger.debug("Login attempt: inactive employee");
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    const principal = user.isActive ? toPrincipal(user) : null;
+    if (!isValid || !principal) {
+        logger.debug("Login attempt rejected");
         return null;
     }
 
-    const isValid = await bcrypt.compare(password, employee.password);
-
-    if (!isValid) {
-        logger.debug("Login attempt: invalid credentials");
-        return null;
-    }
-
-    logger.info("Login successful", { employeeId: employee.employeeId });
-    return {
-        ...employee,
-        joinDate: toDateString(employee.joinDate),
-        faceDescriptor: employee.faceDescriptor ? JSON.parse(employee.faceDescriptor) : undefined
-    } as unknown as Employee;
+    await prisma.userAccount.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+    });
+    logger.info("Login successful", { username: user.username });
+    return principal;
 }

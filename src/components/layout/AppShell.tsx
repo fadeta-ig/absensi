@@ -10,8 +10,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 export interface AppShellUser {
     name: string;
-    employeeId: string;
-    role: string;
+    employeeId: string | null;
+    username?: string;
+    primaryRole?: string;
+    roles?: string[];
+    permissions?: string[];
     hasSubordinates?: boolean;
 }
 
@@ -199,7 +202,7 @@ export default function AppShell({
                         </div>
                         <div className={`min-w-0 flex-1 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                             <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{user.name}</p>
-                            <p className="text-xs text-[var(--text-muted)] truncate">{user.employeeId}</p>
+                            <p className="text-xs text-[var(--text-muted)] truncate">{user.employeeId ?? user.username ?? user.primaryRole}</p>
                         </div>
                     </div>
                 </div>

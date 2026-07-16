@@ -4,8 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface AuditUser {
-    name: string;
-    employeeId: string;
+    displayName: string;
+    username: string;
 }
 
 interface AuditLog {
@@ -14,9 +14,11 @@ interface AuditLog {
     entity: string;
     entityId: string | null;
     details: string | null;
-    performedBy: string;
+    actorIdentifier: string;
+    actorName: string | null;
+    actorRole: string | null;
     createdAt: string;
-    user: AuditUser;
+    user: AuditUser | null;
 }
 
 interface Pagination {
@@ -57,8 +59,8 @@ export default function AuditTrailPage() {
                 if (searchQ) {
                     const q = searchQ.toLowerCase();
                     filteredData = filteredData.filter(log => 
-                        log.user.name.toLowerCase().includes(q) || 
-                        log.user.employeeId.toLowerCase().includes(q) ||
+                        (log.actorName?.toLowerCase().includes(q) ?? false) ||
+                        log.actorIdentifier.toLowerCase().includes(q) ||
                         (log.entityId && log.entityId.toLowerCase().includes(q))
                     );
                 }
@@ -74,7 +76,7 @@ export default function AuditTrailPage() {
 
     useEffect(() => {
         fetchLogs(page, search, actionFilter, entityFilter);
-    }, [page, search, actionFilter, entityFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [page, search, actionFilter, entityFilter]);
 
     // Extract unique actions and entities for filter dropdowns (based on current data chunk)
     const uniqueActions = useMemo(() => Array.from(new Set(logs.map(l => l.action))), [logs]);
@@ -222,11 +224,11 @@ export default function AuditTrailPage() {
                                         <td>
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
-                                                    {log.user?.name?.charAt(0) || '?'}
+                                                    {(log.actorName || log.actorIdentifier).charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-semibold text-[var(--text-primary)]">{log.user?.name || "Unknown"}</p>
-                                                    <p className="text-[10px] text-[var(--text-muted)] font-mono">{log.performedBy}</p>
+                                                    <p className="text-xs font-semibold text-[var(--text-primary)]">{log.actorName || log.user?.displayName || "System"}</p>
+                                                    <p className="text-[10px] text-[var(--text-muted)] font-mono">{log.actorIdentifier}{log.actorRole ? ` · ${log.actorRole}` : ""}</p>
                                                 </div>
                                             </div>
                                         </td>

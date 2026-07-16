@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { forbiddenResponse, requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
-import { logAction } from "@/lib/services/auditService";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { z } from "zod";
 
 const ticketUpdateSchema = z.object({
@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
         await logAction(
             `UPDATE_TICKET_${status}`,
             "ASSET_TICKET",
-            session.employeeId,
+            actorFromSession(session),
             ticket.ticketCode,
             { newStatus: status, response: gaResponse }
         );

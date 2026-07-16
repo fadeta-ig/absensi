@@ -4,26 +4,22 @@ import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import bcrypt from "bcryptjs";
 import {
     getVisibleEmployees,
-    getEmployeeByEmployeeId,
     createEmployee,
     updateEmployee,
     type EmployeeStatusFilter,
     type EmployeeWithRelations,
 } from "@/lib/services/employeeService";
 import { employeeCreateSchema, employeeUpdateSchema } from "@/lib/validations/validationSchemas";
-import { logAction } from "@/lib/services/auditService";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
+import { canManageHr } from "@/lib/permissions";
 
 function serializeEmployee(employee: EmployeeWithRelations, includeHrData: boolean) {
     const {
-        password: _password,
         faceDescriptor: _faceDescriptor,
-        sessionVersion: _sessionVersion,
         ...safe
     } = employee;
-    void _password;
     void _faceDescriptor;
-    void _sessionVersion;
 
     const organization = {
         department: employee.departmentRel?.name || "-",
@@ -40,7 +36,6 @@ function serializeEmployee(employee: EmployeeWithRelations, includeHrData: boole
         departmentId: safe.departmentId,
         divisionId: safe.divisionId,
         positionId: safe.positionId,
-        role: safe.role,
         managerId: safe.managerId,
         joinDate: safe.joinDate,
         isActive: safe.isActive,
@@ -66,16 +61,11 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Filter status tidak valid." }, { status: 400 });
         }
 
-        const requester = await getEmployeeByEmployeeId(session.employeeId);
-        if (!requester) {
-            return NextResponse.json({ error: "Data pengguna Anda tidak ditemukan." }, { status: 404 });
-        }
-
         const status = statusParam as EmployeeStatusFilter;
-        if (session.role !== "hr" && status !== "active") return forbiddenResponse();
+        if (!canManageHr(session) && status !== "active") return forbiddenResponse();
 
-        const employees = (await getVisibleEmployees(requester, status))
-            .map((employee) => serializeEmployee(employee, session.role === "hr"));
+        const employees = (await getVisibleEmployees(session, status))
+            .map((employee) => serializeEmployee(employee, canManageHr(session)));
 
         return NextResponse.json(employees);
     } catch (err) {
@@ -89,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, employeeCreateSchema);
@@ -103,7 +93,8 @@ export async function POST(request: NextRequest) {
 
         const employee = await createEmployee({
             ...body,
-            password: hashedPassword,
+            passwordHash: hashedPassword,
+            createdByUserId: session.userId,
             isActive: true,
         });
 
@@ -117,8 +108,8 @@ export async function POST(request: NextRequest) {
             emailWarning = true;
         }
 
-        logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.employeeId });
-        await logAction("CREATE", "Employee", session.employeeId, employee.id, { employeeId: employee.employeeId, name: employee.name });
+        logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.username });
+        await logAction("CREATE", "Employee", actorFromSession(session), employee.id, { employeeId: employee.employeeId, name: employee.name });
 
         return NextResponse.json({ ...serializeEmployee(employee, true), _emailWarning: emailWarning }, { status: 201 });
     } catch (err: unknown) {
@@ -139,7 +130,7 @@ export async function PUT(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, employeeUpdateSchema);
@@ -152,8 +143,8 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: "Data karyawan tidak ditemukan." }, { status: 404 });
         }
 
-        logger.info("Employee updated", { targetId: updated.employeeId, updatedBy: session.employeeId });
-        await logAction("UPDATE", "Employee", session.employeeId, updated.id, data);
+        logger.info("Employee updated", { targetId: updated.employeeId, updatedBy: session.username });
+        await logAction("UPDATE", "Employee", actorFromSession(session), updated.id, data);
 
         return NextResponse.json(serializeEmployee(updated, true));
     } catch (err: unknown) {

@@ -46,7 +46,6 @@ export async function generateTemplate(): Promise<Buffer> {
         "Departemen": departments[0]?.name ?? "",
         "Divisi": divisions[0]?.name ?? "",
         "Posisi": positions[0]?.name ?? "",
-        "Role": "employee",
         "Tanggal Bergabung": "2026-01-15",
         "Gaji Pokok": 5000000,
         "Cuti Tahunan": 12,
@@ -81,14 +80,9 @@ export async function generateTemplate(): Promise<Buffer> {
             type: "list", allowBlank: false, formulae: ['Panduan!$D$2:$D$1000'],
             showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih Laki-Laki atau Perempuan dari daftar panduan"
         };
-        // Role (I) -> Panduan E2:E1000
-        ws.getCell(`I${i}`).dataValidation = {
-            type: "list", allowBlank: false, formulae: ['Panduan!$E$2:$E$1000'],
-            showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih role dari daftar panduan"
-        };
-        // Status Aktif (N) -> Panduan F2:F1000
-        ws.getCell(`N${i}`).dataValidation = {
-            type: "list", allowBlank: true, formulae: ['Panduan!$F$2:$F$1000'],
+        // Status Aktif (M) -> Panduan E2:E1000
+        ws.getCell(`M${i}`).dataValidation = {
+            type: "list", allowBlank: true, formulae: ['Panduan!$E$2:$E$1000'],
             showErrorMessage: true, errorTitle: "Nilai tidak valid", error: "Pilih status aktif dari daftar panduan"
         };
     }
@@ -101,7 +95,6 @@ export async function generateTemplate(): Promise<Buffer> {
         { header: "Divisi", key: "div", width: 25 },
         { header: "Posisi", key: "pos", width: 25 },
         { header: "Jenis Kelamin", key: "gender", width: 20 },
-        { header: "Role", key: "role", width: 20 },
         { header: "Status Aktif", key: "status", width: 20 },
     ];
     guideSheet.columns = guideColumns;
@@ -114,7 +107,6 @@ export async function generateTemplate(): Promise<Buffer> {
 
     const maxRows = Math.max(departments.length, divisions.length, positions.length, 3);
     const genderVal = ["Laki-Laki", "Perempuan"];
-    const roleVal = ["employee", "hr", "ga"];
     const statusVal = ["Ya", "Tidak"];
 
     for (let i = 0; i < maxRows; i++) {
@@ -123,7 +115,6 @@ export async function generateTemplate(): Promise<Buffer> {
             div: divisions[i]?.name ?? "",
             pos: positions[i]?.name ?? "",
             gender: genderVal[i] ?? "",
-            role: roleVal[i] ?? "",
             status: statusVal[i] ?? "",
         });
     }

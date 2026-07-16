@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
             include: { division: { select: { name: true } } },
         });
 
-        logger.info("Department created", { id: department.id, name: department.name, createdBy: session.employeeId });
+        logger.info("Department created", { id: department.id, name: department.name, createdBy: session.username });
         return NextResponse.json(department, { status: 201 });
     } catch (err) {
         return serverErrorResponse("MasterDepartmentPOST", err);
@@ -92,7 +92,7 @@ export async function PUT(request: NextRequest) {
             include: { division: { select: { name: true } } },
         });
 
-        logger.info("Department updated", { id, updatedBy: session.employeeId });
+        logger.info("Department updated", { id, updatedBy: session.username });
         return NextResponse.json(department);
     } catch (err) {
         return serverErrorResponse("MasterDepartmentPUT", err);
@@ -117,7 +117,7 @@ export async function DELETE(request: NextRequest) {
 
         await prisma.department.delete({ where: { id } });
 
-        logger.info("Department deleted", { id, deletedBy: session.employeeId });
+        logger.info("Department deleted", { id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Departemen berhasil dihapus." });
     } catch (err) {
         return serverErrorResponse("MasterDepartmentDELETE", err);

@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { toWIBDateString } from "@/lib/timezone";
+import { PERMISSIONS, SYSTEM_ROLES } from "@/lib/permissions";
+import type { AuditActor } from "@/lib/services/auditService";
 import type { Prisma } from "@prisma/client";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -49,9 +51,9 @@ export async function getEmployeeStatusOverview(id: string) {
             id: true,
             employeeId: true,
             name: true,
-            role: true,
             isActive: true,
             statusChangedAt: true,
+            userAccount: { select: { id: true, username: true, isActive: true } },
         },
     });
     if (!employee) return null;
@@ -96,10 +98,12 @@ export async function getEmployeeStatusOverview(id: string) {
                 status: { notIn: ["REJECTED", "RESOLVED"] },
             },
         }),
-        prisma.pushSubscription.count({ where: { employeeId: employee.employeeId } }),
+        employee.userAccount
+            ? prisma.pushSubscription.count({ where: { userId: employee.userAccount.id } })
+            : Promise.resolve(0),
         prisma.employeeStatusHistory.findMany({
             where: { employeeId: employee.employeeId },
-            include: { actor: { select: { employeeId: true, name: true } } },
+            include: { actor: { select: { username: true, displayName: true } } },
             orderBy: { createdAt: "desc" },
         }),
         prisma.employee.findMany({
@@ -135,7 +139,7 @@ export async function getEmployeeStatusOverview(id: string) {
 export async function changeEmployeeStatus(
     id: string,
     input: EmployeeStatusChangeInput,
-    changedBy: string
+    changedBy: AuditActor
 ) {
     const effectiveDate = new Date(`${input.effectiveDate}T00:00:00.000Z`);
     if (
@@ -147,11 +151,27 @@ export async function changeEmployeeStatus(
     if (input.effectiveDate > toWIBDateString()) {
         throw new EmployeeStatusError("Tanggal efektif masa depan belum didukung. Pilih hari ini atau tanggal sebelumnya.");
     }
+    if (!changedBy.userId) {
+        throw new EmployeeStatusError("Akun pelaksana tidak valid.", 403);
+    }
+    const actorUserId = changedBy.userId;
 
     return prisma.$transaction(async (tx) => {
         const employee = await tx.employee.findUnique({
             where: { id },
-            select: { id: true, employeeId: true, name: true, role: true, isActive: true },
+            select: {
+                id: true,
+                employeeId: true,
+                name: true,
+                isActive: true,
+                userAccount: {
+                    select: {
+                        id: true,
+                        isActive: true,
+                        roles: { select: { role: { select: { code: true } } } },
+                    },
+                },
+            },
         });
         if (!employee) throw new EmployeeStatusError("Karyawan tidak ditemukan.", 404);
         if (employee.isActive === input.isActive) {
@@ -161,11 +181,26 @@ export async function changeEmployeeStatus(
             );
         }
 
-        const actor = await tx.employee.findUnique({
-            where: { employeeId: changedBy },
-            select: { employeeId: true, role: true, isActive: true },
+        const actor = await tx.userAccount.findUnique({
+            where: { id: actorUserId },
+            select: {
+                id: true,
+                isActive: true,
+                roles: {
+                    select: {
+                        role: {
+                            select: {
+                                permissions: { select: { permission: { select: { code: true } } } },
+                            },
+                        },
+                    },
+                },
+            },
         });
-        if (!actor || actor.role !== "hr" || !actor.isActive) {
+        const actorPermissions = new Set(
+            actor?.roles.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.code)) ?? []
+        );
+        if (!actor?.isActive || !actorPermissions.has(PERMISSIONS.HR_MANAGE)) {
             throw new EmployeeStatusError("Akun HR pelaksana tidak valid.", 403);
         }
 
@@ -175,14 +210,22 @@ export async function changeEmployeeStatus(
         });
 
         if (!input.isActive) {
-            if (employee.employeeId === changedBy) {
+            if (employee.userAccount?.id === actorUserId) {
                 throw new EmployeeStatusError("Anda tidak dapat menonaktifkan akun sendiri.", 409);
             }
 
-            if (employee.role === "hr") {
-                const activeHrCount = await tx.employee.count({ where: { role: "hr", isActive: true } });
-                if (activeHrCount <= 1) {
-                    throw new EmployeeStatusError("HR aktif terakhir tidak dapat dinonaktifkan.", 409);
+            const targetIsSuperAdmin = employee.userAccount?.roles.some(
+                ({ role }) => role.code === SYSTEM_ROLES.SUPER_ADMIN
+            );
+            if (targetIsSuperAdmin) {
+                const activeSuperAdminCount = await tx.userRoleAssignment.count({
+                    where: {
+                        role: { code: SYSTEM_ROLES.SUPER_ADMIN },
+                        user: { isActive: true },
+                    },
+                });
+                if (activeSuperAdminCount <= 1) {
+                    throw new EmployeeStatusError("Super admin aktif terakhir tidak dapat dinonaktifkan.", 409);
                 }
             }
 
@@ -211,9 +254,19 @@ export async function changeEmployeeStatus(
                     data: { managerId: input.reassignManagerId ?? null },
                 });
             }
+        }
 
-            // Push endpoints are credentials for delivery and must not remain attached after offboarding.
-            await tx.pushSubscription.deleteMany({ where: { employeeId: employee.employeeId } });
+        if (employee.userAccount) {
+            if (!input.isActive) {
+                await tx.pushSubscription.deleteMany({ where: { userId: employee.userAccount.id } });
+            }
+            await tx.userAccount.update({
+                where: { id: employee.userAccount.id },
+                data: {
+                    isActive: input.isActive,
+                    sessionVersion: { increment: 1 },
+                },
+            });
         }
 
         const updated = await tx.employee.update({
@@ -221,13 +274,11 @@ export async function changeEmployeeStatus(
             data: {
                 isActive: input.isActive,
                 statusChangedAt: new Date(),
-                sessionVersion: { increment: 1 },
             },
             select: {
                 id: true,
                 employeeId: true,
                 name: true,
-                role: true,
                 isActive: true,
                 statusChangedAt: true,
             },
@@ -240,9 +291,12 @@ export async function changeEmployeeStatus(
                 isActive: input.isActive,
                 reason: input.reason,
                 effectiveDate,
-                changedBy,
+                changedByUserId: actorUserId,
+                changedByIdentifier: changedBy.identifier,
+                changedByName: changedBy.name ?? null,
+                changedByRole: changedBy.role ?? null,
             },
-            include: { actor: { select: { employeeId: true, name: true } } },
+            include: { actor: { select: { username: true, displayName: true } } },
         });
 
         await tx.auditLog.create({
@@ -250,7 +304,11 @@ export async function changeEmployeeStatus(
                 action: input.isActive ? "REACTIVATE_EMPLOYEE" : "DEACTIVATE_EMPLOYEE",
                 entity: "EMPLOYEE",
                 entityId: employee.id,
-                performedBy: changedBy,
+                actorType: changedBy.type ?? "USER",
+                actorUserId,
+                actorIdentifier: changedBy.identifier,
+                actorName: changedBy.name ?? null,
+                actorRole: changedBy.role ?? null,
                 details: JSON.stringify({
                     employeeId: employee.employeeId,
                     employeeName: employee.name,

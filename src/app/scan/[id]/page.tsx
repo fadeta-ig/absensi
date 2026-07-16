@@ -142,7 +142,7 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Login gagal");
-            if (data.role !== "ga") throw new Error("Akses terbatas untuk tim General Affairs.");
+            if (!data.permissions?.includes("ga.manage")) throw new Error("Akses terbatas untuk tim General Affairs.");
             onSuccess();
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : "Login gagal");
@@ -374,7 +374,7 @@ function ScanPageInner({ id }: { id: string }) {
         try {
             const res = await fetch("/api/auth/me");
             const data = res.ok ? await res.json() : null;
-            if (data?.role === "ga") setShowSheet(true);
+            if (data?.permissions?.includes("ga.manage")) setShowSheet(true);
             else setShowLogin(true);
         } catch {
             setShowLogin(true);

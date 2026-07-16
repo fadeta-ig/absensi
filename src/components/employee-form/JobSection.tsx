@@ -21,10 +21,10 @@ export function JobSection({
         <div className="card p-6 space-y-5">
             <div className="flex items-center gap-2 pb-2 border-b border-[var(--border)]">
                 <Briefcase className="w-4 h-4 text-[var(--primary)]" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Pekerjaan & Akses</h2>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Data Pekerjaan</h2>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
                 <div className="form-group !mb-0">
                     <label className="form-label"><span className="flex items-center gap-1"><Layers className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Divisi</span></label>
                     <select className="form-select" value={form.divisionId} onChange={(e) => setForm({ ...form, divisionId: e.target.value, departmentId: "" })} required>
@@ -47,14 +47,6 @@ export function JobSection({
                     <select className="form-select" value={form.positionId} onChange={(e) => setForm({ ...form, positionId: e.target.value, managerId: "" })} required>
                         <option value="">Pilih Jabatan</option>
                         {masterPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                </div>
-                <div className="form-group !mb-0">
-                    <label className="form-label">Role Sistem</label>
-                    <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "employee" | "hr" | "ga" })}>
-                        <option value="employee">Employee (User)</option>
-                        <option value="hr">HR (Manager)</option>
-                        <option value="ga">GA (Asset Management)</option>
                     </select>
                 </div>
             </div>

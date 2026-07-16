@@ -3,6 +3,7 @@ import logger from "@/lib/logger";
 import { Prisma } from "@prisma/client";
 import { AssetCondition, AssetStatus, HolderType } from "@/lib/types/asset";
 import { PublicAssetInfo, InspectionResult, InspectionChecklist } from "./types";
+import type { AuditActor } from "@/lib/services/auditService";
 
 /** Tipe Prisma untuk baris checklist inspeksi */
 type ChecklistItemRow = { itemName: string; isPass: boolean };
@@ -69,7 +70,7 @@ export async function createAssetInspection(data: {
     kondisiSaat: string;
     checklist: InspectionChecklist;
     notes?: string | null;
-    performedBy: string;
+    performedBy: AuditActor;
 }): Promise<InspectionResult> {
     const asset = await prisma.asset.findUnique({ where: { id: data.assetId } });
     if (!asset) throw new Error("Aset tidak ditemukan");
@@ -84,7 +85,8 @@ export async function createAssetInspection(data: {
             assetId: data.assetId,
             kondisiSaat: data.kondisiSaat as never,
             notes: data.notes ?? null,
-            performedBy: data.performedBy,
+            performedBy: data.performedBy.identifier,
+            performedByUserId: data.performedBy.userId ?? null,
             checklistItems: {
                 create: itemsPayload
             }
@@ -101,7 +103,7 @@ export async function createAssetInspection(data: {
             assetCode: asset.assetCode,
             from: asset.kondisi,
             to: data.kondisiSaat,
-            performedBy: data.performedBy,
+            performedBy: data.performedBy.identifier,
         });
     }
 

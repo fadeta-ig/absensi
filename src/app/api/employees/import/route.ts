@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { validateImport, executeImport } from "@/lib/services/bulk-import";
 import logger from "@/lib/logger";
+import { actorFromSession } from "@/lib/services/auditService";
 
 export async function POST(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
@@ -33,11 +34,11 @@ export async function POST(request: NextRequest) {
         }
 
         if (mode === "execute") {
-            const result = await executeImport(buffer, session.employeeId);
+            const result = await executeImport(buffer, actorFromSession(session));
             logger.info("Bulk import executed", {
                 created: result.created,
                 failed: result.failed,
-                performedBy: session.employeeId,
+                performedBy: session.username,
             });
             return NextResponse.json(result, { status: 201 });
         }

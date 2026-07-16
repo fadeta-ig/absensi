@@ -74,7 +74,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 if (!meRes.ok) { router.replace("/"); return; }
                 const data = await meRes.json();
-                if (data.role !== "hr") { router.replace("/employee"); return; }
+                if (!data.permissions?.includes("hr.manage")) { router.replace(data.permissions?.includes("ga.manage") ? "/ga" : "/employee"); return; }
                 setUser(data);
 
                 if (catRes.ok) {
@@ -103,6 +103,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Susun item menu dinamis
     const dynamicNavItems: NavItem[] = [
         ...navItems,
+        ...(user.permissions?.includes("user.manage") ? [{
+            href: "/dashboard/users",
+            icon: Users,
+            label: "User",
+        }] : []),
         {
             label: "Aset Perusahaan",
             icon: Package,
