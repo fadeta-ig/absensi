@@ -17,12 +17,20 @@ export type FormPayrollComponent = {
 export interface FormState {
     employeeId: string;
     name: string;
+    academicTitle: string;
+    preferredName: string;
     email: string;
     phone: string;
+    alternatePhone: string;
+    gender: "Laki-Laki" | "Perempuan";
     departmentId: string;
     divisionId: string;
     positionId: string;
     joinDate: string;
+    employmentType: "PERMANENT" | "CONTRACT" | "PROBATION" | "INTERN";
+    employmentStartDate: string;
+    employmentEndDate: string;
+    probationEndDate: string;
     totalLeave: number;
     usedLeave: number;
     shiftId: string;
@@ -31,4 +39,25 @@ export interface FormState {
     basicSalary: number;
     payrollComponents: FormPayrollComponent[];
     managerId: string;
+    birthPlace: string;
+    birthDate: string;
+    maritalStatus: string;
+    bloodType: string;
+    religion: string;
+    lastEducation: string;
+    notes: string;
+    nationalId: string;
+    familyCardNumber: string;
+    bpjsEmploymentNumber: string;
+    bpjsHealthNumber: string;
+    idCardAddress: string;
+    domicileAddress: string;
+    emergencyContactName: string;
+    emergencyContactRelationship: string;
+    emergencyContactPhone: string;
+    bankName: string;
+    bankAccountNumber: string;
+    bankAccountHolderName: string;
+    ptkpStatus: string;
+    ptkpEffectiveDate: string;
 }

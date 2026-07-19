@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { fetchWithAuth, getAuthCookie } from "../utils/apiTestHelper";
 
 describe("Master Data API Endpoints", () => {
@@ -10,6 +10,16 @@ describe("Master Data API Endpoints", () => {
 
     describe("Divisions API (/api/master/divisions)", () => {
         let divisionId: string;
+
+        afterAll(async () => {
+            if (!divisionId) return;
+            const response = await fetchWithAuth(
+                `/master/divisions?id=${encodeURIComponent(divisionId)}`,
+                hrCookie,
+                { method: "DELETE" }
+            );
+            expect(response.status).toBe(200);
+        });
 
         it("should create a new division", async () => {
             const res = await fetchWithAuth("/master/divisions", hrCookie, {

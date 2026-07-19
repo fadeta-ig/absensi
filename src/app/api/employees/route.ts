@@ -15,36 +15,49 @@ import logger from "@/lib/logger";
 import { canManageHr } from "@/lib/permissions";
 
 function serializeEmployee(employee: EmployeeWithRelations, includeHrData: boolean) {
-    const {
-        faceDescriptor: _faceDescriptor,
-        ...safe
-    } = employee;
-    void _faceDescriptor;
-
     const organization = {
         department: employee.departmentRel?.name || "-",
         division: employee.divisionRel?.name || "-",
         position: employee.positionRel?.name || "-",
     };
 
-    if (includeHrData) return { ...safe, ...organization };
-
-    return {
-        id: safe.id,
-        employeeId: safe.employeeId,
-        name: safe.name,
-        departmentId: safe.departmentId,
-        divisionId: safe.divisionId,
-        positionId: safe.positionId,
-        managerId: safe.managerId,
-        joinDate: safe.joinDate,
-        isActive: safe.isActive,
-        shiftId: safe.shiftId,
-        bypassLocation: safe.bypassLocation,
-        locations: safe.locations,
-        manager: safe.manager,
-        subordinates: safe.subordinates,
+    const publicData = {
+        id: employee.id,
+        employeeId: employee.employeeId,
+        name: employee.name,
+        academicTitle: employee.academicTitle,
+        preferredName: employee.preferredName,
+        departmentId: employee.departmentId,
+        divisionId: employee.divisionId,
+        positionId: employee.positionId,
+        managerId: employee.managerId,
+        employmentType: employee.employmentType,
+        joinDate: employee.joinDate,
+        employmentStartDate: employee.employmentStartDate,
+        employmentEndDate: employee.employmentEndDate,
+        probationEndDate: employee.probationEndDate,
+        isActive: employee.isActive,
+        statusChangedAt: employee.statusChangedAt,
+        shiftId: employee.shiftId,
+        bypassLocation: employee.bypassLocation,
+        locations: employee.locations,
+        manager: employee.manager,
+        subordinates: employee.subordinates,
         ...organization,
+    };
+
+    if (!includeHrData) return publicData;
+    return {
+        ...publicData,
+        email: employee.email,
+        phone: employee.phone,
+        alternatePhone: employee.alternatePhone,
+        gender: employee.gender,
+        totalLeave: employee.totalLeave,
+        usedLeave: employee.usedLeave,
+        avatarUrl: employee.avatarUrl,
+        basicSalary: employee.basicSalary,
+        payrollComponents: employee.payrollComponents,
     };
 }
 
@@ -91,12 +104,13 @@ export async function POST(request: NextRequest) {
         const plainPassword = randomBytes(9).toString("base64url");
         const hashedPassword = await bcrypt.hash(plainPassword, 12);
 
+        const actor = actorFromSession(session);
         const employee = await createEmployee({
             ...body,
             passwordHash: hashedPassword,
             createdByUserId: session.userId,
             isActive: true,
-        });
+        }, actor);
 
         // Send password via email (Synchronous with try/catch for reliability)
         let emailWarning = false;
@@ -109,16 +123,19 @@ export async function POST(request: NextRequest) {
         }
 
         logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.username });
-        await logAction("CREATE", "Employee", actorFromSession(session), employee.id, { employeeId: employee.employeeId, name: employee.name });
+        await logAction("CREATE", "Employee", actor, employee.id, { employeeId: employee.employeeId, name: employee.name });
 
         return NextResponse.json({ ...serializeEmployee(employee, true), _emailWarning: emailWarning }, { status: 201 });
     } catch (err: unknown) {
         const prismaError = err as { code?: string };
         if (prismaError.code === "P2002") {
-            return NextResponse.json({ error: "ID Karyawan sudah terdaftar. Gunakan ID lain." }, { status: 400 });
+            return NextResponse.json({ error: "Email, NIP, nomor identitas, atau rekening sudah digunakan oleh data lain." }, { status: 409 });
         }
         if (prismaError.code === "P2003") {
             return NextResponse.json({ error: "Data referensi tidak valid (shift/atasan). Silakan periksa kembali." }, { status: 400 });
+        }
+        if (err instanceof Error && (err.message.includes("harus diisi lengkap") || err.message.includes("PTKP") || err.message.includes("NIP berkonflik") || err.message.includes("Tanggal") || err.message.includes("hierarki") || err.message.includes("atasan") || err.message.includes("Departemen"))) {
+            return NextResponse.json({ error: err.message }, { status: 400 });
         }
         return serverErrorResponse("EmployeesPOST", err);
     }
@@ -138,18 +155,25 @@ export async function PUT(request: NextRequest) {
 
         const { id, ...data } = result.data;
 
-        const updated = await updateEmployee(id, data);
+        const actor = actorFromSession(session);
+        const updated = await updateEmployee(id, data, actor);
         if (!updated) {
             return NextResponse.json({ error: "Data karyawan tidak ditemukan." }, { status: 404 });
         }
 
         logger.info("Employee updated", { targetId: updated.employeeId, updatedBy: session.username });
-        await logAction("UPDATE", "Employee", actorFromSession(session), updated.id, data);
+        await logAction("UPDATE", "Employee", actor, updated.id, {
+            employeeId: updated.employeeId,
+            changedFields: Object.keys(data),
+        });
 
         return NextResponse.json(serializeEmployee(updated, true));
     } catch (err: unknown) {
         if ((err as { code?: string })?.code === "P2002") {
-            return NextResponse.json({ error: "ID Karyawan sudah digunakan oleh akun lain." }, { status: 400 });
+            return NextResponse.json({ error: "Email, NIP, nomor identitas, atau rekening sudah digunakan oleh data lain." }, { status: 409 });
+        }
+        if (err instanceof Error && (err.message.includes("harus diisi lengkap") || err.message.includes("PTKP") || err.message.includes("NIP berkonflik") || err.message.includes("Tanggal") || err.message.includes("hierarki") || err.message.includes("atasan") || err.message.includes("Departemen"))) {
+            return NextResponse.json({ error: err.message }, { status: 400 });
         }
         return serverErrorResponse("EmployeesPUT", err);
     }

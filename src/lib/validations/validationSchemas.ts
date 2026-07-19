@@ -42,6 +42,59 @@ export const attendanceSchema = z.object({
 
 /* ───────────────────── Employee ───────────────────── */
 
+const optionalNullableText = (max = 1000) => z.preprocess(
+    (value) => value === "" ? null : value,
+    z.string().trim().max(max).nullable().optional(),
+);
+
+const optionalEmployeeDate = z.preprocess(
+    (value) => value === "" ? null : value,
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus berformat YYYY-MM-DD").nullable().optional(),
+);
+
+const employeeExtendedFields = {
+    academicTitle: optionalNullableText(100),
+    preferredName: optionalNullableText(100),
+    alternatePhone: optionalNullableText(50),
+    employmentType: z.enum(["PERMANENT", "CONTRACT", "PROBATION", "INTERN"]).optional().default("PERMANENT"),
+    employmentStartDate: optionalEmployeeDate,
+    employmentEndDate: optionalEmployeeDate,
+    probationEndDate: optionalEmployeeDate,
+    birthPlace: optionalNullableText(191),
+    birthDate: optionalEmployeeDate,
+    maritalStatus: optionalNullableText(50),
+    bloodType: optionalNullableText(5),
+    religion: optionalNullableText(50),
+    lastEducation: optionalNullableText(100),
+    notes: optionalNullableText(5000),
+    nationalId: optionalNullableText(50),
+    familyCardNumber: optionalNullableText(50),
+    bpjsEmploymentNumber: optionalNullableText(50),
+    bpjsHealthNumber: optionalNullableText(50),
+    idCardAddress: optionalNullableText(5000),
+    domicileAddress: optionalNullableText(5000),
+    emergencyContactName: optionalNullableText(191),
+    emergencyContactRelationship: optionalNullableText(100),
+    emergencyContactPhone: optionalNullableText(50),
+    bankName: optionalNullableText(100),
+    bankAccountNumber: optionalNullableText(100),
+    bankAccountHolderName: optionalNullableText(191),
+    ptkpStatus: z.preprocess(
+        (value) => value === "" ? null : value,
+        z.enum(["TK", "K/0", "K/1", "K/2", "K/3", "TK/1", "TK/2", "TK/3"], { message: "Status PTKP tidak valid" }).nullable().optional(),
+    ),
+    ptkpEffectiveDate: optionalEmployeeDate,
+};
+
+function validateEmployeeDates(data: { employmentStartDate?: string | null; employmentEndDate?: string | null; birthDate?: string | null }, context: z.RefinementCtx) {
+    if (data.employmentStartDate && data.employmentEndDate && data.employmentEndDate < data.employmentStartDate) {
+        context.addIssue({ code: "custom", path: ["employmentEndDate"], message: "Tanggal selesai kerja tidak boleh sebelum tanggal mulai" });
+    }
+    if (data.birthDate && data.birthDate > new Date().toISOString().slice(0, 10)) {
+        context.addIssue({ code: "custom", path: ["birthDate"], message: "Tanggal lahir tidak boleh berada di masa depan" });
+    }
+}
+
 export const employeeCreateSchema = z.object({
     employeeId: z.string().min(1, "ID Karyawan harus diisi"),
     name: z.string().min(1, "Nama harus diisi"),
@@ -64,7 +117,9 @@ export const employeeCreateSchema = z.object({
         amount: z.number().min(0, "Amount tidak boleh negatif"),
     })).optional().default([]),
     avatarUrl: z.string().nullable().optional(),
-});
+    ...employeeExtendedFields,
+    employmentType: z.enum(["PERMANENT", "CONTRACT", "PROBATION", "INTERN"]).optional().default("PERMANENT"),
+}).superRefine(validateEmployeeDates);
 
 export const employeeUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
@@ -93,10 +148,13 @@ export const employeeUpdateSchema = z.object({
     })).optional(),
     // Foto profil
     avatarUrl: z.string().nullable().optional(),
+    ...employeeExtendedFields,
+    employmentType: z.enum(["PERMANENT", "CONTRACT", "PROBATION", "INTERN"]).optional(),
     // ⛔ DILARANG via schema ini: role akun, password, faceDescriptor, employeeId
-});
+}).superRefine(validateEmployeeDates);
 // Tipe untuk route handler agar tidak perlu cast 'as any'
 export type EmployeeUpdatePayload = z.infer<typeof employeeUpdateSchema>;
+export type EmployeeCreatePayload = z.infer<typeof employeeCreateSchema>;
 
 export const employeeStatusChangeSchema = z.object({
     isActive: z.boolean(),

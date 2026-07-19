@@ -1,10 +1,13 @@
 import { prisma } from "../prisma";
-import { Employee } from "@/types";
 import { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
 import { canManageGa, canManageHr, type AccessPrincipal } from "@/lib/permissions";
+import type { EmployeeCreatePayload, EmployeeUpdatePayload } from "@/lib/validations/validationSchemas";
+import type { AuditActor } from "@/lib/services/auditService";
+import { applyEmployeePrivateData, employeePrivateRelations } from "@/lib/services/employeePrivateService";
+import { normalizeEmployeeId } from "@/lib/security/pii";
 
-const employeeRelations = {
+export const employeeRelations = {
     locations: { select: { id: true, name: true } },
     payrollComponents: { include: { component: true } },
     manager: { select: { id: true, employeeId: true, name: true, isActive: true } },
@@ -17,6 +20,15 @@ const employeeRelations = {
 // Tipe relasi komprehensif dari Prisma langsung (Strict Type)
 export type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
     include: typeof employeeRelations;
+}>;
+
+const employeeDetailRelations = {
+    ...employeeRelations,
+    ...employeePrivateRelations,
+} satisfies Prisma.EmployeeInclude;
+
+export type EmployeePrivateDetail = Prisma.EmployeeGetPayload<{
+    include: typeof employeeDetailRelations;
 }>;
 
 export async function getEmployees(): Promise<EmployeeWithRelations[]> {
@@ -111,28 +123,59 @@ export async function getEmployeeByEmployeeId(employeeId: string): Promise<Emplo
     return row;
 }
 
-export type CreateEmployeeInput = Omit<Employee, "id" | "statusChangedAt"> & {
+export async function getEmployeePrivateDetailById(id: string): Promise<EmployeePrivateDetail | null> {
+    return prisma.employee.findUnique({
+        where: { id },
+        include: employeeDetailRelations,
+    });
+}
+
+export type CreateEmployeeInput = EmployeeCreatePayload & {
     passwordHash: string;
     createdByUserId: string;
+    isActive?: boolean;
 };
 
-export async function createEmployee(data: CreateEmployeeInput): Promise<EmployeeWithRelations> {
+export async function createEmployee(data: CreateEmployeeInput, actor: AuditActor): Promise<EmployeeWithRelations> {
     return prisma.$transaction(async (tx) => {
         const employeeRole = await tx.role.findUnique({ where: { code: "EMPLOYEE_USER" }, select: { id: true } });
         if (!employeeRole) throw new Error("Role EMPLOYEE_USER belum dikonfigurasi.");
 
+        const employeeIdNormalized = normalizeEmployeeId(data.employeeId);
+        const employeeIdentifiers = await tx.employee.findMany({ select: { employeeId: true, employeeIdNormalized: true } });
+        const normalizedConflict = employeeIdentifiers.find((employee) =>
+            employee.employeeId === data.employeeId
+            || employee.employeeIdNormalized === employeeIdNormalized
+            || normalizeEmployeeId(employee.employeeId) === employeeIdNormalized
+        );
+        if (normalizedConflict) {
+            throw new Error(`NIP berkonflik dengan karyawan ${normalizedConflict.employeeId}.`);
+        }
+        const department = await tx.department.findUnique({ where: { id: data.departmentId }, select: { divisionId: true } });
+        if (!department) throw new Error("Departemen tidak ditemukan.");
+        const resolvedDivisionId = data.divisionId ?? department.divisionId;
+        if (resolvedDivisionId !== department.divisionId) throw new Error("Departemen tidak berada pada divisi yang dipilih.");
+
         const row = await tx.employee.create({
             data: {
             employeeId: data.employeeId,
+            employeeIdNormalized,
             name: data.name,
+            academicTitle: data.academicTitle,
+            preferredName: data.preferredName,
             email: data.email,
             phone: data.phone,
+            alternatePhone: data.alternatePhone,
             gender: data.gender,
+            employmentType: data.employmentType,
             departmentId: data.departmentId,
-            divisionId: data.divisionId,
+            divisionId: resolvedDivisionId,
             positionId: data.positionId,
             managerId: data.managerId || null,
             joinDate: data.joinDate ? new Date(data.joinDate + "T00:00:00.000Z") : new Date(),
+            employmentStartDate: data.employmentStartDate ? new Date(`${data.employmentStartDate}T00:00:00.000Z`) : new Date(`${data.joinDate}T00:00:00.000Z`),
+            employmentEndDate: data.employmentEndDate ? new Date(`${data.employmentEndDate}T00:00:00.000Z`) : null,
+            probationEndDate: data.probationEndDate ? new Date(`${data.probationEndDate}T00:00:00.000Z`) : null,
             totalLeave: data.totalLeave,
             usedLeave: data.usedLeave,
             avatarUrl: data.avatarUrl,
@@ -151,9 +194,11 @@ export async function createEmployee(data: CreateEmployeeInput): Promise<Employe
                     amount: c.amount
                 }))
             } : undefined,
-        },
+            },
             include: employeeRelations,
         });
+
+        await applyEmployeePrivateData(tx, row.employeeId, data, actor);
 
         await tx.userAccount.create({
             data: {
@@ -176,40 +221,64 @@ export async function createEmployee(data: CreateEmployeeInput): Promise<Employe
     });
 }
 
-export async function updateEmployee(id: string, data: Partial<Employee>): Promise<EmployeeWithRelations | null> {
+export async function updateEmployee(
+    id: string,
+    data: Omit<EmployeeUpdatePayload, "id">,
+    actor: AuditActor,
+): Promise<EmployeeWithRelations | null> {
     try {
+        const existingEmployee = await prisma.employee.findUnique({
+            where: { id },
+            select: { employeeId: true, employmentStartDate: true, employmentEndDate: true, departmentId: true, divisionId: true },
+        });
+        if (!existingEmployee) return null;
+
+        const effectiveStart = data.employmentStartDate === undefined
+            ? existingEmployee.employmentStartDate
+            : data.employmentStartDate ? new Date(`${data.employmentStartDate}T00:00:00.000Z`) : null;
+        const effectiveEnd = data.employmentEndDate === undefined
+            ? existingEmployee.employmentEndDate
+            : data.employmentEndDate ? new Date(`${data.employmentEndDate}T00:00:00.000Z`) : null;
+        if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+            throw new Error("Tanggal selesai kerja tidak boleh sebelum tanggal mulai.");
+        }
+
+        let resolvedDivisionId = data.divisionId;
+        if (data.departmentId !== undefined || data.divisionId !== undefined) {
+            const departmentId = data.departmentId ?? existingEmployee.departmentId;
+            const department = await prisma.department.findUnique({ where: { id: departmentId }, select: { divisionId: true } });
+            if (!department) throw new Error("Departemen tidak ditemukan.");
+            resolvedDivisionId = data.divisionId === undefined
+                ? (data.departmentId !== undefined ? department.divisionId : existingEmployee.divisionId)
+                : data.divisionId;
+            if (!resolvedDivisionId || resolvedDivisionId !== department.divisionId) throw new Error("Departemen tidak berada pada divisi yang dipilih.");
+        }
+
         if (data.managerId !== undefined && data.managerId !== null) {
-            const existingEmployee = await prisma.employee.findUnique({
-                where: { id },
-                select: { employeeId: true }
-            });
+            // Prevent self-assignment
+            if (data.managerId === existingEmployee.employeeId) {
+                throw new Error("Karyawan tidak dapat menjadi atasan untuk dirinya sendiri.");
+            }
 
-            if (existingEmployee) {
-                // Prevent self-assignment
-                if (data.managerId === existingEmployee.employeeId) {
-                    throw new Error("Karyawan tidak dapat menjadi atasan untuk dirinya sendiri.");
+            // DFS Cycle Detection
+            let currentManagerId: string | null = data.managerId;
+            const visited = new Set<string>();
+
+            while (currentManagerId) {
+                if (visited.has(currentManagerId)) {
+                    throw new Error("Hierarki melingkar terdeteksi. Silakan periksa kembali struktur atasan.");
+                }
+                visited.add(currentManagerId);
+
+                if (currentManagerId === existingEmployee.employeeId) {
+                    throw new Error("Perubahan atasan ini akan menyebabkan hierarki melingkar (Circular Hierarchy).");
                 }
 
-                // DFS Cycle Detection
-                let currentManagerId: string | null = data.managerId;
-                const visited = new Set<string>();
-
-                while (currentManagerId) {
-                    if (visited.has(currentManagerId)) {
-                        throw new Error("Hierarki melingkar terdeteksi. Silakan periksa kembali struktur atasan.");
-                    }
-                    visited.add(currentManagerId);
-
-                    if (currentManagerId === existingEmployee.employeeId) {
-                        throw new Error("Perubahan atasan ini akan menyebabkan hierarki melingkar (Circular Hierarchy).");
-                    }
-
-                    const managerRow: { managerId: string | null } | null = await prisma.employee.findUnique({
-                        where: { employeeId: currentManagerId },
-                        select: { managerId: true }
-                    });
-                    currentManagerId = managerRow?.managerId || null;
-                }
+                const managerRow: { managerId: string | null } | null = await prisma.employee.findUnique({
+                    where: { employeeId: currentManagerId },
+                    select: { managerId: true }
+                });
+                currentManagerId = managerRow?.managerId || null;
             }
         }
 
@@ -218,14 +287,21 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 where: { id },
                 data: {
                 ...(data.name !== undefined && { name: data.name }),
+                ...(data.academicTitle !== undefined && { academicTitle: data.academicTitle }),
+                ...(data.preferredName !== undefined && { preferredName: data.preferredName }),
                 ...(data.email !== undefined && { email: data.email }),
                 ...(data.phone !== undefined && { phone: data.phone }),
+                ...(data.alternatePhone !== undefined && { alternatePhone: data.alternatePhone }),
                 ...(data.gender !== undefined && { gender: data.gender }),
+                ...(data.employmentType !== undefined && { employmentType: data.employmentType }),
                 ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
-                ...(data.divisionId !== undefined && { divisionId: data.divisionId }),
+                ...(resolvedDivisionId !== undefined && { divisionId: resolvedDivisionId }),
                 ...(data.positionId !== undefined && { positionId: data.positionId }),
                 ...(data.managerId !== undefined && { managerId: data.managerId || null }),
                 ...(data.joinDate !== undefined && { joinDate: new Date(data.joinDate + "T00:00:00.000Z") }),
+                ...(data.employmentStartDate !== undefined && { employmentStartDate: data.employmentStartDate ? new Date(`${data.employmentStartDate}T00:00:00.000Z`) : null }),
+                ...(data.employmentEndDate !== undefined && { employmentEndDate: data.employmentEndDate ? new Date(`${data.employmentEndDate}T00:00:00.000Z`) : null }),
+                ...(data.probationEndDate !== undefined && { probationEndDate: data.probationEndDate ? new Date(`${data.probationEndDate}T00:00:00.000Z`) : null }),
                 ...(data.totalLeave !== undefined && { totalLeave: data.totalLeave }),
                 ...(data.usedLeave !== undefined && { usedLeave: data.usedLeave }),
                 ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl }),
@@ -252,6 +328,8 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
                 include: employeeRelations,
             });
 
+            await applyEmployeePrivateData(tx, updated.employeeId, data, actor);
+
             if (data.name !== undefined || data.email !== undefined) {
                 await tx.userAccount.updateMany({
                     where: { employeeId: updated.employeeId },
@@ -266,7 +344,7 @@ export async function updateEmployee(id: string, data: Partial<Employee>): Promi
         return row;
     } catch (err) {
         logger.error("updateEmployee Gagal", { id, error: err instanceof Error ? err.message : String(err) });
-        throw new Error("Gagal memperbarui data karyawan. Silakan periksa kembali constraint database.");
+        throw err;
     }
 }
 

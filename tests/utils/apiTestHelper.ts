@@ -4,12 +4,28 @@ export const API_BASE_URL = "http://localhost:3000/api";
 
 type Role = "hr" | "ga" | "employee";
 
+const authCookieCache = new Map<Role, Promise<string>>();
 
 
 /**
  * Logs in and returns the raw cookie string that can be used in the fetch 'Cookie' header.
  */
 export async function getAuthCookie(role: Role): Promise<string> {
+    const cached = authCookieCache.get(role);
+    if (cached) return cached;
+
+    const loginPromise = loginAndGetCookie(role);
+    authCookieCache.set(role, loginPromise);
+
+    try {
+        return await loginPromise;
+    } catch (error) {
+        authCookieCache.delete(role);
+        throw error;
+    }
+}
+
+async function loginAndGetCookie(role: Role): Promise<string> {
     const employeeId = role === "hr" ? "WIG001" : role === "ga" ? "WIG002" : "ID25000000"; // Assuming dev seed doesn't have an employee by default except we use db:seed:employee, but let's stick to hr and ga for most tests.
     
     const res = await fetch(`${API_BASE_URL}/auth/login`, {

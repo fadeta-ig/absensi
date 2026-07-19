@@ -49,6 +49,15 @@ export function JobSection({
                         {masterPositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                 </div>
+                <div className="form-group !mb-0">
+                    <label className="form-label">Status Karyawan</label>
+                    <select className="form-select" value={form.employmentType} onChange={(event) => setForm({ ...form, employmentType: event.target.value as FormState["employmentType"] })} required>
+                        <option value="PERMANENT">Tetap</option>
+                        <option value="CONTRACT">Kontrak</option>
+                        <option value="PROBATION">Probation</option>
+                        <option value="INTERN">Magang</option>
+                    </select>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -74,7 +83,22 @@ export function JobSection({
                 </div>
                 <div className="form-group !mb-0">
                     <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-[var(--text-muted)]" /> Tanggal Bergabung</span></label>
-                    <input type="date" className="form-input" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} required />
+                    <input type="date" className="form-input" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value, employmentStartDate: form.employmentStartDate || e.target.value })} required />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="form-group !mb-0">
+                    <label className="form-label">Tanggal Mulai Kerja</label>
+                    <input type="date" className="form-input" value={form.employmentStartDate} onChange={(event) => setForm({ ...form, employmentStartDate: event.target.value })} />
+                </div>
+                <div className="form-group !mb-0">
+                    <label className="form-label">Tanggal Selesai Kerja</label>
+                    <input type="date" className="form-input" value={form.employmentEndDate} onChange={(event) => setForm({ ...form, employmentEndDate: event.target.value })} min={form.employmentStartDate || undefined} />
+                </div>
+                <div className="form-group !mb-0">
+                    <label className="form-label">Selesai Probation/Magang</label>
+                    <input type="date" className="form-input" value={form.probationEndDate} onChange={(event) => setForm({ ...form, probationEndDate: event.target.value })} min={form.employmentStartDate || undefined} />
                 </div>
             </div>
 

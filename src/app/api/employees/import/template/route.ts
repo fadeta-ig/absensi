@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { generateTemplate } from "@/lib/services/bulk-import";
+import { canManageHr } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
     const rateLimited = checkApiRateLimit(request.headers);
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session)) return forbiddenResponse();
 
     try {
         const buffer = await generateTemplate();
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
             status: 200,
             headers: {
                 "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "Content-Disposition": "attachment; filename=Template_Import_Karyawan.xlsx",
+                "Content-Disposition": "attachment; filename=Template_Import_Karyawan_V2.xlsx",
             },
         });
     } catch (err) {

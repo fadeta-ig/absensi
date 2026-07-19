@@ -11,6 +11,7 @@ interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftD
 interface Employee {
     id: string; employeeId: string; name: string; email: string; phone: string;
     department: string; division?: string | null; position: string; isActive: boolean; joinDate: string; shiftId?: string;
+    employmentType: "PERMANENT" | "CONTRACT" | "PROBATION" | "INTERN";
     bypassLocation: boolean; locations?: { id: string; name: string }[];
 }
 
@@ -238,7 +239,7 @@ export default function EmployeesPage() {
                                             <div>{getShiftName(e.shiftId)}</div>
                                             <div className="text-[10px] text-[var(--text-muted)]">{getShiftDaysSummary(e.shiftId)}</div>
                                         </td>
-                                        <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
+                                        <td><div className="flex flex-col items-start gap-1"><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span><span className="text-[10px] text-[var(--text-muted)]">{({ PERMANENT: "Tetap", CONTRACT: "Kontrak", PROBATION: "Probation", INTERN: "Magang" } as const)[e.employmentType] ?? "Tetap"}</span></div></td>
                                         <td>
                                             <div className="flex items-center gap-1.5">
                                                 {e.isActive && (
@@ -280,7 +281,7 @@ export default function EmployeesPage() {
             <BulkImportModal
                 isOpen={showImportModal}
                 onClose={() => setShowImportModal(false)}
-                onImportComplete={() => {
+                onSuccess={() => {
                     void fetchEmployees();
                 }}
             />

@@ -10,6 +10,8 @@ import { IdentitySection } from "./employee-form/IdentitySection";
 import { JobSection } from "./employee-form/JobSection";
 import { PayrollSection } from "./employee-form/PayrollSection";
 import { LocationSection } from "./employee-form/LocationSection";
+import { PrivateDataSection } from "./employee-form/PrivateDataSection";
+import { EmployeeDocumentManager } from "./employee-form/EmployeeDocumentManager";
 
 
 interface Props {
@@ -32,15 +34,25 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
     const [masterPayroll, setMasterPayroll] = useState<MasterPayrollComponent[]>([]);
     const [allEmployees, setAllEmployees] = useState<{ employeeId: string; name: string }[]>([]);
 
+    const dateInput = (value?: string | null) => value ? String(value).slice(0, 10) : "";
+    const today = new Date().toISOString().split("T")[0];
     const [form, setForm] = useState<FormState>({
         employeeId: initialData?.employeeId || "",
         name: initialData?.name || "",
+        academicTitle: initialData?.academicTitle || "",
+        preferredName: initialData?.preferredName || "",
         email: initialData?.email || "",
         phone: initialData?.phone || "",
+        alternatePhone: initialData?.alternatePhone || "",
+        gender: initialData?.gender || "Laki-Laki",
         departmentId: initialData?.departmentId || "",
         divisionId: initialData?.divisionId || "",
         positionId: initialData?.positionId || "",
-        joinDate: initialData?.joinDate || new Date().toISOString().split("T")[0],
+        joinDate: dateInput(initialData?.joinDate) || today,
+        employmentType: initialData?.employmentType || "PERMANENT",
+        employmentStartDate: dateInput(initialData?.employmentStartDate) || dateInput(initialData?.joinDate) || today,
+        employmentEndDate: dateInput(initialData?.employmentEndDate),
+        probationEndDate: dateInput(initialData?.probationEndDate),
         totalLeave: initialData?.totalLeave ?? 12,
         usedLeave: initialData?.usedLeave ?? 0,
         shiftId: initialData?.shiftId || "",
@@ -49,6 +61,27 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         basicSalary: initialData?.basicSalary || 0,
         payrollComponents: (initialData?.payrollComponents || []) as FormPayrollComponent[],
         managerId: initialData?.managerId || "",
+        birthPlace: initialData?.birthPlace || "",
+        birthDate: dateInput(initialData?.birthDate),
+        maritalStatus: initialData?.maritalStatus || "",
+        bloodType: initialData?.bloodType || "",
+        religion: initialData?.religion || "",
+        lastEducation: initialData?.lastEducation || "",
+        notes: initialData?.notes || "",
+        nationalId: initialData?.nationalId || "",
+        familyCardNumber: initialData?.familyCardNumber || "",
+        bpjsEmploymentNumber: initialData?.bpjsEmploymentNumber || "",
+        bpjsHealthNumber: initialData?.bpjsHealthNumber || "",
+        idCardAddress: initialData?.idCardAddress || "",
+        domicileAddress: initialData?.domicileAddress || "",
+        emergencyContactName: initialData?.emergencyContactName || "",
+        emergencyContactRelationship: initialData?.emergencyContactRelationship || "",
+        emergencyContactPhone: initialData?.emergencyContactPhone || "",
+        bankName: initialData?.bankName || "",
+        bankAccountNumber: initialData?.bankAccountNumber || "",
+        bankAccountHolderName: initialData?.bankAccountHolderName || "",
+        ptkpStatus: initialData?.ptkpStatus || "",
+        ptkpEffectiveDate: dateInput(initialData?.ptkpEffectiveDate),
     });
 
     useEffect(() => {
@@ -199,7 +232,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column (Identity & Job) */}
                 <div className="lg:col-span-7 space-y-6">
-                    <IdentitySection form={form} setForm={setForm} />
+                    <IdentitySection form={form} setForm={setForm} isEdit={isEdit} />
                     <JobSection
                         form={form}
                         setForm={setForm}
@@ -230,6 +263,12 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                     />
                 </div>
             </div>
+
+            <PrivateDataSection form={form} setForm={setForm} />
+
+            {isEdit && initialData?.id && (
+                <EmployeeDocumentManager employeeDatabaseId={initialData.id} employeeIsActive={Boolean(initialData.isActive)} />
+            )}
         </form>
     );
 }

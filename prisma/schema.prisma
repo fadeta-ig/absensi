@@ -9,21 +9,29 @@ datasource db {
 }
 
 model Employee {
-  id           String  @id @default(uuid())
-  employeeId   String  @unique @map("employee_id")
-  name         String
-  email        String  @unique
-  phone        String
-  departmentId String  @map("department_id")
-  divisionId   String? @map("division_id")
-  positionId   String  @map("position_id")
+  id                   String  @id @default(uuid())
+  employeeId           String  @unique @map("employee_id")
+  employeeIdNormalized String? @unique @map("employee_id_normalized") @db.VarChar(100)
+  name                 String
+  academicTitle        String? @map("academic_title")
+  preferredName        String? @map("preferred_name")
+  email                String  @unique
+  phone                String
+  alternatePhone       String? @map("alternate_phone")
+  departmentId         String  @map("department_id")
+  divisionId           String? @map("division_id")
+  positionId           String  @map("position_id")
 
   departmentRel         Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   divisionRel           Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   positionRel           Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   gender                String                     @default("Laki-Laki")
+  employmentType        EmploymentType             @default(PERMANENT) @map("employment_type")
   faceDescriptor        String?                    @map("face_descriptor") @db.LongText
   joinDate              DateTime                   @map("join_date")
+  employmentStartDate   DateTime?                  @map("employment_start_date")
+  employmentEndDate     DateTime?                  @map("employment_end_date")
+  probationEndDate      DateTime?                  @map("probation_end_date")
   totalLeave            Int                        @default(12) @map("total_leave")
   usedLeave             Int                        @default(0) @map("used_leave")
   avatarUrl             String?                    @map("avatar_url") @db.LongText
@@ -53,11 +61,26 @@ model Employee {
   assetTickets          AssetTicket[]
   simCards              SimCard[]
   documents             EmployeeDocument[]
+  privateProfile        EmployeePrivateProfile?
+  identity              EmployeeIdentity?
+  addresses             EmployeeAddress[]
+  emergencyContacts     EmployeeEmergencyContact[]
+  bankAccounts          EmployeeBankAccount[]
+  taxProfile            EmployeeTaxProfile?
+  taxHistories          EmployeeTaxHistory[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
   @@index([isActive], map: "idx_employees_is_active")
+  @@index([employmentType], map: "idx_employees_employment_type")
   @@map("employees")
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
+  PROBATION
+  INTERN
 }
 
 model UserAccount {
@@ -86,6 +109,9 @@ model UserAccount {
   assetHistories      AssetHistory[]          @relation("AssetHistoryActor")
   assetBastUploads    AssetBastDocument[]     @relation("AssetBastActor")
   assetInspections    AssetInspection[]       @relation("AssetInspectionActor")
+  employeeDocuments   EmployeeDocument[]      @relation("EmployeeDocumentUploader")
+  taxChanges          EmployeeTaxHistory[]    @relation("EmployeeTaxHistoryActor")
+  employeeImportJobs  EmployeeImportJob[]     @relation("EmployeeImportActor")
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -748,6 +774,157 @@ model SimCard {
   @@map("sim_cards")
 }
 
+// ─── Employee Private HR Data ───────────────────────────────────
+
+model EmployeePrivateProfile {
+  id            String    @id @default(uuid())
+  employeeId    String    @unique @map("employee_id")
+  birthPlace    String?   @map("birth_place")
+  birthDate     DateTime? @map("birth_date")
+  maritalStatus String?   @map("marital_status") @db.VarChar(50)
+  bloodType     String?   @map("blood_type") @db.VarChar(5)
+  religion      String?   @db.VarChar(50)
+  lastEducation String?   @map("last_education") @db.VarChar(100)
+  notes         String?   @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("employee_private_profiles")
+}
+
+model EmployeeIdentity {
+  id                   String   @id @default(uuid())
+  employeeId           String   @unique @map("employee_id")
+  nationalId           String?  @map("national_id") @db.Text
+  nationalIdHash       String?  @unique @map("national_id_hash") @db.VarChar(64)
+  familyCardNumber     String?  @map("family_card_number") @db.Text
+  familyCardNumberHash String?  @map("family_card_number_hash") @db.VarChar(64)
+  bpjsEmploymentNumber String?  @map("bpjs_employment_number") @db.Text
+  bpjsEmploymentHash   String?  @unique @map("bpjs_employment_hash") @db.VarChar(64)
+  bpjsHealthNumber     String?  @map("bpjs_health_number") @db.Text
+  bpjsHealthHash       String?  @unique @map("bpjs_health_hash") @db.VarChar(64)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([familyCardNumberHash], map: "idx_employee_identity_family_card_hash")
+  @@map("employee_identities")
+}
+
+enum EmployeeAddressType {
+  ID_CARD
+  DOMICILE
+}
+
+model EmployeeAddress {
+  id         String              @id @default(uuid())
+  employeeId String              @map("employee_id")
+  type       EmployeeAddressType
+  address    String              @db.Text
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([employeeId, type])
+  @@index([employeeId], map: "idx_employee_addresses_employee")
+  @@map("employee_addresses")
+}
+
+model EmployeeEmergencyContact {
+  id           String   @id @default(uuid())
+  employeeId   String   @map("employee_id")
+  name         String
+  relationship String
+  phone        String
+  isPrimary    Boolean  @default(true) @map("is_primary")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([employeeId], map: "idx_employee_emergency_contacts_employee")
+  @@map("employee_emergency_contacts")
+}
+
+model EmployeeBankAccount {
+  id                String   @id @default(uuid())
+  employeeId        String   @map("employee_id")
+  bankName          String   @map("bank_name")
+  accountNumber     String   @map("account_number") @db.Text
+  accountNumberHash String   @map("account_number_hash") @db.VarChar(64)
+  accountHolderName String   @map("account_holder_name")
+  isPrimary         Boolean  @default(true) @map("is_primary")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([bankName, accountNumberHash])
+  @@index([employeeId], map: "idx_employee_bank_accounts_employee")
+  @@map("employee_bank_accounts")
+}
+
+model EmployeeTaxProfile {
+  id            String   @id @default(uuid())
+  employeeId    String   @unique @map("employee_id")
+  ptkpStatus    String   @map("ptkp_status") @db.VarChar(10)
+  effectiveDate DateTime @map("effective_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@map("employee_tax_profiles")
+}
+
+model EmployeeTaxHistory {
+  id                  String   @id @default(uuid())
+  employeeId          String   @map("employee_id")
+  previousPtkpStatus  String?  @map("previous_ptkp_status") @db.VarChar(10)
+  ptkpStatus          String   @map("ptkp_status") @db.VarChar(10)
+  effectiveDate       DateTime @map("effective_date")
+  changedByUserId     String?  @map("changed_by_user_id")
+  changedByIdentifier String   @map("changed_by")
+  changedByName       String?  @map("changed_by_name")
+  changedByRole       String?  @map("changed_by_role")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  employee Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+  actor    UserAccount? @relation("EmployeeTaxHistoryActor", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, effectiveDate], map: "idx_employee_tax_history_subject_effective")
+  @@index([changedByUserId], map: "idx_employee_tax_history_actor")
+  @@map("employee_tax_histories")
+}
+
+model EmployeeImportJob {
+  id              String    @id @default(uuid())
+  checksum        String    @db.VarChar(64)
+  mode            String    @db.VarChar(20)
+  optionsHash     String    @map("options_hash") @db.VarChar(64)
+  status          String    @db.VarChar(20)
+  totalRows       Int       @default(0) @map("total_rows")
+  createdRows     Int       @default(0) @map("created_rows")
+  updatedRows     Int       @default(0) @map("updated_rows")
+  unchangedRows   Int       @default(0) @map("unchanged_rows")
+  failedRows      Int       @default(0) @map("failed_rows")
+  resultJson      String?   @map("result_json") @db.LongText
+  actorUserId     String?   @map("actor_user_id")
+  actorIdentifier String    @map("actor_identifier")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  completedAt     DateTime? @map("completed_at")
+
+  actor UserAccount? @relation("EmployeeImportActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@unique([checksum, mode, optionsHash])
+  @@index([actorUserId], map: "idx_employee_import_jobs_actor")
+  @@map("employee_import_jobs")
+}
+
 // ─── Employee Documents ─────────────────────────────────────────
 
 enum DocumentType {
@@ -757,20 +934,29 @@ enum DocumentType {
   BPJS_TK
   IJAZAH
   KARTU_KELUARGA
+  KONTRAK
   OTHER
 }
 
 model EmployeeDocument {
-  id         String       @id @default(uuid())
-  employeeId String       @map("employee_id")
-  type       DocumentType
-  title      String
-  fileUrl    String       @map("file_url")
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
+  id               String       @id @default(uuid())
+  employeeId       String       @map("employee_id")
+  type             DocumentType
+  title            String
+  fileUrl          String       @map("file_url") @db.VarChar(500)
+  originalName     String       @map("original_name")
+  mimeType         String       @map("mime_type") @db.VarChar(150)
+  fileSize         Int          @map("file_size")
+  expiresAt        DateTime?    @map("expires_at")
+  notes            String?      @db.Text
+  uploadedByUserId String?      @map("uploaded_by_user_id")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
 
-  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  employee   Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+  uploadedBy UserAccount? @relation("EmployeeDocumentUploader", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
-  @@index([employeeId])
+  @@index([employeeId], map: "employee_documents_employee_id_idx")
+  @@index([uploadedByUserId], map: "idx_employee_documents_uploader")
   @@map("employee_documents")
 }

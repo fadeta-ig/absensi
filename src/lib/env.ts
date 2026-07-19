@@ -7,6 +7,9 @@ import { z } from "zod";
 const envSchema = z.object({
     DATABASE_URL: z.string().min(1, "DATABASE_URL wajib diisi di .env"),
     JWT_SECRET: z.string().min(16, "JWT_SECRET wajib diisi dan minimal 16 karakter"),
+    // Optional during migration. Set a stable, random 32+ character value in production.
+    // JWT_SECRET is used with domain separation as a backwards-compatible fallback.
+    PII_ENCRYPTION_KEY: z.string().min(32, "PII_ENCRYPTION_KEY minimal 32 karakter").optional(),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
     // SMTP (optional — gracefully degrades if not set)

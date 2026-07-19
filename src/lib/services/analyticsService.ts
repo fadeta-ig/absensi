@@ -38,7 +38,11 @@ function mapEmployee(row: Employee360Row): Employee {
     return {
         ...row,
         gender: row.gender as Employee["gender"],
+        employmentType: row.employmentType as Employee["employmentType"],
         joinDate: toDateString(row.joinDate),
+        employmentStartDate: row.employmentStartDate ? toDateString(row.employmentStartDate) : null,
+        employmentEndDate: row.employmentEndDate ? toDateString(row.employmentEndDate) : null,
+        probationEndDate: row.probationEndDate ? toDateString(row.probationEndDate) : null,
         statusChangedAt: toISOOrNull(row.statusChangedAt),
         faceDescriptor: parseJson<number[]>(row.faceDescriptor) ?? undefined,
         manager: row.manager ? {
