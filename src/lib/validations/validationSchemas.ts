@@ -25,8 +25,10 @@ export const sendPasswordSchema = z.object({
 /* ───────────────────── Attendance ───────────────────── */
 
 const locationSchema = z.object({
-    lat: z.number({ message: "Latitude harus berupa angka" }),
-    lng: z.number({ message: "Longitude harus berupa angka" }),
+    lat: z.number({ message: "Latitude harus berupa angka" }).min(-90).max(90),
+    lng: z.number({ message: "Longitude harus berupa angka" }).min(-180).max(180),
+    accuracyMeters: z.number().positive().max(10_000).nullable().optional(),
+    acquiredAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 /** Max photo size ~2MB base64 (prevents DB bloat / DoS). */
@@ -229,17 +231,40 @@ export const visitDraftSchema = z.object({
 export const visitClockInSchema = z.object({
     id: z.string().min(1, "ID kunjungan harus diisi"),
     location: locationSchema,
-    photos: z.array(
-        z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)")
-    ).min(2, "Minimal 2 foto bukti kunjungan"),
+    photos: z.array(z.union([
+        // Kompatibilitas singkat untuk client/PWA lama; metadata device tidak tersedia.
+        z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)").transform((dataUrl) => ({
+            dataUrl,
+            capturedAtDevice: "",
+            category: "LAINNYA" as const,
+            caption: null,
+        })),
+        z.object({
+            dataUrl: z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)"),
+            capturedAtDevice: z.string().datetime({ offset: true }),
+            category: z.enum(["LOKASI", "AKTIVITAS", "HASIL", "DOKUMEN", "LAINNYA"]),
+            caption: z.string().trim().max(200, "Keterangan foto maksimal 200 karakter").nullable().optional(),
+        }),
+    ])).min(2, "Minimal 2 foto bukti kunjungan").max(5, "Maksimal 5 foto bukti kunjungan"),
 });
 
 export const visitClockOutSchema = z.object({
     id: z.string().min(1, "ID kunjungan harus diisi"),
     location: locationSchema,
-    photos: z.array(
-        z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)")
-    ).min(2, "Minimal 2 foto bukti kunjungan"),
+    photos: z.array(z.union([
+        z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)").transform((dataUrl) => ({
+            dataUrl,
+            capturedAtDevice: "",
+            category: "LAINNYA" as const,
+            caption: null,
+        })),
+        z.object({
+            dataUrl: z.string().max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)"),
+            capturedAtDevice: z.string().datetime({ offset: true }),
+            category: z.enum(["LOKASI", "AKTIVITAS", "HASIL", "DOKUMEN", "LAINNYA"]),
+            caption: z.string().trim().max(200, "Keterangan foto maksimal 200 karakter").nullable().optional(),
+        }),
+    ])).min(2, "Minimal 2 foto bukti kunjungan").max(5, "Maksimal 5 foto bukti kunjungan"),
     result: z.string().nullable().optional(),
 });
 

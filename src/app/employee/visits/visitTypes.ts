@@ -1,4 +1,4 @@
-import { VisitStatus } from "@/types";
+import { VisitPhotoCategory, VisitStatus } from "@/types";
 
 export const VISIT_STATUS_CONFIG: Record<VisitStatus, { label: string; class: string; color: string }> = {
     draft: {
@@ -28,3 +28,11 @@ export const VISIT_FILTER_OPTIONS: Array<{ key: "all" | "draft" | "clocked_in" |
 
 export const MIN_PHOTOS_REQUIRED = 2;
 export const DEFAULT_VISIT_RADIUS = 300;
+
+export const VISIT_PHOTO_CATEGORY_OPTIONS: Array<{ value: VisitPhotoCategory; label: string }> = [
+    { value: "LOKASI", label: "Lokasi" },
+    { value: "AKTIVITAS", label: "Aktivitas" },
+    { value: "HASIL", label: "Hasil" },
+    { value: "DOKUMEN", label: "Dokumen" },
+    { value: "LAINNYA", label: "Lainnya" },
+];

@@ -1,7 +1,19 @@
 import { prisma } from "../prisma";
-import { VisitReport, VisitStatus } from "@/types";
-import { toDateString } from "@/lib/utils";
+import {
+    VisitPhoto,
+    VisitPhotoCategory,
+    VisitPhotoDraft,
+    VisitPhotoPhase,
+    VisitReport,
+    VisitStatus,
+} from "@/types";
+import { calculateDistance, toDateString } from "@/lib/utils";
 import logger from "@/lib/logger";
+import {
+    prepareVisitPhotos,
+    VisitPhotoLocationEvidence,
+    VisitPhotoValidationError,
+} from "@/lib/services/visitPhotoService";
 
 // ─── Employee include fragment ──────────────────────────────────
 const employeeInclude = {
@@ -10,6 +22,9 @@ const employeeInclude = {
             name: true,
             departmentRel: { select: { name: true } },
         },
+    },
+    photos: {
+        orderBy: { sequence: "asc" as const },
     },
 } as const;
 
@@ -28,7 +43,44 @@ function toTimeDisplay(d: Date | string | null | undefined): string | null {
     if (!d) return null;
     const date = d instanceof Date ? d : new Date(d);
     if (isNaN(date.getTime())) return null;
-    return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return date.toLocaleTimeString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toVisitPhoto(row: any): VisitPhoto {
+    const id = String(row.id);
+    return {
+        id,
+        phase: row.phase as VisitPhotoPhase,
+        sequence: row.sequence,
+        category: row.category as VisitPhotoCategory,
+        caption: row.caption ?? null,
+        capturedAtDevice: row.capturedAtDevice instanceof Date
+            ? row.capturedAtDevice.toISOString()
+            : row.capturedAtDevice
+                ? new Date(row.capturedAtDevice).toISOString()
+                : null,
+        receivedAtServer: new Date(row.receivedAtServer).toISOString(),
+        officialTimestamp: new Date(row.officialTimestamp).toISOString(),
+        latitude: row.latitude,
+        longitude: row.longitude,
+        accuracyMeters: row.accuracyMeters ?? null,
+        distanceToTargetMeters: row.distanceToTargetMeters ?? null,
+        sha256Original: row.sha256Original,
+        mimeType: row.mimeType,
+        fileSize: row.fileSize,
+        width: row.width,
+        height: row.height,
+        overlayVersion: row.overlayVersion,
+        stampedUrl: `/api/visits/photos/${encodeURIComponent(id)}?variant=stamped`,
+        originalUrl: `/api/visits/photos/${encodeURIComponent(id)}?variant=original`,
+    };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,6 +103,7 @@ function toVisitReport(row: any): VisitReport {
         clockOutLocation: parseJsonField<{ lat: number; lng: number }>(row.clockOutLocation),
         clockInPhotos: parseJsonField<string[]>(row.clockInPhotos),
         clockOutPhotos: parseJsonField<string[]>(row.clockOutPhotos),
+        photos: Array.isArray(row.photos) ? row.photos.map(toVisitPhoto) : [],
         status: row.status as VisitStatus,
         notes: row.notes ?? null,
         hrChecked: row.hrChecked ?? false,
@@ -147,15 +200,23 @@ export async function updateVisitDraft(id: string, data: UpdateDraftInput): Prom
 // ─── Clock In ───────────────────────────────────────────────────
 
 interface ClockInInput {
-    location: { lat: number; lng: number };
-    photos: string[];
+    location: VisitPhotoLocationEvidence;
+    photos: VisitPhotoDraft[];
 }
 
+class VisitTransitionConflictError extends Error {}
+
 export async function clockInVisit(id: string, data: ClockInInput): Promise<VisitReport | null> {
+    let prepared: Awaited<ReturnType<typeof prepareVisitPhotos>> | null = null;
     try {
         const existing = await prisma.visitReport.findUnique({
             where: { id },
-            select: { status: true, visitLocation: true, visitRadius: true },
+            select: {
+                status: true,
+                visitLocation: true,
+                visitRadius: true,
+                clientName: true,
+            },
         });
 
         if (!existing || existing.status !== "draft") {
@@ -163,18 +224,46 @@ export async function clockInVisit(id: string, data: ClockInInput): Promise<Visi
             return null;
         }
 
-        const row = await prisma.visitReport.update({
-            where: { id },
-            data: {
-                clockInTime: new Date(),
-                clockInLocation: JSON.stringify(data.location),
-                clockInPhotos: JSON.stringify(data.photos),
-                status: "clocked_in",
-            },
-            include: employeeInclude,
+        const officialTimestamp = new Date();
+        const target = parseJsonField<{ lat: number; lng: number }>(existing.visitLocation);
+        const distanceToTargetMeters = target
+            ? calculateDistance(data.location.lat, data.location.lng, target.lat, target.lng)
+            : null;
+        prepared = await prepareVisitPhotos({
+            visitId: id,
+            clientName: existing.clientName,
+            phase: "CLOCK_IN",
+            officialTimestamp,
+            photos: data.photos,
+            location: data.location,
+            distanceToTargetMeters,
         });
+
+        const row = await prisma.$transaction(async (tx) => {
+            const updated = await tx.visitReport.updateMany({
+                where: { id, status: "draft" },
+                data: {
+                    clockInTime: officialTimestamp,
+                    clockInLocation: JSON.stringify(data.location),
+                    status: "clocked_in",
+                },
+            });
+            if (updated.count !== 1) throw new VisitTransitionConflictError();
+            await tx.visitPhoto.createMany({ data: prepared!.records });
+            return tx.visitReport.findUniqueOrThrow({
+                where: { id },
+                include: employeeInclude,
+            });
+        });
+        prepared = null;
         return toVisitReport(row);
     } catch (error) {
+        if (prepared) await prepared.cleanup();
+        if (error instanceof VisitPhotoValidationError) throw error;
+        if (error instanceof VisitTransitionConflictError) {
+            logger.warn("Clock in failed: concurrent status transition", { id });
+            return null;
+        }
         logger.error("Failed to clock in visit", { id, error });
         return null;
     }
@@ -183,16 +272,22 @@ export async function clockInVisit(id: string, data: ClockInInput): Promise<Visi
 // ─── Clock Out ──────────────────────────────────────────────────
 
 interface ClockOutInput {
-    location: { lat: number; lng: number };
-    photos: string[];
+    location: VisitPhotoLocationEvidence;
+    photos: VisitPhotoDraft[];
     result?: string | null;
 }
 
 export async function clockOutVisit(id: string, data: ClockOutInput): Promise<VisitReport | null> {
+    let prepared: Awaited<ReturnType<typeof prepareVisitPhotos>> | null = null;
     try {
         const existing = await prisma.visitReport.findUnique({
             where: { id },
-            select: { status: true, visitLocation: true, visitRadius: true },
+            select: {
+                status: true,
+                visitLocation: true,
+                visitRadius: true,
+                clientName: true,
+            },
         });
 
         if (!existing || existing.status !== "clocked_in") {
@@ -200,19 +295,47 @@ export async function clockOutVisit(id: string, data: ClockOutInput): Promise<Vi
             return null;
         }
 
-        const row = await prisma.visitReport.update({
-            where: { id },
-            data: {
-                clockOutTime: new Date(),
-                clockOutLocation: JSON.stringify(data.location),
-                clockOutPhotos: JSON.stringify(data.photos),
-                result: data.result ?? null,
-                status: "clocked_out",
-            },
-            include: employeeInclude,
+        const officialTimestamp = new Date();
+        const target = parseJsonField<{ lat: number; lng: number }>(existing.visitLocation);
+        const distanceToTargetMeters = target
+            ? calculateDistance(data.location.lat, data.location.lng, target.lat, target.lng)
+            : null;
+        prepared = await prepareVisitPhotos({
+            visitId: id,
+            clientName: existing.clientName,
+            phase: "CLOCK_OUT",
+            officialTimestamp,
+            photos: data.photos,
+            location: data.location,
+            distanceToTargetMeters,
         });
+
+        const row = await prisma.$transaction(async (tx) => {
+            const updated = await tx.visitReport.updateMany({
+                where: { id, status: "clocked_in" },
+                data: {
+                    clockOutTime: officialTimestamp,
+                    clockOutLocation: JSON.stringify(data.location),
+                    result: data.result ?? null,
+                    status: "clocked_out",
+                },
+            });
+            if (updated.count !== 1) throw new VisitTransitionConflictError();
+            await tx.visitPhoto.createMany({ data: prepared!.records });
+            return tx.visitReport.findUniqueOrThrow({
+                where: { id },
+                include: employeeInclude,
+            });
+        });
+        prepared = null;
         return toVisitReport(row);
     } catch (error) {
+        if (prepared) await prepared.cleanup();
+        if (error instanceof VisitPhotoValidationError) throw error;
+        if (error instanceof VisitTransitionConflictError) {
+            logger.warn("Clock out failed: concurrent status transition", { id });
+            return null;
+        }
         logger.error("Failed to clock out visit", { id, error });
         return null;
     }

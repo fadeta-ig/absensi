@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { X, Loader2, LogOut } from "lucide-react";
-import { VisitReport } from "@/types";
+import { VisitPhotoDraft, VisitReport } from "@/types";
 import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
 
@@ -13,7 +13,7 @@ interface ClockOutModalProps {
 }
 
 export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps) {
-    const [photos, setPhotos] = useState<string[]>([]);
+    const [photos, setPhotos] = useState<VisitPhotoDraft[]>([]);
     const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
     const [result, setResult] = useState("");
     const [loading, setLoading] = useState(false);
@@ -115,6 +115,7 @@ export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps
                         onPhotosChange={setPhotos}
                         minPhotos={2}
                         maxPhotos={5}
+                        defaultCategory="HASIL"
                     />
 
                     {/* Result */}

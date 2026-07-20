@@ -2,10 +2,11 @@
 
 import {
     X, Clock, FileText, Navigation, MapPin, CheckCircle,
-    AlertCircle, Camera, Building2, LogIn, LogOut
+    AlertCircle, Building2, LogIn, LogOut
 } from "lucide-react";
 import { VisitReport } from "@/types";
 import { VISIT_STATUS_CONFIG } from "../visitTypes";
+import { VisitPhotoGrid } from "@/components/VisitPhotoGrid";
 
 interface VisitDetailModalProps {
     visit: VisitReport;
@@ -55,36 +56,18 @@ function TimelineStep({
     );
 }
 
-function PhotoGrid({ photos, label }: { photos: string[]; label: string }) {
-    if (photos.length === 0) return null;
-
-    return (
-        <div>
-            <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5" /> {label}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-                {photos.map((photo, i) => (
-                    <div
-                        key={i}
-                        className="rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--secondary)]"
-                    >
-                        <img
-                            src={photo}
-                            alt={`${label} ${i + 1}`}
-                            className="w-full aspect-[4/3] object-cover"
-                        />
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
     const statusConfig = VISIT_STATUS_CONFIG[visit.status];
     const statusOrder = ["draft", "clocked_in", "clocked_out"];
     const currentIndex = statusOrder.indexOf(visit.status);
+    const clockInEvidence = [
+        ...(visit.photos?.filter((photo) => photo.phase === "CLOCK_IN") ?? []),
+        ...(visit.clockInPhotos ?? []),
+    ];
+    const clockOutEvidence = [
+        ...(visit.photos?.filter((photo) => photo.phase === "CLOCK_OUT") ?? []),
+        ...(visit.clockOutPhotos ?? []),
+    ];
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -223,13 +206,13 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                     )}
 
                     {/* Clock In Photos */}
-                    {visit.clockInPhotos && visit.clockInPhotos.length > 0 && (
-                        <PhotoGrid photos={visit.clockInPhotos} label="Foto Clock In" />
+                    {clockInEvidence.length > 0 && (
+                        <VisitPhotoGrid photos={clockInEvidence} label="Foto Clock In" />
                     )}
 
                     {/* Clock Out Photos */}
-                    {visit.clockOutPhotos && visit.clockOutPhotos.length > 0 && (
-                        <PhotoGrid photos={visit.clockOutPhotos} label="Foto Clock Out" />
+                    {clockOutEvidence.length > 0 && (
+                        <VisitPhotoGrid photos={clockOutEvidence} label="Foto Clock Out" />
                     )}
 
                     {/* Location Info */}

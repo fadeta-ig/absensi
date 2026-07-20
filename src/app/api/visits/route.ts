@@ -20,17 +20,12 @@ import {
 } from "@/lib/validations/validationSchemas";
 import { calculateDistance } from "@/lib/utils";
 import logger from "@/lib/logger";
+import { actorFromSession, logAction } from "@/lib/services/auditService";
+import { VisitPhotoValidationError } from "@/lib/services/visitPhotoService";
+
+const MAX_VISIT_REQUEST_BYTES = 16 * 1024 * 1024;
 
 // ─── Helpers ────────────────────────────────────────────────────
-
-function parseLocation(raw: string | null | undefined): { lat: number; lng: number } | null {
-    if (!raw) return null;
-    try {
-        return typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch {
-        return null;
-    }
-}
 
 /** Validate that the device location is within the visit's target radius */
 function validateLocationProximity(
@@ -76,6 +71,14 @@ export async function POST(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return forbiddenResponse();
+
+    const contentLength = Number(request.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_VISIT_REQUEST_BYTES) {
+        return NextResponse.json(
+            { error: "Ukuran total permintaan foto terlalu besar (maksimal 16 MB)." },
+            { status: 413 },
+        );
+    }
 
     try {
         const body = await request.json();
@@ -137,6 +140,11 @@ export async function POST(request: NextRequest) {
             }
 
             logger.info("Visit clock in", { visitId: id, employeeId: session.employeeId });
+            await logAction("CLOCK_IN", "VISIT", actorFromSession(session), id, {
+                photoEvidence: updated.photos
+                    ?.filter((photo) => photo.phase === "CLOCK_IN")
+                    .map((photo) => ({ id: photo.id, sha256: photo.sha256Original })),
+            });
             return NextResponse.json(updated);
         }
 
@@ -181,11 +189,19 @@ export async function POST(request: NextRequest) {
             }
 
             logger.info("Visit clock out", { visitId: id, employeeId: session.employeeId });
+            await logAction("CLOCK_OUT", "VISIT", actorFromSession(session), id, {
+                photoEvidence: updated.photos
+                    ?.filter((photo) => photo.phase === "CLOCK_OUT")
+                    .map((photo) => ({ id: photo.id, sha256: photo.sha256Original })),
+            });
             return NextResponse.json(updated);
         }
 
         return NextResponse.json({ error: "Action tidak valid." }, { status: 400 });
     } catch (err) {
+        if (err instanceof VisitPhotoValidationError) {
+            return NextResponse.json({ error: err.message }, { status: 400 });
+        }
         return serverErrorResponse("VisitsPOST", err);
     }
 }

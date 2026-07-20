@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { X, Loader2, LogIn } from "lucide-react";
-import { VisitReport } from "@/types";
+import { VisitPhotoDraft, VisitReport } from "@/types";
 import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
 
@@ -13,7 +13,7 @@ interface ClockInModalProps {
 }
 
 export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
-    const [photos, setPhotos] = useState<string[]>([]);
+    const [photos, setPhotos] = useState<VisitPhotoDraft[]>([]);
     const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -105,6 +105,7 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
                         onPhotosChange={setPhotos}
                         minPhotos={2}
                         maxPhotos={5}
+                        defaultCategory="LOKASI"
                     />
 
                     {/* Submit */}

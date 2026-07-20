@@ -197,6 +197,47 @@ export type TodoItem = {
 
 export type VisitStatus = "draft" | "clocked_in" | "clocked_out";
 
+export type VisitPhotoPhase = "CLOCK_IN" | "CLOCK_OUT";
+
+export type VisitPhotoCategory =
+    | "LOKASI"
+    | "AKTIVITAS"
+    | "HASIL"
+    | "DOKUMEN"
+    | "LAINNYA";
+
+/** Payload foto sebelum divalidasi dan diproses ulang oleh server. */
+export type VisitPhotoDraft = {
+    dataUrl: string;
+    capturedAtDevice: string;
+    category: VisitPhotoCategory;
+    caption?: string | null;
+};
+
+/** Metadata bukti foto yang aman dikirim ke UI; storage path tidak diekspos. */
+export type VisitPhoto = {
+    id: string;
+    phase: VisitPhotoPhase;
+    sequence: number;
+    category: VisitPhotoCategory;
+    caption?: string | null;
+    capturedAtDevice?: string | null;
+    receivedAtServer: string;
+    officialTimestamp: string;
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+    distanceToTargetMeters?: number | null;
+    sha256Original: string;
+    mimeType: string;
+    fileSize: number;
+    width: number;
+    height: number;
+    overlayVersion: number;
+    stampedUrl: string;
+    originalUrl: string;
+};
+
 export type VisitReport = {
     id: string;
     employeeId: string;
@@ -215,6 +256,7 @@ export type VisitReport = {
     clockOutLocation?: { lat: number; lng: number } | null;
     clockInPhotos?: string[] | null;
     clockOutPhotos?: string[] | null;
+    photos?: VisitPhoto[];
     status: VisitStatus;
     hrChecked: boolean;
     notes?: string | null;

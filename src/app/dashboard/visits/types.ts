@@ -1,4 +1,4 @@
-import { VisitStatus } from "@/types";
+import { VisitPhoto, VisitStatus } from "@/types";
 
 export interface VisitReport {
     id: string;
@@ -18,6 +18,7 @@ export interface VisitReport {
     clockOutLocation?: { lat: number; lng: number } | null;
     clockInPhotos?: string[] | null;
     clockOutPhotos?: string[] | null;
+    photos?: VisitPhoto[];
     status: VisitStatus;
     hrChecked: boolean;
     notes?: string | null;

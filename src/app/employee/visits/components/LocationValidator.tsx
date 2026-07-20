@@ -11,7 +11,12 @@ interface LocationValidatorProps {
 }
 
 export interface LocationResult {
-    deviceLocation: { lat: number; lng: number };
+    deviceLocation: {
+        lat: number;
+        lng: number;
+        accuracyMeters: number;
+        acquiredAt: string;
+    };
     distanceMeters: number;
     isWithinRadius: boolean;
 }
@@ -47,7 +52,12 @@ export function LocationValidator({
             const isWithinRadius = distanceMeters <= targetRadius;
 
             const locationResult: LocationResult = {
-                deviceLocation: { lat: deviceLat, lng: deviceLng },
+                deviceLocation: {
+                    lat: deviceLat,
+                    lng: deviceLng,
+                    accuracyMeters: position.coords.accuracy,
+                    acquiredAt: new Date(position.timestamp).toISOString(),
+                },
                 distanceMeters,
                 isWithinRadius,
             };

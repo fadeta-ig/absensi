@@ -254,11 +254,43 @@ model VisitReport {
   notes     String? @db.Text
   hrChecked Boolean @default(false) @map("hr_checked")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  employee  Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  createdAt DateTime     @default(now()) @map("created_at")
+  employee  Employee     @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+  photos    VisitPhoto[]
 
   @@index([employeeId], map: "visit_reports_employee_id_fkey")
   @@map("visit_reports")
+}
+
+model VisitPhoto {
+  id                     String      @id @default(uuid())
+  visitId                String      @map("visit_id")
+  phase                  String      @db.VarChar(20)
+  sequence               Int
+  category               String      @default("LAINNYA") @db.VarChar(32)
+  caption                String?     @db.VarChar(200)
+  originalPath           String      @map("original_path") @db.VarChar(500)
+  stampedPath            String      @map("stamped_path") @db.VarChar(500)
+  capturedAtDevice       DateTime?   @map("captured_at_device")
+  receivedAtServer       DateTime    @default(now()) @map("received_at_server")
+  officialTimestamp      DateTime    @map("official_timestamp")
+  latitude               Float
+  longitude              Float
+  accuracyMeters         Float?      @map("accuracy_meters")
+  distanceToTargetMeters Float?      @map("distance_to_target_meters")
+  sha256Original         String      @map("sha256_original") @db.Char(64)
+  mimeType               String      @map("mime_type") @db.VarChar(100)
+  fileSize               Int         @map("file_size")
+  width                  Int
+  height                 Int
+  overlayVersion         Int         @default(1) @map("overlay_version")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  visit                  VisitReport @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, phase, sequence], map: "visit_photos_visit_phase_sequence_key")
+  @@index([visitId, phase], map: "idx_visit_photos_visit_phase")
+  @@index([sha256Original], map: "idx_visit_photos_sha256")
+  @@map("visit_photos")
 }
 
 model AttendanceRecord {
