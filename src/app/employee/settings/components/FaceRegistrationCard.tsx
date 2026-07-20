@@ -69,7 +69,7 @@ export function FaceRegistrationCard() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+                video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
             });
 
             if (videoRef.current) {
@@ -125,14 +125,18 @@ export function FaceRegistrationCard() {
 
         setFaceProcessing(true);
         setStep("detecting");
-        setFaceMessage({ type: "info", text: "🔍 Mendeteksi wajah... Tetap diam sebentar." });
+        setFaceMessage({ type: "info", text: "🔍 Memindai beberapa frame... Tetap diam sebentar." });
 
         try {
-            const { detectFaceDescriptor } = await import("@/lib/faceRecognition");
-            const descriptor = await detectFaceDescriptor(vid);
+            const { detectFaceDescriptors, averageFaceDescriptors, FACE_SCAN_ATTEMPTS } = await import("@/lib/faceRecognition");
+            const descriptors = await detectFaceDescriptors(vid);
+            const descriptor = averageFaceDescriptors(descriptors);
 
             if (!descriptor) {
-                setFaceMessage({ type: "error", text: "Wajah tidak terdeteksi. Pastikan wajah terlihat jelas dan pencahayaan cukup." });
+                setFaceMessage({
+                    type: "error",
+                    text: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} percobaan. Bersihkan lensa, hadapkan wajah ke cahaya, lalu coba lagi.`,
+                });
                 setStep("ready");
                 setFaceProcessing(false);
                 return;

@@ -99,7 +99,7 @@ export default function AttendancePage() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+                video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
             });
 
             if (videoRef.current) {
@@ -150,31 +150,40 @@ export default function AttendancePage() {
             return;
         }
 
-        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-        const photoData = canvas.toDataURL("image/jpeg", 0.8);
+        const captureCurrentFrame = () => {
+            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL("image/jpeg", 0.85);
+        };
 
         if (!registeredDescriptor) {
+            const photoData = captureCurrentFrame();
             setPhoto(photoData);
             setFaceVerification({ status: "not_registered", message: "Wajah belum terdaftar. Daftarkan di Pengaturan." });
             stopCamera();
             return;
         }
 
-        setFaceVerification({ status: "checking", message: "Memverifikasi wajah..." });
+        setFaceVerification({ status: "checking", message: "Memindai beberapa frame wajah..." });
 
         try {
-            const { loadFaceModels, detectFaceDescriptor, compareFaces } = await import("@/lib/faceRecognition");
+            const { loadFaceModels, detectFaceDescriptors, compareFaces, FACE_SCAN_ATTEMPTS } = await import("@/lib/faceRecognition");
             await loadFaceModels();
-            const descriptor = await detectFaceDescriptor(canvas);
+            const descriptors = await detectFaceDescriptors(vid);
 
-            if (!descriptor) {
-                setFaceVerification({ status: "no_face", message: "Wajah tidak terdeteksi. Coba ambil foto ulang." });
+            if (descriptors.length === 0) {
+                setFaceVerification({
+                    status: "no_face",
+                    message: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} percobaan. Bersihkan lensa dan coba lagi.`,
+                });
                 return;
             }
 
-            const result = compareFaces(descriptor, registeredDescriptor);
+            const result = descriptors
+                .map((descriptor) => compareFaces(descriptor, registeredDescriptor))
+                .reduce((best, current) => current.distance < best.distance ? current : best);
 
             if (result.match) {
+                const photoData = captureCurrentFrame();
                 setPhoto(photoData);
                 setFaceVerification({
                     status: "match",
@@ -187,7 +196,7 @@ export default function AttendancePage() {
                 setFaceVerification({
                     status: "mismatch",
                     distance: result.distance,
-                    message: "Wajah tidak cocok dengan data terdaftar. Silakan coba lagi.",
+                    message: `Wajah belum cocok dari ${descriptors.length} frame. Bersihkan lensa, hadapkan wajah ke cahaya, lalu coba lagi.`,
                 });
             }
         } catch (err) {

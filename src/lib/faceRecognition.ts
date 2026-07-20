@@ -17,18 +17,27 @@ const log = createClientLogger("FaceRecognition");
  * - Nilai LEBIH TINGGI → lebih longgar (kamera HP jelek / pencahayaan buruk)
  * - Nilai LEBIH RENDAH → lebih ketat  (kamera berkualitas tinggi)
  *
- * Skala referensi:
- *   0.40 – sangat ketat   | 0.50 – standar | 0.60 – longgar | 0.65 – sangat longgar ← aktif
+ * Default 0.92 dipakai untuk memberi toleransi ekstra pada kamera buram.
+ * Nilai ini sengaja hanya dinaikkan sedikit karena threshold yang terlalu
+ * mendekati 1 meningkatkan risiko wajah orang lain dianggap cocok.
  *
- * Override tanpa deploy ulang: NEXT_PUBLIC_FACE_THRESHOLD=0.65 di .env
+ * Override saat build: NEXT_PUBLIC_FACE_THRESHOLD=0.92 di .env
  */
 const DEFAULT_THRESHOLD = (() => {
     const envVal = parseFloat(process.env.NEXT_PUBLIC_FACE_THRESHOLD ?? "");
-    return (!isNaN(envVal) && envVal > 0 && envVal < 1) ? envVal : 0.90; // Diperlonggar dari 0.65 ke 0.68 untuk toleransi kamera buram
+    return (!isNaN(envVal) && envVal > 0 && envVal < 1) ? envVal : 0.92;
 })();
 
 /** Threshold aktif — export agar bisa digunakan di UI */
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
+
+/** Konfigurasi scan multi-frame untuk kamera lambat atau buram. */
+export const FACE_SCAN_ATTEMPTS = 4;
+export const FACE_SCAN_MIN_DETECTIONS = 2;
+export const FACE_SCAN_INTERVAL_MS = 180;
+
+/** Confidence detektor; lebih rendah membuat wajah buram lebih mudah ditemukan. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.20;
 
 let modelsLoaded = false;
 let modelsLoading = false;
@@ -88,7 +97,9 @@ export async function detectFaceDescriptor(
     }
 
     try {
-        const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 }); // Lebih toleran untuk kamera buram
+        const options = new faceapi.SsdMobilenetv1Options({
+            minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
+        });
         const detection = await faceapi
             .detectSingleFace(input, options)
             .withFaceLandmarks()
@@ -112,6 +123,73 @@ export async function detectFaceDescriptor(
         });
         return null;
     }
+}
+
+interface MultiFrameDetectionOptions {
+    attempts?: number;
+    minimumDetections?: number;
+    intervalMs?: number;
+}
+
+/**
+ * Pindai beberapa frame video dan kumpulkan descriptor yang berhasil.
+ * Pada kamera bagus fungsi berhenti setelah dua hasil; pada kamera buram
+ * fungsi mencoba hingga empat frame sebelum menyatakan wajah tidak terdeteksi.
+ */
+export async function detectFaceDescriptors(
+    input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+    options: MultiFrameDetectionOptions = {}
+): Promise<Float32Array[]> {
+    const attempts = Math.max(1, options.attempts ?? FACE_SCAN_ATTEMPTS);
+    const minimumDetections = Math.max(
+        1,
+        Math.min(attempts, options.minimumDetections ?? FACE_SCAN_MIN_DETECTIONS)
+    );
+    const intervalMs = Math.max(0, options.intervalMs ?? FACE_SCAN_INTERVAL_MS);
+    const descriptors: Float32Array[] = [];
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const descriptor = await detectFaceDescriptor(input);
+        if (descriptor) descriptors.push(descriptor);
+
+        if (descriptors.length >= minimumDetections) break;
+        if (attempt < attempts - 1 && intervalMs > 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+        }
+    }
+
+    return descriptors;
+}
+
+/**
+ * Rata-ratakan beberapa descriptor registrasi lalu normalisasi kembali.
+ * Ini mengurangi pengaruh satu frame yang goyang/buram saat pendaftaran.
+ */
+export function averageFaceDescriptors(descriptors: Float32Array[]): Float32Array | null {
+    if (descriptors.length === 0) return null;
+
+    const descriptorLength = descriptors[0].length;
+    if (descriptorLength === 0 || descriptors.some((descriptor) => descriptor.length !== descriptorLength)) {
+        return null;
+    }
+
+    const averaged = new Float32Array(descriptorLength);
+    for (const descriptor of descriptors) {
+        for (let index = 0; index < descriptorLength; index += 1) {
+            averaged[index] += descriptor[index] / descriptors.length;
+        }
+    }
+
+    const magnitude = Math.sqrt(
+        Array.from(averaged).reduce((sum, value) => sum + value * value, 0)
+    );
+    if (!Number.isFinite(magnitude) || magnitude === 0) return null;
+
+    for (let index = 0; index < descriptorLength; index += 1) {
+        averaged[index] /= magnitude;
+    }
+
+    return averaged;
 }
 
 /**
