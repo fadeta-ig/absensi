@@ -112,7 +112,7 @@ export default function LetterRequestsPage() {
                 toast(err.error ?? "Gagal mengubah status", "error");
             }
         } catch {
-            toast("Terjadi kesalahan koneksi", "error");
+            toast("Status surat belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
         }

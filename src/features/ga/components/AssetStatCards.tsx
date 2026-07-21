@@ -43,13 +43,13 @@ export function FilterPill({ active, label, count, onClick }: { active: boolean;
             onClick={onClick}
             className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all duration-200 ${
                 active 
-                ? "bg-[var(--foreground)] text-[var(--background)] text-white shadow-sm" 
+                ? "bg-[var(--foreground)] text-[var(--background)] shadow-sm"
                 : "bg-[var(--card)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--secondary)]"
             }`}
         >
             {label}
             {count !== undefined && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] ${active ? "bg-slate-700 text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] ${active ? "bg-[var(--background)]/20 text-[var(--background)]" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}>
                     {count}
                 </span>
             )}

@@ -9,6 +9,8 @@ import { KondisiBadge, StatusBadge, HolderIcon, CategoryBadge } from "@/features
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import { formatRupiah } from "@/lib/utils/formatters";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 
 // Define AssetStats from our new deduped API
 type AssetStats = {
@@ -22,15 +24,13 @@ type AssetStats = {
 
 export default function AssetsPage() {
     const router = useRouter();
+    const toast = useToast();
+    const confirm = useConfirm();
     const [assets, setAssets] = useState<AssetWithHistory[]>([]);
     const [stats, setStats] = useState<AssetStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [loadError, setLoadError] = useState("");
-
-    // Delete confirm dialog state
-    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; code: string } | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
 
     // Filters
     const [searchQuery, setSearchQuery] = useState("");
@@ -110,9 +110,7 @@ export default function AssetsPage() {
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             setDebouncedSearch(searchQuery);
-            if (searchQuery && currentPage !== 1) {
-                setCurrentPage(1);
-            }
+            if (searchQuery) setCurrentPage((page) => page === 1 ? page : 1);
         }, 300);
         return () => clearTimeout(timeoutId);
     }, [searchQuery]);
@@ -129,7 +127,7 @@ export default function AssetsPage() {
 
             // Fetch as blob
             const res = await fetch(`/api/assets/export?${params.toString()}`);
-            if (!res.ok) throw new Error("Gagal mengexport data");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengexport data aset."));
 
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
@@ -140,9 +138,10 @@ export default function AssetsPage() {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            toast("Export aset berhasil dibuat.", "success");
         } catch (err) {
             console.error(err);
-            alert("Gagal mengexport file.");
+            toast(err instanceof Error ? err.message : "Gagal mengexport file.", "error");
         } finally {
             setExporting(false);
         }
@@ -150,24 +149,27 @@ export default function AssetsPage() {
 
     const totalPages = Math.ceil(totalItems / PER_PAGE);
 
-    const handleDelete = async () => {
-        if (!deleteTarget) return;
-        setIsDeleting(true);
-        try {
-            const res = await fetch(`/api/assets/${deleteTarget.id}`, { method: "DELETE" });
-            if (res.ok) {
-                setDeleteTarget(null);
-                await fetchAssets();
-                await fetchStats();
-            } else {
-                const data = await res.json();
-                alert(data.error || "Gagal menghapus aset.");
-            }
-        } catch {
-            alert("Terjadi kesalahan koneksi.");
-        } finally {
-            setIsDeleting(false);
-        }
+    const handleDelete = (asset: AssetWithHistory) => {
+        confirm({
+            title: "Hapus aset secara permanen?",
+            message: `Aset "${asset.name}" (${asset.assetCode}) akan dihapus beserta riwayat terkait. Tindakan ini tidak dapat dibatalkan.`,
+            confirmLabel: "Hapus Permanen",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/assets/${asset.id}`, { method: "DELETE" });
+                    if (!res.ok) {
+                        throw new Error(await getResponseErrorMessage(res, "Gagal menghapus aset."));
+                    }
+                    await fetchAssets();
+                    await fetchStats();
+                    toast("Aset berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Aset belum terhapus karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
+                }
+            },
+        });
     };
 
     return (
@@ -187,20 +189,20 @@ export default function AssetsPage() {
                     </button>
                     <button 
                         onClick={() => router.push("/ga/assets/import")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--category-1-bg)] border border-[var(--category-1)]/20 text-[var(--category-1)] px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-colors"
                     >
                         Import Massal
                     </button>
                     <button 
                         disabled={exporting}
                         onClick={handleExportXlsx}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--success-bg)] border border-[var(--success-border)] text-[var(--success)] px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-colors disabled:opacity-50"
                     >
                         <Download size={16} /> {exporting ? "Mengekspor..." : "Export XLSX"}
                     </button>
                     <button 
                         onClick={() => router.push("/ga/sim")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors shadow-sm"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--info-bg)] border border-[var(--info-border)] text-[var(--info)] px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-colors shadow-sm"
                     >
                         Kelola Kartu SIM
                     </button>
@@ -215,11 +217,11 @@ export default function AssetsPage() {
 
             {/* Stats Overview */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <StatCard icon={<Package />} label="Total Aset" value={stats?.total ?? 0} bg="#f1f5f9" color="#475569" />
-                <StatCard icon={<TrendingUp />} label="Total Nilai (Rp)" value={stats?.totalNilai ? formatRupiah(stats.totalNilai) : "0"} bg="#e0f2fe" color="#0369a1" />
-                <StatCard icon={<CheckCircle />} label="Tersedia (Pool)" value={stats?.available ?? 0} bg="#d1fae5" color="#047857" />
-                <StatCard icon={<Wrench />} label="Maintenance" value={stats?.maintenance ?? 0} bg="#fef3c7" color="#b45309" />
-                <StatCard icon={<AlertCircle />} label="Kondisi Rusak" value={stats?.rusak ?? 0} bg="#fee2e2" color="#b91c1c" />
+                <StatCard icon={<Package />} label="Total Aset" value={stats?.total ?? 0} bg="var(--neutral-bg)" color="var(--neutral)" />
+                <StatCard icon={<TrendingUp />} label="Total Nilai (Rp)" value={stats?.totalNilai ? formatRupiah(stats.totalNilai) : "0"} bg="var(--info-bg)" color="var(--info)" />
+                <StatCard icon={<CheckCircle />} label="Tersedia (Pool)" value={stats?.available ?? 0} bg="var(--success-bg)" color="var(--success)" />
+                <StatCard icon={<Wrench />} label="Maintenance" value={stats?.maintenance ?? 0} bg="var(--warning-bg)" color="var(--warning)" />
+                <StatCard icon={<AlertCircle />} label="Kondisi Rusak" value={stats?.rusak ?? 0} bg="var(--destructive-bg)" color="var(--destructive)" />
             </div>
 
             {loadError && (
@@ -278,7 +280,7 @@ export default function AssetsPage() {
                                     setFilterKondisi("");
                                     setCurrentPage(1);
                                 }}
-                                className="px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-red-600 transition-colors"
+                                className="px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--destructive)] transition-colors"
                             >
                                 Reset
                             </button>
@@ -318,7 +320,7 @@ export default function AssetsPage() {
                         <tbody className="divide-y divide-slate-100">
                             {loading && assets.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data secara langsung (server-side)...</td>
+                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data secara langsung (server-side)...</td>
                                 </tr>
                             ) : loadError ? (
                                 <tr>
@@ -326,7 +328,7 @@ export default function AssetsPage() {
                                 </tr>
                             ) : assets.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada aset ditemukan.</td>
+                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada aset ditemukan.</td>
                                 </tr>
                             ) : (
                                 assets.map((asset) => (
@@ -364,14 +366,14 @@ export default function AssetsPage() {
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => router.push(`/ga/assets/${asset.id}/edit`)}
-                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--category-1)] hover:bg-[var(--category-1-bg)] transition-colors"
                                                     title="Edit Aset"
                                                 >
                                                     <Pencil size={14} />
                                                 </button>
                                                 <button
-                                                    onClick={() => setDeleteTarget({ id: asset.id, name: asset.name, code: asset.assetCode })}
-                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                    onClick={() => handleDelete(asset)}
+                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--destructive)] hover:bg-[var(--destructive-bg)] transition-colors"
                                                     title="Hapus Aset"
                                                 >
                                                     <Trash2 size={14} />
@@ -399,42 +401,6 @@ export default function AssetsPage() {
                 )}
             </div>
 
-            {/* Delete Confirm Dialog */}
-            {deleteTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-[var(--border)]">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                <Trash2 className="text-red-600" size={18} />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-bold text-[var(--text-primary)]">Hapus Aset Secara Permanen?</h3>
-                                <p className="text-sm text-[var(--text-secondary)] mt-1">
-                                    Anda akan menghapus aset <span className="font-semibold text-[var(--text-secondary)]">{deleteTarget.name}</span> ({deleteTarget.code}). 
-                                    Tindakan ini <span className="text-red-600 font-semibold">tidak dapat dibatalkan</span> dan akan menghapus semua riwayat terkait.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3 mt-6 justify-end">
-                            <button
-                                onClick={() => setDeleteTarget(null)}
-                                disabled={isDeleting}
-                                className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] bg-[var(--secondary)] hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
-                            >
-                                Batal
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                disabled={isDeleting}
-                                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-                            >
-                                <Trash2 size={14} />
-                                {isDeleting ? "Menghapus..." : "Ya, Hapus Permanen"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

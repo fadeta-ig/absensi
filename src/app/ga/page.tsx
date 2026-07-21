@@ -28,10 +28,10 @@ type AssetStats = {
 function getCategoryIcon(prefix: string, name: string) {
     const p = prefix.toUpperCase();
     const n = name.toUpperCase();
-    if (p === "LT" || n.includes("LAPTOP")) return { icon: <Laptop size={20} />, color: "#0ea5e9" };
-    if (p === "HP" || n.includes("HP") || n.includes("HANDPHONE") || n.includes("MOBILE")) return { icon: <Smartphone size={20} />, color: "#6366f1" };
-    if (p === "NUM" || n.includes("NOMOR") || n.includes("SIM") || n.includes("IDN")) return { icon: <Phone size={20} />, color: "#10b981" };
-    return { icon: <Package size={20} />, color: "#94a3b8" };
+    if (p === "LT" || n.includes("LAPTOP")) return { icon: <Laptop size={20} />, color: "var(--category-2)" };
+    if (p === "HP" || n.includes("HP") || n.includes("HANDPHONE") || n.includes("MOBILE")) return { icon: <Smartphone size={20} />, color: "var(--category-1)" };
+    if (p === "NUM" || n.includes("NOMOR") || n.includes("SIM") || n.includes("IDN")) return { icon: <Phone size={20} />, color: "var(--success)" };
+    return { icon: <Package size={20} />, color: "var(--neutral)" };
 }
 export default function GaDashboard() {
     const [stats, setStats] = useState<AssetStats | null>(null);
@@ -82,7 +82,7 @@ export default function GaDashboard() {
                     <p className="text-sm text-[var(--text-secondary)] mt-1">Manajemen aset perusahaan WIG</p>
                 </div>
                 <div className="mt-4 md:mt-0">
-                    <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-100">Operational Mode: Active</span>
+                    <span className="text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] px-3 py-1 rounded-full border border-[var(--category-1)]/20">Operational Mode: Active</span>
                 </div>
             </div>
 
@@ -96,33 +96,33 @@ export default function GaDashboard() {
             {/* Alert expiry */}
             <div className="flex flex-col gap-3">
                 {stats && stats.expiringNomor > 0 && (
-                    <div className="bg-amber-50 border border-amber-500 rounded-xl px-4 py-3 flex items-center gap-3">
-                        <AlertTriangle size={18} className="text-amber-600" />
-                        <span className="text-sm text-amber-800 font-medium">
+                    <div className="bg-[var(--warning-bg)] border border-[var(--warning-border)] rounded-xl px-4 py-3 flex items-center gap-3">
+                        <AlertTriangle size={18} className="text-[var(--warning)]" />
+                        <span className="text-sm text-[var(--warning)] font-medium">
                             {stats.expiringNomor} nomor SIM akan expired dalam 30 hari ke depan
                         </span>
-                        <Link href="/ga/nomor" className="ml-auto text-sm text-amber-600 underline font-medium hover:text-amber-700">Lihat</Link>
+                        <Link href="/ga/nomor" className="ml-auto text-sm text-[var(--warning)] underline font-medium hover:opacity-80">Lihat</Link>
                     </div>
                 )}
                 {stats && stats.expiringWarranty > 0 && (
-                    <div className="bg-red-50 border border-red-500 rounded-xl px-4 py-3 flex items-center gap-3">
-                        <AlertCircle size={18} className="text-red-700" />
-                        <span className="text-sm text-red-800 font-medium">
+                    <div className="bg-[var(--destructive-bg)] border border-[var(--destructive-border)] rounded-xl px-4 py-3 flex items-center gap-3">
+                        <AlertCircle size={18} className="text-[var(--destructive)]" />
+                        <span className="text-sm text-[var(--destructive)] font-medium">
                             Peringatan: {stats.expiringWarranty} aset akan habis masa garansinya bulan ini!
                         </span>
-                        <Link href="/ga/assets" className="ml-auto text-sm text-red-700 underline font-medium hover:text-red-800">Lihat</Link>
+                        <Link href="/ga/assets" className="ml-auto text-sm text-[var(--destructive)] underline font-medium hover:opacity-80">Lihat</Link>
                     </div>
                 )}
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <StatCard icon={<Package />} label="Total Aset" value={stats?.total ?? 0} bg="#eef2ff" color="#6366f1" />
-                <StatCard icon={<TrendingUp />} label="Total Kapital" value={stats?.totalNilai ? formatRupiah(stats.totalNilai) : "Rp 0"} bg="#e0f2fe" color="#0284c7" />
-                <StatCard icon={<CheckCircle />} label="Tersedia" value={stats?.available ?? 0} bg="#d1fae5" color="#10b981" />
-                <StatCard icon={<Clock />} label="Digunakan" value={stats?.inUse ?? 0} bg="#dbeafe" color="#3b82f6" />
-                <StatCard icon={<Wrench />} label="Perbaikan" value={stats?.maintenance ?? 0} bg="#fef3c7" color="#f59e0b" />
-                <StatCard icon={<AlertCircle />} label="Rusak" value={stats?.rusak ?? 0} bg="#fee2e2" color="#ef4444" />
+                <StatCard icon={<Package />} label="Total Aset" value={stats?.total ?? 0} bg="var(--category-1-bg)" color="var(--category-1)" />
+                <StatCard icon={<TrendingUp />} label="Total Kapital" value={stats?.totalNilai ? formatRupiah(stats.totalNilai) : "Rp 0"} bg="var(--info-bg)" color="var(--info)" />
+                <StatCard icon={<CheckCircle />} label="Tersedia" value={stats?.available ?? 0} bg="var(--success-bg)" color="var(--success)" />
+                <StatCard icon={<Clock />} label="Digunakan" value={stats?.inUse ?? 0} bg="var(--info-bg)" color="var(--info)" />
+                <StatCard icon={<Wrench />} label="Perbaikan" value={stats?.maintenance ?? 0} bg="var(--warning-bg)" color="var(--warning)" />
+                <StatCard icon={<AlertCircle />} label="Rusak" value={stats?.rusak ?? 0} bg="var(--destructive-bg)" color="var(--destructive)" />
             </div>
 
             {/* Category breakdown (Synchronized with DB) */}
@@ -145,7 +145,7 @@ export default function GaDashboard() {
             <div className="bg-[var(--card)] border border-[var(--border)]/60 rounded-2xl overflow-hidden shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)]">
                 <div className="px-5 py-4 border-b flex justify-between items-center">
                     <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">Aset Tersedia di GA</h2>
-                    <Link href="/ga/assets?status=AVAILABLE" className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Lihat semua &rarr;</Link>
+                    <Link href="/ga/assets?status=AVAILABLE" className="text-[13px] font-semibold text-[var(--category-1)] hover:opacity-80 transition-colors">Lihat semua &rarr;</Link>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full whitespace-nowrap text-left text-sm">
@@ -174,7 +174,7 @@ export default function GaDashboard() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
+                                        <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] hover:opacity-90 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
                                     </td>
                                 </tr>
                             ))}

@@ -164,7 +164,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 toast(error.error || "Gagal menyimpan data karyawan.", "error");
             }
         } catch {
-            toast("Kesalahan koneksi ke server.", "error");
+            toast("Data karyawan belum tersimpan karena koneksi ke server bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setLoading(false);
         }

@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MapPinned, Plus, Filter, CheckCircle, AlertCircle } from "lucide-react";
-import { VisitReport, VisitStatus } from "@/types";
-import { VISIT_FILTER_OPTIONS, VISIT_STATUS_CONFIG } from "./visitTypes";
+import { MapPinned, Plus, Filter } from "lucide-react";
+import { VisitReport } from "@/types";
+import { VISIT_FILTER_OPTIONS } from "./visitTypes";
 import { VisitCard } from "./components/VisitCard";
 import { CreateDraftModal } from "./components/CreateDraftModal";
 import { ClockInModal } from "./components/ClockInModal";
 import { ClockOutModal } from "./components/ClockOutModal";
 import { VisitDetailModal } from "./components/VisitDetailModal";
+import { useConfirm } from "@/components/ConfirmModal";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 type ModalState =
     | { type: "none" }
@@ -20,6 +22,7 @@ type ModalState =
 const ITEMS_PER_PAGE = 6;
 
 export default function VisitsPage() {
+    const confirm = useConfirm();
     const [visits, setVisits] = useState<VisitReport[]>([]);
     const [filterStatus, setFilterStatus] = useState<"all" | "draft" | "clocked_in" | "unchecked" | "checked">("all");
     const [modal, setModal] = useState<ModalState>({ type: "none" });
@@ -35,12 +38,12 @@ export default function VisitsPage() {
                 } else {
                     console.error("Failed to fetch visits:", data);
                     setVisits([]);
-                    setMessage({ type: "error", text: "Gagal memuat data kunjungan." });
+                    setMessage({ type: "error", text: "Data kunjungan tidak dapat dimuat. Muat ulang halaman atau coba lagi nanti." });
                 }
             })
             .catch(() => {
                 setVisits([]);
-                setMessage({ type: "error", text: "Gagal memuat data kunjungan." });
+                setMessage({ type: "error", text: "Data kunjungan tidak dapat dimuat. Periksa koneksi internet lalu coba lagi." });
             });
     }, []);
 
@@ -70,20 +73,28 @@ export default function VisitsPage() {
         setMessage({ type: "success", text: "Clock Out berhasil! Menunggu persetujuan HR." });
     };
 
-    const handleDelete = async (visit: VisitReport) => {
-        if (!confirm("Hapus draft kunjungan ini?")) return;
-        try {
-            const res = await fetch(`/api/visits?id=${visit.id}`, { method: "DELETE" });
-            if (res.ok) {
-                setVisits((prev) => prev.filter((v) => v.id !== visit.id));
-                setMessage({ type: "success", text: "Draft kunjungan berhasil dihapus." });
-            } else {
-                const data = await res.json();
-                setMessage({ type: "error", text: data.error || "Gagal menghapus draft." });
+    const handleDelete = (visit: VisitReport) => {
+        confirm({
+            title: "Hapus Draft Kunjungan?",
+            message: `Draft kunjungan ke ${visit.clientName} akan dihapus dari daftar kunjungan Anda.`,
+            confirmLabel: "Hapus Draft",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/visits?id=${visit.id}`, { method: "DELETE" });
+                    if (res.ok) {
+                        setVisits((prev) => prev.filter((v) => v.id !== visit.id));
+                        setMessage({ type: "success", text: "Draft kunjungan berhasil dihapus." });
+                    } else {
+                        const data = await res.json();
+                        setMessage({ type: "error", text: data.error || "Draft kunjungan gagal dihapus. Coba lagi." });
+                    }
+                } catch {
+                    setMessage({ type: "error", text: "Draft kunjungan belum terhapus karena koneksi bermasalah. Periksa internet lalu coba lagi." });
+                }
             }
-        } catch {
-            setMessage({ type: "error", text: "Terjadi kesalahan koneksi." });
-        }
+        });
     };
 
     const filtered = visits.filter((v) => {
@@ -129,20 +140,9 @@ export default function VisitsPage() {
 
             {/* Message */}
             {message && (
-                <div
-                    className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${
-                        message.type === "success"
-                            ? "bg-green-50 text-green-700 border-green-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                    }`}
-                >
-                    {message.type === "success" ? (
-                        <CheckCircle className="w-4 h-4 shrink-0" />
-                    ) : (
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                    )}
+                <FeedbackMessage variant={message.type}>
                     {message.text}
-                </div>
+                </FeedbackMessage>
             )}
 
             {/* Filter */}

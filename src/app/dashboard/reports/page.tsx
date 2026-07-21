@@ -129,7 +129,7 @@ export default function ReportsPage() {
                 setError(data.error || "Gagal memuat data");
             }
         } catch {
-            setError("Terjadi kesalahan koneksi");
+            setError("Laporan belum dapat dimuat karena koneksi bermasalah. Periksa internet lalu coba lagi.");
         }
         setLoading(false);
     };

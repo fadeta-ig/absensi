@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileText, Loader2, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface EmployeeDocument {
     id: string;
@@ -25,6 +26,7 @@ const DOCUMENT_TYPES = [
 
 export function EmployeeDocumentManager({ employeeDatabaseId, employeeIsActive }: { employeeDatabaseId: string; employeeIsActive: boolean }) {
     const toast = useToast();
+    const confirm = useConfirm();
     const fileRef = useRef<HTMLInputElement>(null);
     const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
     const [loading, setLoading] = useState(true);
@@ -79,20 +81,28 @@ export function EmployeeDocumentManager({ employeeDatabaseId, employeeIsActive }
         }
     };
 
-    const deleteDocument = async (document: EmployeeDocument) => {
-        if (!window.confirm(`Hapus dokumen "${document.title}"? Tindakan ini tidak dapat dibatalkan.`)) return;
-        setDeletingId(document.id);
-        try {
-            const response = await fetch(`/api/employees/${employeeDatabaseId}/documents/${document.id}`, { method: "DELETE" });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal menghapus dokumen.");
-            setDocuments((current) => current.filter((item) => item.id !== document.id));
-            toast("Dokumen berhasil dihapus.", "success");
-        } catch (error) {
-            toast(error instanceof Error ? error.message : "Gagal menghapus dokumen.", "error");
-        } finally {
-            setDeletingId(null);
-        }
+    const deleteDocument = (document: EmployeeDocument) => {
+        confirm({
+            title: "Hapus dokumen?",
+            message: `Dokumen "${document.title}" akan dihapus permanen dari data karyawan.`,
+            confirmLabel: "Hapus",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: async () => {
+                setDeletingId(document.id);
+                try {
+                    const response = await fetch(`/api/employees/${employeeDatabaseId}/documents/${document.id}`, { method: "DELETE" });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || "Gagal menghapus dokumen.");
+                    setDocuments((current) => current.filter((item) => item.id !== document.id));
+                    toast("Dokumen berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus dokumen.", "error");
+                } finally {
+                    setDeletingId(null);
+                }
+            },
+        });
     };
 
     return (

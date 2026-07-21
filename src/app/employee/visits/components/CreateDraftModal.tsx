@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Building2, Navigation, FileText, MapPin, X, Loader2, AlertCircle } from "lucide-react";
+import { Building2, Navigation, FileText, MapPin, X, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { DEFAULT_VISIT_RADIUS } from "../visitTypes";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 const LocationMap = dynamic(() => import("@/components/LocationMap"), { ssr: false });
 
@@ -75,26 +77,30 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                 setError(data.error || data.details?.join(", ") || "Gagal membuat draft kunjungan.");
             }
         } catch {
-            setError("Terjadi kesalahan koneksi.");
+            setError("Draft kunjungan belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
         }
 
         setLoading(false);
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <AccessibleModal
+            ariaLabel="Buat draft kunjungan"
+            onClose={onClose}
+            className="max-w-lg"
+            disableClose={loading}
+        >
                 <div className="modal-header">
                     <h2 className="modal-title">Buat Draft Kunjungan</h2>
-                    <button className="modal-close" onClick={onClose}>
+                    <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup modal buat draft kunjungan">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
                 {error && (
-                    <div className="mb-4 flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
+                    <FeedbackMessage variant="error" className="mb-4">
                         {error}
-                    </div>
+                    </FeedbackMessage>
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -164,10 +170,9 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                             Tap pada peta untuk menentukan lokasi tujuan kunjungan
                         </p>
                         {locationWarning && (
-                            <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700">
-                                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
-                                <span>{locationWarning}</span>
-                            </div>
+                            <FeedbackMessage variant="warning" compact className="mb-2">
+                                {locationWarning}
+                            </FeedbackMessage>
                         )}
                         {visitLocation ? (
                             <div className="rounded-lg overflow-hidden border border-[var(--border)] h-[200px]">
@@ -181,6 +186,7 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                         ) : (
                             <div className="h-[200px] flex items-center justify-center bg-[var(--secondary)] rounded-lg border border-[var(--border)]">
                                 <Loader2 className="w-5 h-5 animate-spin text-[var(--text-muted)]" />
+                                <span className="sr-only">Memuat peta lokasi kunjungan</span>
                             </div>
                         )}
                         {visitLocation && (
@@ -200,10 +206,9 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                         disabled={loading || !form.clientName || !form.clientAddress || !form.purpose || !visitLocation}
                     >
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                        Simpan Draft
+                        {loading ? "Menyimpan draft..." : "Simpan Draft"}
                     </button>
                 </form>
-            </div>
-        </div>
+        </AccessibleModal>
     );
 }

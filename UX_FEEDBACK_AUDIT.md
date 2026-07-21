@@ -957,13 +957,139 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Tingkat keparahan: Tinggi
 - Status: Selesai diperbaiki.
 
+## Implementasi Lanjutan Setelah Quick Scan UX
+
+Bagian ini mencatat perbaikan lanjutan setelah review cepat pasca-audit. Item di bawah bukan bagian dari nomor audit awal T-001 sampai T-083, tetapi berasal dari verifikasi ulang kode terhadap pesan feedback, loading state, dialog, dan kejelasan informasi pengguna.
+
+### Q-001
+
+- Alur atau fitur: Komponen feedback inline lintas halaman.
+- Kondisi spesifik yang bermasalah: Beberapa halaman menampilkan pesan error, warning, atau info dengan struktur dan gaya lokal yang berbeda-beda.
+- Apa yang pengguna lihat sekarang: Pesan inline di area yang disentuh memakai komponen `FeedbackMessage` dengan varian `success`, `error`, `warning`, dan `info`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pesan memiliki ikon, judul opsional, role ARIA, live region, dan gaya visual yang konsisten.
+- Status: Selesai diperbaiki.
+
+### Q-002
+
+- Alur atau fitur: Modal custom lintas fitur.
+- Kondisi spesifik yang bermasalah: Beberapa modal memakai wrapper lokal tanpa pola dialog aksesibel yang seragam.
+- Apa yang pengguna lihat sekarang: Modal yang disentuh memakai `AccessibleModal` dengan `role="dialog"`, `aria-modal`, `aria-label`, Escape close, focus trap, dan restore focus.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna keyboard dan screen reader mendapat konteks dialog yang jelas serta fokus tetap berada di dalam modal saat modal aktif.
+- Status: Selesai diperbaiki.
+
+### Q-003
+
+- Alur atau fitur: Hapus draft kunjungan pegawai (`src/app/employee/visits/page.tsx`).
+- Kondisi spesifik yang bermasalah: Konfirmasi hapus memakai dialog browser native.
+- Apa yang pengguna lihat sekarang: Pengguna melihat `ConfirmModal` aplikasi dengan judul, deskripsi, label tombol spesifik, dan loading saat proses hapus berjalan.
+- Mengapa itu cukup dari sudut pandang pengguna: Aksi destruktif dijelaskan di dalam pola modal aplikasi yang konsisten dan status proses terlihat.
+- Status: Selesai diperbaiki.
+
+### Q-004
+
+- Alur atau fitur: Buat draft kunjungan pegawai (`src/app/employee/visits/components/CreateDraftModal.tsx`).
+- Kondisi spesifik yang bermasalah: Error submit dan kondisi lokasi belum tersedia memakai tampilan lokal yang tidak seragam.
+- Apa yang pengguna lihat sekarang: Error submit dan warning lokasi ditampilkan melalui `FeedbackMessage`; tombol submit menampilkan `Menyimpan draft...` saat proses berjalan.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna melihat kondisi yang perlu diperhatikan serta status penyimpanan secara eksplisit.
+- Status: Selesai diperbaiki.
+
+### Q-005
+
+- Alur atau fitur: Clock in dan clock out kunjungan pegawai (`src/app/employee/visits/components/ClockInModal.tsx`, `src/app/employee/visits/components/ClockOutModal.tsx`).
+- Kondisi spesifik yang bermasalah: Error, validasi lokasi, dan loading submit belum memakai pola feedback/modal bersama.
+- Apa yang pengguna lihat sekarang: Modal memakai `AccessibleModal`, error memakai `FeedbackMessage`, tombol submit menampilkan `Menyimpan clock in...` atau `Menyimpan clock out...`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mengetahui alasan tombol belum bisa dipakai, status penyimpanan, dan error yang terjadi dalam struktur yang sama.
+- Status: Selesai diperbaiki.
+
+### Q-006
+
+- Alur atau fitur: Validasi lokasi kunjungan (`src/app/employee/visits/components/LocationValidator.tsx`).
+- Kondisi spesifik yang bermasalah: Loading, valid, invalid, dan error lokasi memakai gaya lokal yang berbeda.
+- Apa yang pengguna lihat sekarang: Loading memiliki `role="status"` dan hasil validasi memakai `FeedbackMessage` untuk state valid, invalid, dan error.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mendapat informasi jarak/lokasi dalam pola visual yang konsisten dan dapat dibaca assistive technology.
+- Status: Selesai diperbaiki.
+
+### Q-007
+
+- Alur atau fitur: Detail kunjungan pegawai (`src/app/employee/visits/components/VisitDetailModal.tsx`).
+- Kondisi spesifik yang bermasalah: Modal detail belum memakai pola dialog bersama.
+- Apa yang pengguna lihat sekarang: Detail kunjungan memakai `AccessibleModal` dengan label dialog berdasarkan nama klien.
+- Mengapa itu cukup dari sudut pandang pengguna: Konteks modal terbaca jelas dan interaksi tutup/fokus mengikuti pola dialog yang sama.
+- Status: Selesai diperbaiki.
+
+### Q-008
+
+- Alur atau fitur: Detail aset GA, inspeksi, maintenance, dan retire (`src/app/ga/assets/[id]/page.tsx`).
+- Kondisi spesifik yang bermasalah: Retire memakai komponen konfirmasi terpisah; modal inspeksi/maintenance memakai wrapper lokal.
+- Apa yang pengguna lihat sekarang: Retire memakai `ConfirmModal`; modal inspeksi dan maintenance memakai `AccessibleModal`; tombol submit/cancel mengikuti state loading.
+- Mengapa itu cukup dari sudut pandang pengguna: Aksi destruktif dan form modal memakai pola yang sama, termasuk feedback saat proses berjalan.
+- Status: Selesai diperbaiki.
+
+### Q-009
+
+- Alur atau fitur: Scanner QR aset GA (`src/app/ga/scan/page.tsx`).
+- Kondisi spesifik yang bermasalah: Error scanner, action sheet hasil scan, dan loading pencarian aset belum sepenuhnya memakai pola feedback/dialog bersama.
+- Apa yang pengguna lihat sekarang: Error scanner memakai `FeedbackMessage`, action sheet memakai `AccessibleModal`, dan loading pencarian aset memiliki `role="status"` dengan teks `Mencari data aset...`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mengetahui kamera/scan berhenti, kapan sistem mencari aset, dan opsi lanjutan setelah aset ditemukan.
+- Status: Selesai diperbaiki.
+
+### Q-010
+
+- Alur atau fitur: Form create/edit/assign aset GA dan form create/edit SIM.
+- Kondisi spesifik yang bermasalah: Setelah simpan berhasil dan halaman diarahkan, sebagian aksi belum memberi feedback sukses eksplisit; beberapa error fallback masih terlalu umum.
+- Apa yang pengguna lihat sekarang: Aksi simpan yang disentuh menampilkan toast sukses sebelum redirect, error fallback lebih spesifik, dan loading awal memiliki `role="status"`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mendapat konfirmasi bahwa data tersimpan sebelum berpindah halaman serta pesan gagal yang menyebut tindakan yang belum berhasil.
+- Status: Selesai diperbaiki.
+
+### Q-011
+
+- Alur atau fitur: Form konfigurasi aset dan SIM (`src/features/ga/components/AssetForm.tsx`, `src/features/ga/components/SimCardForm.tsx`).
+- Kondisi spesifik yang bermasalah: Error saat memuat data pendukung memakai tampilan lokal.
+- Apa yang pengguna lihat sekarang: Error data pendukung memakai `FeedbackMessage`, dan loading konfigurasi form memakai `role="status"`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mengetahui bahwa pilihan form belum lengkap karena data pendukung gagal dimuat.
+- Status: Selesai diperbaiki.
+
+### Q-012
+
+- Alur atau fitur: Modal status karyawan (`src/components/EmployeeStatusModal.tsx`).
+- Kondisi spesifik yang bermasalah: Modal dan warning dampak memakai pola lokal yang belum seragam.
+- Apa yang pengguna lihat sekarang: Modal memakai `AccessibleModal`; warning dampak aset/SIM/request memakai `FeedbackMessage`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mendapat konteks dialog dan konsekuensi perubahan status dalam pola visual yang sama.
+- Status: Selesai diperbaiki.
+
+### Q-013
+
+- Alur atau fitur: Notification Center HR (`src/components/NotificationCenter.tsx`).
+- Kondisi spesifik yang bermasalah: Loading ulang dan error notifikasi belum terlihat jelas saat dropdown aktif.
+- Apa yang pengguna lihat sekarang: Header dropdown menampilkan status `Memuat...`; error memakai `FeedbackMessage` dengan tombol retry yang memiliki state loading.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna dapat membedakan tidak ada notifikasi dengan gagal memuat, dan melihat tindakan ulang yang tersedia.
+- Status: Selesai diperbaiki.
+
+### Q-014
+
+- Alur atau fitur: Kalender cuti HR (`src/components/LeaveCalendar.tsx`).
+- Kondisi spesifik yang bermasalah: Error data kalender hanya tampak sebagai indikator ringkas.
+- Apa yang pengguna lihat sekarang: Error kalender ditampilkan sebagai `FeedbackMessage` warning dengan judul `Data kalender belum lengkap`.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna melihat bahwa data pendukung kalender belum lengkap tanpa harus menafsirkan badge singkat.
+- Status: Selesai diperbaiki.
+
+### Q-015
+
+- Alur atau fitur: Pesan error generik lintas halaman.
+- Kondisi spesifik yang bermasalah: Beberapa catch menampilkan teks umum seperti `Terjadi kesalahan koneksi`, `Kesalahan jaringan`, atau `Terjadi kesalahan server`.
+- Apa yang pengguna lihat sekarang: Teks generik yang ditargetkan sudah diganti menjadi pesan yang menyebut aksi atau data yang gagal diproses.
+- Mengapa itu cukup dari sudut pandang pengguna: Pengguna mendapat konteks tindakan yang gagal dan dapat memahami langkah yang sedang terhenti.
+- Status: Selesai diperbaiki.
+
 ## Ringkasan Keseluruhan
 
-- Total temuan audit: 83
+- Total temuan audit utama: 83
+- Temuan lanjutan quick scan UX: 15
 - Kritis/Tinggi: 13
 - Sedang: 56
 - Rendah: 14
 - Status selesai diperbaiki: 83
+- Status temuan lanjutan quick scan UX: 15 selesai diperbaiki
 - Status ditunda karena tidak yakin: 0
 - Status tidak dapat dikerjakan: 0
 - Alur dengan celah terbanyak: Manajemen Aset GA dan Public QR, terutama listing aset, form aset, detail aset, riwayat/inspeksi/maintenance, scanner, print label, SIM, categories, tickets, dan public QR.

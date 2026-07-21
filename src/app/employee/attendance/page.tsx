@@ -286,8 +286,8 @@ export default function AttendancePage() {
         } catch (err) {
             log.error("Koneksi error saat submit absensi", { error: err instanceof Error ? err.message : String(err) });
             setStatus("error");
-            toast("Terjadi kesalahan koneksi. Periksa internet Anda.", "error");
-            setMessage("Terjadi kesalahan koneksi");
+            toast("Absensi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
+            setMessage("Absensi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.");
         }
     }, [photo, gpsInfo, faceVerification.status, todayRecord]);
 

@@ -170,7 +170,7 @@ export default function AttendanceCorrectionPage() {
                 toast(data.error ?? "Gagal mengirim pengajuan", "error");
             }
         } catch {
-            toast("Terjadi kesalahan koneksi", "error");
+            toast("Pengajuan koreksi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
         }

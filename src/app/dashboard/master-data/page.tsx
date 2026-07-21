@@ -81,7 +81,7 @@ export default function MasterDataPage() {
             }
         } catch (err) {
             console.error(err);
-            toast("Terjadi kesalahan saat mencari lokasi", "error");
+            toast("Lokasi belum berhasil dicari. Periksa kata kunci atau koneksi lalu coba lagi.", "error");
         } finally {
             setSearchLoading(false);
         }
@@ -192,7 +192,7 @@ export default function MasterDataPage() {
                 setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
             }
         } catch {
-            setMsg({ type: "error", text: "Terjadi kesalahan server" });
+            setMsg({ type: "error", text: "Departemen belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
         }
@@ -217,7 +217,7 @@ export default function MasterDataPage() {
                 setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
             }
         } catch {
-            setMsg({ type: "error", text: "Terjadi kesalahan server" });
+            setMsg({ type: "error", text: "Divisi belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
         }
@@ -242,7 +242,7 @@ export default function MasterDataPage() {
                 setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
             }
         } catch {
-            setMsg({ type: "error", text: "Terjadi kesalahan server" });
+            setMsg({ type: "error", text: "Jabatan belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
         }
@@ -273,7 +273,7 @@ export default function MasterDataPage() {
                 setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
             }
         } catch {
-            setMsg({ type: "error", text: "Terjadi kesalahan server" });
+            setMsg({ type: "error", text: "Lokasi kerja belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
         }

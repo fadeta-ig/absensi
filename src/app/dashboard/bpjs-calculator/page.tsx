@@ -95,12 +95,12 @@ export default function BpjsCalculatorPage() {
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || "Gagal menghitung");
+                throw new Error(data.error || "Perhitungan BPJS belum berhasil diproses.");
             }
 
             setResult(await res.json());
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+            setError(err instanceof Error ? err.message : "Perhitungan BPJS belum berhasil diproses. Periksa nominal gaji lalu coba lagi.");
         } finally {
             setLoading(false);
         }

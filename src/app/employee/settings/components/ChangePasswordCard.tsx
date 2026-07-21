@@ -44,7 +44,7 @@ export function ChangePasswordCard() {
                 setMessage({ type: "error", text: errMessage });
             }
         } catch {
-            setMessage({ type: "error", text: "Terjadi kesalahan koneksi" });
+            setMessage({ type: "error", text: "Password belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi." });
         }
         setLoading(false);
     };

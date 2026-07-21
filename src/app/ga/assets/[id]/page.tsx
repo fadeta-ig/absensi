@@ -10,9 +10,10 @@ import {
 import { AssetWithHistory, AssetHistoryRow, AssetCondition } from "@/lib/types/asset";
 import { KondisiBadge, StatusBadge, CategoryBadge, HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { formatRupiah } from "@/lib/utils/formatters";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 
 import { HistoryTab } from "./components/HistoryTab";
 import { InspectionTab, InspectionRow } from "./components/InspectionTab";
@@ -24,6 +25,7 @@ function AssetDetailContent({ id }: { id: string }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const toast = useToast();
+    const confirm = useConfirm();
     const [asset, setAsset] = useState<AssetWithHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -43,8 +45,6 @@ function AssetDetailContent({ id }: { id: string }) {
     const [maintLoaded, setMaintLoaded] = useState(false);
     const [maintError, setMaintError] = useState<string | null>(null);
 
-    // Retire dialog
-    const [showRetire, setShowRetire] = useState(false);
     const [retiring, setRetiring] = useState(false);
 
     // Inspection dialog
@@ -171,8 +171,19 @@ function AssetDetailContent({ id }: { id: string }) {
             toast(error instanceof Error ? error.message : "Gagal mempensiunkan aset.", "error");
         } finally {
             setRetiring(false);
-            setShowRetire(false);
         }
+    };
+
+    const confirmRetire = () => {
+        if (!asset) return;
+        confirm({
+            title: "Retire Aset?",
+            message: `Aset "${asset.name}" (${asset.assetCode}) akan dipensiunkan dan tidak lagi tersedia untuk operasional.`,
+            confirmLabel: "Ya, Retire",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: handleRetire,
+        });
     };
 
     const handleInspect = async (e: React.FormEvent) => {
@@ -419,32 +430,25 @@ function AssetDetailContent({ id }: { id: string }) {
                                 Tindakan ini tidak dapat dibatalkan. Aset akan dipensiunkan dari sistem operasional.
                             </p>
                             <button
-                                onClick={() => setShowRetire(true)}
-                                className="w-full py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors"
+                                onClick={confirmRetire}
+                                disabled={retiring}
+                                className="w-full py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-60"
                             >
-                                Retire Aset
+                                {retiring ? "Memproses retire..." : "Retire Aset"}
                             </button>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* Retire Confirm Dialog */}
-            <ConfirmDialog
-                open={showRetire}
-                title="Retire Aset?"
-                message={`Aset "${asset.name}" (${asset.assetCode}) akan dipensiunkan dan tidak lagi tersedia untuk operasional.`}
-                confirmLabel="Ya, Retire"
-                variant="danger"
-                loading={retiring}
-                onConfirm={handleRetire}
-                onCancel={() => setShowRetire(false)}
-            />
-
             {/* Inspect Dialog */}
             {showInspection && (
-               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--foreground)] text-[var(--background)]/50 backdrop-blur-sm">
-                   <div className="bg-[var(--card)] rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+               <AccessibleModal
+                   ariaLabel="Catat inspeksi aset"
+                   onClose={() => setShowInspection(false)}
+                   className="max-w-md !p-0 overflow-hidden"
+                   disableClose={submittingInsp}
+               >
                        <div className="p-6 border-b border-[var(--border)] flex items-center justify-between">
                            <h2 className="text-lg font-bold text-[var(--text-primary)]">Catat Inspeksi Baru</h2>
                        </div>
@@ -473,21 +477,24 @@ function AssetDetailContent({ id }: { id: string }) {
                                <textarea value={inspData.notes} onChange={e => setInspData(prev => ({...prev, notes: e.target.value}))} rows={3} placeholder="Ada kerusakan spesifik?" className="form-input" />
                            </div>
                            <div className="flex justify-end gap-3 pt-2">
-                               <button type="button" onClick={() => setShowInspection(false)} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors">Batal</button>
+                               <button type="button" onClick={() => setShowInspection(false)} disabled={submittingInsp} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors disabled:opacity-60">Batal</button>
                                <button type="submit" disabled={submittingInsp} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold  hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
                                    {submittingInsp ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                    {submittingInsp ? "Menyimpan..." : "Simpan Inspeksi"}
                                </button>
                            </div>
                        </form>
-                   </div>
-               </div>
+               </AccessibleModal>
             )}
 
             {/* Maintenance Dialog */}
             {showMaintenance && (
-               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--foreground)] text-[var(--background)]/50 backdrop-blur-sm">
-                   <div className="bg-[var(--card)] rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+               <AccessibleModal
+                   ariaLabel="Catat maintenance aset"
+                   onClose={() => setShowMaintenance(false)}
+                   className="max-w-lg !p-0 overflow-hidden max-h-[90vh] flex flex-col"
+                   disableClose={submittingMaint}
+               >
                        <div className="p-6 border-b border-[var(--border)] flex items-center justify-between shrink-0">
                            <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2"><Wrench size={20} className="text-[var(--text-secondary)]"/> Catat Maintenance/Servis</h2>
                        </div>
@@ -529,15 +536,14 @@ function AssetDetailContent({ id }: { id: string }) {
                                <input type="text" value={maintData.attachmentUrl} onChange={e => setMaintData(prev => ({...prev, attachmentUrl: e.target.value}))} placeholder="Link Google Drive foto nota..." className="form-input" />
                            </div>
                            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)] shrink-0">
-                               <button type="button" onClick={() => setShowMaintenance(false)} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors">Batal</button>
+                               <button type="button" onClick={() => setShowMaintenance(false)} disabled={submittingMaint} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors disabled:opacity-60">Batal</button>
                                <button type="submit" disabled={submittingMaint} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold  hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
                                    {submittingMaint ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                    {submittingMaint ? "Menyimpan..." : "Simpan Data"}
                                </button>
                            </div>
                        </form>
-                   </div>
-               </div>
+               </AccessibleModal>
             )}
         </div>
     );
@@ -546,7 +552,7 @@ function AssetDetailContent({ id }: { id: string }) {
 export default function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     return (
-        <Suspense fallback={<div className="p-6">Loading...</div>}>
+        <Suspense fallback={<div className="p-6 text-sm text-[var(--text-secondary)]">Memuat detail aset...</div>}>
             <AssetDetailContent id={id} />
         </Suspense>
     );

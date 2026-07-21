@@ -127,7 +127,7 @@ export default function EmployeesPage() {
                         setPasswordMsg({ type: "error", text: data.error || "Gagal mengirim password" });
                     }
                 } catch {
-                    setPasswordMsg({ type: "error", text: "Terjadi kesalahan koneksi" });
+                    setPasswordMsg({ type: "error", text: "Password belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi." });
                 }
                 setSendingPassword(null);
             },

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Package, Plus, AlertTriangle, CheckCircle, Clock, X, MessageSquare, Monitor, Loader2, Info } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 
 interface Asset {
     id: string;
@@ -99,7 +100,7 @@ export default function EmployeeAssetsPage() {
                 toast(data.error || "Gagal mengirim tiket.", "error");
             }
         } catch {
-            toast("Terjadi kesalahan jaringan.", "error");
+            toast("Tiket aset belum terkirim karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
         }
@@ -242,8 +243,11 @@ export default function EmployeeAssetsPage() {
 
             {/* Modal Form */}
             {showModal && (
-                <div className="modal-overlay" onClick={() => !submitting && setShowModal(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <AccessibleModal
+                    ariaLabel={modalType === "NEW_REQUEST" ? "Request aset baru" : "Lapor kerusakan aset"}
+                    onClose={() => setShowModal(false)}
+                    disableClose={submitting}
+                >
                         <div className="modal-header">
                             <h2 className="modal-title flex items-center gap-2">
                                 {modalType === "NEW_REQUEST" ? (
@@ -252,7 +256,7 @@ export default function EmployeeAssetsPage() {
                                     <><AlertTriangle className="w-5 h-5 text-orange-500"/> Lapor Kerusakan</>
                                 )}
                             </h2>
-                            <button className="modal-close" onClick={() => !submitting && setShowModal(false)}><X className="w-4 h-4" /></button>
+                            <button className="modal-close" onClick={() => !submitting && setShowModal(false)} disabled={submitting} aria-label="Tutup modal tiket aset"><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {modalType === "DAMAGE_REPORT" && selectedAsset && (
@@ -286,13 +290,12 @@ export default function EmployeeAssetsPage() {
                             </div>
                             <div className="flex justify-end gap-2 pt-2">
                                 <button type="button" onClick={() => setShowModal(false)} disabled={submitting} className="btn btn-ghost">Batal</button>
-                                <button type="submit" disabled={submitting} className="btn btn-primary w-28">
-                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Kirim"}
+                                <button type="submit" disabled={submitting} className="btn btn-primary min-w-[120px]">
+                                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Mengirim...</> : "Kirim"}
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
         </div>
     );

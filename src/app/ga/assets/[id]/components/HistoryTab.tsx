@@ -4,11 +4,14 @@ import type { LucideIcon } from "lucide-react";
 import { AssetHistoryRow } from "@/lib/types/asset";
 import { KondisiBadge } from "@/features/ga/components/badges/AssetBadges";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export function HistoryTab({ history, loaded, error, onRefresh }: { history: AssetHistoryRow[]; loaded: boolean; error?: string | null; onRefresh: () => void | Promise<void> }) {
     const toast = useToast();
+    const confirm = useConfirm();
     const [uploadingId, setUploadingId] = useState<string | null>(null);
+    const [deletingBastId, setDeletingBastId] = useState<string | null>(null);
 
     const handleUploadBast = async (e: React.ChangeEvent<HTMLInputElement>, historyId: string) => {
         const file = e.target.files?.[0];
@@ -28,23 +31,34 @@ export function HistoryTab({ history, loaded, error, onRefresh }: { history: Ass
                 throw new Error(await getResponseErrorMessage(res, "Gagal upload BAST"));
             }
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Terjadi kesalahan jaringan.", "error");
+            toast(err instanceof Error ? err.message : "Dokumen BAST belum terunggah karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setUploadingId(null);
             e.target.value = ""; // reset input
         }
     };
 
-    const handleDeleteBast = async (bastId: string) => {
-        if (!confirm("Hapus dokumen BAST ini?")) return;
-        try {
-            const res = await fetch(`/api/assets/bast/${bastId}`, { method: "DELETE" });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus BAST"));
-            await onRefresh();
-            toast("Dokumen BAST berhasil dihapus.", "success");
-        } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal menghapus BAST", "error");
-        }
+    const handleDeleteBast = (bastId: string) => {
+        confirm({
+            title: "Hapus dokumen BAST?",
+            message: "Dokumen BAST ini akan dihapus dari riwayat mutasi aset.",
+            confirmLabel: "Hapus",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: async () => {
+                setDeletingBastId(bastId);
+                try {
+                    const res = await fetch(`/api/assets/bast/${bastId}`, { method: "DELETE" });
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus BAST"));
+                    await onRefresh();
+                    toast("Dokumen BAST berhasil dihapus.", "success");
+                } catch (err) {
+                    toast(err instanceof Error ? err.message : "Gagal menghapus BAST", "error");
+                } finally {
+                    setDeletingBastId(null);
+                }
+            },
+        });
     };
 
     if (!loaded) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Memuat riwayat...</div>;
@@ -116,8 +130,13 @@ export function HistoryTab({ history, loaded, error, onRefresh }: { history: Ass
                                                     </a>
                                                     {idx === 0 && <span className="shrink-0 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">Terbaru</span>}
                                                 </div>
-                                                <button onClick={() => handleDeleteBast(doc.id)} className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-red-500 shrink-0 transition-all p-1">
-                                                    <Trash2 size={14} />
+                                                <button
+                                                    onClick={() => handleDeleteBast(doc.id)}
+                                                    disabled={deletingBastId === doc.id}
+                                                    className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-red-500 shrink-0 transition-all p-1 disabled:opacity-50"
+                                                    aria-label={`Hapus dokumen ${doc.fileName}`}
+                                                >
+                                                    {deletingBastId === doc.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                                                 </button>
                                             </div>
                                         ))}

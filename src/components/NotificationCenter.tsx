@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Bell, CalendarOff, MapPinned, Clock4, UserX, FileText } from "lucide-react";
+import { Bell, CalendarOff, MapPinned, Clock4, UserX, FileText, Loader2 } from "lucide-react";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 interface Notification {
     id: string;
@@ -35,10 +36,12 @@ export default function NotificationCenter() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [count, setCount] = useState(0);
     const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const fetchNotifications = useCallback(async () => {
+        setLoading(true);
         try {
             const res = await fetch("/api/notifications");
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
@@ -48,6 +51,8 @@ export default function NotificationCenter() {
             setLoadError(null);
         } catch (error) {
             setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
+        } finally {
+            setLoading(false);
         }
     }, []);
 
@@ -81,6 +86,7 @@ export default function NotificationCenter() {
             <button
                 onClick={() => setOpen(!open)}
                 className="relative w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--secondary)] transition-colors"
+                aria-label="Buka notifikasi"
             >
                 <Bell className="w-5 h-5 text-[var(--text-secondary)]" />
                 {count > 0 && (
@@ -94,14 +100,24 @@ export default function NotificationCenter() {
                 <div className="absolute right-0 top-12 w-80 bg-[var(--card)] rounded-xl shadow-xl border border-[var(--border)] z-[300] overflow-hidden animate-[fadeIn_0.15s_ease]">
                     <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
                         <h3 className="text-sm font-bold text-[var(--text-primary)]">Notifikasi</h3>
-                        <span className="text-xs text-[var(--text-muted)]">{count} item</span>
+                        <span className="text-xs text-[var(--text-muted)]">{loading ? "Memuat..." : `${count} item`}</span>
                     </div>
 
                     <div className="max-h-[360px] overflow-y-auto">
                         {loadError ? (
-                            <div className="p-8 text-center">
-                                <AlertCircle className="w-8 h-8 text-[var(--destructive)] opacity-70 mx-auto mb-2" />
-                                <p className="text-xs font-medium text-[var(--destructive)]">{loadError}</p>
+                            <div className="p-4">
+                                <FeedbackMessage variant="error" compact title="Notifikasi belum dapat dimuat">
+                                    <p>{loadError}</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => void fetchNotifications()}
+                                        disabled={loading}
+                                        className="mt-3 inline-flex items-center gap-1 rounded-md bg-[var(--destructive)] px-3 py-1.5 text-[10px] font-semibold text-[var(--destructive-foreground)] disabled:opacity-60"
+                                    >
+                                        {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+                                        {loading ? "Memuat ulang..." : "Coba lagi"}
+                                    </button>
+                                </FeedbackMessage>
                             </div>
                         ) : notifications.length === 0 ? (
                             <div className="p-8 text-center">

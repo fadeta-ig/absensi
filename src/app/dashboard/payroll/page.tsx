@@ -357,7 +357,7 @@ export default function PayrollPage() {
                 if (Array.isArray(freshPayslips)) setPayslips(freshPayslips);
             }
         } catch {
-            setBulkResult({ created: 0, skipped: 0, message: "Terjadi kesalahan koneksi." });
+            setBulkResult({ created: 0, skipped: 0, message: "Generate massal payroll belum selesai karena koneksi bermasalah. Periksa internet lalu coba lagi." });
         } finally {
             setBulkLoading(false);
         }

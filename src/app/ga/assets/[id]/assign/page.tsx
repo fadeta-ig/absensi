@@ -2,13 +2,16 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, UserCheck, RefreshCcw, Search, ChevronsUpDown, Check, AlertCircle } from "lucide-react";
+import { ArrowLeft, UserCheck, RefreshCcw, Search, ChevronsUpDown, Check, AlertCircle, Loader2 } from "lucide-react";
 import { AssetWithHistory } from "@/lib/types/asset";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { useToast } from "@/components/Toast";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 export default function AssignAssetPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
+    const toast = useToast();
     const [asset, setAsset] = useState<AssetWithHistory | null>(null);
     const [loadingParams, setLoadingParams] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -87,16 +90,17 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Gagal serah terima");
-            
+
+            toast("Serah terima aset berhasil disimpan.", "success");
             router.push(`/ga/assets/${id}`);
         } catch (err: unknown) {
-            if (err instanceof Error) setError(err.message);
+            setError(err instanceof Error ? err.message : "Serah terima aset belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);
         }
     };
 
-    if (loadingParams) return <div className="p-6">Memuat konfigurasi...</div>;
+    if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]" role="status">Memuat konfigurasi serah terima...</div>;
     if (error && !asset) {
         return (
             <div className="p-6 max-w-3xl mx-auto min-h-screen">
@@ -122,9 +126,9 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
             </div>
 
             {error && (
-                <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium">
+                <FeedbackMessage variant="error">
                     {error}
-                </div>
+                </FeedbackMessage>
             )}
 
             <form onSubmit={handleSubmit} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden">
@@ -175,8 +179,9 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
 
                 <div className="p-6 border-t bg-[var(--secondary)]/50 flex justify-end gap-3">
                     <button type="button" onClick={() => router.back()} className="px-5 py-2.5 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)]">Batalkan</button>
-                    <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-600 rounded-lg text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                        <UserCheck size={16} /> {saving ? "Memproses..." : "Konfirmasi Mutasi"}
+                    <button type="submit" disabled={saving} className="px-5 py-2.5 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] disabled:opacity-50 flex items-center gap-2">
+                        {saving ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                        {saving ? "Menyimpan mutasi..." : "Konfirmasi Mutasi"}
                     </button>
                 </div>
             </form>

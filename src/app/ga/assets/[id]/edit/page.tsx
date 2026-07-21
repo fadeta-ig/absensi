@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import AssetForm, { AssetFormData } from "@/features/ga/components/AssetForm";
 import { AssetWithHistory } from "@/lib/types/asset";
+import { useToast } from "@/components/Toast";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 export default function EditAssetPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
+    const toast = useToast();
     const [initialData, setInitialData] = useState<Partial<AssetFormData> | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -41,7 +44,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
 
             } catch (err) {
                 console.error("Gagal load aset", err);
-                setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+                setError(err instanceof Error ? err.message : "Data aset tidak dapat dimuat. Muat ulang halaman atau coba lagi nanti.");
             }
         };
         fetchInitialData();
@@ -77,16 +80,17 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             });
             const resData = await res.json();
             if (!res.ok) throw new Error(resData.error || "Gagal mengupdate aset");
-            
+
+            toast("Perubahan aset berhasil disimpan.", "success");
             router.push(`/ga/assets/${id}`);
         } catch (err: unknown) {
-            if (err instanceof Error) setError(err.message);
+            setError(err instanceof Error ? err.message : "Perubahan aset belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);
         }
     };
 
-    if (!initialData && !error) return <div className="p-6">Memuat konfigurasi form...</div>;
+    if (!initialData && !error) return <div className="p-6 text-sm text-[var(--text-secondary)]" role="status">Memuat konfigurasi form...</div>;
 
     return (
         <div className="p-6 max-w-4xl mx-auto flex flex-col gap-6 min-h-screen">
@@ -101,9 +105,9 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             </div>
 
             {error ? (
-                <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium">
+                <FeedbackMessage variant="error">
                     {error}
-                </div>
+                </FeedbackMessage>
             ) : initialData && (
                 <AssetForm mode="edit" initialData={initialData} onSubmit={handleSubmit} saving={saving} />
             )}

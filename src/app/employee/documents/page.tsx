@@ -126,7 +126,7 @@ export default function DocumentsPage() {
                 toast(data.error ?? "Gagal mengirim permintaan", "error");
             }
         } catch {
-            toast("Terjadi kesalahan koneksi", "error");
+            toast("Permintaan surat belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
         }

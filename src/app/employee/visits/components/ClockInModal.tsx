@@ -5,6 +5,8 @@ import { X, Loader2, LogIn } from "lucide-react";
 import { VisitPhotoDraft, VisitReport } from "@/types";
 import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 interface ClockInModalProps {
     visit: VisitReport;
@@ -53,7 +55,7 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
                 setError(data.error || data.details?.join(", ") || "Gagal melakukan clock in.");
             }
         } catch {
-            setError("Terjadi kesalahan koneksi.");
+            setError("Clock in belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
         }
 
         setLoading(false);
@@ -61,76 +63,76 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
 
     if (!visit.visitLocation) {
         return (
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
-                    <div className="modal-header">
-                        <h2 className="modal-title">Clock In</h2>
-                        <button className="modal-close" onClick={onClose}><X className="w-4 h-4" /></button>
-                    </div>
-                    <div className="p-8 text-center text-sm text-[var(--text-muted)]">
-                        Lokasi kunjungan belum ditentukan. Edit draft terlebih dahulu.
-                    </div>
+            <AccessibleModal ariaLabel="Clock in kunjungan" onClose={onClose} className="max-w-lg">
+                <div className="modal-header">
+                    <h2 className="modal-title">Clock In</h2>
+                    <button className="modal-close" onClick={onClose} aria-label="Tutup modal clock in">
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
-            </div>
+                <div className="p-8 text-center text-sm text-[var(--text-muted)]">
+                    Lokasi kunjungan belum ditentukan. Edit draft terlebih dahulu.
+                </div>
+            </AccessibleModal>
         );
     }
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Clock In — {visit.clientName}</h2>
-                    <button className="modal-close" onClick={onClose}>
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-
-                <div className="space-y-4">
-                    {error && (
-                        <div className="flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Location Validation */}
-                    <LocationValidator
-                        targetLocation={visit.visitLocation}
-                        targetRadius={visit.visitRadius}
-                        onLocationResult={handleLocationResult}
-                    />
-
-                    {/* Photo Capture */}
-                    <MultiPhotoCapture
-                        photos={photos}
-                        onPhotosChange={setPhotos}
-                        minPhotos={2}
-                        maxPhotos={5}
-                        defaultCategory="LOKASI"
-                    />
-
-                    {/* Submit */}
-                    <button
-                        type="button"
-                        onClick={handleSubmit}
-                        className="btn btn-primary w-full"
-                        disabled={!canSubmit}
-                    >
-                        {loading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <LogIn className="w-4 h-4" />
-                        )}
-                        Clock In
-                    </button>
-
-                    {!canSubmit && !loading && (
-                        <p className="text-[10px] text-[var(--text-muted)] text-center italic">
-                            {!locationResult?.isWithinRadius && "Lokasi belum valid. "}
-                            {photos.length < 2 && `Ambil minimal 2 foto (${photos.length}/2).`}
-                        </p>
-                    )}
-                </div>
+        <AccessibleModal
+            ariaLabel={`Clock in kunjungan ${visit.clientName}`}
+            onClose={onClose}
+            className="max-w-lg"
+            disableClose={loading}
+        >
+            <div className="modal-header">
+                <h2 className="modal-title">Clock In - {visit.clientName}</h2>
+                <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup modal clock in">
+                    <X className="w-4 h-4" />
+                </button>
             </div>
-        </div>
+
+            <div className="space-y-4">
+                {error && (
+                    <FeedbackMessage variant="error">
+                        {error}
+                    </FeedbackMessage>
+                )}
+
+                <LocationValidator
+                    targetLocation={visit.visitLocation}
+                    targetRadius={visit.visitRadius}
+                    onLocationResult={handleLocationResult}
+                />
+
+                <MultiPhotoCapture
+                    photos={photos}
+                    onPhotosChange={setPhotos}
+                    minPhotos={2}
+                    maxPhotos={5}
+                    defaultCategory="LOKASI"
+                />
+
+                <button
+                    type="button"
+                    onClick={handleSubmit}
+                    className="btn btn-primary w-full"
+                    disabled={loading || !canSubmit}
+                >
+                    {loading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <LogIn className="w-4 h-4" />
+                    )}
+                    {loading ? "Menyimpan clock in..." : "Clock In"}
+                </button>
+
+                {!canSubmit && !loading && (
+                    <p className="text-[10px] text-[var(--text-muted)] text-center italic">
+                        {!locationResult?.isWithinRadius && "Lokasi belum valid. "}
+                        {photos.length < 2 && `Ambil minimal 2 foto (${photos.length}/2).`}
+                    </p>
+                )}
+            </div>
+        </AccessibleModal>
     );
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MapPin, Loader2, ShieldCheck, ShieldAlert, AlertCircle } from "lucide-react";
+import { MapPin, Loader2 } from "lucide-react";
 import { calculateDistance } from "@/lib/utils";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 interface LocationValidatorProps {
     targetLocation: { lat: number; lng: number };
@@ -65,7 +66,7 @@ export function LocationValidator({
             setResult(locationResult);
             onLocationResult(locationResult);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Gagal mendapatkan lokasi.");
+            setError(err instanceof Error ? err.message : "Lokasi perangkat belum didapatkan. Aktifkan GPS lalu coba lagi.");
         }
 
         setLoading(false);
@@ -77,7 +78,7 @@ export function LocationValidator({
 
     if (loading) {
         return (
-            <div className="flex items-center gap-2 p-3 rounded-lg text-xs font-medium border bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]">
+            <div className="flex items-center gap-2 p-3 rounded-lg text-xs font-medium border bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]" role="status" aria-live="polite">
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                 <span>Memverifikasi lokasi...</span>
             </div>
@@ -87,10 +88,9 @@ export function LocationValidator({
     if (error) {
         return (
             <div className="space-y-2">
-                <div className="flex items-center gap-2 p-3 rounded-lg text-xs font-medium border bg-red-50 text-red-700 border-red-200">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span className="flex-1">{error}</span>
-                </div>
+                <FeedbackMessage variant="error" compact>
+                    {error}
+                </FeedbackMessage>
                 <button
                     type="button"
                     onClick={checkLocation}
@@ -106,24 +106,11 @@ export function LocationValidator({
 
     return (
         <div className="space-y-2">
-            <div
-                className={`flex items-center gap-2 p-3 rounded-lg text-xs font-medium border ${
-                    result.isWithinRadius
-                        ? "bg-green-50 text-green-700 border-green-200"
-                        : "bg-red-50 text-red-700 border-red-200"
-                }`}
-            >
-                {result.isWithinRadius ? (
-                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                )}
-                <span className="flex-1">
-                    {result.isWithinRadius
-                        ? `Lokasi valid — ${result.distanceMeters}m dari titik kunjungan (maks ${targetRadius}m)`
-                        : `Anda ${result.distanceMeters}m dari lokasi kunjungan. Jarak maksimal: ${targetRadius}m`}
-                </span>
-            </div>
+            <FeedbackMessage variant={result.isWithinRadius ? "success" : "error"} compact>
+                {result.isWithinRadius
+                    ? `Lokasi valid - ${result.distanceMeters}m dari titik kunjungan (maks ${targetRadius}m)`
+                    : `Anda ${result.distanceMeters}m dari lokasi kunjungan. Jarak maksimal: ${targetRadius}m`}
+            </FeedbackMessage>
             <button
                 type="button"
                 onClick={checkLocation}

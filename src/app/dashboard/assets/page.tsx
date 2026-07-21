@@ -4,13 +4,13 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     Search, Filter, RefreshCw, History, X,
-    Smartphone, Laptop, Phone, Package,
+    Package,
     User, Users, Building2, UserX,
     CheckCircle, Wrench, TrendingUp, AlertCircle,
 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
-import type { AssetWithHistory, AssetStatus, AssetCondition } from "@/lib/types/asset";
+import type { AssetWithHistory } from "@/lib/types/asset";
 import type { AssetStats } from "@/lib/services/assets/queries";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
@@ -34,28 +34,28 @@ const PAGE_SIZE = 20;
 
 function KondisiBadge({ kondisi }: { kondisi: string }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
-        BAIK: { label: "Baik", color: "#10b981", bg: "#d1fae5" },
-        KURANG_BAIK: { label: "Kurang Baik", color: "#f59e0b", bg: "#fef3c7" },
-        RUSAK: { label: "Rusak", color: "#ef4444", bg: "#fee2e2" },
+        BAIK: { label: "Baik", color: "var(--success)", bg: "var(--success-bg)" },
+        KURANG_BAIK: { label: "Kurang Baik", color: "var(--warning)", bg: "var(--warning-bg)" },
+        RUSAK: { label: "Rusak", color: "var(--destructive)", bg: "var(--destructive-bg)" },
     };
-    const c = map[kondisi] ?? { label: kondisi, color: "#6b7280", bg: "#f3f4f6" };
+    const c = map[kondisi] ?? { label: kondisi, color: "var(--neutral)", bg: "var(--neutral-bg)" };
     return <span style={{ fontSize: 11, fontWeight: 600, color: c.color, background: c.bg, padding: "2px 8px", borderRadius: 999 }}>{c.label}</span>;
 }
 
 function StatusBadge({ status }: { status: string }) {
     const map: Record<string, { label: string; color: string; bg: string }> = {
-        AVAILABLE: { label: "Tersedia", color: "#10b981", bg: "#d1fae5" },
-        IN_USE: { label: "Digunakan", color: "#3b82f6", bg: "#dbeafe" },
-        MAINTENANCE: { label: "Perbaikan", color: "#f59e0b", bg: "#fef3c7" },
-        RETIRED: { label: "Retired", color: "#6b7280", bg: "#f3f4f6" },
+        AVAILABLE: { label: "Tersedia", color: "var(--success)", bg: "var(--success-bg)" },
+        IN_USE: { label: "Digunakan", color: "var(--info)", bg: "var(--info-bg)" },
+        MAINTENANCE: { label: "Perbaikan", color: "var(--warning)", bg: "var(--warning-bg)" },
+        RETIRED: { label: "Retired", color: "var(--neutral)", bg: "var(--neutral-bg)" },
     };
-    const c = map[status] ?? { label: status, color: "#6b7280", bg: "#f3f4f6" };
+    const c = map[status] ?? { label: status, color: "var(--neutral)", bg: "var(--neutral-bg)" };
     return <span style={{ fontSize: 11, fontWeight: 600, color: c.color, background: c.bg, padding: "2px 8px", borderRadius: 999 }}>{c.label}</span>;
 }
 
 function CategoryBadge({ cat }: { cat: string }) {
     return (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#6366f1", background: "#eef2ff", padding: "2px 8px", borderRadius: 999, textTransform: "capitalize" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "var(--category-1)", background: "var(--category-1-bg)", padding: "2px 8px", borderRadius: 999, textTransform: "capitalize" }}>
             <Package size={11} />{cat}
         </span>
     );
@@ -63,10 +63,10 @@ function CategoryBadge({ cat }: { cat: string }) {
 
 function HolderIcon({ holderType }: { holderType: string }) {
     const icons: Record<string, React.ReactNode> = {
-        EMPLOYEE: <User size={13} color="#3b82f6" />,
-        FORMER_EMPLOYEE: <UserX size={13} color="#ef4444" />,
-        TEAM: <Users size={13} color="#8b5cf6" />,
-        GA_POOL: <Building2 size={13} color="#10b981" />,
+        EMPLOYEE: <User size={13} color="var(--info)" />,
+        FORMER_EMPLOYEE: <UserX size={13} color="var(--destructive)" />,
+        TEAM: <Users size={13} color="var(--status-company)" />,
+        GA_POOL: <Building2 size={13} color="var(--success)" />,
     };
     return <span style={{ display: "inline-flex", alignItems: "center" }}>{icons[holderType]}</span>;
 }
@@ -114,7 +114,7 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                     <div>
                         <h3 style={{ fontSize: 16, fontWeight: 700 }}>Riwayat Perpindahan</h3>
                         <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                            <span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>{asset.assetCode}</span>
+                            <span style={{ fontFamily: "monospace", background: "var(--neutral-bg)", padding: "1px 6px", borderRadius: 4 }}>{asset.assetCode}</span>
                             {" "}{asset.name}
                         </p>
                     </div>
@@ -144,8 +144,8 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                                 {history.map((h) => (
                                     <div key={h.id} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                                         {/* Timeline dot */}
-                                        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#eef2ff", border: "2px solid #6366f1", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, zIndex: 1 }}>
-                                            <Package size={14} color="#6366f1" />
+                                        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--category-1-bg)", border: "2px solid var(--category-1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, zIndex: 1 }}>
+                                            <Package size={14} color="var(--category-1)" />
                                         </div>
                                         {/* Content */}
                                         <div style={{ flex: 1, border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px", fontSize: 13 }}>
@@ -153,11 +153,11 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                                                 <div>
                                                     <span style={{ fontWeight: 600 }}>{actionLabel[h.action] ?? h.action}</span>
                                                     <p style={{ color: "var(--text-muted)", marginTop: 3, fontSize: 12 }}>
-                                                        <span style={{ color: "#6b7280" }}>{h.fromName ?? "GA"}</span>
+                                                        <span style={{ color: "var(--neutral)" }}>{h.fromName ?? "GA"}</span>
                                                         {" → "}
                                                         <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{h.toName ?? "GA"}</span>
                                                     </p>
-                                                    {h.notes && <p style={{ marginTop: 4, color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>&ldquo;{h.notes}&rdquo;</p>}
+                                                    {h.notes && <p style={{ marginTop: 4, color: "var(--neutral)", fontSize: 12, fontStyle: "italic" }}>&ldquo;{h.notes}&rdquo;</p>}
                                                 </div>
                                                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                                                     <KondisiBadge kondisi={h.kondisiSaat} />
@@ -276,15 +276,15 @@ function HrAssetsPageInner() {
 
             {/* Stats Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-                <StatCard icon={<Package />}      label="Total Aset"   value={stats?.total || 0}       bg="#eef2ff"  color="#6366f1" />
-                <StatCard icon={<CheckCircle />}  label="Tersedia"     value={stats?.available || 0}   bg="#d1fae5"  color="#10b981" />
-                <StatCard icon={<TrendingUp />}   label="Digunakan"    value={stats?.inUse || 0}       bg="#dbeafe"  color="#3b82f6" />
-                <StatCard icon={<Wrench />}       label="Perbaikan"    value={stats?.maintenance || 0} bg="#fef3c7"  color="#f59e0b" />
-                <StatCard icon={<AlertCircle />}  label="Kondisi Rusak" value={stats?.rusak || 0}      bg="#fee2e2"  color="#ef4444" />
+                <StatCard icon={<Package />}      label="Total Aset"   value={stats?.total || 0}       bg="var(--category-1-bg)" color="var(--category-1)" />
+                <StatCard icon={<CheckCircle />}  label="Tersedia"     value={stats?.available || 0}   bg="var(--success-bg)" color="var(--success)" />
+                <StatCard icon={<TrendingUp />}   label="Digunakan"    value={stats?.inUse || 0}       bg="var(--info-bg)" color="var(--info)" />
+                <StatCard icon={<Wrench />}       label="Perbaikan"    value={stats?.maintenance || 0} bg="var(--warning-bg)" color="var(--warning)" />
+                <StatCard icon={<AlertCircle />}  label="Kondisi Rusak" value={stats?.rusak || 0}      bg="var(--destructive-bg)" color="var(--destructive)" />
             </div>
 
             {/* Info banner */}
-            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#1e40af", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ background: "var(--info-bg)", border: "1px solid var(--info-border)", borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "var(--info)", display: "flex", alignItems: "center", gap: 10 }}>
                 <Package size={15} />
                 <span>Halaman ini <strong>hanya untuk monitoring</strong>. Untuk request assign, return, atau servis aset — hubungi tim <strong>GA (General Affairs)</strong>.</span>
             </div>
@@ -360,12 +360,12 @@ function HrAssetsPageInner() {
                                     ) : assets.map(a => (
                                         <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
                                             <td style={{ padding: "10px 14px" }}>
-                                                <span style={{ fontFamily: "monospace", background: "#f3f4f6", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
+                                                <span style={{ fontFamily: "monospace", background: "var(--neutral-bg)", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
                                             </td>
                                             <td style={{ padding: "10px 14px", maxWidth: 220 }}>
                                                 <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{a.name}</span>
                                                 {a.keterangan && (
-                                                    <span style={{ display: "block", fontSize: 11, color: "#f59e0b" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 26)}{a.keterangan.length > 26 ? "…" : ""}</span>
+                                                    <span style={{ display: "block", fontSize: 11, color: "var(--warning)" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 26)}{a.keterangan.length > 26 ? "…" : ""}</span>
                                                 )}
                                             </td>
                                             <td style={{ padding: "10px 14px" }}><CategoryBadge cat={a.category?.name || "LAINNYA"} /></td>
@@ -373,7 +373,7 @@ function HrAssetsPageInner() {
                                             <td style={{ padding: "10px 14px" }}><StatusBadge status={a.status} /></td>
                                             <td style={{ padding: "10px 14px" }}>
                                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                    <div style={{ padding: 4, background: "#f3f4f6", borderRadius: 6, display: "flex" }}>
+                                                    <div style={{ padding: 4, background: "var(--neutral-bg)", borderRadius: 6, display: "flex" }}>
                                                         <HolderIcon holderType={a.holderType} />
                                                     </div>
                                                     <div>

@@ -95,7 +95,7 @@ export default function EmployeeOvertimePage() {
                 setMessage({ type: "error", text: data.error || "Gagal mengajukan lembur" });
             }
         } catch {
-            setMessage({ type: "error", text: "Terjadi kesalahan koneksi" });
+            setMessage({ type: "error", text: "Pengajuan lembur belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi." });
         }
         setLoading(false);
     };

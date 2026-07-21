@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 export type SimCardFormData = {
     provider: string; // Misal: Telkomsel Pascabayar
@@ -78,15 +79,14 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
         onSubmit(formData);
     };
 
-    if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]">Memuat konfigurasi form...</div>;
+    if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]" role="status">Memuat konfigurasi form...</div>;
 
     return (
         <>
         {loadError && (
-            <div className="mb-4 rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{loadError}</span>
-            </div>
+            <FeedbackMessage variant="error" className="mb-4">
+                {loadError}
+            </FeedbackMessage>
         )}
         <form onSubmit={handleSubmit} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
             <div className="p-6 border-b bg-[var(--secondary)]/50">

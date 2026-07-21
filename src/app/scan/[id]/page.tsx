@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -70,16 +71,16 @@ function CategoryIcon({ name, size = 14 }: { name: string | null; size?: number 
 }
 
 const STATUS_MAP: Record<AssetStatus, { label: string; color: string; bg: string }> = {
-    AVAILABLE: { label: "Tersedia", color: "#10b981", bg: "#d1fae5" },
-    IN_USE: { label: "Digunakan", color: "#3b82f6", bg: "#dbeafe" },
-    MAINTENANCE: { label: "Perbaikan", color: "#f59e0b", bg: "#fef3c7" },
-    RETIRED: { label: "Retired", color: "#6b7280", bg: "#f3f4f6" },
+    AVAILABLE: { label: "Tersedia", color: "var(--success)", bg: "var(--success-bg)" },
+    IN_USE: { label: "Digunakan", color: "var(--info)", bg: "var(--info-bg)" },
+    MAINTENANCE: { label: "Perbaikan", color: "var(--warning)", bg: "var(--warning-bg)" },
+    RETIRED: { label: "Retired", color: "var(--neutral)", bg: "var(--neutral-bg)" },
 };
 
 const KONDISI_MAP: Record<AssetCondition, { label: string; color: string; bg: string }> = {
-    BAIK: { label: "Baik", color: "#10b981", bg: "#d1fae5" },
-    KURANG_BAIK: { label: "Kurang Baik", color: "#f59e0b", bg: "#fef3c7" },
-    RUSAK: { label: "Rusak", color: "#ef4444", bg: "#fee2e2" },
+    BAIK: { label: "Baik", color: "var(--success)", bg: "var(--success-bg)" },
+    KURANG_BAIK: { label: "Kurang Baik", color: "var(--warning)", bg: "var(--warning-bg)" },
+    RUSAK: { label: "Rusak", color: "var(--destructive)", bg: "var(--destructive-bg)" },
 };
 
 function holderLabel(type: HolderType, name: string | null): string {
@@ -172,7 +173,7 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
                 </div>
 
                 {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-medium text-red-700">
+                    <div className="mb-4 p-3 bg-[var(--destructive-bg)] border border-[var(--destructive-border)] rounded-lg text-xs font-medium text-[var(--destructive)]" role="alert">
                         {error}
                     </div>
                 )}
@@ -186,7 +187,7 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
                             onChange={e => setEmployeeId(e.target.value)}
                             required
                             placeholder="WIG-XXX"
-                            className="w-full px-3.5 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-[var(--text-muted)]"
+                            className="w-full px-3.5 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm font-medium focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--ring)] outline-none transition-all placeholder:text-[var(--text-muted)]"
                         />
                     </div>
                     <div>
@@ -197,7 +198,7 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
                             onChange={e => setPassword(e.target.value)}
                             required
                             placeholder="••••••••"
-                            className="w-full px-3.5 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-[var(--text-muted)]"
+                            className="w-full px-3.5 py-2.5 bg-[var(--card)] border border-[var(--border)] rounded-lg text-sm font-medium focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--ring)] outline-none transition-all placeholder:text-[var(--text-muted)]"
                         />
                     </div>
                     <button
@@ -282,14 +283,14 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                                     onClick={() => toggleItem(item.key)}
                                     className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg border text-sm font-medium transition-colors ${
                                         checklist[item.key]
-                                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                                            : "bg-red-50 border-red-200 text-red-800"
+                                            ? "bg-[var(--success-bg)] border-[var(--success-border)] text-[var(--success)]"
+                                            : "bg-[var(--destructive-bg)] border-[var(--destructive-border)] text-[var(--destructive)]"
                                     }`}
                                 >
                                     <span>{item.label}</span>
                                     {checklist[item.key]
-                                        ? <CheckCircle size={16} className="text-emerald-500" />
-                                        : <AlertCircle size={16} className="text-red-500" />
+                                        ? <CheckCircle size={16} className="text-[var(--success)]" />
+                                        : <AlertCircle size={16} className="text-[var(--destructive)]" />
                                     }
                                 </button>
                             ))}
@@ -330,15 +331,14 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                             onChange={e => setNotes(e.target.value)}
                             placeholder="Opsional — temuan fisik, rekomendasi, dll."
                             rows={3}
-                            className="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3.5 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder:text-[var(--text-muted)] transition-all resize-none"
+                            className="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3.5 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-[var(--ring)] focus:border-[var(--ring)] placeholder:text-[var(--text-muted)] transition-all resize-none"
                         />
                     </div>
 
                     {error && (
-                        <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
-                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>{error}</span>
-                        </div>
+                        <FeedbackMessage variant="error">
+                            {error}
+                        </FeedbackMessage>
                     )}
                 </form>
 
@@ -502,8 +502,8 @@ function ScanPageInner({ id }: { id: string }) {
                             className="w-full px-5 py-3.5 border-t flex items-center justify-between hover:bg-[var(--secondary)] transition-colors group"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center border border-indigo-100">
-                                    <ClipboardCheck size={15} className="text-indigo-600" />
+                                <div className="w-8 h-8 bg-[var(--category-1-bg)] rounded-lg flex items-center justify-center border border-[var(--category-1)]/20">
+                                    <ClipboardCheck size={15} className="text-[var(--category-1)]" />
                                 </div>
                                 <div className="text-left">
                                     <span className="text-sm font-semibold text-[var(--text-primary)] block">Inspeksi Fisik</span>
@@ -514,11 +514,11 @@ function ScanPageInner({ id }: { id: string }) {
                         </button>
                     ) : (
                         <div className="px-5 py-3.5 border-t flex items-center gap-3">
-                            <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center border border-emerald-100">
-                                <CheckCircle size={15} className="text-emerald-600" />
+                            <div className="w-8 h-8 bg-[var(--success-bg)] rounded-lg flex items-center justify-center border border-[var(--success-border)]">
+                                <CheckCircle size={15} className="text-[var(--success)]" />
                             </div>
                             <div>
-                                <span className="text-sm font-semibold text-emerald-700 block">Inspeksi Tersimpan</span>
+                                <span className="text-sm font-semibold text-[var(--success)] block">Inspeksi Tersimpan</span>
                                 <span className="text-[11px] text-[var(--text-secondary)]">Data berhasil tercatat</span>
                             </div>
                         </div>

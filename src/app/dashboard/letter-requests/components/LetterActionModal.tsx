@@ -1,5 +1,7 @@
-import { AlertCircle, Loader2, X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { LetterRequest, TYPE_CONFIG } from "../types";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 interface Props {
     actionTarget: LetterRequest;
@@ -15,13 +17,16 @@ export function LetterActionModal({
     actionTarget, setActionTarget, actionType, submitting, actionNotes, setActionNotes, handleAction
 }: Props) {
     return (
-        <div className="modal-overlay" onClick={() => { if (!submitting) setActionTarget(null); }}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <AccessibleModal
+            ariaLabel={actionType === "PROCESSING" ? "Proses surat" : actionType === "READY" ? "Tandai surat siap" : "Tolak permintaan surat"}
+            onClose={() => setActionTarget(null)}
+            disableClose={submitting}
+        >
                 <div className="modal-header">
                     <h2 className="modal-title">
                         {actionType === "PROCESSING" ? "Proses Surat" : actionType === "READY" ? "Tandai Siap" : "Tolak Permintaan"}
                     </h2>
-                    <button className="modal-close" onClick={() => setActionTarget(null)} disabled={submitting}>
+                    <button className="modal-close" onClick={() => setActionTarget(null)} disabled={submitting} aria-label="Tutup modal aksi surat">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -38,12 +43,9 @@ export function LetterActionModal({
                     </div>
 
                     {actionType === "REJECTED" && (
-                        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-lg">
-                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                            <p className="text-xs text-red-600">
-                                Permintaan yang ditolak tidak dapat dikembalikan. Pastikan alasan penolakan sudah diisi.
-                            </p>
-                        </div>
+                        <FeedbackMessage variant="warning" compact>
+                            Permintaan yang ditolak tidak dapat dikembalikan. Pastikan alasan penolakan sudah diisi.
+                        </FeedbackMessage>
                     )}
 
                     <div className="form-group !mb-0">
@@ -77,11 +79,10 @@ export function LetterActionModal({
                             disabled={submitting}
                         >
                             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {actionType === "PROCESSING" ? "Mulai Proses" : actionType === "READY" ? "Tandai Siap" : "Tolak Permintaan"}
+                            {submitting ? "Menyimpan..." : actionType === "PROCESSING" ? "Mulai Proses" : actionType === "READY" ? "Tandai Siap" : "Tolak Permintaan"}
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>
+        </AccessibleModal>
     );
 }

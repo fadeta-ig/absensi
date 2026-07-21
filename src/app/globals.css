@@ -21,6 +21,34 @@
   --accent-foreground: #800020;
   --destructive: #dc2626;
   --destructive-foreground: #FFFFFF;
+  --destructive-bg: #FEE2E2;
+  --destructive-border: #FECACA;
+  --success: #047857;
+  --success-bg: #D1FAE5;
+  --success-border: #A7F3D0;
+  --warning: #B45309;
+  --warning-bg: #FEF3C7;
+  --warning-border: #FDE68A;
+  --info: #0369A1;
+  --info-bg: #E0F2FE;
+  --info-border: #BAE6FD;
+  --neutral: #475569;
+  --neutral-bg: #F1F5F9;
+  --neutral-border: #E2E8F0;
+  --status-company: #7C3AED;
+  --status-company-bg: #EDE9FE;
+  --category-1: #4F46E5;
+  --category-1-bg: #EEF2FF;
+  --category-2: #0284C7;
+  --category-2-bg: #E0F2FE;
+  --category-3: #047857;
+  --category-3-bg: #D1FAE5;
+  --category-4: #B45309;
+  --category-4-bg: #FEF3C7;
+  --category-5: #7C3AED;
+  --category-5-bg: #EDE9FE;
+  --category-6: #BE185D;
+  --category-6-bg: #FCE7F3;
   --border: #E5DEDE;
   --input: #E5DEDE;
   --ring: #800020;
@@ -49,6 +77,34 @@
   --accent-foreground: #FF8F9E;
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
+  --destructive-bg: rgba(239, 68, 68, 0.14);
+  --destructive-border: rgba(239, 68, 68, 0.28);
+  --success: #34D399;
+  --success-bg: rgba(52, 211, 153, 0.14);
+  --success-border: rgba(52, 211, 153, 0.28);
+  --warning: #FBBF24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --warning-border: rgba(251, 191, 36, 0.28);
+  --info: #38BDF8;
+  --info-bg: rgba(56, 189, 248, 0.14);
+  --info-border: rgba(56, 189, 248, 0.28);
+  --neutral: #CBD5E1;
+  --neutral-bg: rgba(148, 163, 184, 0.14);
+  --neutral-border: rgba(148, 163, 184, 0.28);
+  --status-company: #A78BFA;
+  --status-company-bg: rgba(167, 139, 250, 0.14);
+  --category-1: #A5B4FC;
+  --category-1-bg: rgba(99, 102, 241, 0.16);
+  --category-2: #7DD3FC;
+  --category-2-bg: rgba(14, 165, 233, 0.16);
+  --category-3: #6EE7B7;
+  --category-3-bg: rgba(16, 185, 129, 0.16);
+  --category-4: #FCD34D;
+  --category-4-bg: rgba(245, 158, 11, 0.16);
+  --category-5: #C4B5FD;
+  --category-5-bg: rgba(139, 92, 246, 0.16);
+  --category-6: #F9A8D4;
+  --category-6-bg: rgba(236, 72, 153, 0.16);
   --border: #2D2D3D;
   --input: #2D2D3D;
   --ring: #9B1B30;
@@ -441,6 +497,21 @@ select {
   0%   { transform: translateY(0); opacity: 0.8; }
   50%  { transform: translateY(13.5rem); opacity: 1; }
   100% { transform: translateY(0); opacity: 0.8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ===== Responsive ===== */

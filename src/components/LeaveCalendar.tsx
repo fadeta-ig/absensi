@@ -2,13 +2,13 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    AlertCircle,
     CakeSlice,
     Calendar as CalendarIcon,
     ChevronLeft,
     ChevronRight,
     Loader2,
 } from "lucide-react";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { toDateString } from "@/lib/utils";
 import type { IndonesianHoliday } from "@/lib/services/holidayService";
 import {
@@ -198,15 +198,6 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                             aria-label="Memuat data kalender"
                         />
                     )}
-                    {calendarError && (
-                        <span
-                            className="flex min-w-0 items-center gap-1 text-[10px] font-medium text-red-600"
-                            title={calendarError}
-                        >
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                            <span className="hidden truncate sm:inline">Data kalender belum lengkap</span>
-                        </span>
-                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     <span
@@ -235,6 +226,13 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                     </div>
                 </div>
             </div>
+            {calendarError && (
+                <div className="px-4 pt-4">
+                    <FeedbackMessage variant="warning" compact title="Data kalender belum lengkap">
+                        {calendarError}
+                    </FeedbackMessage>
+                </div>
+            )}
 
             <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--secondary)]/30">
                 {["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map((d, index) => (

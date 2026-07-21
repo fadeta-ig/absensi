@@ -91,7 +91,7 @@ export default function CorrectionPage() {
                 setMessage({ type: "error", text: err.error || "Gagal mengirim pengajuan." });
             }
         } catch {
-            setMessage({ type: "error", text: "Terjadi kesalahan sistem." });
+            setMessage({ type: "error", text: "Pengajuan koreksi belum terkirim karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setSubmitting(false);
         }

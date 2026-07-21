@@ -546,7 +546,7 @@ export function FaceRegistrationCard() {
                 scanTotal: 0,
             });
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Terjadi kesalahan saat memproses wajah.";
+            const message = err instanceof Error ? err.message : "Wajah belum berhasil diproses.";
             log.error("Error saat registrasi wajah", { error: message });
             if (!mountedRef.current || operationIdRef.current !== operationId) return;
 

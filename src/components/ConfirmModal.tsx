@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useId, useRef } from "react";
 import { AlertTriangle, X, Loader2 } from "lucide-react";
 
 interface ConfirmState {
@@ -40,16 +40,66 @@ export function useConfirm(): OpenConfirmFn {
 export default function ConfirmModal() {
     const [state, setState] = useState<ConfirmState>(INITIAL_STATE);
     const [loading, setLoading] = useState(false);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const cancelRef = useRef<HTMLButtonElement>(null);
+    const titleId = useId();
+    const descriptionId = useId();
 
     useEffect(() => {
         globalOpen = (opts) => setState({ ...opts, open: true });
         return () => { globalOpen = null; };
     }, []);
 
-    const close = () => {
+    const close = useCallback(() => {
         if (loading) return;
         setState(INITIAL_STATE);
-    };
+    }, [loading]);
+
+    useEffect(() => {
+        if (!state.open) return;
+
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const focusTimer = window.setTimeout(() => cancelRef.current?.focus(), 0);
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                close();
+                return;
+            }
+
+            if (event.key !== "Tab" || !dialogRef.current) return;
+
+            const focusable = Array.from(
+                dialogRef.current.querySelectorAll<HTMLElement>(
+                    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                )
+            );
+
+            if (focusable.length === 0) {
+                event.preventDefault();
+                return;
+            }
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+
+        document.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            window.clearTimeout(focusTimer);
+            document.removeEventListener("keydown", handleKeyDown);
+            previousFocus?.focus();
+        };
+    }, [close, state.open]);
 
     const handleConfirm = async () => {
         setLoading(true);
@@ -65,9 +115,18 @@ export default function ConfirmModal() {
 
     const variant = state.variant || "danger";
     const variantStyles = {
-        danger: { icon: "bg-red-100 text-red-600", btn: "bg-red-600 hover:bg-red-700 text-white" },
-        warning: { icon: "bg-amber-100 text-amber-600", btn: "bg-amber-600 hover:bg-amber-700 text-white" },
-        info: { icon: "bg-blue-100 text-blue-600", btn: "bg-blue-600 hover:bg-blue-700 text-white" },
+        danger: {
+            icon: "bg-[var(--destructive)]/10 text-[var(--destructive)]",
+            btn: "bg-[var(--destructive)] hover:opacity-90 text-[var(--destructive-foreground)]",
+        },
+        warning: {
+            icon: "bg-[var(--warning-bg)] text-[var(--warning)]",
+            btn: "bg-[var(--warning)] hover:opacity-90 text-white",
+        },
+        info: {
+            icon: "bg-[var(--info-bg)] text-[var(--info)]",
+            btn: "bg-[var(--info)] hover:opacity-90 text-white",
+        },
     }[variant];
 
     return (
@@ -77,10 +136,20 @@ export default function ConfirmModal() {
 
             {/* Dialog */}
             <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                aria-describedby={descriptionId}
                 className="relative bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-[scaleIn_0.2s_ease]"
                 onClick={(e) => e.stopPropagation()}
             >
-                <button onClick={close} className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" disabled={loading}>
+                <button
+                    onClick={close}
+                    className="absolute top-3 right-3 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                    disabled={loading}
+                    aria-label="Tutup dialog"
+                >
                     <X className="w-4 h-4" />
                 </button>
 
@@ -89,11 +158,12 @@ export default function ConfirmModal() {
                         <AlertTriangle className="w-6 h-6" />
                     </div>
                     <div>
-                        <h3 className="text-base font-bold text-[var(--text-primary)] mb-1">{state.title}</h3>
-                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{state.message}</p>
+                        <h3 id={titleId} className="text-base font-bold text-[var(--text-primary)] mb-1">{state.title}</h3>
+                        <p id={descriptionId} className="text-sm text-[var(--text-secondary)] leading-relaxed">{state.message}</p>
                     </div>
                     <div className="flex gap-3 w-full pt-1">
                         <button
+                            ref={cancelRef}
                             onClick={close}
                             disabled={loading}
                             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors disabled:opacity-50"

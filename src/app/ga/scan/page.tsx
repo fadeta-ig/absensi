@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, QrCode, Package, ClipboardCheck, Wrench, X } from "lucide-react";
+import { ArrowLeft, QrCode, Package, ClipboardCheck, Wrench, X, Loader2 } from "lucide-react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 
 function ScanContent() {
     const router = useRouter();
@@ -133,16 +135,15 @@ function ScanContent() {
                 </div>
 
                 {errorMsg && (
-                    <div className="mt-6 p-4 w-full bg-red-50 text-red-800 border border-red-200 rounded-xl text-center">
-                        <p className="text-sm font-bold mb-1">Peringatan:</p>
+                    <FeedbackMessage variant="error" title="Pemindaian terhenti" className="mt-6 w-full">
                         <p className="text-xs">{errorMsg}</p>
                         <button 
                             onClick={handleResume}
-                            className="mt-3 px-4 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
+                            className="mt-3 px-4 py-1.5 bg-[var(--destructive)] text-[var(--destructive-foreground)] rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
                         >
                             Coba Lagi
                         </button>
-                    </div>
+                    </FeedbackMessage>
                 )}
             </div>
             
@@ -150,8 +151,12 @@ function ScanContent() {
 
             {/* Bottom Action Sheet Modal */}
             {scannedAsset && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 bg-[var(--foreground)] text-[var(--background)]/50 backdrop-blur-sm">
-                    <div className="bg-[var(--card)] w-full max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300">
+                <AccessibleModal
+                    ariaLabel={`Aksi untuk aset ${scannedAsset.name}`}
+                    onClose={handleResume}
+                    className="w-full max-w-md !p-0 rounded-t-3xl sm:rounded-2xl overflow-hidden"
+                    overlayClassName="items-end sm:items-center"
+                >
                         <div className="p-6 border-b border-[var(--border)] flex items-start justify-between relative">
                             <div>
                                 <h2 className="text-xl font-bold text-[var(--text-primary)]">{scannedAsset.name}</h2>
@@ -161,7 +166,7 @@ function ScanContent() {
                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-secondary)]">{scannedAsset.kondisi}</span>
                                 </div>
                             </div>
-                            <button onClick={handleResume} className="p-2 bg-[var(--secondary)] text-[var(--text-muted)] rounded-full hover:bg-slate-200 transition-colors">
+                            <button onClick={handleResume} className="p-2 bg-[var(--secondary)] text-[var(--text-muted)] rounded-full hover:bg-[var(--border)] transition-colors" aria-label="Tutup pilihan aksi aset">
                                 <X size={16} />
                             </button>
                         </div>
@@ -211,15 +216,14 @@ function ScanContent() {
                                 </div>
                             </button>
                         </div>
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
             
             {loadingAsset && !scannedAsset && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--foreground)] text-[var(--background)]/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="status" aria-live="polite">
                     <div className="bg-[var(--card)] p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4">
-                        <div className="w-8 h-8 border-4 border-[var(--border)] border-t-slate-800 rounded-full animate-spin"></div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Mencari Data Aset...</p>
+                        <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)]" />
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">Mencari data aset...</p>
                     </div>
                 </div>
             )}
@@ -229,7 +233,7 @@ function ScanContent() {
 
 export default function AssetScannerPage() {
     return (
-        <Suspense fallback={<div className="p-6">Loading...</div>}>
+        <Suspense fallback={<div className="p-6 flex items-center gap-2 text-sm text-[var(--text-secondary)]"><Loader2 className="w-4 h-4 animate-spin" />Memuat pemindai QR...</div>}>
             <ScanContent />
         </Suspense>
     );

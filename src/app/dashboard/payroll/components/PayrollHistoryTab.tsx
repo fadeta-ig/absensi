@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileText, Eye, Download, Trash2, FileSpreadsheet, Loader2 } from "lucide-react";
 import { Payslip, Employee } from "../types";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export interface PayrollHistoryTabProps {
@@ -24,6 +25,7 @@ export function PayrollHistoryTab({
     fmt
 }: PayrollHistoryTabProps) {
     const toast = useToast();
+    const confirm = useConfirm();
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const getEmpName = (empId: string) => employees.find((e) => e.employeeId === empId)?.name || empId;
 
@@ -70,21 +72,29 @@ export function PayrollHistoryTab({
                                                 <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm !p-1.5 text-[var(--primary)]" title="Lihat Detail"><Eye className="w-3.5 h-3.5" /></button>
                                                 <button onClick={() => handlePayslipPdf(p)} className="btn btn-ghost btn-sm !p-1.5 text-red-600" title="Download PDF"><Download className="w-3.5 h-3.5" /></button>
                                                 <button
-                                                    onClick={async () => {
-                                                        if (!confirm(`Hapus slip gaji ${getEmpName(p.employeeId)} periode ${p.period}?`)) return;
-                                                        setDeletingId(p.id);
-                                                        try {
-                                                            const res = await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
-                                                            if (!res.ok) {
-                                                                throw new Error(await getResponseErrorMessage(res, "Gagal menghapus slip gaji."));
-                                                            }
-                                                            setPayslips(prev => prev.filter(x => x.id !== p.id));
-                                                            toast("Slip gaji berhasil dihapus.", "success");
-                                                        } catch (error) {
-                                                            toast(error instanceof Error ? error.message : "Gagal menghapus slip gaji.", "error");
-                                                        } finally {
-                                                            setDeletingId(null);
-                                                        }
+                                                    onClick={() => {
+                                                        confirm({
+                                                            title: "Hapus slip gaji?",
+                                                            message: `Slip gaji ${getEmpName(p.employeeId)} periode ${p.period} akan dihapus dari riwayat.`,
+                                                            confirmLabel: "Hapus",
+                                                            cancelLabel: "Batal",
+                                                            variant: "danger",
+                                                            onConfirm: async () => {
+                                                                setDeletingId(p.id);
+                                                                try {
+                                                                    const res = await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
+                                                                    if (!res.ok) {
+                                                                        throw new Error(await getResponseErrorMessage(res, "Gagal menghapus slip gaji."));
+                                                                    }
+                                                                    setPayslips(prev => prev.filter(x => x.id !== p.id));
+                                                                    toast("Slip gaji berhasil dihapus.", "success");
+                                                                } catch (error) {
+                                                                    toast(error instanceof Error ? error.message : "Gagal menghapus slip gaji.", "error");
+                                                                } finally {
+                                                                    setDeletingId(null);
+                                                                }
+                                                            },
+                                                        });
                                                     }}
                                                     disabled={deletingId === p.id}
                                                     className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"

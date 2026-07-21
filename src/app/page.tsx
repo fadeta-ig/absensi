@@ -68,7 +68,7 @@ export default function LoginPage() {
 
       router.push(data.landingPath || "/");
     } catch {
-      setError("Terjadi kesalahan koneksi");
+      setError("Login belum berhasil karena koneksi ke server bermasalah. Periksa internet lalu coba lagi.");
       setLoading(false);
       isSubmitting.current = false;
     }

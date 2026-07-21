@@ -13,6 +13,8 @@ import {
     UserX,
     X,
 } from "lucide-react";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 type EmployeeSummary = {
     id: string;
@@ -131,11 +133,12 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onMouseDown={onClose}>
-            <div
-                className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-                onMouseDown={(event) => event.stopPropagation()}
-            >
+        <AccessibleModal
+            ariaLabel={nextIsActive ? "Aktifkan kembali karyawan" : "Nonaktifkan karyawan"}
+            onClose={onClose}
+            className="w-full max-w-3xl max-h-[92vh] overflow-y-auto !p-0 rounded-2xl"
+            disableClose={submitting}
+        >
                 <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-6 py-4">
                     <div className="flex items-center gap-3">
                         <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${nextIsActive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
@@ -148,7 +151,7 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
                             <p className="text-xs text-[var(--text-muted)]">{employee.name} · {employee.employeeId}</p>
                         </div>
                     </div>
-                    <button type="button" onClick={onClose} className="btn btn-ghost !p-2" disabled={submitting}>
+                    <button type="button" onClick={onClose} className="btn btn-ghost !p-2" disabled={submitting} aria-label="Tutup modal status karyawan">
                         <X className="h-4 w-4" />
                     </button>
                 </div>
@@ -173,9 +176,9 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
                                     </div>
 
                                     {(overview.impact.assignedAssets.length > 0 || overview.impact.simCards.length > 0 || pendingTotal > 0) && (
-                                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+                                        <FeedbackMessage variant="warning" compact>
                                             Akses akan tetap dihentikan. Aset, SIM, dan proses pending tidak dihapus otomatis agar dapat ditindaklanjuti oleh HR/GA dengan jejak data yang utuh.
-                                        </div>
+                                        </FeedbackMessage>
                                     )}
 
                                     {requiresReassignment && (
@@ -253,7 +256,9 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
                     ) : null}
 
                     {error && (
-                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+                        <FeedbackMessage variant="error">
+                            {error}
+                        </FeedbackMessage>
                     )}
                 </div>
 
@@ -269,8 +274,7 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
                         {submitting ? "Menyimpan..." : nextIsActive ? "Aktifkan Kembali" : "Nonaktifkan"}
                     </button>
                 </div>
-            </div>
-        </div>
+        </AccessibleModal>
     );
 }
 

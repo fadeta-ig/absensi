@@ -226,9 +226,8 @@ export default function BulkImportPage() {
             if (!res.ok) throw new Error(data.error || "Gagal melakukan import server.");
             
             setSuccessCount(data.count);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (err: unknown) {
-            setErrors([err instanceof Error ? err.message : "Terjadi kesalahan yang tidak diketahui."]);
+            setErrors([err instanceof Error ? err.message : "Import aset belum berhasil. Periksa koneksi lalu coba unggah ulang file."]);
         } finally {
             setIsSubmitting(false);
         }

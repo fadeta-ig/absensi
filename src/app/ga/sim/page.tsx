@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, RefreshCw, Smartphone as SimIcon, CheckCircle, AlertCircle, Download, Pencil, Trash2 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
-import { AssetWithHistory } from "@/lib/types/asset";
 import { HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface SimCardRow {
     id: string;
@@ -22,17 +23,13 @@ interface SimCardRow {
 
 export default function SimCardDashboardPage() {
     const router = useRouter();
+    const toast = useToast();
+    const confirm = useConfirm();
     const [assets, setAssets] = useState<SimCardRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [loadError, setLoadError] = useState("");
-
-    // Stats specific to SIM
     const [simStats, setSimStats] = useState({ total: 0, aktif: 0, tidakAktif: 0 });
-
-    // Delete confirm dialog 
-    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; } | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
 
     // Filters
     const [searchQuery, setSearchQuery] = useState("");
@@ -124,7 +121,7 @@ export default function SimCardDashboardPage() {
 
     const handleExportCsv = () => {
         if (assets.length === 0) {
-            alert("Tidak ada data SIM untuk diexport.");
+            toast("Tidak ada data SIM untuk diexport.", "warning");
             return;
         }
 
@@ -149,35 +146,44 @@ export default function SimCardDashboardPage() {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+            toast("Export SIM berhasil dibuat.", "success");
+        } catch {
+            toast("Gagal mengexport data SIM.", "error");
         } finally {
             setExporting(false);
         }
     };
 
-    const handleDelete = async () => {
-        if (!deleteTarget) return;
-        setIsDeleting(true);
-        try {
-            const res = await fetch(`/api/sim-cards/${deleteTarget.id}`, { method: "DELETE" });
-            if (res.ok) {
-                setDeleteTarget(null);
-                await fetchSimCards();
-                await fetchStats();
-            } else {
-                alert("Gagal menghapus SIM.");
-            }
-        } catch {
-            alert("Kesalahan koneksi.");
-        } finally {
-            setIsDeleting(false);
-        }
+    const handleDelete = (sim: SimCardRow) => {
+        confirm({
+            title: "Hapus SIM permanen?",
+            message: `Nomor ${sim.phoneNumber} akan dihapus dari daftar SIM. Tindakan ini tidak dapat dibatalkan.`,
+            confirmLabel: "Hapus",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/sim-cards/${sim.id}`, { method: "DELETE" });
+                    if (!res.ok) {
+                        throw new Error(await getResponseErrorMessage(res, "Gagal menghapus SIM."));
+                    }
+                    await fetchSimCards();
+                    await fetchStats();
+                    toast("SIM berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "SIM belum terhapus karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
+                }
+            },
+        });
     };
 
     const StatusBadgeSIM = ({ status }: { status: string }) => {
         const isActive = status !== "RETIRED";
         return (
             <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-md tracking-wider border ${
-                isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
+                isActive
+                    ? "bg-[var(--success-bg)] text-[var(--success)] border-[var(--success-border)]"
+                    : "bg-[var(--destructive-bg)] text-[var(--destructive)] border-[var(--destructive-border)]"
             }`}>
                 {isActive ? "Aktif" : "Tidak Aktif"}
             </span>
@@ -196,7 +202,7 @@ export default function SimCardDashboardPage() {
                     <button 
                         disabled={exporting}
                         onClick={handleExportCsv}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--success-bg)] border border-[var(--success-border)] text-[var(--success)] px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-colors disabled:opacity-50"
                     >
                         <Download size={16} /> {exporting ? "Mengekspor..." : "Export"}
                     </button>
@@ -211,9 +217,9 @@ export default function SimCardDashboardPage() {
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard icon={<SimIcon />} label="Total Data SIM" value={simStats.total} bg="#f1f5f9" color="#475569" />
-                <StatCard icon={<CheckCircle />} label="SIM Aktif" value={simStats.aktif} bg="#d1fae5" color="#047857" />
-                <StatCard icon={<AlertCircle />} label="SIM Mati / Hangus" value={simStats.tidakAktif} bg="#fee2e2" color="#b91c1c" />
+                <StatCard icon={<SimIcon />} label="Total Data SIM" value={simStats.total} bg="var(--neutral-bg)" color="var(--neutral)" />
+                <StatCard icon={<CheckCircle />} label="SIM Aktif" value={simStats.aktif} bg="var(--success-bg)" color="var(--success)" />
+                <StatCard icon={<AlertCircle />} label="SIM Mati / Hangus" value={simStats.tidakAktif} bg="var(--destructive-bg)" color="var(--destructive)" />
             </div>
 
             {loadError && (
@@ -310,13 +316,13 @@ export default function SimCardDashboardPage() {
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => router.push(`/ga/sim/${asset.id}/edit`)}
-                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--category-1)] hover:bg-[var(--category-1-bg)] transition-colors"
                                                 >
                                                     <Pencil size={14} />
                                                 </button>
                                                 <button
-                                                    onClick={() => setDeleteTarget({ id: asset.id, name: asset.phoneNumber })}
-                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                    onClick={() => handleDelete(asset)}
+                                                    className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--destructive)] hover:bg-[var(--destructive-bg)] transition-colors"
                                                 >
                                                     <Trash2 size={14} />
                                                 </button>
@@ -342,28 +348,6 @@ export default function SimCardDashboardPage() {
                 )}
             </div>
 
-            {/* Modal Konfirmasi Hapus */}
-            {deleteTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-[var(--card)] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 border border-[var(--border)]">
-                        <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                <Trash2 className="text-red-600" size={18} />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-bold text-[var(--text-primary)]">Hapus SIM Permanen?</h3>
-                                <p className="text-sm text-[var(--text-secondary)] mt-1">
-                                    Menghapus nomor <span className="font-semibold text-[var(--text-secondary)]">{deleteTarget.name}</span> dari list.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3 mt-6 justify-end">
-                            <button onClick={() => setDeleteTarget(null)} disabled={isDeleting} className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] bg-[var(--secondary)] hover:bg-slate-200 rounded-lg">Batal</button>
-                            <button onClick={handleDelete} disabled={isDeleting} className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg">Ya, Hapus</button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

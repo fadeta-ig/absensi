@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, RefreshCw, Layers, Archive, Trash2, Edit2, X, Check, AlertCircle } from "lucide-react";
+import { Plus, RefreshCw, Layers, Archive, Trash2, Edit2, X, Check, AlertCircle, Loader2 } from "lucide-react";
 import { AssetCategory } from "@/lib/types/asset";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export default function CategoriesPage() {
     const toast = useToast();
+    const confirm = useConfirm();
     const [categories, setCategories] = useState<AssetCategory[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -22,6 +24,7 @@ export default function CategoriesPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
     const [editPrefix, setEditPrefix] = useState("");
+    const [savingEditId, setSavingEditId] = useState<string | null>(null);
 
     const fetchCategories = useCallback(async () => {
         try {
@@ -66,35 +69,36 @@ export default function CategoriesPage() {
             await fetchCategories();
             toast("Kategori berhasil ditambahkan.", "success");
         } catch (err: unknown) {
-            if (err instanceof Error) setError(err.message);
+            setError(err instanceof Error ? err.message : "Gagal menyimpan kategori");
         } finally {
             setSaving(false);
         }
     };
 
-    const handleDelete = async (cat: AssetCategory) => {
+    const handleDelete = (cat: AssetCategory) => {
         const hasAssets = (cat._count?.assets ?? 0) > 0;
-        
-        if (hasAssets) {
-            const confirmed = window.confirm(`PERINGATAN: Kategori "${cat.name}" masih terhubung dengan ${cat._count?.assets} aset aktif. Jika dilanjutkan, sistem mungkin akan menolak penghapusan ini. Lanjutkan validasi?`);
-            if (!confirmed) return;
-        } else {
-            const confirmed = window.confirm(`Hapus kategori "${cat.name}" secara permanen?`);
-            if (!confirmed) return;
-        }
 
-        try {
-            const res = await fetch(`/api/assets/categories/${cat.id}`, { method: "DELETE" });
-            const data = await res.json();
-            if (!res.ok) {
-                alert(data.error || "Gagal menghapus kategori");
-                return;
-            }
-            await fetchCategories();
-            toast("Kategori berhasil dihapus.", "success");
-        } catch (err: unknown) {
-            alert("Terjadi kesalahan jaringan saat menghapus.");
-        }
+        confirm({
+            title: hasAssets ? "Kategori masih digunakan" : "Hapus kategori?",
+            message: hasAssets
+                ? `Kategori "${cat.name}" masih terhubung dengan ${cat._count?.assets} aset aktif. Sistem dapat menolak penghapusan jika relasi masih ada.`
+                : `Kategori "${cat.name}" akan dihapus secara permanen.`,
+            confirmLabel: hasAssets ? "Lanjutkan Validasi" : "Hapus",
+            cancelLabel: "Batal",
+            variant: hasAssets ? "warning" : "danger",
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`/api/assets/categories/${cat.id}`, { method: "DELETE" });
+                    if (!res.ok) {
+                        throw new Error(await getResponseErrorMessage(res, "Gagal menghapus kategori."));
+                    }
+                    await fetchCategories();
+                    toast("Kategori berhasil dihapus.", "success");
+                } catch (err: unknown) {
+                    toast(err instanceof Error ? err.message : "Kategori belum terhapus karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
+                }
+            },
+        });
     };
 
     const startEdit = (cat: AssetCategory) => {
@@ -108,22 +112,23 @@ export default function CategoriesPage() {
     };
 
     const handleSaveEdit = async (id: string) => {
+        setSavingEditId(id);
         try {
             const res = await fetch(`/api/assets/categories/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: editName, prefix: editPrefix.toUpperCase() })
             });
-            const data = await res.json();
             if (!res.ok) {
-                alert(data.error || "Gagal memperbarui kategori");
-                return;
+                throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui kategori."));
             }
             setEditingId(null);
             await fetchCategories();
             toast("Kategori berhasil diperbarui.", "success");
         } catch (err: unknown) {
-            alert("Kesalahan jaringan saat memperbarui.");
+            toast(err instanceof Error ? err.message : "Kategori belum diperbarui karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
+        } finally {
+            setSavingEditId(null);
         }
     };
 
@@ -138,12 +143,12 @@ export default function CategoriesPage() {
                 {/* Form Tambah Kategori */}
                 <div className="bg-[var(--card)] border rounded-xl p-5 shadow-sm md:col-span-1">
                     <div className="flex items-center gap-2 mb-4 text-[var(--text-primary)] font-semibold">
-                        <Plus size={18} className="text-emerald-500" />
+                        <Plus size={18} className="text-[var(--success)]" />
                         Tambah Kategori Baru
                     </div>
                     
                     {error && (
-                        <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100 flex items-start gap-2">
+                        <div className="mb-4 p-3 bg-[var(--destructive-bg)] text-[var(--destructive)] rounded-lg text-sm border border-[var(--destructive-border)] flex items-start gap-2" role="alert">
                             <span className="font-semibold shrink-0">!</span> {error}
                         </div>
                     )}
@@ -179,7 +184,7 @@ export default function CategoriesPage() {
                             disabled={saving}
                             className="w-full py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 mt-2"
                         >
-                            {saving ? "Menyimpan..." : "Simpan Kategori"}
+                            {saving ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</span> : "Simpan Kategori"}
                         </button>
                     </form>
                 </div>
@@ -188,7 +193,7 @@ export default function CategoriesPage() {
                 <div className="bg-[var(--card)] border rounded-xl overflow-hidden shadow-sm md:col-span-2">
                     <div className="px-5 py-4 border-b flex justify-between items-center bg-[var(--secondary)]/50">
                         <div className="flex items-center gap-2 font-semibold text-[var(--text-primary)]">
-                            <Layers size={18} className="text-blue-500" />
+                            <Layers size={18} className="text-[var(--info)]" />
                             Daftar Kategori
                         </div>
                         <button onClick={fetchCategories} className="p-1.5 hover:bg-[var(--secondary)] rounded text-[var(--text-secondary)] transition-colors">
@@ -235,7 +240,7 @@ export default function CategoriesPage() {
                                                 {editingId === cat.id ? (
                                                     <input type="text" value={editPrefix} maxLength={5} onChange={e => setEditPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm font-mono w-20 uppercase" />
                                                 ) : (
-                                                    <span className="font-mono text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10/50 px-2 rounded py-0.5">{cat.prefix}</span>
+                                                    <span className="font-mono text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] px-2 rounded py-0.5">{cat.prefix}</span>
                                                 )}
                                             </td>
                                             <td className="px-5 py-3 text-[var(--text-secondary)] text-center">
@@ -246,15 +251,17 @@ export default function CategoriesPage() {
                                             <td className="px-5 py-3 text-right">
                                                 {editingId === cat.id ? (
                                                     <div className="flex justify-end gap-2">
-                                                        <button onClick={cancelEdit} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--secondary)] rounded-lg transition-colors"><X size={16} /></button>
-                                                        <button onClick={() => handleSaveEdit(cat.id)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Check size={16} /></button>
+                                                        <button disabled={savingEditId === cat.id} onClick={cancelEdit} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--secondary)] rounded-lg transition-colors disabled:opacity-50"><X size={16} /></button>
+                                                        <button disabled={savingEditId === cat.id} onClick={() => handleSaveEdit(cat.id)} className="p-1.5 text-[var(--success)] hover:bg-[var(--success-bg)] rounded-lg transition-colors disabled:opacity-50">
+                                                            {savingEditId === cat.id ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                                        </button>
                                                     </div>
                                                 ) : (
                                                     <div className="flex justify-end gap-2">
-                                                        <button onClick={() => startEdit(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                                        <button onClick={() => startEdit(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info-bg)] rounded-lg transition-colors" title="Edit">
                                                             <Edit2 size={16} />
                                                         </button>
-                                                        <button onClick={() => handleDelete(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                                                        <button onClick={() => handleDelete(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--destructive)] hover:bg-[var(--destructive-bg)] rounded-lg transition-colors" title="Hapus">
                                                             <Trash2 size={16} />
                                                         </button>
                                                     </div>

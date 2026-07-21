@@ -7,6 +7,7 @@ import {
 import { VisitReport } from "@/types";
 import { VISIT_STATUS_CONFIG } from "../visitTypes";
 import { VisitPhotoGrid } from "@/components/VisitPhotoGrid";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 
 interface VisitDetailModalProps {
     visit: VisitReport;
@@ -70,11 +71,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
     ];
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div
-                className="modal-content max-w-lg p-0 overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
+        <AccessibleModal ariaLabel={`Detail kunjungan ${visit.clientName}`} onClose={onClose} className="max-w-lg !p-0 overflow-hidden">
                 {/* Header */}
                 <div className="bg-[var(--secondary)] p-5 border-b border-[var(--border)] flex items-center justify-between">
                     <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -84,6 +81,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                     <button
                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--destructive)] hover:text-white text-[var(--text-secondary)] transition-colors"
                         onClick={onClose}
+                        aria-label="Tutup detail kunjungan"
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -242,7 +240,6 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+        </AccessibleModal>
     );
 }

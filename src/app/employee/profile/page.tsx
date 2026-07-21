@@ -143,7 +143,7 @@ export default function ProfilePage() {
                 toast(data.error ?? "Gagal menyimpan profil", "error");
             }
         } catch {
-            toast("Terjadi kesalahan koneksi", "error");
+            toast("Profil belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSaving(false);
         }

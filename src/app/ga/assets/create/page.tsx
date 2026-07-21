@@ -4,9 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import AssetForm, { AssetFormData } from "@/features/ga/components/AssetForm";
+import { useToast } from "@/components/Toast";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 export default function CreateAssetPage() {
     const router = useRouter();
+    const toast = useToast();
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -39,10 +42,11 @@ export default function CreateAssetPage() {
             });
             const resData = await res.json();
             if (!res.ok) throw new Error(resData.error || "Gagal membuat aset");
-            
+
+            toast("Aset baru berhasil disimpan.", "success");
             router.push("/ga/assets");
         } catch (err: unknown) {
-            if (err instanceof Error) setError(err.message);
+            setError(err instanceof Error ? err.message : "Aset belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);
         }
@@ -64,9 +68,9 @@ export default function CreateAssetPage() {
             </div>
 
             {error && (
-                <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium">
+                <FeedbackMessage variant="error">
                     {error}
-                </div>
+                </FeedbackMessage>
             )}
 
             <AssetForm mode="create" onSubmit={handleSubmit} saving={saving} />

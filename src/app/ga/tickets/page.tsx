@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Ticket, Search, Filter, MessageSquare, CheckCircle, XCircle, Clock, Package, Monitor, Loader2, ArrowRight, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 
 interface TicketData {
     id: string;
@@ -83,7 +84,7 @@ export default function GATicketsPage() {
                 toast(await getResponseErrorMessage(res, "Gagal memperbarui status."), "error");
             }
         } catch {
-            toast("Terjadi kesalahan jaringan.", "error");
+            toast("Status tiket belum tersimpan karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
         }
@@ -248,13 +249,17 @@ export default function GATicketsPage() {
 
             {/* Action Modal */}
             {selectedTicket && (
-                <div className="modal-overlay" onClick={() => !submitting && setSelectedTicket(null)}>
-                    <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+                <AccessibleModal
+                    ariaLabel={`Tindak lanjut tiket ${selectedTicket.title}`}
+                    onClose={() => setSelectedTicket(null)}
+                    className="max-w-lg"
+                    disableClose={submitting}
+                >
                         <div className="modal-header">
                             <h2 className="modal-title flex items-center gap-2">
                                 <MessageSquare className="w-5 h-5 text-indigo-500"/> Tindak Lanjut Tiket
                             </h2>
-                            <button className="modal-close" onClick={() => !submitting && setSelectedTicket(null)}><XCircle className="w-5 h-5" /></button>
+                            <button className="modal-close" onClick={() => !submitting && setSelectedTicket(null)} disabled={submitting} aria-label="Tutup modal tindak lanjut tiket"><XCircle className="w-5 h-5" /></button>
                         </div>
                         <div className="p-4 bg-[var(--secondary)]/50 border-b border-[var(--border)] mb-4 space-y-2">
                             <p className="text-sm font-bold text-[var(--text-primary)]">{selectedTicket.title}</p>
@@ -287,13 +292,12 @@ export default function GATicketsPage() {
                             </div>
                             <div className="flex justify-end gap-2 pt-4 border-t border-[var(--border)]">
                                 <button type="button" onClick={() => setSelectedTicket(null)} disabled={submitting} className="btn btn-ghost">Batal</button>
-                                <button type="submit" disabled={submitting} className="btn btn-primary min-w-[100px]">
-                                    {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Simpan"}
+                                <button type="submit" disabled={submitting} className="btn btn-primary min-w-[120px]">
+                                    {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyimpan...</> : "Simpan"}
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
         </div>
     );

@@ -127,14 +127,14 @@ export default function Pph21CalculatorPage() {
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || "Gagal menghitung");
+                throw new Error(data.error || "Perhitungan PPh 21 belum berhasil diproses.");
             }
 
             const data: CalculationResult = await res.json();
             setResult(data);
             setShowDetail(false);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+            setError(err instanceof Error ? err.message : "Perhitungan PPh 21 belum berhasil diproses. Periksa nominal gaji lalu coba lagi.");
         } finally {
             setLoading(false);
         }
