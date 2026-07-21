@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Employee } from "@/types";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 import { Department, Division, FormPayrollComponent, Location, MasterPayrollComponent, Position, WorkShift, FormState } from "./employee-form/types";
 import { IdentitySection } from "./employee-form/IdentitySection";
 import { JobSection } from "./employee-form/JobSection";
@@ -87,15 +88,19 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
     useEffect(() => {
         const load = async () => {
             try {
-                const [d, v, p, l, s, m, emps] = await Promise.all([
-                    fetch("/api/master/departments").then(r => r.json()),
-                    fetch("/api/master/divisions").then(r => r.json()),
-                    fetch("/api/master/positions").then(r => r.json()),
-                    fetch("/api/master/locations").then(r => r.json()),
-                    fetch("/api/shifts").then(r => r.json()),
-                    fetch("/api/master/payroll-components").then(r => r.json()),
-                    fetch("/api/employees").then(r => r.json()),
+                const responses = await Promise.all([
+                    fetch("/api/master/departments"),
+                    fetch("/api/master/divisions"),
+                    fetch("/api/master/positions"),
+                    fetch("/api/master/locations"),
+                    fetch("/api/shifts"),
+                    fetch("/api/master/payroll-components"),
+                    fetch("/api/employees"),
                 ]);
+                const failedResponse = responses.find((response) => !response.ok);
+                if (failedResponse) throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat master data karyawan."));
+
+                const [d, v, p, l, s, m, emps] = await Promise.all(responses.map((response) => response.json()));
                 setMasterDepts(d);
                 setMasterDivisions(v);
                 setMasterPositions(p);
@@ -120,7 +125,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                     setForm(f => ({ ...f, payrollComponents: comps }));
                 }
             } catch (err) {
-                console.error("Failed to load master data", err);
+                toast(err instanceof Error ? err.message : "Gagal memuat master data karyawan.", "error");
             } finally {
                 setFetching(false);
             }

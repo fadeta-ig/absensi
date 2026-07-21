@@ -5,6 +5,7 @@ import { Users, Plus, Search, Pencil, X, Loader2, Key, Layers, Upload, UserCheck
 import { useConfirm } from "@/components/ConfirmModal";
 import BulkImportModal from "@/components/BulkImportModal";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
@@ -45,9 +46,17 @@ export default function EmployeesPage() {
 
     useEffect(() => {
         void fetchEmployees();
-        fetch("/api/shifts").then((r) => r.json()).then((data: WorkShift[]) => {
-            setShifts(data);
-        });
+        fetch("/api/shifts")
+            .then(async (r) => {
+                if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat data shift."));
+                return r.json();
+            })
+            .then((data: WorkShift[]) => {
+                setShifts(Array.isArray(data) ? data : []);
+            })
+            .catch((error) => {
+                setPasswordMsg({ type: "error", text: error instanceof Error ? error.message : "Gagal memuat data shift." });
+            });
     }, [fetchEmployees]);
 
     const counts = useMemo(() => ({

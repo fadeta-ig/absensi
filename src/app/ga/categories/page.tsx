@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, RefreshCw, Layers, Archive, Trash2, Edit2, X, Check } from "lucide-react";
+import { Plus, RefreshCw, Layers, Archive, Trash2, Edit2, X, Check, AlertCircle } from "lucide-react";
 import { AssetCategory } from "@/lib/types/asset";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export default function CategoriesPage() {
+    const toast = useToast();
     const [categories, setCategories] = useState<AssetCategory[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     
     // Form state
     const [name, setName] = useState("");
@@ -22,13 +26,17 @@ export default function CategoriesPage() {
     const fetchCategories = useCallback(async () => {
         try {
             setLoading(true);
+            setLoadError("");
             const res = await fetch(`/api/assets/categories`);
-            if (res.ok) {
-                const data = await res.json();
-                setCategories(data);
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat kategori aset."));
             }
+            const data = await res.json();
+            setCategories(data);
         } catch (error) {
             console.error("Gagal mengambil data kategori", error);
+            setCategories([]);
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat kategori aset.");
         } finally {
             setLoading(false);
         }
@@ -55,7 +63,8 @@ export default function CategoriesPage() {
             // Berhasil
             setName("");
             setPrefix("");
-            fetchCategories();
+            await fetchCategories();
+            toast("Kategori berhasil ditambahkan.", "success");
         } catch (err: unknown) {
             if (err instanceof Error) setError(err.message);
         } finally {
@@ -81,7 +90,8 @@ export default function CategoriesPage() {
                 alert(data.error || "Gagal menghapus kategori");
                 return;
             }
-            fetchCategories();
+            await fetchCategories();
+            toast("Kategori berhasil dihapus.", "success");
         } catch (err: unknown) {
             alert("Terjadi kesalahan jaringan saat menghapus.");
         }
@@ -110,7 +120,8 @@ export default function CategoriesPage() {
                 return;
             }
             setEditingId(null);
-            fetchCategories();
+            await fetchCategories();
+            toast("Kategori berhasil diperbarui.", "success");
         } catch (err: unknown) {
             alert("Kesalahan jaringan saat memperbarui.");
         }
@@ -199,6 +210,13 @@ export default function CategoriesPage() {
                                 {loading && categories.length === 0 ? (
                                     <tr>
                                         <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Memuat kategori...</td>
+                                    </tr>
+                                ) : loadError ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-5 py-10 text-center text-[var(--destructive)]">
+                                            <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-70" />
+                                            <span className="font-semibold">{loadError}</span>
+                                        </td>
                                     </tr>
                                 ) : categories.length === 0 ? (
                                     <tr>

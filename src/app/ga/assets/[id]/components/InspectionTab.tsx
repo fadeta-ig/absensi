@@ -12,8 +12,21 @@ export type InspectionRow = {
     inspectedAt: string;
 };
 
-export function InspectionTab({ inspections, loaded, onAdd }: { inspections: InspectionRow[]; loaded: boolean; onAdd: () => void }) {
+export function InspectionTab({ inspections, loaded, error, onAdd }: { inspections: InspectionRow[]; loaded: boolean; error?: string | null; onAdd: () => void }) {
     if (!loaded) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Memuat inspeksi...</div>;
+    if (error) return (
+        <div className="space-y-4">
+            <div className="flex justify-end">
+                <button onClick={onAdd} className="bg-[var(--foreground)] text-[var(--background)] px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--primary-light)] transition-colors">
+                    <ClipboardCheck size={14} /> Catat Inspeksi Baru
+                </button>
+            </div>
+            <div className="flex items-start justify-center gap-2 py-8 text-center text-sm text-[var(--destructive)]">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-4">

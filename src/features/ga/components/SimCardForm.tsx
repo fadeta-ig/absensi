@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { AlertCircle, Save } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export type SimCardFormData = {
     provider: string; // Misal: Telkomsel Pascabayar
@@ -23,6 +24,7 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
     const router = useRouter();
     const [employees, setEmployees] = useState<{ employeeId: string; name: string }[]>([]);
     const [loadingParams, setLoadingParams] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [formData, setFormData] = useState<SimCardFormData>({
         provider: initialData?.provider || "",
         phoneNumber: initialData?.phoneNumber || "",
@@ -33,18 +35,23 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
 
     useEffect(() => {
         const fetchData = async () => {
+            setLoadError("");
             try {
                 const [empRes] = await Promise.all([
                     fetch("/api/employees?limit=1000")
                 ]);
 
-                if (empRes.ok) {
-                    const empData = await empRes.json();
-                    const list = Array.isArray(empData) ? empData : empData.data || [];
-                    setEmployees(list);
+                if (!empRes.ok) {
+                    throw new Error(await getResponseErrorMessage(empRes, "Gagal memuat daftar karyawan."));
                 }
+
+                const empData = await empRes.json();
+                const list = Array.isArray(empData) ? empData : empData.data || [];
+                setEmployees(list);
             } catch (err) {
                 console.error("Gagal load data form", err);
+                setEmployees([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat konfigurasi form.");
             } finally {
                 setLoadingParams(false);
             }
@@ -74,6 +81,13 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
     if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]">Memuat konfigurasi form...</div>;
 
     return (
+        <>
+        {loadError && (
+            <div className="mb-4 rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{loadError}</span>
+            </div>
+        )}
         <form onSubmit={handleSubmit} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
             <div className="p-6 border-b bg-[var(--secondary)]/50">
                 <h2 className="text-md font-semibold text-[var(--text-primary)]">Detail Kartu SIM</h2>
@@ -124,5 +138,6 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
                 </button>
             </div>
         </form>
+        </>
     );
 }

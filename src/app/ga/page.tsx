@@ -10,6 +10,7 @@ import { AssetWithHistory } from "@/lib/types/asset";
 import { StatCard, CategoryStat } from "@/features/ga/components/AssetStatCards";
 import { CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
 import { formatRupiah } from "@/lib/utils/formatters";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 type AssetStats = {
     total: number;
@@ -36,25 +37,29 @@ export default function GaDashboard() {
     const [stats, setStats] = useState<AssetStats | null>(null);
     const [recent, setRecent] = useState<AssetWithHistory[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     useEffect(() => {
         const load = async () => {
+            setLoadError("");
             try {
                 const [statsRes, recentRes] = await Promise.all([
                     fetch("/api/assets/stats"),
                     fetch("/api/assets?status=AVAILABLE&limit=8")
                 ]);
 
-                if (statsRes.ok) {
-                    const statsData = await statsRes.json();
-                    setStats(statsData);
-                }
+                if (!statsRes.ok) throw new Error(await getResponseErrorMessage(statsRes, "Gagal memuat statistik dashboard GA."));
+                if (!recentRes.ok) throw new Error(await getResponseErrorMessage(recentRes, "Gagal memuat aset tersedia dashboard GA."));
 
-                if (recentRes.ok) {
-                    const recentData = await recentRes.json();
-                    // Since API returns { data: [...], ... } for paginated assets
-                    setRecent(recentData.data ? recentData.data.slice(0, 8) : recentData.slice(0, 8));
-                }
+                const statsData = await statsRes.json();
+                const recentData = await recentRes.json();
+                setStats(statsData);
+                // Since API returns { data: [...], ... } for paginated assets
+                setRecent(recentData.data ? recentData.data.slice(0, 8) : recentData.slice(0, 8));
+            } catch (err) {
+                setStats(null);
+                setRecent([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat dashboard GA.");
             } finally {
                 setLoading(false);
             }
@@ -80,6 +85,13 @@ export default function GaDashboard() {
                     <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-100">Operational Mode: Active</span>
                 </div>
             </div>
+
+            {loadError && (
+                <div className="rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
 
             {/* Alert expiry */}
             <div className="flex flex-col gap-3">

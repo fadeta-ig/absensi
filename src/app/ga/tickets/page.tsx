@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Ticket, Search, Filter, MessageSquare, CheckCircle, XCircle, Clock, Package, Monitor, Loader2, ArrowRight } from "lucide-react";
+import { Ticket, Search, Filter, MessageSquare, CheckCircle, XCircle, Clock, Package, Monitor, Loader2, ArrowRight, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface TicketData {
     id: string;
@@ -22,6 +23,7 @@ interface TicketData {
 export default function GATicketsPage() {
     const [tickets, setTickets] = useState<TicketData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
     const toast = useToast();
@@ -34,14 +36,20 @@ export default function GATicketsPage() {
 
     const fetchTickets = async () => {
         setLoading(true);
+        setLoadError("");
         try {
             const res = await fetch("/api/ga/tickets");
-            if (res.ok) {
-                const data = await res.json();
-                setTickets(data);
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat data tiket."));
             }
-        } catch {
-            toast("Gagal memuat data tiket.", "error");
+
+            const data = await res.json();
+            setTickets(Array.isArray(data) ? data : []);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Gagal memuat data tiket.";
+            setTickets([]);
+            setLoadError(message);
+            toast(message, "error");
         } finally {
             setLoading(false);
         }
@@ -72,7 +80,7 @@ export default function GATicketsPage() {
                 setSelectedTicket(null);
                 fetchTickets();
             } else {
-                toast("Gagal memperbarui status.", "error");
+                toast(await getResponseErrorMessage(res, "Gagal memperbarui status."), "error");
             }
         } catch {
             toast("Terjadi kesalahan jaringan.", "error");
@@ -150,6 +158,11 @@ export default function GATicketsPage() {
             {/* Ticket List */}
             {loading ? (
                 <div className="flex justify-center py-12"><div className="spinner" /></div>
+            ) : loadError ? (
+                <div className="card p-12 text-center border-dashed">
+                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
+                </div>
             ) : filteredTickets.length === 0 ? (
                 <div className="card p-12 text-center border-dashed">
                     <Ticket className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />

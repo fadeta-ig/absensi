@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ClipboardList, Download, FileSpreadsheet, X } from "lucide-react";
+import { AlertCircle, ClipboardList, Download, FileSpreadsheet, Loader2, X } from "lucide-react";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 import { AttendanceSummary } from "./components/AttendanceSummary";
 import { AttendanceFilters } from "./components/AttendanceFilters";
@@ -12,10 +14,13 @@ import { Employee, AttendanceRecord, MasterData, AttendanceCorrection } from "./
 import { useCallback } from "react";
 
 export default function AttendanceMonitorPage() {
+    const toast = useToast();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [departments, setDepartments] = useState<MasterData[]>([]);
     const [divisions, setDivisions] = useState<MasterData[]>([]);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     // Filter states
     const [startDate, setStartDate] = useState(() => {
@@ -31,6 +36,8 @@ export default function AttendanceMonitorPage() {
     // Tabs
     const [activeTab, setActiveTab] = useState<"log" | "corrections">("log");
     const [corrections, setCorrections] = useState<AttendanceCorrection[]>([]);
+    const [correctionsLoading, setCorrectionsLoading] = useState(true);
+    const [correctionsError, setCorrectionsError] = useState("");
 
     // Correction modal
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -42,23 +49,66 @@ export default function AttendanceMonitorPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    useEffect(() => {
-        fetch("/api/attendance").then((r) => r.json()).then((d) => {
-            if (Array.isArray(d)) setRecords(d);
-        });
-        fetch("/api/attendance/correction").then((r) => r.json()).then((d) => {
-            if (Array.isArray(d)) setCorrections(d);
-        });
-        fetch("/api/employees").then((r) => r.json()).then((d) => {
-            if (Array.isArray(d)) setEmployees(d);
-        });
-        fetch("/api/master/departments").then((r) => r.json()).then((d) => {
-            if (Array.isArray(d)) setDepartments(d);
-        });
-        fetch("/api/master/divisions").then((r) => r.json()).then((d) => {
-            if (Array.isArray(d)) setDivisions(d);
-        });
+    const loadAttendanceRecords = useCallback(async () => {
+        const res = await fetch("/api/attendance");
+        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data absensi."));
+        const data = await res.json();
+        if (Array.isArray(data)) setRecords(data);
     }, []);
+
+    const loadCorrections = useCallback(async () => {
+        setCorrectionsLoading(true);
+        setCorrectionsError("");
+        try {
+            const res = await fetch("/api/attendance/correction");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat pengajuan koreksi."));
+            const data = await res.json();
+            setCorrections(Array.isArray(data) ? data : []);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Gagal memuat pengajuan koreksi.";
+            setCorrectionsError(message);
+            toast(message, "error");
+        } finally {
+            setCorrectionsLoading(false);
+        }
+    }, [toast]);
+
+    useEffect(() => {
+        const loadInitialData = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                const [employeeRes, departmentRes, divisionRes] = await Promise.all([
+                    fetch("/api/employees"),
+                    fetch("/api/master/departments"),
+                    fetch("/api/master/divisions"),
+                ]);
+
+                const failedResponse = [employeeRes, departmentRes, divisionRes].find((res) => !res.ok);
+                if (failedResponse) throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat data absensi."));
+
+                await loadAttendanceRecords();
+                const [employeeData, departmentData, divisionData] = await Promise.all([
+                    employeeRes.json(),
+                    departmentRes.json(),
+                    divisionRes.json(),
+                ]);
+
+                if (Array.isArray(employeeData)) setEmployees(employeeData);
+                if (Array.isArray(departmentData)) setDepartments(departmentData);
+                if (Array.isArray(divisionData)) setDivisions(divisionData);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat data absensi.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadInitialData();
+        void loadCorrections();
+    }, [loadAttendanceRecords, loadCorrections, toast]);
 
     // Reset page to 1 on filter change
     useEffect(() => {
@@ -196,14 +246,13 @@ export default function AttendanceMonitorPage() {
             if (res.ok) {
                 // Refresh data
                 setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
-                fetch("/api/attendance").then((r) => r.json()).then((d) => {
-                    if (Array.isArray(d)) setRecords(d);
-                });
+                toast(s === "APPROVED" ? "Pengajuan koreksi disetujui." : "Pengajuan koreksi ditolak.", "success");
+                await loadAttendanceRecords();
             } else {
-                alert("Gagal memproses pengajuan");
+                throw new Error(await getResponseErrorMessage(res, "Gagal memproses pengajuan koreksi."));
             }
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal memproses pengajuan koreksi.", "error");
         } finally {
             setProcessingId(null);
         }
@@ -229,6 +278,13 @@ export default function AttendanceMonitorPage() {
                 </div>
             </div>
 
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
             {/* Tab Navigators */}
             <div className="flex space-x-1 bg-[var(--secondary)] p-1 rounded-lg w-max">
                 <button
@@ -249,6 +305,12 @@ export default function AttendanceMonitorPage() {
             </div>
 
             {activeTab === "log" && (
+                initialLoading ? (
+                    <div className="card p-12 text-center text-[var(--text-muted)]">
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                        <p className="text-sm font-medium">Memuat data absensi...</p>
+                    </div>
+                ) : (
                 <>
                     <AttendanceSummary
                         present={summaryData.present}
@@ -279,11 +341,14 @@ export default function AttendanceMonitorPage() {
                         setPhotoPreview={setPhotoPreview}
                     />
                 </>
+                )
             )}
 
             {activeTab === "corrections" && (
                 <AttendanceCorrectionTab
                     corrections={corrections}
+                    loading={correctionsLoading}
+                    error={correctionsError}
                     processingId={processingId}
                     getEmpInfo={getEmpInfo}
                     handleCorrectionAction={handleCorrectionAction}

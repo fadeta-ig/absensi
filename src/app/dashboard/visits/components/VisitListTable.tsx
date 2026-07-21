@@ -1,15 +1,17 @@
-import { CheckCircle, Eye, XCircle, LogIn, LogOut } from "lucide-react";
+import { AlertCircle, CheckCircle, Eye, Loader2, XCircle, LogIn, LogOut } from "lucide-react";
 import { VisitReport, STATUS_CONFIG } from "../types";
 
 interface Props {
     filtered: VisitReport[];
+    loading: boolean;
+    error: string;
     updating: string | null;
     setSelectedVisit: (v: VisitReport | null) => void;
     handleStatusUpdate: (id: string, isChecked: boolean) => void;
 }
 
 export function VisitListTable({
-    filtered, updating, setSelectedVisit, handleStatusUpdate
+    filtered, loading, error, updating, setSelectedVisit, handleStatusUpdate
 }: Props) {
     return (
         <div className="card overflow-hidden">
@@ -28,7 +30,23 @@ export function VisitListTable({
                         </tr>
                     </thead>
                     <tbody>
-                        {filtered.length === 0 ? (
+                        {loading ? (
+                            <tr>
+                                <td colSpan={8} className="text-center py-10 text-sm text-[var(--text-muted)]">
+                                    <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
+                                    Memuat kunjungan...
+                                </td>
+                            </tr>
+                        ) : error ? (
+                            <tr>
+                                <td colSpan={8} className="py-10 text-center text-[var(--destructive)]">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <AlertCircle className="w-4 h-4" />
+                                        <span>{error}</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        ) : filtered.length === 0 ? (
                             <tr><td colSpan={8} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada kunjungan ditemukan</td></tr>
                         ) : (
                             filtered.map((v) => {
@@ -89,7 +107,7 @@ export function VisitListTable({
                                                         disabled={updating === v.id}
                                                         title={isChecked ? "Batal Tandai" : "Tandai Sudah Dicek"}
                                                     >
-                                                        {isChecked ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                                        {updating === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isChecked ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                                                     </button>
                                                 )}
                                             </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Package, Plus, AlertTriangle, CheckCircle, Clock, X, MessageSquare, Monitor, Loader2, Info } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface Asset {
     id: string;
@@ -30,6 +31,7 @@ export default function EmployeeAssetsPage() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [loadError, setLoadError] = useState("");
     const toast = useToast();
 
     // Modal state
@@ -40,15 +42,22 @@ export default function EmployeeAssetsPage() {
 
     const fetchData = async () => {
         setLoading(true);
+        setLoadError("");
         try {
             const res = await fetch("/api/employee/assets");
-            if (res.ok) {
-                const data = await res.json();
-                setAssets(data.assets);
-                setTickets(data.tickets);
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal mengambil data aset."));
             }
-        } catch {
-            toast("Gagal mengambil data aset.", "error");
+
+            const data = await res.json();
+            setAssets(Array.isArray(data.assets) ? data.assets : []);
+            setTickets(Array.isArray(data.tickets) ? data.tickets : []);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Gagal mengambil data aset.";
+            setAssets([]);
+            setTickets([]);
+            setLoadError(message);
+            toast(message, "error");
         } finally {
             setLoading(false);
         }
@@ -124,6 +133,11 @@ export default function EmployeeAssetsPage() {
 
             {loading ? (
                 <div className="flex justify-center py-12"><div className="spinner" /></div>
+            ) : loadError ? (
+                <div className="card p-8 text-center">
+                    <AlertTriangle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Daftar Aset */}

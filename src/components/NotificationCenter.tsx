@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarOff, MapPinned, Clock4, UserX, FileText } from "lucide-react";
+import { AlertCircle, Bell, CalendarOff, MapPinned, Clock4, UserX, FileText } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface Notification {
     id: string;
@@ -34,17 +35,20 @@ export default function NotificationCenter() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [count, setCount] = useState(0);
     const [open, setOpen] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const fetchNotifications = useCallback(async () => {
         try {
             const res = await fetch("/api/notifications");
-            if (res.ok) {
-                const data = await res.json();
-                setNotifications(data.notifications || []);
-                setCount(data.count || 0);
-            }
-        } catch { /* silent */ }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
+            const data = await res.json();
+            setNotifications(data.notifications || []);
+            setCount(data.count || 0);
+            setLoadError(null);
+        } catch (error) {
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
+        }
     }, []);
 
     useEffect(() => {
@@ -94,7 +98,12 @@ export default function NotificationCenter() {
                     </div>
 
                     <div className="max-h-[360px] overflow-y-auto">
-                        {notifications.length === 0 ? (
+                        {loadError ? (
+                            <div className="p-8 text-center">
+                                <AlertCircle className="w-8 h-8 text-[var(--destructive)] opacity-70 mx-auto mb-2" />
+                                <p className="text-xs font-medium text-[var(--destructive)]">{loadError}</p>
+                            </div>
+                        ) : notifications.length === 0 ? (
                             <div className="p-8 text-center">
                                 <Bell className="w-8 h-8 text-[var(--text-muted)] opacity-20 mx-auto mb-2" />
                                 <p className="text-xs text-[var(--text-muted)]">Tidak ada notifikasi</p>

@@ -8,6 +8,7 @@ import {
 import dynamic from "next/dynamic";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 // Dynamic import for the Map component to avoid SSR issues
 const LocationMap = dynamic(() => import("@/components/LocationMap"), {
@@ -95,12 +96,14 @@ export default function MasterDataPage() {
                 fetch("/api/master/positions"),
                 fetch("/api/master/locations")
             ]);
+            const failedResponse = [deptsRes, divRes, posRes, locRes].find((res) => !res.ok);
+            if (failedResponse) throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat master data."));
             if (deptsRes.ok) setDepartments(await deptsRes.json());
             if (divRes.ok) setDivisions(await divRes.json());
             if (posRes.ok) setPositions(await posRes.json());
             if (locRes.ok) setLocations(await locRes.json());
         } catch (error) {
-            console.error("Failed to fetch master data", error);
+            toast(error instanceof Error ? error.message : "Gagal memuat master data.", "error");
         } finally {
             setLoading(false);
         }
@@ -286,14 +289,11 @@ export default function MasterDataPage() {
                 setLoading(true);
                 try {
                     const res = await fetch(`/api/master/departments?id=${id}`, { method: "DELETE" });
-                    const data = await res.json();
-                    if (res.ok) {
-                        fetchData();
-                    } else {
-                        toast(data.error, "error");
-                    }
-                } catch {
-                    toast("Gagal menghapus data", "error");
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus departemen."));
+                    await fetchData();
+                    toast("Departemen berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus departemen.", "error");
                 } finally {
                     setLoading(false);
                 }
@@ -311,11 +311,11 @@ export default function MasterDataPage() {
                 setLoading(true);
                 try {
                     const res = await fetch(`/api/master/divisions?id=${id}`, { method: "DELETE" });
-                    if (res.ok) {
-                        fetchData();
-                    }
-                } catch {
-                    toast("Gagal menghapus data", "error");
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus divisi."));
+                    await fetchData();
+                    toast("Divisi berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus divisi.", "error");
                 } finally {
                     setLoading(false);
                 }
@@ -333,11 +333,11 @@ export default function MasterDataPage() {
                 setLoading(true);
                 try {
                     const res = await fetch(`/api/master/positions?id=${id}`, { method: "DELETE" });
-                    if (res.ok) {
-                        fetchData();
-                    }
-                } catch {
-                    toast("Gagal menghapus data", "error");
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus jabatan."));
+                    await fetchData();
+                    toast("Jabatan berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus jabatan.", "error");
                 } finally {
                     setLoading(false);
                 }
@@ -355,11 +355,11 @@ export default function MasterDataPage() {
                 setLoading(true);
                 try {
                     const res = await fetch(`/api/master/locations?id=${id}`, { method: "DELETE" });
-                    if (res.ok) {
-                        fetchData();
-                    }
-                } catch {
-                    toast("Gagal menghapus data", "error");
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus lokasi."));
+                    await fetchData();
+                    toast("Lokasi berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus lokasi.", "error");
                 } finally {
                     setLoading(false);
                 }

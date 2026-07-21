@@ -1,4 +1,4 @@
-import { Wrench } from "lucide-react";
+import { AlertCircle, Wrench } from "lucide-react";
 
 export type MaintenanceRow = {
     id: string;
@@ -14,8 +14,21 @@ export type MaintenanceRow = {
     createdAt: string;
 };
 
-export function MaintenanceTab({ maintenances, loaded, onAdd }: { maintenances: MaintenanceRow[]; loaded: boolean; onAdd: () => void }) {
+export function MaintenanceTab({ maintenances, loaded, error, onAdd }: { maintenances: MaintenanceRow[]; loaded: boolean; error?: string | null; onAdd: () => void }) {
     if (!loaded) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Memuat riwayat servis...</div>;
+    if (error) return (
+        <div className="space-y-4">
+            <div className="flex justify-end">
+                <button onClick={onAdd} className="bg-[var(--foreground)] text-[var(--background)] px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--primary-light)] transition-colors">
+                    <Wrench size={14} /> Catat Servis/Maintenance
+                </button>
+            </div>
+            <div className="flex items-start justify-center gap-2 py-8 text-center text-sm text-[var(--destructive)]">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+            </div>
+        </div>
+    );
 
     return (
         <div className="space-y-4">

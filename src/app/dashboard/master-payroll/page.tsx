@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface PayrollComponent {
     id: string;
@@ -37,9 +38,11 @@ export default function MasterPayrollPage() {
         setLoading(true);
         try {
             const res = await fetch("/api/master/payroll-components");
-            if (res.ok) setComponents(await res.json());
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat komponen payroll."));
+            const data = await res.json();
+            setComponents(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error("Failed to fetch components", error);
+            toast(error instanceof Error ? error.message : "Gagal memuat komponen payroll.", "error");
         } finally {
             setLoading(false);
         }
@@ -108,9 +111,11 @@ export default function MasterPayrollPage() {
                 setLoading(true);
                 try {
                     const res = await fetch(`/api/master/payroll-components?id=${id}`, { method: "DELETE" });
-                    if (res.ok) fetchData();
-                } catch {
-                    toast("Gagal menghapus data", "error");
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus komponen payroll."));
+                    await fetchData();
+                    toast("Komponen payroll berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus komponen payroll.", "error");
                 } finally {
                     setLoading(false);
                 }

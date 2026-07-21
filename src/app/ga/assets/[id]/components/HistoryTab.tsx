@@ -3,8 +3,11 @@ import { UserCheck, ArrowRight, Trash2, Wrench, AlertCircle, Clock, Upload, Load
 import type { LucideIcon } from "lucide-react";
 import { AssetHistoryRow } from "@/lib/types/asset";
 import { KondisiBadge } from "@/features/ga/components/badges/AssetBadges";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
-export function HistoryTab({ history, loaded, onRefresh }: { history: AssetHistoryRow[]; loaded: boolean; onRefresh: () => void }) {
+export function HistoryTab({ history, loaded, error, onRefresh }: { history: AssetHistoryRow[]; loaded: boolean; error?: string | null; onRefresh: () => void | Promise<void> }) {
+    const toast = useToast();
     const [uploadingId, setUploadingId] = useState<string | null>(null);
 
     const handleUploadBast = async (e: React.ChangeEvent<HTMLInputElement>, historyId: string) => {
@@ -19,14 +22,13 @@ export function HistoryTab({ history, loaded, onRefresh }: { history: AssetHisto
         try {
             const res = await fetch("/api/assets/bast", { method: "POST", body: formData });
             if (res.ok) {
-                onRefresh();
+                await onRefresh();
+                toast("Dokumen BAST berhasil diunggah.", "success");
             } else {
-                const data = await res.json();
-                alert(data.error || "Gagal upload BAST");
+                throw new Error(await getResponseErrorMessage(res, "Gagal upload BAST"));
             }
         } catch (err) {
-            console.error(err);
-            alert("Terjadi kesalahan jaringan.");
+            toast(err instanceof Error ? err.message : "Terjadi kesalahan jaringan.", "error");
         } finally {
             setUploadingId(null);
             e.target.value = ""; // reset input
@@ -37,14 +39,21 @@ export function HistoryTab({ history, loaded, onRefresh }: { history: AssetHisto
         if (!confirm("Hapus dokumen BAST ini?")) return;
         try {
             const res = await fetch(`/api/assets/bast/${bastId}`, { method: "DELETE" });
-            if (res.ok) onRefresh();
-            else alert("Gagal menghapus BAST");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus BAST"));
+            await onRefresh();
+            toast("Dokumen BAST berhasil dihapus.", "success");
         } catch (err) {
-            console.error(err);
+            toast(err instanceof Error ? err.message : "Gagal menghapus BAST", "error");
         }
     };
 
     if (!loaded) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Memuat riwayat...</div>;
+    if (error) return (
+        <div className="flex items-start justify-center gap-2 py-8 text-center text-sm text-[var(--destructive)]">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
+        </div>
+    );
     if (history.length === 0) return <div className="py-8 text-center text-[var(--text-muted)] text-sm">Belum ada riwayat mutasi.</div>;
 
     const ACTION_CONFIG: Record<string, { icon: LucideIcon; label: string; color: string }> = {

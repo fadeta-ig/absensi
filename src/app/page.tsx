@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { User, Lock, LogIn, Loader2, KeyRound } from "lucide-react";
+import { consumeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => consumeAuthRedirectMessage() ?? "");
   const [cooldown, setCooldown] = useState(0);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const isSubmitting = useRef(false);

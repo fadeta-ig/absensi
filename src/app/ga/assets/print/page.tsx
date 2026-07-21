@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Printer, CheckSquare, Square, Search, Filter } from "lucide-react";
+import { ArrowLeft, Printer, CheckSquare, Square, Search, Filter, AlertCircle } from "lucide-react";
 import QRCode from "react-qr-code";
 import { AssetWithHistory } from "@/lib/types/asset";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export default function PrintLabelsPage() {
     const router = useRouter();
@@ -12,15 +13,29 @@ export default function PrintLabelsPage() {
     const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [loadError, setLoadError] = useState("");
 
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("ALL");
 
     useEffect(() => {
-        fetch("/api/assets/categories")
-            .then(res => res.json())
-            .then(data => setCategories(data))
-            .catch(err => console.error(err));
+        const loadCategories = async () => {
+            try {
+                const res = await fetch("/api/assets/categories");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat kategori aset."));
+                }
+
+                const data = await res.json();
+                setCategories(Array.isArray(data) ? data : []);
+            } catch (err) {
+                console.error(err);
+                setCategories([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat kategori aset.");
+            }
+        };
+
+        void loadCategories();
     }, []);
 
     useEffect(() => {
@@ -32,12 +47,16 @@ export default function PrintLabelsPage() {
                 if (categoryFilter !== "ALL") params.set("category", categoryFilter);
 
                 const res = await fetch(`/api/assets?${params.toString()}`);
-                if (res.ok) {
-                    const parsed = await res.json();
-                    setAssets(parsed.data || parsed);
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat aset untuk cetak label."));
                 }
+
+                const parsed = await res.json();
+                setAssets(parsed.data || parsed);
             } catch (err) {
                 console.error(err);
+                setAssets([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat aset untuk cetak label.");
             } finally {
                 setLoading(false);
             }
@@ -100,6 +119,13 @@ export default function PrintLabelsPage() {
                     </button>
                 </div>
 
+                {loadError && (
+                    <div className="rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                        <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                        <span>{loadError}</span>
+                    </div>
+                )}
+
                 {/* Asset Selector */}
                 <div className="bg-[var(--card)] border rounded-xl overflow-hidden shadow-sm flex flex-col max-h-[500px]">
                     <div className="px-4 py-3 border-b flex flex-col sm:flex-row gap-3 items-center bg-[var(--secondary)]/60 justify-between">
@@ -144,7 +170,16 @@ export default function PrintLabelsPage() {
                         </div>
                     </div>
                     <div className="overflow-y-auto p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 bg-[var(--secondary)]/40 opacity-100 transition-opacity" style={{opacity: loading ? 0.5 : 1}}>
-                        {assets.map(asset => {
+                        {loadError ? (
+                            <div className="col-span-full p-8 text-center text-[var(--destructive)]">
+                                <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-70" />
+                                <p className="text-sm font-semibold">{loadError}</p>
+                            </div>
+                        ) : assets.length === 0 ? (
+                            <div className="col-span-full p-8 text-center text-[var(--text-muted)]">
+                                <p className="text-sm font-semibold">Tidak ada aset untuk dicetak.</p>
+                            </div>
+                        ) : assets.map(asset => {
                             const isSelected = selectedIds.has(asset.id);
                             return (
                                 <div

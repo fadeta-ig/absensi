@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon, Check } from "lucide-react";
+import { AlertCircle, CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon, Check } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { formatIndonesianDate } from "@/lib/utils";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface LeaveRequest {
     id: string;
@@ -17,20 +18,29 @@ interface LeaveRequest {
 }
 
 export default function LeavePage() {
+    const toast = useToast();
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [balance, setBalance] = useState({ total: 12, used: 0 });
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
     const [loading, setLoading] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
 
     useEffect(() => {
-        fetch("/api/leave").then((r) => r.json()).then((data) => {
-            if (Array.isArray(data)) {
-                setLeaves(data);
-                const approvedLeaves = data.filter((l: LeaveRequest) => l.status === "approved" && l.type === "annual");
+        const loadLeaves = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/leave");
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data cuti."));
+                const data = await res.json();
+                const leaveList = Array.isArray(data) ? data : [];
+                setLeaves(leaveList);
+                const approvedLeaves = leaveList.filter((l: LeaveRequest) => l.status === "approved" && l.type === "annual");
 
                 // Day-based calculation for balance
                 let usedDays = 0;
@@ -42,11 +52,17 @@ export default function LeavePage() {
                 });
 
                 setBalance({ total: 12, used: usedDays });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat data cuti.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
             }
-        });
-    }, []);
+        };
 
-    const toast = useToast();
+        void loadLeaves();
+    }, [toast]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -71,22 +87,25 @@ export default function LeavePage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        const res = await fetch("/api/leave", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(form),
-        });
-        if (res.ok) {
+        try {
+            const res = await fetch("/api/leave", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(form),
+            });
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal mengirim pengajuan cuti"));
+            }
             const newLeave = await res.json();
             setLeaves((prev) => [newLeave, ...prev]);
             setShowForm(false);
             setForm({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
             toast("Pengajuan cuti berhasil dikirim!", "success");
-        } else {
-            const errData = await res.json();
-            toast(errData.error || "Gagal mengirim pengajuan cuti", "error");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal mengirim pengajuan cuti", "error");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const getTypeLabel = (t: string) => {
@@ -129,18 +148,25 @@ export default function LeavePage() {
                 </button>
             </div>
 
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
             {/* Balance */}
             <div className="grid grid-cols-3 gap-4">
                 <div className="card p-4 text-center">
-                    <p className="text-2xl font-extrabold text-[var(--primary)]">{balance.total}</p>
+                    <p className="text-2xl font-extrabold text-[var(--primary)]">{initialLoading ? "..." : balance.total}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Total</p>
                 </div>
                 <div className="card p-4 text-center">
-                    <p className="text-2xl font-extrabold text-orange-500">{balance.used}</p>
+                    <p className="text-2xl font-extrabold text-orange-500">{initialLoading ? "..." : balance.used}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Terpakai</p>
                 </div>
                 <div className="card p-4 text-center">
-                    <p className="text-2xl font-extrabold text-green-600">{balance.total - balance.used}</p>
+                    <p className="text-2xl font-extrabold text-green-600">{initialLoading ? "..." : balance.total - balance.used}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Sisa</p>
                 </div>
             </div>
@@ -226,7 +252,12 @@ export default function LeavePage() {
                     <CalendarDays className="w-4 h-4 text-[var(--primary)]" />
                     Riwayat Cuti
                 </h2>
-                {leaves.length === 0 ? (
+                {initialLoading ? (
+                    <div className="card p-8 text-center text-[var(--text-muted)]">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
+                        <p className="text-sm font-medium">Memuat riwayat cuti...</p>
+                    </div>
+                ) : leaves.length === 0 ? (
                     <div className="card p-8 text-center">
                         <CalendarOff className="w-10 h-10 text-[var(--text-muted)] opacity-30 mx-auto mb-2" />
                         <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada pengajuan</p>

@@ -1,5 +1,8 @@
-import { FileText, Eye, Download, Trash2, FileSpreadsheet } from "lucide-react";
+import { useState } from "react";
+import { FileText, Eye, Download, Trash2, FileSpreadsheet, Loader2 } from "lucide-react";
 import { Payslip, Employee } from "../types";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export interface PayrollHistoryTabProps {
     filteredHistoryPayslips: Payslip[];
@@ -20,6 +23,8 @@ export function PayrollHistoryTab({
     handleExportHistory,
     fmt
 }: PayrollHistoryTabProps) {
+    const toast = useToast();
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const getEmpName = (empId: string) => employees.find((e) => e.employeeId === empId)?.name || empId;
 
     return (
@@ -67,15 +72,25 @@ export function PayrollHistoryTab({
                                                 <button
                                                     onClick={async () => {
                                                         if (!confirm(`Hapus slip gaji ${getEmpName(p.employeeId)} periode ${p.period}?`)) return;
-                                                        const res = await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
-                                                        if (res.ok) {
+                                                        setDeletingId(p.id);
+                                                        try {
+                                                            const res = await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
+                                                            if (!res.ok) {
+                                                                throw new Error(await getResponseErrorMessage(res, "Gagal menghapus slip gaji."));
+                                                            }
                                                             setPayslips(prev => prev.filter(x => x.id !== p.id));
+                                                            toast("Slip gaji berhasil dihapus.", "success");
+                                                        } catch (error) {
+                                                            toast(error instanceof Error ? error.message : "Gagal menghapus slip gaji.", "error");
+                                                        } finally {
+                                                            setDeletingId(null);
                                                         }
                                                     }}
+                                                    disabled={deletingId === p.id}
                                                     className="btn btn-ghost btn-sm !p-1.5 text-red-500 hover:!bg-red-50"
                                                     title="Hapus Slip Gaji"
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    {deletingId === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                                                 </button>
                                             </div>
                                         </td>

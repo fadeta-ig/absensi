@@ -9,6 +9,9 @@ import {
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useToast } from "@/components/Toast";
+import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 
 const navItems: NavItem[] = [
@@ -100,8 +103,10 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
+    const toast = useToast();
     const [user, setUser] = useState<AppShellUser | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
     const fetchedRef = useRef(false);
 
     useEffect(() => {
@@ -111,9 +116,14 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         const checkAuth = async () => {
             try {
                 const res = await fetch("/api/auth/me", { credentials: "same-origin" });
-                if (!res.ok) { router.replace("/"); return; }
+                if (!res.ok) {
+                    storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
+                    router.replace("/");
+                    return;
+                }
                 const data = await res.json();
                 if (!data.employeeId || !data.permissions?.includes("employee.self")) {
+                    storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
                     router.replace(data.permissions?.includes("hr.manage") ? "/dashboard" : data.permissions?.includes("ga.manage") ? "/ga" : "/");
                     return;
                 }
@@ -122,6 +132,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                     hasSubordinates: Array.isArray(data.subordinates) && data.subordinates.length > 0,
                 });
             } catch {
+                storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
                 router.replace("/");
             } finally {
                 setAuthChecked(true);
@@ -132,9 +143,18 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleLogout = useCallback(async () => {
-        await fetch("/api/auth/logout", { method: "POST" });
-        router.replace("/");
-    }, [router]);
+        if (loggingOut) return;
+        setLoggingOut(true);
+        toast("Memproses logout...", "info");
+        try {
+            const res = await fetch("/api/auth/logout", { method: "POST" });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
+            router.replace("/");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal logout.", "error");
+            setLoggingOut(false);
+        }
+    }, [loggingOut, router, toast]);
 
     const handleNavigate = useCallback((href: string) => {
         router.push(href);
@@ -172,6 +192,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             mobileTitle="WIG"
             storageKey="employee-sidebar-collapsed"
             onLogout={handleLogout}
+            logoutLoading={loggingOut}
             extraNav={monitoringNav}
             mobileHeaderRight={
                 <div className="flex items-center gap-1">

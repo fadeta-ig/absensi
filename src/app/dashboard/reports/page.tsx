@@ -7,6 +7,7 @@ import {
     Loader2, AlertCircle, Download, Eye, FileText, CheckSquare
 } from "lucide-react";
 import { exportToExcel, exportToPdfMatrix } from "@/lib/export";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface PreviewData {
     sheetName: string;
@@ -44,15 +45,33 @@ export default function ReportsPage() {
     const [employees, setEmployees] = useState<{ employeeId: string, name: string, departmentId: string, divisionId: string }[]>([]);
 
     useEffect(() => {
-        Promise.all([
-            fetch("/api/master/divisions").then(r => r.json()),
-            fetch("/api/master/departments").then(r => r.json()),
-            fetch("/api/employees").then(r => r.json())
-        ]).then(([divs, depts, emps]) => {
-            if (Array.isArray(divs)) setDivisions(divs);
-            if (Array.isArray(depts)) setDepartments(depts);
-            if (Array.isArray(emps)) setEmployees(emps);
-        }).catch(() => {});
+        const loadFilters = async () => {
+            try {
+                const [divisionsRes, departmentsRes, employeesRes] = await Promise.all([
+                    fetch("/api/master/divisions"),
+                    fetch("/api/master/departments"),
+                    fetch("/api/employees")
+                ]);
+
+                if (!divisionsRes.ok) throw new Error(await getResponseErrorMessage(divisionsRes, "Gagal memuat divisi untuk filter laporan."));
+                if (!departmentsRes.ok) throw new Error(await getResponseErrorMessage(departmentsRes, "Gagal memuat departemen untuk filter laporan."));
+                if (!employeesRes.ok) throw new Error(await getResponseErrorMessage(employeesRes, "Gagal memuat karyawan untuk filter laporan."));
+
+                const [divs, depts, emps] = await Promise.all([
+                    divisionsRes.json(),
+                    departmentsRes.json(),
+                    employeesRes.json()
+                ]);
+
+                if (Array.isArray(divs)) setDivisions(divs);
+                if (Array.isArray(depts)) setDepartments(depts);
+                if (Array.isArray(emps)) setEmployees(emps);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Gagal memuat pilihan filter laporan.");
+            }
+        };
+
+        void loadFilters();
     }, []);
 
     const filteredDepartments = divisionId ? departments.filter(d => d.divisionId === divisionId) : departments;
@@ -357,7 +376,7 @@ export default function ReportsPage() {
                         {selectedType?.label} — {new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d {new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
                         {isGrouped && type === "attendance" && <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] rounded-sm uppercase">Mode Grouped</span>}
                     </p>
-                    <p className="text-[10px] text-blue-600 mt-0.5 font-medium">Format: .xlsx (Excel). Pastikan periode sudah sesuai sebelum mendownload.</p>
+                    <p className="text-[10px] text-blue-600 mt-0.5 font-medium">Format: .xlsx (Excel) atau .pdf. Pastikan periode sudah sesuai sebelum mendownload.</p>
                 </div>
             </div>
 

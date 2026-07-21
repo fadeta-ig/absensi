@@ -8,6 +8,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,11 +84,23 @@ export default function DocumentsPage() {
 
     // ── Fetch List ─────────────────────────────────────────────────────────────
     useEffect(() => {
-        fetch("/api/letter-requests")
-            .then((r) => r.json())
-            .then((data: LetterRequest[]) => { if (Array.isArray(data)) setRequests(data); })
-            .catch(() => toast("Gagal memuat data surat", "error"))
-            .finally(() => setLoadingList(false));
+        const loadRequests = async () => {
+            try {
+                const res = await fetch("/api/letter-requests");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat data surat"));
+                }
+
+                const data = await res.json() as LetterRequest[];
+                if (Array.isArray(data)) setRequests(data);
+            } catch (err) {
+                toast(err instanceof Error ? err.message : "Gagal memuat data surat", "error");
+            } finally {
+                setLoadingList(false);
+            }
+        };
+
+        void loadRequests();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Submit ─────────────────────────────────────────────────────────────────

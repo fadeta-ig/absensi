@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
-    Clock4, Search, CheckCircle, XCircle, Clock,
-    Calendar, FileText, User, Filter, Eye, X
+    AlertCircle, Clock4, Search, CheckCircle, XCircle, Clock,
+    Calendar, FileText, User, Filter, Eye, X, Loader2
 } from "lucide-react";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface OvertimeRequest {
     id: string;
@@ -29,6 +31,7 @@ const STATUS_CONFIG = {
 };
 
 export default function DashboardOvertimePage() {
+    const toast = useToast();
     const [requests, setRequests] = useState<OvertimeRequest[]>([]);
     const [search, setSearch] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -36,10 +39,29 @@ export default function DashboardOvertimePage() {
     const [updating, setUpdating] = useState<string | null>(null);
     const [approvedHoursInput, setApprovedHoursInput] = useState<number>(0);
     const [isHolidayInput, setIsHolidayInput] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     useEffect(() => {
-        fetch("/api/overtime").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setRequests(d); });
-    }, []);
+        const loadRequests = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/overtime");
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat pengajuan lembur."));
+                const data = await res.json();
+                setRequests(Array.isArray(data) ? data : []);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat pengajuan lembur.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadRequests();
+    }, [toast]);
 
     const handleStatusUpdate = async (id: string, status: "approved" | "rejected") => {
         setUpdating(id);
@@ -58,9 +80,15 @@ export default function DashboardOvertimePage() {
                 const updated = await res.json();
                 setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)));
                 if (selectedReq?.id === id) setSelectedReq({ ...selectedReq, ...updated });
+                toast(status === "approved" ? "Pengajuan lembur disetujui." : "Pengajuan lembur ditolak.", "success");
+            } else {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui status lembur."));
             }
-        } catch (err) { console.error("Gagal update status lembur:", err); }
-        setUpdating(null);
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal memperbarui status lembur.", "error");
+        } finally {
+            setUpdating(null);
+        }
     };
 
     const filtered = requests.filter((r) => {
@@ -90,6 +118,13 @@ export default function DashboardOvertimePage() {
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">{requests.length} pengajuan lembur</p>
             </div>
+
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -146,8 +181,15 @@ export default function DashboardOvertimePage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {filtered.length === 0 ? (
-                                <tr><td colSpan={7} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada pengajuan lembur ditemukan</td></tr>
+                            {initialLoading ? (
+                                <tr>
+                                    <td colSpan={8} className="text-center py-10 text-sm text-[var(--text-muted)]">
+                                        <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
+                                        Memuat pengajuan lembur...
+                                    </td>
+                                </tr>
+                            ) : filtered.length === 0 ? (
+                                <tr><td colSpan={8} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada pengajuan lembur ditemukan</td></tr>
                             ) : (
                                 filtered.map((r) => {
                                     const cfg = STATUS_CONFIG[r.status];
@@ -186,7 +228,7 @@ export default function DashboardOvertimePage() {
                                                                 disabled={updating === r.id}
                                                                 title="Setujui"
                                                             >
-                                                                <CheckCircle className="w-3.5 h-3.5" />
+                                                                {updating === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
                                                             </button>
                                                             <button
                                                                 onClick={() => handleStatusUpdate(r.id, "rejected")}
@@ -194,7 +236,7 @@ export default function DashboardOvertimePage() {
                                                                 disabled={updating === r.id}
                                                                 title="Tolak"
                                                             >
-                                                                <XCircle className="w-3.5 h-3.5" />
+                                                                {updating === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
                                                             </button>
                                                         </>
                                                     )}
@@ -287,14 +329,14 @@ export default function DashboardOvertimePage() {
                                             className="btn btn-primary flex-1"
                                             disabled={updating === selectedReq.id}
                                         >
-                                            <CheckCircle className="w-4 h-4" /> Setujui
+                                            {updating === selectedReq.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Setujui
                                         </button>
                                         <button
                                             onClick={() => handleStatusUpdate(selectedReq.id, "rejected")}
                                             className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
                                             disabled={updating === selectedReq.id}
                                         >
-                                            <XCircle className="w-4 h-4" /> Tolak
+                                            {updating === selectedReq.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Tolak
                                         </button>
                                     </div>
                                 </div>

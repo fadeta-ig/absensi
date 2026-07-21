@@ -12,6 +12,8 @@ import Pagination from "@/components/ui/Pagination";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import type { AssetWithHistory, AssetStatus, AssetCondition } from "@/lib/types/asset";
 import type { AssetStats } from "@/lib/services/assets/queries";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 type AssetCategoryParams = { id: string; name: string; prefix: string };
 
@@ -74,10 +76,29 @@ function HolderIcon({ holderType }: { holderType: string }) {
 function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
     const [history, setHistory] = useState<HistoryRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     useEffect(() => {
-        fetch(`/api/assets/history?assetId=${asset.id}`)
-            .then(r => r.json()).then(setHistory).finally(() => setLoading(false));
+        const loadHistory = async () => {
+            setLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch(`/api/assets/history?assetId=${asset.id}`);
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat perpindahan aset."));
+                }
+
+                const data = await res.json() as HistoryRow[];
+                setHistory(Array.isArray(data) ? data : []);
+            } catch (err) {
+                setHistory([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat riwayat perpindahan aset.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadHistory();
     }, [asset.id]);
 
     const actionLabel: Record<string, string> = {
@@ -105,6 +126,11 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                 <div style={{ flex: 1, overflowY: "auto" }}>
                     {loading ? (
                         <div style={{ textAlign: "center", padding: 32 }}><div className="spinner" /></div>
+                    ) : loadError ? (
+                        <div className="rounded-lg border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 p-4 text-sm text-[var(--destructive)] flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{loadError}</span>
+                        </div>
                     ) : history.length === 0 ? (
                         <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)" }}>
                             <Package size={32} style={{ margin: "0 auto 8px", opacity: 0.3 }} />
@@ -157,6 +183,7 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
 // ─── Main Inner Page ────────────────────────────────────────────
 
 function HrAssetsPageInner() {
+    const toast = useToast();
     const searchParams = useSearchParams();
     const [assets, setAssets] = useState<Asset[]>([]);
     const [stats, setStats] = useState<AssetStats | null>(null);
@@ -168,9 +195,11 @@ function HrAssetsPageInner() {
     const [historyTarget, setHistoryTarget] = useState<Asset | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
+    const [loadError, setLoadError] = useState("");
 
     const loadData = useCallback(async () => {
         setLoading(true);
+        setLoadError("");
         try {
             const query = new URLSearchParams();
             if (filterCat !== "ALL") query.set("category", filterCat);
@@ -185,23 +214,28 @@ function HrAssetsPageInner() {
                 fetch("/api/assets/categories")
             ]);
 
-            if (resAssets.ok) {
-                const json = await resAssets.json();
-                setAssets(json.data || []);
-                setTotalItems(json.total || 0);
-            }
-            if (resStats.ok) {
-                setStats(await resStats.json());
-            }
-            if (resCats.ok) {
-                setCategories(await resCats.json());
-            }
+            if (!resAssets.ok) throw new Error(await getResponseErrorMessage(resAssets, "Gagal memuat daftar aset."));
+            if (!resStats.ok) throw new Error(await getResponseErrorMessage(resStats, "Gagal memuat statistik aset."));
+            if (!resCats.ok) throw new Error(await getResponseErrorMessage(resCats, "Gagal memuat kategori aset."));
+
+            const json = await resAssets.json();
+            setAssets(json.data || []);
+            setTotalItems(json.total || 0);
+            setStats(await resStats.json());
+            setCategories(await resCats.json());
         } catch (err) {
             console.error("Failed to load GA data", err);
+            const message = err instanceof Error ? err.message : "Gagal memuat data aset.";
+            setAssets([]);
+            setTotalItems(0);
+            setStats(null);
+            setCategories([]);
+            setLoadError(message);
+            toast(message, "error");
         } finally {
             setLoading(false);
         }
-    }, [filterCat, filterStatus, search, currentPage]);
+    }, [filterCat, filterStatus, search, currentPage, toast]);
 
     useEffect(() => {
         loadData();
@@ -254,6 +288,13 @@ function HrAssetsPageInner() {
                 <Package size={15} />
                 <span>Halaman ini <strong>hanya untuk monitoring</strong>. Untuk request assign, return, atau servis aset — hubungi tim <strong>GA (General Affairs)</strong>.</span>
             </div>
+
+            {loadError && (
+                <div className="rounded-lg border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)] flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
 
             {/* Quick filter pills berdasarkan kategori */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

@@ -3,13 +3,16 @@
 import { useEffect, useState, useCallback, use, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+    AlertCircle,
     ArrowLeft, Edit3, ArrowRightLeft, Package, QrCode,
-    History, ClipboardCheck, Trash2, Wrench
+    History, ClipboardCheck, Loader2, Trash2, Wrench
 } from "lucide-react";
 import { AssetWithHistory, AssetHistoryRow, AssetCondition } from "@/lib/types/asset";
 import { KondisiBadge, StatusBadge, CategoryBadge, HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { formatRupiah } from "@/lib/utils/formatters";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 import { HistoryTab } from "./components/HistoryTab";
 import { InspectionTab, InspectionRow } from "./components/InspectionTab";
@@ -20,8 +23,10 @@ type TabKey = "spec" | "history" | "inspections" | "maintenance";
 function AssetDetailContent({ id }: { id: string }) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const toast = useToast();
     const [asset, setAsset] = useState<AssetWithHistory | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [qrUrl, setQrUrl] = useState<string | null>(null);
 
     // Tabs
@@ -30,10 +35,13 @@ function AssetDetailContent({ id }: { id: string }) {
     const [inspections, setInspections] = useState<InspectionRow[]>([]);
     const [historyLoaded, setHistoryLoaded] = useState(false);
     const [inspLoaded, setInspLoaded] = useState(false);
+    const [historyError, setHistoryError] = useState<string | null>(null);
+    const [inspError, setInspError] = useState<string | null>(null);
 
     // Maintenance
     const [maintenances, setMaintenances] = useState<MaintenanceRow[]>([]);
     const [maintLoaded, setMaintLoaded] = useState(false);
+    const [maintError, setMaintError] = useState<string | null>(null);
 
     // Retire dialog
     const [showRetire, setShowRetire] = useState(false);
@@ -62,22 +70,24 @@ function AssetDetailContent({ id }: { id: string }) {
     });
 
     const fetchAsset = useCallback(async () => {
+        setLoadError(null);
         try {
             const res = await fetch(`/api/assets/${id}`);
             if (res.status === 401 || res.status === 403) {
                 router.replace(`/scan/${id}`);
                 return;
             }
-            if (res.ok) {
-                setAsset(await res.json());
-                setQrUrl(`/api/assets/qr?assetId=${id}&v=2`);
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Aset tidak ditemukan."));
+            setAsset(await res.json());
+            setQrUrl(`/api/assets/qr?assetId=${id}&v=2`);
         } catch (error) {
-            console.error("Gagal load aset", error);
+            const message = error instanceof Error ? error.message : "Gagal memuat detail aset.";
+            setLoadError(message);
+            toast(message, "error");
         } finally {
             setLoading(false);
         }
-    }, [id, router]);
+    }, [id, router, toast]);
 
     useEffect(() => { fetchAsset(); }, [fetchAsset]);
 
@@ -94,39 +104,71 @@ function AssetDetailContent({ id }: { id: string }) {
     }, [searchParams]);
 
     const fetchHistory = useCallback(async () => {
+        setHistoryError(null);
         try {
             const res = await fetch(`/api/assets/history?assetId=${id}`);
-            if (res.ok) setHistory(await res.json());
-        } catch (err) {
-            console.error(err);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat mutasi aset."));
+            const data = await res.json();
+            setHistory(Array.isArray(data) ? data : []);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Gagal memuat riwayat mutasi aset.";
+            setHistoryError(message);
+            toast(message, "error");
         }
-    }, [id]);
+    }, [id, toast]);
 
     // Lazy-load history & inspections when tab switches
     useEffect(() => {
         if (activeTab === "history" && !historyLoaded) {
-            fetchHistory().then(() => setHistoryLoaded(true));
+            fetchHistory().finally(() => setHistoryLoaded(true));
         }
         if (activeTab === "inspections" && !inspLoaded) {
-            fetch(`/api/assets/${id}/inspect`)
-                .then(r => r.ok ? r.json() : [])
-                .then(data => { setInspections(data); setInspLoaded(true); });
+            const loadInspections = async () => {
+                setInspError(null);
+                try {
+                    const res = await fetch(`/api/assets/${id}/inspect`);
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat inspeksi aset."));
+                    const data = await res.json();
+                    setInspections(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : "Gagal memuat inspeksi aset.";
+                    setInspError(message);
+                    toast(message, "error");
+                } finally {
+                    setInspLoaded(true);
+                }
+            };
+            void loadInspections();
         }
         if (activeTab === "maintenance" && !maintLoaded) {
-            fetch(`/api/assets/${id}/maintenance`)
-                .then(r => r.ok ? r.json() : [])
-                .then(data => { setMaintenances(data); setMaintLoaded(true); });
+            const loadMaintenance = async () => {
+                setMaintError(null);
+                try {
+                    const res = await fetch(`/api/assets/${id}/maintenance`);
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat servis aset."));
+                    const data = await res.json();
+                    setMaintenances(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : "Gagal memuat riwayat servis aset.";
+                    setMaintError(message);
+                    toast(message, "error");
+                } finally {
+                    setMaintLoaded(true);
+                }
+            };
+            void loadMaintenance();
         }
-    }, [activeTab, id, historyLoaded, inspLoaded, maintLoaded, fetchHistory]);
+    }, [activeTab, id, historyLoaded, inspLoaded, maintLoaded, fetchHistory, toast]);
 
     const handleRetire = async () => {
         setRetiring(true);
         try {
             const res = await fetch(`/api/assets/${id}/retire`, { method: "POST" });
-            if (res.ok) router.push("/ga/assets");
-            else alert("Gagal mempensiunkan aset");
-        } catch (err) {
-            console.error(err);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mempensiunkan aset."));
+            toast("Aset berhasil dipensiunkan.", "success");
+            router.push("/ga/assets");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal mempensiunkan aset.", "error");
         } finally {
             setRetiring(false);
             setShowRetire(false);
@@ -151,11 +193,12 @@ function AssetDetailContent({ id }: { id: string }) {
                 setInspections([data, ...inspections]);
                 setShowInspection(false);
                 setInspData({ kondisi: "BAIK", notes: "", chk: { "Fisik & Body": true, "Fungsi/Sistem": true, "Kelengkapan": true } });
+                toast("Inspeksi aset berhasil disimpan.", "success");
             } else {
-                alert("Gagal menyimpan inspeksi");
+                throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan inspeksi."));
             }
-        } catch (err) {
-            console.error(err);
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal menyimpan inspeksi.", "error");
         } finally {
             setSubmittingInsp(false);
         }
@@ -184,18 +227,31 @@ function AssetDetailContent({ id }: { id: string }) {
                 setShowMaintenance(false);
                 setMaintData({ vendorName: "", cost: 0, startDate: new Date().toISOString().split("T")[0], estimatedEndDate: "", status: "IN_PROGRESS", notes: "", attachmentUrl: "" });
                 fetchAsset(); // refresh to update asset status if changed
+                toast("Data maintenance berhasil disimpan.", "success");
             } else {
-                alert("Gagal menyimpan data maintenance");
+                throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data maintenance."));
             }
-        } catch (err) {
-            console.error(err);
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal menyimpan data maintenance.", "error");
         } finally {
             setSubmittingMaint(false);
         }
     };
 
-    if (loading) return <div className="p-6">Memuat aset...</div>;
-    if (!asset) return <div className="p-6">Aset tidak ditemukan.</div>;
+    if (loading) return (
+        <div className="p-6 flex items-center gap-3 text-sm text-[var(--text-muted)]">
+            <div className="spinner" />
+            <span>Memuat aset...</span>
+        </div>
+    );
+    if (!asset) return (
+        <div className="p-6">
+            <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-4 text-sm text-[var(--destructive)]">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{loadError || "Aset tidak ditemukan."}</span>
+            </div>
+        </div>
+    );
 
     const SpecRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
         <div className="flex flex-col py-3 border-b border-[var(--border)] last:border-0">
@@ -311,15 +367,15 @@ function AssetDetailContent({ id }: { id: string }) {
                             )}
 
                             {activeTab === "history" && (
-                                <HistoryTab history={history} loaded={historyLoaded} onRefresh={fetchHistory} />
+                                <HistoryTab history={history} loaded={historyLoaded} error={historyError} onRefresh={fetchHistory} />
                             )}
 
                             {activeTab === "inspections" && (
-                                <InspectionTab inspections={inspections} loaded={inspLoaded} onAdd={() => setShowInspection(true)} />
+                                <InspectionTab inspections={inspections} loaded={inspLoaded} error={inspError} onAdd={() => setShowInspection(true)} />
                             )}
 
                             {activeTab === "maintenance" && (
-                                <MaintenanceTab maintenances={maintenances} loaded={maintLoaded} onAdd={() => setShowMaintenance(true)} />
+                                <MaintenanceTab maintenances={maintenances} loaded={maintLoaded} error={maintError} onAdd={() => setShowMaintenance(true)} />
                             )}
                         </div>
                     </div>
@@ -419,7 +475,8 @@ function AssetDetailContent({ id }: { id: string }) {
                            <div className="flex justify-end gap-3 pt-2">
                                <button type="button" onClick={() => setShowInspection(false)} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors">Batal</button>
                                <button type="submit" disabled={submittingInsp} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold  hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
-                                   {submittingInsp ? "Menyimpan" : "Simpan Inspeksi"}
+                                   {submittingInsp ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                   {submittingInsp ? "Menyimpan..." : "Simpan Inspeksi"}
                                </button>
                            </div>
                        </form>
@@ -474,7 +531,8 @@ function AssetDetailContent({ id }: { id: string }) {
                            <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)] shrink-0">
                                <button type="button" onClick={() => setShowMaintenance(false)} className="px-4 py-2 border border-[var(--border)] bg-[var(--card)] rounded-lg text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--secondary)] transition-colors">Batal</button>
                                <button type="submit" disabled={submittingMaint} className="px-4 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-semibold  hover:bg-[var(--primary-light)] transition-colors disabled:opacity-50 flex items-center gap-2">
-                                   {submittingMaint ? "Menyimpan" : "Simpan Data"}
+                                   {submittingMaint ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                   {submittingMaint ? "Menyimpan..." : "Simpan Data"}
                                </button>
                            </div>
                        </form>

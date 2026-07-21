@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Building2, Navigation, FileText, MapPin, X, Loader2 } from "lucide-react";
+import { Building2, Navigation, FileText, MapPin, X, Loader2, AlertCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 import { DEFAULT_VISIT_RADIUS } from "../visitTypes";
 
@@ -22,17 +22,23 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
     const [visitLocation, setVisitLocation] = useState({ lat: -6.2088, lng: 106.8456 });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [locationWarning, setLocationWarning] = useState<string | null>(() =>
+        typeof navigator !== "undefined" && !navigator.geolocation
+            ? "Browser tidak mendukung geolocation. Tentukan titik kunjungan secara manual pada peta."
+            : null
+    );
 
     // Get current device location as initial map center
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    setVisitLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                },
-                () => undefined
-            );
-        }
+        if (!navigator.geolocation) return;
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setVisitLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setLocationWarning(null);
+            },
+            () => setLocationWarning("Lokasi perangkat tidak dapat digunakan. Tentukan titik kunjungan secara manual pada peta.")
+        );
     }, []);
 
     const handleMapClick = useCallback((lat: number, lng: number) => {
@@ -157,6 +163,12 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                         <p className="text-[10px] text-[var(--text-muted)] mb-2 italic">
                             Tap pada peta untuk menentukan lokasi tujuan kunjungan
                         </p>
+                        {locationWarning && (
+                            <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-600" />
+                                <span>{locationWarning}</span>
+                            </div>
+                        )}
                         {visitLocation ? (
                             <div className="rounded-lg overflow-hidden border border-[var(--border)] h-[200px]">
                                 <LocationMap

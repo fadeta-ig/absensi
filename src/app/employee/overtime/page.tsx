@@ -5,6 +5,7 @@ import {
     Clock4, Plus, Loader2, CheckCircle, AlertCircle, X,
     Calendar, Clock, FileText, Filter
 } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface OvertimeRequest {
     id: string;
@@ -28,6 +29,8 @@ export default function EmployeeOvertimePage() {
     const [requests, setRequests] = useState<OvertimeRequest[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [loadingList, setLoadingList] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("all");
 
@@ -43,7 +46,26 @@ export default function EmployeeOvertimePage() {
     });
 
     useEffect(() => {
-        fetch("/api/overtime").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setRequests(d); });
+        const loadRequests = async () => {
+            setLoadingList(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/overtime");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat pengajuan lembur."));
+                }
+
+                const data = await res.json();
+                setRequests(Array.isArray(data) ? data : []);
+            } catch (err) {
+                setRequests([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat pengajuan lembur.");
+            } finally {
+                setLoadingList(false);
+            }
+        };
+
+        void loadRequests();
     }, []);
 
     const resetForm = () => {
@@ -127,7 +149,16 @@ export default function EmployeeOvertimePage() {
             </div>
 
             {/* Request List */}
-            {filtered.length === 0 ? (
+            {loadingList ? (
+                <div className="flex justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-50" />
+                </div>
+            ) : loadError ? (
+                <div className="card p-8 text-center">
+                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
+                </div>
+            ) : filtered.length === 0 ? (
                 <div className="card p-8 text-center">
                     <Clock4 className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm text-[var(--text-muted)]">Belum ada pengajuan lembur</p>

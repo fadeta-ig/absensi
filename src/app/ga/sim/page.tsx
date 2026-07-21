@@ -7,6 +7,7 @@ import Pagination from "@/components/ui/Pagination";
 import { AssetWithHistory } from "@/lib/types/asset";
 import { HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface SimCardRow {
     id: string;
@@ -24,6 +25,7 @@ export default function SimCardDashboardPage() {
     const [assets, setAssets] = useState<SimCardRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
+    const [loadError, setLoadError] = useState("");
 
     // Stats specific to SIM
     const [simStats, setSimStats] = useState({ total: 0, aktif: 0, tidakAktif: 0 });
@@ -45,6 +47,7 @@ export default function SimCardDashboardPage() {
     const fetchSimCards = useCallback(async () => {
         try {
             setLoading(true);
+            setLoadError("");
             const params = new URLSearchParams();
             if (filterStatus === "AKTIF") {
                 // Not mapped to backend yet, filtering on frontend instead below
@@ -56,22 +59,27 @@ export default function SimCardDashboardPage() {
             params.set("limit", String(PER_PAGE));
 
             const res = await fetch(`/api/sim-cards`);
-            if (res.ok) {
-                const data = await res.json() as { data?: SimCardRow[] };
-                
-                let filteredData = data.data || [];
-                // Simple search filter
-                if (debouncedSearch) {
-                    filteredData = filteredData.filter((sim) => sim.phoneNumber.includes(debouncedSearch) || sim.provider.toLowerCase().includes(debouncedSearch.toLowerCase()));
-                }
-                
-                // Active/Inactive can be determined by expiredDate or assigned status
-                // We'll treat assigned or recently created as active. For simplicity, just use all if no explicit status.
-                setAssets(filteredData);
-                setTotalItems(filteredData.length);
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat data SIM."));
             }
+
+            const data = await res.json() as { data?: SimCardRow[] };
+
+            let filteredData = data.data || [];
+            // Simple search filter
+            if (debouncedSearch) {
+                filteredData = filteredData.filter((sim) => sim.phoneNumber.includes(debouncedSearch) || sim.provider.toLowerCase().includes(debouncedSearch.toLowerCase()));
+            }
+
+            // Active/Inactive can be determined by expiredDate or assigned status
+            // We'll treat assigned or recently created as active. For simplicity, just use all if no explicit status.
+            setAssets(filteredData);
+            setTotalItems(filteredData.length);
         } catch (error) {
             console.error("Gagal mengambil data SIM", error);
+            setAssets([]);
+            setTotalItems(0);
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat data SIM.");
         } finally {
             setLoading(false);
         }
@@ -80,17 +88,21 @@ export default function SimCardDashboardPage() {
     const fetchStats = useCallback(async () => {
         try {
             const res = await fetch(`/api/sim-cards`);
-            if (res.ok) {
-                const data = await res.json() as { data?: SimCardRow[] };
-                const allSims = data.data || [];
-                setSimStats({
-                    total: allSims.length,
-                    aktif: allSims.length,
-                    tidakAktif: 0
-                });
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat statistik SIM."));
             }
+
+            const data = await res.json() as { data?: SimCardRow[] };
+            const allSims = data.data || [];
+            setSimStats({
+                total: allSims.length,
+                aktif: allSims.length,
+                tidakAktif: 0
+            });
         } catch (error) {
             console.error(error);
+            setSimStats({ total: 0, aktif: 0, tidakAktif: 0 });
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat statistik SIM.");
         }
     }, []);
 
@@ -111,8 +123,35 @@ export default function SimCardDashboardPage() {
     }, [searchQuery, currentPage]);
 
     const handleExportCsv = () => {
-        alert("Fitur Export Spreadsheet ditambahkan.");
-        // Anda bisa kopas script ExcelJS dari Asset biasa di lain waktu jika diminta
+        if (assets.length === 0) {
+            alert("Tidak ada data SIM untuk diexport.");
+            return;
+        }
+
+        setExporting(true);
+        try {
+            const escapeCsv = (value: string | number | null | undefined) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+            const headers = ["Nomor SIM", "Provider", "Pemegang", "Departemen", "Valid Until"];
+            const rows = assets.map((sim) => [
+                sim.phoneNumber,
+                sim.provider,
+                sim.assignedTo?.name ?? "Tersedia",
+                sim.assignedTo?.departmentRel?.name ?? "",
+                sim.expiredDate ? new Date(sim.expiredDate).toLocaleDateString("id-ID") : ""
+            ]);
+            const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+            const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `Data_SIM_WIG_${new Date().toISOString().split("T")[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } finally {
+            setExporting(false);
+        }
     };
 
     const handleDelete = async () => {
@@ -155,10 +194,11 @@ export default function SimCardDashboardPage() {
                 </div>
                 <div className="flex gap-2 w-full md:w-auto flex-wrap">
                     <button 
+                        disabled={exporting}
                         onClick={handleExportCsv}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-50"
                     >
-                        <Download size={16} /> Export
+                        <Download size={16} /> {exporting ? "Mengekspor..." : "Export"}
                     </button>
                     <button 
                         onClick={() => router.push("/ga/sim/create")}
@@ -175,6 +215,13 @@ export default function SimCardDashboardPage() {
                 <StatCard icon={<CheckCircle />} label="SIM Aktif" value={simStats.aktif} bg="#d1fae5" color="#047857" />
                 <StatCard icon={<AlertCircle />} label="SIM Mati / Hangus" value={simStats.tidakAktif} bg="#fee2e2" color="#b91c1c" />
             </div>
+
+            {loadError && (
+                <div className="rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
 
             {/* Table Area */}
             <div className="bg-[var(--card)] border rounded-xl shadow-sm flex flex-col flex-1 overflow-hidden relative">
@@ -221,6 +268,10 @@ export default function SimCardDashboardPage() {
                             {loading && assets.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data SIM Card...</td>
+                                </tr>
+                            ) : loadError ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--destructive)]">{loadError}</td>
                                 </tr>
                             ) : assets.length === 0 ? (
                                 <tr>

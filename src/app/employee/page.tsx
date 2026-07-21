@@ -3,15 +3,18 @@
 import { useEffect, useState } from "react";
 import { 
     Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, 
-    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard
+    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard, AlertCircle, Loader2
 } from "lucide-react";
 import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface NewsItem { id: string; title: string; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
 
 export default function EmployeeHomePage() {
+    const toast = useToast();
     const [user, setUser] = useState<{ 
         name: string; 
         employeeId: string; 
@@ -24,20 +27,50 @@ export default function EmployeeHomePage() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
+    const [loadingData, setLoadingData] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     useEffect(() => {
-        fetch("/api/auth/me").then((r) => r.json()).then((data) => {
-            setUser(data);
-            if (data?.totalLeave !== undefined && data?.usedLeave !== undefined) {
-                setLeaveBalance({ total: data.totalLeave, used: data.usedLeave });
+        const loadHomeData = async () => {
+            setLoadingData(true);
+            setLoadError("");
+            try {
+                const [userRes, newsRes, attendanceRes] = await Promise.all([
+                    fetch("/api/auth/me"),
+                    fetch("/api/news"),
+                    fetch("/api/attendance")
+                ]);
+
+                if (!userRes.ok) throw new Error(await getResponseErrorMessage(userRes, "Gagal memuat data profil."));
+                if (!newsRes.ok) throw new Error(await getResponseErrorMessage(newsRes, "Gagal memuat informasi perusahaan."));
+                if (!attendanceRes.ok) throw new Error(await getResponseErrorMessage(attendanceRes, "Gagal memuat data kehadiran."));
+
+                const [userData, newsData, attendanceData] = await Promise.all([
+                    userRes.json(),
+                    newsRes.json(),
+                    attendanceRes.json()
+                ]);
+
+                setUser(userData);
+                if (userData?.totalLeave !== undefined && userData?.usedLeave !== undefined) {
+                    setLeaveBalance({ total: userData.totalLeave, used: userData.usedLeave });
+                }
+                setNews(Array.isArray(newsData) ? newsData : []);
+                setAttendance(Array.isArray(attendanceData) ? attendanceData : []);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : "Gagal memuat data beranda.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setLoadingData(false);
             }
-        });
-        fetch("/api/news").then((r) => r.json()).then(setNews);
-        fetch("/api/attendance").then((r) => r.json()).then(setAttendance);
+        };
+
+        void loadHomeData();
 
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
-    }, []);
+    }, [toast]);
 
     const today = new Date().toISOString().split("T")[0];
     const todayRecord = attendance.find((a) => a.date === today);
@@ -95,6 +128,20 @@ export default function EmployeeHomePage() {
 
             <PushNotificationManager />
 
+            {loadingData && (
+                <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-4 py-3 flex items-center gap-3 text-sm text-[var(--text-secondary)]">
+                    <Loader2 className="w-4 h-4 animate-spin text-[var(--primary)]" />
+                    <span>Memuat data beranda...</span>
+                </div>
+            )}
+
+            {loadError && (
+                <div className="rounded-2xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
             {/* ─── Greeting ────────────────────────────────────── */}
             <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-5 py-4">
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">
@@ -135,7 +182,7 @@ export default function EmployeeHomePage() {
                         <TrendingUp className="w-[18px] h-[18px] text-emerald-600 stroke-[2]" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{presentTotal}</p>
+                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{loadingData ? "..." : presentTotal}</p>
                         <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Total Kehadiran</p>
                     </div>
                 </div>
@@ -146,7 +193,7 @@ export default function EmployeeHomePage() {
                         <CalendarOff className="w-[18px] h-[18px] text-amber-600 stroke-[2]" />
                     </div>
                     <div className="min-w-0">
-                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{remainingLeave}</p>
+                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{loadingData ? "..." : remainingLeave}</p>
                         <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Sisa Hari Cuti</p>
                     </div>
                 </div>
@@ -165,7 +212,15 @@ export default function EmployeeHomePage() {
                     )}
                 </div>
 
-                {news.length === 0 ? (
+                {loadingData ? (
+                    <div className="px-4 pb-5 pt-3 text-center">
+                        <Loader2 className="w-5 h-5 animate-spin text-[var(--primary)] opacity-60 mx-auto" />
+                    </div>
+                ) : loadError ? (
+                    <div className="px-4 pb-5 pt-3 text-center">
+                        <p className="text-xs font-medium text-[var(--destructive)]">Informasi belum dapat dimuat.</p>
+                    </div>
+                ) : news.length === 0 ? (
                     <div className="px-4 pb-5 pt-3 text-center">
                         <p className="text-xs font-medium text-[var(--text-muted)]">Tidak ada informasi aktif.</p>
                     </div>

@@ -8,6 +8,7 @@ import { AssetWithHistory } from "@/lib/types/asset";
 import { KondisiBadge, StatusBadge, HolderIcon, CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import { formatRupiah } from "@/lib/utils/formatters";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 // Define AssetStats from our new deduped API
 type AssetStats = {
@@ -25,6 +26,7 @@ export default function AssetsPage() {
     const [stats, setStats] = useState<AssetStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
+    const [loadError, setLoadError] = useState("");
 
     // Delete confirm dialog state
     const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; code: string } | null>(null);
@@ -46,15 +48,19 @@ export default function AssetsPage() {
     const fetchCategories = useCallback(async () => {
         try {
             const res = await fetch("/api/assets/categories");
-            if (res.ok) setCategories(await res.json());
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat kategori aset."));
+            setCategories(await res.json());
         } catch (error) {
             console.error("Gagal mengambil kategori", error);
+            setCategories([]);
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat kategori aset.");
         }
     }, []);
 
     const fetchAssets = useCallback(async () => {
         try {
             setLoading(true);
+            setLoadError("");
             const params = new URLSearchParams();
             if (filterCategory) params.set("category", filterCategory);
             if (filterStatus && filterStatus !== "ALL") params.set("status", filterStatus);
@@ -65,13 +71,15 @@ export default function AssetsPage() {
             params.set("excludeCategory", "NUM");
 
             const res = await fetch(`/api/assets?${params.toString()}`);
-            if (res.ok) {
-                const data = await res.json();
-                setAssets(data.data || []);
-                setTotalItems(data.total || 0);
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat daftar aset."));
+            const data = await res.json();
+            setAssets(data.data || []);
+            setTotalItems(data.total || 0);
         } catch (error) {
             console.error("Gagal mengambil data aset", error);
+            setAssets([]);
+            setTotalItems(0);
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat daftar aset.");
         } finally {
             setLoading(false);
         }
@@ -80,9 +88,12 @@ export default function AssetsPage() {
     const fetchStats = useCallback(async () => {
         try {
             const res = await fetch("/api/assets/stats?excludeCategory=NUM");
-            if (res.ok) setStats(await res.json());
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat statistik aset."));
+            setStats(await res.json());
         } catch (error) {
             console.error("Gagal mengambil data statistik", error);
+            setStats(null);
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat statistik aset.");
         }
     }, []);
 
@@ -211,6 +222,13 @@ export default function AssetsPage() {
                 <StatCard icon={<AlertCircle />} label="Kondisi Rusak" value={stats?.rusak ?? 0} bg="#fee2e2" color="#b91c1c" />
             </div>
 
+            {loadError && (
+                <div className="rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                    <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
             {/* Table Area */}
             <div className="bg-[var(--card)] border rounded-xl shadow-sm flex flex-col flex-1 overflow-hidden relative">
                 {/* Filters */}
@@ -301,6 +319,10 @@ export default function AssetsPage() {
                             {loading && assets.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data secara langsung (server-side)...</td>
+                                </tr>
+                            ) : loadError ? (
+                                <tr>
+                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--destructive)]">{loadError}</td>
                                 </tr>
                             ) : assets.length === 0 ? (
                                 <tr>

@@ -6,6 +6,7 @@ import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, AlertCircle, Tras
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { generateBulkImportTemplate } from "@/lib/utils/excelTemplateGenerator";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 type ParsedRow = {
     [key: string]: string;
@@ -38,19 +39,38 @@ export default function BulkImportPage() {
     // Kategori lookup cache client-side untuk validasi prefix
     const [validPrefixes, setValidPrefixes] = useState<Set<string>>(new Set());
     const [categoryList, setCategoryList] = useState<{ prefix: string; name: string }[]>([]);
+    const [categoryLoadError, setCategoryLoadError] = useState("");
 
     useEffect(() => {
-        fetch("/api/assets/categories")
-            .then(r => r.ok ? r.json() : [])
-            .then((data: { prefix: string; name: string }[]) => {
+        const loadCategories = async () => {
+            try {
+                const res = await fetch("/api/assets/categories");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat daftar kategori untuk template."));
+                }
+
+                const data = await res.json() as { prefix: string; name: string }[];
                 setCategoryList(data);
                 const prefixes = new Set(data.map(c => c.prefix.toUpperCase()));
                 setValidPrefixes(prefixes);
-            })
-            .catch(() => {});
+                setCategoryLoadError("");
+            } catch (err) {
+                const message = err instanceof Error ? err.message : "Gagal memuat daftar kategori untuk template.";
+                setCategoryList([]);
+                setValidPrefixes(new Set());
+                setCategoryLoadError(message);
+            }
+        };
+
+        void loadCategories();
     }, []);
 
     const downloadTemplate = async () => {
+        if (categoryLoadError) {
+            setErrors([`${categoryLoadError} Segarkan halaman sebelum mengunduh template.`]);
+            return;
+        }
+
         await generateBulkImportTemplate(categoryList);
     };
 
@@ -247,6 +267,13 @@ export default function BulkImportPage() {
                     <FileSpreadsheet size={16} /> Unduh Template (.xlsx)
                 </button>
             </div>
+
+            {categoryLoadError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{categoryLoadError} Template belum dapat diunduh dengan daftar kategori yang lengkap.</span>
+                </div>
+            )}
 
             {/* Error Alerts */}
             {errors.length > 0 && (

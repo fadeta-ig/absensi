@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { AlertCircle, Save } from "lucide-react";
 import { AssetCategory } from "@/lib/types/asset";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export type AssetFormData = {
     name: string;
@@ -35,6 +36,7 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
     const [categories, setCategories] = useState<AssetCategory[]>([]);
     const [employees, setEmployees] = useState<{ employeeId: string; name: string }[]>([]);
     const [loadingParams, setLoadingParams] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     const [formData, setFormData] = useState<AssetFormData>({
         name: initialData?.name || "",
@@ -56,27 +58,34 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
 
     useEffect(() => {
         const fetchData = async () => {
+            setLoadError("");
             try {
                 const [catRes, empRes] = await Promise.all([
                     fetch("/api/assets/categories"),
                     fetch("/api/employees?limit=1000")
                 ]);
 
-                if (catRes.ok) {
-                    const data = await catRes.json();
-                    setCategories(data);
-                    if (data.length > 0 && mode === "create" && !initialData?.categoryId) {
-                        setFormData(prev => ({ ...prev, categoryId: data[0].id }));
-                    }
+                if (!catRes.ok) {
+                    throw new Error(await getResponseErrorMessage(catRes, "Gagal memuat kategori aset."));
+                }
+                if (!empRes.ok) {
+                    throw new Error(await getResponseErrorMessage(empRes, "Gagal memuat daftar karyawan."));
                 }
 
-                if (empRes.ok) {
-                    const empData = await empRes.json();
-                    const list = Array.isArray(empData) ? empData : empData.data || [];
-                    setEmployees(list);
+                const data = await catRes.json();
+                setCategories(data);
+                if (data.length > 0 && mode === "create" && !initialData?.categoryId) {
+                    setFormData(prev => ({ ...prev, categoryId: data[0].id }));
                 }
+
+                const empData = await empRes.json();
+                const list = Array.isArray(empData) ? empData : empData.data || [];
+                setEmployees(list);
             } catch (err) {
                 console.error("Gagal load data form", err);
+                setCategories([]);
+                setEmployees([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat konfigurasi form.");
             } finally {
                 setLoadingParams(false);
             }
@@ -121,6 +130,13 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
     if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]">Memuat konfigurasi form...</div>;
 
     return (
+        <>
+        {loadError && (
+            <div className="mb-4 rounded-xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{loadError}</span>
+            </div>
+        )}
         <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
             <div className="p-6 border-b bg-[var(--secondary)]/50">
                 <h2 className="text-md font-semibold text-[var(--text-primary)]">Identifikasi Utama</h2>
@@ -247,5 +263,6 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
                 </button>
             </div>
         </form>
+        </>
     );
 }

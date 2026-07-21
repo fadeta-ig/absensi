@@ -22,6 +22,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Error ditangkap dengan `catch { /* silent */ }`. Dropdown tetap menampilkan notifikasi lama atau teks `Tidak ada notifikasi`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak dapat membedakan kondisi benar-benar tidak ada notifikasi dengan kondisi notifikasi gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-002
 
@@ -30,6 +31,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch dropdown menangkap error tanpa pesan; fetch badge juga mengabaikan error. Panel dapat menampilkan `Tidak ada notifikasi terbaru`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mengetahui apakah memang tidak ada notifikasi atau data notifikasi gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-003
 
@@ -38,6 +40,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Komponen selalu `return null`; kegagalan hanya dicatat ke console.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mendapat informasi bahwa notifikasi push tidak aktif atau tidak berhasil dihubungkan.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-004
 
@@ -46,6 +49,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Layout menampilkan loading lalu melakukan redirect tanpa pesan penyebab redirect.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mendapat informasi apakah sesi berakhir, akses ditolak, atau role mengarah ke portal berbeda.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-005
 
@@ -54,6 +58,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Handler logout melakukan fetch dan redirect tanpa loading state, success message, atau error message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Saat koneksi lambat atau gagal, pengguna tidak melihat status proses logout.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 ## Dashboard HR Utama
 
@@ -71,6 +76,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Error ditangkap dengan `catch { /* silent refresh failure */ }`. Pada initial load, `analytics` dapat tetap `null`; beberapa bagian tetap skeleton atau data ringkasan kosong. Tombol refresh juga tidak menampilkan error.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mengetahui bahwa dashboard gagal diperbarui dan tidak dapat membedakan data kosong dari data yang gagal dimuat.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 ## Manajemen Karyawan HR
 
@@ -92,6 +98,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch shift tidak memiliki catch dan tidak menampilkan pesan. Kolom shift dapat menampilkan `-`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah karyawan tidak memiliki shift atau data shift gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-008
 
@@ -100,6 +107,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Saat fetch berjalan ada `Memuat data...`; jika gagal, error hanya dicatat ke console dan form tetap tampil dengan pilihan yang dapat kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa pilihan form tidak lengkap karena master data gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Absensi HR dan Persetujuan Koreksi
 
@@ -118,6 +126,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch awal memakai `.then` tanpa catch dan tidak memiliki loading/error state halaman. Tabel dapat menampilkan data kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak dapat membedakan tidak ada data absensi dengan data absensi yang gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-010
 
@@ -126,6 +135,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Status item diperbarui di state lokal; tidak ada pesan sukses.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna hanya melihat perubahan status jika memperhatikan tabel; tidak ada konfirmasi eksplisit bahwa tindakan berhasil diproses.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-011
 
@@ -134,6 +144,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Error hanya dicatat dengan `console.error(e)`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat pesan bahwa tindakan gagal karena koneksi atau request gagal.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-012
 
@@ -142,6 +153,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Browser alert generik `Gagal memproses pengajuan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pesan tidak menampilkan alasan dari server atau kondisi spesifik yang membuat pengajuan gagal diproses.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-013
 
@@ -150,6 +162,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: `fetchHistory` tidak memiliki catch, tidak ada loading state, dan tabel dapat menampilkan `Belum ada riwayat pengajuan.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mengetahui apakah riwayat kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Cuti HR
 
@@ -168,6 +181,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tidak ada loading/error state khusus. Statistik dapat bernilai nol dan daftar menampilkan `Tidak ada pengajuan cuti ditemukan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah tidak ada pengajuan cuti atau data cuti gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-015
 
@@ -176,6 +190,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Handler memakai `try/finally` tanpa catch dan hanya memproses `res.ok`; tidak ada pesan error untuk non-OK.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat informasi bahwa perubahan status gagal atau mengapa gagal.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-016
 
@@ -184,6 +199,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Data direfresh dan modal ditutup; tidak ada success message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Keberhasilan hanya tersirat dari perubahan daftar atau modal yang hilang.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 ## Lembur HR
 
@@ -201,6 +217,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch awal tidak memiliki catch/loading/error state; tabel dapat menampilkan `Tidak ada pengajuan lembur ditemukan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah daftar lembur kosong atau data gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-018
 
@@ -209,6 +226,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; non-OK tidak menampilkan pesan.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa tindakan approve/reject gagal diproses.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-019
 
@@ -217,6 +235,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: State lokal diperbarui; tidak ada success message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Keberhasilan hanya tersirat dari perubahan status pada UI.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 ## Kunjungan HR
 
@@ -234,6 +253,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Error dicatat ke console, `visits` diset kosong, dan halaman dapat menampilkan daftar kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah kunjungan memang kosong atau data gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-021
 
@@ -242,6 +262,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya mencatat `Gagal update status kunjungan`; non-OK tidak menampilkan pesan.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa status kunjungan gagal diperbarui.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-022
 
@@ -250,6 +271,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: State lokal diperbarui; tidak ada success message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Keberhasilan hanya terlihat jika pengguna memperhatikan perubahan badge/status.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 ## Payroll HR
 
@@ -268,6 +290,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch awal memakai beberapa `.then` tanpa catch dan tanpa loading/error halaman.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah data payroll kosong atau data pendukung gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-024
 
@@ -276,6 +299,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Handler hanya memberi pesan jika `res.ok`. Tidak ada catch dan tidak ada pesan error untuk non-OK.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa pembuatan slip gagal atau alasan gagalnya.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-025
 
@@ -284,6 +308,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Ada browser confirm sebelum delete. Jika `res.ok`, item dihapus dari state. Tidak ada loading, success message, catch, atau error message untuk non-OK.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat status proses delete dan tidak mendapat informasi saat delete gagal.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Master Data HR
 
@@ -302,6 +327,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Loading ditampilkan saat fetch berjalan; catch hanya `console.error`; setelah selesai tab dapat kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui master data gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-027
 
@@ -310,6 +336,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Delete departemen hanya menampilkan toast jika `data.error` tersedia. Delete divisi, jabatan, dan lokasi tidak menampilkan pesan untuk non-OK.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin dapat melihat modal tertutup atau loading selesai tanpa tahu bahwa delete tidak berhasil.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Master Payroll HR
 
@@ -327,6 +354,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Loading ditampilkan saat fetch berjalan; catch hanya `console.error`; halaman dapat menampilkan `Belum ada komponen payroll`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah komponen payroll kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-029
 
@@ -335,6 +363,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Non-OK tidak menampilkan pesan; success hanya memanggil `fetchData`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat informasi eksplisit saat delete gagal atau berhasil.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## News HR
 
@@ -353,6 +382,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch awal tidak memiliki catch/loading/error state. Halaman dapat menampilkan `Belum ada berita`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah belum ada berita atau berita gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-031
 
@@ -361,6 +391,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Jika `res.ok`, modal ditutup dan list diupdate. Untuk non-OK tidak ada pesan; tidak ada catch pada submit.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa berita gagal disimpan atau alasan gagalnya.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-032
 
@@ -369,6 +400,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Success hanya mengubah state lokal. Non-OK dan network error tidak ditampilkan untuk delete/toggle pin.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat konfirmasi eksplisit ketika perubahan berhasil dan tidak mendapat pesan ketika perubahan gagal.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Reports, Audit, Letter Requests, Shifts, dan Asset Monitoring HR
 
@@ -388,6 +420,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch kosong `catch(() => {})`; filter dapat kosong tanpa pesan.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa pilihan filter laporan tidak lengkap karena data master gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-034
 
@@ -396,6 +429,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Informasi format hanya menyebut `.xlsx` walaupun tombol PDF tersedia.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Informasi yang terlihat tidak mencakup semua format output yang dapat dipilih.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-035
 
@@ -404,6 +438,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Loading row muncul saat fetch berjalan; catch hanya `console.error`; setelah loading selesai tabel dapat menampilkan `Tidak ada jejak audit yang ditemukan.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah tidak ada audit log atau data audit gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-036
 
@@ -412,6 +447,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Kode hanya memanggil `r.json()` lalu mengisi state jika data array; toast error hanya ada di catch network.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat error jika server menjawab non-OK dengan payload error.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-037
 
@@ -420,6 +456,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tidak ada catch/loading awal; halaman dapat menampilkan `Belum ada shift`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah shift belum dibuat atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-038
 
@@ -428,6 +465,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tombol menampilkan spinner saat `loading`; jika `res.ok`, modal ditutup. Tidak ada pesan error untuk non-OK dan tidak ada catch pada request submit.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui bahwa shift gagal disimpan.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-039
 
@@ -436,6 +474,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Delete memakai confirm modal. `onConfirm` hanya memproses `res.ok`; set default hanya refresh jika `res.ok`. Tidak ada success/error message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mendapat feedback eksplisit bahwa aksi berhasil atau gagal.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-040
 
@@ -444,6 +483,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error("Failed to load GA data")`; setelah loading selesai tabel dapat menampilkan `Tidak ada aset ditemukan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin HR tidak mengetahui apakah data aset kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-041
 
@@ -452,6 +492,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch history tidak memiliki catch; modal dapat berhenti di empty state `Belum ada riwayat perpindahan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin tidak mengetahui apakah aset tidak punya riwayat atau riwayat gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Portal Pegawai: Home, News, dan To-Do
 
@@ -470,6 +511,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch tidak memiliki catch/loading/error. UI dapat menampilkan fallback `Sobat`, `Tidak ada informasi aktif.`, total kehadiran 0, atau sisa cuti default.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah data pribadinya kosong/default atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-043
 
@@ -478,6 +520,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tidak ada loading/error/catch; halaman menampilkan `Tidak ada berita`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak dapat membedakan tidak ada berita dengan berita gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-044
 
@@ -486,6 +529,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tidak ada loading/error/catch; halaman menampilkan `Belum ada catatan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah to-do kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-045
 
@@ -494,6 +538,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Add todo hanya memperbarui list jika `res.ok`; tidak ada error message untuk non-OK dan tidak ada catch. Toggle/delete juga tidak punya loading atau error message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui bahwa perubahan to-do gagal disimpan.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 ## Portal Pegawai: Absensi dan Riwayat Kehadiran
 
@@ -511,14 +556,18 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Error hanya dicatat oleh client logger. `todayRecord` tetap `null`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui bahwa status absensi hari ini gagal dimuat; UI dapat tetap menganggap pegawai belum clock in.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-047
 
 - Alur atau fitur: Absensi pegawai, descriptor wajah (`src/app/employee/attendance/page.tsx`)
-- Kondisi spesifik yang bermasalah: Fetch `/api/auth/face` gagal. `[tidak yakin]`
+- Kondisi spesifik yang bermasalah: Fetch `/api/auth/face` gagal.
 - Apa yang pengguna lihat sekarang: Error hanya dicatat oleh client logger. Saat capture, `registeredDescriptor` tetap `null` dan UI memakai pesan `Wajah belum terdaftar. Daftarkan di Pengaturan.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Kondisi gagal memuat descriptor dan kondisi wajah belum terdaftar tidak dibedakan di UI.
 - Tingkat keparahan: Sedang
+- Alasan awal ditandai `[tidak yakin]`: Pada audit awal, kondisi ini terlihat dari pembacaan statis di fetch descriptor, tetapi perlu dipastikan apakah ada fallback UI lain yang membedakan `registeredDescriptor === null` karena tidak terdaftar dari `registeredDescriptor === null` karena fetch gagal.
+- Hasil verifikasi: Terkonfirmasi. Fetch `/api/auth/face` di halaman absensi hanya mencatat error ke client logger. Jika fetch gagal, `registeredDescriptor` tetap `null`; saat `captureAndVerify` berjalan, kondisi itu masuk ke cabang `not_registered`.
+- Status: Selesai diperbaiki setelah verifikasi.
 
 #### T-048
 
@@ -527,6 +576,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Kode hanya mencatat `Gagal mendapatkan 2D context dari canvas` dan return tanpa pesan pengguna.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui mengapa capture/verifikasi tidak berlanjut.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-049
 
@@ -535,6 +585,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Loading spinner hilang setelah `.finally`; halaman dapat menampilkan `Tidak ada data kehadiran` untuk periode yang dipilih.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah riwayat kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Portal Pegawai: Koreksi Absensi, Cuti, Lembur, dan Slip Gaji
 
@@ -554,6 +605,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Kode langsung membaca JSON dan hanya update state jika data array. Toast error hanya ada di catch network.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mendapat error jika server menjawab non-OK dengan payload error.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-051
 
@@ -562,6 +614,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tidak ada loading/error/catch; saldo cuti tetap default `{ total: 12, used: 0 }` dan riwayat dapat menampilkan `Belum ada pengajuan`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai dapat melihat saldo/riwayat default tanpa mengetahui bahwa data cuti gagal dimuat.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-052
 
@@ -570,6 +623,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Handler tidak memiliki try/catch; `setLoading(false)` hanya berada setelah response diproses.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mendapat pesan error koneksi saat pengajuan gagal terkirim.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-053
 
@@ -578,6 +632,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch awal tidak memiliki catch/loading/error; halaman dapat menampilkan `Belum ada pengajuan lembur`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah lembur kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-054
 
@@ -586,6 +641,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tidak ada loading/error/catch; halaman menampilkan `Belum ada slip gaji`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah slip belum diterbitkan atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## Portal Pegawai: Dokumen, Aset, Kunjungan, Monitoring, dan Settings
 
@@ -606,6 +662,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Kode hanya mengisi state jika data array; toast error hanya muncul di catch network.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mendapat pesan saat server menolak/ gagal mengirim list dengan response non-OK.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-056
 
@@ -614,6 +671,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Jika `res.ok`, assets/tickets diset. Untuk non-OK tidak ada pesan. Setelah loading selesai, UI dapat menampilkan `Tidak ada aset` dan `Belum ada tiket`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah benar tidak punya aset/tiket atau data gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-057
 
@@ -622,6 +680,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch kamera kosong. Tombol kamera berhenti loading tanpa pesan error.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui bahwa kamera gagal diakses, sementara clock in/out mensyaratkan minimal dua foto.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-058
 
@@ -630,6 +689,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Callback error `getCurrentPosition` mengembalikan `undefined`; peta tetap memakai koordinat default awal.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui bahwa posisi perangkat tidak berhasil dipakai sebagai titik awal peta.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-059
 
@@ -638,6 +698,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `setLoading(false)`; halaman dapat menampilkan `Tidak ada anggota tim yang ditemukan.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pegawai tidak mengetahui apakah memang tidak punya anggota tim atau data monitoring gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-060
 
@@ -646,14 +707,18 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Server component mengembalikan teks `Forbidden`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pesan tidak menjelaskan konteks akses monitoring atau langkah lanjutan.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-061
 
 - Alur atau fitur: Settings registrasi wajah, cek status wajah (`src/app/employee/settings/components/FaceRegistrationCard.tsx`)
-- Kondisi spesifik yang bermasalah: Fetch `/api/auth/face` gagal saat cek status awal. `[tidak yakin]`
+- Kondisi spesifik yang bermasalah: Fetch `/api/auth/face` gagal saat cek status awal.
 - Apa yang pengguna lihat sekarang: Catch mencatat error dan menyetel `faceStatus` menjadi `not_registered`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Status `Belum` dapat berarti wajah belum terdaftar atau status gagal dimuat.
 - Tingkat keparahan: Sedang
+- Alasan awal ditandai `[tidak yakin]`: Pada audit awal, perlu dikonfirmasi apakah ada pesan lain di komponen registrasi wajah yang muncul ketika cek status awal gagal.
+- Hasil verifikasi: Terkonfirmasi. Catch pada fetch `/api/auth/face` mencatat error dan mengubah `faceStatus` menjadi `not_registered`; badge idle menampilkan status `Belum`, sehingga gagal memuat status wajah tidak dibedakan dari wajah yang memang belum terdaftar.
+- Status: Selesai diperbaiki setelah verifikasi.
 
 #### T-062
 
@@ -662,6 +727,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Tombol langsung menjalankan DELETE dengan loading dan success/error message, tanpa dialog konfirmasi atau warning sebelum penghapusan.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mendapat peringatan eksplisit sebelum aksi yang menghapus data biometrik login/absensi.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## GA: Dashboard, Listing Aset, Form, dan Assign
 
@@ -681,6 +747,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: `try/finally` tidak memiliki catch. Setelah loading false, stats dapat null dan recent kosong tanpa pesan.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah aset tersedia kosong atau dashboard gagal memuat data.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-064
 
@@ -689,6 +756,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; table dapat menampilkan `Tidak ada aset ditemukan`, stats tetap default/null, dan filter kategori kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak dapat membedakan hasil filter kosong dari kegagalan memuat data.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-065
 
@@ -697,6 +765,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Saat loading tampil `Memuat konfigurasi form...`; jika gagal, error hanya dicatat ke console dan form tetap tampil dengan pilihan yang dapat kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui bahwa pilihan kategori/karyawan tidak lengkap.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-066
 
@@ -705,6 +774,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya console. Jika asset tidak terisi, halaman menampilkan `Aset tidak ditemukan.`; jika employees gagal, combobox dapat kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah aset benar tidak ada atau data gagal dimuat, dan tidak tahu jika daftar karyawan gagal tersedia.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## GA: Detail Aset, Riwayat, Inspeksi, Maintenance, Scan, dan Print
 
@@ -726,6 +796,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; setelah loading selesai, jika `asset` null halaman menampilkan `Aset tidak ditemukan.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak dapat membedakan aset benar tidak ada dengan data detail gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-068
 
@@ -734,6 +805,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Error hanya dicatat ke console; `historyLoaded` tetap diset setelah promise selesai, lalu tab dapat menampilkan `Belum ada riwayat mutasi.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah riwayat kosong atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-069
 
@@ -742,6 +814,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch lazy-load tidak memiliki catch. Untuk response non-OK, data diubah menjadi array kosong; untuk exception, loaded flag tidak diset.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA dapat melihat empty state yang tidak membedakan gagal load, atau loading `Memuat inspeksi...`/`Memuat riwayat servis...` yang tidak selesai pada exception.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-070
 
@@ -750,6 +823,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Non-OK memakai alert generik seperti `Gagal menyimpan inspeksi`; catch hanya `console.error` tanpa pesan pengguna.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mendapat alasan spesifik atau pesan apa pun untuk kegagalan network.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-071
 
@@ -758,6 +832,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; tidak ada pesan pengguna.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui bahwa dokumen BAST gagal dihapus.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-072
 
@@ -766,6 +841,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Callback error kedua kosong `(error) => {}`. UI dapat tetap menampilkan area scanner atau `Mempersiapkan Kamera...` tanpa pesan error.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui alasan kamera/scan tidak berjalan.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-073
 
@@ -774,6 +850,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; setelah loading selesai daftar pilihan dapat kosong tanpa pesan error.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah memang tidak ada aset yang bisa dicetak atau data gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 ## GA: Import, SIM Card, Categories, Tickets, dan Public QR
 
@@ -791,10 +868,13 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 #### T-074
 
 - Alur atau fitur: Import aset massal, template kategori (`src/app/ga/assets/import/page.tsx`)
-- Kondisi spesifik yang bermasalah: Fetch kategori untuk template gagal. `[tidak yakin]`
+- Kondisi spesifik yang bermasalah: Fetch kategori untuk template gagal.
 - Apa yang pengguna lihat sekarang: Catch kategori kosong. Validasi upload nanti dapat menampilkan `Sistem gagal memuat daftar kategori. Harap segarkan halaman.`, tetapi tombol `Unduh Template` tetap memakai `categoryList` yang dapat kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak diberi tahu saat template diunduh dengan daftar kategori yang tidak berhasil dimuat.
 - Tingkat keparahan: Rendah
+- Alasan awal ditandai `[tidak yakin]`: Pada audit awal, validasi upload memiliki pesan ketika daftar kategori kosong, tetapi belum dipastikan apakah alur `Unduh Template` memakai guard yang sama atau memiliki feedback terpisah.
+- Hasil verifikasi: Terkonfirmasi. Fetch kategori memakai fallback `r.ok ? r.json() : []` dan `catch(() => {})`; `downloadTemplate` langsung memanggil `generateBulkImportTemplate(categoryList)`, sehingga template tetap dapat diunduh dengan daftar kategori kosong tanpa pesan khusus.
+- Status: Selesai diperbaiki setelah verifikasi.
 
 #### T-075
 
@@ -803,6 +883,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; halaman dapat menampilkan `Tidak ada SIM Card ditemukan` dan stats 0.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah SIM kosong atau data SIM gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-076
 
@@ -811,6 +892,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Browser alert `Fitur Export Spreadsheet ditambahkan.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pesan menyatakan fitur ditambahkan, tetapi tidak ada file export yang dihasilkan oleh handler.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-077
 
@@ -819,6 +901,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Saat fetch berjalan tampil `Memuat konfigurasi form...`; jika gagal, error hanya dicatat ke console dan form tetap tampil dengan select karyawan kosong.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui bahwa pilihan karyawan gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-078
 
@@ -827,6 +910,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Catch hanya `console.error`; tabel dapat menampilkan `Tidak ada kategori data.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah kategori belum ada atau gagal dimuat.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-079
 
@@ -835,6 +919,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Create mengosongkan form dan refresh list. Edit menutup mode edit dan refresh list. Delete refresh list. Tidak ada success message.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Keberhasilan aksi hanya tersirat dari perubahan list/form.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-080
 
@@ -843,6 +928,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Toast error hanya ada di catch network. Untuk non-OK, tickets tetap default dan halaman dapat menampilkan `Tidak ada tiket`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Admin GA tidak mengetahui apakah tidak ada tiket atau server menolak/gagal mengirim data tiket.
 - Tingkat keparahan: Sedang
+- Status: Selesai diperbaiki.
 
 #### T-081
 
@@ -851,6 +937,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Toast generik `Gagal memperbarui status.`
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pesan tidak menampilkan alasan spesifik dari server jika ada.
 - Tingkat keparahan: Rendah
+- Status: Selesai diperbaiki.
 
 #### T-082
 
@@ -859,6 +946,7 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Fetch tidak memiliki catch/finally; loading spinner tetap menjadi state utama.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mendapat informasi bahwa data QR gagal dimuat.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 #### T-083
 
@@ -867,13 +955,17 @@ Audit dilakukan dengan membaca kode aplikasi. Aplikasi tidak dijalankan. Semua t
 - Apa yang pengguna lihat sekarang: Handler hanya memanggil `onSuccess()` jika `res.ok`; non-OK tidak menampilkan pesan dan catch hanya `console.error`.
 - Mengapa itu tidak cukup dari sudut pandang pengguna: Pengguna tidak mengetahui bahwa inspeksi gagal disimpan.
 - Tingkat keparahan: Tinggi
+- Status: Selesai diperbaiki.
 
 ## Ringkasan Keseluruhan
 
-- Total temuan cacat atau belum ditangani: 83
+- Total temuan audit: 83
 - Kritis/Tinggi: 13
 - Sedang: 56
 - Rendah: 14
+- Status selesai diperbaiki: 83
+- Status ditunda karena tidak yakin: 0
+- Status tidak dapat dikerjakan: 0
 - Alur dengan celah terbanyak: Manajemen Aset GA dan Public QR, terutama listing aset, form aset, detail aset, riwayat/inspeksi/maintenance, scanner, print label, SIM, categories, tickets, dan public QR.
 - Area HR dengan celah terbanyak: Operasional admin HR yang memuat data awal dan aksi status, terutama absensi, cuti, lembur, kunjungan, payroll, news, shifts, reports, audit, dan asset monitoring.
 - Area pegawai dengan celah terbanyak: Data awal portal pegawai dan alur harian, terutama home, news, to-do, absensi, cuti, slip gaji, aset, dokumen, kunjungan, monitoring, dan settings wajah.

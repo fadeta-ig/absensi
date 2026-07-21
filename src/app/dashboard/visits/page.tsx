@@ -3,34 +3,44 @@
 import { useEffect, useState } from "react";
 import { MapPinned, Search, Filter } from "lucide-react";
 import { VisitStatus } from "@/types";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 import { VisitListTable } from "./components/VisitListTable";
 import { VisitDetailModal } from "./components/VisitDetailModal";
 import { VisitReport, STATUS_CONFIG, FILTER_OPTIONS } from "./types";
 
 export default function DashboardVisitsPage() {
+    const toast = useToast();
     const [visits, setVisits] = useState<VisitReport[]>([]);
     const [search, setSearch] = useState("");
     const [filterStatus, setFilterStatus] = useState<"all" | "unchecked" | "checked">("all");
     const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
     const [updating, setUpdating] = useState<string | null>(null);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     useEffect(() => {
-        fetch("/api/visits")
-            .then((r) => r.json())
-            .then((data) => {
-                if (Array.isArray(data)) {
-                    setVisits(data);
-                } else {
-                    console.error("Failed to fetch visits:", data);
-                    setVisits([]);
-                }
-            })
-            .catch((err) => {
-                console.error("Error fetching visits:", err);
+        const loadVisits = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/visits");
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat laporan kunjungan."));
+                const data = await res.json();
+                setVisits(Array.isArray(data) ? data : []);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat laporan kunjungan.";
+                setLoadError(message);
                 setVisits([]);
-            });
-    }, []);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadVisits();
+    }, [toast]);
 
     const handleStatusUpdate = async (id: string, isChecked: boolean) => {
         setUpdating(id);
@@ -44,15 +54,16 @@ export default function DashboardVisitsPage() {
                     hrChecked: isChecked,
                 }),
             });
-            if (res.ok) {
-                const updated = await res.json();
-                setVisits((prev) => prev.map((v) => (v.id === id ? updated : v)));
-                if (selectedVisit?.id === id) setSelectedVisit(updated);
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui status kunjungan."));
+            const updated = await res.json();
+            setVisits((prev) => prev.map((v) => (v.id === id ? updated : v)));
+            if (selectedVisit?.id === id) setSelectedVisit(updated);
+            toast(isChecked ? "Kunjungan ditandai sudah dicek." : "Status cek kunjungan dibatalkan.", "success");
         } catch (err) {
-            console.error("Gagal update status kunjungan:", err);
+            toast(err instanceof Error ? err.message : "Gagal memperbarui status kunjungan.", "error");
+        } finally {
+            setUpdating(null);
         }
-        setUpdating(null);
     };
 
     const filtered = visits.filter((v) => {
@@ -137,6 +148,8 @@ export default function DashboardVisitsPage() {
             {/* Table */}
             <VisitListTable
                 filtered={filtered}
+                loading={initialLoading}
+                error={loadError}
                 updating={updating}
                 setSelectedVisit={setSelectedVisit}
                 handleStatusUpdate={handleStatusUpdate}

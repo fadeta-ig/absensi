@@ -40,7 +40,7 @@ export const FACE_SCAN_INTERVAL_MS = 180;
 const FACE_DETECTION_MIN_CONFIDENCE = 0.20;
 
 let modelsLoaded = false;
-let modelsLoading = false;
+let modelLoadPromise: Promise<void> | null = null;
 
 /**
  * Load face-api.js models dari /models/.
@@ -48,40 +48,30 @@ let modelsLoading = false;
  */
 export async function loadFaceModels(): Promise<void> {
     if (modelsLoaded) return;
+    if (modelLoadPromise) return modelLoadPromise;
 
-    if (modelsLoading) {
-        // Tunggu load yang sedang berjalan selesai
-        await new Promise<void>((resolve) => {
-            const check = setInterval(() => {
-                if (modelsLoaded || !modelsLoading) {
-                    clearInterval(check);
-                    resolve();
-                }
-            }, 200);
-        });
-        return;
-    }
-
-    modelsLoading = true;
     const MODEL_URL = "/models";
 
-    try {
+    modelLoadPromise = (async () => {
         await Promise.all([
             faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
             faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
             faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
         modelsLoaded = true;
-    } catch (err) {
-        modelsLoading = false;
-        log.error("Gagal load face-api models", {
-            error: err instanceof Error ? err.message : String(err),
-            modelUrl: MODEL_URL,
+    })()
+        .catch((err) => {
+            log.error("Gagal load face-api models", {
+                error: err instanceof Error ? err.message : String(err),
+                modelUrl: MODEL_URL,
+            });
+            throw err;
+        })
+        .finally(() => {
+            modelLoadPromise = null;
         });
-        throw err;
-    }
 
-    modelsLoading = false;
+    return modelLoadPromise;
 }
 
 /**
@@ -129,6 +119,7 @@ interface MultiFrameDetectionOptions {
     attempts?: number;
     minimumDetections?: number;
     intervalMs?: number;
+    onAttempt?: (attempt: number, total: number, detections: number) => void;
 }
 
 /**
@@ -149,6 +140,7 @@ export async function detectFaceDescriptors(
     const descriptors: Float32Array[] = [];
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
+        options.onAttempt?.(attempt + 1, attempts, descriptors.length);
         const descriptor = await detectFaceDescriptor(input);
         if (descriptor) descriptors.push(descriptor);
 

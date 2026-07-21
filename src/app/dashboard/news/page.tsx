@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Megaphone, Plus, Pencil, Trash2, Pin, X, Loader2, Upload, Paperclip, FileText } from "lucide-react";
+import { AlertCircle, Megaphone, Plus, Pencil, Trash2, Pin, X, Loader2, Upload, Paperclip, FileText } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface NewsItem {
     id: string; title: string; content: string;
@@ -19,6 +20,9 @@ export default function NewsManagementPage() {
     const [editId, setEditId] = useState<string | null>(null);
     const [form, setForm] = useState(INIT_FORM);
     const [loading, setLoading] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const [actionId, setActionId] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -26,8 +30,25 @@ export default function NewsManagementPage() {
     const toast = useToast();
 
     useEffect(() => {
-        fetch("/api/news").then((r) => r.json()).then(setNews);
-    }, []);
+        const loadNews = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/news");
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat berita."));
+                const data = await res.json();
+                setNews(Array.isArray(data) ? data : []);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat berita.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadNews();
+    }, [toast]);
 
     const uploadFile = async (file: File): Promise<{ url: string; name: string } | null> => {
         setUploading(true);
@@ -76,16 +97,23 @@ export default function NewsManagementPage() {
             createdAt: new Date().toISOString(),
         };
 
-        const res = await fetch("/api/news", {
-            method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-        });
-        if (res.ok) {
+        try {
+            const res = await fetch("/api/news", {
+                method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, editId ? "Gagal menyimpan perubahan berita." : "Gagal mempublikasikan berita."));
+
             const data = await res.json();
             if (editId) setNews((prev) => prev.map((n) => (n.id === editId ? data : n)));
             else setNews((prev) => [data, ...prev]);
+            toast(editId ? "Berita berhasil diperbarui." : "Berita berhasil dipublikasikan.", "success");
             closeForm();
+        } catch (error) {
+            toast(error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan berita." : "Gagal mempublikasikan berita.", "error");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleDelete = async (id: string) => {
@@ -95,19 +123,34 @@ export default function NewsManagementPage() {
             variant: "danger",
             confirmLabel: "Ya, Hapus",
             onConfirm: async () => {
-                const res = await fetch(`/api/news?id=${id}`, { method: "DELETE" });
-                if (res.ok) setNews((prev) => prev.filter((n) => n.id !== id));
+                try {
+                    const res = await fetch(`/api/news?id=${id}`, { method: "DELETE" });
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus berita."));
+                    setNews((prev) => prev.filter((n) => n.id !== id));
+                    toast("Berita berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus berita.", "error");
+                }
             },
         });
     };
 
     const togglePin = async (item: NewsItem) => {
-        const res = await fetch("/api/news", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: item.id, isPinned: !item.isPinned }),
-        });
-        if (res.ok) setNews((prev) => prev.map((n) => (n.id === item.id ? { ...n, isPinned: !n.isPinned } : n)));
+        setActionId(item.id);
+        try {
+            const res = await fetch("/api/news", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: item.id, isPinned: !item.isPinned }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status pin berita."));
+            setNews((prev) => prev.map((n) => (n.id === item.id ? { ...n, isPinned: !n.isPinned } : n)));
+            toast(!item.isPinned ? "Berita berhasil di-pin." : "Pin berita berhasil dilepas.", "success");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal mengubah status pin berita.", "error");
+        } finally {
+            setActionId(null);
+        }
     };
 
     const openEdit = (item: NewsItem) => {
@@ -156,14 +199,26 @@ export default function NewsManagementPage() {
                         <Megaphone className="w-5 h-5 text-[var(--primary)]" />
                         Manajemen Berita
                     </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">{news.length} berita terpublikasi</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">{initialLoading ? "Memuat berita..." : `${news.length} berita terpublikasi`}</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
                     <Plus className="w-4 h-4" /> Buat Berita
                 </button>
             </div>
 
-            {news.length === 0 ? (
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
+            {initialLoading ? (
+                <div className="card p-12 text-center text-[var(--text-muted)]">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                    <p className="text-sm font-medium">Memuat berita...</p>
+                </div>
+            ) : news.length === 0 ? (
                 <div className="card p-12 text-center">
                     <Megaphone className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada berita</p>
@@ -188,8 +243,8 @@ export default function NewsManagementPage() {
                                     <p className="text-[10px] text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
-                                    <button onClick={() => togglePin(item)} className={`btn btn-ghost btn-sm !p-1.5 ${item.isPinned ? "text-[var(--primary)]" : ""}`} title={item.isPinned ? "Unpin" : "Pin"}>
-                                        <Pin className="w-3.5 h-3.5" />
+                                    <button onClick={() => togglePin(item)} disabled={actionId === item.id} className={`btn btn-ghost btn-sm !p-1.5 ${item.isPinned ? "text-[var(--primary)]" : ""}`} title={item.isPinned ? "Unpin" : "Pin"}>
+                                        {actionId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pin className="w-3.5 h-3.5" />}
                                     </button>
                                     <button onClick={() => openEdit(item)} className="btn btn-ghost btn-sm !p-1.5">
                                         <Pencil className="w-3.5 h-3.5" />

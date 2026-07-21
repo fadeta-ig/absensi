@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2 } from "lucide-react";
+import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ export function EmployeeNotificationPanel() {
     const [notifications, setNotifications] = useState<EmployeeNotification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [readIds, setReadIds] = useState<Set<string>>(new Set());
     const panelRef = useRef<HTMLDivElement>(null);
     const hasFetched = useRef(false);
@@ -59,14 +61,15 @@ export function EmployeeNotificationPanel() {
     const fetchNotifications = useCallback(async () => {
         if (loading) return;
         setLoading(true);
+        setLoadError(null);
         try {
             const res = await fetch("/api/notifications/employee");
-            if (!res.ok) return;
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
             const data = await res.json() as NotifResponse;
             setNotifications(data.notifications ?? []);
             setUnreadCount(data.unread ?? 0);
-        } catch {
-            // silently ignore — notif panel is non-critical
+        } catch (error) {
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
         } finally {
             setLoading(false);
         }
@@ -83,9 +86,12 @@ export function EmployeeNotificationPanel() {
     // Fetch badge count saat mount (background)
     useEffect(() => {
         fetch("/api/notifications/employee")
-            .then((r) => r.json())
+            .then(async (r) => {
+                if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat notifikasi."));
+                return r.json();
+            })
             .then((data: NotifResponse) => setUnreadCount(data.unread ?? 0))
-            .catch(() => {/* silently ignore */});
+            .catch((error) => setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi."));
     }, []);
 
     // Close on outside click
@@ -164,6 +170,13 @@ export function EmployeeNotificationPanel() {
                             <div className="flex items-center justify-center py-10">
                                 <Loader2 className="w-5 h-5 animate-spin text-[var(--primary)] opacity-50" />
                             </div>
+                        ) : loadError ? (
+                            <div className="py-10 text-center px-6">
+                                <AlertCircle className="w-8 h-8 text-[var(--destructive)] opacity-70 mx-auto mb-2" />
+                                <p className="text-xs text-[var(--destructive)] font-medium">
+                                    {loadError}
+                                </p>
+                            </div>
                         ) : notifications.length === 0 ? (
                             <div className="py-10 text-center">
                                 <Bell className="w-8 h-8 text-[var(--text-muted)] opacity-20 mx-auto mb-2" />
@@ -214,7 +227,7 @@ export function EmployeeNotificationPanel() {
                     </div>
 
                     {/* Footer */}
-                    {notifications.length > 0 && (
+                    {(notifications.length > 0 || loadError) && (
                         <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--secondary)]/30">
                             <button
                                 onClick={fetchNotifications}

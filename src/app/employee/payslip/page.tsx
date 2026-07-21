@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Download, X, Eye } from "lucide-react";
+import { FileText, Download, X, Eye, Loader2, AlertCircle } from "lucide-react";
 import { exportPayslipPdf } from "@/lib/export";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface PayslipItem { type: "ALLOWANCE" | "DEDUCTION"; name: string; amount: number; }
 interface Payslip {
@@ -14,14 +15,33 @@ interface Payslip {
 export default function PayslipPage() {
     const [payslips, setPayslips] = useState<Payslip[]>([]);
     const [selected, setSelected] = useState<Payslip | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
 
     useEffect(() => {
-        fetch("/api/payslips").then((r) => r.json()).then((data) => {
-            if (Array.isArray(data)) setPayslips(data);
-        });
+        const loadPayslips = async () => {
+            setLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/payslips");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat slip gaji."));
+                }
+
+                const data = await res.json();
+                setPayslips(Array.isArray(data) ? data : []);
+            } catch (err) {
+                setPayslips([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat slip gaji.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadPayslips();
     }, []);
 
     const fmt = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
@@ -56,7 +76,17 @@ export default function PayslipPage() {
                 <p className="text-sm text-[var(--text-muted)] mt-1">Riwayat slip gaji Anda</p>
             </div>
 
-            {payslips.length === 0 ? (
+            {loading ? (
+                <div className="card p-12 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Memuat slip gaji...</p>
+                </div>
+            ) : loadError ? (
+                <div className="card p-12 text-center">
+                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
+                </div>
+            ) : payslips.length === 0 ? (
                 <div className="card p-12 text-center">
                     <FileText className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada slip gaji</p>

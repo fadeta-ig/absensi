@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Search, ChevronRight, Activity, Layers } from "lucide-react";
+import { Users, Search, ChevronRight, Activity, Layers, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface Employee {
     id: string;
@@ -21,15 +22,29 @@ export default function MonitoringPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     useEffect(() => {
-        fetch("/api/employees")
-            .then((r) => r.json())
-            .then((data) => {
+        const loadEmployees = async () => {
+            setLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/employees");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat data monitoring tim."));
+                }
+
+                const data = await res.json();
                 setEmployees(Array.isArray(data) ? data : []);
+            } catch (err) {
+                setEmployees([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat data monitoring tim.");
+            } finally {
                 setLoading(false);
-            })
-            .catch(() => setLoading(false));
+            }
+        };
+
+        void loadEmployees();
     }, []);
 
     const filtered = employees.filter((e) =>
@@ -74,7 +89,16 @@ export default function MonitoringPage() {
 
             {/* Grid kartu karyawan */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-                {filtered.length > 0 ? filtered.map((e) => (
+                {loadError ? (
+                    <div style={{
+                        gridColumn: "1 / -1", padding: "48px", textAlign: "center",
+                        color: "var(--destructive)", background: "var(--card)",
+                        borderRadius: "12px", border: "1px solid var(--border)"
+                    }}>
+                        <AlertCircle style={{ width: "32px", height: "32px", margin: "0 auto 8px", opacity: 0.7 }} />
+                        <p style={{ fontWeight: 600 }}>{loadError}</p>
+                    </div>
+                ) : filtered.length > 0 ? filtered.map((e) => (
                     <div
                         key={e.id}
                         className="card"

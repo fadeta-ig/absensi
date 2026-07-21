@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clock, Calendar, CheckCircle2, History, XCircle, Send, AlertCircle } from "lucide-react";
+import { Clock, Calendar, CheckCircle2, History, XCircle, Send, AlertCircle, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface AttendanceCorrectionItem {
     id: string;
@@ -15,6 +16,8 @@ interface AttendanceCorrectionItem {
 
 export default function CorrectionPage() {
     const [history, setHistory] = useState<AttendanceCorrectionItem[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(true);
+    const [historyError, setHistoryError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState<{type: "success" | "error", text: string} | null>(null);
 
@@ -24,9 +27,22 @@ export default function CorrectionPage() {
     const [reason, setReason] = useState("");
 
     const fetchHistory = async () => {
-        const res = await fetch("/api/attendance/correction");
-        const data = await res.json();
-        if (Array.isArray(data)) setHistory(data);
+        setHistoryLoading(true);
+        setHistoryError("");
+        try {
+            const res = await fetch("/api/attendance/correction");
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat pengajuan."));
+            }
+
+            const data = await res.json();
+            setHistory(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setHistory([]);
+            setHistoryError(err instanceof Error ? err.message : "Gagal memuat riwayat pengajuan.");
+        } finally {
+            setHistoryLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -177,7 +193,21 @@ export default function CorrectionPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {history.length === 0 ? (
+                                    {historyLoading ? (
+                                        <tr>
+                                            <td colSpan={4} className="text-center py-8 text-[var(--text-secondary)]">
+                                                <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-60" />
+                                                Memuat riwayat pengajuan...
+                                            </td>
+                                        </tr>
+                                    ) : historyError ? (
+                                        <tr>
+                                            <td colSpan={4} className="text-center py-8 text-[var(--destructive)]">
+                                                <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-70" />
+                                                <span className="font-semibold">{historyError}</span>
+                                            </td>
+                                        </tr>
+                                    ) : history.length === 0 ? (
                                         <tr>
                                             <td colSpan={4} className="text-center py-8 text-[var(--text-secondary)] italic">Belum ada riwayat pengajuan.</td>
                                         </tr>

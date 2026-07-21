@@ -6,6 +6,7 @@ import {
     Calendar, AlertCircle, ClipboardCheck, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,14 +86,19 @@ export default function AttendanceCorrectionPage() {
 
     // ── Fetch List ─────────────────────────────────────────────────────────────
     const fetchList = useCallback(async () => {
+        setLoadingList(true);
         try {
             const res = await fetch("/api/attendance/correction");
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat data koreksi"));
+            }
+
             const data = await res.json() as CorrectionRequest[];
             if (Array.isArray(data)) {
                 setRequests(data.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
             }
-        } catch {
-            toast("Gagal memuat data koreksi", "error");
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal memuat data koreksi", "error");
         } finally {
             setLoadingList(false);
         }

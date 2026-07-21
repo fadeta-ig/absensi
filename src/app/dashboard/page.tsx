@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Activity, RefreshCw } from "lucide-react";
+import { Activity, AlertCircle, RefreshCw } from "lucide-react";
 import { CalendarOff } from "lucide-react";
 import LeaveCalendar from "@/components/LeaveCalendar";
 import StatsGrid from "@/components/dashboard/StatsGrid";
@@ -13,6 +13,8 @@ import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import PendingLeaveList from "@/components/dashboard/PendingLeaveList";
 import TodayAttendance from "@/components/dashboard/TodayAttendance";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 import { toWIBDateString } from "@/lib/timezone";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -37,15 +39,20 @@ interface NewsItem { id: string; title: string; category: string; createdAt: str
 
 // ─── Page ─────────────────────────────────────────────────────
 export default function DashboardPage() {
+    const toast = useToast();
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [news, setNews] = useState<NewsItem[]>([]);
     const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const fetchAllData = useCallback(async () => {
+    const fetchAllData = useCallback(async (showToast = false) => {
+        setRefreshing(true);
         try {
             const [empRes, attRes, leaveRes, newsRes, analyticsRes] = await Promise.all([
                 fetch("/api/employees"),
@@ -54,6 +61,11 @@ export default function DashboardPage() {
                 fetch("/api/news"),
                 fetch("/api/analytics"),
             ]);
+
+            const failedResponse = [empRes, attRes, leaveRes, newsRes, analyticsRes].find((res) => !res.ok);
+            if (failedResponse) {
+                throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat data dashboard."));
+            }
 
             const [empData, attData, leaveData, newsData, analyticsData] = await Promise.all([
                 empRes.json(),
@@ -68,9 +80,18 @@ export default function DashboardPage() {
             if (Array.isArray(leaveData)) setLeaves(leaveData);
             if (Array.isArray(newsData)) setNews(newsData);
             if (analyticsData?.summary) setAnalytics(analyticsData);
+            setLoadError(null);
             setLastUpdated(new Date());
-        } catch { /* silent refresh failure */ }
-    }, []);
+            if (showToast) toast("Dashboard berhasil diperbarui.", "success");
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Gagal memuat data dashboard.";
+            setLoadError(message);
+            if (showToast) toast(message, "error");
+        } finally {
+            setInitialLoading(false);
+            setRefreshing(false);
+        }
+    }, [toast]);
 
     useEffect(() => {
         const initialFetchTimer = setTimeout(() => void fetchAllData(), 0);
@@ -124,12 +145,13 @@ export default function DashboardPage() {
                         <Activity className="w-3.5 h-3.5 text-[var(--primary)]" />
                         <span className="text-xs font-semibold text-[var(--primary)]">Sistem Aktif</span>
                     </div>
-                    <button
-                        onClick={fetchAllData}
+                <button
+                        onClick={() => void fetchAllData(true)}
+                        disabled={refreshing}
                         className="px-3 py-1.5 bg-[var(--secondary)] rounded-full flex items-center gap-1.5 hover:bg-[var(--border)] transition-colors"
                         title="Refresh sekarang"
                     >
-                        <RefreshCw className="w-3 h-3 text-[var(--text-muted)]" />
+                        <RefreshCw className={`w-3 h-3 text-[var(--text-muted)] ${refreshing ? "animate-spin" : ""}`} />
                         <span className="text-[10px] font-medium text-[var(--text-muted)]">
                             {lastUpdated.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                         </span>
@@ -137,7 +159,14 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {!analytics ? (
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
+            {initialLoading && !analytics ? (
                 <div className="space-y-6">
                     <Skeleton className="h-28 w-full" />
                     <Skeleton className="h-20 w-full" />
@@ -146,7 +175,7 @@ export default function DashboardPage() {
                         <Skeleton className="h-64 w-full lg:col-span-2" />
                     </div>
                 </div>
-            ) : (
+            ) : analytics ? (
                 <>
                     <StatsGrid
                         activeCount={activeEmps.length}
@@ -200,6 +229,12 @@ export default function DashboardPage() {
                         getEmployeeName={getEmployeeName}
                     />
                 </>
+            ) : (
+                <div className="card p-12 text-center">
+                    <AlertCircle className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Data dashboard belum dapat dimuat</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Gunakan tombol refresh untuk mencoba memuat ulang.</p>
+                </div>
             )}
         </div>
     );

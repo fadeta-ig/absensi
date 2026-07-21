@@ -36,14 +36,22 @@ yarn-error.log*
 /backups/
 *.log
 
+# runtime uploads (file user/upload production tidak masuk repository)
+/public/uploads/
+
 # PWA generated files (digenerate saat build, berbeda tiap environment)
 /public/sw.js
 /public/sw.js.map
 /public/workbox-*.js
 /public/workbox-*.js.map
+/public/worker-*.js
+/public/worker-*.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel

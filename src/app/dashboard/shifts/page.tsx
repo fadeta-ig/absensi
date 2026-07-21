@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer, Copy } from "lucide-react";
+import { AlertCircle, Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer, Copy } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface ShiftDay {
     dayOfWeek: number;
@@ -43,35 +45,63 @@ const INIT_FORM = {
 };
 
 export default function ShiftsPage() {
+    const confirm = useConfirm();
+    const toast = useToast();
     const [shifts, setShifts] = useState<WorkShift[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [form, setForm] = useState(INIT_FORM);
     const [loading, setLoading] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
+    const [actionId, setActionId] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch("/api/shifts").then((r) => r.json()).then(setShifts);
-    }, []);
+        const loadShifts = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/shifts");
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data shift."));
+                const data = await res.json();
+                setShifts(Array.isArray(data) ? data : []);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat data shift.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadShifts();
+    }, [toast]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         const method = editId ? "PUT" : "POST";
         const body = editId ? { ...form, id: editId } : form;
-        const res = await fetch("/api/shifts", {
-            method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-        });
-        if (res.ok) {
-            const latest = await fetch("/api/shifts").then((r) => r.json());
-            setShifts(latest);
-            closeForm();
-        }
-        setLoading(false);
-    };
+        try {
+            const res = await fetch("/api/shifts", {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift."));
 
-    const confirm = useConfirm();
+            const latestRes = await fetch("/api/shifts");
+            if (!latestRes.ok) throw new Error(await getResponseErrorMessage(latestRes, "Shift tersimpan, tetapi data terbaru gagal dimuat."));
+            const latest = await latestRes.json();
+            setShifts(Array.isArray(latest) ? latest : []);
+            closeForm();
+            toast(editId ? "Shift berhasil diperbarui." : "Shift berhasil ditambahkan.", "success");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift.", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleDelete = async (id: string) => {
         confirm({
@@ -80,21 +110,37 @@ export default function ShiftsPage() {
             variant: "danger",
             confirmLabel: "Ya, Hapus",
             onConfirm: async () => {
-                const res = await fetch(`/api/shifts?id=${id}`, { method: "DELETE" });
-                if (res.ok) setShifts((prev) => prev.filter((s) => s.id !== id));
+                try {
+                    const res = await fetch(`/api/shifts?id=${id}`, { method: "DELETE" });
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus shift."));
+                    setShifts((prev) => prev.filter((s) => s.id !== id));
+                    toast("Shift berhasil dihapus.", "success");
+                } catch (error) {
+                    toast(error instanceof Error ? error.message : "Gagal menghapus shift.", "error");
+                }
             },
         });
     };
 
     const handleSetDefault = async (shift: WorkShift) => {
-        const res = await fetch("/api/shifts", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: shift.id, isDefault: true }),
-        });
-        if (res.ok) {
-            const latest = await fetch("/api/shifts").then((r) => r.json());
-            setShifts(latest);
+        setActionId(shift.id);
+        try {
+            const res = await fetch("/api/shifts", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: shift.id, isDefault: true }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menjadikan shift sebagai default."));
+
+            const latestRes = await fetch("/api/shifts");
+            if (!latestRes.ok) throw new Error(await getResponseErrorMessage(latestRes, "Default shift tersimpan, tetapi data terbaru gagal dimuat."));
+            const latest = await latestRes.json();
+            setShifts(Array.isArray(latest) ? latest : []);
+            toast("Shift default berhasil diperbarui.", "success");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal menjadikan shift sebagai default.", "error");
+        } finally {
+            setActionId(null);
         }
     };
 
@@ -180,8 +226,20 @@ export default function ShiftsPage() {
                 </button>
             </div>
 
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
+
             {/* Shift Cards */}
-            {shifts.length === 0 ? (
+            {initialLoading ? (
+                <div className="card p-12 text-center text-[var(--text-muted)]">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                    <p className="text-sm font-medium">Memuat data shift...</p>
+                </div>
+            ) : shifts.length === 0 ? (
                 <div className="card p-12 text-center">
                     <Clock className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada shift</p>
@@ -252,8 +310,8 @@ export default function ShiftsPage() {
 
                             <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-[var(--border)]">
                                 {!shift.isDefault && (
-                                    <button onClick={() => handleSetDefault(shift)} className="btn btn-ghost btn-sm text-xs gap-1 flex-1">
-                                        <Star className="w-3 h-3" /> Set Default
+                                    <button onClick={() => handleSetDefault(shift)} disabled={actionId === shift.id} className="btn btn-ghost btn-sm text-xs gap-1 flex-1">
+                                        {actionId === shift.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Star className="w-3 h-3" />} Set Default
                                     </button>
                                 )}
                                 <button onClick={() => openEdit(shift)} className="btn btn-ghost btn-sm !p-1.5">

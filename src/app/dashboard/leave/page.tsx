@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import {
+    AlertCircle,
     CalendarOff,
     CheckCircle,
     XCircle,
@@ -17,6 +18,8 @@ import {
     Loader2
 } from "lucide-react";
 import { formatIndonesianDate } from "@/lib/utils";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface LeaveRequest {
     id: string;
@@ -32,6 +35,7 @@ interface LeaveRequest {
 }
 
 export default function LeaveManagementPage() {
+    const toast = useToast();
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [filterStatus, setFilterStatus] = useState("all");
     const [filterType, setFilterType] = useState("all");
@@ -41,16 +45,33 @@ export default function LeaveManagementPage() {
     const [editStartDate, setEditStartDate] = useState("");
     const [editEndDate, setEditEndDate] = useState("");
     const [isUpdating, setIsUpdating] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
-    useEffect(() => {
-        fetchLeaves();
-    }, []);
-
-    const fetchLeaves = async () => {
+    const fetchLeaves = useCallback(async () => {
         const r = await fetch("/api/leave");
+        if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat data cuti."));
         const d = await r.json();
         if (Array.isArray(d)) setLeaves(d);
-    };
+    }, []);
+
+    useEffect(() => {
+        const loadInitialData = async () => {
+            setInitialLoading(true);
+            setLoadError("");
+            try {
+                await fetchLeaves();
+            } catch (error) {
+                const message = error instanceof Error ? error.message : "Gagal memuat data cuti.";
+                setLoadError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadInitialData();
+    }, [fetchLeaves, toast]);
 
     const stats = useMemo(() => ({
         total: leaves.length,
@@ -90,9 +111,11 @@ export default function LeaveManagementPage() {
                     endDate: l.endDate,
                 }),
             });
-            if (res.ok) {
-                await fetchLeaves();
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui status cuti."));
+            await fetchLeaves();
+            toast(status === "approved" ? "Pengajuan cuti disetujui." : "Pengajuan cuti ditolak.", "success");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal memperbarui status cuti.", "error");
         } finally {
             setIsUpdating(false);
         }
@@ -111,11 +134,13 @@ export default function LeaveManagementPage() {
                     endDate: editEndDate,
                 }),
             });
-            if (res.ok) {
-                await fetchLeaves();
-                setIsModalOpen(false);
-                setSelectedLeave(null);
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui status cuti."));
+            await fetchLeaves();
+            setIsModalOpen(false);
+            setSelectedLeave(null);
+            toast(status === "approved" ? "Pengajuan cuti disetujui." : "Pengajuan cuti ditolak.", "success");
+        } catch (error) {
+            toast(error instanceof Error ? error.message : "Gagal memperbarui status cuti.", "error");
         } finally {
             setIsUpdating(false);
         }
@@ -173,6 +198,13 @@ export default function LeaveManagementPage() {
                     <p className="text-sm text-[var(--text-muted)] mt-1">Kelola dan tinjau pengajuan cuti karyawan</p>
                 </div>
             </div>
+
+            {loadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{loadError}</span>
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -232,7 +264,12 @@ export default function LeaveManagementPage() {
             </div>
 
             {/* List */}
-            {filtered.length === 0 ? (
+            {initialLoading ? (
+                <div className="card p-12 text-center text-[var(--text-muted)]">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                    <p className="text-sm font-medium">Memuat pengajuan cuti...</p>
+                </div>
+            ) : filtered.length === 0 ? (
                 <div className="card p-12 text-center">
                     <CalendarOff className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada pengajuan cuti ditemukan</p>
@@ -296,7 +333,7 @@ export default function LeaveManagementPage() {
                                                     className="btn btn-success btn-sm !px-2"
                                                     title="Setujui Cuti"
                                                 >
-                                                    <Check className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Setujui</span>
+                                                    {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} <span className="hidden sm:inline">Setujui</span>
                                                 </button>
                                                 <button
                                                     onClick={() => handleQuickAction(l, "rejected")}
@@ -304,7 +341,7 @@ export default function LeaveManagementPage() {
                                                     className="btn btn-danger btn-sm !px-2"
                                                     title="Tolak Cuti"
                                                 >
-                                                    <X className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Tolak</span>
+                                                    {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />} <span className="hidden sm:inline">Tolak</span>
                                                 </button>
                                             </div>
                                         )}

@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { LucideIcon, LogOut, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LucideIcon, LogOut, Loader2, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useToast } from "@/components/Toast";
+import { consumeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -51,6 +53,8 @@ interface AppShellProps {
     mobileBottomNav?: React.ReactNode;
     /** Callback logout */
     onLogout: () => void;
+    /** Status proses logout */
+    logoutLoading?: boolean;
     children: React.ReactNode;
 }
 
@@ -67,8 +71,10 @@ export default function AppShell({
     mobileHeaderRight,
     mobileBottomNav,
     onLogout,
+    logoutLoading = false,
     children,
 }: AppShellProps) {
+    const toast = useToast();
     const router   = useRouter();
     const pathname  = usePathname();
     const searchParams = useSearchParams();
@@ -99,6 +105,11 @@ export default function AppShell({
         return localStorage.getItem(storageKey) === "true";
     });
     const [openMenus, setOpenMenus] = useState<string[]>([]);
+
+    useEffect(() => {
+        const message = consumeAuthRedirectMessage();
+        if (message) toast(message, "warning");
+    }, [toast]);
 
     // Auto-expand sub-menu jika sub-item aktif (termasuk URL dengan query params)
     useEffect(() => {
@@ -292,11 +303,12 @@ export default function AppShell({
                 <div className={`p-3 border-t border-[var(--border)] ${sidebarCollapsed ? "lg:flex lg:justify-center" : ""}`}>
                     <button
                         onClick={onLogout}
+                        disabled={logoutLoading}
                         title={sidebarCollapsed ? "Keluar" : undefined}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}
                     >
-                        <LogOut className="w-[18px] h-[18px] shrink-0" />
-                        <span className={sidebarCollapsed ? "lg:hidden" : ""}>Keluar</span>
+                        {logoutLoading ? <Loader2 className="w-[18px] h-[18px] shrink-0 animate-spin" /> : <LogOut className="w-[18px] h-[18px] shrink-0" />}
+                        <span className={sidebarCollapsed ? "lg:hidden" : ""}>{logoutLoading ? "Keluar..." : "Keluar"}</span>
                     </button>
                 </div>
             </aside>

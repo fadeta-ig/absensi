@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe, Download, FileText, Paperclip } from "lucide-react";
+import { Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe, Download, FileText, Paperclip, Loader2, AlertCircle } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface NewsItem {
     id: string;
@@ -19,12 +20,33 @@ export default function NewsPage() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [selected, setSelected] = useState<NewsItem | null>(null);
     const [filter, setFilter] = useState("all");
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 5;
 
     useEffect(() => {
-        fetch("/api/news").then((r) => r.json()).then(setNews);
+        const loadNews = async () => {
+            setLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/news");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat berita."));
+                }
+
+                const data = await res.json() as NewsItem[];
+                setNews(Array.isArray(data) ? data : []);
+            } catch (err) {
+                setNews([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat berita.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadNews();
     }, []);
 
     const filtered = filter === "all" ? news : news.filter((n) => n.category === filter);
@@ -77,7 +99,17 @@ export default function NewsPage() {
             </div>
 
             {/* News List */}
-            {filtered.length === 0 ? (
+            {loading ? (
+                <div className="card p-12 text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Memuat berita...</p>
+                </div>
+            ) : loadError ? (
+                <div className="card p-12 text-center">
+                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
+                </div>
+            ) : filtered.length === 0 ? (
                 <div className="card p-12 text-center">
                     <Newspaper className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada berita</p>

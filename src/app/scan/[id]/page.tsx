@@ -5,9 +5,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
     CheckCircle, AlertCircle, Smartphone, Laptop, Phone,
     Package, ClipboardCheck, X, LogIn, ShieldCheck, User, Clock,
-    ChevronRight, Cpu, Tag
+    ChevronRight, Cpu, Tag, Loader2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
     const [kondisi, setKondisi] = useState<AssetCondition>("BAIK");
     const [notes, setNotes] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const toggleItem = (key: string) => {
         setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
@@ -234,15 +236,17 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
+        setError(null);
         try {
             const res = await fetch(`/api/assets/${asset.id}/inspect`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ kondisiSaat: kondisi, checklist, notes: notes || null }),
             });
-            if (res.ok) onSuccess();
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Inspeksi gagal disimpan."));
+            onSuccess();
         } catch (err) {
-            console.error(err);
+            setError(err instanceof Error ? err.message : "Inspeksi gagal disimpan.");
         } finally {
             setSubmitting(false);
         }
@@ -329,6 +333,13 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                             className="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-3.5 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder:text-[var(--text-muted)] transition-all resize-none"
                         />
                     </div>
+
+                    {error && (
+                        <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{error}</span>
+                        </div>
+                    )}
                 </form>
 
                 {/* Submit */}
@@ -339,7 +350,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
                         disabled={submitting}
                         className="w-full py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                        {submitting ? "Menyimpan..." : <><ClipboardCheck size={16} /> Simpan Inspeksi</>}
+                        {submitting ? <><Loader2 size={16} className="animate-spin" /> Menyimpan...</> : <><ClipboardCheck size={16} /> Simpan Inspeksi</>}
                     </button>
                 </div>
             </div>
@@ -354,14 +365,28 @@ function ScanPageInner({ id }: { id: string }) {
     const router = useRouter();
     const [asset, setAsset] = useState<PublicAssetInfo | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [showLogin, setShowLogin] = useState(false);
     const [showSheet, setShowSheet] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
     useEffect(() => {
-        fetch(`/api/public/assets/${id}`)
-            .then(r => r.ok ? r.json() : null)
-            .then(data => { setAsset(data); setLoading(false); });
+        const loadAsset = async () => {
+            setLoading(true);
+            setLoadError(null);
+            try {
+                const res = await fetch(`/api/public/assets/${id}`);
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "QR Code ini tidak terhubung ke aset aktif manapun."));
+                setAsset(await res.json());
+            } catch (error) {
+                setAsset(null);
+                setLoadError(error instanceof Error ? error.message : "Gagal memuat data aset.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadAsset();
     }, [id]);
 
     useEffect(() => {
@@ -395,8 +420,8 @@ function ScanPageInner({ id }: { id: string }) {
         return (
             <div className="min-h-screen bg-[var(--card)] flex flex-col items-center justify-center p-6 text-center">
                 <Package size={40} className="text-slate-200 mb-4" />
-                <h1 className="text-lg font-bold text-[var(--text-primary)]">Aset Tidak Ditemukan</h1>
-                <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-xs">QR Code ini tidak terhubung ke aset aktif manapun.</p>
+                <h1 className="text-lg font-bold text-[var(--text-primary)]">{loadError ? "Data Aset Tidak Dapat Dimuat" : "Aset Tidak Ditemukan"}</h1>
+                <p className="text-sm text-[var(--text-secondary)] mt-1 max-w-xs">{loadError || "QR Code ini tidak terhubung ke aset aktif manapun."}</p>
             </div>
         );
     }

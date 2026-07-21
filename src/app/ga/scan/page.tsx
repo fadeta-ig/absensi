@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, QrCode, Package, ClipboardCheck, Wrench, X } from "lucide-react";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 function ScanContent() {
     const router = useRouter();
@@ -44,8 +45,8 @@ function ScanContent() {
                         // Fetch asset info
                         setLoadingAsset(true);
                         fetch(`/api/assets/${assetId}`)
-                            .then(res => {
-                                if (!res.ok) throw new Error("Aset tidak ditemukan di database");
+                            .then(async (res) => {
+                                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Aset tidak ditemukan di database"));
                                 return res.json();
                             })
                             .then(data => {
@@ -68,10 +69,27 @@ function ScanContent() {
                 } catch (error: unknown) {
                     setErrorMsg(error instanceof Error ? error.message : "QR Code tidak valid.");
                 }
-            }, (error) => {});
+            }, (error) => {
+                const message = String(error).toLowerCase();
+                const isCameraRuntimeError =
+                    message.includes("permission") ||
+                    message.includes("notallowed") ||
+                    message.includes("notfound") ||
+                    message.includes("camera") ||
+                    message.includes("overconstrained") ||
+                    message.includes("notreadable");
+
+                if (isCameraRuntimeError) {
+                    setScanning(false);
+                    setErrorMsg("Kamera tidak dapat diakses. Periksa izin kamera browser dan coba lagi.");
+                }
+            });
             
             scannerRef.current = scanner;
             setScanning(true);
+        }).catch(() => {
+            setScanning(false);
+            setErrorMsg("Scanner QR gagal dimuat. Muat ulang halaman lalu coba lagi.");
         });
 
         return () => {

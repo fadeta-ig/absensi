@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface AuditUser {
     displayName: string;
@@ -32,6 +33,7 @@ export default function AuditTrailPage() {
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [pagination, setPagination] = useState<Pagination | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     
     // Filters
     const [search, setSearch] = useState("");
@@ -45,6 +47,7 @@ export default function AuditTrailPage() {
 
     const fetchLogs = async (p: number, searchQ: string, actF: string, entF: string) => {
         setLoading(true);
+        setLoadError("");
         try {
             const offset = (p - 1) * limit;
             const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() });
@@ -52,23 +55,28 @@ export default function AuditTrailPage() {
             if (entF) params.append("entity", entF);
 
             const res = await fetch(`/api/audit?${params.toString()}`);
-            if (res.ok) {
-                const data = await res.json();
-                // Client-side search for the search input (on user name or ID) since our simple API doesn't support deep relation search yet
-                let filteredData = data.data as AuditLog[];
-                if (searchQ) {
-                    const q = searchQ.toLowerCase();
-                    filteredData = filteredData.filter(log => 
-                        (log.actorName?.toLowerCase().includes(q) ?? false) ||
-                        log.actorIdentifier.toLowerCase().includes(q) ||
-                        (log.entityId && log.entityId.toLowerCase().includes(q))
-                    );
-                }
-                setLogs(filteredData);
-                setPagination(data.pagination);
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat jejak audit."));
             }
+
+            const data = await res.json();
+            // Client-side search for the search input (on user name or ID) since our simple API doesn't support deep relation search yet
+            let filteredData = data.data as AuditLog[];
+            if (searchQ) {
+                const q = searchQ.toLowerCase();
+                filteredData = filteredData.filter(log =>
+                    (log.actorName?.toLowerCase().includes(q) ?? false) ||
+                    log.actorIdentifier.toLowerCase().includes(q) ||
+                    (log.entityId && log.entityId.toLowerCase().includes(q))
+                );
+            }
+            setLogs(filteredData);
+            setPagination(data.pagination);
         } catch (err) {
             console.error("Failed to fetch audit logs", err);
+            setLogs([]);
+            setPagination(null);
+            setLoadError(err instanceof Error ? err.message : "Gagal memuat jejak audit.");
         } finally {
             setLoading(false);
         }
@@ -188,6 +196,13 @@ export default function AuditTrailPage() {
                                     <td colSpan={5} className="py-12 text-center">
                                         <div className="spinner mx-auto" />
                                         <p className="text-xs text-[var(--text-muted)] mt-2">Menyinkronkan log...</p>
+                                    </td>
+                                </tr>
+                            ) : loadError ? (
+                                <tr>
+                                    <td colSpan={5} className="py-12 text-center">
+                                        <AlertCircle className="w-10 h-10 mx-auto mb-3 text-[var(--destructive)] opacity-70" />
+                                        <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
                                     </td>
                                 </tr>
                             ) : logs.length === 0 ? (

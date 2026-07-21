@@ -9,6 +9,7 @@ import Link from "next/link";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 const log = createClientLogger("AttendancePage");
 
@@ -42,6 +43,7 @@ export default function AttendancePage() {
     // Face verification state
     const [faceVerification, setFaceVerification] = useState<FaceVerification>({ status: "idle" });
     const [registeredDescriptor, setRegisteredDescriptor] = useState<number[] | null>(null);
+    const [faceDescriptorError, setFaceDescriptorError] = useState("");
 
     useEffect(() => {
         // Fetch GPS with validation
@@ -68,26 +70,47 @@ export default function AttendancePage() {
 
         // Fetch today's attendance record
         fetch("/api/attendance")
-            .then((r) => r.json())
+            .then(async (r) => {
+                if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat data absensi hari ini."));
+                return r.json();
+            })
             .then((data) => {
                 const today = new Date().toISOString().split("T")[0];
                 const found = data.find((a: { date: string }) => a.date === today);
                 if (found) setTodayRecord(found);
             })
-            .catch((err) => log.error("Gagal fetch data absensi", { error: String(err) }));
+            .catch((err) => {
+                const message = err instanceof Error ? err.message : "Gagal memuat data absensi hari ini.";
+                log.error("Gagal fetch data absensi", { error: message });
+                setStatus("error");
+                setMessage(message);
+                toast(message, "error");
+            });
 
         // Fetch registered face descriptor
         fetch("/api/auth/face")
-            .then((r) => r.json())
+            .then(async (r) => {
+                if (!r.ok) {
+                    throw new Error(await getResponseErrorMessage(r, "Gagal memuat data wajah terdaftar."));
+                }
+                return r.json();
+            })
             .then((data) => {
+                setFaceDescriptorError("");
                 if (data.hasFace && data.descriptor) {
                     setRegisteredDescriptor(data.descriptor);
                 } else {
                     log.warn("Wajah belum terdaftar", { hasFace: data.hasFace });
                 }
             })
-            .catch((err) => log.error("Gagal fetch face descriptor", { error: String(err) }));
-    }, []);
+            .catch((err) => {
+                const message = err instanceof Error ? err.message : "Gagal memuat data wajah terdaftar.";
+                log.error("Gagal fetch face descriptor", { error: message });
+                setFaceDescriptorError(message);
+                setFaceVerification({ status: "error", message: `${message} Muat ulang halaman atau buka Pengaturan.` });
+                toast(message, "error");
+            });
+    }, [toast]);
 
     const startCamera = useCallback(async () => {
         if (!navigator.mediaDevices?.getUserMedia) {
@@ -147,6 +170,11 @@ export default function AttendancePage() {
         const ctx = canvas.getContext("2d");
         if (!ctx) {
             log.error("Gagal mendapatkan 2D context dari canvas");
+            const errorMessage = "Gagal mengambil foto dari kamera. Muat ulang halaman lalu coba lagi.";
+            setFaceVerification({ status: "error", message: errorMessage });
+            setStatus("error");
+            setMessage(errorMessage);
+            toast(errorMessage, "error");
             return;
         }
 
@@ -154,6 +182,14 @@ export default function AttendancePage() {
             ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
             return canvas.toDataURL("image/jpeg", 0.85);
         };
+
+        if (faceDescriptorError) {
+            const photoData = captureCurrentFrame();
+            setPhoto(photoData);
+            setFaceVerification({ status: "error", message: `${faceDescriptorError} Muat ulang halaman atau buka Pengaturan.` });
+            stopCamera();
+            return;
+        }
 
         if (!registeredDescriptor) {
             const photoData = captureCurrentFrame();
@@ -203,7 +239,7 @@ export default function AttendancePage() {
             log.error("Error saat verifikasi wajah", { error: err instanceof Error ? err.message : String(err) });
             setFaceVerification({ status: "error", message: "Gagal memverifikasi wajah. Coba lagi." });
         }
-    }, [registeredDescriptor, stopCamera]);
+    }, [registeredDescriptor, faceDescriptorError, stopCamera, toast]);
 
     const submitAttendance = useCallback(async () => {
         if (!photo || !gpsInfo) return;

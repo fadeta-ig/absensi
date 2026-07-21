@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Wallet, Plus, FileText, FileSpreadsheet } from "lucide-react";
+import { AlertCircle, FileSpreadsheet, FileText, Loader2, Plus, Wallet } from "lucide-react";
 import { exportToExcel, exportPayslipPdf } from "@/lib/export";
+import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 import { Employee, Division, Department, AllowanceItem, MasterComponent, PayslipItem, Payslip, Tab } from "./types";
 import { PayrollFilters } from "./components/PayrollFilters";
@@ -12,6 +14,7 @@ import { PayrollHistoryTab } from "./components/PayrollHistoryTab";
 import { PayrollBulkModal, PayrollPayslipModal } from "./components/PayrollModals";
 
 export default function PayrollPage() {
+    const toast = useToast();
     const [tab, setTab] = useState<Tab>("recap");
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [payslips, setPayslips] = useState<Payslip[]>([]);
@@ -34,6 +37,9 @@ export default function PayrollPage() {
     const [deductions, setDeductions] = useState<AllowanceItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState("");
+    const [error, setError] = useState("");
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [initialError, setInitialError] = useState("");
 
     const [overtimeRequests, setOvertimeRequests] = useState<{ employeeId: string; date: string; overtimePay: number; status: string }[]>([]);
 
@@ -43,15 +49,50 @@ export default function PayrollPage() {
     const [bulkResult, setBulkResult] = useState<{ created: number; skipped: number; message: string } | null>(null);
 
     useEffect(() => {
-        fetch("/api/employees").then((r) => r.json()).then(setEmployees);
-        fetch("/api/payslips").then((r) => r.json()).then((d: Payslip[]) => { if (Array.isArray(d)) setPayslips(d); });
-        fetch("/api/master/payroll-components").then((r) => r.json()).then((d) => {
-            if (Array.isArray(d)) setMasterComponents(d);
-        });
-        fetch("/api/master/departments").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterDepts(d); });
-        fetch("/api/master/divisions").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setMasterDivisions(d); });
-        fetch("/api/overtime").then((r) => r.json()).then((d) => { if (Array.isArray(d)) setOvertimeRequests(d); });
-    }, []);
+        const loadInitialData = async () => {
+            setInitialLoading(true);
+            setInitialError("");
+            try {
+                const [empRes, payslipRes, componentRes, deptRes, divisionRes, overtimeRes] = await Promise.all([
+                    fetch("/api/employees"),
+                    fetch("/api/payslips"),
+                    fetch("/api/master/payroll-components"),
+                    fetch("/api/master/departments"),
+                    fetch("/api/master/divisions"),
+                    fetch("/api/overtime"),
+                ]);
+
+                const failedResponse = [empRes, payslipRes, componentRes, deptRes, divisionRes, overtimeRes].find((res) => !res.ok);
+                if (failedResponse) {
+                    throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat data payroll."));
+                }
+
+                const [empData, payslipData, componentData, deptData, divisionData, overtimeData] = await Promise.all([
+                    empRes.json(),
+                    payslipRes.json(),
+                    componentRes.json(),
+                    deptRes.json(),
+                    divisionRes.json(),
+                    overtimeRes.json(),
+                ]);
+
+                if (Array.isArray(empData)) setEmployees(empData);
+                if (Array.isArray(payslipData)) setPayslips(payslipData);
+                if (Array.isArray(componentData)) setMasterComponents(componentData);
+                if (Array.isArray(deptData)) setMasterDepts(deptData);
+                if (Array.isArray(divisionData)) setMasterDivisions(divisionData);
+                if (Array.isArray(overtimeData)) setOvertimeRequests(overtimeData);
+            } catch (loadError) {
+                const message = loadError instanceof Error ? loadError.message : "Gagal memuat data payroll.";
+                setInitialError(message);
+                toast(message, "error");
+            } finally {
+                setInitialLoading(false);
+            }
+        };
+
+        void loadInitialData();
+    }, [toast]);
 
     // Effect to auto-populate payroll data when employee is selected in Create Tab
     useEffect(() => {
@@ -103,23 +144,35 @@ export default function PayrollPage() {
         e.preventDefault();
         setLoading(true);
         setSuccess("");
+        setError("");
         const filteredAllowances = allowances.filter((a) => a.name && a.amount > 0);
         const filteredDeductions = deductions.filter((d) => d.name && d.amount > 0);
-        const res = await fetch("/api/payslips", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                ...form, allowances: filteredAllowances, deductions: filteredDeductions, netSalary,
-                issuedDate: new Date().toISOString().split("T")[0],
-            }),
-        });
-        if (res.ok) {
+        try {
+            const res = await fetch("/api/payslips", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ...form, allowances: filteredAllowances, deductions: filteredDeductions, netSalary,
+                    issuedDate: new Date().toISOString().split("T")[0],
+                }),
+            });
+
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal membuat slip gaji."));
+            }
+
             const newPayslip = await res.json();
             setSuccess("Slip gaji berhasil dibuat!");
+            toast("Slip gaji berhasil dibuat.", "success");
             setForm({ employeeId: "", period: "", basicSalary: 0, overtime: 0, notes: "" });
             setPayslips((prev) => [newPayslip, ...prev]);
+        } catch (submitError) {
+            const message = submitError instanceof Error ? submitError.message : "Gagal membuat slip gaji.";
+            setError(message);
+            toast(message, "error");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleProsesRecap = (emp: Employee) => {
@@ -366,22 +419,36 @@ export default function PayrollPage() {
             )}
 
             {tab === "recap" && (
-                <PayrollRecapTab
-                    filteredRecapEmployees={filteredRecapEmployees}
-                    payslips={payslips}
-                    selectedPeriod={selectedPeriod}
-                    overtimeRequests={overtimeRequests}
-                    fmt={fmt}
-                    handleBulkGenerate={handleBulkGenerate}
-                    handleExportRecapExcel={handleExportRecapExcel}
-                    handleExportRecapPdf={handleExportRecapPdf}
-                    handleProsesRecap={handleProsesRecap}
-                />
+                initialLoading ? (
+                    <div className="card p-12 text-center text-[var(--text-muted)]">
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                        <p className="text-sm font-medium">Memuat data payroll...</p>
+                    </div>
+                ) : (
+                    <PayrollRecapTab
+                        filteredRecapEmployees={filteredRecapEmployees}
+                        payslips={payslips}
+                        selectedPeriod={selectedPeriod}
+                        overtimeRequests={overtimeRequests}
+                        fmt={fmt}
+                        handleBulkGenerate={handleBulkGenerate}
+                        handleExportRecapExcel={handleExportRecapExcel}
+                        handleExportRecapPdf={handleExportRecapPdf}
+                        handleProsesRecap={handleProsesRecap}
+                    />
+                )
+            )}
+
+            {initialError && (
+                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{initialError}</span>
+                </div>
             )}
 
             {tab === "create" && (
                 <PayrollCreateTab
-                    success={success} setTab={setTab} handleSubmit={handleSubmit}
+                    success={success} error={error} setTab={setTab} handleSubmit={handleSubmit}
                     form={form} setForm={setForm} employees={employees}
                     allowances={allowances} setAllowances={setAllowances}
                     deductions={deductions} setDeductions={setDeductions}
@@ -391,15 +458,22 @@ export default function PayrollPage() {
             )}
 
             {tab === "history" && (
-                <PayrollHistoryTab
-                    filteredHistoryPayslips={filteredHistoryPayslips}
-                    employees={employees}
-                    setPayslips={setPayslips}
-                    setSelected={setSelected}
-                    handlePayslipPdf={handlePayslipPdf}
-                    handleExportHistory={handleExportHistory}
-                    fmt={fmt}
-                />
+                initialLoading ? (
+                    <div className="card p-12 text-center text-[var(--text-muted)]">
+                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                        <p className="text-sm font-medium">Memuat riwayat payroll...</p>
+                    </div>
+                ) : (
+                    <PayrollHistoryTab
+                        filteredHistoryPayslips={filteredHistoryPayslips}
+                        employees={employees}
+                        setPayslips={setPayslips}
+                        setSelected={setSelected}
+                        handlePayslipPdf={handlePayslipPdf}
+                        handleExportHistory={handleExportHistory}
+                        fmt={fmt}
+                    />
+                )
             )}
 
             <PayrollBulkModal 

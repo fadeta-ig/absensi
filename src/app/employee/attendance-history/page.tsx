@@ -3,8 +3,9 @@
 import { useEffect, useState, useMemo } from "react";
 import {
     ClipboardList, CalendarDays, Clock, CheckCircle, AlertTriangle,
-    XCircle, Filter, ChevronLeft, ChevronRight, Loader2
+    XCircle, Filter, ChevronLeft, ChevronRight, Loader2, AlertCircle
 } from "lucide-react";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface AttendanceRecord {
     id: string;
@@ -83,6 +84,7 @@ function fmtDate(dateStr: string): string {
 export default function AttendanceHistoryPage() {
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
     const now = new Date();
     const [filterMode, setFilterMode] = useState<FilterMode>("month");
@@ -98,13 +100,27 @@ export default function AttendanceHistoryPage() {
     }, [filterMode, selectedDate, selectedMonth, selectedYear]);
 
     useEffect(() => {
-        setLoading(true);
-        fetch("/api/attendance")
-            .then((r) => r.json())
-            .then((data) => {
-                if (Array.isArray(data)) setRecords(data);
-            })
-            .finally(() => setLoading(false));
+        const loadRecords = async () => {
+            setLoading(true);
+            setLoadError("");
+            try {
+                const res = await fetch("/api/attendance");
+                if (!res.ok) {
+                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat kehadiran."));
+                }
+
+                const data = await res.json();
+                if (!Array.isArray(data)) throw new Error("Format data riwayat kehadiran tidak sesuai.");
+                setRecords(data);
+            } catch (err) {
+                setRecords([]);
+                setLoadError(err instanceof Error ? err.message : "Gagal memuat riwayat kehadiran.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void loadRecords();
     }, []);
 
     /** Filter records based on current mode & selection */
@@ -299,6 +315,11 @@ export default function AttendanceHistoryPage() {
             {loading ? (
                 <div className="flex justify-center py-12">
                     <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-50" />
+                </div>
+            ) : loadError ? (
+                <div className="card p-8 text-center">
+                    <AlertCircle className="w-8 h-8 mx-auto opacity-70 mb-2 text-[var(--destructive)]" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
                 </div>
             ) : filteredRecords.length === 0 ? (
                 <div className="card p-8 text-center text-[var(--text-muted)]">

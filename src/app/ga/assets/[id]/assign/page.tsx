@@ -2,8 +2,9 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, UserCheck, RefreshCcw, Search, ChevronsUpDown, Check } from "lucide-react";
+import { ArrowLeft, Save, UserCheck, RefreshCcw, Search, ChevronsUpDown, Check, AlertCircle } from "lucide-react";
 import { AssetWithHistory } from "@/lib/types/asset";
+import { getResponseErrorMessage } from "@/lib/clientErrors";
 
 export default function AssignAssetPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -30,20 +31,27 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
                     fetch(`/api/assets/${id}`),
                     fetch("/api/employees?limit=500") // Assuming small enough or we just use simple input for now
                 ]);
-                
-                if (assetRes.ok) {
-                    const data = await assetRes.json();
-                    setAsset(data);
-                    setKondisi(data.kondisi);
+
+                if (!assetRes.ok) {
+                    throw new Error(await getResponseErrorMessage(assetRes, "Gagal memuat data aset."));
                 }
-                if (empRes.ok) {
-                    const data = await empRes.json();
-                    // Assuming data.data holds the employees array or data itself
-                    const list = Array.isArray(data) ? data : data.data || [];
-                    setEmployees(list.map((e: { employeeId: string; name: string }) => ({ id: e.employeeId, name: e.name })));
+                if (!empRes.ok) {
+                    throw new Error(await getResponseErrorMessage(empRes, "Gagal memuat daftar karyawan."));
                 }
+
+                const assetData = await assetRes.json();
+                setAsset(assetData);
+                setKondisi(assetData.kondisi);
+
+                const employeeData = await empRes.json();
+                // Assuming data.data holds the employees array or data itself
+                const list = Array.isArray(employeeData) ? employeeData : employeeData.data || [];
+                setEmployees(list.map((e: { employeeId: string; name: string }) => ({ id: e.employeeId, name: e.name })));
             } catch (err) {
                 console.error(err);
+                setAsset(null);
+                setEmployees([]);
+                setError(err instanceof Error ? err.message : "Gagal memuat konfigurasi serah terima aset.");
             } finally {
                 setLoadingParams(false);
             }
@@ -89,6 +97,16 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
     };
 
     if (loadingParams) return <div className="p-6">Memuat konfigurasi...</div>;
+    if (error && !asset) {
+        return (
+            <div className="p-6 max-w-3xl mx-auto min-h-screen">
+                <div className="card p-8 text-center">
+                    <AlertCircle className="w-10 h-10 text-[var(--destructive)] opacity-70 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-[var(--destructive)]">{error}</p>
+                </div>
+            </div>
+        );
+    }
     if (!asset) return <div className="p-6">Aset tidak ditemukan.</div>;
 
     return (

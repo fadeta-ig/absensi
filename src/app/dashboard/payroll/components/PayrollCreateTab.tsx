@@ -1,8 +1,9 @@
-import { CheckCircle2, Loader2, Send, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Send, Plus, Trash2 } from "lucide-react";
 import { Employee, AllowanceItem } from "../types";
 
 export interface PayrollCreateTabProps {
     success: string;
+    error: string;
     setTab: (tab: "recap" | "history") => void;
     handleSubmit: (e: React.FormEvent) => void;
     form: { employeeId: string; period: string; basicSalary: number; overtime: number; notes: string };
@@ -20,7 +21,7 @@ export interface PayrollCreateTabProps {
 }
 
 export function PayrollCreateTab({
-    success, setTab, handleSubmit,
+    success, error, setTab, handleSubmit,
     form, setForm, employees,
     allowances, setAllowances,
     deductions, setDeductions,
@@ -36,6 +37,13 @@ export function PayrollCreateTab({
                         {success}
                     </div>
                     <button onClick={() => setTab("history")} className="text-xs font-bold underline">Lihat Riwayat</button>
+                </div>
+            )}
+
+            {error && (
+                <div className="p-3 bg-[var(--destructive)]/10 border border-[var(--destructive)]/30 text-[var(--destructive)] rounded-lg text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {error}
                 </div>
             )}
 
