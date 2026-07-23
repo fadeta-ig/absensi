@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import Image from "next/image";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,16 +77,27 @@ export default function ProfilePage() {
 
     // ── Fetch Profile ──────────────────────────────────────────────────────────
     useEffect(() => {
-        fetch("/api/auth/profile")
-            .then((r) => r.json())
-            .then((data: UserProfile) => {
+        async function loadProfile() {
+            try {
+                const response = await fetch("/api/auth/profile");
+                if (!response.ok) {
+                    throw new Error(await getResponseErrorMessage(response, "Gagal memuat profil"));
+                }
+
+                const data = await response.json() as UserProfile;
                 setProfile(data);
                 setPhone(data.phone ?? "");
                 setAvatarPreview(data.avatarUrl ?? null);
-            })
-            .catch(() => toast("Gagal memuat profil", "error"))
-            .finally(() => setLoading(false));
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+            } catch (error) {
+                reportClientError("EmployeeProfilePage", "Gagal memuat profil karyawan", error);
+                toast("Gagal memuat profil", "error");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        void loadProfile();
+    }, [toast]);
 
     // ── Phone Change Handler ───────────────────────────────────────────────────
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,7 +122,10 @@ export default function ProfilePage() {
             setAvatarBase64(base64);
             setIsDirty(true);
         };
-        reader.onerror = () => toast("Gagal membaca file foto", "error");
+        reader.onerror = () => {
+            reportClientError("EmployeeProfilePage", "Gagal membaca file foto profil", reader.error ?? "FileReader error");
+            toast("Gagal membaca file foto", "error");
+        };
         reader.readAsDataURL(file);
     }, [toast]);
 
@@ -129,9 +144,13 @@ export default function ProfilePage() {
                 }),
             });
 
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan profil"));
+            }
+
             const data = await res.json() as { success?: boolean; error?: string };
 
-            if (res.ok && data.success) {
+            if (data.success) {
                 setIsDirty(false);
                 setAvatarBase64(null);
                 toast("Profil berhasil disimpan!", "success");
@@ -142,8 +161,9 @@ export default function ProfilePage() {
             } else {
                 toast(data.error ?? "Gagal menyimpan profil", "error");
             }
-        } catch {
-            toast("Profil belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
+        } catch (error) {
+            reportClientError("EmployeeProfilePage", "Gagal menyimpan profil karyawan", error);
+            toast(error instanceof Error ? error.message : "Profil belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSaving(false);
         }

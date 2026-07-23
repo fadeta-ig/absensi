@@ -7,6 +7,7 @@ import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ClockInModalProps {
     visit: VisitReport;
@@ -46,19 +47,19 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
                     photos,
                 }),
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                onClockIn(data);
-                onClose();
-            } else {
-                setError(data.error || data.details?.join(", ") || "Gagal melakukan clock in.");
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal melakukan clock in."));
             }
-        } catch {
-            setError("Clock in belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
-        }
 
-        setLoading(false);
+            const data = await res.json();
+            onClockIn(data);
+            onClose();
+        } catch (error) {
+            reportClientError("ClockInModal", "Gagal menyimpan clock in kunjungan", error, { visitId: visit.id });
+            setError(error instanceof Error ? error.message : "Clock in belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (!visit.visitLocation) {

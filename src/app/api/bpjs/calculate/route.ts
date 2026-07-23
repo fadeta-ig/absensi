@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import {
     calculateAllBpjs,
     isValidJkkRiskLevel,
@@ -14,9 +13,6 @@ const bpjsCalculateSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 

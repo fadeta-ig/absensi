@@ -6,7 +6,7 @@ import { Search, Plus, RefreshCw, Smartphone as SimIcon, CheckCircle, AlertCircl
 import Pagination from "@/components/ui/Pagination";
 import { HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 
@@ -73,7 +73,7 @@ export default function SimCardDashboardPage() {
             setAssets(filteredData);
             setTotalItems(filteredData.length);
         } catch (error) {
-            console.error("Gagal mengambil data SIM", error);
+            reportClientError("SimCardDashboardPage", "Gagal mengambil data SIM", error, { currentPage, filterStatus, debouncedSearch });
             setAssets([]);
             setTotalItems(0);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat data SIM.");
@@ -97,7 +97,7 @@ export default function SimCardDashboardPage() {
                 tidakAktif: 0
             });
         } catch (error) {
-            console.error(error);
+            reportClientError("SimCardDashboardPage", "Gagal mengambil statistik SIM", error);
             setSimStats({ total: 0, aktif: 0, tidakAktif: 0 });
             setLoadError(error instanceof Error ? error.message : "Gagal memuat statistik SIM.");
         }
@@ -147,7 +147,8 @@ export default function SimCardDashboardPage() {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             toast("Export SIM berhasil dibuat.", "success");
-        } catch {
+        } catch (error) {
+            reportClientError("SimCardDashboardPage", "Gagal membuat export SIM", error, { totalRows: assets.length });
             toast("Gagal mengexport data SIM.", "error");
         } finally {
             setExporting(false);
@@ -171,6 +172,7 @@ export default function SimCardDashboardPage() {
                     await fetchStats();
                     toast("SIM berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("SimCardDashboardPage", "Gagal menghapus SIM", error, { simId: sim.id });
                     toast(error instanceof Error ? error.message : "SIM belum terhapus karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
                 }
             },

@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { DEFAULT_VISIT_RADIUS } from "../visitTypes";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const LocationMap = dynamic(() => import("@/components/LocationMap"), { ssr: false });
 
@@ -68,19 +69,19 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                     visitRadius: DEFAULT_VISIT_RADIUS,
                 }),
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                onCreated(data);
-                onClose();
-            } else {
-                setError(data.error || data.details?.join(", ") || "Gagal membuat draft kunjungan.");
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal membuat draft kunjungan."));
             }
-        } catch {
-            setError("Draft kunjungan belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
-        }
 
-        setLoading(false);
+            const data = await res.json();
+            onCreated(data);
+            onClose();
+        } catch (error) {
+            reportClientError("CreateDraftModal", "Gagal membuat draft kunjungan", error, { clientName: form.clientName });
+            setError(error instanceof Error ? error.message : "Draft kunjungan belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

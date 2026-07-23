@@ -6,14 +6,13 @@ import { loginSchema } from "@/lib/validations/validationSchemas";
 import { getLandingPath } from "@/lib/permissions";
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkLoginRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const result = await validateBody(request, loginSchema);
         if ("error" in result) return result.error;
 
         const { employeeId, password, rememberMe } = result.data;
+        const rateLimited = checkLoginRateLimit(request.headers, employeeId);
+        if (rateLimited) return rateLimited;
 
         const user = await verifyLogin(employeeId, password);
         if (!user) {

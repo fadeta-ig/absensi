@@ -3,8 +3,8 @@ import { z } from "zod";
 /* ───────────────────── Auth ───────────────────── */
 
 export const loginSchema = z.object({
-    employeeId: z.string().min(1, "ID Karyawan harus diisi"),
-    password: z.string().min(1, "Password harus diisi"),
+    employeeId: z.string().trim().min(1, "ID Karyawan harus diisi").max(100, "ID Karyawan maksimal 100 karakter"),
+    password: z.string().min(1, "Password harus diisi").max(200, "Password maksimal 200 karakter"),
     rememberMe: z.boolean().optional(),
 });
 

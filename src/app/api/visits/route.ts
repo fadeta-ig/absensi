@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse, parseJsonBody } from "@/lib/middleware/apiGuard";
 import {
     getVisitReports,
     getVisitReportById,
@@ -44,10 +43,7 @@ function validateLocationProximity(
 
 // ─── GET ────────────────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr" && !session.employeeId) return forbiddenResponse();
@@ -65,9 +61,6 @@ export async function GET(request: NextRequest) {
 // ─── POST ───────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return forbiddenResponse();
@@ -81,7 +74,9 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const body = await request.json();
+        const parsedBody = await parseJsonBody<Record<string, unknown>>(request, "VisitsPOST");
+        if ("error" in parsedBody) return parsedBody.error;
+        const body = parsedBody.data;
         const action = body.action as string;
 
         // ── Create Draft ──────────────────────────────────────
@@ -209,14 +204,13 @@ export async function POST(request: NextRequest) {
 // ─── PUT ────────────────────────────────────────────────────────
 
 export async function PUT(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
     try {
-        const body = await request.json();
+        const parsedBody = await parseJsonBody<Record<string, unknown>>(request, "VisitsPUT");
+        if ("error" in parsedBody) return parsedBody.error;
+        const body = parsedBody.data;
         const action = body.action as string;
 
         // ── Update Draft ──────────────────────────────────────
@@ -287,9 +281,6 @@ export async function PUT(request: NextRequest) {
 // ─── DELETE ─────────────────────────────────────────────────────
 
 export async function DELETE(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
@@ -316,7 +307,7 @@ export async function DELETE(request: NextRequest) {
 
         const deleted = await deleteVisitReport(id);
         if (!deleted) {
-            return NextResponse.json({ error: "Gagal menghapus kunjungan." }, { status: 404 });
+            return NextResponse.json({ error: "Status kunjungan berubah sebelum draft dihapus." }, { status: 409 });
         }
 
         logger.info("Visit draft deleted", { visitId: id, deletedBy: session.username });

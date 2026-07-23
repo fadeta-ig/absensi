@@ -4,7 +4,7 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, UserCheck, RefreshCcw, Search, ChevronsUpDown, Check, AlertCircle, Loader2 } from "lucide-react";
 import { AssetWithHistory } from "@/lib/types/asset";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
@@ -51,7 +51,7 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
                 const list = Array.isArray(employeeData) ? employeeData : employeeData.data || [];
                 setEmployees(list.map((e: { employeeId: string; name: string }) => ({ id: e.employeeId, name: e.name })));
             } catch (err) {
-                console.error(err);
+                reportClientError("AssignAssetPage", "Gagal memuat konfigurasi serah terima aset", err, { assetId: id });
                 setAsset(null);
                 setEmployees([]);
                 setError(err instanceof Error ? err.message : "Gagal memuat konfigurasi serah terima aset.");
@@ -94,6 +94,7 @@ export default function AssignAssetPage({ params }: { params: Promise<{ id: stri
             toast("Serah terima aset berhasil disimpan.", "success");
             router.push(`/ga/assets/${id}`);
         } catch (err: unknown) {
+            reportClientError("AssignAssetPage", "Gagal menyimpan serah terima aset", err, { assetId: id, toHolderType });
             setError(err instanceof Error ? err.message : "Serah terima aset belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);

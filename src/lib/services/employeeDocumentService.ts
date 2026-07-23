@@ -3,6 +3,7 @@ import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
+import logger from "@/lib/logger";
 
 export const MAX_EMPLOYEE_DOCUMENT_SIZE = 10 * 1024 * 1024;
 const STORAGE_ROOT = path.resolve(process.cwd(), "storage", "employee-documents");
@@ -44,6 +45,19 @@ function safeResolvedPath(fileUrl: string): string {
     const resolved = path.resolve(STORAGE_ROOT, fileUrl);
     if (!resolved.startsWith(`${STORAGE_ROOT}${path.sep}`)) throw new Error("Lokasi dokumen tidak valid.");
     return resolved;
+}
+
+async function cleanupEmployeeDocumentFile(filePath: string, context: Record<string, unknown>): Promise<void> {
+    try {
+        await unlink(filePath);
+    } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+        logger.warn("Employee document cleanup failed", {
+            filePath,
+            ...context,
+            error,
+        });
+    }
 }
 
 export async function listEmployeeDocuments(employeeDatabaseId: string) {
@@ -113,7 +127,10 @@ export async function uploadEmployeeDocument(input: {
             select: { id: true, type: true, title: true, originalName: true, mimeType: true, fileSize: true, expiresAt: true, notes: true, createdAt: true },
         });
     } catch (error) {
-        await unlink(absolutePath).catch(() => undefined);
+        await cleanupEmployeeDocumentFile(absolutePath, {
+            employeeDatabaseId: input.employeeDatabaseId,
+            title: input.title,
+        });
         throw error;
     }
 }
@@ -134,6 +151,10 @@ export async function deleteEmployeeDocument(employeeDatabaseId: string, documen
     });
     if (!document) return null;
     await prisma.employeeDocument.delete({ where: { id: document.id } });
-    await unlink(safeResolvedPath(document.fileUrl)).catch(() => undefined);
+    await cleanupEmployeeDocumentFile(safeResolvedPath(document.fileUrl), {
+        employeeDatabaseId,
+        documentId,
+        employeeId: document.employeeId,
+    });
     return document;
 }

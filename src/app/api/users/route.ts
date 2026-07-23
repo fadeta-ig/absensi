@@ -9,7 +9,6 @@ import {
     unauthorizedResponse,
     validateBody,
 } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit, checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
 import { canManageUsers, SYSTEM_ROLES } from "@/lib/permissions";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { sendPasswordEmail } from "@/lib/services/emailService";
@@ -72,9 +71,7 @@ function serializeUser(user: Awaited<ReturnType<typeof listAdministrativeUsers>>
     };
 }
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageUsers(session)) return forbiddenResponse();
@@ -91,8 +88,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkSensitiveRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageUsers(session)) return forbiddenResponse();
@@ -146,8 +141,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const rateLimited = checkSensitiveRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageUsers(session)) return forbiddenResponse();

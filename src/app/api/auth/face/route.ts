@@ -1,44 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { faceDescriptorSchema } from "@/lib/validations/validationSchemas";
 import { canManageHr } from "@/lib/permissions";
 
 /** GET — Check if current employee has a face registered */
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return NextResponse.json({ error: "Akun tidak terhubung dengan data karyawan" }, { status: 403 });
 
-    const employee = await prisma.employee.findUnique({
-        where: { employeeId: session.employeeId },
-        select: { faceDescriptor: true },
-    });
+    try {
+        const employee = await prisma.employee.findUnique({
+            where: { employeeId: session.employeeId },
+            select: { faceDescriptor: true },
+        });
 
-    if (!employee) {
-        return NextResponse.json(
-            { error: "Data karyawan tidak ditemukan" },
-            { status: 404 }
-        );
+        if (!employee) {
+            return NextResponse.json(
+                { error: "Data karyawan tidak ditemukan" },
+                { status: 404 }
+            );
+        }
+
+        const descriptorRaw = employee.faceDescriptor as string | null;
+        const descriptor = descriptorRaw ? JSON.parse(descriptorRaw) : null;
+        return NextResponse.json({
+            hasFace: !!descriptor && Array.isArray(descriptor) && descriptor.length === 128,
+            descriptor,
+        });
+    } catch (err) {
+        return serverErrorResponse("FaceGET", err, { employeeId: session.employeeId });
     }
-
-    const descriptorRaw = employee.faceDescriptor as string | null;
-    const descriptor = descriptorRaw ? JSON.parse(descriptorRaw) : null;
-    return NextResponse.json({
-        hasFace: !!descriptor && Array.isArray(descriptor) && descriptor.length === 128,
-        descriptor,
-    });
 }
 
 /** POST — Save face descriptor for current employee */
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
@@ -87,10 +84,7 @@ export async function POST(request: NextRequest) {
 }
 
 /** DELETE — Remove face descriptor for current employee */
-export async function DELETE(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function DELETE() {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();

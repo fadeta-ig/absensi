@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { MapPinned, Search, Filter } from "lucide-react";
 import { VisitStatus } from "@/types";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 import { VisitListTable } from "./components/VisitListTable";
 import { VisitDetailModal } from "./components/VisitDetailModal";
@@ -30,6 +30,7 @@ export default function DashboardVisitsPage() {
                 const data = await res.json();
                 setVisits(Array.isArray(data) ? data : []);
             } catch (error) {
+                reportClientError("DashboardVisitsPage", "Gagal memuat laporan kunjungan", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat laporan kunjungan.";
                 setLoadError(message);
                 setVisits([]);
@@ -60,6 +61,7 @@ export default function DashboardVisitsPage() {
             if (selectedVisit?.id === id) setSelectedVisit(updated);
             toast(isChecked ? "Kunjungan ditandai sudah dicek." : "Status cek kunjungan dibatalkan.", "success");
         } catch (err) {
+            reportClientError("DashboardVisitsPage", "Gagal memperbarui status kunjungan", err, { visitId: id, isChecked });
             toast(err instanceof Error ? err.message : "Gagal memperbarui status kunjungan.", "error");
         } finally {
             setUpdating(null);

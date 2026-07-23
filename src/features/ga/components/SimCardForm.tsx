@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 export type SimCardFormData = {
@@ -50,7 +50,7 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
                 const list = Array.isArray(empData) ? empData : empData.data || [];
                 setEmployees(list);
             } catch (err) {
-                console.error("Gagal load data form", err);
+                reportClientError("SimCardForm", "Gagal load data form", err, { mode });
                 setEmployees([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat konfigurasi form.");
             } finally {

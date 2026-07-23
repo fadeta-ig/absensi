@@ -1,36 +1,21 @@
-/**
- * In-Memory Rate Limiter
- *
- * ⚠️  KETERBATASAN PENTING:
- * Rate limiter ini menggunakan Map JavaScript di memori proses Node.js.
- * Ini berfungsi dengan baik untuk deployment single-instance (PM2, VPS, Docker single container).
- *
- * TIDAK efektif jika:
- * - Deploy di beberapa instance / multi-server (load balancer)
- * - Platform serverless (Vercel, Netlify Functions) — setiap invocation adalah proses baru
- *
- * Untuk production multi-instance, migrasi ke Redis-based rate limiter:
- * - Upstash Redis (serverless-friendly): https://upstash.com/
- * - ioredis + custom sliding window
- *
- * Untuk single-server (PM2 cluster mode), gunakan `cluster.isMaster` + IPC,
- * atau `@cluster-key-value/rate-limiter`.
- */
-
 import { NextResponse } from "next/server";
+import logger from "@/lib/logger";
 
 interface RateLimitEntry {
     count: number;
     resetTime: number;
+    exceededLogged: boolean;
+}
+
+interface RateLimitLogMeta {
+    prefix: string;
+    ip?: string;
+    identifier?: string;
 }
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
-
-// ─── Cleanup Task ──────────────────────────────────────────────
-// Hapus entry yang sudah expired setiap 5 menit untuk mencegah memory leak
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
-// Guard: jangan jalankan setInterval di Edge Runtime (middleware)
 if (typeof globalThis.setInterval !== "undefined") {
     setInterval(() => {
         const now = Date.now();
@@ -42,43 +27,26 @@ if (typeof globalThis.setInterval !== "undefined") {
     }, CLEANUP_INTERVAL_MS);
 }
 
-// ─── IP Extraction ─────────────────────────────────────────────
-/**
- * Ambil IP client dari header request.
- * Mendukung: Nginx reverse proxy (x-forwarded-for), Cloudflare (cf-connecting-ip),
- * dan fallback ke "unknown" jika tidak tersedia.
- */
 function getClientIp(headers: Headers): string {
     return (
-        headers.get("cf-connecting-ip") ||           // Cloudflare
-        headers.get("x-forwarded-for")?.split(",")[0]?.trim() || // Nginx / Load Balancer
-        headers.get("x-real-ip") ||                   // Alternative proxy header
-        "unknown"
+        headers.get("cf-connecting-ip")
+        || headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || headers.get("x-real-ip")
+        || "unknown"
     );
 }
 
-// ─── Core Rate Limit Function ──────────────────────────────────
-/**
- * Periksa apakah request dari IP ini sudah melebihi batas.
- * Menggunakan algoritma Fixed Window Counter.
- *
- * @returns null jika masih dalam batas, NextResponse 429 jika rate-limited
- */
-export function checkRateLimit(
-    headers: Headers,
-    prefix: string,
+function checkRateLimitKey(
+    key: string,
+    meta: RateLimitLogMeta,
     maxRequests: number,
     windowMs: number
 ): NextResponse | null {
-    const ip = getClientIp(headers);
-    const key = `${prefix}:${ip}`;
     const now = Date.now();
-
     const entry = rateLimitStore.get(key);
 
     if (!entry || now > entry.resetTime) {
-        // Window baru atau window lama sudah expired
-        rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
+        rateLimitStore.set(key, { count: 1, resetTime: now + windowMs, exceededLogged: false });
         return null;
     }
 
@@ -86,6 +54,17 @@ export function checkRateLimit(
 
     if (entry.count > maxRequests) {
         const retryAfterSeconds = Math.ceil((entry.resetTime - now) / 1000);
+        if (!entry.exceededLogged) {
+            logger.warn("Rate limit exceeded", {
+                ...meta,
+                count: entry.count,
+                maxRequests,
+                windowMs,
+                retryAfterSeconds,
+            });
+            entry.exceededLogged = true;
+        }
+
         return NextResponse.json(
             {
                 error: "Terlalu banyak permintaan. Silakan coba lagi nanti.",
@@ -106,27 +85,31 @@ export function checkRateLimit(
     return null;
 }
 
-// ─── Presets ──────────────────────────────────────────────────
-
-/**
- * Login: 5 request per 60 detik per IP.
- * Mencegah brute-force password.
- */
-export function checkLoginRateLimit(headers: Headers): NextResponse | null {
-    return checkRateLimit(headers, "login", 5, 60_000);
+export function checkRateLimit(
+    headers: Headers,
+    prefix: string,
+    maxRequests: number,
+    windowMs: number
+): NextResponse | null {
+    const ip = getClientIp(headers);
+    return checkRateLimitKey(`${prefix}:${ip}`, { prefix, ip }, maxRequests, windowMs);
 }
 
-/**
- * General API: 60 request per 60 detik per IP.
- * Batasan longgar untuk operasi normal karyawan.
- */
-export function checkApiRateLimit(headers: Headers): NextResponse | null {
-    return checkRateLimit(headers, "api", 60, 60_000);
+function normalizeIdentifier(identifier: string): string {
+    return identifier.trim().toLowerCase();
 }
 
-/**
- * Sensitive actions (ganti password, register wajah, dll): 10 request per 60 detik.
- */
-export function checkSensitiveRateLimit(headers: Headers): NextResponse | null {
-    return checkRateLimit(headers, "sensitive", 10, 60_000);
+export function checkLoginRateLimit(headers: Headers, identifier: string): NextResponse | null {
+    const ipLimited = checkRateLimit(headers, "login:ip", 30, 60_000);
+    if (ipLimited) return ipLimited;
+
+    const normalizedIdentifier = normalizeIdentifier(identifier);
+    if (!normalizedIdentifier) return null;
+
+    return checkRateLimitKey(
+        `login:account:${normalizedIdentifier}`,
+        { prefix: "login:account", identifier: normalizedIdentifier },
+        5,
+        60_000
+    );
 }

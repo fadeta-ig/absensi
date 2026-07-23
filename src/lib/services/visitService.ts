@@ -30,11 +30,15 @@ const employeeInclude = {
 
 // ─── JSON Helpers ───────────────────────────────────────────────
 
-function parseJsonField<T>(raw: string | null | undefined): T | null {
+function parseJsonField<T>(raw: string | null | undefined, context: Record<string, unknown>): T | null {
     if (!raw) return null;
     try {
         return typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch {
+    } catch (error) {
+        logger.warn("Stored visit JSON parse failed", {
+            ...context,
+            error,
+        });
         return null;
     }
 }
@@ -97,12 +101,12 @@ function toVisitReport(row: any): VisitReport {
         clientAddress: row.clientAddress,
         purpose: row.purpose,
         result: row.result ?? null,
-        visitLocation: parseJsonField<{ lat: number; lng: number }>(row.visitLocation),
+        visitLocation: parseJsonField<{ lat: number; lng: number }>(row.visitLocation, { field: "visitLocation", id: row.id, employeeId: row.employeeId }),
         visitRadius: row.visitRadius ?? 300,
-        clockInLocation: parseJsonField<{ lat: number; lng: number }>(row.clockInLocation),
-        clockOutLocation: parseJsonField<{ lat: number; lng: number }>(row.clockOutLocation),
-        clockInPhotos: parseJsonField<string[]>(row.clockInPhotos),
-        clockOutPhotos: parseJsonField<string[]>(row.clockOutPhotos),
+        clockInLocation: parseJsonField<{ lat: number; lng: number }>(row.clockInLocation, { field: "clockInLocation", id: row.id, employeeId: row.employeeId }),
+        clockOutLocation: parseJsonField<{ lat: number; lng: number }>(row.clockOutLocation, { field: "clockOutLocation", id: row.id, employeeId: row.employeeId }),
+        clockInPhotos: parseJsonField<string[]>(row.clockInPhotos, { field: "clockInPhotos", id: row.id, employeeId: row.employeeId }),
+        clockOutPhotos: parseJsonField<string[]>(row.clockOutPhotos, { field: "clockOutPhotos", id: row.id, employeeId: row.employeeId }),
         photos: Array.isArray(row.photos) ? row.photos.map(toVisitPhoto) : [],
         status: row.status as VisitStatus,
         notes: row.notes ?? null,
@@ -171,30 +175,25 @@ interface UpdateDraftInput {
 }
 
 export async function updateVisitDraft(id: string, data: UpdateDraftInput): Promise<VisitReport | null> {
-    try {
-        const existing = await prisma.visitReport.findUnique({ where: { id }, select: { status: true } });
-        if (!existing || existing.status !== "draft") {
-            logger.warn("Attempted to update non-draft visit", { id, currentStatus: existing?.status });
-            return null;
-        }
-
-        const row = await prisma.visitReport.update({
-            where: { id },
-            data: {
-                ...(data.clientName !== undefined && { clientName: data.clientName }),
-                ...(data.clientAddress !== undefined && { clientAddress: data.clientAddress }),
-                ...(data.purpose !== undefined && { purpose: data.purpose }),
-                ...(data.visitLocation !== undefined && { visitLocation: JSON.stringify(data.visitLocation) }),
-                ...(data.visitRadius !== undefined && { visitRadius: data.visitRadius }),
-                ...(data.notes !== undefined && { notes: data.notes }),
-            },
-            include: employeeInclude,
-        });
-        return toVisitReport(row);
-    } catch (error) {
-        logger.error("Failed to update visit draft", { id, error });
+    const existing = await prisma.visitReport.findUnique({ where: { id }, select: { status: true } });
+    if (!existing || existing.status !== "draft") {
+        logger.warn("Attempted to update non-draft visit", { id, currentStatus: existing?.status });
         return null;
     }
+
+    const row = await prisma.visitReport.update({
+        where: { id },
+        data: {
+            ...(data.clientName !== undefined && { clientName: data.clientName }),
+            ...(data.clientAddress !== undefined && { clientAddress: data.clientAddress }),
+            ...(data.purpose !== undefined && { purpose: data.purpose }),
+            ...(data.visitLocation !== undefined && { visitLocation: JSON.stringify(data.visitLocation) }),
+            ...(data.visitRadius !== undefined && { visitRadius: data.visitRadius }),
+            ...(data.notes !== undefined && { notes: data.notes }),
+        },
+        include: employeeInclude,
+    });
+    return toVisitReport(row);
 }
 
 // ─── Clock In ───────────────────────────────────────────────────
@@ -212,6 +211,7 @@ export async function clockInVisit(id: string, data: ClockInInput): Promise<Visi
         const existing = await prisma.visitReport.findUnique({
             where: { id },
             select: {
+                employeeId: true,
                 status: true,
                 visitLocation: true,
                 visitRadius: true,
@@ -225,7 +225,7 @@ export async function clockInVisit(id: string, data: ClockInInput): Promise<Visi
         }
 
         const officialTimestamp = new Date();
-        const target = parseJsonField<{ lat: number; lng: number }>(existing.visitLocation);
+        const target = parseJsonField<{ lat: number; lng: number }>(existing.visitLocation, { field: "visitLocation", id, employeeId: existing.employeeId });
         const distanceToTargetMeters = target
             ? calculateDistance(data.location.lat, data.location.lng, target.lat, target.lng)
             : null;
@@ -264,8 +264,7 @@ export async function clockInVisit(id: string, data: ClockInInput): Promise<Visi
             logger.warn("Clock in failed: concurrent status transition", { id });
             return null;
         }
-        logger.error("Failed to clock in visit", { id, error });
-        return null;
+        throw error;
     }
 }
 
@@ -283,6 +282,7 @@ export async function clockOutVisit(id: string, data: ClockOutInput): Promise<Vi
         const existing = await prisma.visitReport.findUnique({
             where: { id },
             select: {
+                employeeId: true,
                 status: true,
                 visitLocation: true,
                 visitRadius: true,
@@ -296,7 +296,7 @@ export async function clockOutVisit(id: string, data: ClockOutInput): Promise<Vi
         }
 
         const officialTimestamp = new Date();
-        const target = parseJsonField<{ lat: number; lng: number }>(existing.visitLocation);
+        const target = parseJsonField<{ lat: number; lng: number }>(existing.visitLocation, { field: "visitLocation", id, employeeId: existing.employeeId });
         const distanceToTargetMeters = target
             ? calculateDistance(data.location.lat, data.location.lng, target.lat, target.lng)
             : null;
@@ -336,55 +336,44 @@ export async function clockOutVisit(id: string, data: ClockOutInput): Promise<Vi
             logger.warn("Clock out failed: concurrent status transition", { id });
             return null;
         }
-        logger.error("Failed to clock out visit", { id, error });
-        return null;
+        throw error;
     }
 }
 
 // ─── HR Verification ──────────────────────────────────────────────
 
 export async function verifyVisit(id: string, isChecked: boolean): Promise<VisitReport | null> {
-    try {
-        const existing = await prisma.visitReport.findUnique({
-            where: { id },
-            select: { status: true },
-        });
+    const existing = await prisma.visitReport.findUnique({
+        where: { id },
+        select: { status: true },
+    });
 
-        if (!existing || existing.status !== "clocked_out") {
-            logger.warn("Verify failed: invalid status", { id, currentStatus: existing?.status });
-            return null;
-        }
-
-        const row = await prisma.visitReport.update({
-            where: { id },
-            data: { hrChecked: isChecked },
-            include: employeeInclude,
-        });
-        return toVisitReport(row);
-    } catch (error) {
-        logger.error("Failed to verify visit", { id, error });
+    if (!existing || existing.status !== "clocked_out") {
+        logger.warn("Verify failed: invalid status", { id, currentStatus: existing?.status });
         return null;
     }
+
+    const row = await prisma.visitReport.update({
+        where: { id },
+        data: { hrChecked: isChecked },
+        include: employeeInclude,
+    });
+    return toVisitReport(row);
 }
 
 // ─── Delete (Draft only) ────────────────────────────────────────
 
 export async function deleteVisitReport(id: string): Promise<boolean> {
-    try {
-        const existing = await prisma.visitReport.findUnique({
-            where: { id },
-            select: { status: true },
-        });
+    const existing = await prisma.visitReport.findUnique({
+        where: { id },
+        select: { status: true },
+    });
 
-        if (!existing || existing.status !== "draft") {
-            logger.warn("Delete failed: can only delete drafts", { id, currentStatus: existing?.status });
-            return false;
-        }
-
-        await prisma.visitReport.delete({ where: { id } });
-        return true;
-    } catch (error) {
-        logger.error("Failed to delete visit report", { id, error });
+    if (!existing || existing.status !== "draft") {
+        logger.warn("Delete failed: can only delete drafts", { id, currentStatus: existing?.status });
         return false;
     }
+
+    await prisma.visitReport.delete({ where: { id } });
+    return true;
 }

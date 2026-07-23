@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { AssetCategory } from "@/lib/types/asset";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 export type AssetFormData = {
@@ -83,7 +83,7 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
                 const list = Array.isArray(empData) ? empData : empData.data || [];
                 setEmployees(list);
             } catch (err) {
-                console.error("Gagal load data form", err);
+                reportClientError("AssetForm", "Gagal load data form", err, { mode });
                 setCategories([]);
                 setEmployees([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat konfigurasi form.");

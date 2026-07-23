@@ -6,7 +6,7 @@ import {
     Calendar, FileText, User, Filter, Eye, X, Loader2
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface OvertimeRequest {
     id: string;
@@ -52,6 +52,7 @@ export default function DashboardOvertimePage() {
                 const data = await res.json();
                 setRequests(Array.isArray(data) ? data : []);
             } catch (error) {
+                reportClientError("DashboardOvertimePage", "Gagal memuat pengajuan lembur", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat pengajuan lembur.";
                 setLoadError(message);
                 toast(message, "error");
@@ -85,6 +86,7 @@ export default function DashboardOvertimePage() {
                 throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui status lembur."));
             }
         } catch (error) {
+            reportClientError("DashboardOvertimePage", "Gagal memperbarui status lembur", error, { overtimeId: id, status });
             toast(error instanceof Error ? error.message : "Gagal memperbarui status lembur.", "error");
         } finally {
             setUpdating(null);

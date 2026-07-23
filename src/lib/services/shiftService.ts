@@ -1,6 +1,5 @@
 import { prisma } from "../prisma";
 import { WorkShift } from "@/types";
-import logger from "@/lib/logger";
 import { Prisma } from "@prisma/client";
 
 type WorkShiftWithDays = Prisma.WorkShiftGetPayload<{ include: { days: true } }>;
@@ -62,51 +61,46 @@ export async function createShift(data: CreateShiftInput): Promise<WorkShift> {
 }
 
 export async function updateShift(id: string, data: Partial<CreateShiftInput>): Promise<WorkShift | null> {
-    try {
-        if (data.isDefault) {
-            await prisma.workShift.updateMany({ data: { isDefault: false } });
-        }
+    const existing = await prisma.workShift.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return null;
 
-        // If days are provided, delete old ones and recreate
-        if (data.days) {
-            await prisma.workShiftDay.deleteMany({ where: { shiftId: id } });
-        }
-
-        const row = await prisma.workShift.update({
-            where: { id },
-            data: {
-                ...(data.name !== undefined && { name: data.name }),
-                ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
-                ...(data.lateCheckIn !== undefined && { lateCheckIn: data.lateCheckIn }),
-                ...(data.earlyCheckIn !== undefined && { earlyCheckIn: data.earlyCheckIn }),
-                ...(data.lateCheckOut !== undefined && { lateCheckOut: data.lateCheckOut }),
-                ...(data.earlyCheckOut !== undefined && { earlyCheckOut: data.earlyCheckOut }),
-                ...(data.days && {
-                    days: {
-                        create: data.days.map((d) => ({
-                            dayOfWeek: d.dayOfWeek,
-                            startTime: d.startTime,
-                            endTime: d.endTime,
-                            isOff: d.isOff,
-                        })),
-                    },
-                }),
-            },
-            include: { days: { orderBy: { dayOfWeek: "asc" } } },
-        });
-        return mapWorkShift(row);
-    } catch (error) {
-        logger.error("Failed to update shift", { id, error });
-        return null;
+    if (data.isDefault) {
+        await prisma.workShift.updateMany({ data: { isDefault: false } });
     }
+
+    // If days are provided, delete old ones and recreate
+    if (data.days) {
+        await prisma.workShiftDay.deleteMany({ where: { shiftId: id } });
+    }
+
+    const row = await prisma.workShift.update({
+        where: { id },
+        data: {
+            ...(data.name !== undefined && { name: data.name }),
+            ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+            ...(data.lateCheckIn !== undefined && { lateCheckIn: data.lateCheckIn }),
+            ...(data.earlyCheckIn !== undefined && { earlyCheckIn: data.earlyCheckIn }),
+            ...(data.lateCheckOut !== undefined && { lateCheckOut: data.lateCheckOut }),
+            ...(data.earlyCheckOut !== undefined && { earlyCheckOut: data.earlyCheckOut }),
+            ...(data.days && {
+                days: {
+                    create: data.days.map((d) => ({
+                        dayOfWeek: d.dayOfWeek,
+                        startTime: d.startTime,
+                        endTime: d.endTime,
+                        isOff: d.isOff,
+                    })),
+                },
+            }),
+        },
+        include: { days: { orderBy: { dayOfWeek: "asc" } } },
+    });
+    return mapWorkShift(row);
 }
 
 export async function deleteShift(id: string): Promise<boolean> {
-    try {
-        await prisma.workShift.delete({ where: { id } });
-        return true;
-    } catch (error) {
-        logger.error("Failed to delete shift", { id, error });
-        return false;
-    }
+    const existing = await prisma.workShift.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return false;
+    await prisma.workShift.delete({ where: { id } });
+    return true;
 }

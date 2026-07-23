@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { AlertCircle, ClipboardList, Download, FileSpreadsheet, Loader2, X } from "lucide-react";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 import { AttendanceSummary } from "./components/AttendanceSummary";
 import { AttendanceFilters } from "./components/AttendanceFilters";
@@ -65,6 +65,7 @@ export default function AttendanceMonitorPage() {
             const data = await res.json();
             setCorrections(Array.isArray(data) ? data : []);
         } catch (error) {
+            reportClientError("AttendanceMonitorPage", "Gagal memuat pengajuan koreksi", error);
             const message = error instanceof Error ? error.message : "Gagal memuat pengajuan koreksi.";
             setCorrectionsError(message);
             toast(message, "error");
@@ -98,6 +99,7 @@ export default function AttendanceMonitorPage() {
                 if (Array.isArray(departmentData)) setDepartments(departmentData);
                 if (Array.isArray(divisionData)) setDivisions(divisionData);
             } catch (error) {
+                reportClientError("AttendanceMonitorPage", "Gagal memuat data absensi awal", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat data absensi.";
                 setLoadError(message);
                 toast(message, "error");
@@ -252,6 +254,7 @@ export default function AttendanceMonitorPage() {
                 throw new Error(await getResponseErrorMessage(res, "Gagal memproses pengajuan koreksi."));
             }
         } catch (error) {
+            reportClientError("AttendanceMonitorPage", "Gagal memproses pengajuan koreksi", error, { correctionId: id, status: s });
             toast(error instanceof Error ? error.message : "Gagal memproses pengajuan koreksi.", "error");
         } finally {
             setProcessingId(null);

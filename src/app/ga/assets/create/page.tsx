@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import AssetForm, { AssetFormData } from "@/features/ga/components/AssetForm";
 import { useToast } from "@/components/Toast";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export default function CreateAssetPage() {
     const router = useRouter();
@@ -40,12 +41,12 @@ export default function CreateAssetPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            const resData = await res.json();
-            if (!res.ok) throw new Error(resData.error || "Gagal membuat aset");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membuat aset"));
 
             toast("Aset baru berhasil disimpan.", "success");
             router.push("/ga/assets");
         } catch (err: unknown) {
+            reportClientError("CreateAssetPage", "Gagal membuat asset GA", err, { name: data.name, categoryId: data.categoryId });
             setError(err instanceof Error ? err.message : "Aset belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);

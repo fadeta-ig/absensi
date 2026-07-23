@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 /** Convert a base64 URL string to a Uint8Array for the applicationServerKey */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -70,6 +70,7 @@ export default function PushNotificationManager() {
                     if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengaktifkan notifikasi push."));
                 }
             } catch (err) {
+                reportClientError("PushNotificationManager", "Gagal mengaktifkan notifikasi push", err);
                 notifyOnce(err instanceof Error ? err.message : "Gagal mengaktifkan notifikasi push.", "error");
             }
         };

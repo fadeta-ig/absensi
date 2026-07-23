@@ -5,7 +5,7 @@ import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Employee } from "@/types";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { Department, Division, FormPayrollComponent, Location, MasterPayrollComponent, Position, WorkShift, FormState } from "./employee-form/types";
 import { IdentitySection } from "./employee-form/IdentitySection";
 import { JobSection } from "./employee-form/JobSection";
@@ -125,6 +125,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                     setForm(f => ({ ...f, payrollComponents: comps }));
                 }
             } catch (err) {
+                reportClientError("EmployeeForm", "Gagal memuat master data karyawan", err, { isEdit });
                 toast(err instanceof Error ? err.message : "Gagal memuat master data karyawan.", "error");
             } finally {
                 setFetching(false);
@@ -160,10 +161,10 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 router.push("/dashboard/employees");
                 router.refresh();
             } else {
-                const error = await res.json();
-                toast(error.error || "Gagal menyimpan data karyawan.", "error");
+                toast(await getResponseErrorMessage(res, "Gagal menyimpan data karyawan."), "error");
             }
-        } catch {
+        } catch (error) {
+            reportClientError("EmployeeForm", "Gagal menyimpan data karyawan", error, { isEdit, employeeDatabaseId: initialData?.id });
             toast("Data karyawan belum tersimpan karena koneksi ke server bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setLoading(false);

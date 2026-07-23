@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, CheckSquare, Square, Search, Filter, AlertCircle } from "lucide-react";
 import QRCode from "react-qr-code";
 import { AssetWithHistory } from "@/lib/types/asset";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export default function PrintLabelsPage() {
     const router = useRouter();
@@ -29,7 +29,7 @@ export default function PrintLabelsPage() {
                 const data = await res.json();
                 setCategories(Array.isArray(data) ? data : []);
             } catch (err) {
-                console.error(err);
+                reportClientError("PrintLabelsPage", "Gagal memuat kategori aset untuk cetak label", err);
                 setCategories([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat kategori aset.");
             }
@@ -54,7 +54,7 @@ export default function PrintLabelsPage() {
                 const parsed = await res.json();
                 setAssets(parsed.data || parsed);
             } catch (err) {
-                console.error(err);
+                reportClientError("PrintLabelsPage", "Gagal memuat aset untuk cetak label", err, { search, categoryFilter });
                 setAssets([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat aset untuk cetak label.");
             } finally {

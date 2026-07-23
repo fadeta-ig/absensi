@@ -56,7 +56,7 @@ export async function sendPasswordEmail(
             recipient: email,
             recipientName: name,
         });
-        return true;
+        return false;
     }
 
     try {
@@ -75,7 +75,7 @@ export async function sendPasswordEmail(
     } catch (error) {
         logger.error("[Email] Gagal mengirim password email", {
             recipient: email,
-            error: error instanceof Error ? error.message : String(error),
+            error,
         });
         return false;
     }
@@ -106,7 +106,7 @@ export async function sendPasswordChangedEmail(
             action: "password-changed",
             recipient: email,
         });
-        return true;
+        return false;
     }
 
     try {
@@ -121,7 +121,10 @@ export async function sendPasswordChangedEmail(
         });
         return true;
     } catch (error) {
-        logger.error("[Email Error] Gagal mengirim email password changed:", error);
+        logger.error("[Email] Gagal mengirim email password changed", {
+            recipient: email,
+            error,
+        });
         return false;
     }
 }

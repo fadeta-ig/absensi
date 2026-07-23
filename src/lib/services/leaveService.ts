@@ -1,7 +1,6 @@
 import { prisma } from "../prisma";
 import { LeaveRequest } from "@/types";
 import { Prisma } from "@prisma/client";
-import logger from "@/lib/logger";
 
 /** Tipe inferensi Prisma untuk LeaveRequest beserta relasi employee-nya */
 export type LeaveRequestWithEmployee = Prisma.LeaveRequestGetPayload<{
@@ -46,8 +45,6 @@ export async function getLeaveRequests(employeeId?: string): Promise<LeaveReques
 }
 
 export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promise<LeaveRequest> {
-    logger.info("Pengajuan cuti baru", { employeeId: data.employeeId, type: data.type, startDate: data.startDate, endDate: data.endDate });
-
     // Pre-check: validasi saldo cuti untuk tipe annual
     if (data.type === "annual") {
         const employee = await prisma.employee.findUnique({
@@ -126,79 +123,74 @@ export function calculateWorkingDays(
 }
 
 export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | null> {
-    try {
-        const existing = await prisma.leaveRequest.findUnique({
-            where: { id },
-            include: { employee: true }
+    const existing = await prisma.leaveRequest.findUnique({
+        where: { id },
+        include: { employee: true }
+    });
+
+    if (!existing) return null;
+
+    // Balance Recalculation Logic
+    // Resolve employee's shift offDays for accurate working-day calculation
+    const offDays = new Set<number>([0]); // default: Minggu
+    if (existing.employee.shiftId) {
+        const shift = await prisma.workShift.findUnique({
+            where: { id: existing.employee.shiftId },
+            include: { days: true },
         });
-
-        if (!existing) return null;
-
-        // Balance Recalculation Logic
-        // Resolve employee's shift offDays for accurate working-day calculation
-        const offDays = new Set<number>([0]); // default: Minggu
-        if (existing.employee.shiftId) {
-            const shift = await prisma.workShift.findUnique({
-                where: { id: existing.employee.shiftId },
-                include: { days: true },
-            });
-            if (shift) {
-                offDays.clear();
-                for (const d of shift.days) {
-                    if (d.isOff) offDays.add(d.dayOfWeek);
-                }
+        if (shift) {
+            offDays.clear();
+            for (const d of shift.days) {
+                if (d.isOff) offDays.add(d.dayOfWeek);
             }
         }
+    }
 
-        if (existing.type === "annual") {
-            if (data.status === "approved" || (existing.status === "approved" && (data.startDate || data.endDate))) {
-                const oldDays = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
-                const newDays = calculateWorkingDays(
-                    data.startDate || existing.startDate,
-                    data.endDate || existing.endDate,
-                    offDays
-                );
+    if (existing.type === "annual") {
+        if (data.status === "approved" || (existing.status === "approved" && (data.startDate || data.endDate))) {
+            const oldDays = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
+            const newDays = calculateWorkingDays(
+                data.startDate || existing.startDate,
+                data.endDate || existing.endDate,
+                offDays
+            );
 
-                let diff = 0;
-                if (existing.status !== "approved" && data.status === "approved") {
-                    // Changing from pending/rejected to approved
-                    diff = newDays;
-                } else if (existing.status === "approved" && data.status !== "rejected") {
-                    // Already approved, just adjusting dates
-                    diff = newDays - oldDays;
+            let diff = 0;
+            if (existing.status !== "approved" && data.status === "approved") {
+                // Changing from pending/rejected to approved
+                diff = newDays;
+            } else if (existing.status === "approved" && data.status !== "rejected") {
+                // Already approved, just adjusting dates
+                diff = newDays - oldDays;
+            }
+
+            if (diff !== 0) {
+                if (diff > 0 && (existing.employee.totalLeave - existing.employee.usedLeave) < diff) {
+                    throw new Error(`Sisa cuti karyawan tidak mencukupi untuk persetujuan ini.`);
                 }
-
-                if (diff !== 0) {
-                    if (diff > 0 && (existing.employee.totalLeave - existing.employee.usedLeave) < diff) {
-                        throw new Error(`Sisa cuti karyawan tidak mencukupi untuk persetujuan ini.`);
-                    }
-                    await prisma.employee.update({
-                        where: { employeeId: existing.employeeId },
-                        data: { usedLeave: { increment: diff } }
-                    });
-                }
-            } else if (existing.status === "approved" && data.status === "rejected") {
-                // Reversing an approval
-                const days = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
                 await prisma.employee.update({
                     where: { employeeId: existing.employeeId },
-                    data: { usedLeave: { decrement: days } }
+                    data: { usedLeave: { increment: diff } }
                 });
             }
+        } else if (existing.status === "approved" && data.status === "rejected") {
+            // Reversing an approval
+            const days = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
+            await prisma.employee.update({
+                where: { employeeId: existing.employeeId },
+                data: { usedLeave: { decrement: days } }
+            });
         }
-
-        const row = await prisma.leaveRequest.update({
-            where: { id },
-            data: {
-                ...(data.status !== undefined && { status: data.status }),
-                ...(data.startDate !== undefined && { startDate: new Date(data.startDate) }),
-                ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
-                ...(data.reason !== undefined && { reason: data.reason }),
-            },
-        });
-        return toLeaveRequest(row);
-    } catch (err) {
-        logger.error("Gagal update leave request", { id, error: err });
-        return null;
     }
+
+    const row = await prisma.leaveRequest.update({
+        where: { id },
+        data: {
+            ...(data.status !== undefined && { status: data.status }),
+            ...(data.startDate !== undefined && { startDate: new Date(data.startDate) }),
+            ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
+            ...(data.reason !== undefined && { reason: data.reason }),
+        },
+    });
+    return toLeaveRequest(row);
 }

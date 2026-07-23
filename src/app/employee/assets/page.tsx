@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Package, Plus, AlertTriangle, CheckCircle, Clock, X, MessageSquare, Monitor, Loader2, Info } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 
 interface Asset {
@@ -54,6 +54,7 @@ export default function EmployeeAssetsPage() {
             setAssets(Array.isArray(data.assets) ? data.assets : []);
             setTickets(Array.isArray(data.tickets) ? data.tickets : []);
         } catch (err) {
+            reportClientError("EmployeeAssetsPage", "Gagal mengambil data aset employee", err);
             const message = err instanceof Error ? err.message : "Gagal mengambil data aset.";
             setAssets([]);
             setTickets([]);
@@ -96,10 +97,10 @@ export default function EmployeeAssetsPage() {
                 setShowModal(false);
                 fetchData();
             } else {
-                const data = await res.json();
-                toast(data.error || "Gagal mengirim tiket.", "error");
+                toast(await getResponseErrorMessage(res, "Gagal mengirim tiket aset."), "error");
             }
-        } catch {
+        } catch (error) {
+            reportClientError("EmployeeAssetsPage", "Gagal mengirim tiket aset", error, { type: modalType, assetId: selectedAsset?.id });
             toast("Tiket aset belum terkirim karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);

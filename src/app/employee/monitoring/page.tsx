@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Users, Search, ChevronRight, Activity, Layers, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface Employee {
     id: string;
@@ -37,6 +37,7 @@ export default function MonitoringPage() {
                 const data = await res.json();
                 setEmployees(Array.isArray(data) ? data : []);
             } catch (err) {
+                reportClientError("MonitoringPage", "Gagal memuat data monitoring tim", err);
                 setEmployees([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat data monitoring tim.");
             } finally {

@@ -343,7 +343,7 @@ export async function updateEmployee(
         });
         return row;
     } catch (err) {
-        logger.error("updateEmployee Gagal", { id, error: err instanceof Error ? err.message : String(err) });
+        logger.error("updateEmployee Gagal", { id, error: err });
         throw err;
     }
 }
@@ -353,8 +353,7 @@ export async function deleteEmployee(id: string): Promise<boolean> {
         await prisma.employee.delete({ where: { id } });
         return true;
     } catch (err: unknown) {
-        const prismaErr = err as { code?: string; message?: string };
-        logger.error("deleteEmployee Gagal", { id, code: prismaErr?.code, message: prismaErr?.message });
+        logger.error("deleteEmployee Gagal", { id, error: err });
         throw new Error("Penghapusan ditolak. Karyawan ini mungkin masih memiliki riwayat absensi, gaji, atau peminjaman yang tak terhapus (onDelete: Restrict). Disarankan menonaktifkan status karyawan (isActive: false) alih-alih menghapus data permanen.");
     }
 }

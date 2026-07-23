@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import SimCardForm, { SimCardFormData } from "@/features/ga/components/SimCardForm";
 import { useToast } from "@/components/Toast";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { reportClientError } from "@/lib/clientErrors";
 
 export default function SimCardEditPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -32,7 +33,7 @@ export default function SimCardEditPage({ params }: { params: Promise<{ id: stri
                 });
 
             } catch (err) {
-                console.error("Gagal load SIM Card", err);
+                reportClientError("SimCardEditPage", "Gagal load SIM Card", err, { simId: id });
                 setError(err instanceof Error ? err.message : "Data SIM Card tidak dapat dimuat. Muat ulang halaman atau coba lagi nanti.");
             }
         };
@@ -63,6 +64,7 @@ export default function SimCardEditPage({ params }: { params: Promise<{ id: stri
             toast("Perubahan SIM Card berhasil disimpan.", "success");
             router.push(`/ga/sim`);
         } catch (err: unknown) {
+            reportClientError("SimCardEditPage", "Gagal menyimpan perubahan SIM Card", err, { simId: id });
             setError(err instanceof Error ? err.message : "Perubahan SIM Card belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);

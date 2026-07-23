@@ -58,10 +58,8 @@ export async function updateSimCard(id: string, data: Partial<SimCardInput>) {
 }
 
 export async function deleteSimCard(id: string) {
-    try {
-        await prisma.simCard.delete({ where: { id } });
-        return true;
-    } catch {
-        return false;
-    }
+    const existing = await prisma.simCard.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return false;
+    await prisma.simCard.delete({ where: { id } });
+    return true;
 }

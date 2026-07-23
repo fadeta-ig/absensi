@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface PayrollComponent {
     id: string;
@@ -42,6 +42,7 @@ export default function MasterPayrollPage() {
             const data = await res.json();
             setComponents(Array.isArray(data) ? data : []);
         } catch (error) {
+            reportClientError("MasterPayrollPage", "Gagal memuat komponen payroll", error);
             toast(error instanceof Error ? error.message : "Gagal memuat komponen payroll.", "error");
         } finally {
             setLoading(false);
@@ -83,15 +84,15 @@ export default function MasterPayrollPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(form)
             });
-            const data = await res.json();
             if (res.ok) {
                 setMsg({ type: "success", text: `Komponen berhasil ${editMode ? "diperbarui" : "ditambahkan"}` });
                 fetchData();
                 setTimeout(() => setShowModal(false), 1000);
             } else {
-                setMsg({ type: "error", text: data.error || "Gagal menyimpan" });
+                setMsg({ type: "error", text: await getResponseErrorMessage(res, "Gagal menyimpan komponen payroll.") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("MasterPayrollPage", "Gagal menyimpan komponen payroll", error, { editMode, componentId: form.id });
             setMsg({ type: "error", text: "Kesalahan server" });
         } finally {
             setLoading(false);
@@ -115,6 +116,7 @@ export default function MasterPayrollPage() {
                     await fetchData();
                     toast("Komponen payroll berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("MasterPayrollPage", "Gagal menghapus komponen payroll", error, { componentId: id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus komponen payroll.", "error");
                 } finally {
                     setLoading(false);

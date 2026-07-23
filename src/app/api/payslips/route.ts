@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { payslipCreateSchema } from "@/lib/validations/validationSchemas";
 import { getPayslips, createPayslip, deletePayslip } from "@/lib/services/payslipService";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
@@ -28,9 +24,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -57,9 +50,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -71,7 +61,10 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "ID payslip diperlukan." }, { status: 400 });
         }
 
-        await deletePayslip(id);
+        const deleted = await deletePayslip(id);
+        if (!deleted) {
+            return NextResponse.json({ error: "Slip gaji tidak ditemukan." }, { status: 404 });
+        }
         
         await logAction("DELETE", "PAYSLIP", actorFromSession(session), id);
         logger.info("Payslip deleted", { id, deletedBy: session.username });

@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { submitCorrection, getCorrectionsByUser, getAllCorrections, resolveCorrection } from "@/lib/services/attendanceCorrectionService";
 import { attendanceCorrectionCreateSchema, attendanceCorrectionUpdateSchema } from "@/lib/validations/validationSchemas";
 import logger from "@/lib/logger";
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
@@ -27,9 +23,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return forbiddenResponse();
@@ -52,9 +45,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -69,6 +59,12 @@ export async function PATCH(request: NextRequest) {
         
         return NextResponse.json(updated);
     } catch (err) {
+        if (err instanceof Error && err.message === "Correction request not found") {
+            return NextResponse.json({ error: "Pengajuan koreksi tidak ditemukan." }, { status: 404 });
+        }
+        if (err instanceof Error && err.message === "Request has already been processed") {
+            return NextResponse.json({ error: "Pengajuan koreksi sudah diproses." }, { status: 409 });
+        }
         return serverErrorResponse("AttendanceCorrectionPATCH", err);
     }
 }

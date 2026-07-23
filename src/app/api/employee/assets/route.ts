@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { z } from "zod";
@@ -12,10 +11,7 @@ const ticketSchema = z.object({
     description: z.string().min(10),
 });
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
@@ -40,9 +36,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();

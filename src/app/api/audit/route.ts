@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { forbiddenResponse, requireAuth, unauthorizedResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();

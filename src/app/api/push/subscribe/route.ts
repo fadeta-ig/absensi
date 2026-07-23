@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, serverErrorResponse, parseJsonBody, validateBody } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -14,23 +13,14 @@ const subscribeSchema = z.object({
 
 /** POST — subscribe to push notifications */
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
     try {
-        const body = await request.json();
-        const parsed = subscribeSchema.safeParse(body);
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: parsed.error.issues[0]?.message || "Data subscription tidak valid." },
-                { status: 400 },
-            );
-        }
+        const result = await validateBody(request, subscribeSchema);
+        if ("error" in result) return result.error;
 
-        const { endpoint, keys } = parsed.data;
+        const { endpoint, keys } = result.data;
 
         await prisma.pushSubscription.upsert({
             where: { endpoint },
@@ -55,16 +45,15 @@ export async function POST(request: NextRequest) {
 
 /** DELETE — unsubscribe from push notifications */
 export async function DELETE(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
     try {
-        const { endpoint } = await request.json();
+        const body = await parseJsonBody<{ endpoint?: unknown }>(request, "PushSubscribeDELETE");
+        if ("error" in body) return body.error;
+        const { endpoint } = body.data;
 
-        if (endpoint) {
+        if (typeof endpoint === "string" && endpoint) {
             await prisma.pushSubscription.deleteMany({
                 where: { endpoint, userId: session.userId },
             });

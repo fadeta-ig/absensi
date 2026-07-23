@@ -1,13 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { generateTemplate } from "@/lib/services/bulk-import";
 import { canManageHr } from "@/lib/permissions";
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();

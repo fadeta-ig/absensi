@@ -5,7 +5,7 @@ import { Plus, RefreshCw, Layers, Archive, Trash2, Edit2, X, Check, AlertCircle,
 import { AssetCategory } from "@/lib/types/asset";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export default function CategoriesPage() {
     const toast = useToast();
@@ -37,7 +37,7 @@ export default function CategoriesPage() {
             const data = await res.json();
             setCategories(data);
         } catch (error) {
-            console.error("Gagal mengambil data kategori", error);
+            reportClientError("CategoriesPage", "Gagal mengambil data kategori", error);
             setCategories([]);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat kategori aset.");
         } finally {
@@ -69,6 +69,7 @@ export default function CategoriesPage() {
             await fetchCategories();
             toast("Kategori berhasil ditambahkan.", "success");
         } catch (err: unknown) {
+            reportClientError("CategoriesPage", "Gagal menyimpan kategori", err);
             setError(err instanceof Error ? err.message : "Gagal menyimpan kategori");
         } finally {
             setSaving(false);
@@ -95,6 +96,7 @@ export default function CategoriesPage() {
                     await fetchCategories();
                     toast("Kategori berhasil dihapus.", "success");
                 } catch (err: unknown) {
+                    reportClientError("CategoriesPage", "Gagal menghapus kategori", err, { categoryId: cat.id });
                     toast(err instanceof Error ? err.message : "Kategori belum terhapus karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
                 }
             },
@@ -126,6 +128,7 @@ export default function CategoriesPage() {
             await fetchCategories();
             toast("Kategori berhasil diperbarui.", "success");
         } catch (err: unknown) {
+            reportClientError("CategoriesPage", "Gagal memperbarui kategori", err, { categoryId: id });
             toast(err instanceof Error ? err.message : "Kategori belum diperbarui karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setSavingEditId(null);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileText, Loader2, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface EmployeeDocument {
     id: string;
@@ -41,10 +42,11 @@ export function EmployeeDocumentManager({ employeeDatabaseId, employeeIsActive }
         setLoading(true);
         try {
             const response = await fetch(`/api/employees/${employeeDatabaseId}/documents`, { cache: "no-store" });
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal memuat dokumen."));
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal memuat dokumen.");
             setDocuments(Array.isArray(data.documents) ? data.documents : []);
         } catch (error) {
+            reportClientError("EmployeeDocumentManager", "Gagal memuat dokumen karyawan", error, { employeeDatabaseId });
             toast(error instanceof Error ? error.message : "Gagal memuat dokumen.", "error");
         } finally {
             setLoading(false);
@@ -68,13 +70,13 @@ export function EmployeeDocumentManager({ employeeDatabaseId, employeeIsActive }
             if (expiresAt) formData.set("expiresAt", expiresAt);
             if (notes.trim()) formData.set("notes", notes.trim());
             const response = await fetch(`/api/employees/${employeeDatabaseId}/documents`, { method: "POST", body: formData });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal mengunggah dokumen.");
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal mengunggah dokumen."));
             toast("Dokumen berhasil diunggah.", "success");
             setTitle(""); setExpiresAt(""); setNotes("");
             if (fileRef.current) fileRef.current.value = "";
             await load();
         } catch (error) {
+            reportClientError("EmployeeDocumentManager", "Gagal mengunggah dokumen karyawan", error, { employeeDatabaseId, type });
             toast(error instanceof Error ? error.message : "Gagal mengunggah dokumen.", "error");
         } finally {
             setUploading(false);
@@ -92,11 +94,11 @@ export function EmployeeDocumentManager({ employeeDatabaseId, employeeIsActive }
                 setDeletingId(document.id);
                 try {
                     const response = await fetch(`/api/employees/${employeeDatabaseId}/documents/${document.id}`, { method: "DELETE" });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || "Gagal menghapus dokumen.");
+                    if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal menghapus dokumen."));
                     setDocuments((current) => current.filter((item) => item.id !== document.id));
                     toast("Dokumen berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("EmployeeDocumentManager", "Gagal menghapus dokumen karyawan", error, { employeeDatabaseId, documentId: document.id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus dokumen.", "error");
                 } finally {
                     setDeletingId(null);

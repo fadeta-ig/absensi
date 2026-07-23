@@ -1,7 +1,6 @@
 import { DocumentType } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, parseFormData } from "@/lib/middleware/apiGuard";
 import { canManageHr } from "@/lib/permissions";
 import { EMPLOYEE_DOCUMENT_TYPES, listEmployeeDocuments, uploadEmployeeDocument } from "@/lib/services/employeeDocumentService";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
@@ -14,8 +13,6 @@ async function requireHr() {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
     const auth = await requireHr();
     if ("response" in auth) return auth.response;
 
@@ -34,14 +31,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
     const auth = await requireHr();
     if ("response" in auth) return auth.response;
 
     try {
         const { id } = await params;
-        const formData = await request.formData();
+        const parsedForm = await parseFormData(request, "EmployeeDocumentsPOST");
+        if ("error" in parsedForm) return parsedForm.error;
+        const formData = parsedForm.data;
         const file = formData.get("file");
         const type = String(formData.get("type") ?? "");
         const title = String(formData.get("title") ?? "").trim();
@@ -65,7 +62,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await logAction("UPLOAD", "EmployeeDocument", actorFromSession(auth.session), document.id, { employeeDatabaseId: id, type, title });
         return NextResponse.json({ ...document, downloadUrl: `/api/employees/${id}/documents/${document.id}` }, { status: 201 });
     } catch (error) {
-        if (error instanceof Error && (error.message.includes("Dokumen") || error.message.includes("dokumen") || error.message.includes("Karyawan") || error.message.includes("file"))) {
+        if (error instanceof Error && error.message === "Karyawan tidak ditemukan.") {
+            return NextResponse.json({ error: error.message }, { status: 404 });
+        }
+        if (error instanceof Error && (error.message.includes("Dokumen") || error.message.includes("dokumen") || error.message.includes("file"))) {
             return NextResponse.json({ error: error.message }, { status: 400 });
         }
         return serverErrorResponse("EmployeeDocumentsPOST", error);

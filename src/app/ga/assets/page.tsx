@@ -8,7 +8,7 @@ import { AssetWithHistory } from "@/lib/types/asset";
 import { KondisiBadge, StatusBadge, HolderIcon, CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import { formatRupiah } from "@/lib/utils/formatters";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 
@@ -51,7 +51,7 @@ export default function AssetsPage() {
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat kategori aset."));
             setCategories(await res.json());
         } catch (error) {
-            console.error("Gagal mengambil kategori", error);
+            reportClientError("AssetsPage", "Gagal mengambil kategori", error);
             setCategories([]);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat kategori aset.");
         }
@@ -76,7 +76,7 @@ export default function AssetsPage() {
             setAssets(data.data || []);
             setTotalItems(data.total || 0);
         } catch (error) {
-            console.error("Gagal mengambil data aset", error);
+            reportClientError("AssetsPage", "Gagal mengambil data aset", error, { currentPage, filterCategory, filterStatus, filterKondisi, debouncedSearch });
             setAssets([]);
             setTotalItems(0);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat daftar aset.");
@@ -91,7 +91,7 @@ export default function AssetsPage() {
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat statistik aset."));
             setStats(await res.json());
         } catch (error) {
-            console.error("Gagal mengambil data statistik", error);
+            reportClientError("AssetsPage", "Gagal mengambil data statistik", error);
             setStats(null);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat statistik aset.");
         }
@@ -140,7 +140,7 @@ export default function AssetsPage() {
             URL.revokeObjectURL(url);
             toast("Export aset berhasil dibuat.", "success");
         } catch (err) {
-            console.error(err);
+            reportClientError("AssetsPage", "Gagal mengexport data aset", err, { filterCategory, filterStatus, filterKondisi, searchQuery });
             toast(err instanceof Error ? err.message : "Gagal mengexport file.", "error");
         } finally {
             setExporting(false);
@@ -166,6 +166,7 @@ export default function AssetsPage() {
                     await fetchStats();
                     toast("Aset berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("AssetsPage", "Gagal menghapus aset", error, { assetId: asset.id });
                     toast(error instanceof Error ? error.message : "Aset belum terhapus karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
                 }
             },

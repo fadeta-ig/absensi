@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { AlertCircle, Camera, CheckCircle, Loader2, RefreshCw, ScanFace, ShieldCheck, Trash2 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useConfirm } from "@/components/ConfirmModal";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const log = createClientLogger("FaceRegistration");
 
@@ -270,7 +270,7 @@ export function FaceRegistrationCard() {
             if (getAbortError(err)) return;
 
             const message = err instanceof Error ? err.message : "Gagal memuat status wajah.";
-            log.error("Gagal cek status wajah", { error: message });
+            reportClientError("FaceRegistration", "Gagal cek status wajah", err);
             if (!mountedRef.current) return;
 
             setFlow({
@@ -357,8 +357,7 @@ export function FaceRegistrationCard() {
             setModelsReady(true);
             return true;
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Gagal memuat model AI.";
-            log.error("Gagal load model AI", { error: message });
+            reportClientError("FaceRegistration", "Gagal load model AI", err);
             if (!mountedRef.current || operationIdRef.current !== operationId) return false;
 
             setFlow((current) => ({
@@ -436,7 +435,7 @@ export function FaceRegistrationCard() {
         } catch (err) {
             const message = getCameraErrorMessage(err);
             const errName = err instanceof DOMException || err instanceof Error ? err.name : "UnknownError";
-            log.error("Gagal mengakses kamera", { errorName: errName, error: err instanceof Error ? err.message : String(err) });
+            reportClientError("FaceRegistration", "Gagal mengakses kamera", err, { errorName: errName });
             stopCameraStream();
             if (!mountedRef.current || operationIdRef.current !== operationId) return;
 
@@ -547,7 +546,7 @@ export function FaceRegistrationCard() {
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : "Wajah belum berhasil diproses.";
-            log.error("Error saat registrasi wajah", { error: message });
+            reportClientError("FaceRegistration", "Error saat registrasi wajah", err);
             if (!mountedRef.current || operationIdRef.current !== operationId) return;
 
             setFlow((current) => ({
@@ -596,7 +595,7 @@ export function FaceRegistrationCard() {
                     });
                 } catch (err) {
                     const message = err instanceof Error ? err.message : "Gagal menghapus data wajah.";
-                    log.error("Error hapus wajah", { error: message });
+                    reportClientError("FaceRegistration", "Error hapus wajah", err);
                     if (!mountedRef.current || operationIdRef.current !== operationId) return;
 
                     setFlow((current) => ({

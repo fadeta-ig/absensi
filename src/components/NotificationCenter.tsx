@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CalendarOff, MapPinned, Clock4, UserX, FileText, Loader2 } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 interface Notification {
@@ -13,6 +13,11 @@ interface Notification {
     message: string;
     href: string;
     time: string;
+}
+
+interface NotificationCenterProps {
+    enabled?: boolean;
+    onAccessDenied?: () => void;
 }
 
 const TYPE_ICON = {
@@ -31,39 +36,66 @@ const TYPE_COLOR = {
     letter: "text-teal-500 bg-teal-50",
 };
 
-export default function NotificationCenter() {
+export default function NotificationCenter({ enabled = true, onAccessDenied }: NotificationCenterProps) {
     const router = useRouter();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [count, setCount] = useState(0);
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [authBlocked, setAuthBlocked] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const fetchNotifications = useCallback(async () => {
+        if (!enabled || authBlocked) return;
+
         setLoading(true);
         try {
             const res = await fetch("/api/notifications");
+            if (res.status === 401 || res.status === 403) {
+                setAuthBlocked(true);
+                setNotifications([]);
+                setCount(0);
+                setLoadError(null);
+                setOpen(false);
+                onAccessDenied?.();
+                return;
+            }
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
             const data = await res.json();
             setNotifications(data.notifications || []);
             setCount(data.count || 0);
             setLoadError(null);
         } catch (error) {
+            reportClientError("NotificationCenter", "Gagal memuat notifikasi", error);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [authBlocked, enabled, onAccessDenied]);
 
     useEffect(() => {
+        if (enabled) {
+            setAuthBlocked(false);
+            return;
+        }
+
+        setOpen(false);
+        setNotifications([]);
+        setCount(0);
+        setLoadError(null);
+    }, [enabled]);
+
+    useEffect(() => {
+        if (!enabled || authBlocked) return;
+
         const initialFetchTimer = setTimeout(() => void fetchNotifications(), 0);
         const interval = setInterval(fetchNotifications, 60000);
         return () => {
             clearTimeout(initialFetchTimer);
             clearInterval(interval);
         };
-    }, [fetchNotifications]);
+    }, [authBlocked, enabled, fetchNotifications]);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -80,6 +112,8 @@ export default function NotificationCenter() {
         setOpen(false);
         router.push(href);
     };
+
+    if (!enabled || authBlocked) return null;
 
     return (
         <div className="relative" ref={dropdownRef}>

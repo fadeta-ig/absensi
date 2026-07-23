@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import logger from "@/lib/logger";
@@ -16,10 +15,7 @@ const payrollComponentSchema = z.object({
     isActive: z.boolean().default(true),
 });
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -35,9 +31,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -65,9 +58,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -79,6 +69,11 @@ export async function PUT(request: NextRequest) {
 
         if (!id) {
             return NextResponse.json({ error: "ID komponen diperlukan." }, { status: 400 });
+        }
+
+        const existing = await prisma.payrollComponent.findUnique({ where: { id }, select: { id: true } });
+        if (!existing) {
+            return NextResponse.json({ error: "Komponen gaji tidak ditemukan." }, { status: 404 });
         }
 
         const component = await prisma.payrollComponent.update({
@@ -100,9 +95,6 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -113,6 +105,11 @@ export async function DELETE(request: NextRequest) {
 
         if (!id) {
             return NextResponse.json({ error: "ID komponen diperlukan." }, { status: 400 });
+        }
+
+        const existing = await prisma.payrollComponent.findUnique({ where: { id }, select: { id: true } });
+        if (!existing) {
+            return NextResponse.json({ error: "Komponen gaji tidak ditemukan." }, { status: 404 });
         }
 
         await prisma.payrollComponent.delete({ where: { id } });

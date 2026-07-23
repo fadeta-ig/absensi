@@ -23,7 +23,8 @@ import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/l
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const navItems: NavItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -66,44 +67,58 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [loggingOut, setLoggingOut] = useState(false);
     const fetchedRef = useRef(false);
 
+    const checkAuth = useCallback(async () => {
+        setAuthChecked(false);
+        setUser(null);
+
+        try {
+            const meRes = await fetch("/api/auth/me", { credentials: "same-origin" });
+
+            if (!meRes.ok) {
+                storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
+                router.replace("/");
+                return;
+            }
+
+            const data = await meRes.json();
+            if (!data.permissions?.includes("hr.manage")) {
+                storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
+                router.replace(data.permissions?.includes("ga.manage") ? "/ga" : "/employee");
+                return;
+            }
+
+            setUser(data);
+
+            const catRes = await fetch("/api/assets/categories");
+            if (catRes.ok) {
+                const catData = await catRes.json();
+                setCategories(catData);
+            }
+        } catch (error) {
+            reportClientError("DashboardLayout", "Gagal memverifikasi sesi dashboard", error);
+            storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
+            router.replace("/");
+        } finally {
+            setAuthChecked(true);
+        }
+    }, [router]);
+
     useEffect(() => {
         if (fetchedRef.current) return;
         fetchedRef.current = true;
+        void checkAuth();
+    }, [checkAuth]);
 
-        const checkAuth = async () => {
-            try {
-                const [meRes, catRes] = await Promise.all([
-                    fetch("/api/auth/me", { credentials: "same-origin" }),
-                    fetch("/api/assets/categories")
-                ]);
+    useEffect(() => subscribeAuthChanged((event) => {
+        if (event.reason === "logout") {
+            setUser(null);
+            setAuthChecked(true);
+            router.replace("/");
+            return;
+        }
 
-                if (!meRes.ok) {
-                    storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
-                    router.replace("/");
-                    return;
-                }
-                const data = await meRes.json();
-                if (!data.permissions?.includes("hr.manage")) {
-                    storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
-                    router.replace(data.permissions?.includes("ga.manage") ? "/ga" : "/employee");
-                    return;
-                }
-                setUser(data);
-
-                if (catRes.ok) {
-                    const catData = await catRes.json();
-                    setCategories(catData);
-                }
-            } catch {
-                storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
-                router.replace("/");
-            } finally {
-                setAuthChecked(true);
-            }
-        };
-
-        checkAuth();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        void checkAuth();
+    }), [checkAuth, router]);
 
     const handleLogout = useCallback(async () => {
         if (loggingOut) return;
@@ -112,12 +127,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         try {
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
+            notifyAuthChanged("logout");
             router.replace("/");
         } catch (error) {
+            reportClientError("DashboardLayout", "Logout dashboard gagal", error);
             toast(error instanceof Error ? error.message : "Gagal logout.", "error");
             setLoggingOut(false);
         }
     }, [loggingOut, router, toast]);
+
+    const handleNotificationAccessDenied = useCallback(() => {
+        void checkAuth();
+    }, [checkAuth]);
 
     if (!authChecked || !user) {
         return <AppShellLoading message="Memuat Dashboard..." />;
@@ -157,7 +178,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             mobileHeaderRight={
                 <div className="flex items-center gap-1">
                     <ThemeToggle />
-                    <NotificationCenter />
+                    <NotificationCenter
+                        enabled={Boolean(user.permissions?.includes("hr.manage"))}
+                        onAccessDenied={handleNotificationAccessDenied}
+                    />
                 </div>
             }
         >

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -12,10 +11,7 @@ const profileUpdateSchema = z.object({
 
 export type ProfileUpdateBody = z.infer<typeof profileUpdateSchema>;
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) {
@@ -76,9 +72,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) {
@@ -86,17 +79,10 @@ export async function PUT(request: NextRequest) {
     }
 
     try {
-        const body = await request.json() as unknown;
-        const parsed = profileUpdateSchema.safeParse(body);
+        const result = await validateBody(request, profileUpdateSchema);
+        if ("error" in result) return result.error;
 
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: "Data tidak valid", details: parsed.error.flatten().fieldErrors },
-                { status: 400 }
-            );
-        }
-
-        const { phone, avatarUrl } = parsed.data;
+        const { phone, avatarUrl } = result.data;
 
         // Guard: Karyawan hanya bisa update data dirinya sendiri
         // Tidak ada field yang bisa diubah di luar phone dan avatarUrl

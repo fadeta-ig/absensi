@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import logger from "@/lib/logger";
@@ -15,25 +14,19 @@ const bulkPayslipSchema = z.object({
 // ─── POST: Generate payslip massal ────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
 
+    const failureContext: { period?: string; currentEmployeeId?: string; createdCount?: number } = {};
+
     try {
-        const body = await request.json() as unknown;
-        const parsed = bulkPayslipSchema.safeParse(body);
+        const result = await validateBody(request, bulkPayslipSchema);
+        if ("error" in result) return result.error;
 
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: "Data tidak valid", details: parsed.error.flatten().fieldErrors },
-                { status: 400 }
-            );
-        }
-
-        const { period, employeeIds } = parsed.data;
+        const { period, employeeIds } = result.data;
+        failureContext.period = period;
+        failureContext.createdCount = 0;
 
         // Check already existing payslips for this period
         const existingPayslips = await prisma.payslipRecord.findMany({
@@ -90,6 +83,7 @@ export async function POST(request: NextRequest) {
         const createdPayslips: { employeeId: string; name: string; netSalary: number }[] = [];
 
         for (const emp of employees) {
+            failureContext.currentEmployeeId = emp.employeeId;
             // Determine allowances and deductions
             let allowances: { name: string; amount: number }[];
             let deductions: { name: string; amount: number }[];
@@ -137,6 +131,7 @@ export async function POST(request: NextRequest) {
                 name: emp.name,
                 netSalary,
             });
+            failureContext.createdCount = createdPayslips.length;
         }
 
         logger.info("Bulk payslip generated", {
@@ -154,6 +149,6 @@ export async function POST(request: NextRequest) {
         }, { status: 201 });
 
     } catch (err) {
-        return serverErrorResponse("BulkPayslipPOST", err);
+        return serverErrorResponse("BulkPayslipPOST", err, failureContext);
     }
 }

@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, parseFormData } from "@/lib/middleware/apiGuard";
 import { validateImport, executeImport, DuplicateImportError, type ImportMode } from "@/lib/services/bulk-import";
 import logger from "@/lib/logger";
 import { actorFromSession } from "@/lib/services/auditService";
 import { canManageHr } from "@/lib/permissions";
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();
 
     try {
-        const formData = await request.formData();
+        const parsedForm = await parseFormData(request, "BulkImportPOST");
+        if ("error" in parsedForm) return parsedForm.error;
+        const formData = parsedForm.data;
         const file = formData.get("file") as File | null;
         const operation = String(formData.get("operation") ?? formData.get("mode") ?? "validate");
         const importMode = String(formData.get("importMode") ?? "create") as ImportMode;

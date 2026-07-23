@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe, Download, FileText, Paperclip, Loader2, AlertCircle } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface NewsItem {
     id: string;
@@ -39,6 +39,7 @@ export default function NewsPage() {
                 const data = await res.json() as NewsItem[];
                 setNews(Array.isArray(data) ? data : []);
             } catch (err) {
+                reportClientError("EmployeeNewsPage", "Gagal memuat berita employee", err);
                 setNews([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat berita.");
             } finally {

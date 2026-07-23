@@ -11,7 +11,8 @@ import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificat
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 
 const navItems: NavItem[] = [
@@ -109,38 +110,52 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     const [loggingOut, setLoggingOut] = useState(false);
     const fetchedRef = useRef(false);
 
+    const checkAuth = useCallback(async () => {
+        setAuthChecked(false);
+        setUser(null);
+
+        try {
+            const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+            if (!res.ok) {
+                storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
+                router.replace("/");
+                return;
+            }
+            const data = await res.json();
+            if (!data.employeeId || !data.permissions?.includes("employee.self")) {
+                storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
+                router.replace(data.permissions?.includes("hr.manage") ? "/dashboard" : data.permissions?.includes("ga.manage") ? "/ga" : "/");
+                return;
+            }
+            setUser({
+                ...data,
+                hasSubordinates: Array.isArray(data.subordinates) && data.subordinates.length > 0,
+            });
+        } catch (error) {
+            reportClientError("EmployeeLayout", "Gagal memverifikasi sesi employee", error);
+            storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
+            router.replace("/");
+        } finally {
+            setAuthChecked(true);
+        }
+    }, [router]);
+
     useEffect(() => {
         if (fetchedRef.current) return;
         fetchedRef.current = true;
+        void checkAuth();
+    }, [checkAuth]);
 
-        const checkAuth = async () => {
-            try {
-                const res = await fetch("/api/auth/me", { credentials: "same-origin" });
-                if (!res.ok) {
-                    storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
-                    router.replace("/");
-                    return;
-                }
-                const data = await res.json();
-                if (!data.employeeId || !data.permissions?.includes("employee.self")) {
-                    storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
-                    router.replace(data.permissions?.includes("hr.manage") ? "/dashboard" : data.permissions?.includes("ga.manage") ? "/ga" : "/");
-                    return;
-                }
-                setUser({
-                    ...data,
-                    hasSubordinates: Array.isArray(data.subordinates) && data.subordinates.length > 0,
-                });
-            } catch {
-                storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
-                router.replace("/");
-            } finally {
-                setAuthChecked(true);
-            }
-        };
+    useEffect(() => subscribeAuthChanged((event) => {
+        if (event.reason === "logout") {
+            setUser(null);
+            setAuthChecked(true);
+            router.replace("/");
+            return;
+        }
 
-        checkAuth();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        void checkAuth();
+    }), [checkAuth, router]);
 
     const handleLogout = useCallback(async () => {
         if (loggingOut) return;
@@ -149,8 +164,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         try {
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
+            notifyAuthChanged("logout");
             router.replace("/");
         } catch (error) {
+            reportClientError("EmployeeLayout", "Logout employee gagal", error);
             toast(error instanceof Error ? error.message : "Gagal logout.", "error");
             setLoggingOut(false);
         }
@@ -159,6 +176,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     const handleNavigate = useCallback((href: string) => {
         router.push(href);
     }, [router]);
+
+    const handleNotificationAccessDenied = useCallback(() => {
+        void checkAuth();
+    }, [checkAuth]);
 
     if (!authChecked || !user) {
         return <AppShellLoading message="Memuat..." />;
@@ -197,7 +218,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             mobileHeaderRight={
                 <div className="flex items-center gap-1">
                     <ThemeToggle />
-                    <EmployeeNotificationPanel />
+                    <EmployeeNotificationPanel
+                        enabled={Boolean(user.employeeId && user.permissions?.includes("employee.self"))}
+                        onAccessDenied={handleNotificationAccessDenied}
+                    />
                 </div>
             }
             mobileBottomNav={

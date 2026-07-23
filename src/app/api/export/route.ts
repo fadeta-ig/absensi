@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
-import logger from "@/lib/logger";
 import { toDateDisplay, toTimeString } from "@/lib/utils";
 
 interface ExportRow {
@@ -17,9 +15,6 @@ const toDateStr = toDateDisplay;
 
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();

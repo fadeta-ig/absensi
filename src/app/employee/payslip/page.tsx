@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { FileText, Download, X, Eye, Loader2, AlertCircle } from "lucide-react";
 import { exportPayslipPdf } from "@/lib/export";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface PayslipItem { type: "ALLOWANCE" | "DEDUCTION"; name: string; amount: number; }
 interface Payslip {
@@ -34,6 +34,7 @@ export default function PayslipPage() {
                 const data = await res.json();
                 setPayslips(Array.isArray(data) ? data : []);
             } catch (err) {
+                reportClientError("PayslipPage", "Gagal memuat slip gaji employee", err);
                 setPayslips([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat slip gaji.");
             } finally {

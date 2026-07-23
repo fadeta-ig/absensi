@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import QRCode from "qrcode";
 import { getAssetById } from "@/lib/services/assetService";
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     
@@ -49,7 +45,6 @@ export async function GET(request: NextRequest) {
             },
         });
     } catch (err: unknown) {
-        console.error("QR Error", err);
-        return NextResponse.json({ error: "Gagal membuat QR Code" }, { status: 500 });
+        return serverErrorResponse("AssetQRGET", err);
     }
 }

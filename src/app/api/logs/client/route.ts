@@ -1,30 +1,42 @@
 /**
  * POST /api/logs/client
  *
- * Menerima log dari browser dan menulis ke Winston.
- * Hanya level warn & error yang diproses — info/debug di-drop
- * agar combined.log tidak spam.
+ * Receives browser logs and writes them to the centralized Winston logger.
+ * Only warn and error are accepted; client info/debug are dropped by clientLogger.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import logger from "@/lib/logger";
+import { checkRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, serverErrorResponse, unauthorizedResponse, validateBody } from "@/lib/middleware/apiGuard";
 
-const ALLOWED_LEVELS = new Set(["warn", "error"]);
+const clientLogSchema = z.object({
+  level: z.enum(["warn", "error"]),
+  module: z.string().max(120).optional(),
+  message: z.string().min(1).max(500),
+  data: z.record(z.string(), z.unknown()).optional(),
+  timestamp: z.string().max(80).optional(),
+});
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { level, module: mod, message, data, timestamp } = body;
+  const rateLimited = checkRateLimit(req.headers, "client-log", 30, 60_000);
+  if (rateLimited) return rateLimited;
 
-    // Drop info & debug — tidak perlu masuk file log
-    if (!level || !message || !ALLOWED_LEVELS.has(level)) {
-      return NextResponse.json({ ok: true });
-    }
+  const session = await requireAuth();
+  if (!session) return unauthorizedResponse();
+
+  try {
+    const result = await validateBody(req, clientLogSchema);
+    if ("error" in result) return result.error;
+    const { level, module: mod, message, data, timestamp } = result.data;
 
     const meta = {
       source: "client-browser",
       module: mod ?? "unknown",
       clientTimestamp: timestamp,
+      userId: session.userId,
+      username: session.username,
       ...(data ?? {}),
     };
 
@@ -35,8 +47,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch {
-    // Jangan log error di sini agar tidak trigger loop
-    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return serverErrorResponse("ClientLogPOST", err);
   }
 }

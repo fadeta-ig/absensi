@@ -5,7 +5,7 @@ import {
     ClipboardList, CalendarDays, Clock, CheckCircle, AlertTriangle,
     XCircle, Filter, ChevronLeft, ChevronRight, Loader2, AlertCircle
 } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface AttendanceRecord {
     id: string;
@@ -113,6 +113,7 @@ export default function AttendanceHistoryPage() {
                 if (!Array.isArray(data)) throw new Error("Format data riwayat kehadiran tidak sesuai.");
                 setRecords(data);
             } catch (err) {
+                reportClientError("AttendanceHistoryPage", "Gagal memuat riwayat kehadiran", err);
                 setRecords([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat riwayat kehadiran.");
             } finally {

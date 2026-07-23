@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getActiveSession, type SessionPayload } from "@/lib/auth";
 import { ZodSchema, ZodError } from "zod";
-import logger from "@/lib/logger";
+import logger, { serializeError } from "@/lib/logger";
 import { sanitizeObject } from "./sanitize";
 
 // SessionPayload is now imported from @/lib/auth (single source of truth)
@@ -37,6 +37,61 @@ export function forbiddenResponse(): NextResponse {
     );
 }
 
+function requestLogMeta(request: Request, context?: string): Record<string, unknown> {
+    let path = "unknown";
+    try {
+        path = new URL(request.url).pathname;
+    } catch {
+        path = request.url || "unknown";
+    }
+
+    return {
+        ...(context ? { context } : {}),
+        method: request.method,
+        path,
+    };
+}
+
+export async function parseJsonBody<T = unknown>(
+    request: Request,
+    context?: string
+): Promise<{ data: T } | { error: NextResponse }> {
+    try {
+        return { data: await request.json() as T };
+    } catch (err) {
+        logger.warn("Malformed JSON request body", {
+            ...requestLogMeta(request, context),
+            error: serializeError(err),
+        });
+        return {
+            error: NextResponse.json(
+                { error: "Format data tidak valid. Pastikan mengirim JSON yang benar." },
+                { status: 400 }
+            ),
+        };
+    }
+}
+
+export async function parseFormData(
+    request: Request,
+    context?: string
+): Promise<{ data: FormData } | { error: NextResponse }> {
+    try {
+        return { data: await request.formData() };
+    } catch (err) {
+        logger.warn("Malformed multipart form data", {
+            ...requestLogMeta(request, context),
+            error: serializeError(err),
+        });
+        return {
+            error: NextResponse.json(
+                { error: "Format form-data tidak valid. Pastikan file dan field dikirim dengan benar." },
+                { status: 400 }
+            ),
+        };
+    }
+}
+
 /**
  * Validate request body against a Zod schema.
  * Input otomatis di-sanitize (strip HTML tags) sebelum validasi Zod.
@@ -58,8 +113,16 @@ export async function validateBody<T>(
         return { data };
     } catch (err) {
         if (err instanceof ZodError) {
-            const messages = err.issues.map((e: { message: string }) => e.message);
-            logger.warn("Validation failed", { errors: messages });
+            const issues = err.issues.map((issue) => ({
+                path: issue.path.join("."),
+                message: issue.message,
+                code: issue.code,
+            }));
+            const messages = issues.map((issue) => issue.message);
+            logger.warn("Request validation failed", {
+                ...requestLogMeta(request),
+                issues,
+            });
             return {
                 error: NextResponse.json(
                     { error: "Data tidak valid", details: messages },
@@ -67,6 +130,10 @@ export async function validateBody<T>(
                 ),
             };
         }
+        logger.warn("Malformed JSON request body", {
+            ...requestLogMeta(request),
+            error: serializeError(err),
+        });
         return {
             error: NextResponse.json(
                 { error: "Format data tidak valid. Pastikan mengirim JSON yang benar." },
@@ -79,8 +146,12 @@ export async function validateBody<T>(
 /**
  * Standard 500 Server Error response with logging.
  */
-export function serverErrorResponse(context: string, err: unknown): NextResponse {
-    logger.error(`[${context}]`, { error: err instanceof Error ? err.message : String(err) });
+export function serverErrorResponse(
+    context: string,
+    err: unknown,
+    meta: Record<string, unknown> = {}
+): NextResponse {
+    logger.error(`[${context}] Server error`, { ...meta, error: serializeError(err) });
     return NextResponse.json(
         { error: "Terjadi kesalahan pada server. Silakan coba lagi." },
         { status: 500 }

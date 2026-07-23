@@ -6,7 +6,7 @@ import { ArrowLeft, UploadCloud, FileSpreadsheet, CheckCircle, AlertCircle, Tras
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { generateBulkImportTemplate } from "@/lib/utils/excelTemplateGenerator";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type ParsedRow = {
     [key: string]: string;
@@ -55,6 +55,7 @@ export default function BulkImportPage() {
                 setValidPrefixes(prefixes);
                 setCategoryLoadError("");
             } catch (err) {
+                reportClientError("GaAssetImportPage", "Gagal memuat kategori asset import", err);
                 const message = err instanceof Error ? err.message : "Gagal memuat daftar kategori untuk template.";
                 setCategoryList([]);
                 setValidPrefixes(new Set());
@@ -98,7 +99,8 @@ export default function BulkImportPage() {
                 const ws = wb.Sheets[wsName];
                 const rawRows = XLSX.utils.sheet_to_json<ParsedRow>(ws, { defval: "" });
                 validateAndSetRows(rawRows, file);
-            } catch {
+            } catch (err) {
+                reportClientError("GaAssetImportPage", "Gagal membaca file Excel asset import", err, { fileName: file.name });
                 setErrors(["Gagal membaca file Excel. Pastikan format valid."]);
                 setIsParsing(false);
             }
@@ -227,6 +229,7 @@ export default function BulkImportPage() {
             
             setSuccessCount(data.count);
         } catch (err: unknown) {
+            reportClientError("GaAssetImportPage", "Gagal menjalankan bulk import asset", err, { rowCount: parsedData.length });
             setErrors([err instanceof Error ? err.message : "Import aset belum berhasil. Periksa koneksi lalu coba unggah ulang file."]);
         } finally {
             setIsSubmitting(false);

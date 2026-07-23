@@ -5,6 +5,7 @@ import {
     Shield, Heart, HardHat, Info, ChevronDown, ChevronUp,
     HelpCircle, Building2, User, ArrowRight,
 } from "lucide-react";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -93,13 +94,11 @@ export default function BpjsCalculatorPage() {
                 body: JSON.stringify({ grossMonthlyIncome: income, jkkRiskLevel: jkkRisk }),
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || "Perhitungan BPJS belum berhasil diproses.");
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Perhitungan BPJS belum berhasil diproses."));
 
             setResult(await res.json());
         } catch (err) {
+            reportClientError("BpjsCalculatorPage", "Gagal menghitung BPJS", err, { jkkRiskLevel: jkkRisk, grossIncome: income });
             setError(err instanceof Error ? err.message : "Perhitungan BPJS belum berhasil diproses. Periksa nominal gaji lalu coba lagi.");
         } finally {
             setLoading(false);

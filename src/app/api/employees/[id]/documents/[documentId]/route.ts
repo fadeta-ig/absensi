@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { canManageHr } from "@/lib/permissions";
 import { deleteEmployeeDocument, readEmployeeDocument } from "@/lib/services/employeeDocumentService";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
@@ -11,8 +10,6 @@ function contentDisposition(filename: string) {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string; documentId: string }> }) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();
@@ -38,8 +35,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string; documentId: string }> }) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();

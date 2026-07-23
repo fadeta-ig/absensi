@@ -8,7 +8,7 @@ import {
 import dynamic from "next/dynamic";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // Dynamic import for the Map component to avoid SSR issues
 const LocationMap = dynamic(() => import("@/components/LocationMap"), {
@@ -80,7 +80,7 @@ export default function MasterDataPage() {
                 toast("Lokasi tidak ditemukan", "warning");
             }
         } catch (err) {
-            console.error(err);
+            reportClientError("MasterDataPage", "Gagal mencari lokasi", err, { searchQuery });
             toast("Lokasi belum berhasil dicari. Periksa kata kunci atau koneksi lalu coba lagi.", "error");
         } finally {
             setSearchLoading(false);
@@ -103,6 +103,7 @@ export default function MasterDataPage() {
             if (posRes.ok) setPositions(await posRes.json());
             if (locRes.ok) setLocations(await locRes.json());
         } catch (error) {
+            reportClientError("MasterDataPage", "Gagal memuat master data", error);
             toast(error instanceof Error ? error.message : "Gagal memuat master data.", "error");
         } finally {
             setLoading(false);
@@ -183,15 +184,15 @@ export default function MasterDataPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(deptForm)
             });
-            const data = await res.json();
             if (res.ok) {
                 setMsg({ type: "success", text: `Departemen berhasil ${editMode ? "diperbarui" : "ditambahkan"}` });
                 fetchData();
                 setTimeout(() => setShowModal(false), 1000);
             } else {
-                setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
+                setMsg({ type: "error", text: await getResponseErrorMessage(res, "Gagal menyimpan departemen.") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("MasterDataPage", "Gagal menyimpan departemen", error, { editMode, id: deptForm.id });
             setMsg({ type: "error", text: "Departemen belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
@@ -208,15 +209,15 @@ export default function MasterDataPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(divForm)
             });
-            const data = await res.json();
             if (res.ok) {
                 setMsg({ type: "success", text: `Divisi berhasil ${editMode ? "diperbarui" : "ditambahkan"}` });
                 fetchData();
                 setTimeout(() => setShowModal(false), 1000);
             } else {
-                setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
+                setMsg({ type: "error", text: await getResponseErrorMessage(res, "Gagal menyimpan divisi.") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("MasterDataPage", "Gagal menyimpan divisi", error, { editMode, id: divForm.id });
             setMsg({ type: "error", text: "Divisi belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
@@ -233,15 +234,15 @@ export default function MasterDataPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(posForm)
             });
-            const data = await res.json();
             if (res.ok) {
                 setMsg({ type: "success", text: `Jabatan berhasil ${editMode ? "diperbarui" : "ditambahkan"}` });
                 fetchData();
                 setTimeout(() => setShowModal(false), 1000);
             } else {
-                setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
+                setMsg({ type: "error", text: await getResponseErrorMessage(res, "Gagal menyimpan jabatan.") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("MasterDataPage", "Gagal menyimpan jabatan", error, { editMode, id: posForm.id });
             setMsg({ type: "error", text: "Jabatan belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
@@ -264,15 +265,15 @@ export default function MasterDataPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
-            const data = await res.json();
             if (res.ok) {
                 setMsg({ type: "success", text: `Lokasi berhasil ${editMode ? "diperbarui" : "ditambahkan"}` });
                 fetchData();
                 setTimeout(() => setShowModal(false), 1000);
             } else {
-                setMsg({ type: "error", text: data.error || "Gagal menyimpan data" });
+                setMsg({ type: "error", text: await getResponseErrorMessage(res, "Gagal menyimpan lokasi kerja.") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("MasterDataPage", "Gagal menyimpan lokasi kerja", error, { editMode, id: locForm.id });
             setMsg({ type: "error", text: "Lokasi kerja belum tersimpan karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setLoading(false);
@@ -293,6 +294,7 @@ export default function MasterDataPage() {
                     await fetchData();
                     toast("Departemen berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("MasterDataPage", "Gagal menghapus departemen", error, { id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus departemen.", "error");
                 } finally {
                     setLoading(false);
@@ -315,6 +317,7 @@ export default function MasterDataPage() {
                     await fetchData();
                     toast("Divisi berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("MasterDataPage", "Gagal menghapus divisi", error, { id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus divisi.", "error");
                 } finally {
                     setLoading(false);
@@ -337,6 +340,7 @@ export default function MasterDataPage() {
                     await fetchData();
                     toast("Jabatan berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("MasterDataPage", "Gagal menghapus jabatan", error, { id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus jabatan.", "error");
                 } finally {
                     setLoading(false);
@@ -359,6 +363,7 @@ export default function MasterDataPage() {
                     await fetchData();
                     toast("Lokasi berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("MasterDataPage", "Gagal menghapus lokasi", error, { id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus lokasi.", "error");
                 } finally {
                     setLoading(false);

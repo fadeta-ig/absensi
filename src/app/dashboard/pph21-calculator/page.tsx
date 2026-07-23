@@ -5,6 +5,7 @@ import {
     Calculator, Info, ArrowRight, TrendingDown, Wallet,
     FileText, HelpCircle, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types (mirroring pph21Service types for client) ─────────────────
 
@@ -125,15 +126,13 @@ export default function Pph21CalculatorPage() {
                 }),
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || "Perhitungan PPh 21 belum berhasil diproses.");
-            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Perhitungan PPh 21 belum berhasil diproses."));
 
             const data: CalculationResult = await res.json();
             setResult(data);
             setShowDetail(false);
         } catch (err) {
+            reportClientError("Pph21CalculatorPage", "Gagal menghitung PPh 21", err, { ptkpStatus, month, grossIncome: income });
             setError(err instanceof Error ? err.message : "Perhitungan PPh 21 belum berhasil diproses. Periksa nominal gaji lalu coba lagi.");
         } finally {
             setLoading(false);

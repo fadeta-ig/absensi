@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { AlertCircle, FileSpreadsheet, FileText, Loader2, Plus, Wallet } from "lucide-react";
 import { exportToExcel, exportPayslipPdf } from "@/lib/export";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 import { Employee, Division, Department, AllowanceItem, MasterComponent, PayslipItem, Payslip, Tab } from "./types";
 import { PayrollFilters } from "./components/PayrollFilters";
@@ -83,6 +83,7 @@ export default function PayrollPage() {
                 if (Array.isArray(divisionData)) setMasterDivisions(divisionData);
                 if (Array.isArray(overtimeData)) setOvertimeRequests(overtimeData);
             } catch (loadError) {
+                reportClientError("PayrollPage", "Gagal memuat data payroll", loadError);
                 const message = loadError instanceof Error ? loadError.message : "Gagal memuat data payroll.";
                 setInitialError(message);
                 toast(message, "error");
@@ -167,6 +168,7 @@ export default function PayrollPage() {
             setForm({ employeeId: "", period: "", basicSalary: 0, overtime: 0, notes: "" });
             setPayslips((prev) => [newPayslip, ...prev]);
         } catch (submitError) {
+            reportClientError("PayrollPage", "Gagal membuat slip gaji", submitError, { employeeId: form.employeeId, period: form.period });
             const message = submitError instanceof Error ? submitError.message : "Gagal membuat slip gaji.";
             setError(message);
             toast(message, "error");
@@ -349,6 +351,10 @@ export default function PayrollPage() {
                 body: JSON.stringify({ period: selectedPeriod, employeeIds: toGenerate }),
             });
 
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Generate massal payroll gagal."));
+            }
+
             const data = await res.json() as { created: number; skipped: number; message: string };
             setBulkResult(data);
 
@@ -356,7 +362,8 @@ export default function PayrollPage() {
                 const freshPayslips = await fetch("/api/payslips").then((r) => r.json());
                 if (Array.isArray(freshPayslips)) setPayslips(freshPayslips);
             }
-        } catch {
+        } catch (error) {
+            reportClientError("PayrollPage", "Generate massal payroll gagal", error, { period: selectedPeriod, selectedCount: filteredRecapEmployees.length });
             setBulkResult({ created: 0, skipped: 0, message: "Generate massal payroll belum selesai karena koneksi bermasalah. Periksa internet lalu coba lagi." });
         } finally {
             setBulkLoading(false);

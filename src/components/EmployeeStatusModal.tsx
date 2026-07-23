@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type EmployeeSummary = {
     id: string;
@@ -80,12 +81,13 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
         setLoading(true);
         fetch(`/api/employees/${employee.id}/status`, { signal: controller.signal })
             .then(async (response) => {
+                if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal memuat dampak perubahan status."));
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || "Gagal memuat dampak perubahan status.");
                 setOverview(data);
             })
             .catch((fetchError: unknown) => {
                 if (fetchError instanceof DOMException && fetchError.name === "AbortError") return;
+                reportClientError("EmployeeStatusModal", "Gagal memuat dampak perubahan status karyawan", fetchError, { employeeId: employee.id });
                 setError(fetchError instanceof Error ? fetchError.message : "Gagal memuat data.");
             })
             .finally(() => setLoading(false));
@@ -122,10 +124,11 @@ export default function EmployeeStatusModal({ employee, onClose, onSuccess }: Pr
                     reassignManagerId,
                 }),
             });
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal mengubah status karyawan."));
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal mengubah status karyawan.");
             await onSuccess(data.message);
         } catch (submitError: unknown) {
+            reportClientError("EmployeeStatusModal", "Gagal mengubah status karyawan", submitError, { employeeId: employee.id, nextIsActive });
             setError(submitError instanceof Error ? submitError.message : "Gagal mengubah status karyawan.");
         } finally {
             setSubmitting(false);

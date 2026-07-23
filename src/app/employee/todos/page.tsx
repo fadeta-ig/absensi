@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, NotebookPen, Plus, Trash2, CheckCircle, Circle, Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface TodoItem {
     id: string;
@@ -31,6 +31,7 @@ export default function TodosPage() {
                 const data = await res.json();
                 setTodos(Array.isArray(data) ? data : []);
             } catch (error) {
+                reportClientError("TodosPage", "Gagal memuat catatan", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat catatan.";
                 setLoadError(message);
                 toast(message, "error");
@@ -58,6 +59,7 @@ export default function TodosPage() {
             setNewTodo("");
             toast("Catatan berhasil ditambahkan.", "success");
         } catch (error) {
+            reportClientError("TodosPage", "Gagal menambahkan catatan", error);
             toast(error instanceof Error ? error.message : "Gagal menambahkan catatan.", "error");
         } finally {
             setLoading(false);
@@ -75,6 +77,7 @@ export default function TodosPage() {
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status catatan."));
             setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !completed } : t)));
         } catch (error) {
+            reportClientError("TodosPage", "Gagal mengubah status catatan", error, { todoId: id });
             toast(error instanceof Error ? error.message : "Gagal mengubah status catatan.", "error");
         } finally {
             setBusyId(null);
@@ -89,6 +92,7 @@ export default function TodosPage() {
             setTodos((prev) => prev.filter((t) => t.id !== id));
             toast("Catatan berhasil dihapus.", "success");
         } catch (error) {
+            reportClientError("TodosPage", "Gagal menghapus catatan", error, { todoId: id });
             toast(error instanceof Error ? error.message : "Gagal menghapus catatan.", "error");
         } finally {
             setBusyId(null);
