@@ -5,7 +5,7 @@ import { AssetHistoryRow } from "@/lib/types/asset";
 import { KondisiBadge } from "@/features/ga/components/badges/AssetBadges";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export function HistoryTab({ history, loaded, error, onRefresh }: { history: AssetHistoryRow[]; loaded: boolean; error?: string | null; onRefresh: () => void | Promise<void> }) {
     const toast = useToast();
@@ -31,6 +31,7 @@ export function HistoryTab({ history, loaded, error, onRefresh }: { history: Ass
                 throw new Error(await getResponseErrorMessage(res, "Gagal upload BAST"));
             }
         } catch (err) {
+            reportClientError("GaAssetHistoryTab", "Gagal mengunggah dokumen BAST", err, { historyId });
             toast(err instanceof Error ? err.message : "Dokumen BAST belum terunggah karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setUploadingId(null);
@@ -53,6 +54,7 @@ export function HistoryTab({ history, loaded, error, onRefresh }: { history: Ass
                     await onRefresh();
                     toast("Dokumen BAST berhasil dihapus.", "success");
                 } catch (err) {
+                    reportClientError("GaAssetHistoryTab", "Gagal menghapus dokumen BAST", err, { bastId });
                     toast(err instanceof Error ? err.message : "Gagal menghapus BAST", "error");
                 } finally {
                     setDeletingBastId(null);

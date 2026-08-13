@@ -17,7 +17,9 @@ export async function GET(req: Request) {
     }
 
     if (authHeader !== `Bearer ${cronSecret}`) {
-        logger.warn("[Cron] Unauthorized reset-leave attempt.");
+        logger.warn("[Cron] Unauthorized reset-leave attempt.", {
+            userAgent: req.headers.get("user-agent") ?? "unknown",
+        });
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -3,6 +3,7 @@ import { mkdir, readFile, rmdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import type { Prisma } from "@prisma/client";
 import sharp from "sharp";
+import logger from "@/lib/logger";
 import type {
     VisitPhotoCategory,
     VisitPhotoDraft,
@@ -61,6 +62,15 @@ function safeResolvedPath(relativePath: string): string {
         throw new Error("Lokasi penyimpanan foto kunjungan tidak valid.");
     }
     return resolved;
+}
+
+async function cleanupFile(operation: Promise<unknown>, context: Record<string, unknown>) {
+    try {
+        await operation;
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return;
+        logger.warn("Visit photo cleanup failed", { ...context, error });
+    }
 }
 
 function parseJpegDataUrl(dataUrl: string): Buffer {
@@ -244,8 +254,8 @@ async function prepareSinglePhoto(input: PrepareVisitPhotosInput, photo: VisitPh
         await writeFile(stampedAbsolutePath, stampedBuffer, { flag: "wx" });
     } catch (error) {
         await Promise.all([
-            unlink(originalAbsolutePath).catch(() => undefined),
-            unlink(stampedAbsolutePath).catch(() => undefined),
+            cleanupFile(unlink(originalAbsolutePath), { path: originalPath, phase: input.phase }),
+            cleanupFile(unlink(stampedAbsolutePath), { path: stampedPath, phase: input.phase }),
         ]);
         throw error;
     }
@@ -289,15 +299,15 @@ export async function prepareVisitPhotos(input: PrepareVisitPhotosInput): Promis
     const records: Prisma.VisitPhotoCreateManyInput[] = [];
     const cleanup = async () => {
         await Promise.all(records.flatMap((record) => [
-            unlink(safeResolvedPath(record.originalPath)).catch(() => undefined),
-            unlink(safeResolvedPath(record.stampedPath)).catch(() => undefined),
+            cleanupFile(unlink(safeResolvedPath(record.originalPath)), { path: record.originalPath, visitId: input.visitId }),
+            cleanupFile(unlink(safeResolvedPath(record.stampedPath)), { path: record.stampedPath, visitId: input.visitId }),
         ]));
         const phaseDirectories = Array.from(new Set(
             records.map((record) => path.dirname(safeResolvedPath(record.originalPath))),
         ));
         for (const phaseDirectory of phaseDirectories) {
-            await rmdir(phaseDirectory).catch(() => undefined);
-            await rmdir(path.dirname(phaseDirectory)).catch(() => undefined);
+            await cleanupFile(rmdir(phaseDirectory), { path: phaseDirectory, visitId: input.visitId });
+            await cleanupFile(rmdir(path.dirname(phaseDirectory)), { path: path.dirname(phaseDirectory), visitId: input.visitId });
         }
     };
 
@@ -309,7 +319,7 @@ export async function prepareVisitPhotos(input: PrepareVisitPhotosInput): Promis
     } catch (error) {
         await cleanup();
         if (error instanceof VisitPhotoValidationError) throw error;
-        throw new VisitPhotoValidationError("Foto tidak dapat diproses oleh server.");
+        throw error;
     }
 }
 

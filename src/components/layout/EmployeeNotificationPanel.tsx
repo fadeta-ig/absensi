@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +23,11 @@ interface NotifResponse {
     notifications: EmployeeNotification[];
     total: number;
     unread: number;
+}
+
+interface EmployeeNotificationPanelProps {
+    enabled?: boolean;
+    onAccessDenied?: () => void;
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -48,51 +53,93 @@ function fmtRelativeTime(isoStr: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EmployeeNotificationPanel() {
+export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: EmployeeNotificationPanelProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<EmployeeNotification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [readIds, setReadIds] = useState<Set<string>>(new Set());
+    const [authBlocked, setAuthBlocked] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
     const hasFetched = useRef(false);
 
+    const stopForAuthChange = useCallback(() => {
+        setAuthBlocked(true);
+        setIsOpen(false);
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoadError(null);
+        setReadIds(new Set());
+        hasFetched.current = false;
+        onAccessDenied?.();
+    }, [onAccessDenied]);
+
     const fetchNotifications = useCallback(async () => {
-        if (loading) return;
+        if (!enabled || authBlocked || loading) return;
         setLoading(true);
         setLoadError(null);
         try {
             const res = await fetch("/api/notifications/employee");
+            if (res.status === 401 || res.status === 403) {
+                stopForAuthChange();
+                return;
+            }
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
             const data = await res.json() as NotifResponse;
             setNotifications(data.notifications ?? []);
             setUnreadCount(data.unread ?? 0);
         } catch (error) {
+            reportClientError("EmployeeNotificationPanel", "Gagal memuat notifikasi employee", error);
             setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
         } finally {
             setLoading(false);
         }
-    }, [loading]);
+    }, [authBlocked, enabled, loading, stopForAuthChange]);
+
+    const fetchBadgeCount = useCallback(async () => {
+        if (!enabled || authBlocked) return;
+        try {
+            const res = await fetch("/api/notifications/employee");
+            if (res.status === 401 || res.status === 403) {
+                stopForAuthChange();
+                return;
+            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
+            const data = await res.json() as NotifResponse;
+            setUnreadCount(data.unread ?? 0);
+        } catch (error) {
+            reportClientError("EmployeeNotificationPanel", "Gagal memuat badge notifikasi employee", error);
+            setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
+        }
+    }, [authBlocked, enabled, stopForAuthChange]);
+
+    useEffect(() => {
+        if (enabled) {
+            setAuthBlocked(false);
+            return;
+        }
+
+        setIsOpen(false);
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoadError(null);
+        setReadIds(new Set());
+        hasFetched.current = false;
+    }, [enabled]);
 
     // Auto-fetch saat pertama kali dibuka
     useEffect(() => {
-        if (isOpen && !hasFetched.current) {
+        if (enabled && !authBlocked && isOpen && !hasFetched.current) {
             hasFetched.current = true;
             fetchNotifications();
         }
-    }, [isOpen, fetchNotifications]);
+    }, [authBlocked, enabled, isOpen, fetchNotifications]);
 
     // Fetch badge count saat mount (background)
     useEffect(() => {
-        fetch("/api/notifications/employee")
-            .then(async (r) => {
-                if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat notifikasi."));
-                return r.json();
-            })
-            .then((data: NotifResponse) => setUnreadCount(data.unread ?? 0))
-            .catch((error) => setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi."));
-    }, []);
+        void fetchBadgeCount();
+    }, [fetchBadgeCount]);
 
     // Close on outside click
     useEffect(() => {
@@ -121,6 +168,8 @@ export function EmployeeNotificationPanel() {
     };
 
     const displayUnread = Math.max(0, unreadCount - readIds.size);
+
+    if (!enabled || authBlocked) return null;
 
     return (
         <div className="relative" ref={panelRef}>

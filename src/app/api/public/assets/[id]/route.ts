@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { getPublicAssetById } from "@/lib/services/assetService";
+import { serverErrorResponse } from "@/lib/middleware/apiGuard";
 
 /**
  * GET /api/public/assets/[id]
@@ -11,10 +11,6 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    // Rate limit ketat: mencegah scraping/brute force
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const { id } = await params;
         const asset = await getPublicAssetById(id);
@@ -33,10 +29,6 @@ export async function GET(
             },
         });
     } catch (err: unknown) {
-        console.error("[PublicAssetGET]", err);
-        return NextResponse.json(
-            { error: "Terjadi kesalahan pada server." },
-            { status: 500 }
-        );
+        return serverErrorResponse("PublicAssetGET", err);
     }
 }

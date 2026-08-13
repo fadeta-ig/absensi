@@ -48,53 +48,47 @@ export async function createNews(data: Omit<NewsItem, "id">): Promise<NewsItem> 
 }
 
 export async function updateNews(id: string, data: Partial<NewsItem>): Promise<NewsItem | null> {
-    try {
-        if (data.mediaUrl !== undefined) {
-            const oldRow = await prisma.newsItem.findUnique({ where: { id }, select: { mediaUrl: true } });
-            if (oldRow?.mediaUrl && oldRow.mediaUrl !== data.mediaUrl) {
-                const oldFilePath = path.join(getUploadDir(), oldRow.mediaUrl);
-                try {
-                    await unlink(oldFilePath);
-                } catch (error) {
-                    logger.warn("Old news media not found for deletion", { path: oldFilePath, error });
-                }
-            }
-        }
+    const existing = await prisma.newsItem.findUnique({ where: { id }, select: { mediaUrl: true } });
+    if (!existing) return null;
 
-        const row = await prisma.newsItem.update({
-            where: { id },
-            data: {
-                ...(data.title !== undefined && { title: data.title }),
-                ...(data.content !== undefined && { content: data.content }),
-                ...(data.category !== undefined && { category: data.category }),
-                ...(data.isPinned !== undefined && { isPinned: data.isPinned }),
-                ...(data.mediaUrl !== undefined && { mediaUrl: data.mediaUrl }),
-                ...(data.mediaName !== undefined && { mediaName: data.mediaName }),
-            },
-        });
-        return mapNewsItem(row);
-    } catch (error) {
-        logger.error("Failed to update news", { id, error });
-        return null;
-    }
-}
-
-export async function deleteNews(id: string): Promise<boolean> {
-    try {
-        const oldRow = await prisma.newsItem.findUnique({ where: { id }, select: { mediaUrl: true } });
-        if (oldRow?.mediaUrl) {
-            const oldFilePath = path.join(getUploadDir(), oldRow.mediaUrl);
+    if (data.mediaUrl !== undefined) {
+        if (existing.mediaUrl && existing.mediaUrl !== data.mediaUrl) {
+            const oldFilePath = path.join(getUploadDir(), existing.mediaUrl);
             try {
                 await unlink(oldFilePath);
             } catch (error) {
                 logger.warn("Old news media not found for deletion", { path: oldFilePath, error });
             }
         }
-
-        await prisma.newsItem.delete({ where: { id } });
-        return true;
-    } catch (error) {
-        logger.error("Failed to delete news", { id, error });
-        return false;
     }
+
+    const row = await prisma.newsItem.update({
+        where: { id },
+        data: {
+            ...(data.title !== undefined && { title: data.title }),
+            ...(data.content !== undefined && { content: data.content }),
+            ...(data.category !== undefined && { category: data.category }),
+            ...(data.isPinned !== undefined && { isPinned: data.isPinned }),
+            ...(data.mediaUrl !== undefined && { mediaUrl: data.mediaUrl }),
+            ...(data.mediaName !== undefined && { mediaName: data.mediaName }),
+        },
+    });
+    return mapNewsItem(row);
+}
+
+export async function deleteNews(id: string): Promise<boolean> {
+    const existing = await prisma.newsItem.findUnique({ where: { id }, select: { mediaUrl: true } });
+    if (!existing) return false;
+
+    if (existing.mediaUrl) {
+        const oldFilePath = path.join(getUploadDir(), existing.mediaUrl);
+        try {
+            await unlink(oldFilePath);
+        } catch (error) {
+            logger.warn("Old news media not found for deletion", { path: oldFilePath, error });
+        }
+    }
+
+    await prisma.newsItem.delete({ where: { id } });
+    return true;
 }

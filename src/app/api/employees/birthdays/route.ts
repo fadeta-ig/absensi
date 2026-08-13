@@ -1,19 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import {
     forbiddenResponse,
     requireAuth,
     unauthorizedResponse,
     serverErrorResponse,
 } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { canManageHr } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { toEmployeeBirthday } from "@/lib/services/birthdayService";
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();

@@ -5,7 +5,7 @@ import {
     FileText, Search, Filter
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 import { LetterRequestTable } from "./components/LetterRequestTable";
 import { LetterDetailModal } from "./components/LetterDetailModal";
@@ -54,6 +54,7 @@ export default function LetterRequestsPage() {
                 const data = await res.json() as LetterRequest[];
                 if (Array.isArray(data)) setRequests(data);
             } catch (err) {
+                reportClientError("LetterRequestsPage", "Gagal memuat data surat karyawan", err);
                 toast(err instanceof Error ? err.message : "Gagal memuat data surat", "error");
             } finally {
                 setLoading(false);
@@ -108,10 +109,13 @@ export default function LetterRequestsPage() {
                 setActionNotes("");
                 toast(`Status berhasil diubah ke "${STATUS_CONFIG[actionType].label}"`, "success");
             } else {
-                const err = await res.json() as { error?: string };
-                toast(err.error ?? "Gagal mengubah status", "error");
+                toast(await getResponseErrorMessage(res, "Gagal mengubah status surat."), "error");
             }
-        } catch {
+        } catch (error) {
+            reportClientError("LetterRequestsPage", "Gagal mengubah status surat karyawan", error, {
+                requestId: actionTarget.id,
+                status: actionType,
+            });
             toast("Status surat belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);

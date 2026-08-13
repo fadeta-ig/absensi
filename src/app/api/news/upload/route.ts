@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, parseFormData } from "@/lib/middleware/apiGuard";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -9,15 +8,14 @@ import logger from "@/lib/logger";
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "news");
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
 
     try {
-        const formData = await request.formData();
+        const parsedForm = await parseFormData(request, "NewsUploadPOST");
+        if ("error" in parsedForm) return parsedForm.error;
+        const formData = parsedForm.data;
         const file = formData.get("file") as File | null;
 
         if (!file) {

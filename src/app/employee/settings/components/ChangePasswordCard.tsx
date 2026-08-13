@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AlertCircle, CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export function ChangePasswordCard() {
     const [currentPassword, setCurrentPassword] = useState("");
@@ -30,23 +31,23 @@ export function ChangePasswordCard() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ currentPassword, newPassword }),
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                setMessage({ type: "success", text: "Password berhasil diubah!" });
-                setCurrentPassword("");
-                setNewPassword("");
-                setConfirmPassword("");
-            } else {
-                const errMessage = data.details && data.details.length > 0 
-                    ? data.details[0] 
-                    : data.error || "Gagal mengubah password";
-                setMessage({ type: "error", text: errMessage });
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal mengubah password"));
             }
-        } catch {
-            setMessage({ type: "error", text: "Password belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi." });
+
+            setMessage({ type: "success", text: "Password berhasil diubah!" });
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+        } catch (error) {
+            reportClientError("ChangePasswordCard", "Gagal mengubah password karyawan", error);
+            setMessage({
+                type: "error",
+                text: error instanceof Error ? error.message : "Password belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi.",
+            });
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const passwordStrength = (pw: string) => {

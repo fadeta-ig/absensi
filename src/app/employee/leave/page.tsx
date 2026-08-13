@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon, Check } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { formatIndonesianDate } from "@/lib/utils";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface LeaveRequest {
     id: string;
@@ -53,6 +53,7 @@ export default function LeavePage() {
 
                 setBalance({ total: 12, used: usedDays });
             } catch (error) {
+                reportClientError("EmployeeLeavePage", "Gagal memuat data cuti", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat data cuti.";
                 setLoadError(message);
                 toast(message, "error");
@@ -102,6 +103,7 @@ export default function LeavePage() {
             setForm({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
             toast("Pengajuan cuti berhasil dikirim!", "success");
         } catch (error) {
+            reportClientError("EmployeeLeavePage", "Gagal mengirim pengajuan cuti", error, { type: form.type, startDate: form.startDate, endDate: form.endDate });
             toast(error instanceof Error ? error.message : "Gagal mengirim pengajuan cuti", "error");
         } finally {
             setLoading(false);

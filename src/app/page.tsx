@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { User, Lock, LogIn, Loader2, KeyRound } from "lucide-react";
 import { consumeAuthRedirectMessage } from "@/lib/authRedirectMessage";
+import { notifyAuthChanged } from "@/lib/authEvents";
+import { reportClientError } from "@/lib/clientErrors";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -66,8 +68,10 @@ export default function LoginPage() {
       // Small delay to ensure cookie is properly set before navigation
       await new Promise((r) => setTimeout(r, 200));
 
+      notifyAuthChanged("login");
       router.push(data.landingPath || "/");
-    } catch {
+    } catch (error) {
+      reportClientError("LoginPage", "Login request failed", error, { username });
       setError("Login belum berhasil karena koneksi ke server bermasalah. Periksa internet lalu coba lagi.");
       setLoading(false);
       isSubmitting.current = false;

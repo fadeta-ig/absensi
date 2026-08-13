@@ -13,7 +13,7 @@ import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import type { AssetWithHistory } from "@/lib/types/asset";
 import type { AssetStats } from "@/lib/services/assets/queries";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type AssetCategoryParams = { id: string; name: string; prefix: string };
 
@@ -91,6 +91,7 @@ function HistoryModal({ asset, onClose }: { asset: Asset; onClose: () => void })
                 const data = await res.json() as HistoryRow[];
                 setHistory(Array.isArray(data) ? data : []);
             } catch (err) {
+                reportClientError("HrAssetsHistoryModal", "Gagal memuat riwayat perpindahan aset", err, { assetId: asset.id });
                 setHistory([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat riwayat perpindahan aset.");
             } finally {
@@ -224,7 +225,7 @@ function HrAssetsPageInner() {
             setStats(await resStats.json());
             setCategories(await resCats.json());
         } catch (err) {
-            console.error("Failed to load GA data", err);
+            reportClientError("HrAssetsPage", "Gagal memuat data aset HR", err, { filterCat, filterStatus, search, currentPage });
             const message = err instanceof Error ? err.message : "Gagal memuat data aset.";
             setAssets([]);
             setTotalItems(0);

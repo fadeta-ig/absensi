@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, parseFormData } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     // Only GA or HR can upload BAST
     if (session.role !== "ga" && session.role !== "hr") return forbiddenResponse();
 
     try {
-        const formData = await request.formData();
+        const parsedForm = await parseFormData(request, "BASTUploadPOST");
+        if ("error" in parsedForm) return parsedForm.error;
+        const formData = parsedForm.data;
         const file = formData.get("file") as File | null;
         const historyId = formData.get("historyId") as string | null;
 

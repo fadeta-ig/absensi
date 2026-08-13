@@ -3,7 +3,7 @@ import { FileText, Eye, Download, Trash2, FileSpreadsheet, Loader2 } from "lucid
 import { Payslip, Employee } from "../types";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export interface PayrollHistoryTabProps {
     filteredHistoryPayslips: Payslip[];
@@ -89,6 +89,7 @@ export function PayrollHistoryTab({
                                                                     setPayslips(prev => prev.filter(x => x.id !== p.id));
                                                                     toast("Slip gaji berhasil dihapus.", "success");
                                                                 } catch (error) {
+                                                                    reportClientError("PayrollHistoryTab", "Gagal menghapus slip gaji", error, { payslipId: p.id, employeeId: p.employeeId, period: p.period });
                                                                     toast(error instanceof Error ? error.message : "Gagal menghapus slip gaji.", "error");
                                                                 } finally {
                                                                     setDeletingId(null);

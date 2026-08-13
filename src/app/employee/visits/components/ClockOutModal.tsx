@@ -7,6 +7,7 @@ import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ClockOutModalProps {
     visit: VisitReport;
@@ -48,19 +49,19 @@ export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps
                     result: result || null,
                 }),
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                onClockOut(data);
-                onClose();
-            } else {
-                setError(data.error || data.details?.join(", ") || "Gagal melakukan clock out.");
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal melakukan clock out."));
             }
-        } catch {
-            setError("Clock out belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
-        }
 
-        setLoading(false);
+            const data = await res.json();
+            onClockOut(data);
+            onClose();
+        } catch (error) {
+            reportClientError("ClockOutModal", "Gagal menyimpan clock out kunjungan", error, { visitId: visit.id });
+            setError(error instanceof Error ? error.message : "Clock out belum tersimpan karena koneksi bermasalah. Periksa internet lalu coba lagi.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (!visit.visitLocation) {

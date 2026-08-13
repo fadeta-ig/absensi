@@ -4,7 +4,6 @@ import {
     requireAuth,
     unauthorizedResponse,
 } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { normalizeHolidayPayload } from "@/lib/services/holidayService";
 import logger from "@/lib/logger";
 
@@ -13,9 +12,6 @@ const MIN_YEAR = 2020;
 const MAX_YEAR = 2100;
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();

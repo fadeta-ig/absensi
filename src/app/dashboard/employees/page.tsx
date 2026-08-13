@@ -5,7 +5,7 @@ import { Users, Plus, Search, Pencil, X, Loader2, Key, Layers, Upload, UserCheck
 import { useConfirm } from "@/components/ConfirmModal";
 import BulkImportModal from "@/components/BulkImportModal";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
@@ -33,10 +33,11 @@ export default function EmployeesPage() {
         setLoadingEmployees(true);
         try {
             const response = await fetch("/api/employees?status=all");
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal memuat data karyawan."));
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal memuat data karyawan.");
             setEmployees(Array.isArray(data) ? data : []);
         } catch (error) {
+            reportClientError("EmployeesPage", "Gagal memuat data karyawan", error);
             setEmployees([]);
             setPasswordMsg({ type: "error", text: error instanceof Error ? error.message : "Gagal memuat data karyawan." });
         } finally {
@@ -55,6 +56,7 @@ export default function EmployeesPage() {
                 setShifts(Array.isArray(data) ? data : []);
             })
             .catch((error) => {
+                reportClientError("EmployeesPage", "Gagal memuat data shift untuk karyawan", error);
                 setPasswordMsg({ type: "error", text: error instanceof Error ? error.message : "Gagal memuat data shift." });
             });
     }, [fetchEmployees]);
@@ -120,13 +122,11 @@ export default function EmployeesPage() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ employeeId: emp.employeeId }),
                     });
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengirim password."));
                     const data = await res.json();
-                    if (res.ok) {
-                        setPasswordMsg({ type: "success", text: data.message });
-                    } else {
-                        setPasswordMsg({ type: "error", text: data.error || "Gagal mengirim password" });
-                    }
-                } catch {
+                    setPasswordMsg({ type: "success", text: data.message });
+                } catch (error) {
+                    reportClientError("EmployeesPage", "Gagal mengirim password karyawan", error, { employeeId: emp.employeeId });
                     setPasswordMsg({ type: "error", text: "Password belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi." });
                 }
                 setSendingPassword(null);

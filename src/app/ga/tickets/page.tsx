@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Ticket, Search, Filter, MessageSquare, CheckCircle, XCircle, Clock, Package, Monitor, Loader2, ArrowRight, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 
 interface TicketData {
@@ -47,6 +47,7 @@ export default function GATicketsPage() {
             const data = await res.json();
             setTickets(Array.isArray(data) ? data : []);
         } catch (err) {
+            reportClientError("GATicketsPage", "Gagal memuat data tiket GA", err);
             const message = err instanceof Error ? err.message : "Gagal memuat data tiket.";
             setTickets([]);
             setLoadError(message);
@@ -83,7 +84,11 @@ export default function GATicketsPage() {
             } else {
                 toast(await getResponseErrorMessage(res, "Gagal memperbarui status."), "error");
             }
-        } catch {
+        } catch (error) {
+            reportClientError("GATicketsPage", "Gagal memperbarui status tiket GA", error, {
+                ticketId: selectedTicket.id,
+                status: newStatus,
+            });
             toast("Status tiket belum tersimpan karena jaringan bermasalah. Periksa koneksi lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);

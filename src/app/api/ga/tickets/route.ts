@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { forbiddenResponse, requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { z } from "zod";
@@ -11,10 +10,7 @@ const ticketUpdateSchema = z.object({
     gaResponse: z.string().optional(),
 });
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
@@ -35,9 +31,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
@@ -47,6 +40,14 @@ export async function PUT(request: NextRequest) {
         if ("error" in result) return result.error;
 
         const { id, status, gaResponse } = result.data;
+
+        const existing = await prisma.assetTicket.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+        if (!existing) {
+            return NextResponse.json({ error: "Ticket tidak ditemukan." }, { status: 404 });
+        }
 
         const ticket = await prisma.assetTicket.update({
             where: { id },

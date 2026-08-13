@@ -8,7 +8,8 @@ import {
     ChevronRight, Cpu, Tag, Loader2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { notifyAuthChanged } from "@/lib/authEvents";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -145,8 +146,10 @@ function LoginModal({ onSuccess, onClose }: { onSuccess: () => void; onClose: ()
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Login gagal");
             if (!data.permissions?.includes("ga.manage")) throw new Error("Akses terbatas untuk tim General Affairs.");
+            notifyAuthChanged("login");
             onSuccess();
         } catch (err: unknown) {
+            reportClientError("PublicAssetScanLogin", "Login GA untuk inspeksi aset gagal", err);
             setError(err instanceof Error ? err.message : "Login gagal");
         } finally {
             setLoading(false);
@@ -247,6 +250,7 @@ function InspectionSheet({ asset, onClose, onSuccess }: {
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Inspeksi gagal disimpan."));
             onSuccess();
         } catch (err) {
+            reportClientError("PublicAssetInspection", "Inspeksi aset gagal disimpan", err, { assetId: asset.id });
             setError(err instanceof Error ? err.message : "Inspeksi gagal disimpan.");
         } finally {
             setSubmitting(false);
@@ -379,6 +383,7 @@ function ScanPageInner({ id }: { id: string }) {
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "QR Code ini tidak terhubung ke aset aktif manapun."));
                 setAsset(await res.json());
             } catch (error) {
+                reportClientError("PublicAssetScanPage", "Gagal memuat data aset publik", error, { assetId: id });
                 setAsset(null);
                 setLoadError(error instanceof Error ? error.message : "Gagal memuat data aset.");
             } finally {
@@ -401,7 +406,8 @@ function ScanPageInner({ id }: { id: string }) {
             const data = res.ok ? await res.json() : null;
             if (data?.permissions?.includes("ga.manage")) setShowSheet(true);
             else setShowLogin(true);
-        } catch {
+        } catch (error) {
+            reportClientError("PublicAssetScanPage", "Gagal memeriksa sesi GA sebelum inspeksi", error, { assetId: asset?.id ?? id });
             setShowLogin(true);
         }
     };

@@ -5,6 +5,7 @@ import EmployeeForm from "@/components/EmployeeForm";
 import { useParams } from "next/navigation";
 import { Employee } from "@/types";
 import { Loader2 } from "lucide-react";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export default function EditEmployeePage() {
     const { id } = useParams();
@@ -12,10 +13,25 @@ export default function EditEmployeePage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch(`/api/employees/${id}`, { cache: "no-store" })
-            .then(async (response) => response.ok ? response.json() : null)
-            .then((data: Employee | null) => setEmployee(data))
-            .finally(() => setLoading(false));
+        async function loadEmployee() {
+            setLoading(true);
+            try {
+                const response = await fetch(`/api/employees/${id}`, { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(await getResponseErrorMessage(response, "Karyawan tidak ditemukan."));
+                }
+
+                const data = await response.json() as Employee;
+                setEmployee(data);
+            } catch (error) {
+                reportClientError("EditEmployeePage", "Gagal memuat data edit karyawan", error, { employeeId: String(id) });
+                setEmployee(null);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        void loadEmployee();
     }, [id]);
 
     if (loading) return (

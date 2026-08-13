@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { webPush } from "@/lib/webPush";
-import logger from "@/lib/logger";
+import logger, { serializeError } from "@/lib/logger";
 
 /**
  * POST /api/cron/daily-greeting
@@ -13,9 +13,17 @@ import logger from "@/lib/logger";
  */
 export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
-    const expectedToken = `Bearer ${process.env.CRON_SECRET}`;
+    const cronSecret = process.env.CRON_SECRET;
 
-    if (!authHeader || authHeader !== expectedToken) {
+    if (!cronSecret) {
+        logger.error("Daily greeting cron blocked: CRON_SECRET not configured");
+        return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+        logger.warn("Unauthorized daily-greeting cron attempt", {
+            userAgent: request.headers.get("user-agent") ?? "unknown",
+        });
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -78,7 +86,10 @@ export async function POST(request: NextRequest) {
                     }
                     logger.warn("Push notification failed", {
                         employeeId: emp.employeeId,
+                        subscriptionId: sub.id,
+                        endpoint: sub.endpoint,
                         statusCode,
+                        error: serializeError(err),
                     });
                 }
             }

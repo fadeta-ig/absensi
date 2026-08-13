@@ -11,6 +11,7 @@ import { ClockOutModal } from "./components/ClockOutModal";
 import { VisitDetailModal } from "./components/VisitDetailModal";
 import { useConfirm } from "@/components/ConfirmModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type ModalState =
     | { type: "none" }
@@ -30,21 +31,34 @@ export default function VisitsPage() {
     const [currentPage, setCurrentPage] = useState(1);
 
     useEffect(() => {
-        fetch("/api/visits")
-            .then((r) => r.json())
-            .then((data) => {
+        let cancelled = false;
+
+        const loadVisits = async () => {
+            try {
+                const response = await fetch("/api/visits");
+                if (!response.ok) {
+                    throw new Error(await getResponseErrorMessage(response, "Data kunjungan tidak dapat dimuat."));
+                }
+                const data = await response.json();
                 if (Array.isArray(data)) {
+                    if (cancelled) return;
                     setVisits(data);
                 } else {
-                    console.error("Failed to fetch visits:", data);
-                    setVisits([]);
-                    setMessage({ type: "error", text: "Data kunjungan tidak dapat dimuat. Muat ulang halaman atau coba lagi nanti." });
+                    throw new Error("Format data kunjungan tidak valid.");
                 }
-            })
-            .catch(() => {
-                setVisits([]);
-                setMessage({ type: "error", text: "Data kunjungan tidak dapat dimuat. Periksa koneksi internet lalu coba lagi." });
-            });
+            } catch (error) {
+                reportClientError("EmployeeVisitsPage", "Gagal memuat data kunjungan", error);
+                if (!cancelled) {
+                    setVisits([]);
+                    setMessage({ type: "error", text: error instanceof Error ? error.message : "Data kunjungan tidak dapat dimuat. Periksa koneksi internet lalu coba lagi." });
+                }
+            }
+        };
+
+        void loadVisits();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // Auto-hide message after 5 seconds
@@ -87,10 +101,10 @@ export default function VisitsPage() {
                         setVisits((prev) => prev.filter((v) => v.id !== visit.id));
                         setMessage({ type: "success", text: "Draft kunjungan berhasil dihapus." });
                     } else {
-                        const data = await res.json();
-                        setMessage({ type: "error", text: data.error || "Draft kunjungan gagal dihapus. Coba lagi." });
+                        setMessage({ type: "error", text: await getResponseErrorMessage(res, "Draft kunjungan gagal dihapus. Coba lagi.") });
                     }
-                } catch {
+                } catch (error) {
+                    reportClientError("EmployeeVisitsPage", "Gagal menghapus draft kunjungan", error, { visitId: visit.id });
                     setMessage({ type: "error", text: "Draft kunjungan belum terhapus karena koneksi bermasalah. Periksa internet lalu coba lagi." });
                 }
             }

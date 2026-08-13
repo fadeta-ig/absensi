@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import {
     getAttendanceRecords,
     getAttendanceByDate,
@@ -21,9 +20,6 @@ function formatMinutes(totalMinutes: number): string {
 }
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
@@ -45,9 +41,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return forbiddenResponse();
@@ -163,6 +156,12 @@ export async function POST(request: NextRequest) {
                 clockOutLocation: body.location,
                 clockOutPhoto: body.photo,
             });
+            if (!updated) {
+                return serverErrorResponse("AttendanceClockOutUpdate", new Error("Attendance update returned null"), {
+                    attendanceId: existing.id,
+                    employeeId: session.employeeId,
+                });
+            }
 
             logger.info("Clock-out success", { employeeId: session.employeeId });
             return NextResponse.json(updated);

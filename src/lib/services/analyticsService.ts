@@ -3,6 +3,7 @@ import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } 
 import { AssetWithHistory } from "../types/asset";
 import { calculateWorkingDays } from "./leaveService";
 import { toDateString, toISOOrNull } from "@/lib/utils";
+import logger from "@/lib/logger";
 import type {
     AttendanceRecord as DbAttendanceRecord,
     LeaveRequest as DbLeaveRequest,
@@ -25,11 +26,15 @@ type Employee360Row = Prisma.EmployeeGetPayload<{
 type PayslipWithItems = Prisma.PayslipRecordGetPayload<{ include: { items: true } }>;
 type AssetWithCategory = Prisma.AssetGetPayload<{ include: { categoryRel: true } }>;
 
-function parseJson<T>(value: string | null): T | null {
+function parseJson<T>(value: string | null, context: Record<string, unknown>): T | null {
     if (!value) return null;
     try {
         return JSON.parse(value) as T;
-    } catch {
+    } catch (error) {
+        logger.warn("Stored JSON parse failed", {
+            ...context,
+            error,
+        });
         return null;
     }
 }
@@ -44,7 +49,7 @@ function mapEmployee(row: Employee360Row): Employee {
         employmentEndDate: row.employmentEndDate ? toDateString(row.employmentEndDate) : null,
         probationEndDate: row.probationEndDate ? toDateString(row.probationEndDate) : null,
         statusChangedAt: toISOOrNull(row.statusChangedAt),
-        faceDescriptor: parseJson<number[]>(row.faceDescriptor) ?? undefined,
+        faceDescriptor: parseJson<number[]>(row.faceDescriptor, { source: "Employee", field: "faceDescriptor", employeeId: row.employeeId, id: row.id }) ?? undefined,
         manager: row.manager ? {
             id: row.manager.id,
             employeeId: row.manager.employeeId,
@@ -66,8 +71,8 @@ function mapAttendance(row: DbAttendanceRecord): AttendanceRecord {
         date: toDateString(row.date),
         clockIn: toISOOrNull(row.clockIn),
         clockOut: toISOOrNull(row.clockOut),
-        clockInLocation: parseJson<{ lat: number; lng: number }>(row.clockInLocation),
-        clockOutLocation: parseJson<{ lat: number; lng: number }>(row.clockOutLocation),
+        clockInLocation: parseJson<{ lat: number; lng: number }>(row.clockInLocation, { source: "AttendanceRecord", field: "clockInLocation", id: row.id, employeeId: row.employeeId }),
+        clockOutLocation: parseJson<{ lat: number; lng: number }>(row.clockOutLocation, { source: "AttendanceRecord", field: "clockOutLocation", id: row.id, employeeId: row.employeeId }),
         status: row.status as AttendanceRecord["status"],
     };
 }
@@ -77,11 +82,11 @@ function mapVisit(row: DbVisitReport): VisitReport {
         date: toDateString(row.date),
         clockInTime: toISOOrNull(row.clockInTime),
         clockOutTime: toISOOrNull(row.clockOutTime),
-        visitLocation: parseJson<{ lat: number; lng: number }>(row.visitLocation),
-        clockInLocation: parseJson<{ lat: number; lng: number }>(row.clockInLocation),
-        clockOutLocation: parseJson<{ lat: number; lng: number }>(row.clockOutLocation),
-        clockInPhotos: parseJson<string[]>(row.clockInPhotos),
-        clockOutPhotos: parseJson<string[]>(row.clockOutPhotos),
+        visitLocation: parseJson<{ lat: number; lng: number }>(row.visitLocation, { source: "VisitReport", field: "visitLocation", id: row.id, employeeId: row.employeeId }),
+        clockInLocation: parseJson<{ lat: number; lng: number }>(row.clockInLocation, { source: "VisitReport", field: "clockInLocation", id: row.id, employeeId: row.employeeId }),
+        clockOutLocation: parseJson<{ lat: number; lng: number }>(row.clockOutLocation, { source: "VisitReport", field: "clockOutLocation", id: row.id, employeeId: row.employeeId }),
+        clockInPhotos: parseJson<string[]>(row.clockInPhotos, { source: "VisitReport", field: "clockInPhotos", id: row.id, employeeId: row.employeeId }),
+        clockOutPhotos: parseJson<string[]>(row.clockOutPhotos, { source: "VisitReport", field: "clockOutPhotos", id: row.id, employeeId: row.employeeId }),
         status: row.status as VisitReport["status"],
         createdAt: toISOOrNull(row.createdAt)!,
     };

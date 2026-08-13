@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendPasswordEmail } from "@/lib/services/emailService";
-import { checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sendPasswordSchema } from "@/lib/validations/validationSchemas";
 import bcrypt from "bcryptjs";
@@ -20,9 +19,6 @@ function generatePassword(): string {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkSensitiveRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();

@@ -9,6 +9,7 @@ import {
     Loader2,
 } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { toDateString } from "@/lib/utils";
 import type { IndonesianHoliday } from "@/lib/services/holidayService";
 import {
@@ -72,21 +73,18 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                 const response = await fetch(`/api/holidays?year=${year}`, {
                     signal: controller.signal,
                 });
-                const result: unknown = await response.json();
-
                 if (!response.ok) {
-                    const message = result && typeof result === "object" && "error" in result
-                        ? String((result as { error: unknown }).error)
-                        : "Data hari libur nasional tidak dapat dimuat.";
-                    throw new Error(message);
+                    throw new Error(await getResponseErrorMessage(response, "Data hari libur nasional tidak dapat dimuat."));
                 }
 
+                const result: unknown = await response.json();
                 const data = result && typeof result === "object" && Array.isArray((result as { data?: unknown }).data)
                     ? (result as { data: IndonesianHoliday[] }).data
                     : [];
                 setHolidays(data);
             } catch (error) {
                 if (controller.signal.aborted) return;
+                reportClientError("LeaveCalendar", "Gagal memuat hari libur nasional", error, { year });
                 setHolidays([]);
                 setHolidayError(error instanceof Error ? error.message : "Data hari libur nasional tidak dapat dimuat.");
             } finally {
@@ -109,18 +107,15 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
                 const response = await fetch("/api/employees/birthdays", {
                     signal: controller.signal,
                 });
-                const result: unknown = await response.json();
-
                 if (!response.ok) {
-                    const message = result && typeof result === "object" && "error" in result
-                        ? String((result as { error: unknown }).error)
-                        : "Data ulang tahun karyawan tidak dapat dimuat.";
-                    throw new Error(message);
+                    throw new Error(await getResponseErrorMessage(response, "Data ulang tahun karyawan tidak dapat dimuat."));
                 }
 
+                const result: unknown = await response.json();
                 setBirthdays(normalizeBirthdayPayload(result));
             } catch (error) {
                 if (controller.signal.aborted) return;
+                reportClientError("LeaveCalendar", "Gagal memuat ulang tahun karyawan", error);
                 setBirthdays([]);
                 setBirthdayError(error instanceof Error ? error.message : "Data ulang tahun karyawan tidak dapat dimuat.");
             } finally {

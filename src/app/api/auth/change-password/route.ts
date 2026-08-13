@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
 import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { changePasswordSchema } from "@/lib/validations/validationSchemas";
 import { sendPasswordChangedEmail } from "@/lib/services/emailService";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import logger from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkSensitiveRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     try {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
@@ -49,8 +46,12 @@ export async function POST(request: NextRequest) {
         });
 
         // Dispatch background email notification
-        sendPasswordChangedEmail(user.email, user.displayName).catch((e) => {
-            console.error("Gagal mengirim email reset: ", e);
+        sendPasswordChangedEmail(user.email, user.displayName).catch((error) => {
+            logger.warn("Password changed notification email failed", {
+                userId: user.id,
+                email: user.email,
+                error,
+            });
         });
 
         const response = NextResponse.json({

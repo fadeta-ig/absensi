@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { formatIndonesianDate } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface LeaveRequest {
     id: string;
@@ -62,6 +62,7 @@ export default function LeaveManagementPage() {
             try {
                 await fetchLeaves();
             } catch (error) {
+                reportClientError("LeaveManagementPage", "Gagal memuat data cuti", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat data cuti.";
                 setLoadError(message);
                 toast(message, "error");
@@ -115,6 +116,7 @@ export default function LeaveManagementPage() {
             await fetchLeaves();
             toast(status === "approved" ? "Pengajuan cuti disetujui." : "Pengajuan cuti ditolak.", "success");
         } catch (error) {
+            reportClientError("LeaveManagementPage", "Gagal memperbarui status cuti dari quick action", error, { leaveId: l.id, status });
             toast(error instanceof Error ? error.message : "Gagal memperbarui status cuti.", "error");
         } finally {
             setIsUpdating(false);
@@ -140,6 +142,7 @@ export default function LeaveManagementPage() {
             setSelectedLeave(null);
             toast(status === "approved" ? "Pengajuan cuti disetujui." : "Pengajuan cuti ditolak.", "success");
         } catch (error) {
+            reportClientError("LeaveManagementPage", "Gagal memperbarui status cuti dari modal", error, { leaveId: id, status });
             toast(error instanceof Error ? error.message : "Gagal memperbarui status cuti.", "error");
         } finally {
             setIsUpdating(false);

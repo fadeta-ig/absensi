@@ -247,9 +247,22 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: AuditActor
 
         const { sendPasswordEmail } = await import("../emailService");
         for (const item of transactionResult.emailQueue) {
-            sendPasswordEmail(item.email, item.name, item.password).catch(() => {
-                logger.warn("Bulk import: gagal kirim email password", { employeeId: item.employeeId });
-            });
+            sendPasswordEmail(item.email, item.name, item.password)
+                .then((sent) => {
+                    if (!sent) {
+                        logger.warn("Bulk import: email password tidak terkirim", {
+                            employeeId: item.employeeId,
+                            recipient: item.email,
+                        });
+                    }
+                })
+                .catch((error) => {
+                    logger.warn("Bulk import: gagal kirim email password", {
+                        employeeId: item.employeeId,
+                        recipient: item.email,
+                        error,
+                    });
+                });
         }
         const { emailQueue: _emailQueue, ...result } = transactionResult;
         void _emailQueue;
@@ -263,7 +276,7 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: AuditActor
             });
             if (existing) throw new DuplicateImportError(existing.id);
         }
-        logger.error("Bulk import V2 gagal", { error: error instanceof Error ? error.message : String(error), performedBy: performedBy.identifier });
+        logger.error("Bulk import V2 gagal", { error, performedBy: performedBy.identifier });
         throw error;
     }
 }

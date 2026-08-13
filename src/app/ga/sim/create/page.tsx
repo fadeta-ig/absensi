@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import SimCardForm, { SimCardFormData } from "@/features/ga/components/SimCardForm";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 export default function SimCardCreatePage() {
     const router = useRouter();
@@ -28,7 +28,7 @@ export default function SimCardCreatePage() {
             router.push("/ga/sim");
             router.refresh();
         } catch (error) {
-            console.error(error);
+            reportClientError("SimCardCreatePage", "Gagal menyimpan SIM Card", error);
             toast(error instanceof Error ? error.message : "SIM Card belum tersimpan. Periksa data lalu coba lagi.", "error");
         } finally {
             setSaving(false);

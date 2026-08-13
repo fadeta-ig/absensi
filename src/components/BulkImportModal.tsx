@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, Users, X } from "lucide-react";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type Step = "upload" | "validation" | "confirm" | "result";
 type ImportMode = "create" | "update" | "upsert";
@@ -65,11 +66,12 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: { isOpen
             formData.set("importMode", importMode);
             formData.set("allowCreateMaster", String(allowCreateMaster));
             const response = await fetch("/api/employees/import", { method: "POST", body: formData });
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Proses impor gagal."));
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Proses impor gagal.");
             if (operation === "validate") { setReport(data); setStep("validation"); }
             else { setResult(data); setStep("result"); }
         } catch (requestError) {
+            reportClientError("BulkImportModal", "Proses import karyawan gagal", requestError, { operation, importMode, allowCreateMaster });
             setError(requestError instanceof Error ? requestError.message : "Proses impor gagal.");
         } finally { setLoading(false); }
     };
@@ -78,10 +80,13 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: { isOpen
         setError("");
         try {
             const response = await fetch("/api/employees/import/template");
-            if (!response.ok) throw new Error("Template tidak dapat diunduh.");
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Template tidak dapat diunduh."));
             const url = URL.createObjectURL(await response.blob());
             const anchor = document.createElement("a"); anchor.href = url; anchor.download = "Template_Import_Karyawan_V2.xlsx"; anchor.click(); URL.revokeObjectURL(url);
-        } catch (downloadError) { setError(downloadError instanceof Error ? downloadError.message : "Template tidak dapat diunduh."); }
+        } catch (downloadError) {
+            reportClientError("BulkImportModal", "Template import karyawan gagal diunduh", downloadError);
+            setError(downloadError instanceof Error ? downloadError.message : "Template tidak dapat diunduh.");
+        }
     };
 
     if (!isOpen) return null;

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer, Copy } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ShiftDay {
     dayOfWeek: number;
@@ -66,6 +66,7 @@ export default function ShiftsPage() {
                 const data = await res.json();
                 setShifts(Array.isArray(data) ? data : []);
             } catch (error) {
+                reportClientError("ShiftsPage", "Gagal memuat data shift", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat data shift.";
                 setLoadError(message);
                 toast(message, "error");
@@ -97,6 +98,7 @@ export default function ShiftsPage() {
             closeForm();
             toast(editId ? "Shift berhasil diperbarui." : "Shift berhasil ditambahkan.", "success");
         } catch (error) {
+            reportClientError("ShiftsPage", editId ? "Gagal menyimpan perubahan shift" : "Gagal menambahkan shift", error, { shiftId: editId });
             toast(error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift.", "error");
         } finally {
             setLoading(false);
@@ -116,6 +118,7 @@ export default function ShiftsPage() {
                     setShifts((prev) => prev.filter((s) => s.id !== id));
                     toast("Shift berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("ShiftsPage", "Gagal menghapus shift", error, { shiftId: id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus shift.", "error");
                 }
             },
@@ -138,6 +141,7 @@ export default function ShiftsPage() {
             setShifts(Array.isArray(latest) ? latest : []);
             toast("Shift default berhasil diperbarui.", "success");
         } catch (error) {
+            reportClientError("ShiftsPage", "Gagal menjadikan shift default", error, { shiftId: shift.id });
             toast(error instanceof Error ? error.message : "Gagal menjadikan shift sebagai default.", "error");
         } finally {
             setActionId(null);

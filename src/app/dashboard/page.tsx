@@ -14,7 +14,7 @@ import PendingLeaveList from "@/components/dashboard/PendingLeaveList";
 import TodayAttendance from "@/components/dashboard/TodayAttendance";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { toWIBDateString } from "@/lib/timezone";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -84,6 +84,7 @@ export default function DashboardPage() {
             setLastUpdated(new Date());
             if (showToast) toast("Dashboard berhasil diperbarui.", "success");
         } catch (error) {
+            reportClientError("DashboardPage", "Gagal memuat data dashboard", error, { showToast });
             const message = error instanceof Error ? error.message : "Gagal memuat data dashboard.";
             setLoadError(message);
             if (showToast) toast(message, "error");

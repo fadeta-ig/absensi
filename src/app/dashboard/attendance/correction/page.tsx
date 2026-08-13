@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Clock, Calendar, CheckCircle2, History, XCircle, Send, AlertCircle, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface AttendanceCorrectionItem {
     id: string;
@@ -38,6 +38,7 @@ export default function CorrectionPage() {
             const data = await res.json();
             setHistory(Array.isArray(data) ? data : []);
         } catch (err) {
+            reportClientError("DashboardAttendanceCorrectionPage", "Gagal memuat riwayat koreksi absensi", err);
             setHistory([]);
             setHistoryError(err instanceof Error ? err.message : "Gagal memuat riwayat pengajuan.");
         } finally {
@@ -87,10 +88,10 @@ export default function CorrectionPage() {
                 setReason("");
                 fetchHistory();
             } else {
-                const err = await res.json();
-                setMessage({ type: "error", text: err.error || "Gagal mengirim pengajuan." });
+                setMessage({ type: "error", text: await getResponseErrorMessage(res, "Gagal mengirim pengajuan.") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("DashboardAttendanceCorrectionPage", "Gagal mengirim pengajuan koreksi absensi", error, { targetDate });
             setMessage({ type: "error", text: "Pengajuan koreksi belum terkirim karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setSubmitting(false);

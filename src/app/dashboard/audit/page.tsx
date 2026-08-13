@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface AuditUser {
     displayName: string;
@@ -73,7 +73,7 @@ export default function AuditTrailPage() {
             setLogs(filteredData);
             setPagination(data.pagination);
         } catch (err) {
-            console.error("Failed to fetch audit logs", err);
+            reportClientError("AuditTrailPage", "Gagal memuat jejak audit", err, { page: p, searchQ, actionFilter: actF, entityFilter: entF });
             setLogs([]);
             setPagination(null);
             setLoadError(err instanceof Error ? err.message : "Gagal memuat jejak audit.");

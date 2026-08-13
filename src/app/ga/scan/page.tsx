@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, QrCode, Package, ClipboardCheck, Wrench, X, Loader2 } from "lucide-react";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 
@@ -61,6 +61,7 @@ function ScanContent() {
                                 });
                             })
                             .catch(err => {
+                                reportClientError("AssetScannerPage", "Gagal mengambil data aset hasil scan", err, { assetId });
                                 setErrorMsg(err.message);
                             })
                             .finally(() => setLoadingAsset(false));
@@ -89,14 +90,17 @@ function ScanContent() {
             
             scannerRef.current = scanner;
             setScanning(true);
-        }).catch(() => {
+        }).catch((error) => {
+            reportClientError("AssetScannerPage", "Scanner QR gagal dimuat", error);
             setScanning(false);
             setErrorMsg("Scanner QR gagal dimuat. Muat ulang halaman lalu coba lagi.");
         });
 
         return () => {
             if (scannerRef.current) {
-                scannerRef.current.clear().catch(console.error);
+                scannerRef.current.clear().catch((error) => {
+                    reportClientError("AssetScannerPage", "Gagal membersihkan scanner QR", error);
+                });
                 scannerRef.current = null;
             }
         };

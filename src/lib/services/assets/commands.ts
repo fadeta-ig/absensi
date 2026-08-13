@@ -139,38 +139,36 @@ export async function updateAsset(id: string, data: {
     assignedToId?: string | null;
     assignedToName?: string | null;
 }): Promise<AssetWithHistory | null> {
-    try {
-        const row = (await prisma.asset.update({
-            where: { id },
-            data: {
-                ...(data.name !== undefined && { name: data.name }),
-                ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
-                ...(data.kondisi !== undefined && { kondisi: data.kondisi as never }),
-                ...(data.keterangan !== undefined && { keterangan: data.keterangan }),
-                ...(data.serialNumber !== undefined && { serialNumber: data.serialNumber }),
-                ...(data.imei !== undefined && { imei: data.imei }),
-                ...(data.manufacturer !== undefined && { manufacturer: data.manufacturer }),
-                ...(data.modelName !== undefined && { modelName: data.modelName }),
-                ...(data.purchaseDate !== undefined && {
-                    purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
-                }),
-                ...(data.purchasePrice !== undefined && { purchasePrice: data.purchasePrice }),
-                ...(data.warrantyExpiry !== undefined && {
-                    warrantyExpiry: data.warrantyExpiry ? new Date(data.warrantyExpiry) : null,
-                }),
-                ...(data.status !== undefined && { status: data.status as never }),
-                ...(data.holderType !== undefined && { holderType: data.holderType as never }),
-                ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
-                ...(data.assignedToName !== undefined && { assignedToName: data.assignedToName }),
-                ...(data.assignedToName !== undefined && { assignedAt: data.assignedToName ? new Date() : null }),
-            },
-            include: ASSIGNED_TO_INCLUDE,
-        })) as AssetRowRaw;
-        return toAsset(row);
-    } catch (err) {
-        logger.error("Gagal memperbarui aset", { assetId: id, error: err });
-        return null;
-    }
+    const existing = await prisma.asset.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return null;
+
+    const row = (await prisma.asset.update({
+        where: { id },
+        data: {
+            ...(data.name !== undefined && { name: data.name }),
+            ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+            ...(data.kondisi !== undefined && { kondisi: data.kondisi as never }),
+            ...(data.keterangan !== undefined && { keterangan: data.keterangan }),
+            ...(data.serialNumber !== undefined && { serialNumber: data.serialNumber }),
+            ...(data.imei !== undefined && { imei: data.imei }),
+            ...(data.manufacturer !== undefined && { manufacturer: data.manufacturer }),
+            ...(data.modelName !== undefined && { modelName: data.modelName }),
+            ...(data.purchaseDate !== undefined && {
+                purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
+            }),
+            ...(data.purchasePrice !== undefined && { purchasePrice: data.purchasePrice }),
+            ...(data.warrantyExpiry !== undefined && {
+                warrantyExpiry: data.warrantyExpiry ? new Date(data.warrantyExpiry) : null,
+            }),
+            ...(data.status !== undefined && { status: data.status as never }),
+            ...(data.holderType !== undefined && { holderType: data.holderType as never }),
+            ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+            ...(data.assignedToName !== undefined && { assignedToName: data.assignedToName }),
+            ...(data.assignedToName !== undefined && { assignedAt: data.assignedToName ? new Date() : null }),
+        },
+        include: ASSIGNED_TO_INCLUDE,
+    })) as AssetRowRaw;
+    return toAsset(row);
 }
 
 /**

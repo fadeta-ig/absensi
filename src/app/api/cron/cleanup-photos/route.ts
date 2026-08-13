@@ -5,8 +5,18 @@ import logger from "@/lib/logger";
 export async function GET(request: NextRequest) {
     // Basic CRON authorization (Vercel standard)
     const authHeader = request.headers.get("Authorization");
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return new NextResponse("Unauthorized", { status: 401 });
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!cronSecret) {
+        logger.error("Cron cleanup photos blocked: CRON_SECRET not configured");
+        return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
+    }
+
+    if (authHeader !== `Bearer ${cronSecret}`) {
+        logger.warn("Unauthorized cleanup-photos cron attempt", {
+            userAgent: request.headers.get("user-agent") ?? "unknown",
+        });
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     try {

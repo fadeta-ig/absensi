@@ -183,14 +183,21 @@ export async function verifyLogin(username: string, password: string): Promise<U
 
     if (!user) {
         await bcrypt.hash("timing-equalizer", 10);
-        logger.debug("Login attempt rejected");
+        logger.warn("Login attempt rejected", { username, reason: "invalid_credentials" });
         return null;
     }
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     const principal = user.isActive ? toPrincipal(user) : null;
-    if (!isValid || !principal) {
-        logger.debug("Login attempt rejected");
+    if (!isValid) {
+        logger.warn("Login attempt rejected", { username, reason: "invalid_credentials" });
+        return null;
+    }
+    if (!principal) {
+        logger.warn("Login attempt rejected", {
+            username,
+            reason: user.isActive ? "role_or_employee_state_invalid" : "user_inactive",
+        });
         return null;
     }
 

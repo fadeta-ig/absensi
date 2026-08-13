@@ -6,7 +6,6 @@ import {
     unauthorizedResponse,
     validateBody,
 } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit, checkSensitiveRateLimit } from "@/lib/middleware/rateLimit";
 import { employeeStatusChangeSchema } from "@/lib/validations/validationSchemas";
 import {
     changeEmployeeStatus,
@@ -20,9 +19,6 @@ import { actorFromSession } from "@/lib/services/auditService";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, context: RouteContext) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();
@@ -38,9 +34,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-    const rateLimited = checkSensitiveRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();

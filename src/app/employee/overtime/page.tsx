@@ -5,7 +5,7 @@ import {
     Clock4, Plus, Loader2, CheckCircle, AlertCircle, X,
     Calendar, Clock, FileText, Filter
 } from "lucide-react";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface OvertimeRequest {
     id: string;
@@ -58,6 +58,7 @@ export default function EmployeeOvertimePage() {
                 const data = await res.json();
                 setRequests(Array.isArray(data) ? data : []);
             } catch (err) {
+                reportClientError("EmployeeOvertimePage", "Gagal memuat pengajuan lembur", err);
                 setRequests([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat pengajuan lembur.");
             } finally {
@@ -84,17 +85,17 @@ export default function EmployeeOvertimePage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(form),
             });
-            const data = await res.json();
-
             if (res.ok) {
+                const data = await res.json();
                 setRequests((prev) => [data, ...prev]);
                 setShowForm(false);
                 resetForm();
                 setMessage({ type: "success", text: "Pengajuan lembur berhasil dikirim!" });
             } else {
-                setMessage({ type: "error", text: data.error || "Gagal mengajukan lembur" });
+                setMessage({ type: "error", text: await getResponseErrorMessage(res, "Gagal mengajukan lembur") });
             }
-        } catch {
+        } catch (error) {
+            reportClientError("EmployeeOvertimePage", "Gagal mengirim pengajuan lembur", error, { date: form.date, startTime: form.startTime, endTime: form.endTime });
             setMessage({ type: "error", text: "Pengajuan lembur belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi." });
         }
         setLoading(false);

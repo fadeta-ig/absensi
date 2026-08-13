@@ -8,7 +8,7 @@ import {
 import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface NewsItem { id: string; title: string; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
@@ -58,6 +58,7 @@ export default function EmployeeHomePage() {
                 setNews(Array.isArray(newsData) ? newsData : []);
                 setAttendance(Array.isArray(attendanceData) ? attendanceData : []);
             } catch (err) {
+                reportClientError("EmployeeHomePage", "Gagal memuat data beranda employee", err);
                 const message = err instanceof Error ? err.message : "Gagal memuat data beranda.";
                 setLoadError(message);
                 toast(message, "error");

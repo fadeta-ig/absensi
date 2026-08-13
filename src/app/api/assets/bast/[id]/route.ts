@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { canManageGa, canManageHr, canReadAssets } from "@/lib/permissions";
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     // Only GA or HR can delete BAST
@@ -46,9 +42,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canReadAssets(session)) return forbiddenResponse();

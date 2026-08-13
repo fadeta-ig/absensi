@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { canManageHr } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
@@ -10,9 +9,6 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ photoId: string }> },
 ) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 

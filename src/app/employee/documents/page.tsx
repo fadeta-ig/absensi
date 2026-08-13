@@ -8,7 +8,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +94,7 @@ export default function DocumentsPage() {
                 const data = await res.json() as LetterRequest[];
                 if (Array.isArray(data)) setRequests(data);
             } catch (err) {
+                reportClientError("EmployeeDocumentsPage", "Gagal memuat data surat", err);
                 toast(err instanceof Error ? err.message : "Gagal memuat data surat", "error");
             } finally {
                 setLoadingList(false);
@@ -115,17 +116,17 @@ export default function DocumentsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ type: selectedType, purpose }),
             });
-            const data = await res.json() as LetterRequest & { error?: string };
-
             if (res.ok) {
+                const data = await res.json() as LetterRequest;
                 setRequests((prev) => [data, ...prev]);
                 setShowForm(false);
                 setPurpose("");
                 toast("Permintaan surat berhasil dikirim ke HR!", "success");
             } else {
-                toast(data.error ?? "Gagal mengirim permintaan", "error");
+                toast(await getResponseErrorMessage(res, "Gagal mengirim permintaan"), "error");
             }
-        } catch {
+        } catch (error) {
+            reportClientError("EmployeeDocumentsPage", "Gagal mengirim permintaan surat", error, { type: selectedType });
             toast("Permintaan surat belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);

@@ -102,7 +102,7 @@ export async function detectFaceDescriptor(
                 : input instanceof HTMLCanvasElement
                     ? { width: input.width, height: input.height }
                     : {};
-            log.warn("Wajah tidak terdeteksi di frame", info);
+            log.info("Wajah tidak terdeteksi di frame", info);
             return null;
         }
 
@@ -148,6 +148,19 @@ export async function detectFaceDescriptors(
         if (attempt < attempts - 1 && intervalMs > 0) {
             await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
         }
+    }
+
+    if (descriptors.length === 0) {
+        const inputInfo = input instanceof HTMLVideoElement
+            ? { videoWidth: input.videoWidth, videoHeight: input.videoHeight, readyState: input.readyState }
+            : input instanceof HTMLCanvasElement
+                ? { width: input.width, height: input.height }
+                : {};
+        log.warn("Wajah tidak terdeteksi setelah seluruh percobaan scan", {
+            attempts,
+            minimumDetections,
+            ...inputInfo,
+        });
     }
 
     return descriptors;
@@ -200,7 +213,7 @@ export function compareFaces(
     const match = distance < threshold;
 
     if (!match) {
-        log.warn("Face mismatch", {
+        log.info("Face mismatch", {
             distance: distance.toFixed(4),
             threshold,
             similarityPct: `${((1 - distance) * 100).toFixed(1)}%`,

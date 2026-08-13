@@ -22,7 +22,9 @@ export async function GET(req: Request) {
     }
 
     if (authHeader !== `Bearer ${cronSecret}`) {
-        logger.warn("[Cron Payroll] Unauthorized generate-payroll attempt.");
+        logger.warn("[Cron Payroll] Unauthorized generate-payroll attempt.", {
+            userAgent: req.headers.get("user-agent") ?? "unknown",
+        });
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -124,13 +126,21 @@ export async function GET(req: Request) {
                     }
                 });
                 generatedCount++;
-            } catch (err) {
-                logger.error(`[Cron Payroll] Error generating for employee ${emp.employeeId}`, { err });
+            } catch (error) {
+                logger.error("[Cron Payroll] Error generating payslip for employee", {
+                    employeeId: emp.employeeId,
+                    period: periodStr,
+                    error,
+                });
                 failedEmployees.push(emp.employeeId);
             }
         }
 
-        logger.info(`[Cron Payroll] Generated ${generatedCount} payslips. Failed: ${failedEmployees.length}`);
+        logger.info("[Cron Payroll] Payroll generation completed", {
+            period: periodStr,
+            generatedCount,
+            failedCount: failedEmployees.length,
+        });
 
         await logAction("GENERATE_PAYROLL", "PayslipRecord", SYSTEM_ACTOR, undefined, {
             period: periodStr,
@@ -138,12 +148,15 @@ export async function GET(req: Request) {
             failed: failedEmployees,
         });
 
-        return NextResponse.json({
-            success: true,
-            period: periodStr,
-            generatedCount,
-            failedEmployees
-        });
+        return NextResponse.json(
+            {
+                success: failedEmployees.length === 0,
+                period: periodStr,
+                generatedCount,
+                failedEmployees,
+            },
+            { status: failedEmployees.length > 0 ? 207 : 200 }
+        );
 
     } catch (error) {
         logger.error("[Cron Payroll] Failed to generate payroll", { error });

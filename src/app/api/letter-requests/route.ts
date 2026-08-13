@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import logger from "@/lib/logger";
@@ -58,10 +57,7 @@ function toLetterDTO(row: LetterRequestRow, employeeName?: string) {
 // HR → semua request (dengan nama karyawan)
 // Employee → hanya milik sendiri
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
@@ -95,25 +91,15 @@ export async function GET(request: NextRequest) {
 // ─── POST ─────────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return forbiddenResponse();
 
     try {
-        const body = await request.json() as unknown;
-        const parsed = letterRequestCreateSchema.safeParse(body);
+        const result = await validateBody(request, letterRequestCreateSchema);
+        if ("error" in result) return result.error;
 
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: "Data tidak valid", details: parsed.error.flatten().fieldErrors },
-                { status: 400 }
-            );
-        }
-
-        const { type, purpose } = parsed.data;
+        const { type, purpose } = result.data;
 
         const created = await prisma.letterRequest.create({
             data: {
@@ -134,25 +120,15 @@ export async function POST(request: NextRequest) {
 // ─── PATCH: HR update status surat ───────────────────────────────────────────
 
 export async function PATCH(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
 
     try {
-        const body = await request.json() as unknown;
-        const parsed = letterRequestUpdateSchema.safeParse(body);
+        const result = await validateBody(request, letterRequestUpdateSchema);
+        if ("error" in result) return result.error;
 
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: "Data tidak valid", details: parsed.error.flatten().fieldErrors },
-                { status: 400 }
-            );
-        }
-
-        const { id, status, notes } = parsed.data;
+        const { id, status, notes } = result.data;
 
         const existing = await prisma.letterRequest.findUnique({ where: { id } });
         if (!existing) {

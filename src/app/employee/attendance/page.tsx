@@ -9,7 +9,7 @@ import Link from "next/link";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const log = createClientLogger("AttendancePage");
 
@@ -63,7 +63,7 @@ export default function AttendancePage() {
                 }
             } catch (err) {
                 const errMsg = err instanceof Error ? err.message : String(err);
-                log.error("Gagal mendapatkan lokasi GPS", { error: errMsg });
+                reportClientError("AttendancePage", "Gagal mendapatkan lokasi GPS", err);
                 setMessage(errMsg || "Gagal mendapatkan lokasi. Aktifkan GPS.");
             }
         })();
@@ -81,7 +81,7 @@ export default function AttendancePage() {
             })
             .catch((err) => {
                 const message = err instanceof Error ? err.message : "Gagal memuat data absensi hari ini.";
-                log.error("Gagal fetch data absensi", { error: message });
+                reportClientError("AttendancePage", "Gagal memuat data absensi hari ini", err);
                 setStatus("error");
                 setMessage(message);
                 toast(message, "error");
@@ -105,7 +105,7 @@ export default function AttendancePage() {
             })
             .catch((err) => {
                 const message = err instanceof Error ? err.message : "Gagal memuat data wajah terdaftar.";
-                log.error("Gagal fetch face descriptor", { error: message });
+                reportClientError("AttendancePage", "Gagal memuat face descriptor", err);
                 setFaceDescriptorError(message);
                 setFaceVerification({ status: "error", message: `${message} Muat ulang halaman atau buka Pengaturan.` });
                 toast(message, "error");
@@ -141,8 +141,7 @@ export default function AttendancePage() {
             }
         } catch (err) {
             const errName = err instanceof Error ? err.name : "UnknownError";
-            const errMsg = err instanceof Error ? err.message : String(err);
-            log.error("Gagal mengakses kamera", { errorName: errName, error: errMsg });
+            reportClientError("AttendancePage", "Gagal mengakses kamera", err, { errorName: errName });
             setMessage(`Gagal mengakses kamera: ${errName}. Berikan izin kamera.`);
         }
     }, [streaming]);
@@ -228,7 +227,7 @@ export default function AttendancePage() {
                 });
                 stopCamera();
             } else {
-                // compareFaces sudah log.warn mismatch di dalam library
+                // compareFaces mencatat mismatch sebagai info-level client log.
                 setFaceVerification({
                     status: "mismatch",
                     distance: result.distance,
@@ -236,7 +235,7 @@ export default function AttendancePage() {
                 });
             }
         } catch (err) {
-            log.error("Error saat verifikasi wajah", { error: err instanceof Error ? err.message : String(err) });
+            reportClientError("AttendancePage", "Error saat verifikasi wajah", err);
             setFaceVerification({ status: "error", message: "Gagal memverifikasi wajah. Coba lagi." });
         }
     }, [registeredDescriptor, faceDescriptorError, stopCamera, toast]);
@@ -266,25 +265,25 @@ export default function AttendancePage() {
                     location: { lat: gpsInfo.lat, lng: gpsInfo.lng },
                 }),
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                setStatus("success");
-                setTodayRecord(data);
-                if (data.clockOut) {
-                    toast("Clock Out berhasil! Selamat beristirahat 🏠", "success");
-                } else {
-                    toast("Clock In berhasil! Selamat bekerja 💼", "success");
-                }
-                setTimeout(() => router.push("/employee"), 1500);
-            } else {
-                log.error("Submit absensi ditolak server", { httpStatus: res.status, error: data.error });
+            if (!res.ok) {
+                const errorMessage = await getResponseErrorMessage(res, "Gagal melakukan absensi");
                 setStatus("error");
-                toast(data.error || "Gagal melakukan absensi", "error");
-                setMessage(data.error || "Gagal submit absensi");
+                toast(errorMessage, "error");
+                setMessage(errorMessage);
+                return;
             }
+
+            const data = await res.json();
+            setStatus("success");
+            setTodayRecord(data);
+            if (data.clockOut) {
+                toast("Clock Out berhasil! Selamat beristirahat 🏠", "success");
+            } else {
+                toast("Clock In berhasil! Selamat bekerja 💼", "success");
+            }
+            setTimeout(() => router.push("/employee"), 1500);
         } catch (err) {
-            log.error("Koneksi error saat submit absensi", { error: err instanceof Error ? err.message : String(err) });
+            reportClientError("AttendancePage", "Koneksi error saat submit absensi", err);
             setStatus("error");
             toast("Absensi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
             setMessage("Absensi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.");

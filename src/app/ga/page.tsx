@@ -10,7 +10,7 @@ import { AssetWithHistory } from "@/lib/types/asset";
 import { StatCard, CategoryStat } from "@/features/ga/components/AssetStatCards";
 import { CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
 import { formatRupiah } from "@/lib/utils/formatters";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type AssetStats = {
     total: number;
@@ -57,6 +57,7 @@ export default function GaDashboard() {
                 // Since API returns { data: [...], ... } for paginated assets
                 setRecent(recentData.data ? recentData.data.slice(0, 8) : recentData.slice(0, 8));
             } catch (err) {
+                reportClientError("GaDashboard", "Gagal memuat dashboard GA", err);
                 setStats(null);
                 setRecent([]);
                 setLoadError(err instanceof Error ? err.message : "Gagal memuat dashboard GA.");

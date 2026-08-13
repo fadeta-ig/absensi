@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import logger from "@/lib/logger";
@@ -15,9 +14,6 @@ const departmentSchema = z.object({
 });
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -39,9 +35,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -70,9 +63,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -84,6 +74,11 @@ export async function PUT(request: NextRequest) {
 
         if (!id) {
             return NextResponse.json({ error: "ID departemen diperlukan." }, { status: 400 });
+        }
+
+        const existing = await prisma.department.findUnique({ where: { id }, select: { id: true } });
+        if (!existing) {
+            return NextResponse.json({ error: "Departemen tidak ditemukan." }, { status: 404 });
         }
 
         const department = await prisma.department.update({
@@ -100,9 +95,6 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (session.role !== "hr") return forbiddenResponse();
@@ -113,6 +105,11 @@ export async function DELETE(request: NextRequest) {
 
         if (!id) {
             return NextResponse.json({ error: "ID departemen diperlukan." }, { status: 400 });
+        }
+
+        const existing = await prisma.department.findUnique({ where: { id }, select: { id: true } });
+        if (!existing) {
+            return NextResponse.json({ error: "Departemen tidak ditemukan." }, { status: 404 });
         }
 
         await prisma.department.delete({ where: { id } });

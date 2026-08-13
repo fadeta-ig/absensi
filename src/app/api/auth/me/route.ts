@@ -1,12 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
+import { NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse } from "@/lib/middleware/apiGuard";
 import { getEmployeeByEmployeeId } from "@/lib/services/employeeService";
 
-export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
+export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import { createBulkAssets } from "@/lib/services/assetService";
 import { actorFromSession } from "@/lib/services/auditService";
 import { z } from "zod";
@@ -22,9 +21,6 @@ const bulkAssetSchema = z.array(
  * Menerima array dari asset data (sudah diparsing dari frontend).
  */
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 

@@ -2,7 +2,6 @@ import { prisma } from "../prisma";
 import { OvertimeRequest } from "@/types";
 import { Prisma } from "@prisma/client";
 import { toDateString, toTimeString } from "@/lib/utils";
-import logger from "@/lib/logger";
 
 import { calculateOvertimePay } from "./overtimeCalcService";
 
@@ -79,8 +78,6 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
         }).totalPay;
     }
 
-    logger.info("Overtime request created", { employeeId: data.employeeId, hours: data.hours, overtimePay });
-
     const row = await prisma.overtimeRequest.create({
         data: {
             employeeId: data.employeeId,
@@ -99,65 +96,57 @@ export async function createOvertimeRequest(data: Omit<OvertimeRequest, "id">): 
 
 
 export async function updateOvertimeRequest(id: string, data: Partial<OvertimeRequest> & Record<string, unknown>): Promise<OvertimeRequest | null> {
-    try {
-        // Ambil existing record untuk date + recalculate
-        const existing = await prisma.overtimeRequest.findUnique({
-            where: { id },
-            include: { employee: { select: { basicSalary: true } } },
-        });
-        if (!existing) return null;
+    // Ambil existing record untuk date + recalculate
+    const existing = await prisma.overtimeRequest.findUnique({
+        where: { id },
+        include: { employee: { select: { basicSalary: true } } },
+    });
+    if (!existing) return null;
 
-        const baseDateStr = data.date
-            ? String(data.date)
-            : toDateString(existing.date);
+    const baseDateStr = data.date
+        ? String(data.date)
+        : toDateString(existing.date);
 
-        // Recalculate overtimePay saat approved dan approvedHours berubah
-        let recalculatedPay: number | undefined;
-        if (data.status === "approved" && existing.employee.basicSalary > 0) {
-            const finalHours = (data.approvedHours as number | undefined) ?? existing.hours;
-            const finalIsHoliday = (data.isHoliday as boolean | undefined) ?? existing.isHoliday;
-            recalculatedPay = calculateOvertimePay({
-                monthlySalary: existing.employee.basicSalary,
-                hours: finalHours,
-                isHoliday: finalIsHoliday,
-            }).totalPay;
-        }
-
-        const row = await prisma.overtimeRequest.update({
-            where: { id },
-            data: {
-                ...(data.date !== undefined && { date: new Date(baseDateStr) }),
-                ...(data.startTime !== undefined && { startTime: new Date(`${baseDateStr}T${data.startTime}:00`) }),
-                ...(data.endTime !== undefined && { 
-                    endTime: (() => {
-                        const s = data.startTime ? new Date(`${baseDateStr}T${data.startTime}:00`) : existing.startTime;
-                        const e = new Date(`${baseDateStr}T${data.endTime}:00`);
-                        if (e < s) e.setDate(e.getDate() + 1);
-                        return e;
-                    })() 
-                }),
-                ...(data.hours !== undefined && { hours: data.hours }),
-                ...(data.reason !== undefined && { reason: data.reason }),
-                ...(data.status !== undefined && { status: data.status }),
-                ...(data.approvedHours !== undefined && { approvedHours: data.approvedHours }),
-                ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
-                ...(recalculatedPay !== undefined ? { overtimePay: recalculatedPay } : (data.overtimePay !== undefined && { overtimePay: data.overtimePay })),
-            },
-        });
-        return toOvertimeRequest(row);
-    } catch (err) {
-        logger.error("Gagal update overtime request", { id, error: err });
-        return null;
+    // Recalculate overtimePay saat approved dan approvedHours berubah
+    let recalculatedPay: number | undefined;
+    if (data.status === "approved" && existing.employee.basicSalary > 0) {
+        const finalHours = (data.approvedHours as number | undefined) ?? existing.hours;
+        const finalIsHoliday = (data.isHoliday as boolean | undefined) ?? existing.isHoliday;
+        recalculatedPay = calculateOvertimePay({
+            monthlySalary: existing.employee.basicSalary,
+            hours: finalHours,
+            isHoliday: finalIsHoliday,
+        }).totalPay;
     }
+
+    const row = await prisma.overtimeRequest.update({
+        where: { id },
+        data: {
+            ...(data.date !== undefined && { date: new Date(baseDateStr) }),
+            ...(data.startTime !== undefined && { startTime: new Date(`${baseDateStr}T${data.startTime}:00`) }),
+            ...(data.endTime !== undefined && {
+                endTime: (() => {
+                    const s = data.startTime ? new Date(`${baseDateStr}T${data.startTime}:00`) : existing.startTime;
+                    const e = new Date(`${baseDateStr}T${data.endTime}:00`);
+                    if (e < s) e.setDate(e.getDate() + 1);
+                    return e;
+                })()
+            }),
+            ...(data.hours !== undefined && { hours: data.hours }),
+            ...(data.reason !== undefined && { reason: data.reason }),
+            ...(data.status !== undefined && { status: data.status }),
+            ...(data.approvedHours !== undefined && { approvedHours: data.approvedHours }),
+            ...(data.isHoliday !== undefined && { isHoliday: data.isHoliday }),
+            ...(recalculatedPay !== undefined ? { overtimePay: recalculatedPay } : (data.overtimePay !== undefined && { overtimePay: data.overtimePay })),
+        },
+    });
+    return toOvertimeRequest(row);
 }
 
 
 export async function deleteOvertimeRequest(id: string): Promise<boolean> {
-    try {
-        await prisma.overtimeRequest.delete({ where: { id } });
-        return true;
-    } catch (error) {
-        logger.error("Gagal delete overtime request", { id, error });
-        return false;
-    }
+    const existing = await prisma.overtimeRequest.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) return false;
+    await prisma.overtimeRequest.delete({ where: { id } });
+    return true;
 }

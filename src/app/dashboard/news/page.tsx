@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { AlertCircle, Megaphone, Plus, Pencil, Trash2, Pin, X, Loader2, Upload, Paperclip, FileText } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface NewsItem {
     id: string; title: string; content: string;
@@ -39,6 +39,7 @@ export default function NewsManagementPage() {
                 const data = await res.json();
                 setNews(Array.isArray(data) ? data : []);
             } catch (error) {
+                reportClientError("NewsManagementPage", "Gagal memuat berita", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat berita.";
                 setLoadError(message);
                 toast(message, "error");
@@ -57,12 +58,12 @@ export default function NewsManagementPage() {
             fd.append("file", file);
             const res = await fetch("/api/news/upload", { method: "POST", body: fd });
             if (!res.ok) {
-                const err = await res.json();
-                toast(err.error || "Upload gagal", "error");
+                toast(await getResponseErrorMessage(res, "Upload gagal"), "error");
                 return null;
             }
             return await res.json();
-        } catch {
+        } catch (error) {
+            reportClientError("NewsManagementPage", "Upload lampiran berita gagal", error, { fileName: file.name, fileSize: file.size });
             toast("Upload gagal, cek koneksi", "error");
             return null;
         } finally {
@@ -110,6 +111,7 @@ export default function NewsManagementPage() {
             toast(editId ? "Berita berhasil diperbarui." : "Berita berhasil dipublikasikan.", "success");
             closeForm();
         } catch (error) {
+            reportClientError("NewsManagementPage", "Gagal menyimpan berita", error, { editId });
             toast(error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan berita." : "Gagal mempublikasikan berita.", "error");
         } finally {
             setLoading(false);
@@ -129,6 +131,7 @@ export default function NewsManagementPage() {
                     setNews((prev) => prev.filter((n) => n.id !== id));
                     toast("Berita berhasil dihapus.", "success");
                 } catch (error) {
+                    reportClientError("NewsManagementPage", "Gagal menghapus berita", error, { newsId: id });
                     toast(error instanceof Error ? error.message : "Gagal menghapus berita.", "error");
                 }
             },
@@ -147,6 +150,7 @@ export default function NewsManagementPage() {
             setNews((prev) => prev.map((n) => (n.id === item.id ? { ...n, isPinned: !n.isPinned } : n)));
             toast(!item.isPinned ? "Berita berhasil di-pin." : "Pin berita berhasil dilepas.", "success");
         } catch (error) {
+            reportClientError("NewsManagementPage", "Gagal mengubah status pin berita", error, { newsId: item.id, nextPinned: !item.isPinned });
             toast(error instanceof Error ? error.message : "Gagal mengubah status pin berita.", "error");
         } finally {
             setActionId(null);

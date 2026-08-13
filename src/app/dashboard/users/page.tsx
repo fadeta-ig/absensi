@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { KeyRound, Loader2, Pencil, Plus, Search, ShieldCheck, UserCheck, UserX, X } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 type RoleCode = "SUPER_ADMIN" | "HR_ADMIN" | "GA_ADMIN";
 
@@ -73,11 +74,12 @@ export default function UsersPage() {
         setLoading(true);
         try {
             const response = await fetch("/api/users", { cache: "no-store" });
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal memuat user."));
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal memuat user.");
             setUsers(data.users ?? []);
             setEligibleEmployees(data.eligibleEmployees ?? []);
         } catch (error) {
+            reportClientError("UsersPage", "Gagal memuat daftar user admin", error);
             toast(error instanceof Error ? error.message : "Gagal memuat user.", "error");
         } finally {
             setLoading(false);
@@ -117,12 +119,13 @@ export default function UsersPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
+            if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal menyimpan user."));
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "Gagal menyimpan user.");
             toast(data.message || "User berhasil disimpan.", data.emailSent === false ? "warning" : "success");
             setForm(null);
             await loadUsers();
         } catch (error) {
+            reportClientError("UsersPage", "Gagal menyimpan user admin", error, { isEdit: Boolean(form.id), userId: form.id ?? null });
             toast(error instanceof Error ? error.message : "Gagal menyimpan user.", "error");
         } finally {
             setSaving(false);
@@ -145,11 +148,12 @@ export default function UsersPage() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ id: user.id, action: "update", isActive: !user.isActive }),
                     });
+                    if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal mengubah status user."));
                     const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || "Gagal mengubah status user.");
                     toast(data.message, "success");
                     await loadUsers();
                 } catch (error) {
+                    reportClientError("UsersPage", "Gagal mengubah status user admin", error, { userId: user.id, targetStatus: !user.isActive });
                     toast(error instanceof Error ? error.message : "Gagal mengubah status user.", "error");
                 } finally {
                     setBusyUserId(null);
@@ -172,10 +176,11 @@ export default function UsersPage() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ id: user.id, action: "reset_password" }),
                     });
+                    if (!response.ok) throw new Error(await getResponseErrorMessage(response, "Gagal mereset password."));
                     const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || "Gagal mereset password.");
                     toast(data.message, data.emailSent === false ? "warning" : "success");
                 } catch (error) {
+                    reportClientError("UsersPage", "Gagal mereset password user admin", error, { userId: user.id });
                     toast(error instanceof Error ? error.message : "Gagal mereset password.", "error");
                 } finally {
                     setBusyUserId(null);

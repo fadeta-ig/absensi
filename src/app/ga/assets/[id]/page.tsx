@@ -12,7 +12,7 @@ import { KondisiBadge, StatusBadge, CategoryBadge, HolderIcon } from "@/features
 import { formatRupiah } from "@/lib/utils/formatters";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 
 import { HistoryTab } from "./components/HistoryTab";
@@ -81,6 +81,7 @@ function AssetDetailContent({ id }: { id: string }) {
             setAsset(await res.json());
             setQrUrl(`/api/assets/qr?assetId=${id}&v=2`);
         } catch (error) {
+            reportClientError("GaAssetDetailPage", "Gagal memuat detail aset", error, { assetId: id });
             const message = error instanceof Error ? error.message : "Gagal memuat detail aset.";
             setLoadError(message);
             toast(message, "error");
@@ -111,6 +112,7 @@ function AssetDetailContent({ id }: { id: string }) {
             const data = await res.json();
             setHistory(Array.isArray(data) ? data : []);
         } catch (error) {
+            reportClientError("GaAssetDetailPage", "Gagal memuat riwayat mutasi aset", error, { assetId: id });
             const message = error instanceof Error ? error.message : "Gagal memuat riwayat mutasi aset.";
             setHistoryError(message);
             toast(message, "error");
@@ -131,6 +133,7 @@ function AssetDetailContent({ id }: { id: string }) {
                     const data = await res.json();
                     setInspections(Array.isArray(data) ? data : []);
                 } catch (error) {
+                    reportClientError("GaAssetDetailPage", "Gagal memuat inspeksi aset", error, { assetId: id });
                     const message = error instanceof Error ? error.message : "Gagal memuat inspeksi aset.";
                     setInspError(message);
                     toast(message, "error");
@@ -149,6 +152,7 @@ function AssetDetailContent({ id }: { id: string }) {
                     const data = await res.json();
                     setMaintenances(Array.isArray(data) ? data : []);
                 } catch (error) {
+                    reportClientError("GaAssetDetailPage", "Gagal memuat riwayat servis aset", error, { assetId: id });
                     const message = error instanceof Error ? error.message : "Gagal memuat riwayat servis aset.";
                     setMaintError(message);
                     toast(message, "error");
@@ -168,6 +172,7 @@ function AssetDetailContent({ id }: { id: string }) {
             toast("Aset berhasil dipensiunkan.", "success");
             router.push("/ga/assets");
         } catch (error) {
+            reportClientError("GaAssetDetailPage", "Gagal mempensiunkan aset", error, { assetId: id });
             toast(error instanceof Error ? error.message : "Gagal mempensiunkan aset.", "error");
         } finally {
             setRetiring(false);
@@ -209,6 +214,7 @@ function AssetDetailContent({ id }: { id: string }) {
                 throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan inspeksi."));
             }
         } catch (error) {
+            reportClientError("GaAssetDetailPage", "Gagal menyimpan inspeksi aset", error, { assetId: id });
             toast(error instanceof Error ? error.message : "Gagal menyimpan inspeksi.", "error");
         } finally {
             setSubmittingInsp(false);
@@ -243,6 +249,7 @@ function AssetDetailContent({ id }: { id: string }) {
                 throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data maintenance."));
             }
         } catch (error) {
+            reportClientError("GaAssetDetailPage", "Gagal menyimpan data maintenance aset", error, { assetId: id });
             toast(error instanceof Error ? error.message : "Gagal menyimpan data maintenance.", "error");
         } finally {
             setSubmittingMaint(false);

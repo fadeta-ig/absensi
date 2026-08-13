@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { checkApiRateLimit } from "@/lib/middleware/rateLimit";
 import bcrypt from "bcryptjs";
 import {
     getVisibleEmployees,
@@ -62,9 +61,6 @@ function serializeEmployee(employee: EmployeeWithRelations, includeHrData: boole
 }
 
 export async function GET(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
@@ -87,9 +83,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();
@@ -116,7 +109,8 @@ export async function POST(request: NextRequest) {
         let emailWarning = false;
         try {
             const { sendPasswordEmail } = await import("@/lib/services/emailService");
-            await sendPasswordEmail(employee.email, employee.name, plainPassword);
+            const emailSent = await sendPasswordEmail(employee.email, employee.name, plainPassword);
+            emailWarning = !emailSent;
         } catch (emailErr) {
             logger.warn("Gagal kirim email password untuk karyawan baru", { employeeId: employee.employeeId, error: emailErr });
             emailWarning = true;
@@ -142,9 +136,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-    const rateLimited = checkApiRateLimit(request.headers);
-    if (rateLimited) return rateLimited;
-
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!canManageHr(session)) return forbiddenResponse();

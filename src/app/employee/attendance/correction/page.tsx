@@ -6,7 +6,7 @@ import {
     Calendar, AlertCircle, ClipboardCheck, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +98,7 @@ export default function AttendanceCorrectionPage() {
                 setRequests(data.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
             }
         } catch (err) {
+            reportClientError("AttendanceCorrectionPage", "Gagal memuat data koreksi absensi", err);
             toast(err instanceof Error ? err.message : "Gagal memuat data koreksi", "error");
         } finally {
             setLoadingList(false);
@@ -157,19 +158,20 @@ export default function AttendanceCorrectionPage() {
                 }),
             });
 
-            const data = await res.json() as CorrectionRequest & { error?: string };
-
-            if (res.ok) {
-                setRequests((prev) => [data, ...prev]);
-                setShowForm(false);
-                setForm({ targetDate: yesterdayStr, proposedClockIn: "", proposedClockOut: "", reason: "" });
-                setAttachmentBase64(null);
-                setAttachmentName(null);
-                toast("Pengajuan koreksi berhasil dikirim!", "success");
-            } else {
-                toast(data.error ?? "Gagal mengirim pengajuan", "error");
+            if (!res.ok) {
+                toast(await getResponseErrorMessage(res, "Gagal mengirim pengajuan koreksi."), "error");
+                return;
             }
-        } catch {
+
+            const data = await res.json() as CorrectionRequest;
+            setRequests((prev) => [data, ...prev]);
+            setShowForm(false);
+            setForm({ targetDate: yesterdayStr, proposedClockIn: "", proposedClockOut: "", reason: "" });
+            setAttachmentBase64(null);
+            setAttachmentName(null);
+            toast("Pengajuan koreksi berhasil dikirim!", "success");
+        } catch (error) {
+            reportClientError("AttendanceCorrectionPage", "Gagal mengirim koreksi absensi", error, { targetDate: form.targetDate });
             toast("Pengajuan koreksi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);

@@ -7,6 +7,7 @@ import AssetForm, { AssetFormData } from "@/features/ga/components/AssetForm";
 import { AssetWithHistory } from "@/lib/types/asset";
 import { useToast } from "@/components/Toast";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { reportClientError } from "@/lib/clientErrors";
 
 export default function EditAssetPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -43,7 +44,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
                 });
 
             } catch (err) {
-                console.error("Gagal load aset", err);
+                reportClientError("EditAssetPage", "Gagal load aset", err, { assetId: id });
                 setError(err instanceof Error ? err.message : "Data aset tidak dapat dimuat. Muat ulang halaman atau coba lagi nanti.");
             }
         };
@@ -84,6 +85,7 @@ export default function EditAssetPage({ params }: { params: Promise<{ id: string
             toast("Perubahan aset berhasil disimpan.", "success");
             router.push(`/ga/assets/${id}`);
         } catch (err: unknown) {
+            reportClientError("EditAssetPage", "Gagal menyimpan perubahan aset", err, { assetId: id });
             setError(err instanceof Error ? err.message : "Perubahan aset belum tersimpan. Periksa data lalu coba lagi.");
         } finally {
             setSaving(false);

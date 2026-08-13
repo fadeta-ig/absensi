@@ -7,7 +7,7 @@ import {
     Loader2, AlertCircle, Download, Eye, FileText, CheckSquare
 } from "lucide-react";
 import { exportToExcel, exportToPdfMatrix } from "@/lib/export";
-import { getResponseErrorMessage } from "@/lib/clientErrors";
+import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface PreviewData {
     sheetName: string;
@@ -67,6 +67,7 @@ export default function ReportsPage() {
                 if (Array.isArray(depts)) setDepartments(depts);
                 if (Array.isArray(emps)) setEmployees(emps);
             } catch (err) {
+                reportClientError("ReportsPage", "Gagal memuat pilihan filter laporan", err);
                 setError(err instanceof Error ? err.message : "Gagal memuat pilihan filter laporan.");
             }
         };
@@ -122,13 +123,14 @@ export default function ReportsPage() {
             }
             const query = buildQuery("json");
             const res = await fetch(`/api/export?${query.toString()}`);
-            const data = await res.json();
             if (res.ok) {
+                const data = await res.json();
                 setPreview(data);
             } else {
-                setError(data.error || "Gagal memuat data");
+                setError(await getResponseErrorMessage(res, "Gagal memuat data"));
             }
-        } catch {
+        } catch (error) {
+            reportClientError("ReportsPage", "Preview laporan gagal dimuat", error, { type, startDate, endDate, divisionId, departmentId, employeeId });
             setError("Laporan belum dapat dimuat karena koneksi bermasalah. Periksa internet lalu coba lagi.");
         }
         setLoading(false);
@@ -146,7 +148,7 @@ export default function ReportsPage() {
             if (format === "excel") {
                 const query = buildQuery("excel");
                 const res = await fetch(`/api/export?${query.toString()}`);
-                if (!res.ok) throw new Error("Gagal mengunduh");
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengunduh laporan Excel."));
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -160,8 +162,8 @@ export default function ReportsPage() {
                 // PDF: fetch JSON data then generate PDF client-side
                 const query = buildQuery("json");
                 const res = await fetch(`/api/export?${query.toString()}`);
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengambil data untuk PDF"));
                 const result = await res.json();
-                if (!res.ok) throw new Error(result.error || "Gagal mengambil data untuk PDF");
 
                 if (isMatrix && type === "attendance") {
                     // Matrix PDF
@@ -194,6 +196,7 @@ export default function ReportsPage() {
                 }
             }
         } catch (err: unknown) {
+            reportClientError("ReportsPage", "Download laporan gagal", err, { type, format, startDate, endDate, divisionId, departmentId, employeeId });
             const message = err instanceof Error ? err.message : "Gagal mendownload file";
             setError(message);
         }
