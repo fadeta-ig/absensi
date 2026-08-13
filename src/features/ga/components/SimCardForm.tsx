@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { FormDraftBanner } from "@/components/FormDraftBanner";
 
 export type SimCardFormData = {
     provider: string; // Misal: Telkomsel Pascabayar
@@ -26,13 +29,31 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
     const [employees, setEmployees] = useState<{ employeeId: string; name: string }[]>([]);
     const [loadingParams, setLoadingParams] = useState(true);
     const [loadError, setLoadError] = useState("");
-    const [formData, setFormData] = useState<SimCardFormData>({
+
+    const draftKey = mode === "edit"
+        ? `draft_simcard_edit_${initialData?.phoneNumber || ""}`
+        : "draft_simcard_create";
+
+    const initialFormState: SimCardFormData = {
         provider: initialData?.provider || "",
         phoneNumber: initialData?.phoneNumber || "",
         expiredDate: initialData?.expiredDate ? initialData.expiredDate.split('T')[0] : "",
         assignedToId: initialData?.assignedToId || "",
         notes: initialData?.notes || "",
+    };
+
+    const {
+        formData,
+        setFormData,
+        hasDraft,
+        lastSaved,
+        clearDraft,
+    } = useFormDraft<SimCardFormData>({
+        key: draftKey,
+        initialValue: initialFormState,
     });
+
+    useUnsavedChanges(hasDraft);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -74,15 +95,21 @@ export default function SimCardForm({ mode, initialData, onSubmit, saving }: Sim
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit(formData);
+        await onSubmit(formData);
+        clearDraft();
     };
 
     if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]" role="status">Memuat konfigurasi form...</div>;
 
     return (
         <>
+        <FormDraftBanner
+            hasDraft={hasDraft}
+            lastSaved={lastSaved}
+            onClearDraft={clearDraft}
+        />
         {loadError && (
             <FeedbackMessage variant="error" className="mb-4">
                 {loadError}

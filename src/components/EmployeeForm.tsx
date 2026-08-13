@@ -15,6 +15,10 @@ import { PrivateDataSection } from "./employee-form/PrivateDataSection";
 import { EmployeeDocumentManager } from "./employee-form/EmployeeDocumentManager";
 
 
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { FormDraftBanner } from "@/components/FormDraftBanner";
+
 interface Props {
     initialData?: Partial<Employee>;
     isEdit?: boolean;
@@ -37,7 +41,12 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
 
     const dateInput = (value?: string | null) => value ? String(value).slice(0, 10) : "";
     const today = new Date().toISOString().split("T")[0];
-    const [form, setForm] = useState<FormState>({
+
+    const draftKey = isEdit
+        ? `draft_employee_edit_${initialData?.id || initialData?.employeeId || ""}`
+        : "draft_employee_create";
+
+    const initialFormState: FormState = {
         employeeId: initialData?.employeeId || "",
         name: initialData?.name || "",
         academicTitle: initialData?.academicTitle || "",
@@ -83,7 +92,21 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         bankAccountHolderName: initialData?.bankAccountHolderName || "",
         ptkpStatus: initialData?.ptkpStatus || "",
         ptkpEffectiveDate: dateInput(initialData?.ptkpEffectiveDate),
+    };
+
+    const {
+        formData: form,
+        setFormData: setForm,
+        hasDraft,
+        lastSaved,
+        clearDraft,
+    } = useFormDraft<FormState>({
+        key: draftKey,
+        initialValue: initialFormState,
     });
+
+    // Protect against unsaved changes on refresh/navigation
+    useUnsavedChanges(hasDraft);
 
     useEffect(() => {
         const load = async () => {
@@ -151,6 +174,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 body: JSON.stringify(body),
             });
             if (res.ok) {
+                clearDraft();
                 const data = await res.json();
                 if (data._emailWarning) {
                     toast("Karyawan ditambahkan, namun gagal mengirim email password. Silakan kirim manual.", "warning");
@@ -233,6 +257,12 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                     </button>
                 </div>
             </div>
+
+            <FormDraftBanner
+                hasDraft={hasDraft}
+                lastSaved={lastSaved}
+                onClearDraft={clearDraft}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column (Identity & Job) */}

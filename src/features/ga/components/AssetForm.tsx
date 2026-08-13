@@ -6,6 +6,9 @@ import { Save } from "lucide-react";
 import { AssetCategory } from "@/lib/types/asset";
 import { getResponseErrorMessage } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { useFormDraft } from "@/hooks/useFormDraft";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { FormDraftBanner } from "@/components/FormDraftBanner";
 
 export type AssetFormData = {
     name: string;
@@ -39,7 +42,11 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
     const [loadingParams, setLoadingParams] = useState(true);
     const [loadError, setLoadError] = useState("");
 
-    const [formData, setFormData] = useState<AssetFormData>({
+    const draftKey = mode === "edit"
+        ? `draft_asset_edit_${initialData?.serialNumber || initialData?.name || ""}`
+        : "draft_asset_create";
+
+    const initialFormState: AssetFormData = {
         name: initialData?.name || "",
         categoryId: initialData?.categoryId || "",
         kondisi: initialData?.kondisi || "BAIK",
@@ -55,7 +62,20 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
         purchasePrice: initialData?.purchasePrice || "",
         warrantyExpiry: initialData?.warrantyExpiry || "",
         keterangan: initialData?.keterangan || "",
+    };
+
+    const {
+        formData,
+        setFormData,
+        hasDraft,
+        lastSaved,
+        clearDraft,
+    } = useFormDraft<AssetFormData>({
+        key: draftKey,
+        initialValue: initialFormState,
     });
+
+    useUnsavedChanges(hasDraft);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -128,16 +148,27 @@ export default function AssetForm({ mode, initialData, onSubmit, saving }: Asset
     };
 
 
+    const handleSubmitForm = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await onSubmit(formData);
+        clearDraft();
+    };
+
     if (loadingParams) return <div className="p-6 text-sm text-[var(--text-secondary)]" role="status">Memuat konfigurasi form...</div>;
 
     return (
         <>
+        <FormDraftBanner
+            hasDraft={hasDraft}
+            lastSaved={lastSaved}
+            onClearDraft={clearDraft}
+        />
         {loadError && (
             <FeedbackMessage variant="error" className="mb-4">
                 {loadError}
             </FeedbackMessage>
         )}
-        <form onSubmit={e => { e.preventDefault(); onSubmit(formData); }} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
+        <form onSubmit={handleSubmitForm} className="bg-[var(--card)] border rounded-xl shadow-sm overflow-hidden animate-in fade-in">
             <div className="p-6 border-b bg-[var(--secondary)]/50">
                 <h2 className="text-md font-semibold text-[var(--text-primary)]">Identifikasi Utama</h2>
             </div>
