@@ -1,7 +1,5 @@
 /**
  * Face Recognition — face-api.js wrapper
- * Dilengkapi dengan Multi-Pass Computer Vision Preprocessing Pipeline
- * untuk memaksimalkan deteksi pada kamera buram, berembun, atau backlight.
  *
  * Logging: hanya warn & error yang dikirim ke server.
  * Info/debug di-drop oleh clientLogger (silent).
@@ -9,7 +7,6 @@
 
 import * as faceapi from "face-api.js";
 import { createClientLogger } from "@/lib/clientLogger";
-import { createProcessedCanvas, ProcessingPass } from "@/lib/faceImageProcessing";
 
 const log = createClientLogger("FaceRecognition");
 
@@ -31,13 +28,13 @@ const DEFAULT_THRESHOLD = (() => {
 /** Threshold aktif — export agar bisa digunakan di UI */
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
-/** Konfigurasi scan multi-frame yang stabil dan ringan untuk perangkat mobile. */
-export const FACE_SCAN_ATTEMPTS = 3;
-export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 200;
+/** Konfigurasi scan multi-frame untuk kamera. */
+export const FACE_SCAN_ATTEMPTS = 4;
+export const FACE_SCAN_MIN_DETECTIONS = 2;
+export const FACE_SCAN_INTERVAL_MS = 180;
 
-/** Confidence detektor; 0.12 memberikan toleransi tinggi dengan akurasi optimal. */
-const FACE_DETECTION_MIN_CONFIDENCE = 0.12;
+/** Confidence detektor; 0.20 optimal untuk mendeteksi wajah dengan akurat tanpa delay. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.20;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
@@ -77,16 +74,14 @@ export async function loadFaceModels(): Promise<void> {
 
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
- * Mencoba deteksi langsung pada input utama terlebih dahulu, lalu dilanjutkan
- * dengan Computer Vision Enhancement (Sharpen, Contrast, Gamma Lift, ROI Crop)
- * jika input primer belum terdeteksi.
- * Return `null` jika tidak ada wajah terdeteksi pada seluruh pass.
+ * Return `null` jika tidak ada wajah terdeteksi.
  */
 export async function detectFaceDescriptor(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> {
     if (!modelsLoaded) {
-        await loadFaceModels();
+        log.error("detectFaceDescriptor dipanggil sebelum model selesai di-load");
+        return null;
     }
 
     if (typeof HTMLVideoElement !== "undefined" && input instanceof HTMLVideoElement) {
@@ -95,60 +90,26 @@ export async function detectFaceDescriptor(
         }
     }
 
-    const options = new faceapi.SsdMobilenetv1Options({
-        minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
-    });
-
     try {
-        // 1. Deteksi langsung pada input utama (live stream / direct canvas)
-        const single = await faceapi
+        const options = new faceapi.SsdMobilenetv1Options({
+            minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
+        });
+        const detection = await faceapi
             .detectSingleFace(input, options)
             .withFaceLandmarks()
             .withFaceDescriptor();
 
-        if (single?.descriptor) {
-            return single.descriptor;
+        if (!detection) {
+            return null;
         }
 
-        // 2. Fallback deteksi all faces pada input utama
-        const allDetections = await faceapi
-            .detectAllFaces(input, options)
-            .withFaceLandmarks()
-            .withFaceDescriptors();
-
-        if (allDetections && allDetections.length > 0) {
-            const best = allDetections.reduce((largest, curr) => {
-                const currArea = curr.detection.box.width * curr.detection.box.height;
-                const largestArea = largest.detection.box.width * largest.detection.box.height;
-                return currArea > largestArea ? curr : largest;
-            });
-            return best.descriptor;
-        }
+        return detection.descriptor;
     } catch (err) {
-        log.warn("Error pada deteksi input primer", { error: String(err) });
+        log.error("Error saat deteksi wajah", {
+            error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
     }
-
-    // 3. Jika belum terdeteksi, coba variasi preprocessed canvas (sharpen, gamma, center-crop)
-    const extraPasses: ProcessingPass[] = ["sharpen_contrast", "gamma_lift", "center_crop"];
-    for (const pass of extraPasses) {
-        try {
-            const processedCanvas = createProcessedCanvas(input, pass);
-            if (!processedCanvas) continue;
-
-            const detection = await faceapi
-                .detectSingleFace(processedCanvas, options)
-                .withFaceLandmarks()
-                .withFaceDescriptor();
-
-            if (detection?.descriptor) {
-                return detection.descriptor;
-            }
-        } catch {
-            // Ignore error on fallback passes
-        }
-    }
-
-    return null;
 }
 
 interface MultiFrameDetectionOptions {
@@ -156,12 +117,11 @@ interface MultiFrameDetectionOptions {
     minimumDetections?: number;
     intervalMs?: number;
     onAttempt?: (attempt: number, total: number, detections: number) => void;
-    onDiagnostic?: (info: string) => void;
 }
 
 /**
- * Pindai frame video dan kumpulkan descriptor yang berhasil.
- * Berjalan berurutan secara bersih tanpa thread-locking.
+ * Pindai beberapa frame video dan kumpulkan descriptor yang berhasil.
+ * Pada kamera bagus fungsi berhenti setelah dua hasil.
  */
 export async function detectFaceDescriptors(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
@@ -182,35 +142,15 @@ export async function detectFaceDescriptors(
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         options.onAttempt?.(attempt + 1, attempts, descriptors.length);
 
-        // Jeda waktu agar antarmuka browser sempat merespons dan me-render
-        await new Promise<void>((resolve) => setTimeout(resolve, 80));
-
-        const t0 = performance.now();
         const descriptor = await detectFaceDescriptor(input);
-        const elapsed = Math.round(performance.now() - t0);
-
         if (descriptor) {
-            options.onDiagnostic?.(`Percobaan ${attempt + 1}: Terdeteksi (${elapsed}ms)`);
             descriptors.push(descriptor);
-        } else {
-            options.onDiagnostic?.(`Percobaan ${attempt + 1}: Tidak terdeteksi (${elapsed}ms)`);
         }
 
         if (descriptors.length >= minimumDetections) break;
         if (attempt < attempts - 1 && intervalMs > 0) {
             await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
         }
-    }
-
-    if (descriptors.length === 0) {
-        const inputInfo = (typeof HTMLVideoElement !== "undefined" && input instanceof HTMLVideoElement)
-            ? { videoWidth: input.videoWidth, videoHeight: input.videoHeight, readyState: input.readyState }
-            : {};
-        log.warn("Wajah tidak terdeteksi setelah percobaan scan", {
-            attempts,
-            minimumDetections,
-            ...inputInfo,
-        });
     }
 
     return descriptors;
