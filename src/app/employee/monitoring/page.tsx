@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Users, Search, ChevronRight, Activity, Layers, AlertCircle } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Users, Search, Activity, Layers, AlertCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import DataTablePagination from "@/components/ui/DataTablePagination";
 
 interface Employee {
     id: string;
@@ -16,13 +17,16 @@ interface Employee {
     isActive: boolean;
 }
 
-
-
 export default function MonitoringPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [search, setSearch] = useState("");
+    const [deptFilter, setDeptFilter] = useState("all");
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
+
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(8);
 
     useEffect(() => {
         const loadEmployees = async () => {
@@ -48,11 +52,38 @@ export default function MonitoringPage() {
         void loadEmployees();
     }, []);
 
-    const filtered = employees.filter((e) =>
-        e.name.toLowerCase().includes(search.toLowerCase()) ||
-        e.employeeId.toLowerCase().includes(search.toLowerCase()) ||
-        e.department.toLowerCase().includes(search.toLowerCase())
-    );
+    // Reset page to 1 on filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, deptFilter, pageSize]);
+
+    const departments = useMemo(() => {
+        const set = new Set(employees.map(e => e.department).filter(Boolean));
+        return Array.from(set);
+    }, [employees]);
+
+    const filtered = useMemo(() => {
+        return employees.filter((e) => {
+            const matchSearch = e.name.toLowerCase().includes(search.toLowerCase()) ||
+                e.employeeId.toLowerCase().includes(search.toLowerCase()) ||
+                e.department.toLowerCase().includes(search.toLowerCase());
+            const matchDept = deptFilter === "all" || e.department === deptFilter;
+            return matchSearch && matchDept;
+        });
+    }, [employees, search, deptFilter]);
+
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+    const paginatedEmployees = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filtered.slice(start, start + pageSize);
+    }, [filtered, currentPage, pageSize]);
+
+    const resetFilters = () => {
+        setSearch("");
+        setDeptFilter("all");
+    };
+
+    const hasActiveFilters = search || deptFilter !== "all";
 
     if (loading) {
         return (
@@ -63,106 +94,137 @@ export default function MonitoringPage() {
     }
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             {/* Header */}
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+            <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="page-title">Monitoring Tim</h1>
-                    <p style={{ color: "var(--text-muted)", fontSize: "14px", marginTop: "4px" }}>
-                        Monitoring performa dan aktivitas anggota tim Anda secara real-time.
+                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-[var(--primary)]" />
+                        Monitoring Tim
+                    </h1>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Monitoring performa dan profil anggota tim Anda secara real-time.
                     </p>
                 </div>
-                <Activity style={{ width: "32px", height: "32px", color: "var(--primary)" }} />
             </div>
 
-            {/* Search */}
-            <div style={{ position: "relative", maxWidth: "400px" }}>
-                <Search style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", width: "16px", height: "16px", color: "var(--text-muted)" }} />
-                <input
-                    type="text"
-                    className="form-input"
-                    style={{ paddingLeft: "40px" }}
-                    placeholder="Cari anggota tim..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-            </div>
-
-            {/* Grid kartu karyawan */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
-                {loadError ? (
-                    <div style={{
-                        gridColumn: "1 / -1", padding: "48px", textAlign: "center",
-                        color: "var(--destructive)", background: "var(--card)",
-                        borderRadius: "12px", border: "1px solid var(--border)"
-                    }}>
-                        <AlertCircle style={{ width: "32px", height: "32px", margin: "0 auto 8px", opacity: 0.7 }} />
-                        <p style={{ fontWeight: 600 }}>{loadError}</p>
+            {/* Filter Bar */}
+            <div className="card p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="relative sm:col-span-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                        <input
+                            type="text"
+                            className="form-input pl-10 w-full"
+                            placeholder="Cari nama, NIP, atau departemen..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
                     </div>
-                ) : filtered.length > 0 ? filtered.map((e) => (
-                    <div
-                        key={e.id}
-                        className="card"
-                        style={{ borderLeft: "4px solid var(--primary)", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}
-                    >
-                        {/* Card Header */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                                <div style={{
-                                    width: "40px", height: "40px", borderRadius: "50%",
-                                    background: "var(--secondary)", color: "var(--primary)",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    fontWeight: "700", fontSize: "16px", flexShrink: 0
-                                }}>
-                                    {e.name.charAt(0)}
-                                </div>
-                                <div>
-                                    <p style={{ fontWeight: "600", fontSize: "14px", color: "var(--text-primary)" }}>{e.name}</p>
-                                    <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>{e.position}</p>
-                                </div>
-                            </div>
-                            {/* Badge status aktif */}
-                            <span style={{
-                                fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "9999px",
-                                background: e.isActive ? "#d1fae5" : "#fee2e2",
-                                color: e.isActive ? "#065f46" : "#991b1b",
-                            }}>
-                                {e.isActive ? "Active" : "Inactive"}
-                            </span>
-                        </div>
-
-                        {/* Card Content */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ color: "var(--text-muted)" }}>Department</span>
-                                <span style={{ fontWeight: "500", color: "var(--text-primary)" }}>{e.department}</span>
-                            </div>
-
-                        </div>
-
-                        {/* Action */}
-                        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
-                            <Link
-                                href={`/employee/monitoring/${e.id}`}
-                                className="btn btn-secondary"
-                                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "12px", width: "100%" }}
-                            >
-                                <Layers style={{ width: "14px", height: "14px" }} />
-                                Lihat Profil 360°
-                            </Link>
-                        </div>
+                    <div>
+                        <select
+                            className="form-select w-full"
+                            value={deptFilter}
+                            onChange={(e) => setDeptFilter(e.target.value)}
+                        >
+                            <option value="all">Semua Departemen</option>
+                            {departments.map(dept => (
+                                <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                        </select>
                     </div>
-                )) : (
-                    <div style={{
-                        gridColumn: "1 / -1", padding: "48px", textAlign: "center",
-                        color: "var(--text-muted)", background: "var(--secondary)",
-                        borderRadius: "12px", border: "2px dashed var(--border)"
-                    }}>
-                        <Users style={{ width: "32px", height: "32px", margin: "0 auto 8px", opacity: 0.4 }} />
-                        <p>Tidak ada anggota tim yang ditemukan.</p>
+                </div>
+
+                {hasActiveFilters && (
+                    <div className="flex justify-end pt-2 border-t border-[var(--border)]">
+                        <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Reset Filter
+                        </button>
                     </div>
                 )}
             </div>
+
+            {/* Grid kartu karyawan */}
+            {loadError ? (
+                <div className="card p-12 text-center text-[var(--destructive)]">
+                    <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-70" />
+                    <p className="font-semibold text-sm">{loadError}</p>
+                </div>
+            ) : filtered.length === 0 ? (
+                <div className="card p-12 text-center text-[var(--text-muted)]">
+                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada anggota tim yang cocok</p>
+                    <p className="text-xs mt-1">Coba sesuaikan kata kunci pencarian Anda</p>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {paginatedEmployees.map((e) => (
+                            <div
+                                key={e.id}
+                                className="card p-4 flex flex-col justify-between space-y-3 border-l-4 border-l-[var(--primary)] hover:shadow-md transition-shadow"
+                            >
+                                {/* Card Header */}
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-9 h-9 rounded-full bg-[var(--primary)] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                            {e.name.charAt(0)}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-xs text-[var(--text-primary)] truncate">{e.name}</p>
+                                            <p className="text-[10px] text-[var(--text-muted)] font-mono">{e.employeeId}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`badge ${e.isActive ? "badge-success" : "badge-error"} text-[9px]`}>
+                                        {e.isActive ? "Aktif" : "Nonaktif"}
+                                    </span>
+                                </div>
+
+                                {/* Card Content */}
+                                <div className="space-y-1 text-xs py-1 border-y border-[var(--border)]">
+                                    <div className="flex justify-between">
+                                        <span className="text-[var(--text-muted)]">Departemen</span>
+                                        <span className="font-medium text-[var(--text-primary)]">{e.department}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-[var(--text-muted)]">Jabatan</span>
+                                        <span className="font-medium text-[var(--text-primary)] truncate max-w-[120px]">{e.position}</span>
+                                    </div>
+                                </div>
+
+                                {/* Action */}
+                                <div className="pt-1">
+                                    <Link
+                                        href={`/employee/monitoring/${e.id}`}
+                                        className="btn btn-secondary btn-sm w-full flex items-center justify-center gap-1.5 text-xs"
+                                    >
+                                        <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                                        Lihat Profil 360
+                                    </Link>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="card overflow-hidden">
+                        <DataTablePagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={filtered.length}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={setPageSize}
+                            pageSizeOptions={[4, 8, 16, 32]}
+                            itemLabel="anggota tim"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

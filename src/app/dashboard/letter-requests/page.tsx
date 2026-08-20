@@ -194,6 +194,7 @@ export default function LetterRequestsPage() {
                 loading={loading}
                 filteredLength={filtered.length}
                 paginated={paginated}
+                allFiltered={filtered}
                 currentPage={currentPage}
                 totalPages={totalPages}
                 ITEMS_PER_PAGE={ITEMS_PER_PAGE}

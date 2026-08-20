@@ -1,23 +1,95 @@
-import { Check, ChevronLeft, ChevronRight, Eye, FileText, Loader2 } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Check, Eye, FileText, Loader2, CheckSquare, Square, FileSpreadsheet } from "lucide-react";
 import { LetterRequest, TYPE_CONFIG, STATUS_CONFIG } from "../types";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import BulkActionBar from "@/components/ui/BulkActionBar";
+import { exportToExcel } from "@/lib/export";
+import { useToast } from "@/components/Toast";
 
 interface Props {
     loading: boolean;
     filteredLength: number;
     paginated: LetterRequest[];
+    allFiltered?: LetterRequest[];
     currentPage: number;
     totalPages: number;
     ITEMS_PER_PAGE: number;
     setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
+    setItemsPerPage?: React.Dispatch<React.SetStateAction<number>>;
     setDetail: (req: LetterRequest) => void;
     openAction: (req: LetterRequest, type: "PROCESSING" | "READY" | "REJECTED") => void;
     fmtDate: (iso: string) => string;
 }
 
 export function LetterRequestTable({
-    loading, filteredLength, paginated, currentPage, totalPages, ITEMS_PER_PAGE,
-    setCurrentPage, setDetail, openAction, fmtDate
+    loading, filteredLength, paginated, allFiltered = [], currentPage, totalPages, ITEMS_PER_PAGE,
+    setCurrentPage, setItemsPerPage, setDetail, openAction, fmtDate
 }: Props) {
+    const toast = useToast();
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const isAllCurrentPageSelected = paginated.length > 0 && paginated.every(r => selectedIds.has(r.id));
+    const isAllFilteredSelected = allFiltered.length > 0 && allFiltered.every(r => selectedIds.has(r.id));
+
+    const toggleSelectAllCurrentPage = () => {
+        const next = new Set(selectedIds);
+        if (isAllCurrentPageSelected) {
+            paginated.forEach(r => next.delete(r.id));
+        } else {
+            paginated.forEach(r => next.add(r.id));
+        }
+        setSelectedIds(next);
+    };
+
+    const selectAllFiltered = () => {
+        const next = new Set(selectedIds);
+        (allFiltered.length > 0 ? allFiltered : paginated).forEach(r => next.add(r.id));
+        setSelectedIds(next);
+    };
+
+    const toggleSelectOne = (id: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(id)) {
+            next.delete(id);
+        } else {
+            next.add(id);
+        }
+        setSelectedIds(next);
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const handleBulkExportExcel = () => {
+        const targetList = (allFiltered.length > 0 ? allFiltered : paginated).filter(r => selectedIds.has(r.id));
+        if (targetList.length === 0) return;
+
+        const data = targetList.map(r => ({
+            employeeId: r.employeeId,
+            name: r.employeeName || r.employeeId,
+            type: TYPE_CONFIG[r.type]?.label || r.type,
+            purpose: r.purpose,
+            date: fmtDate(r.createdAt),
+            status: STATUS_CONFIG[r.status]?.label || r.status,
+        }));
+
+        exportToExcel(
+            data,
+            [
+                { key: "employeeId", label: "NIP" },
+                { key: "name", label: "Nama Karyawan" },
+                { key: "type", label: "Jenis Surat" },
+                { key: "purpose", label: "Tujuan Permohonan" },
+                { key: "date", label: "Tanggal Pengajuan" },
+                { key: "status", label: "Status" },
+            ],
+            `Data_Permintaan_Surat_${new Date().toISOString().slice(0, 10)}`,
+            "Surat"
+        );
+        toast(`${targetList.length} data surat berhasil diekspor ke Excel.`, "success");
+    };
+
     if (loading) {
         return (
             <div className="flex justify-center py-16">
@@ -42,12 +114,26 @@ export function LetterRequestTable({
                 <table className="data-table">
                     <thead>
                         <tr>
+                            <th className="w-10 text-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAllCurrentPage}
+                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                >
+                                    {isAllCurrentPageSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                    ) : (
+                                        <Square className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </th>
                             <th>Karyawan</th>
                             <th>Jenis Surat</th>
                             <th className="hidden lg:table-cell">Tujuan</th>
                             <th>Tanggal</th>
                             <th>Status</th>
-                            <th className="text-center">Aksi</th>
+                            <th className="text-right">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -56,13 +142,27 @@ export function LetterRequestTable({
                             const statusCfg = STATUS_CONFIG[req.status];
                             const TypeIcon = typeCfg.icon;
                             const StatusIcon = statusCfg.icon;
+                            const isSelected = selectedIds.has(req.id);
 
                             return (
-                                <tr key={req.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
+                                <tr key={req.id} className={`hover:bg-[var(--secondary)]/50 transition-colors ${isSelected ? "bg-[var(--primary)]/5" : ""}`}>
+                                    <td className="text-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSelectOne(req.id)}
+                                            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                        >
+                                            {isSelected ? (
+                                                <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                            ) : (
+                                                <Square className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                    </td>
                                     <td className="font-medium">
                                         <div>
-                                            <p className="text-[var(--text-primary)]">{req.employeeName ?? req.employeeId}</p>
-                                            <p className="text-[10px] text-[var(--text-muted)]">{req.employeeId}</p>
+                                            <p className="text-xs font-semibold text-[var(--text-primary)]">{req.employeeName ?? req.employeeId}</p>
+                                            <p className="text-[10px] font-mono text-[var(--text-muted)]">{req.employeeId}</p>
                                         </div>
                                     </td>
                                     <td>
@@ -70,13 +170,13 @@ export function LetterRequestTable({
                                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${typeCfg.bg}`}>
                                                 <TypeIcon className={`w-3.5 h-3.5 ${typeCfg.color}`} />
                                             </div>
-                                            <span className="text-sm font-medium text-[var(--text-primary)]">{typeCfg.label}</span>
+                                            <span className="text-xs font-semibold text-[var(--text-primary)]">{typeCfg.label}</span>
                                         </div>
                                     </td>
                                     <td className="hidden lg:table-cell">
-                                        <p className="text-sm text-[var(--text-secondary)] line-clamp-2 max-w-[300px]">{req.purpose}</p>
+                                        <p className="text-xs text-[var(--text-secondary)] line-clamp-2 max-w-[300px]">{req.purpose}</p>
                                     </td>
-                                    <td className="text-sm text-[var(--text-secondary)]">
+                                    <td className="text-xs text-[var(--text-secondary)]">
                                         {fmtDate(req.createdAt)}
                                     </td>
                                     <td>
@@ -85,8 +185,8 @@ export function LetterRequestTable({
                                             {statusCfg.label}
                                         </span>
                                     </td>
-                                    <td className="text-center">
-                                        <div className="flex items-center justify-center gap-1">
+                                    <td className="text-right">
+                                        <div className="flex items-center justify-end gap-1">
                                             <button
                                                 onClick={() => setDetail(req)}
                                                 className="btn btn-ghost btn-sm !p-1.5 text-[var(--primary)]"
@@ -115,7 +215,7 @@ export function LetterRequestTable({
                                             {req.status === "PROCESSING" && (
                                                 <button
                                                     onClick={() => openAction(req, "READY")}
-                                                    className="btn btn-sm bg-green-500 text-white hover:bg-green-600 !py-1 !px-2 text-[10px]"
+                                                    className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700 !py-1 !px-2 text-[10px] flex items-center gap-1"
                                                 >
                                                     <Check className="w-3 h-3" /> Selesai
                                                 </button>
@@ -129,30 +229,35 @@ export function LetterRequestTable({
                 </table>
             </div>
 
-            {/* Pagination */}
-            {filteredLength > ITEMS_PER_PAGE && (
-                <div className="px-6 py-3 border-t border-[var(--border)] bg-[#F9FAFB] flex items-center justify-between">
-                    <span className="text-xs font-medium text-[var(--text-muted)]">
-                        Hal {currentPage} dari {totalPages} ({filteredLength} data)
-                    </span>
-                    <div className="flex items-center gap-1">
-                        <button
-                            className="btn btn-ghost btn-sm !p-1.5"
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <button
-                            className="btn btn-ghost btn-sm !p-1.5"
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* Reusable DataTablePagination */}
+            <DataTablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={filteredLength}
+                pageSize={ITEMS_PER_PAGE}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setItemsPerPage}
+                itemLabel="permintaan surat"
+            />
+
+            {/* Bulk Action Bar */}
+            <BulkActionBar
+                selectedCount={selectedIds.size}
+                totalCount={filteredLength}
+                allSelected={isAllFilteredSelected}
+                onSelectAll={selectAllFiltered}
+                onClearSelection={clearSelection}
+                itemLabel="surat"
+            >
+                <button
+                    type="button"
+                    onClick={handleBulkExportExcel}
+                    className="btn btn-primary btn-sm flex items-center gap-1.5"
+                >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Ekspor Excel ({selectedIds.size})
+                </button>
+            </BulkActionBar>
         </div>
     );
 }

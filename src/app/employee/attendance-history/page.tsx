@@ -3,9 +3,13 @@
 import { useEffect, useState, useMemo } from "react";
 import {
     ClipboardList, CalendarDays, Clock, CheckCircle, AlertTriangle,
-    XCircle, Filter, ChevronLeft, ChevronRight, Loader2, AlertCircle
+    XCircle, Filter, ChevronLeft, ChevronRight, Loader2, AlertCircle,
+    FileSpreadsheet, RotateCcw
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { exportToExcel } from "@/lib/export";
+import { useToast } from "@/components/Toast";
 
 interface AttendanceRecord {
     id: string;
@@ -34,12 +38,10 @@ const STATUS_MAP: Record<string, { label: string; badge: string; icon: typeof Ch
 function fmtTime(val?: string | null): string {
     if (!val) return "--:--";
 
-    // Validasi apabila nilainya berupa hh:mm atau hh:mm:ss
     if (/^\d{2}:\d{2}(:\d{2})?$/.test(val)) {
         return val.substring(0, 5);
     }
 
-    // Attempt parse as date (ISO)
     const d = new Date(val);
     if (isNaN(d.getTime())) return "--:--";
     return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -50,14 +52,12 @@ function calcDuration(clockIn?: string | null, clockOut?: string | null): string
     if (!clockIn || !clockOut) return "-";
 
     let t1, t2;
-    // Process clockIn
     if (/^\d{2}:\d{2}/.test(clockIn)) {
         const [h, m] = clockIn.split(':').map(Number);
         t1 = new Date().setHours(h, m, 0, 0);
     } else {
         t1 = new Date(clockIn).getTime();
     }
-    // Process clockOut
     if (/^\d{2}:\d{2}/.test(clockOut)) {
         const [h, m] = clockOut.split(':').map(Number);
         t2 = new Date().setHours(h, m, 0, 0);
@@ -82,6 +82,7 @@ function fmtDate(dateStr: string): string {
 }
 
 export default function AttendanceHistoryPage() {
+    const toast = useToast();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -92,12 +93,13 @@ export default function AttendanceHistoryPage() {
     const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
     const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
+    // Pagination
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 10;
+    const [pageSize, setPageSize] = useState(10);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [filterMode, selectedDate, selectedMonth, selectedYear]);
+    }, [filterMode, selectedDate, selectedMonth, selectedYear, pageSize]);
 
     useEffect(() => {
         const loadRecords = async () => {
@@ -134,7 +136,6 @@ export default function AttendanceHistoryPage() {
             if (filterMode === "month") {
                 return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
             }
-            // year
             return d.getFullYear() === selectedYear;
         });
     }, [records, filterMode, selectedDate, selectedMonth, selectedYear]);
@@ -148,12 +149,11 @@ export default function AttendanceHistoryPage() {
         return { present, late, absent, leave, total: filteredRecords.length };
     }, [filteredRecords]);
 
+    const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
     const paginatedRecords = useMemo(() => {
-        const start = (currentPage - 1) * ITEMS_PER_PAGE;
-        return filteredRecords.slice(start, start + ITEMS_PER_PAGE);
-    }, [filteredRecords, currentPage]);
-
-    const totalPages = Math.ceil(filteredRecords.length / ITEMS_PER_PAGE) || 1;
+        const start = (currentPage - 1) * pageSize;
+        return filteredRecords.slice(start, start + pageSize);
+    }, [filteredRecords, currentPage, pageSize]);
 
     /** Available years from data, or default to current year */
     const availableYears = useMemo(() => {
@@ -188,24 +188,63 @@ export default function AttendanceHistoryPage() {
         return `${selectedYear}`;
     }, [filterMode, selectedDate, selectedMonth, selectedYear]);
 
+    const handleExportExcel = () => {
+        if (filteredRecords.length === 0) return;
+
+        const data = filteredRecords.map(r => ({
+            date: r.date,
+            clockIn: fmtTime(r.clockIn),
+            clockOut: fmtTime(r.clockOut),
+            duration: calcDuration(r.clockIn, r.clockOut),
+            status: STATUS_MAP[r.status]?.label || r.status,
+            notes: r.notes || "-"
+        }));
+
+        exportToExcel(
+            data,
+            [
+                { key: "date", label: "Tanggal" },
+                { key: "clockIn", label: "Jam Masuk" },
+                { key: "clockOut", label: "Jam Pulang" },
+                { key: "duration", label: "Durasi Kerja" },
+                { key: "status", label: "Status" },
+                { key: "notes", label: "Catatan" },
+            ],
+            `Riwayat_Presensi_${periodLabel.replace(/\s+/g, "_")}`,
+            "Presensi"
+        );
+        toast("Riwayat presensi berhasil diekspor ke Excel.", "success");
+    };
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease] min-w-0 overflow-hidden">
             {/* Header */}
-            <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-[var(--primary)]" />
-                    Riwayat Kehadiran
-                </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
-                    Lihat detail kehadiran harian, bulanan, atau tahunan
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <ClipboardList className="w-5 h-5 text-[var(--primary)]" />
+                        Riwayat Kehadiran
+                    </h1>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Lihat detail kehadiran harian, bulanan, atau tahunan
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    disabled={filteredRecords.length === 0}
+                    className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
+                >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Ekspor Excel
+                </button>
             </div>
 
             {/* Filter Controls */}
             <div className="card p-4 space-y-4">
                 <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-[var(--text-muted)]" />
-                    <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Filter</span>
+                    <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Filter Periode</span>
                 </div>
 
                 {/* Mode Toggle */}
@@ -329,75 +368,69 @@ export default function AttendanceHistoryPage() {
                     <p className="text-xs mt-1">untuk periode {periodLabel}</p>
                 </div>
             ) : (
-                <>
-                    {/* ── Desktop Table (hidden on mobile) ── */}
-                    <div className="hidden sm:block card overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="data-table w-full">
-                                <thead className="bg-[var(--secondary)]">
-                                    <tr className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-left border-b border-[var(--border)]">
-                                        <th className="py-3 px-4">Tanggal</th>
-                                        <th className="py-3 px-3">Clock In</th>
-                                        <th className="py-3 px-3">Clock Out</th>
-                                        <th className="py-3 px-3">Durasi</th>
-                                        <th className="py-3 px-3">Status</th>
-                                        <th className="py-3 px-3">Catatan</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {paginatedRecords.map((r) => {
-                                        const si = STATUS_MAP[r.status] ?? STATUS_MAP["present"];
-                                        const StatusIcon = si.icon;
-                                        return (
-                                            <tr key={r.id} className="border-b border-[var(--border)] hover:bg-[var(--secondary)]/30 transition-colors">
-                                                <td className="py-2.5 px-4 align-middle">
-                                                    <div className="font-semibold text-[var(--text-primary)] text-sm whitespace-nowrap">
-                                                        {fmtDate(r.date)}
-                                                    </div>
-                                                </td>
-                                                <td className="py-2.5 px-3 align-middle">
-                                                    <div className="flex items-center gap-1.5 text-sm">
-                                                        <Clock className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                                                        <span className="font-mono text-[var(--text-secondary)]">{fmtTime(r.clockIn)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-2.5 px-3 align-middle">
-                                                    <div className="flex items-center gap-1.5 text-sm">
-                                                        <Clock className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                                                        <span className="font-mono text-[var(--text-secondary)]">{fmtTime(r.clockOut)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-2.5 px-3 align-middle">
-                                                    <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] text-[var(--text-secondary)] rounded-full font-medium whitespace-nowrap border border-[var(--border)]">
-                                                        {calcDuration(r.clockIn, r.clockOut)}
-                                                    </span>
-                                                </td>
-                                                <td className="py-2.5 px-3 align-middle">
-                                                    <span className={`badge ${si.badge} flex items-center gap-1 w-fit text-[11px] px-2 py-1`}>
-                                                        <StatusIcon className="w-3 h-3" />
-                                                        {si.label}
-                                                    </span>
-                                                </td>
-                                                <td className="py-2.5 px-3 align-middle">
-                                                    <span className="text-xs text-[var(--text-muted)] line-clamp-1 italic max-w-[120px]">
-                                                        {r.notes || "-"}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                <div className="card overflow-hidden">
+                    {/* Desktop Table (hidden on mobile) */}
+                    <div className="hidden sm:block overflow-x-auto">
+                        <table className="data-table w-full">
+                            <thead className="bg-[var(--secondary)]">
+                                <tr>
+                                    <th>Tanggal</th>
+                                    <th>Clock In</th>
+                                    <th>Clock Out</th>
+                                    <th>Durasi</th>
+                                    <th>Status</th>
+                                    <th>Catatan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paginatedRecords.map((r) => {
+                                    const si = STATUS_MAP[r.status] ?? STATUS_MAP["present"];
+                                    const StatusIcon = si.icon;
+                                    return (
+                                        <tr key={r.id}>
+                                            <td className="font-semibold text-xs text-[var(--text-primary)] whitespace-nowrap">
+                                                {fmtDate(r.date)}
+                                            </td>
+                                            <td className="text-xs">
+                                                <div className="flex items-center gap-1.5 font-mono text-blue-600 font-medium">
+                                                    <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                                    <span>{fmtTime(r.clockIn)}</span>
+                                                </div>
+                                            </td>
+                                            <td className="text-xs">
+                                                <div className="flex items-center gap-1.5 font-mono text-orange-600 font-medium">
+                                                    <Clock className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                    <span>{fmtTime(r.clockOut)}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] text-[var(--text-secondary)] rounded-full font-semibold whitespace-nowrap">
+                                                    {calcDuration(r.clockIn, r.clockOut)}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${si.badge} flex items-center gap-1 w-fit text-[10px]`}>
+                                                    <StatusIcon className="w-3 h-3" />
+                                                    {si.label}
+                                                </span>
+                                            </td>
+                                            <td className="text-xs text-[var(--text-muted)] italic max-w-[150px] truncate">
+                                                {r.notes || "-"}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
 
-                    {/* ── Mobile Card List (visible only on small screens) ── */}
-                    <div className="sm:hidden space-y-2">
+                    {/* Mobile Card List (visible only on small screens) */}
+                    <div className="sm:hidden divide-y divide-[var(--border)]">
                         {paginatedRecords.map((r) => {
                             const si = STATUS_MAP[r.status] ?? STATUS_MAP["present"];
                             const StatusIcon = si.icon;
                             return (
-                                <div key={r.id} className="card p-3 space-y-2">
+                                <div key={r.id} className="p-3.5 space-y-2">
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs font-semibold text-[var(--text-primary)]">{fmtDate(r.date)}</span>
                                         <span className={`badge ${si.badge} flex items-center gap-1 text-[10px] px-2 py-0.5`}>
@@ -405,19 +438,19 @@ export default function AttendanceHistoryPage() {
                                             {si.label}
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="grid grid-cols-3 gap-2 text-center bg-[var(--secondary)]/40 p-2 rounded-lg">
                                         <div>
                                             <p className="text-[9px] text-[var(--text-muted)] uppercase font-semibold">Masuk</p>
                                             <div className="flex items-center justify-center gap-1 mt-0.5">
-                                                <Clock className="w-3 h-3 text-green-500" />
-                                                <span className="text-xs font-mono text-[var(--text-secondary)]">{fmtTime(r.clockIn)}</span>
+                                                <Clock className="w-3 h-3 text-blue-500" />
+                                                <span className="text-xs font-mono font-medium text-[var(--text-secondary)]">{fmtTime(r.clockIn)}</span>
                                             </div>
                                         </div>
                                         <div>
                                             <p className="text-[9px] text-[var(--text-muted)] uppercase font-semibold">Keluar</p>
                                             <div className="flex items-center justify-center gap-1 mt-0.5">
-                                                <Clock className="w-3 h-3 text-red-500" />
-                                                <span className="text-xs font-mono text-[var(--text-secondary)]">{fmtTime(r.clockOut)}</span>
+                                                <Clock className="w-3 h-3 text-orange-500" />
+                                                <span className="text-xs font-mono font-medium text-[var(--text-secondary)]">{fmtTime(r.clockOut)}</span>
                                             </div>
                                         </div>
                                         <div>
@@ -426,27 +459,23 @@ export default function AttendanceHistoryPage() {
                                         </div>
                                     </div>
                                     {r.notes && (
-                                        <p className="text-[10px] text-[var(--text-muted)] italic truncate border-t border-[var(--border)] pt-1.5">{r.notes}</p>
+                                        <p className="text-[10px] text-[var(--text-muted)] italic truncate">{r.notes}</p>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
 
-                    {/* ── Pagination (shared) ── */}
-                    {filteredRecords.length > ITEMS_PER_PAGE && (
-                        <div className="card px-3 sm:px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-3 text-sm">
-                            <span className="text-[10px] sm:text-xs text-[var(--text-muted)]">
-                                Menampilkan <strong className="text-[var(--text-primary)]">{paginatedRecords.length}</strong> dari <strong className="text-[var(--text-primary)]">{filteredRecords.length}</strong> catatan
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Prev</button>
-                                <span className="text-[10px] sm:text-xs font-medium text-[var(--text-muted)]">Hal {currentPage} / {totalPages}</span>
-                                <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next</button>
-                            </div>
-                        </div>
-                    )}
-                </>
+                    <DataTablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={filteredRecords.length}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={setPageSize}
+                        itemLabel="catatan kehadiran"
+                    />
+                </div>
             )}
         </div>
     );

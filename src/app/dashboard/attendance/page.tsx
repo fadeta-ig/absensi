@@ -47,7 +47,7 @@ export default function AttendanceMonitorPage() {
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const loadAttendanceRecords = useCallback(async () => {
         const res = await fetch("/api/attendance");
@@ -333,11 +333,13 @@ export default function AttendanceMonitorPage() {
 
                     <AttendanceLogTab
                         paginatedRecords={paginatedRecords}
+                        filteredRecords={filtered}
                         filteredLength={filtered.length}
                         currentPage={currentPage}
                         itemsPerPage={itemsPerPage}
                         totalPages={totalPages}
                         setCurrentPage={setCurrentPage}
+                        setItemsPerPage={setItemsPerPage}
                         getEmpInfo={getEmpInfo}
                         formatTime={formatTime}
                         statusLabel={statusLabel}

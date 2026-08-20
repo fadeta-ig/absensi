@@ -1,13 +1,22 @@
-import { Camera, ChevronLeft, ChevronRight } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Camera, CheckSquare, Square, FileSpreadsheet } from "lucide-react";
 import { AttendanceRecord, Employee } from "../types";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import BulkActionBar from "@/components/ui/BulkActionBar";
+import { exportToExcel } from "@/lib/export";
+import { useToast } from "@/components/Toast";
 
 interface Props {
     paginatedRecords: AttendanceRecord[];
+    filteredRecords?: AttendanceRecord[];
     filteredLength: number;
     currentPage: number;
     itemsPerPage: number;
     totalPages: number;
     setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
+    setItemsPerPage?: React.Dispatch<React.SetStateAction<number>>;
     getEmpInfo: (id: string) => { name: string; department: string; division: string };
     formatTime: (time?: string) => string;
     statusLabel: (status: string) => string;
@@ -15,15 +24,99 @@ interface Props {
 }
 
 export function AttendanceLogTab({
-    paginatedRecords, filteredLength, currentPage, itemsPerPage, totalPages,
-    setCurrentPage, getEmpInfo, formatTime, statusLabel, setPhotoPreview
+    paginatedRecords, filteredRecords = [], filteredLength, currentPage, itemsPerPage, totalPages,
+    setCurrentPage, setItemsPerPage, getEmpInfo, formatTime, statusLabel, setPhotoPreview
 }: Props) {
+    const toast = useToast();
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+    const isAllCurrentPageSelected = paginatedRecords.length > 0 && paginatedRecords.every(r => selectedIds.has(r.id));
+    const isAllFilteredSelected = filteredRecords.length > 0 && filteredRecords.every(r => selectedIds.has(r.id));
+
+    const toggleSelectAllCurrentPage = () => {
+        const next = new Set(selectedIds);
+        if (isAllCurrentPageSelected) {
+            paginatedRecords.forEach(r => next.delete(r.id));
+        } else {
+            paginatedRecords.forEach(r => next.add(r.id));
+        }
+        setSelectedIds(next);
+    };
+
+    const selectAllFiltered = () => {
+        const next = new Set(selectedIds);
+        (filteredRecords.length > 0 ? filteredRecords : paginatedRecords).forEach(r => next.add(r.id));
+        setSelectedIds(next);
+    };
+
+    const toggleSelectOne = (id: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(id)) {
+            next.delete(id);
+        } else {
+            next.add(id);
+        }
+        setSelectedIds(next);
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const handleBulkExportExcel = () => {
+        const targetList = (filteredRecords.length > 0 ? filteredRecords : paginatedRecords).filter(r => selectedIds.has(r.id));
+        if (targetList.length === 0) return;
+
+        const data = targetList.map(r => {
+            const info = getEmpInfo(r.employeeId);
+            return {
+                employeeId: r.employeeId,
+                name: info.name,
+                department: info.department,
+                division: info.division,
+                date: r.date,
+                clockIn: r.clockIn ? formatTime(r.clockIn) : "-",
+                clockOut: r.clockOut ? formatTime(r.clockOut) : "-",
+                status: statusLabel(r.status),
+            };
+        });
+
+        exportToExcel(
+            data,
+            [
+                { key: "employeeId", label: "NIP" },
+                { key: "name", label: "Nama Karyawan" },
+                { key: "department", label: "Departemen" },
+                { key: "division", label: "Divisi" },
+                { key: "date", label: "Tanggal" },
+                { key: "clockIn", label: "Jam Masuk" },
+                { key: "clockOut", label: "Jam Pulang" },
+                { key: "status", label: "Status" },
+            ],
+            `Log_Absensi_Terpilih_${new Date().toISOString().slice(0, 10)}`,
+            "Absensi"
+        );
+        toast(`${targetList.length} data absensi berhasil diekspor ke Excel.`, "success");
+    };
+
     return (
         <div className="card overflow-hidden border border-[var(--border)] shadow-sm">
             <div className="overflow-x-auto">
                 <table className="data-table">
                     <thead className="bg-[#F9FAFB]">
                         <tr>
+                            <th className="w-10 text-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAllCurrentPage}
+                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                >
+                                    {isAllCurrentPageSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                    ) : (
+                                        <Square className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </th>
                             <th className="w-32">ID Karyawan</th>
                             <th>Nama</th>
                             <th className="hidden lg:table-cell">Departemen</th>
@@ -37,15 +130,29 @@ export function AttendanceLogTab({
                     <tbody className="divide-y divide-[var(--border)]">
                         {paginatedRecords.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="text-center py-12 text-[var(--text-muted)] italic">
+                                <td colSpan={9} className="text-center py-12 text-[var(--text-muted)] italic">
                                     Tidak ada data absensi ditemukan untuk kriteria ini.
                                 </td>
                             </tr>
                         ) : (
                             paginatedRecords.map((r) => {
                                 const info = getEmpInfo(r.employeeId);
+                                const isSelected = selectedIds.has(r.id);
                                 return (
-                                    <tr key={r.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
+                                    <tr key={r.id} className={`hover:bg-[var(--secondary)]/50 transition-colors ${isSelected ? "bg-[var(--primary)]/5" : ""}`}>
+                                        <td className="text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSelectOne(r.id)}
+                                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                            >
+                                                {isSelected ? (
+                                                    <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                                ) : (
+                                                    <Square className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                        </td>
                                         <td className="font-mono text-xs font-semibold text-[var(--text-primary)]">
                                             {r.employeeId}
                                         </td>
@@ -111,64 +218,35 @@ export function AttendanceLogTab({
                 </table>
             </div>
 
-            {/* Pagination Controls */}
-            <div className="px-6 py-4 bg-[#F9FAFB] border-t border-[var(--border)] flex items-center justify-between">
-                <div className="text-xs font-medium text-[var(--text-muted)]">
-                    Menampilkan <span className="text-[var(--text-primary)]">{(currentPage - 1) * itemsPerPage + 1}</span> - <span className="text-[var(--text-primary)]">{Math.min(currentPage * itemsPerPage, filteredLength)}</span> dari <span className="text-[var(--text-primary)] font-bold">{filteredLength}</span> data
-                </div>
-                {totalPages > 1 && (
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="p-2 rounded-md hover:bg-[var(--card)] hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
-                            title="Halaman Sebelumnya"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
+            {/* Reusable Pagination Controls */}
+            <DataTablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={filteredLength}
+                pageSize={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setItemsPerPage}
+                itemLabel="catatan absensi"
+            />
 
-                        <div className="flex items-center">
-                            {[...Array(totalPages)].map((_, i) => {
-                                const page = i + 1;
-                                // Only show current, first, last, and neighbors
-                                if (
-                                    page === 1 ||
-                                    page === totalPages ||
-                                    (page >= currentPage - 1 && page <= currentPage + 1)
-                                ) {
-                                    return (
-                                        <button
-                                            key={page}
-                                            onClick={() => setCurrentPage(page)}
-                                            className={`min-w-[32px] h-8 flex items-center justify-center rounded-md text-sm font-bold transition-all ${currentPage === page
-                                                ? "bg-[var(--primary)] text-white shadow-md"
-                                                : "text-[var(--text-muted)] hover:bg-[var(--card)] hover:text-[var(--primary)] border border-transparent hover:border-[var(--border)]"
-                                                }`}
-                                        >
-                                            {page}
-                                        </button>
-                                    );
-                                } else if (
-                                    page === currentPage - 2 ||
-                                    page === currentPage + 2
-                                ) {
-                                    return <span key={page} className="px-1 text-[var(--text-muted)]">...</span>;
-                                }
-                                return null;
-                            })}
-                        </div>
-
-                        <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="p-2 rounded-md hover:bg-[var(--card)] hover:shadow-sm disabled:opacity-50 disabled:hover:bg-transparent transition-all border border-transparent hover:border-[var(--border)]"
-                            title="Halaman Selanjutnya"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-            </div>
+            {/* Bulk Action Bar */}
+            <BulkActionBar
+                selectedCount={selectedIds.size}
+                totalCount={filteredLength}
+                allSelected={isAllFilteredSelected}
+                onSelectAll={selectAllFiltered}
+                onClearSelection={clearSelection}
+                itemLabel="absensi"
+            >
+                <button
+                    type="button"
+                    onClick={handleBulkExportExcel}
+                    className="btn btn-primary btn-sm flex items-center gap-1.5"
+                >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Ekspor Excel ({selectedIds.size})
+                </button>
+            </BulkActionBar>
         </div>
     );
 }

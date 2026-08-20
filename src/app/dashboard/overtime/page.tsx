@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
     AlertCircle, Clock4, Search, CheckCircle, XCircle, Clock,
-    Calendar, FileText, User, Filter, Eye, X, Loader2
+    Calendar, FileText, User, Filter, Eye, X, Loader2,
+    CheckSquare, Square, FileSpreadsheet, Check, RotateCcw
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import BulkActionBar from "@/components/ui/BulkActionBar";
+import { exportToExcel } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface OvertimeRequest {
     id: string;
     employeeId: string;
-    employee?: { name: string };
+    employee?: { name: string; department?: string };
     date: string;
     startTime: string;
     endTime: string;
@@ -42,6 +46,14 @@ export default function DashboardOvertimePage() {
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
+    // Multi-Select
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkProcessing, setBulkProcessing] = useState(false);
+
     useEffect(() => {
         const loadRequests = async () => {
             setInitialLoading(true);
@@ -63,6 +75,11 @@ export default function DashboardOvertimePage() {
 
         void loadRequests();
     }, [toast]);
+
+    // Reset pagination to page 1 on filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [search, filterStatus, pageSize]);
 
     const handleStatusUpdate = async (id: string, status: "approved" | "rejected") => {
         setUpdating(id);
@@ -93,14 +110,129 @@ export default function DashboardOvertimePage() {
         }
     };
 
-    const filtered = requests.filter((r) => {
-        const empName = r.employee?.name || "";
-        const matchSearch = r.employeeId.toLowerCase().includes(search.toLowerCase()) ||
-            empName.toLowerCase().includes(search.toLowerCase()) ||
-            r.reason.toLowerCase().includes(search.toLowerCase());
-        const matchStatus = filterStatus === "all" || r.status === filterStatus;
-        return matchSearch && matchStatus;
-    });
+    const handleBulkStatusUpdate = async (status: "approved" | "rejected") => {
+        const targetList = requests.filter(r => selectedIds.has(r.id) && r.status === "pending");
+        if (targetList.length === 0) {
+            toast("Tidak ada pengajuan lembur berstatus menunggu yang dipilih.", "warning");
+            return;
+        }
+
+        setBulkProcessing(true);
+        try {
+            for (const r of targetList) {
+                await fetch("/api/overtime", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id: r.id,
+                        status,
+                        approvedHours: r.hours,
+                        isHoliday: r.isHoliday
+                    }),
+                });
+            }
+            // Reload requests
+            const res = await fetch("/api/overtime");
+            if (res.ok) {
+                const data = await res.json();
+                setRequests(Array.isArray(data) ? data : []);
+            }
+            clearSelection();
+            toast(`${targetList.length} pengajuan lembur berhasil ${status === "approved" ? "disetujui" : "ditolak"}.`, "success");
+        } catch (error) {
+            reportClientError("DashboardOvertimePage", "Gagal memproses persetujuan lembur massal", error);
+            toast("Sebagian persetujuan lembur massal gagal diperbarui.", "error");
+        } finally {
+            setBulkProcessing(false);
+        }
+    };
+
+    const handleBulkExportExcel = () => {
+        const targetList = requests.filter(r => selectedIds.has(r.id));
+        if (targetList.length === 0) return;
+
+        const data = targetList.map(r => ({
+            employeeId: r.employeeId,
+            name: r.employee?.name || r.employeeId,
+            date: r.date,
+            time: `${r.startTime} - ${r.endTime}`,
+            hours: r.hours,
+            approvedHours: r.approvedHours ?? r.hours,
+            isHoliday: r.isHoliday ? "Hari Libur" : "Hari Kerja",
+            overtimePay: r.overtimePay,
+            reason: r.reason,
+            status: STATUS_CONFIG[r.status]?.label || r.status,
+            createdAt: new Date(r.createdAt).toLocaleDateString("id-ID")
+        }));
+
+        exportToExcel(
+            data,
+            [
+                { key: "employeeId", label: "NIP" },
+                { key: "name", label: "Nama Karyawan" },
+                { key: "date", label: "Tanggal Lembur" },
+                { key: "time", label: "Jam Lembur" },
+                { key: "hours", label: "Jam Pengajuan" },
+                { key: "approvedHours", label: "Jam Disetujui" },
+                { key: "isHoliday", label: "Tipe Hari" },
+                { key: "overtimePay", label: "Upah Lembur" },
+                { key: "reason", label: "Alasan" },
+                { key: "status", label: "Status" },
+                { key: "createdAt", label: "Tgl Pengajuan" }
+            ],
+            `Data_Lembur_Export_${new Date().toISOString().slice(0, 10)}`,
+            "Lembur"
+        );
+        toast(`${targetList.length} data lembur berhasil diekspor ke Excel.`, "success");
+    };
+
+    const filtered = useMemo(() => {
+        return requests.filter((r) => {
+            const empName = r.employee?.name || "";
+            const matchSearch = r.employeeId.toLowerCase().includes(search.toLowerCase()) ||
+                empName.toLowerCase().includes(search.toLowerCase()) ||
+                r.reason.toLowerCase().includes(search.toLowerCase());
+            const matchStatus = filterStatus === "all" || r.status === filterStatus;
+            return matchSearch && matchStatus;
+        });
+    }, [requests, search, filterStatus]);
+
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+    const paginatedRequests = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filtered.slice(start, start + pageSize);
+    }, [filtered, currentPage, pageSize]);
+
+    const isAllCurrentPageSelected = paginatedRequests.length > 0 && paginatedRequests.every(r => selectedIds.has(r.id));
+    const isAllFilteredSelected = filtered.length > 0 && filtered.every(r => selectedIds.has(r.id));
+
+    const toggleSelectAllCurrentPage = () => {
+        const next = new Set(selectedIds);
+        if (isAllCurrentPageSelected) {
+            paginatedRequests.forEach(r => next.delete(r.id));
+        } else {
+            paginatedRequests.forEach(r => next.add(r.id));
+        }
+        setSelectedIds(next);
+    };
+
+    const selectAllFiltered = () => {
+        const next = new Set(selectedIds);
+        filtered.forEach(r => next.add(r.id));
+        setSelectedIds(next);
+    };
+
+    const toggleSelectOne = (id: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(id)) {
+            next.delete(id);
+        } else {
+            next.add(id);
+        }
+        setSelectedIds(next);
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
 
     const statusCounts = {
         all: requests.length,
@@ -111,14 +243,22 @@ export default function DashboardOvertimePage() {
 
     const totalApprovedHours = requests.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.hours, 0);
 
+    const resetFilters = () => {
+        setSearch("");
+        setFilterStatus("all");
+    };
+
+    const hasActiveFilters = search || filterStatus !== "all";
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+            {/* Header */}
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Clock4 className="w-5 h-5 text-[var(--primary)]" />
                     Manajemen Lembur
                 </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">{requests.length} pengajuan lembur</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">{requests.length} pengajuan lembur terdaftar</p>
             </div>
 
             {loadError && (
@@ -144,26 +284,44 @@ export default function DashboardOvertimePage() {
                 ))}
             </div>
 
-            {/* Fmt helper */}
+            {/* Search & Filter Bar */}
+            <div className="card p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                        <input
+                            type="text"
+                            className="form-input pl-10 w-full"
+                            placeholder="Cari nama, NIP atau alasan lembur..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {(["all", "pending", "approved", "rejected"] as const).map((s) => (
+                            <button
+                                key={s}
+                                onClick={() => setFilterStatus(s)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filterStatus === s ? "bg-[var(--primary)] text-white shadow-sm" : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"}`}
+                            >
+                                {s === "all" ? "Semua" : STATUS_CONFIG[s].label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-            {/* Search & Filter */}
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                    <input type="text" className="form-input pl-10" placeholder="Cari nama, ID atau alasan..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                </div>
-                <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-[var(--text-muted)]" />
-                    {(["all", "pending", "approved", "rejected"] as const).map((s) => (
+                {hasActiveFilters && (
+                    <div className="flex justify-end pt-2 border-t border-[var(--border)]">
                         <button
-                            key={s}
-                            onClick={() => setFilterStatus(s)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filterStatus === s ? "bg-[var(--primary)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"}`}
+                            type="button"
+                            onClick={resetFilters}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
                         >
-                            {s === "all" ? "Semua" : STATUS_CONFIG[s].label}
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Reset Filter
                         </button>
-                    ))}
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Table */}
@@ -172,49 +330,81 @@ export default function DashboardOvertimePage() {
                     <table className="data-table">
                         <thead>
                             <tr>
+                                <th className="w-10 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={toggleSelectAllCurrentPage}
+                                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                        title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                    >
+                                        {isAllCurrentPageSelected ? (
+                                            <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                        ) : (
+                                            <Square className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                </th>
                                 <th>Karyawan</th>
                                 <th>Tanggal</th>
                                 <th className="hidden md:table-cell">Jam</th>
-                                <th className="hidden md:table-cell">Durasi</th>
+                                <th className="hidden md:table-cell text-center">Durasi</th>
                                 <th className="hidden lg:table-cell">Alasan</th>
                                 <th>Upah Lembur</th>
                                 <th>Status</th>
-                                <th>Aksi</th>
+                                <th className="text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
                             {initialLoading ? (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-10 text-sm text-[var(--text-muted)]">
-                                        <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
+                                    <td colSpan={9} className="text-center py-12 text-sm text-[var(--text-muted)]">
+                                        <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-60" />
                                         Memuat pengajuan lembur...
                                     </td>
                                 </tr>
                             ) : filtered.length === 0 ? (
-                                <tr><td colSpan={8} className="text-center py-8 text-sm text-[var(--text-muted)]">Tidak ada pengajuan lembur ditemukan</td></tr>
+                                <tr><td colSpan={9} className="text-center py-10 text-sm text-[var(--text-muted)]">Tidak ada pengajuan lembur yang cocok</td></tr>
                             ) : (
-                                filtered.map((r) => {
+                                paginatedRequests.map((r) => {
                                     const cfg = STATUS_CONFIG[r.status];
+                                    const isSelected = selectedIds.has(r.id);
                                     return (
-                                        <tr key={r.id}>
+                                        <tr key={r.id} className={isSelected ? "bg-[var(--primary)]/5" : undefined}>
+                                            <td className="text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleSelectOne(r.id)}
+                                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                                >
+                                                    {isSelected ? (
+                                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                                    ) : (
+                                                        <Square className="w-4 h-4" />
+                                                    )}
+                                                </button>
+                                            </td>
                                             <td>
                                                 <div className="flex flex-col">
-                                                    <span className="font-semibold text-sm text-[var(--text-primary)]">{r.employee?.name || "Karyawan"}</span>
+                                                    <span className="font-semibold text-xs text-[var(--text-primary)]">{r.employee?.name || "Karyawan"}</span>
                                                     <span className="font-mono text-[10px] text-[var(--text-muted)]">{r.employeeId}</span>
                                                 </div>
                                             </td>
-                                            <td className="text-xs">{r.date}</td>
-                                            <td className="hidden md:table-cell text-xs">{r.startTime} — {r.endTime}</td>
-                                            <td className="hidden md:table-cell text-xs font-semibold">{Number(r.hours.toFixed(2))}h</td>
-                                            <td className="hidden lg:table-cell text-xs text-[var(--text-secondary)] max-w-[200px]">
-                                                <p className="line-clamp-2">{r.reason}</p>
+                                            <td className="text-xs font-medium">{r.date}</td>
+                                            <td className="hidden md:table-cell text-xs font-mono text-blue-600">{r.startTime} — {r.endTime}</td>
+                                            <td className="hidden md:table-cell text-xs text-center font-bold text-[var(--text-primary)]">
+                                                <span className="px-2 py-0.5 rounded-full bg-[var(--secondary)]">
+                                                    {Number(r.hours.toFixed(2))}h
+                                                </span>
                                             </td>
-                                            <td className="text-xs font-semibold text-green-600">
+                                            <td className="hidden lg:table-cell text-xs text-[var(--text-secondary)] max-w-[200px]">
+                                                <p className="line-clamp-2" title={r.reason}>{r.reason}</p>
+                                            </td>
+                                            <td className="text-xs font-bold text-emerald-600">
                                                 {r.overtimePay > 0 ? new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(r.overtimePay) : "-"}
                                             </td>
                                             <td><span className={`badge ${cfg.class}`}>{cfg.label}</span></td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
+                                            <td className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
                                                     <button onClick={() => {
                                                         setSelectedReq(r);
                                                         setApprovedHoursInput(r.approvedHours ?? r.hours);
@@ -226,11 +416,11 @@ export default function DashboardOvertimePage() {
                                                         <>
                                                             <button
                                                                 onClick={() => handleStatusUpdate(r.id, "approved")}
-                                                                className="btn btn-ghost btn-sm !p-1.5 text-green-600 hover:!bg-green-50"
+                                                                className="btn btn-ghost btn-sm !p-1.5 text-emerald-600 hover:!bg-emerald-50"
                                                                 disabled={updating === r.id}
                                                                 title="Setujui"
                                                             >
-                                                                {updating === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                                                {updating === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                                             </button>
                                                             <button
                                                                 onClick={() => handleStatusUpdate(r.id, "rejected")}
@@ -238,7 +428,7 @@ export default function DashboardOvertimePage() {
                                                                 disabled={updating === r.id}
                                                                 title="Tolak"
                                                             >
-                                                                {updating === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                                                {updating === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                                                             </button>
                                                         </>
                                                     )}
@@ -251,109 +441,154 @@ export default function DashboardOvertimePage() {
                         </tbody>
                     </table>
                 </div>
+
+                <DataTablePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filtered.length}
+                    pageSize={pageSize}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
+                    itemLabel="pengajuan lembur"
+                />
             </div>
+
+            {/* Bulk Action Bar */}
+            <BulkActionBar
+                selectedCount={selectedIds.size}
+                totalCount={filtered.length}
+                allSelected={isAllFilteredSelected}
+                onSelectAll={selectAllFiltered}
+                onClearSelection={clearSelection}
+                itemLabel="lembur"
+            >
+                <button
+                    type="button"
+                    onClick={() => handleBulkStatusUpdate("approved")}
+                    disabled={bulkProcessing}
+                    className="btn btn-success btn-sm flex items-center gap-1.5"
+                >
+                    {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Setujui Terpilih
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleBulkStatusUpdate("rejected")}
+                    disabled={bulkProcessing}
+                    className="btn btn-danger btn-sm flex items-center gap-1.5"
+                >
+                    {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                    Tolak Terpilih
+                </button>
+                <button
+                    type="button"
+                    onClick={handleBulkExportExcel}
+                    className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
+                >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    Ekspor Excel
+                </button>
+            </BulkActionBar>
 
             {/* Detail Modal */}
             {selectedReq && (
                 <div className="modal-overlay" onClick={() => setSelectedReq(null)}>
                     <div className="modal-content max-w-md" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2 className="modal-title">Detail Lembur</h2>
+                            <h2 className="modal-title flex items-center gap-2">
+                                <Clock4 className="w-4 h-4 text-[var(--primary)]" />
+                                Detail Pengajuan Lembur
+                            </h2>
                             <button className="modal-close" onClick={() => setSelectedReq(null)}>
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-[var(--text-primary)]">{selectedReq.employee?.name || "Karyawan"}</span>
-                                    <span className="text-[11px] font-mono text-[var(--text-muted)]">{selectedReq.employeeId}</span>
-                                </div>
-                                <span className={`badge ${STATUS_CONFIG[selectedReq.status].class}`}>
-                                    {STATUS_CONFIG[selectedReq.status].label}
-                                </span>
+                            <div className="p-3 bg-[var(--secondary)] rounded-xl space-y-1">
+                                <p className="font-bold text-sm text-[var(--text-primary)]">{selectedReq.employee?.name || "Karyawan"}</p>
+                                <p className="text-xs text-[var(--text-muted)] font-mono">{selectedReq.employeeId}</p>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3 text-xs">
                                 <div>
-                                    <p className="text-xs text-[var(--text-muted)] mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> Tanggal</p>
-                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{selectedReq.date}</p>
+                                    <span className="text-[var(--text-muted)]">Tanggal</span>
+                                    <p className="font-semibold">{selectedReq.date}</p>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-[var(--text-muted)] mb-1 flex items-center gap-1"><Clock className="w-3 h-3" /> Jam Lembur</p>
-                                    <p className="text-sm text-[var(--text-secondary)]">{selectedReq.startTime} — {selectedReq.endTime} ({Number(selectedReq.hours.toFixed(2))} jam)</p>
+                                    <span className="text-[var(--text-muted)]">Jam</span>
+                                    <p className="font-semibold">{selectedReq.startTime} — {selectedReq.endTime}</p>
                                 </div>
                                 <div>
-                                    <p className="text-xs text-[var(--text-muted)] mb-1 flex items-center gap-1"><FileText className="w-3 h-3" /> Alasan</p>
-                                    <p className="text-sm text-[var(--text-secondary)]">{selectedReq.reason}</p>
+                                    <span className="text-[var(--text-muted)]">Durasi Diajukan</span>
+                                    <p className="font-semibold">{Number(selectedReq.hours.toFixed(2))} jam</p>
+                                </div>
+                                <div>
+                                    <span className="text-[var(--text-muted)]">Tipe Hari</span>
+                                    <p className="font-semibold">{selectedReq.isHoliday ? "Hari Libur" : "Hari Kerja"}</p>
                                 </div>
                             </div>
 
-                            {selectedReq.status === "pending" && (
-                                <div className="space-y-4 pt-3 border-t border-[var(--border)]">
-                                    <div className="form-group !mb-0">
-                                        <label className="form-label">Jam Disetujui</label>
-                                        <input
-                                            type="number"
-                                            className="form-input"
-                                            value={approvedHoursInput}
-                                            onChange={(e) => setApprovedHoursInput(Number(e.target.value))}
-                                            min={0.5}
-                                            max={12}
-                                            step={0.5}
-                                        />
-                                        <p className="text-[10px] text-[var(--text-muted)] mt-1">Karyawan mengajukan {Number(selectedReq.hours.toFixed(2))} jam</p>
-                                    </div>
-                                    <div className="form-group !mb-0">
-                                        <label className="form-label">Tipe Hari</label>
-                                        <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsHolidayInput(false)}
-                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${!isHolidayInput ? "bg-[var(--primary)] text-white border-[var(--primary)]" : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)]"
-                                                    }`}
-                                            >
-                                                Hari Kerja
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsHolidayInput(true)}
-                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${isHolidayInput ? "bg-orange-500 text-white border-orange-500" : "bg-[var(--card)] text-[var(--text-secondary)] border-[var(--border)]"
-                                                    }`}
-                                            >
-                                                Hari Libur
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => handleStatusUpdate(selectedReq.id, "approved")}
-                                            className="btn btn-primary flex-1"
-                                            disabled={updating === selectedReq.id}
-                                        >
-                                            {updating === selectedReq.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Setujui
-                                        </button>
-                                        <button
-                                            onClick={() => handleStatusUpdate(selectedReq.id, "rejected")}
-                                            className="btn btn-secondary flex-1 !text-red-600 !border-red-200 hover:!bg-red-50"
-                                            disabled={updating === selectedReq.id}
-                                        >
-                                            {updating === selectedReq.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Tolak
-                                        </button>
-                                    </div>
+                            <div>
+                                <span className="text-xs text-[var(--text-muted)]">Alasan Lembur</span>
+                                <p className="text-xs text-[var(--text-primary)] mt-1 p-2 bg-[var(--secondary)] rounded-lg">
+                                    {selectedReq.reason}
+                                </p>
+                            </div>
+
+                            {selectedReq.overtimePay > 0 && (
+                                <div className="p-3 bg-green-50 rounded-xl border border-green-200 text-xs">
+                                    <span className="text-green-700">Estimasi Upah Lembur (PP 35/2021)</span>
+                                    <p className="text-lg font-bold text-green-800">
+                                        {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(selectedReq.overtimePay)}
+                                    </p>
                                 </div>
                             )}
 
-                            {selectedReq.status === "approved" && selectedReq.overtimePay > 0 && (
-                                <div className="pt-3 border-t border-[var(--border)]">
-                                    <div className="flex justify-between items-center bg-green-50 p-3 rounded-lg border border-green-200">
+                            {selectedReq.status === "pending" && (
+                                <div className="space-y-3 pt-2 border-t border-[var(--border)]">
+                                    <p className="text-xs font-semibold text-[var(--text-primary)]">Penyesuaian Persetujuan</p>
+                                    <div className="grid grid-cols-2 gap-2">
                                         <div>
-                                            <p className="text-xs text-green-700 font-medium">Upah Lembur (PP 35/2021)</p>
-                                            <p className="text-[10px] text-green-600">{Number((selectedReq.approvedHours ?? selectedReq.hours).toFixed(2))} jam disetujui</p>
+                                            <label className="form-label text-[10px]">Jam Disetujui</label>
+                                            <input
+                                                type="number"
+                                                className="form-input text-xs"
+                                                value={approvedHoursInput}
+                                                onChange={(e) => setApprovedHoursInput(Number(e.target.value))}
+                                                min={0.5}
+                                                max={12}
+                                                step={0.5}
+                                            />
                                         </div>
-                                        <p className="text-lg font-extrabold text-green-700">
-                                            {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(selectedReq.overtimePay)}
-                                        </p>
+                                        <div className="flex items-center mt-5">
+                                            <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isHolidayInput}
+                                                    onChange={(e) => setIsHolidayInput(e.target.checked)}
+                                                    className="rounded border-[var(--border)]"
+                                                />
+                                                <span>Hari Libur</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button
+                                            onClick={() => handleStatusUpdate(selectedReq.id, "approved")}
+                                            className="btn btn-success flex-1"
+                                            disabled={updating === selectedReq.id}
+                                        >
+                                            {updating === selectedReq.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                            Setujui
+                                        </button>
+                                        <button
+                                            onClick={() => handleStatusUpdate(selectedReq.id, "rejected")}
+                                            className="btn btn-danger flex-1"
+                                            disabled={updating === selectedReq.id}
+                                        >
+                                            {updating === selectedReq.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                            Tolak
+                                        </button>
                                     </div>
                                 </div>
                             )}
