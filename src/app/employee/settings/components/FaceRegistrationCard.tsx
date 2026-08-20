@@ -666,7 +666,7 @@ export function FaceRegistrationCard() {
                             <div className="absolute inset-0 pointer-events-none">
                                 <div className="absolute inset-0 bg-black/20" />
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className={`relative w-48 h-60 rounded-[50%] border-2 transition-all duration-300 bg-transparent ${
+                                    <div className={`relative w-44 h-56 rounded-[50%] border-2 transition-all duration-300 bg-transparent ${
                                         flow.phase === "detecting"
                                             ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)]"
                                             : flow.phase === "saving"
@@ -681,13 +681,13 @@ export function FaceRegistrationCard() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="absolute bottom-4 left-0 right-0 flex justify-center px-4">
-                                    <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm border border-white/10 shadow-sm">
+                                <div className="absolute bottom-3 left-0 right-0 flex justify-center px-4">
+                                    <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm border border-white/10 shadow-sm text-center">
                                         {flow.phase === "detecting"
                                             ? `Memindai frame${flow.scanAttempt && flow.scanTotal ? ` ${flow.scanAttempt}/${flow.scanTotal}` : ""}... Tahan posisi`
                                             : flow.phase === "saving"
                                                 ? "Menyimpan data wajah..."
-                                                : "Posisikan seluruh wajah di dalam lingkaran oval"}
+                                                : "Beri jarak ±30-40 cm agar seluruh dahi & dagu terlihat utuh"}
                                     </span>
                                 </div>
                             </div>
@@ -700,12 +700,12 @@ export function FaceRegistrationCard() {
                     <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-lg text-xs text-amber-800 dark:text-amber-300 space-y-1">
                         <div className="flex items-center gap-1.5 font-bold">
                             <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                            <span>Tips Pemindaian Optimal:</span>
+                            <span>Tips Agar Wajah Langsung Terdeteksi:</span>
                         </div>
                         <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-700 dark:text-amber-400/90 pl-1">
-                            <li>Bersihkan lensa kamera depan jika sedikit berdebu atau berembun.</li>
-                            <li>Posisikan wajah menghadap ke sumber cahaya terang (hindari membelakangi lampu/jendela).</li>
-                            <li>Lepaskan masker atau kacamata hitam pekat saat memindai.</li>
+                            <li><strong>Jarak Kamera:</strong> Mundurkan sedikit HP Anda (beri jarak ±30-40 cm / setengah lengan) agar tepi dahi dan dagu tidak terpotong.</li>
+                            <li><strong>Pencahayaan:</strong> Pastikan wajah menghadap sumber cahaya terang (jangan membelakangi lampu).</li>
+                            <li><strong>Kebersihan Lensa:</strong> Usap lensa kamera depan jika sedikit berdebu atau berembun.</li>
                         </ul>
                     </div>
                 )}

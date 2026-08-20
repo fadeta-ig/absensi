@@ -29,12 +29,12 @@ const DEFAULT_THRESHOLD = (() => {
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
 /** Konfigurasi scan multi-frame cepat untuk perangkat mobile. */
-export const FACE_SCAN_ATTEMPTS = 3;
+export const FACE_SCAN_ATTEMPTS = 4;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 80;
+export const FACE_SCAN_INTERVAL_MS = 60;
 
-/** Confidence detektor; 0.15 membuat wajah pada kamera HP low-end atau lensa sedikit buram/berembun tetap terdeteksi. */
-const FACE_DETECTION_MIN_CONFIDENCE = 0.15;
+/** Confidence detektor; 0.10 memberikan toleransi ekstra tinggi agar wajah terdeteksi dalam berbagai kondisi. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.10;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
@@ -87,7 +87,7 @@ function getOptimizedInput(
         if (vw === 0 || vh === 0) return input;
 
         try {
-            const maxDim = 480;
+            const maxDim = 512;
             const scale = Math.min(1, maxDim / Math.max(vw, vh));
             const w = Math.max(160, Math.round(vw * scale));
             const h = Math.max(120, Math.round(vh * scale));
@@ -109,7 +109,7 @@ function getOptimizedInput(
 
 /**
  * Eksekusi deteksi wajah dengan proteksi timeout (maksimal 3.5 detik per frame)
- * agar inferensi tidak pernah macet atau freeze tanpa batas di perangkat HP.
+ * dan fallback multi-detection untuk wajah jarak dekat / miring.
  */
 async function runDetectionWithTimeout(
     target: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement,
@@ -118,13 +118,34 @@ async function runDetectionWithTimeout(
 ): Promise<Float32Array | null> {
     const detectionPromise = (async () => {
         try {
-            const detection = await faceapi
+            // 1. Coba deteksi single face primer
+            const single = await faceapi
                 .detectSingleFace(target, options)
                 .withFaceLandmarks()
                 .withFaceDescriptor();
-            return detection ? detection.descriptor : null;
+
+            if (single && single.descriptor) {
+                return single.descriptor;
+            }
+
+            // 2. Fallback: deteksi all faces dan ambil wajah terbesar di viewport
+            const allDetections = await faceapi
+                .detectAllFaces(target, options)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+
+            if (allDetections && allDetections.length > 0) {
+                const best = allDetections.reduce((largest, curr) => {
+                    const currArea = curr.detection.box.width * curr.detection.box.height;
+                    const largestArea = largest.detection.box.width * largest.detection.box.height;
+                    return currArea > largestArea ? curr : largest;
+                });
+                return best.descriptor;
+            }
+
+            return null;
         } catch (err) {
-            log.error("Error pada saat inferensi single face", {
+            log.error("Error pada saat inferensi face detection", {
                 error: err instanceof Error ? err.message : String(err),
             });
             return null;
@@ -158,7 +179,18 @@ export async function detectFaceDescriptor(
             minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
         });
 
-        return await runDetectionWithTimeout(optimized, options, 3500);
+        // Coba pada kanvas yang dioptimasi
+        let descriptor = await runDetectionWithTimeout(optimized, options, 3000);
+
+        // Jika belum dapat dan input adalah video, coba langsung pada video mentah
+        if (!descriptor && optimized !== input) {
+            const fallbackOptions = new faceapi.SsdMobilenetv1Options({
+                minConfidence: 0.08,
+            });
+            descriptor = await runDetectionWithTimeout(input, fallbackOptions, 3000);
+        }
+
+        return descriptor;
     } catch (err) {
         log.error("Error saat deteksi wajah", {
             error: err instanceof Error ? err.message : String(err),
@@ -197,7 +229,7 @@ export async function detectFaceDescriptors(
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         options.onAttempt?.(attempt + 1, attempts, descriptors.length);
         // Berikan waktu render mikro agar browser me-repaint antarmuka di layar
-        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        await new Promise<void>((resolve) => setTimeout(resolve, 40));
 
         const descriptor = await detectFaceDescriptor(input);
         if (descriptor) {
