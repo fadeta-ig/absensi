@@ -28,12 +28,12 @@ const DEFAULT_THRESHOLD = (() => {
 /** Threshold aktif — export agar bisa digunakan di UI */
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
-/** Konfigurasi scan multi-frame cepat untuk perangkat mobile. */
-export const FACE_SCAN_ATTEMPTS = 4;
+/** Konfigurasi scan multi-frame untuk perangkat mobile. */
+export const FACE_SCAN_ATTEMPTS = 5;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 60;
+export const FACE_SCAN_INTERVAL_MS = 300;
 
-/** Confidence detektor; 0.10 memberikan toleransi ekstra tinggi agar wajah terdeteksi dalam berbagai kondisi. */
+/** Confidence detektor; semakin rendah semakin toleran terhadap kamera buram. */
 const FACE_DETECTION_MIN_CONFIDENCE = 0.10;
 
 let modelsLoaded = false;
@@ -56,6 +56,7 @@ export async function loadFaceModels(): Promise<void> {
             faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
         modelsLoaded = true;
+        log.info("Face-api models berhasil dimuat");
     })()
         .catch((err) => {
             log.error("Gagal load face-api models", {
@@ -72,98 +73,11 @@ export async function loadFaceModels(): Promise<void> {
 }
 
 /**
- * Optimasi input canvas untuk inferensi mobile berkecepatan tinggi.
- * Menurunkan resolusi video HD (1080p/720p) ke ~480px agar inferensi SSD MobileNet
- * berjalan instan (150ms-250ms) tanpa membekukan UI thread browser HP.
- */
-function getOptimizedInput(
-    input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
-): HTMLCanvasElement | HTMLImageElement | HTMLVideoElement {
-    if (typeof document === "undefined") return input;
-
-    if (input instanceof HTMLVideoElement) {
-        const vw = input.videoWidth || 640;
-        const vh = input.videoHeight || 480;
-        if (vw === 0 || vh === 0) return input;
-
-        try {
-            const maxDim = 512;
-            const scale = Math.min(1, maxDim / Math.max(vw, vh));
-            const w = Math.max(160, Math.round(vw * scale));
-            const h = Math.max(120, Math.round(vh * scale));
-
-            const canvas = document.createElement("canvas");
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-                ctx.drawImage(input, 0, 0, w, h);
-                return canvas;
-            }
-        } catch {
-            return input;
-        }
-    }
-    return input;
-}
-
-/**
- * Eksekusi deteksi wajah dengan proteksi timeout (maksimal 3.5 detik per frame)
- * dan fallback multi-detection untuk wajah jarak dekat / miring.
- */
-async function runDetectionWithTimeout(
-    target: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement,
-    options: faceapi.SsdMobilenetv1Options,
-    timeoutMs = 3500
-): Promise<Float32Array | null> {
-    const detectionPromise = (async () => {
-        try {
-            // 1. Coba deteksi single face primer
-            const single = await faceapi
-                .detectSingleFace(target, options)
-                .withFaceLandmarks()
-                .withFaceDescriptor();
-
-            if (single && single.descriptor) {
-                return single.descriptor;
-            }
-
-            // 2. Fallback: deteksi all faces dan ambil wajah terbesar di viewport
-            const allDetections = await faceapi
-                .detectAllFaces(target, options)
-                .withFaceLandmarks()
-                .withFaceDescriptors();
-
-            if (allDetections && allDetections.length > 0) {
-                const best = allDetections.reduce((largest, curr) => {
-                    const currArea = curr.detection.box.width * curr.detection.box.height;
-                    const largestArea = largest.detection.box.width * largest.detection.box.height;
-                    return currArea > largestArea ? curr : largest;
-                });
-                return best.descriptor;
-            }
-
-            return null;
-        } catch (err) {
-            log.error("Error pada saat inferensi face detection", {
-                error: err instanceof Error ? err.message : String(err),
-            });
-            return null;
-        }
-    })();
-
-    const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => {
-            log.warn("Deteksi frame melebihi batas waktu (timeout)", { timeoutMs });
-            resolve(null);
-        }, timeoutMs);
-    });
-
-    return Promise.race([detectionPromise, timeoutPromise]);
-}
-
-/**
  * Detect a single face dan kembalikan 128-point descriptor.
+ * Menggunakan elemen video/canvas/image LANGSUNG tanpa offscreen canvas
+ * karena pada banyak HP (Chrome Android), drawImage(video) ke offscreen
+ * canvas menghasilkan gambar hitam kosong akibat hardware-accelerated decoding.
+ *
  * Return `null` jika tidak ada wajah terdeteksi.
  */
 export async function detectFaceDescriptor(
@@ -173,24 +87,51 @@ export async function detectFaceDescriptor(
         await loadFaceModels();
     }
 
+    // Pastikan video element sudah siap streaming frame
+    if (input instanceof HTMLVideoElement) {
+        if (input.readyState < 2 || input.videoWidth === 0 || input.videoHeight === 0) {
+            log.warn("Video belum siap untuk deteksi wajah", {
+                readyState: input.readyState,
+                videoWidth: input.videoWidth,
+                videoHeight: input.videoHeight,
+            });
+            return null;
+        }
+    }
+
     try {
-        const optimized = getOptimizedInput(input);
         const options = new faceapi.SsdMobilenetv1Options({
             minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
         });
 
-        // Coba pada kanvas yang dioptimasi
-        let descriptor = await runDetectionWithTimeout(optimized, options, 3000);
+        // 1. Deteksi single face (cepat, optimal untuk satu orang)
+        const single = await faceapi
+            .detectSingleFace(input, options)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
 
-        // Jika belum dapat dan input adalah video, coba langsung pada video mentah
-        if (!descriptor && optimized !== input) {
-            const fallbackOptions = new faceapi.SsdMobilenetv1Options({
-                minConfidence: 0.08,
-            });
-            descriptor = await runDetectionWithTimeout(input, fallbackOptions, 3000);
+        if (single?.descriptor) {
+            return single.descriptor;
         }
 
-        return descriptor;
+        // 2. Fallback: detectAllFaces, ambil wajah paling besar
+        //    Ini membantu saat wajah terlalu dekat/miring sehingga
+        //    detectSingleFace gagal karena boundary clipping.
+        const allDetections = await faceapi
+            .detectAllFaces(input, options)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+
+        if (allDetections && allDetections.length > 0) {
+            const best = allDetections.reduce((largest, curr) => {
+                const currArea = curr.detection.box.width * curr.detection.box.height;
+                const largestArea = largest.detection.box.width * largest.detection.box.height;
+                return currArea > largestArea ? curr : largest;
+            });
+            return best.descriptor;
+        }
+
+        return null;
     } catch (err) {
         log.error("Error saat deteksi wajah", {
             error: err instanceof Error ? err.message : String(err),
@@ -208,7 +149,10 @@ interface MultiFrameDetectionOptions {
 
 /**
  * Pindai beberapa frame video dan kumpulkan descriptor yang berhasil.
- * Langsung selesai begitu mendapatkan minimal 1 deteksi berkualitas tinggi.
+ * Interval antar-frame sengaja diperbesar (300ms) agar:
+ * 1. Kamera HP sempat auto-focus dan auto-exposure
+ * 2. Browser sempat me-render frame baru ke video element
+ * 3. UI sempat me-repaint animasi pemindaian
  */
 export async function detectFaceDescriptors(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
@@ -228,8 +172,9 @@ export async function detectFaceDescriptors(
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         options.onAttempt?.(attempt + 1, attempts, descriptors.length);
-        // Berikan waktu render mikro agar browser me-repaint antarmuka di layar
-        await new Promise<void>((resolve) => setTimeout(resolve, 40));
+
+        // Jeda agar browser sempat render frame video baru dan repaint UI
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
         const descriptor = await detectFaceDescriptor(input);
         if (descriptor) {
@@ -243,9 +188,13 @@ export async function detectFaceDescriptors(
     }
 
     if (descriptors.length === 0) {
+        const inputInfo = input instanceof HTMLVideoElement
+            ? { videoWidth: input.videoWidth, videoHeight: input.videoHeight, readyState: input.readyState }
+            : {};
         log.warn("Wajah tidak terdeteksi setelah seluruh percobaan scan", {
             attempts,
             minimumDetections,
+            ...inputInfo,
         });
     }
 
