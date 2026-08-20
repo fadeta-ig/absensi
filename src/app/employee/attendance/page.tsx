@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
     Camera, MapPin, Clock, CheckCircle, AlertCircle, Loader2,
-    Video, VideoOff, ShieldCheck, ShieldAlert, ScanFace, AlertTriangle
+    Video, VideoOff, ShieldCheck, ShieldAlert, ScanFace, AlertTriangle, FlipHorizontal
 } from "lucide-react";
 import Link from "next/link";
 import { createClientLogger } from "@/lib/clientLogger";
@@ -34,6 +34,7 @@ export default function AttendancePage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [streaming, setStreaming] = useState(false);
+    const [isMirrored, setIsMirrored] = useState(true);
     const [photo, setPhoto] = useState<string | null>(null);
     const [gpsInfo, setGpsInfo] = useState<GpsInfo | null>(null);
     const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -380,7 +381,18 @@ export default function AttendancePage() {
             {!isDone && (
                 <div className="card overflow-hidden">
                     <div className="relative w-full aspect-[4/3] sm:aspect-video bg-[var(--foreground)] text-[var(--background)] rounded-t-xl overflow-hidden">
-                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: "scaleX(-1)" }} />
+                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: isMirrored ? "scaleX(-1)" : "none" }} />
+                        {streaming && (
+                            <button
+                                type="button"
+                                onClick={() => setIsMirrored((prev) => !prev)}
+                                className="absolute top-3 right-3 z-10 px-2.5 py-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center gap-1.5 backdrop-blur-sm transition-all border border-white/20 shadow-sm"
+                                title="Klik untuk membalik/cermin tampilan kamera"
+                            >
+                                <FlipHorizontal className="w-3.5 h-3.5" />
+                                <span>{isMirrored ? "Cermin: ON" : "Cermin: OFF"}</span>
+                            </button>
+                        )}
                         {!streaming && !photo && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/50">
                                 <Video className="w-12 h-12 opacity-30" />
@@ -391,7 +403,7 @@ export default function AttendancePage() {
                             </div>
                         )}
                         {photo && (
-                            <img src={photo} alt="Captured" className="w-full h-full object-cover" style={{ transform: "none" }} />
+                            <img src={photo} alt="Captured" className="w-full h-full object-cover" style={{ transform: isMirrored ? "scaleX(-1)" : "none" }} />
                         )}
                         {streaming && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

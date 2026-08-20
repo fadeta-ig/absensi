@@ -32,12 +32,12 @@ const DEFAULT_THRESHOLD = (() => {
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
 /** Konfigurasi scan multi-frame untuk kamera lambat atau buram. */
-export const FACE_SCAN_ATTEMPTS = 4;
-export const FACE_SCAN_MIN_DETECTIONS = 2;
-export const FACE_SCAN_INTERVAL_MS = 180;
+export const FACE_SCAN_ATTEMPTS = 5;
+export const FACE_SCAN_MIN_DETECTIONS = 1;
+export const FACE_SCAN_INTERVAL_MS = 160;
 
-/** Confidence detektor; lebih rendah membuat wajah buram lebih mudah ditemukan. */
-const FACE_DETECTION_MIN_CONFIDENCE = 0.20;
+/** Confidence detektor; lebih rendah (0.15) membuat wajah pada kamera HP low-end atau lensa sedikit buram/berembun tetap terdeteksi. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.15;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;

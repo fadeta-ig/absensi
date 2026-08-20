@@ -1,7 +1,10 @@
+"use client";
+
 import { useState, useRef, useCallback, useEffect } from "react";
-import { AlertCircle, Camera, CheckCircle, Loader2, RefreshCw, ScanFace, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, Camera, CheckCircle, FlipHorizontal, Loader2, RefreshCw, ScanFace, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useConfirm } from "@/components/ConfirmModal";
+import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const log = createClientLogger("FaceRegistration");
@@ -142,13 +145,13 @@ function getBadge(flow: FaceFlow) {
     if (flow.hasFace) {
         return {
             label: "Terdaftar",
-            className: "border-[var(--primary)]/30 bg-[var(--accent)] text-[var(--accent-foreground)]",
+            className: "border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
             loading: false,
         };
     }
 
     return {
-        label: "Belum",
+        label: "Belum Terdaftar",
         className: "border-[var(--border)] bg-[var(--secondary)] text-[var(--text-secondary)]",
         loading: false,
     };
@@ -157,7 +160,7 @@ function getBadge(flow: FaceFlow) {
 function getMessageClass(type: FaceMessage["type"]) {
     switch (type) {
         case "success":
-            return "border-[var(--primary)]/30 bg-[var(--accent)] text-[var(--accent-foreground)]";
+            return "border-emerald-300 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800";
         case "error":
             return "border-[var(--destructive)]/30 bg-[var(--destructive)]/10 text-[var(--destructive)]";
         default:
@@ -173,6 +176,7 @@ function waitForNextFrame() {
 
 export function FaceRegistrationCard() {
     const confirm = useConfirm();
+    const toast = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,6 +185,7 @@ export function FaceRegistrationCard() {
     const operationIdRef = useRef(0);
     const [flow, setFlow] = useState<FaceFlow>(INITIAL_FLOW);
     const [modelsReady, setModelsReady] = useState(false);
+    const [isMirrored, setIsMirrored] = useState(true);
 
     const clearReadyTimer = useCallback(() => {
         if (readyTimerRef.current) {
@@ -252,129 +257,55 @@ export function FaceRegistrationCard() {
         try {
             const res = await fetch("/api/auth/face", { signal: controller.signal });
             if (!res.ok) {
-                throw new Error(await getResponseErrorMessage(res, "Gagal memuat status wajah."));
+                throw new Error(await getResponseErrorMessage(res, "Gagal memeriksa status registrasi wajah."));
             }
 
-            const data = await res.json();
-            if (!mountedRef.current || controller.signal.aborted) return;
+            const data = (await res.json()) as { registered: boolean };
+            if (!mountedRef.current) return;
 
             setFlow({
                 phase: "idle",
-                hasFace: Boolean(data.hasFace),
+                hasFace: data.registered,
                 message: null,
                 scanAttempt: 0,
                 scanTotal: 0,
             });
-            log.info("Status wajah", { hasFace: data.hasFace });
         } catch (err) {
-            if (getAbortError(err)) return;
+            if (getAbortError(err) || !mountedRef.current) return;
 
-            const message = err instanceof Error ? err.message : "Gagal memuat status wajah.";
-            reportClientError("FaceRegistration", "Gagal cek status wajah", err);
-            if (!mountedRef.current) return;
-
+            reportClientError("FaceRegistration", "Error cek status registrasi wajah", err);
+            const message = err instanceof Error ? err.message : "Gagal memeriksa status registrasi wajah.";
             setFlow({
                 phase: "status_error",
                 hasFace: null,
-                message: { type: "error", text: `${message} Status wajah belum dapat dipastikan.` },
+                message: { type: "error", text: message },
                 scanAttempt: 0,
                 scanTotal: 0,
             });
-        } finally {
-            if (statusAbortRef.current === controller) statusAbortRef.current = null;
         }
     }, []);
 
     useEffect(() => {
-        void checkFaceStatus();
-        return () => statusAbortRef.current?.abort();
-    }, [checkFaceStatus]);
-
-    useEffect(() => {
         mountedRef.current = true;
+        void checkFaceStatus();
 
         return () => {
             mountedRef.current = false;
-            operationIdRef.current += 1;
             statusAbortRef.current?.abort();
-            stopCameraStream();
-        };
-    }, [stopCameraStream]);
-
-    useEffect(() => {
-        if (flow.phase !== "idle" || modelsReady) return;
-
-        let cancelled = false;
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        let idleId: number | null = null;
-        const idleWindow = window as Window & {
-            requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-            cancelIdleCallback?: (handle: number) => void;
-        };
-
-        const preloadModels = async () => {
-            try {
-                const { loadFaceModels } = await import("@/lib/faceRecognition");
-                await loadFaceModels();
-                if (!cancelled && mountedRef.current) setModelsReady(true);
-            } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                log.warn("Preload model wajah gagal", { error: message });
+            clearReadyTimer();
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track) => track.stop());
+                streamRef.current = null;
             }
         };
-
-        if (idleWindow.requestIdleCallback) {
-            idleId = idleWindow.requestIdleCallback(() => void preloadModels(), { timeout: 3000 });
-        } else {
-            timeoutId = setTimeout(() => void preloadModels(), 1200);
-        }
-
-        return () => {
-            cancelled = true;
-            if (timeoutId) clearTimeout(timeoutId);
-            if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
-        };
-    }, [flow.phase, modelsReady]);
-
-    const ensureModelsLoaded = useCallback(async (operationId: number) => {
-        if (modelsReady) return true;
-
-        setFlow((current) => ({
-            ...current,
-            phase: "loading_models",
-            message: {
-                type: "info",
-                text: "Menyiapkan verifikasi wajah. Proses pertama dapat memakan beberapa detik.",
-            },
-            scanAttempt: 0,
-            scanTotal: 0,
-        }));
-
-        try {
-            const { loadFaceModels } = await import("@/lib/faceRecognition");
-            await loadFaceModels();
-            if (!mountedRef.current || operationIdRef.current !== operationId) return false;
-            setModelsReady(true);
-            return true;
-        } catch (err) {
-            reportClientError("FaceRegistration", "Gagal load model AI", err);
-            if (!mountedRef.current || operationIdRef.current !== operationId) return false;
-
-            setFlow((current) => ({
-                ...current,
-                phase: "error",
-                message: { type: "error", text: "Gagal menyiapkan verifikasi wajah. Muat ulang halaman lalu coba lagi." },
-            }));
-            return false;
-        }
-    }, [modelsReady]);
+    }, [checkFaceStatus, clearReadyTimer]);
 
     const cancelCameraFlow = useCallback(() => {
         operationIdRef.current += 1;
         stopCameraStream();
         setFlow((current) => ({
+            ...current,
             phase: "idle",
-            hasFace: current.hasFace,
             message: null,
             scanAttempt: 0,
             scanTotal: 0,
@@ -384,31 +315,34 @@ export function FaceRegistrationCard() {
     const startFaceCamera = useCallback(async () => {
         const operationId = operationIdRef.current + 1;
         operationIdRef.current = operationId;
-
-        const loaded = await ensureModelsLoaded(operationId);
-        if (!loaded || !mountedRef.current || operationIdRef.current !== operationId) return;
-
-        if (!navigator.mediaDevices?.getUserMedia) {
-            setFlow((current) => ({
-                ...current,
-                phase: "error",
-                message: { type: "error", text: getCameraErrorMessage(new Error("media-devices-unavailable")) },
-            }));
-            return;
-        }
-
         stopCameraStream();
+
         setFlow((current) => ({
             ...current,
-            phase: "starting_camera",
-            message: { type: "info", text: "Browser akan meminta izin kamera. Izinkan untuk melanjutkan." },
+            phase: modelsReady ? "starting_camera" : "loading_models",
+            message: {
+                type: "info",
+                text: modelsReady
+                    ? "Mengaktifkan kamera untuk pendaftaran wajah..."
+                    : "Menyiapkan model AI biometrik wajah...",
+            },
             scanAttempt: 0,
             scanTotal: 0,
         }));
 
         try {
-            await waitForNextFrame();
-            if (!mountedRef.current || operationIdRef.current !== operationId) return;
+            if (!modelsReady) {
+                const { loadFaceModels } = await import("@/lib/faceRecognition");
+                await loadFaceModels();
+                if (!mountedRef.current || operationIdRef.current !== operationId) return;
+                setModelsReady(true);
+            }
+
+            setFlow((current) => ({
+                ...current,
+                phase: "starting_camera",
+                message: { type: "info", text: "Membuka kamera..." },
+            }));
 
             const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
             if (!mountedRef.current || operationIdRef.current !== operationId) {
@@ -417,8 +351,12 @@ export function FaceRegistrationCard() {
             }
 
             streamRef.current = stream;
+
+            await waitForNextFrame();
             const video = videoRef.current;
-            if (!video) throw new Error("camera-preview-timeout");
+            if (!video) {
+                throw new Error("Elemen video tidak ditemukan.");
+            }
 
             video.srcObject = stream;
             await waitForVideoReady(video);
@@ -429,25 +367,23 @@ export function FaceRegistrationCard() {
                 phase: "camera_ready",
                 message: {
                     type: "info",
-                    text: "Pastikan wajah berada di tengah panduan dan preview terlihat jelas.",
+                    text: "Posisikan wajah tepat di tengah lingkaran oval, lalu tekan tombol Scan & Simpan.",
                 },
             }));
         } catch (err) {
-            const message = getCameraErrorMessage(err);
-            const errName = err instanceof DOMException || err instanceof Error ? err.name : "UnknownError";
-            reportClientError("FaceRegistration", "Gagal mengakses kamera", err, { errorName: errName });
-            stopCameraStream();
             if (!mountedRef.current || operationIdRef.current !== operationId) return;
+
+            stopCameraStream();
+            const message = getCameraErrorMessage(err);
+            reportClientError("FaceRegistration", "Gagal memulai kamera untuk registrasi wajah", err);
 
             setFlow((current) => ({
                 ...current,
                 phase: "error",
                 message: { type: "error", text: message },
-                scanAttempt: 0,
-                scanTotal: 0,
             }));
         }
-    }, [ensureModelsLoaded, stopCameraStream, waitForVideoReady]);
+    }, [modelsReady, stopCameraStream, waitForVideoReady]);
 
     const registerFace = useCallback(async () => {
         const video = videoRef.current;
@@ -455,17 +391,7 @@ export function FaceRegistrationCard() {
             setFlow((current) => ({
                 ...current,
                 phase: "error",
-                message: { type: "error", text: "Preview kamera belum siap. Aktifkan kamera lalu coba lagi." },
-            }));
-            return;
-        }
-
-        if (video.videoWidth === 0 || video.videoHeight === 0) {
-            log.warn("Video frame belum siap saat scan registrasi", { readyState: video.readyState });
-            setFlow((current) => ({
-                ...current,
-                phase: "camera_ready",
-                message: { type: "error", text: "Preview kamera belum siap. Tunggu sampai gambar terlihat jelas." },
+                message: { type: "error", text: "Kamera belum aktif. Buka kembali kamera untuk melanjutkan." },
             }));
             return;
         }
@@ -474,7 +400,7 @@ export function FaceRegistrationCard() {
         setFlow((current) => ({
             ...current,
             phase: "detecting",
-            message: { type: "info", text: "Memindai wajah. Tetap diam sebentar." },
+            message: { type: "info", text: "Memindai fitur wajah. Tetap diam dan tatap kamera sejenak..." },
             scanAttempt: 0,
             scanTotal: 0,
         }));
@@ -493,7 +419,7 @@ export function FaceRegistrationCard() {
                         ...current,
                         scanAttempt: attempt,
                         scanTotal: total,
-                        message: { type: "info", text: `Memindai wajah (${attempt}/${total}). Tetap diam sebentar.` },
+                        message: { type: "info", text: `Memindai frame (${attempt}/${total}). Tahan posisi wajah Anda...` },
                     }));
                 },
             });
@@ -506,7 +432,7 @@ export function FaceRegistrationCard() {
                     phase: "camera_ready",
                     message: {
                         type: "error",
-                        text: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} percobaan. Pastikan cahaya cukup dan wajah menghadap kamera.`,
+                        text: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} pemindaian. Pastikan ruangan cukup terang, bersihkan lensa kamera depan, dan wajah menghadap langsung ke kamera.`,
                     },
                     scanAttempt: 0,
                     scanTotal: 0,
@@ -517,7 +443,7 @@ export function FaceRegistrationCard() {
             setFlow((current) => ({
                 ...current,
                 phase: "saving",
-                message: { type: "info", text: "Menyimpan data wajah ke server." },
+                message: { type: "info", text: "Menyimpan data biometrik wajah secara aman ke server..." },
                 scanAttempt: 0,
                 scanTotal: 0,
             }));
@@ -530,7 +456,7 @@ export function FaceRegistrationCard() {
             if (!mountedRef.current || operationIdRef.current !== operationId) return;
 
             if (!res.ok) {
-                throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data wajah."));
+                throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data biometrik wajah."));
             }
 
             stopCameraStream();
@@ -539,11 +465,12 @@ export function FaceRegistrationCard() {
                 hasFace: true,
                 message: {
                     type: "success",
-                    text: "Wajah berhasil didaftarkan. Verifikasi wajah siap digunakan saat absensi.",
+                    text: "Wajah berhasil didaftarkan! Data biometrik aktif dan siap digunakan untuk absensi kehadiran.",
                 },
                 scanAttempt: 0,
                 scanTotal: 0,
             });
+            toast("Wajah berhasil didaftarkan. Verifikasi wajah aktif untuk absensi masuk & pulang.", "success");
         } catch (err) {
             const message = err instanceof Error ? err.message : "Wajah belum berhasil diproses.";
             reportClientError("FaceRegistration", "Error saat registrasi wajah", err);
@@ -552,18 +479,18 @@ export function FaceRegistrationCard() {
             setFlow((current) => ({
                 ...current,
                 phase: streamRef.current ? "camera_ready" : "error",
-                message: { type: "error", text: `${message} Coba lagi saat wajah terlihat jelas.` },
+                message: { type: "error", text: `${message} Periksa pencahayaan dan coba lagi.` },
                 scanAttempt: 0,
                 scanTotal: 0,
             }));
         }
-    }, [stopCameraStream]);
+    }, [stopCameraStream, toast]);
 
     const deleteFace = useCallback(() => {
         confirm({
-            title: "Hapus data wajah?",
-            message: "Data wajah digunakan untuk verifikasi absensi. Setelah dihapus, Anda perlu mendaftarkan wajah kembali sebelum memakai verifikasi wajah.",
-            confirmLabel: "Hapus",
+            title: "Hapus data biometrik wajah?",
+            message: "Data wajah digunakan untuk validasi absensi harian. Setelah dihapus, Anda harus mendaftarkan wajah kembali sebelum dapat melakukan presensi berbasis wajah.",
+            confirmLabel: "Hapus Wajah",
             cancelLabel: "Batal",
             variant: "danger",
             onConfirm: async () => {
@@ -573,7 +500,7 @@ export function FaceRegistrationCard() {
                 setFlow((current) => ({
                     ...current,
                     phase: "deleting",
-                    message: { type: "info", text: "Menghapus data wajah." },
+                    message: { type: "info", text: "Menghapus data wajah dari server..." },
                     scanAttempt: 0,
                     scanTotal: 0,
                 }));
@@ -589,10 +516,11 @@ export function FaceRegistrationCard() {
                     setFlow({
                         phase: "idle",
                         hasFace: false,
-                        message: { type: "success", text: "Data wajah berhasil dihapus." },
+                        message: { type: "success", text: "Data biometrik wajah berhasil dihapus." },
                         scanAttempt: 0,
                         scanTotal: 0,
                     });
+                    toast("Data biometrik wajah berhasil dihapus.", "success");
                 } catch (err) {
                     const message = err instanceof Error ? err.message : "Gagal menghapus data wajah.";
                     reportClientError("FaceRegistration", "Error hapus wajah", err);
@@ -607,7 +535,7 @@ export function FaceRegistrationCard() {
                 }
             },
         });
-    }, [confirm, stopCameraStream]);
+    }, [confirm, stopCameraStream, toast]);
 
     const activeStep = PHASE_STEP[flow.phase];
     const currentStepIndex = activeStep ? STEP_ORDER.indexOf(activeStep) : -1;
@@ -626,7 +554,7 @@ export function FaceRegistrationCard() {
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Registrasi Wajah</h2>
-                            <p className="text-xs text-[var(--text-muted)]">Verifikasi identitas saat absensi</p>
+                            <p className="text-xs text-[var(--text-muted)]">Verifikasi identitas biometrik saat absensi</p>
                         </div>
                     </div>
                     <span className={`inline-flex items-center gap-1.5 border text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shrink-0 ${badge.className}`}>
@@ -645,11 +573,11 @@ export function FaceRegistrationCard() {
 
                             return (
                                 <div key={step} className="contents">
-                                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full border transition-colors ${
+                                    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border transition-colors ${
                                         isActive
-                                            ? "border-[var(--primary)]/30 bg-[var(--accent)] text-[var(--accent-foreground)]"
+                                            ? "border-[var(--primary)]/30 bg-[var(--accent)] text-[var(--accent-foreground)] font-semibold"
                                             : isDone
-                                                ? "border-[var(--primary)]/20 bg-[var(--primary)]/10 text-[var(--primary)]"
+                                                ? "border-emerald-500/20 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400"
                                                 : "border-[var(--border)] bg-[var(--secondary)] text-[var(--text-muted)]"
                                     }`}>
                                         {isDone ? (
@@ -662,7 +590,7 @@ export function FaceRegistrationCard() {
                                         {STEP_LABELS[step]}
                                     </div>
                                     {index < STEP_ORDER.length - 1 && (
-                                        <div className={`flex-1 h-px ${index < currentStepIndex ? "bg-[var(--primary)]/40" : "bg-[var(--border)]"}`} />
+                                        <div className={`flex-1 h-px ${index < currentStepIndex ? "bg-emerald-500/40" : "bg-[var(--border)]"}`} />
                                     )}
                                 </div>
                             );
@@ -677,18 +605,18 @@ export function FaceRegistrationCard() {
                         aria-live={flow.message.type === "error" ? "assertive" : "polite"}
                     >
                         {flow.message.type === "success" ? (
-                            <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <CheckCircle className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
                         ) : flow.message.type === "error" ? (
-                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[var(--destructive)]" />
                         ) : (
-                            <Loader2 className="w-4 h-4 shrink-0 mt-0.5 animate-spin" />
+                            <Loader2 className="w-4 h-4 shrink-0 mt-0.5 animate-spin text-[var(--primary)]" />
                         )}
-                        <span>{flow.message.text}</span>
+                        <span className="text-xs leading-relaxed font-medium">{flow.message.text}</span>
                     </div>
                 )}
 
                 {showCameraPanel && (
-                    <div className="relative aspect-[4/3] bg-[var(--foreground)] text-[var(--background)] rounded-xl overflow-hidden">
+                    <div className="relative aspect-[4/3] bg-[var(--foreground)] text-[var(--background)] rounded-xl overflow-hidden shadow-inner">
                         <video
                             ref={videoRef}
                             autoPlay
@@ -697,7 +625,21 @@ export function FaceRegistrationCard() {
                             className={`w-full h-full object-cover transition-opacity duration-200 ${
                                 showLiveVideo ? "opacity-100" : "opacity-0"
                             }`}
+                            style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
                         />
+
+                        {/* Mirror / Flip Viewport Toggle */}
+                        {showLiveVideo && (
+                            <button
+                                type="button"
+                                onClick={() => setIsMirrored((prev) => !prev)}
+                                className="absolute top-3 right-3 z-10 px-2.5 py-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center gap-1.5 backdrop-blur-sm transition-all border border-white/20 shadow-sm"
+                                title="Klik untuk membalik/cermin tampilan kamera"
+                            >
+                                <FlipHorizontal className="w-3.5 h-3.5" />
+                                <span>{isMirrored ? "Cermin: ON" : "Cermin: OFF"}</span>
+                            </button>
+                        )}
 
                         {!showLiveVideo && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--foreground)] text-[var(--background)]">
@@ -706,7 +648,7 @@ export function FaceRegistrationCard() {
                                     <ScanFace className="w-6 h-6 text-[var(--background)] absolute inset-0 m-auto opacity-80" />
                                 </div>
                                 <p className="text-xs text-[var(--background)] opacity-80 text-center px-4">
-                                    {flow.phase === "loading_models" ? "Menyiapkan model verifikasi wajah..." : "Mengaktifkan kamera..."}
+                                    {flow.phase === "loading_models" ? "Menyiapkan modul AI biometrik wajah..." : "Mengaktifkan kamera..."}
                                 </p>
                             </div>
                         )}
@@ -715,26 +657,47 @@ export function FaceRegistrationCard() {
                             <div className="absolute inset-0 pointer-events-none">
                                 <div className="absolute inset-0 bg-black/20" />
                                 <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="relative w-44 h-56 rounded-[50%] border-2 border-[var(--primary)] bg-transparent">
+                                    <div className={`relative w-48 h-60 rounded-[50%] border-2 transition-all duration-300 bg-transparent ${
+                                        flow.phase === "detecting"
+                                            ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)]"
+                                            : flow.phase === "saving"
+                                                ? "border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.5)]"
+                                                : "border-[var(--primary)] shadow-[0_0_15px_rgba(128,0,32,0.3)]"
+                                    }`}>
                                         {(flow.phase === "detecting" || flow.phase === "saving") && (
                                             <div
                                                 className="absolute inset-x-4 top-0 h-0.5 animate-[scanLine_1.5s_ease-in-out_infinite] will-change-transform"
-                                                style={{ background: "linear-gradient(90deg, transparent, var(--primary), transparent)" }}
+                                                style={{ background: "linear-gradient(90deg, transparent, #fbbf24, transparent)" }}
                                             />
                                         )}
                                     </div>
                                 </div>
-                                <div className="absolute bottom-6 left-0 right-0 flex justify-center px-4">
-                                    <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-black/40 text-white">
+                                <div className="absolute bottom-4 left-0 right-0 flex justify-center px-4">
+                                    <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm border border-white/10 shadow-sm">
                                         {flow.phase === "detecting"
-                                            ? `Mendeteksi wajah${flow.scanAttempt && flow.scanTotal ? ` ${flow.scanAttempt}/${flow.scanTotal}` : ""}`
+                                            ? `Memindai frame${flow.scanAttempt && flow.scanTotal ? ` ${flow.scanAttempt}/${flow.scanTotal}` : ""}... Tahan posisi`
                                             : flow.phase === "saving"
-                                                ? "Menyimpan data wajah"
-                                                : "Posisikan wajah di tengah"}
+                                                ? "Menyimpan data wajah..."
+                                                : "Posisikan seluruh wajah di dalam lingkaran oval"}
                                     </span>
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Error recovery hint */}
+                {flow.phase === "camera_ready" && flow.message?.type === "error" && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-lg text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>Tips Pemindaian Optimal:</span>
+                        </div>
+                        <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-700 dark:text-amber-400/90 pl-1">
+                            <li>Bersihkan lensa kamera depan jika sedikit berdebu atau berembun.</li>
+                            <li>Posisikan wajah menghadap ke sumber cahaya terang (hindari membelakangi lampu/jendela).</li>
+                            <li>Lepaskan masker atau kacamata hitam pekat saat memindai.</li>
+                        </ul>
                     </div>
                 )}
 
@@ -744,7 +707,7 @@ export function FaceRegistrationCard() {
                             <button
                                 onClick={registerFace}
                                 disabled={flow.phase !== "camera_ready"}
-                                className="btn btn-primary flex-1"
+                                className="btn btn-primary flex-1 flex items-center justify-center gap-1.5"
                             >
                                 {flow.phase === "detecting" || flow.phase === "saving" ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -756,7 +719,7 @@ export function FaceRegistrationCard() {
                                     : flow.phase === "starting_camera"
                                         ? "Membuka Kamera..."
                                         : flow.phase === "detecting"
-                                            ? "Mendeteksi..."
+                                            ? "Memindai..."
                                             : flow.phase === "saving"
                                                 ? "Menyimpan..."
                                                 : "Scan & Simpan"}
@@ -765,7 +728,7 @@ export function FaceRegistrationCard() {
                                 onClick={cancelCameraFlow}
                                 disabled={flow.phase === "saving"}
                                 className="btn btn-secondary"
-                                title="Batalkan"
+                                title="Batalkan proses"
                             >
                                 Batal
                             </button>
@@ -775,7 +738,7 @@ export function FaceRegistrationCard() {
                     {!showCameraPanel && flow.phase === "status_error" && (
                         <button
                             onClick={() => void checkFaceStatus()}
-                            className="btn btn-secondary flex-1"
+                            className="btn btn-secondary flex-1 flex items-center justify-center gap-1.5"
                         >
                             <RefreshCw className="w-4 h-4" />
                             Cek Ulang Status
@@ -785,7 +748,7 @@ export function FaceRegistrationCard() {
                     {!showCameraPanel && !isBusy && flow.hasFace === false && flow.phase !== "status_error" && (
                         <button
                             onClick={startFaceCamera}
-                            className="btn btn-primary flex-1"
+                            className="btn btn-primary flex-1 flex items-center justify-center gap-1.5"
                         >
                             <Camera className="w-4 h-4" />
                             Daftarkan Wajah
@@ -796,45 +759,57 @@ export function FaceRegistrationCard() {
                         <div className="flex gap-2 w-full">
                             <button
                                 onClick={startFaceCamera}
-                                className="btn btn-secondary flex-1"
+                                className="btn btn-secondary flex-1 flex items-center justify-center gap-1.5"
                             >
                                 <RefreshCw className="w-4 h-4" />
                                 Perbarui Wajah
                             </button>
                             <button
                                 onClick={deleteFace}
-                                className="btn btn-danger flex-1"
+                                className="btn btn-danger flex-1 flex items-center justify-center gap-1.5"
                             >
                                 <Trash2 className="w-4 h-4" />
-                                Hapus
+                                Hapus Wajah
                             </button>
                         </div>
                     )}
 
                     {!showCameraPanel && flow.phase === "deleting" && (
-                        <button className="btn btn-secondary flex-1" disabled>
+                        <button className="btn btn-secondary flex-1 flex items-center justify-center gap-1.5" disabled>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Menghapus...
+                            Menghapus Data Wajah...
                         </button>
                     )}
                 </div>
 
                 {flow.hasFace === false && flow.phase === "idle" && (
-                    <div className="flex items-start gap-2 p-3 bg-[var(--secondary)] rounded-lg border border-[var(--border)]">
+                    <div className="flex items-start gap-2.5 p-3.5 bg-[var(--secondary)] rounded-xl border border-[var(--border)]">
                         <AlertCircle className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
-                        <p className="text-xs text-[var(--text-secondary)]">
-                            Daftarkan wajah Anda untuk meningkatkan keamanan absensi.
-                            Pastikan pencahayaan cukup dan wajah terlihat jelas di kamera.
-                        </p>
+                        <div className="text-xs space-y-1">
+                            <p className="font-semibold text-[var(--text-primary)]">Wajah Belum Terdaftar</p>
+                            <p className="text-[var(--text-secondary)] leading-relaxed">
+                                Daftarkan wajah Anda untuk mengaktifkan fitur verifikasi biometrik saat absensi.
+                                Pastikan pencahayaan cukup dan wajah terlihat jelas di kamera.
+                            </p>
+                        </div>
                     </div>
                 )}
 
                 {(flow.hasFace === true || flow.phase === "success") && !showCameraPanel && (
-                    <div className="flex items-start gap-2 p-3 bg-[var(--accent)] rounded-lg border border-[var(--primary)]/20">
-                        <ShieldCheck className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
-                        <p className="text-xs text-[var(--accent-foreground)]">
-                            Wajah Anda telah terdaftar. Sistem akan memverifikasi identitas saat absensi.
+                    <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40 space-y-2">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                                Wajah Anda Telah Berhasil Terdaftar
+                            </p>
+                        </div>
+                        <p className="text-xs text-emerald-800 dark:text-emerald-400/90 leading-relaxed">
+                            Data biometrik tersimpan secara aman dengan enkripsi 128-vektor. Sistem siap memverifikasi identitas Anda secara instan saat melakukan absensi masuk dan pulang.
                         </p>
+                        <div className="pt-1 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>Status: Siap Digunakan untuk Absensi Masuk & Pulang</span>
+                        </div>
                     </div>
                 )}
             </div>
