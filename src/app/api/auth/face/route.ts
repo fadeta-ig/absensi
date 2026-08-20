@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { faceDescriptorSchema } from "@/lib/validations/validationSchemas";
-import { canManageHr } from "@/lib/permissions";
 
 /** GET — Check if current employee has a face registered */
 export async function GET() {
@@ -24,9 +23,18 @@ export async function GET() {
         }
 
         const descriptorRaw = employee.faceDescriptor as string | null;
-        const descriptor = descriptorRaw ? JSON.parse(descriptorRaw) : null;
+        let descriptor: number[] | null = null;
+        try {
+            descriptor = descriptorRaw ? JSON.parse(descriptorRaw) : null;
+        } catch {
+            descriptor = null;
+        }
+
+        const isRegistered = !!descriptor && Array.isArray(descriptor) && descriptor.length === 128;
+
         return NextResponse.json({
-            hasFace: !!descriptor && Array.isArray(descriptor) && descriptor.length === 128,
+            hasFace: isRegistered,
+            registered: isRegistered,
             descriptor,
         });
     } catch (err) {
@@ -34,7 +42,7 @@ export async function GET() {
     }
 }
 
-/** POST — Save face descriptor for current employee */
+/** POST — Save or update face descriptor for current employee */
 export async function POST(request: NextRequest) {
     try {
         const session = await requireAuth();
@@ -55,13 +63,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Karyawan tidak ditemukan" }, { status: 404 });
         }
 
-        if (employee.faceDescriptor) {
-            return NextResponse.json(
-                { error: "Wajah sudah terdaftar. Hubungi HR untuk mereset data wajah Anda." },
-                { status: 403 }
-            );
-        }
-
         const isValidNumbers = descriptor.every(
             (v: number) => typeof v === "number" && !isNaN(v)
         );
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
             data: { faceDescriptor: JSON.stringify(descriptor) },
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, hasFace: true, registered: true });
     } catch (err) {
         return serverErrorResponse("FaceEnroll", err);
     }
@@ -89,17 +90,13 @@ export async function DELETE() {
         const session = await requireAuth();
         if (!session) return unauthorizedResponse();
         if (!session.employeeId) return NextResponse.json({ error: "Akun tidak terhubung dengan data karyawan" }, { status: 403 });
-        
-        if (!canManageHr(session)) {
-            return NextResponse.json({ error: "Hanya HR yang dapat menghapus data wajah." }, { status: 403 });
-        }
 
         await prisma.employee.update({
             where: { employeeId: session.employeeId },
             data: { faceDescriptor: null },
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, hasFace: false, registered: false });
     } catch (err) {
         return serverErrorResponse("FaceDelete", err);
     }

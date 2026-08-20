@@ -128,7 +128,7 @@ function getCameraErrorMessage(err: unknown) {
 function getBadge(flow: FaceFlow) {
     if (flow.phase === "checking_status" || flow.phase === "deleting") {
         return {
-            label: flow.phase === "deleting" ? "Memproses" : "Memuat",
+            label: flow.phase === "deleting" ? "Memproses" : "Memeriksa",
             className: "border-[var(--border)] bg-[var(--secondary)] text-[var(--text-muted)]",
             loading: true,
         };
@@ -142,7 +142,7 @@ function getBadge(flow: FaceFlow) {
         };
     }
 
-    if (flow.hasFace) {
+    if (flow.hasFace === true) {
         return {
             label: "Terdaftar",
             className: "border-emerald-500/30 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
@@ -260,12 +260,14 @@ export function FaceRegistrationCard() {
                 throw new Error(await getResponseErrorMessage(res, "Gagal memeriksa status registrasi wajah."));
             }
 
-            const data = (await res.json()) as { registered: boolean };
+            const data = (await res.json()) as { hasFace?: boolean; registered?: boolean };
             if (!mountedRef.current) return;
+
+            const isRegistered = Boolean(data.hasFace ?? data.registered ?? false);
 
             setFlow({
                 phase: "idle",
-                hasFace: data.registered,
+                hasFace: isRegistered,
                 message: null,
                 scanAttempt: 0,
                 scanTotal: 0,
@@ -565,6 +567,13 @@ export function FaceRegistrationCard() {
             </div>
 
             <div className="p-4 space-y-4">
+                {flow.phase === "checking_status" && (
+                    <div className="flex items-center justify-center py-6 gap-2 text-xs text-[var(--text-muted)]">
+                        <Loader2 className="w-4 h-4 animate-spin text-[var(--primary)]" />
+                        <span>Memeriksa status registrasi biometrik...</span>
+                    </div>
+                )}
+
                 {activeStep && (
                     <div className="flex items-center gap-1 text-[10px] font-medium" aria-label="Progress registrasi wajah">
                         {STEP_ORDER.map((step, index) => {
@@ -701,6 +710,7 @@ export function FaceRegistrationCard() {
                     </div>
                 )}
 
+                {/* Action Buttons */}
                 <div className="flex gap-2">
                     {showCameraPanel && (
                         <>
@@ -745,7 +755,7 @@ export function FaceRegistrationCard() {
                         </button>
                     )}
 
-                    {!showCameraPanel && !isBusy && flow.hasFace === false && flow.phase !== "status_error" && (
+                    {!showCameraPanel && !isBusy && flow.hasFace !== true && flow.phase !== "status_error" && (
                         <button
                             onClick={startFaceCamera}
                             className="btn btn-primary flex-1 flex items-center justify-center gap-1.5"
@@ -782,7 +792,7 @@ export function FaceRegistrationCard() {
                     )}
                 </div>
 
-                {flow.hasFace === false && flow.phase === "idle" && (
+                {flow.hasFace !== true && flow.phase === "idle" && !showCameraPanel && (
                     <div className="flex items-start gap-2.5 p-3.5 bg-[var(--secondary)] rounded-xl border border-[var(--border)]">
                         <AlertCircle className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
                         <div className="text-xs space-y-1">
