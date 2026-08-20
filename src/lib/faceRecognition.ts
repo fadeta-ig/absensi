@@ -32,9 +32,9 @@ const DEFAULT_THRESHOLD = (() => {
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
 /** Konfigurasi scan multi-frame yang stabil dan ringan untuk perangkat mobile. */
-export const FACE_SCAN_ATTEMPTS = 2;
+export const FACE_SCAN_ATTEMPTS = 3;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 250;
+export const FACE_SCAN_INTERVAL_MS = 200;
 
 /** Confidence detektor; 0.12 memberikan toleransi tinggi dengan akurasi optimal. */
 const FACE_DETECTION_MIN_CONFIDENCE = 0.12;
@@ -77,7 +77,9 @@ export async function loadFaceModels(): Promise<void> {
 
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
- * Menjalankan Multi-Pass Image Preprocessing (Raw -> Sharpen/Contrast -> Gamma Shadow Lift -> Center ROI).
+ * Mencoba deteksi langsung pada input utama terlebih dahulu, lalu dilanjutkan
+ * dengan Computer Vision Enhancement (Sharpen, Contrast, Gamma Lift, ROI Crop)
+ * jika input primer belum terdeteksi.
  * Return `null` jika tidak ada wajah terdeteksi pada seluruh pass.
  */
 export async function detectFaceDescriptor(
@@ -97,42 +99,52 @@ export async function detectFaceDescriptor(
         minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
     });
 
-    // 4 Tahap Preprocessing Citra Digital
-    const passes: ProcessingPass[] = ["raw", "sharpen_contrast", "gamma_lift", "center_crop"];
+    try {
+        // 1. Deteksi langsung pada input utama (live stream / direct canvas)
+        const single = await faceapi
+            .detectSingleFace(input, options)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
 
-    for (const pass of passes) {
+        if (single?.descriptor) {
+            return single.descriptor;
+        }
+
+        // 2. Fallback deteksi all faces pada input utama
+        const allDetections = await faceapi
+            .detectAllFaces(input, options)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+
+        if (allDetections && allDetections.length > 0) {
+            const best = allDetections.reduce((largest, curr) => {
+                const currArea = curr.detection.box.width * curr.detection.box.height;
+                const largestArea = largest.detection.box.width * largest.detection.box.height;
+                return currArea > largestArea ? curr : largest;
+            });
+            return best.descriptor;
+        }
+    } catch (err) {
+        log.warn("Error pada deteksi input primer", { error: String(err) });
+    }
+
+    // 3. Jika belum terdeteksi, coba variasi preprocessed canvas (sharpen, gamma, center-crop)
+    const extraPasses: ProcessingPass[] = ["sharpen_contrast", "gamma_lift", "center_crop"];
+    for (const pass of extraPasses) {
         try {
             const processedCanvas = createProcessedCanvas(input, pass);
-            const target = processedCanvas ?? input;
+            if (!processedCanvas) continue;
 
-            // 1. Deteksi single face utama
-            const single = await faceapi
-                .detectSingleFace(target, options)
+            const detection = await faceapi
+                .detectSingleFace(processedCanvas, options)
                 .withFaceLandmarks()
                 .withFaceDescriptor();
 
-            if (single?.descriptor) {
-                return single.descriptor;
+            if (detection?.descriptor) {
+                return detection.descriptor;
             }
-
-            // 2. Fallback: deteksi all faces jika single face tidak lolos
-            const allDetections = await faceapi
-                .detectAllFaces(target, options)
-                .withFaceLandmarks()
-                .withFaceDescriptors();
-
-            if (allDetections && allDetections.length > 0) {
-                const best = allDetections.reduce((largest, curr) => {
-                    const currArea = curr.detection.box.width * curr.detection.box.height;
-                    const largestArea = largest.detection.box.width * largest.detection.box.height;
-                    return currArea > largestArea ? curr : largest;
-                });
-                return best.descriptor;
-            }
-        } catch (err) {
-            log.error(`Error saat deteksi wajah pass: ${pass}`, {
-                error: err instanceof Error ? err.message : String(err),
-            });
+        } catch {
+            // Ignore error on fallback passes
         }
     }
 
@@ -171,7 +183,7 @@ export async function detectFaceDescriptors(
         options.onAttempt?.(attempt + 1, attempts, descriptors.length);
 
         // Jeda waktu agar antarmuka browser sempat merespons dan me-render
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        await new Promise<void>((resolve) => setTimeout(resolve, 80));
 
         const t0 = performance.now();
         const descriptor = await detectFaceDescriptor(input);
