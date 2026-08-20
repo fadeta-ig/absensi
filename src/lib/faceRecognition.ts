@@ -1,5 +1,7 @@
 /**
  * Face Recognition — face-api.js wrapper
+ * Dilengkapi dengan Multi-Pass Computer Vision Preprocessing Pipeline
+ * untuk memaksimalkan deteksi pada kamera buram, berembun, atau backlight.
  *
  * Logging: hanya warn & error yang dikirim ke server.
  * Info/debug di-drop oleh clientLogger (silent).
@@ -7,6 +9,7 @@
 
 import * as faceapi from "face-api.js";
 import { createClientLogger } from "@/lib/clientLogger";
+import { createProcessedCanvas, ProcessingPass } from "@/lib/faceImageProcessing";
 
 const log = createClientLogger("FaceRecognition");
 
@@ -33,8 +36,8 @@ export const FACE_SCAN_ATTEMPTS = 2;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
 export const FACE_SCAN_INTERVAL_MS = 250;
 
-/** Confidence detektor; 0.15 memberikan toleransi tinggi tanpa membebani komputasi. */
-const FACE_DETECTION_MIN_CONFIDENCE = 0.15;
+/** Confidence detektor; 0.12 memberikan toleransi tinggi dengan akurasi optimal. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.12;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
@@ -74,8 +77,8 @@ export async function loadFaceModels(): Promise<void> {
 
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
- * Aman dieksekusi di lingkungan browser maupun SSR/test.
- * Return `null` jika tidak ada wajah terdeteksi.
+ * Menjalankan Multi-Pass Image Preprocessing (Raw -> Sharpen/Contrast -> Gamma Shadow Lift -> Center ROI).
+ * Return `null` jika tidak ada wajah terdeteksi pada seluruh pass.
  */
 export async function detectFaceDescriptor(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
@@ -90,43 +93,50 @@ export async function detectFaceDescriptor(
         }
     }
 
-    try {
-        const options = new faceapi.SsdMobilenetv1Options({
-            minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
-        });
+    const options = new faceapi.SsdMobilenetv1Options({
+        minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
+    });
 
-        // 1. Deteksi single face utama
-        const single = await faceapi
-            .detectSingleFace(input, options)
-            .withFaceLandmarks()
-            .withFaceDescriptor();
+    // 4 Tahap Preprocessing Citra Digital
+    const passes: ProcessingPass[] = ["raw", "sharpen_contrast", "gamma_lift", "center_crop"];
 
-        if (single?.descriptor) {
-            return single.descriptor;
-        }
+    for (const pass of passes) {
+        try {
+            const processedCanvas = createProcessedCanvas(input, pass);
+            const target = processedCanvas ?? input;
 
-        // 2. Fallback: deteksi all faces jika single face tidak lolos
-        const allDetections = await faceapi
-            .detectAllFaces(input, options)
-            .withFaceLandmarks()
-            .withFaceDescriptors();
+            // 1. Deteksi single face utama
+            const single = await faceapi
+                .detectSingleFace(target, options)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
 
-        if (allDetections && allDetections.length > 0) {
-            const best = allDetections.reduce((largest, curr) => {
-                const currArea = curr.detection.box.width * curr.detection.box.height;
-                const largestArea = largest.detection.box.width * largest.detection.box.height;
-                return currArea > largestArea ? curr : largest;
+            if (single?.descriptor) {
+                return single.descriptor;
+            }
+
+            // 2. Fallback: deteksi all faces jika single face tidak lolos
+            const allDetections = await faceapi
+                .detectAllFaces(target, options)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+
+            if (allDetections && allDetections.length > 0) {
+                const best = allDetections.reduce((largest, curr) => {
+                    const currArea = curr.detection.box.width * curr.detection.box.height;
+                    const largestArea = largest.detection.box.width * largest.detection.box.height;
+                    return currArea > largestArea ? curr : largest;
+                });
+                return best.descriptor;
+            }
+        } catch (err) {
+            log.error(`Error saat deteksi wajah pass: ${pass}`, {
+                error: err instanceof Error ? err.message : String(err),
             });
-            return best.descriptor;
         }
-
-        return null;
-    } catch (err) {
-        log.error("Error saat deteksi wajah", {
-            error: err instanceof Error ? err.message : String(err),
-        });
-        return null;
     }
+
+    return null;
 }
 
 interface MultiFrameDetectionOptions {
