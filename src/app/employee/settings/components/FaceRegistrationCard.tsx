@@ -404,7 +404,7 @@ export function FaceRegistrationCard() {
             phase: "detecting",
             message: { type: "info", text: "Memindai fitur wajah. Tetap diam dan tatap kamera sejenak..." },
             scanAttempt: 1,
-            scanTotal: 5,
+            scanTotal: 2,
         }));
 
         try {

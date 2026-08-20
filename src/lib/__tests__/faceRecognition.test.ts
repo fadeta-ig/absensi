@@ -69,7 +69,7 @@ describe("faceRecognition", () => {
         });
 
         expect(detectSingleFace).toHaveBeenCalledTimes(2);
-        expect(detectSingleFace.mock.calls[0][1].options.minConfidence).toBe(0.10);
+        expect(detectSingleFace.mock.calls[0][1].options.minConfidence).toBe(0.15);
         expect(results).toEqual([descriptor]);
     });
 
