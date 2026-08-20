@@ -404,7 +404,7 @@ export function FaceRegistrationCard() {
             phase: "detecting",
             message: { type: "info", text: "Memindai fitur wajah. Tetap diam dan tatap kamera sejenak..." },
             scanAttempt: 1,
-            scanTotal: 3,
+            scanTotal: 5,
         }));
 
         try {
@@ -413,6 +413,8 @@ export function FaceRegistrationCard() {
                 ...current,
                 scanTotal: FACE_SCAN_ATTEMPTS,
             }));
+
+            const diagnosticLogs: string[] = [];
 
             const descriptors = await detectFaceDescriptors(video, {
                 onAttempt: (attempt, total) => {
@@ -424,17 +426,25 @@ export function FaceRegistrationCard() {
                         message: { type: "info", text: `Memindai frame (${attempt}/${total}). Tahan posisi wajah Anda...` },
                     }));
                 },
+                onDiagnostic: (info) => {
+                    diagnosticLogs.push(info);
+                },
             });
             if (!mountedRef.current || operationIdRef.current !== operationId) return;
 
             const descriptor = averageFaceDescriptors(descriptors);
             if (!descriptor) {
+                const videoInfo = `Video: ${video.videoWidth}x${video.videoHeight}, readyState: ${video.readyState}`;
+                const diagText = diagnosticLogs.length > 0
+                    ? `\n\nDiagnostik:\n${diagnosticLogs.join("\n")}\n${videoInfo}`
+                    : "";
+
                 setFlow((current) => ({
                     ...current,
                     phase: "camera_ready",
                     message: {
                         type: "error",
-                        text: `Wajah belum terdeteksi. Pastikan ruangan cukup terang, bersihkan lensa kamera depan, dan hadapkan wajah ke kamera.`,
+                        text: `Wajah belum terdeteksi. Pastikan wajah utuh terlihat (dahi sampai dagu), ruangan cukup terang, dan beri jarak ±30 cm.${diagText}`,
                     },
                     scanAttempt: 0,
                     scanTotal: 0,
@@ -620,7 +630,7 @@ export function FaceRegistrationCard() {
                         ) : (
                             <Loader2 className="w-4 h-4 shrink-0 mt-0.5 animate-spin text-[var(--primary)]" />
                         )}
-                        <span className="text-xs leading-relaxed font-medium">{flow.message.text}</span>
+                        <span className="text-xs leading-relaxed font-medium whitespace-pre-wrap">{flow.message.text}</span>
                     </div>
                 )}
 
