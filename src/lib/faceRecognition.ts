@@ -31,20 +31,22 @@ export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 /** Konfigurasi scan multi-frame untuk perangkat mobile. */
 export const FACE_SCAN_ATTEMPTS = 5;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 200;
+export const FACE_SCAN_INTERVAL_MS = 150;
 
 /** Confidence detektor; semakin rendah semakin toleran terhadap kamera buram. */
 const FACE_DETECTION_MIN_CONFIDENCE = 0.10;
 
-/** Timeout per-frame agar deteksi tidak hang selamanya di HP lambat. */
-const DETECTION_TIMEOUT_MS = 10000;
+/** Timeout per-frame (3.5 detik). */
+const DETECTION_TIMEOUT_MS = 3500;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
 
 /**
- * Load face-api.js models dari /models/.
- * Hanya load sekali — panggilan berikutnya langsung return.
+ * Inisialisasi TensorFlow.js Environment Flags & Load Models.
+ * Menonaktifkan WEBGL_PACK dan WEBGL_CONV_IM2COL sangat krusial untuk perangkat Android:
+ * Secara default tfjs 1.7.0 mengaktifkan WEBGL_PACK yang menyebabkan shader compilation
+ * lock / timeout (10+ detik) pada GPU mobile (Adreno, Mali, dsb).
  */
 export async function loadFaceModels(): Promise<void> {
     if (modelsLoaded) return;
@@ -53,12 +55,23 @@ export async function loadFaceModels(): Promise<void> {
     const MODEL_URL = "/models";
 
     modelLoadPromise = (async () => {
+        try {
+            if (faceapi.tf && faceapi.tf.ENV) {
+                // Matikan packing WebGL agar shader compile instan di HP
+                faceapi.tf.ENV.set("WEBGL_PACK", false);
+                faceapi.tf.ENV.set("WEBGL_CONV_IM2COL", false);
+            }
+        } catch {
+            // Ignore if flag is not configurable
+        }
+
         await Promise.all([
             faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
             faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
             faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
         modelsLoaded = true;
+        log.info("Face-api models berhasil dimuat dengan konfigurasi mobile optimal");
     })()
         .catch((err) => {
             log.error("Gagal load face-api models", {
@@ -75,12 +88,10 @@ export async function loadFaceModels(): Promise<void> {
 }
 
 /**
- * Ambil frame dari video dan gambar ke canvas 2D yang sudah teruji.
- * face-api.js secara internal selalu mengkonversi input ke canvas via
- * `createCanvasFromMedia()` lalu membaca piksel dengan `tf.browser.fromPixels()`.
- * Pada banyak HP mobile, proses drawImage(video) di dalam face-api.js
- * terjadi terlalu cepat sehingga kanvas kosong/hitam. Dengan membuat
- * canvas sendiri dan memastikan pikselnya valid, kita mem-bypass masalah itu.
+ * Capture frame kamera ke kanvas berdimensi proporsional (~360px).
+ * Memberikan canvas berukuran wajar ke face-api.js sehingga:
+ * 1. face-api.js tidak perlu membuat canvas internal lagi.
+ * 2. Ukuran piksel yang diproses AI menjadi ringan sehingga inferensi selesai dalam 150-250ms.
  */
 function captureVideoToCanvas(video: HTMLVideoElement): HTMLCanvasElement | null {
     if (typeof document === "undefined") return null;
@@ -90,38 +101,18 @@ function captureVideoToCanvas(video: HTMLVideoElement): HTMLCanvasElement | null
     if (vw === 0 || vh === 0) return null;
 
     try {
+        const maxDim = 360;
+        const scale = Math.min(1, maxDim / Math.max(vw, vh));
+        const w = Math.max(160, Math.round(vw * scale));
+        const h = Math.max(120, Math.round(vh * scale));
+
         const canvas = document.createElement("canvas");
-        canvas.width = vw;
-        canvas.height = vh;
-        const ctx = canvas.getContext("2d");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (!ctx) return null;
 
-        ctx.drawImage(video, 0, 0, vw, vh);
-
-        // Verifikasi bahwa canvas benar-benar berisi piksel (bukan hitam kosong)
-        const sample = ctx.getImageData(
-            Math.floor(vw / 4), Math.floor(vh / 4),
-            Math.min(32, Math.floor(vw / 2)), Math.min(32, Math.floor(vh / 2))
-        );
-        let nonZeroCount = 0;
-        for (let i = 0; i < sample.data.length; i += 4) {
-            if (sample.data[i] > 5 || sample.data[i + 1] > 5 || sample.data[i + 2] > 5) {
-                nonZeroCount++;
-            }
-        }
-        const totalPixels = sample.data.length / 4;
-        const hasContent = nonZeroCount > totalPixels * 0.05;
-
-        if (!hasContent) {
-            log.warn("Canvas berisi piksel hitam/kosong setelah drawImage dari video", {
-                videoWidth: vw,
-                videoHeight: vh,
-                nonZeroPixels: nonZeroCount,
-                totalSampled: totalPixels,
-            });
-            return null;
-        }
-
+        ctx.drawImage(video, 0, 0, w, h);
         return canvas;
     } catch (err) {
         log.error("Gagal capture video ke canvas", {
@@ -133,10 +124,6 @@ function captureVideoToCanvas(video: HTMLVideoElement): HTMLCanvasElement | null
 
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
- * Menggunakan canvas yang sudah diverifikasi pikselnya sebagai input,
- * sehingga face-api.js tidak perlu melakukan konversi internal yang
- * bisa menghasilkan canvas kosong pada HP tertentu.
- *
  * Return `null` jika tidak ada wajah terdeteksi atau timeout.
  */
 export async function detectFaceDescriptor(
@@ -146,17 +133,15 @@ export async function detectFaceDescriptor(
         await loadFaceModels();
     }
 
-    // Untuk video: tangkap frame ke canvas terlebih dahulu, verifikasi isinya
     let detectionInput: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement = input;
     if (input instanceof HTMLVideoElement) {
-        if (input.readyState < 3 || input.videoWidth === 0 || input.videoHeight === 0) {
+        if (input.readyState < 2 || input.videoWidth === 0 || input.videoHeight === 0) {
             return null;
         }
         const canvas = captureVideoToCanvas(input);
         if (canvas) {
             detectionInput = canvas;
         }
-        // Jika capture gagal (canvas kosong), tetap coba pakai video langsung
     }
 
     const detectionWork = async (): Promise<Float32Array | null> => {
@@ -165,6 +150,7 @@ export async function detectFaceDescriptor(
                 minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
             });
 
+            // 1. Coba deteksi single face
             const single = await faceapi
                 .detectSingleFace(detectionInput, options)
                 .withFaceLandmarks()
@@ -172,6 +158,21 @@ export async function detectFaceDescriptor(
 
             if (single?.descriptor) {
                 return single.descriptor;
+            }
+
+            // 2. Fallback: deteksi all faces jika single face gagal
+            const allDetections = await faceapi
+                .detectAllFaces(detectionInput, options)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+
+            if (allDetections && allDetections.length > 0) {
+                const best = allDetections.reduce((largest, curr) => {
+                    const currArea = curr.detection.box.width * curr.detection.box.height;
+                    const largestArea = largest.detection.box.width * largest.detection.box.height;
+                    return currArea > largestArea ? curr : largest;
+                });
+                return best.descriptor;
             }
 
             return null;
@@ -183,7 +184,7 @@ export async function detectFaceDescriptor(
         }
     };
 
-    // Proteksi timeout
+    // Proteksi timeout per frame
     const timeout = new Promise<null>((resolve) =>
         setTimeout(() => resolve(null), DETECTION_TIMEOUT_MS)
     );
@@ -201,7 +202,6 @@ interface MultiFrameDetectionOptions {
 
 /**
  * Pindai beberapa frame video dan kumpulkan descriptor yang berhasil.
- * Setiap frame dilindungi timeout individual.
  */
 export async function detectFaceDescriptors(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
@@ -222,8 +222,8 @@ export async function detectFaceDescriptors(
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         options.onAttempt?.(attempt + 1, attempts, descriptors.length);
 
-        // Jeda agar browser sempat render frame video baru dan repaint UI
-        await new Promise<void>((resolve) => setTimeout(resolve, 80));
+        // Jeda mikro agar browser sempat render
+        await new Promise<void>((resolve) => setTimeout(resolve, 30));
 
         const t0 = performance.now();
         const descriptor = await detectFaceDescriptor(input);
