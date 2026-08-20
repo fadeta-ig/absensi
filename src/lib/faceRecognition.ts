@@ -31,7 +31,7 @@ export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 /** Konfigurasi scan multi-frame cepat untuk perangkat mobile. */
 export const FACE_SCAN_ATTEMPTS = 3;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 100;
+export const FACE_SCAN_INTERVAL_MS = 80;
 
 /** Confidence detektor; 0.15 membuat wajah pada kamera HP low-end atau lensa sedikit buram/berembun tetap terdeteksi. */
 const FACE_DETECTION_MIN_CONFIDENCE = 0.15;
@@ -78,29 +78,67 @@ export async function loadFaceModels(): Promise<void> {
  */
 function getOptimizedInput(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
-): HTMLCanvasElement | HTMLImageElement {
-    if (typeof document === "undefined") return input as HTMLCanvasElement;
+): HTMLCanvasElement | HTMLImageElement | HTMLVideoElement {
+    if (typeof document === "undefined") return input;
 
     if (input instanceof HTMLVideoElement) {
         const vw = input.videoWidth || 640;
         const vh = input.videoHeight || 480;
-        if (vw === 0 || vh === 0) return input as unknown as HTMLCanvasElement;
+        if (vw === 0 || vh === 0) return input;
 
-        const maxDim = 480;
-        const scale = Math.min(1, maxDim / Math.max(vw, vh));
-        const w = Math.max(160, Math.round(vw * scale));
-        const h = Math.max(120, Math.round(vh * scale));
+        try {
+            const maxDim = 480;
+            const scale = Math.min(1, maxDim / Math.max(vw, vh));
+            const w = Math.max(160, Math.round(vw * scale));
+            const h = Math.max(120, Math.round(vh * scale));
 
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (ctx) {
-            ctx.drawImage(input, 0, 0, w, h);
-            return canvas;
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+                ctx.drawImage(input, 0, 0, w, h);
+                return canvas;
+            }
+        } catch {
+            return input;
         }
     }
-    return input as HTMLCanvasElement | HTMLImageElement;
+    return input;
+}
+
+/**
+ * Eksekusi deteksi wajah dengan proteksi timeout (maksimal 3.5 detik per frame)
+ * agar inferensi tidak pernah macet atau freeze tanpa batas di perangkat HP.
+ */
+async function runDetectionWithTimeout(
+    target: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement,
+    options: faceapi.SsdMobilenetv1Options,
+    timeoutMs = 3500
+): Promise<Float32Array | null> {
+    const detectionPromise = (async () => {
+        try {
+            const detection = await faceapi
+                .detectSingleFace(target, options)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+            return detection ? detection.descriptor : null;
+        } catch (err) {
+            log.error("Error pada saat inferensi single face", {
+                error: err instanceof Error ? err.message : String(err),
+            });
+            return null;
+        }
+    })();
+
+    const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+            log.warn("Deteksi frame melebihi batas waktu (timeout)", { timeoutMs });
+            resolve(null);
+        }, timeoutMs);
+    });
+
+    return Promise.race([detectionPromise, timeoutPromise]);
 }
 
 /**
@@ -118,18 +156,9 @@ export async function detectFaceDescriptor(
         const optimized = getOptimizedInput(input);
         const options = new faceapi.SsdMobilenetv1Options({
             minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
-            maxResults: 1,
         });
-        const detection = await faceapi
-            .detectSingleFace(optimized, options)
-            .withFaceLandmarks()
-            .withFaceDescriptor();
 
-        if (!detection) {
-            return null;
-        }
-
-        return detection.descriptor;
+        return await runDetectionWithTimeout(optimized, options, 3500);
     } catch (err) {
         log.error("Error saat deteksi wajah", {
             error: err instanceof Error ? err.message : String(err),
@@ -167,8 +196,8 @@ export async function detectFaceDescriptors(
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         options.onAttempt?.(attempt + 1, attempts, descriptors.length);
-        // Berikan waktu render bagi browser agar teks frame ter-update di layar
-        await new Promise<void>((resolve) => setTimeout(resolve, 40));
+        // Berikan waktu render mikro agar browser me-repaint antarmuka di layar
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
         const descriptor = await detectFaceDescriptor(input);
         if (descriptor) {

@@ -403,8 +403,8 @@ export function FaceRegistrationCard() {
             ...current,
             phase: "detecting",
             message: { type: "info", text: "Memindai fitur wajah. Tetap diam dan tatap kamera sejenak..." },
-            scanAttempt: 0,
-            scanTotal: 0,
+            scanAttempt: 1,
+            scanTotal: 3,
         }));
 
         try {
@@ -434,7 +434,7 @@ export function FaceRegistrationCard() {
                     phase: "camera_ready",
                     message: {
                         type: "error",
-                        text: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} pemindaian. Pastikan ruangan cukup terang, bersihkan lensa kamera depan, dan wajah menghadap langsung ke kamera.`,
+                        text: `Wajah belum terdeteksi. Pastikan ruangan cukup terang, bersihkan lensa kamera depan, dan hadapkan wajah ke kamera.`,
                     },
                     scanAttempt: 0,
                     scanTotal: 0,
