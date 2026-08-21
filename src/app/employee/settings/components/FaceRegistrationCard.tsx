@@ -27,7 +27,6 @@ export function FaceRegistrationCard() {
     const confirm = useConfirm();
     const toast = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
 
     const [faceStatus, setFaceStatus] = useState<FaceStatus>("loading");
@@ -157,8 +156,12 @@ export function FaceRegistrationCard() {
 
     const registerFace = useCallback(async () => {
         const video = videoRef.current;
-        const canvas = canvasRef.current;
         if (!video || !streamRef.current) return;
+
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+            setModalMessage({ type: "error", text: "Frame kamera belum siap. Tunggu sebentar lalu coba lagi." });
+            return;
+        }
 
         setFaceProcessing(true);
         setStep("detecting");
@@ -167,27 +170,12 @@ export function FaceRegistrationCard() {
         try {
             const { detectFaceDescriptors, averageFaceDescriptors, FACE_SCAN_ATTEMPTS } = await import("@/lib/faceRecognition");
 
-            // Gunakan canvas ringan (320px) agar inferensi AI instan (< 100ms) di HP
-            let inputTarget: HTMLCanvasElement | HTMLVideoElement = video;
-            if (canvas && video.videoWidth > 0 && video.videoHeight > 0) {
-                const targetDim = 320;
-                const scale = Math.min(1, targetDim / Math.max(video.videoWidth, video.videoHeight));
-                canvas.width = Math.max(160, Math.round(video.videoWidth * scale));
-                canvas.height = Math.max(120, Math.round(video.videoHeight * scale));
-                const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                if (ctx) {
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    inputTarget = canvas;
-                }
-            }
-
-            const descriptors = await detectFaceDescriptors(inputTarget, {
+            // Langsung kirim video element ke AI (seperti commit f653a2e yang terbukti bekerja).
+            // JANGAN gunakan canvas perantara — canvas 320px terlalu kecil untuk
+            // SSD MobileNet (butuh min 512px), dan hidden canvas di Android Chrome
+            // tidak menerima frame valid dari hardware video decoder.
+            const descriptors = await detectFaceDescriptors(video, {
                 onAttempt: (attempt, total) => {
-                    // Update frame snapshot pada setiap attempt
-                    if (inputTarget === canvas && canvas && video.videoWidth > 0) {
-                        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    }
                     setModalMessage({
                         type: "info",
                         text: `Memindai frame (${attempt}/${total}). Tahan posisi wajah Anda...`,
@@ -445,8 +433,6 @@ export function FaceRegistrationCard() {
                                 style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
                             />
 
-                            {/* Hidden canvas for ultra-fast downscaled inference */}
-                            <canvas ref={canvasRef} className="hidden" />
 
                             {/* Loading Camera / Models Overlay */}
                             {!faceStreaming && (
