@@ -8,6 +8,9 @@ vi.mock("face-api.js", () => ({
     SsdMobilenetv1Options: class {
         constructor(public options: { minConfidence: number }) {}
     },
+    TinyFaceDetectorOptions: class {
+        constructor(public options: { inputSize: number; scoreThreshold: number }) {}
+    },
     detectSingleFace,
     detectAllFaces: vi.fn(() => ({
         withFaceLandmarks: () => ({
@@ -18,6 +21,8 @@ vi.mock("face-api.js", () => ({
         Math.sqrt(first.reduce((sum, value, index) => sum + (value - second[index]) ** 2, 0))
     )),
     nets: {
+        tinyFaceDetector: { loadFromUri: vi.fn() },
+        faceLandmark68TinyNet: { loadFromUri: vi.fn() },
         ssdMobilenetv1: { loadFromUri: vi.fn() },
         faceLandmark68Net: { loadFromUri: vi.fn() },
         faceRecognitionNet: { loadFromUri: vi.fn() },
@@ -36,6 +41,7 @@ vi.mock("@/lib/clientLogger", () => ({
 import {
     averageFaceDescriptors,
     compareFaces,
+    detectFaceDescriptorDetailed,
     detectFaceDescriptors,
     FACE_THRESHOLD,
     loadFaceModels,
@@ -65,6 +71,7 @@ describe("faceRecognition", () => {
         const descriptor = new Float32Array([1, 0]);
         detectSingleFace
             .mockImplementationOnce(() => detectionChain(null))
+            .mockImplementationOnce(() => detectionChain(null))
             .mockImplementationOnce(() => detectionChain(descriptor));
 
         const results = await detectFaceDescriptors({} as HTMLVideoElement, {
@@ -73,9 +80,24 @@ describe("faceRecognition", () => {
             intervalMs: 0,
         });
 
-        expect(detectSingleFace).toHaveBeenCalledTimes(2);
-        expect(detectSingleFace.mock.calls[0][1].options.minConfidence).toBe(0.15);
+        expect(detectSingleFace).toHaveBeenCalledTimes(3);
+        expect(detectSingleFace.mock.calls[0][1].options.scoreThreshold).toBe(0.2);
+        expect(detectSingleFace.mock.calls[1][1].options.minConfidence).toBe(0.15);
         expect(results).toEqual([descriptor]);
+    });
+
+    it("membedakan error detektor dari wajah yang tidak ditemukan", async () => {
+        detectSingleFace.mockImplementationOnce(() => {
+            throw new Error("WebGL context lost");
+        });
+
+        const result = await detectFaceDescriptorDetailed({} as HTMLCanvasElement);
+
+        expect(result).toMatchObject({
+            status: "error",
+            stage: "detection",
+            message: "WebGL context lost",
+        });
     });
 
     it("merata-ratakan dan menormalisasi descriptor registrasi", () => {

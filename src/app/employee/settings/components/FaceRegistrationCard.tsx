@@ -11,23 +11,104 @@ import {
     ScanFace,
     ShieldCheck,
     Trash2,
-    Upload,
     X,
 } from "lucide-react";
-import { createClientLogger } from "@/lib/clientLogger";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
-const log = createClientLogger("FaceRegistration");
-
 type FaceStatus = "loading" | "registered" | "not_registered" | "error";
-type AnalysisState = "idle" | "analyzing" | "valid" | "invalid" | "saving";
+type AnalysisState = "idle" | "analyzing" | "valid" | "invalid" | "error" | "saving";
+
+const MAX_CAPTURE_BYTES = 25 * 1024 * 1024;
+const MAX_ANALYSIS_HEIGHT = 640;
+const MODEL_LOAD_TIMEOUT_MS = 20_000;
+const DETECTION_TIMEOUT_MS = 20_000;
+
+class FaceAnalysisTimeoutError extends Error {
+    constructor(stage: string) {
+        super(`${stage} melebihi batas waktu`);
+        this.name = "FaceAnalysisTimeoutError";
+    }
+}
+
+function withTimeout<T>(operation: Promise<T>, timeoutMs: number, stage: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => reject(new FaceAnalysisTimeoutError(stage)), timeoutMs);
+        operation.then(
+            (value) => {
+                window.clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error: unknown) => {
+                window.clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
+    });
+}
+
+function createCanvas(width: number, height: number): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    return canvas;
+}
+
+async function optimizeCapturedImage(file: File): Promise<HTMLCanvasElement> {
+    if (file.size === 0) throw new Error("File foto kosong.");
+    if (file.size > MAX_CAPTURE_BYTES) throw new Error("Ukuran foto melebihi 25 MB.");
+
+    if (typeof createImageBitmap === "function") {
+        let bitmap: ImageBitmap | null = null;
+        try {
+            bitmap = await createImageBitmap(file, {
+                imageOrientation: "from-image",
+                resizeHeight: MAX_ANALYSIS_HEIGHT,
+                resizeQuality: "high",
+            });
+            const canvas = createCanvas(bitmap.width, bitmap.height);
+            const context = canvas.getContext("2d");
+            if (!context) throw new Error("Canvas tidak tersedia pada browser ini.");
+            context.drawImage(bitmap, 0, 0);
+            return canvas;
+        } catch (error) {
+            // Safari dan beberapa format kamera tidak mendukung createImageBitmap.
+            // Lanjutkan ke decoder Image berbasis object URL di bawah.
+            if (!(error instanceof Error)) throw error;
+        } finally {
+            bitmap?.close();
+        }
+    }
+
+    return new Promise<HTMLCanvasElement>((resolve, reject) => {
+        const imageUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            const scale = Math.min(1, MAX_ANALYSIS_HEIGHT / Math.max(1, image.height));
+            const canvas = createCanvas(Math.round(image.width * scale), Math.round(image.height * scale));
+            const context = canvas.getContext("2d");
+            URL.revokeObjectURL(imageUrl);
+            if (!context) {
+                reject(new Error("Canvas tidak tersedia pada browser ini."));
+                return;
+            }
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            resolve(canvas);
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(imageUrl);
+            reject(new Error("Format foto tidak dapat dibaca. Gunakan foto JPEG atau PNG dari kamera."));
+        };
+        image.src = imageUrl;
+    });
+}
 
 export function FaceRegistrationCard() {
     const confirm = useConfirm();
     const toast = useToast();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const analysisRunRef = useRef(0);
 
     const [faceStatus, setFaceStatus] = useState<FaceStatus>("loading");
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,75 +139,75 @@ export function FaceRegistrationCard() {
         void checkFaceStatus();
     }, [checkFaceStatus]);
 
-    // Membuka kamera native HP
+    const cancelAnalysis = useCallback(() => {
+        analysisRunRef.current += 1;
+    }, []);
+
+    // Membuka kamera native HP dan membatalkan analisis sebelumnya bila ada.
     const triggerNativeCamera = useCallback(() => {
+        cancelAnalysis();
         setErrorMessage(null);
+        setDetectedDescriptor(null);
+        if (analysisState === "analyzing") setAnalysisState("idle");
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
             fileInputRef.current.click();
         }
-    }, []);
+    }, [analysisState, cancelAnalysis]);
 
     // Proses analisis foto setelah diambil dari kamera native
-    const processCapturedImage = useCallback(async (imageSrc: string) => {
-        setSelectedImageSrc(imageSrc);
+    const processCapturedImage = useCallback(async (file: File) => {
+        const runId = analysisRunRef.current + 1;
+        analysisRunRef.current = runId;
         setIsModalOpen(true);
+        setSelectedImageSrc(null);
         setAnalysisState("analyzing");
         setErrorMessage(null);
         setDetectedDescriptor(null);
 
         try {
-            // 1. Muat modul AI biometrik
-            const { loadFaceModels, detectFaceDescriptor } = await import("@/lib/faceRecognition");
-            await loadFaceModels();
+            // Ubah foto asli menjadi bitmap kecil sebelum model dan preview memakainya.
+            const scaledCanvas = await withTimeout(
+                optimizeCapturedImage(file),
+                DETECTION_TIMEOUT_MS,
+                "Pemrosesan foto"
+            );
+            if (analysisRunRef.current !== runId) return;
+            setSelectedImageSrc(scaledCanvas.toDataURL("image/jpeg", 0.9));
 
-            // 2. Decode dan resize foto ke dimensi optimal (max 800px)
-            // Foto native HP berukuran 12MP-48MP (4000x3000) yang jika tidak di-resize
-            // akan menyebabkan WebGL crash / Out of Memory di browser HP.
-            const scaledCanvas = await new Promise<HTMLCanvasElement>((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const maxDim = 800;
-                    let { width, height } = img;
-                    if (width > maxDim || height > maxDim) {
-                        if (width > height) {
-                            height = Math.round((height * maxDim) / width);
-                            width = maxDim;
-                        } else {
-                            width = Math.round((width * maxDim) / height);
-                            height = maxDim;
-                        }
-                    }
-                    const canvas = document.createElement("canvas");
-                    canvas.width = Math.max(1, width);
-                    canvas.height = Math.max(1, height);
-                    const ctx = canvas.getContext("2d");
-                    if (!ctx) {
-                        reject(new Error("Canvas context error"));
-                        return;
-                    }
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    resolve(canvas);
-                };
-                img.onerror = () => reject(new Error("Gagal membaca file foto."));
-                // JANGAN pasang crossOrigin untuk Base64 data: URI karena memicu hang di Chrome Android
-                img.src = imageSrc;
-            });
+            const { loadFaceModels, detectFaceDescriptorDetailed } = await import("@/lib/faceRecognition");
+            await withTimeout(loadFaceModels(), MODEL_LOAD_TIMEOUT_MS, "Pemuatan mesin wajah");
+            if (analysisRunRef.current !== runId) return;
 
-            // 3. Jalankan deteksi wajah pada foto teroptimasi
-            const descriptor = await detectFaceDescriptor(scaledCanvas);
+            const result = await withTimeout(
+                detectFaceDescriptorDetailed(scaledCanvas),
+                DETECTION_TIMEOUT_MS,
+                "Pemindaian wajah"
+            );
+            if (analysisRunRef.current !== runId) return;
 
-            if (descriptor) {
-                setDetectedDescriptor(descriptor);
+            if (result.status === "success") {
+                setDetectedDescriptor(result.descriptor);
                 setAnalysisState("valid");
-            } else {
+            } else if (result.status === "not_found") {
                 setAnalysisState("invalid");
                 setErrorMessage("Wajah tidak terdeteksi pada foto. Pastikan wajah menghadap lurus ke kamera dengan pencahayaan terang.");
+            } else {
+                reportClientError("FaceRegistration", "Mesin deteksi wajah gagal", result, { stage: result.stage });
+                setAnalysisState("error");
+                setErrorMessage("Mesin pemindai wajah gagal dijalankan. Coba tutup aplikasi lain, lalu ambil foto ulang atau muat ulang halaman.");
             }
         } catch (err) {
+            if (analysisRunRef.current !== runId) return;
             reportClientError("FaceRegistration", "Error saat memproses foto", err);
-            setAnalysisState("invalid");
-            setErrorMessage("Terjadi kesalahan saat menganalisis foto. Silakan coba ambil foto kembali.");
+            setAnalysisState("error");
+            setErrorMessage(
+                err instanceof FaceAnalysisTimeoutError
+                    ? "Pemindaian terlalu lama dan dihentikan agar tidak macet. Coba ambil foto ulang."
+                    : err instanceof Error
+                        ? err.message
+                        : "Terjadi kesalahan saat menganalisis foto. Silakan coba ambil foto kembali."
+            );
         }
     }, []);
 
@@ -136,14 +217,7 @@ export function FaceRegistrationCard() {
             const file = e.target.files?.[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const result = event.target?.result;
-                if (typeof result === "string") {
-                    void processCapturedImage(result);
-                }
-            };
-            reader.readAsDataURL(file);
+            void processCapturedImage(file);
         },
         [processCapturedImage]
     );
@@ -205,12 +279,13 @@ export function FaceRegistrationCard() {
 
     const closeModal = useCallback(() => {
         if (analysisState === "saving") return;
+        cancelAnalysis();
         setIsModalOpen(false);
         setSelectedImageSrc(null);
         setDetectedDescriptor(null);
         setAnalysisState("idle");
         setErrorMessage(null);
-    }, [analysisState]);
+    }, [analysisState, cancelAnalysis]);
 
     return (
         <>
@@ -370,7 +445,7 @@ export function FaceRegistrationCard() {
             </div>
 
             {/* ── Photo Preview & Verification Modal ── */}
-            {isModalOpen && selectedImageSrc && (
+            {isModalOpen && (
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.15s_ease]">
                     <div
                         className="relative w-full max-w-sm max-h-[92vh] bg-[var(--card)] rounded-3xl overflow-hidden shadow-2xl border border-[var(--border)] flex flex-col animate-[scaleIn_0.2s_ease]"
@@ -401,13 +476,19 @@ export function FaceRegistrationCard() {
 
                         {/* Photo Viewport with Verification Overlay */}
                         <div className="relative aspect-[3/4] max-h-[50vh] bg-black overflow-hidden select-none shrink-0 flex items-center justify-center">
-                            {/* Static Captured Image */}
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={selectedImageSrc}
-                                alt="Foto Wajah"
-                                className="w-full h-full object-cover"
-                            />
+                            {selectedImageSrc ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                    src={selectedImageSrc}
+                                    alt="Foto Wajah"
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="flex items-center gap-2 text-xs text-white/80">
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Menyiapkan foto...
+                                </div>
+                            )}
 
                             {/* Guideline Frame Overlay */}
                             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -417,7 +498,7 @@ export function FaceRegistrationCard() {
                                     className={`relative w-44 h-60 rounded-[50%] border-2 transition-all duration-300 ${
                                         analysisState === "valid"
                                             ? "border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.7)]"
-                                            : analysisState === "invalid"
+                                            : analysisState === "invalid" || analysisState === "error"
                                                 ? "border-red-400 shadow-[0_0_30px_rgba(248,113,113,0.7)]"
                                                 : "border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)]"
                                     }`}
@@ -468,16 +549,28 @@ export function FaceRegistrationCard() {
                                 </div>
                             )}
 
+                            {analysisState === "error" && (
+                                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-800 text-xs text-red-800 dark:text-red-300">
+                                    <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-bold">Pemindaian Tidak Dapat Dilanjutkan</p>
+                                        <p className="text-[11px] text-red-700 dark:text-red-400 mt-0.5 leading-relaxed">
+                                            {errorMessage || "Silakan ambil foto ulang."}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Action Buttons */}
                             <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={triggerNativeCamera}
-                                    disabled={analysisState === "saving" || analysisState === "analyzing"}
+                                    disabled={analysisState === "saving"}
                                     className="btn btn-secondary flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2.5"
                                 >
                                     <Camera className="w-3.5 h-3.5" />
-                                    Ambil Ulang
+                                    {analysisState === "analyzing" ? "Batalkan & Ambil Ulang" : "Ambil Ulang"}
                                 </button>
 
                                 {analysisState === "valid" && (
