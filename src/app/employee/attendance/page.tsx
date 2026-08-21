@@ -12,6 +12,33 @@ import { useRouter } from "next/navigation";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const log = createClientLogger("AttendancePage");
+const FACE_OPERATION_TIMEOUT_MS = 25_000;
+
+class FaceVerificationTimeoutError extends Error {
+    constructor(stage: string) {
+        super(`${stage} melebihi batas waktu`);
+        this.name = "FaceVerificationTimeoutError";
+    }
+}
+
+function withFaceTimeout<T>(operation: Promise<T>, stage: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timeoutId = window.setTimeout(
+            () => reject(new FaceVerificationTimeoutError(stage)),
+            FACE_OPERATION_TIMEOUT_MS
+        );
+        operation.then(
+            (value) => {
+                window.clearTimeout(timeoutId);
+                resolve(value);
+            },
+            (error: unknown) => {
+                window.clearTimeout(timeoutId);
+                reject(error);
+            }
+        );
+    });
+}
 
 interface FaceVerification {
     status: "idle" | "checking" | "match" | "mismatch" | "no_face" | "not_registered" | "error";
@@ -32,6 +59,7 @@ export default function AttendancePage() {
     const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const verificationRunRef = useRef(0);
 
     const [streaming, setStreaming] = useState(false);
     const [isMirrored, setIsMirrored] = useState(true);
@@ -158,6 +186,9 @@ export default function AttendancePage() {
 
     const captureAndVerify = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current) return;
+        const verificationRun = verificationRunRef.current + 1;
+        verificationRunRef.current = verificationRun;
+        setPhoto(null);
 
         const vid = videoRef.current;
         if (vid.videoWidth === 0 || vid.videoHeight === 0) {
@@ -202,11 +233,46 @@ export default function AttendancePage() {
         setFaceVerification({ status: "checking", message: "Memindai beberapa frame wajah..." });
 
         try {
-            const { loadFaceModels, detectFaceDescriptors, compareFaces, FACE_SCAN_ATTEMPTS } = await import("@/lib/faceRecognition");
-            await loadFaceModels();
-            const descriptors = await detectFaceDescriptors(vid);
+            const {
+                ensureStableFaceRecognitionBackend,
+                loadFaceModels,
+                detectFaceDescriptorDetailed,
+                compareFaces,
+                FACE_SCAN_ATTEMPTS,
+                FACE_SCAN_INTERVAL_MS,
+            } = await import("@/lib/faceRecognition");
 
-            if (descriptors.length === 0) {
+            await withFaceTimeout(ensureStableFaceRecognitionBackend(), "Persiapan mesin pemindai");
+            if (verificationRunRef.current !== verificationRun) return;
+            await withFaceTimeout(loadFaceModels(), "Pemuatan model wajah");
+            if (verificationRunRef.current !== verificationRun) return;
+
+            let descriptor: Float32Array | null = null;
+            for (let attempt = 0; attempt < FACE_SCAN_ATTEMPTS; attempt += 1) {
+                const scanResult = await withFaceTimeout(
+                    detectFaceDescriptorDetailed(vid),
+                    `Pemindaian wajah percobaan ${attempt + 1}`
+                );
+                if (verificationRunRef.current !== verificationRun) return;
+
+                if (scanResult.status === "success") {
+                    descriptor = scanResult.descriptor;
+                    break;
+                }
+                if (scanResult.status === "error") {
+                    reportClientError("AttendancePage", "Mesin deteksi wajah gagal", scanResult, { stage: scanResult.stage });
+                    setFaceVerification({
+                        status: "error",
+                        message: "Mesin pemindai wajah gagal dijalankan. Muat ulang halaman lalu coba lagi.",
+                    });
+                    return;
+                }
+                if (attempt < FACE_SCAN_ATTEMPTS - 1) {
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, FACE_SCAN_INTERVAL_MS));
+                }
+            }
+
+            if (!descriptor) {
                 setFaceVerification({
                     status: "no_face",
                     message: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} percobaan. Bersihkan lensa dan coba lagi.`,
@@ -214,9 +280,7 @@ export default function AttendancePage() {
                 return;
             }
 
-            const result = descriptors
-                .map((descriptor) => compareFaces(descriptor, registeredDescriptor))
-                .reduce((best, current) => current.distance < best.distance ? current : best);
+            const result = compareFaces(descriptor, registeredDescriptor);
 
             if (result.match) {
                 const photoData = captureCurrentFrame();
@@ -236,16 +300,22 @@ export default function AttendancePage() {
                 });
             }
         } catch (err) {
+            if (verificationRunRef.current !== verificationRun) return;
             reportClientError("AttendancePage", "Error saat verifikasi wajah", err);
-            setFaceVerification({ status: "error", message: "Gagal memverifikasi wajah. Coba lagi." });
+            setFaceVerification({
+                status: "error",
+                message: err instanceof FaceVerificationTimeoutError
+                    ? `${err.message}. Proses dihentikan agar tidak terus memverifikasi; coba lagi.`
+                    : "Gagal memverifikasi wajah. Muat ulang halaman lalu coba lagi.",
+            });
         }
     }, [registeredDescriptor, faceDescriptorError, stopCamera, toast]);
 
     const submitAttendance = useCallback(async () => {
         if (!photo || !gpsInfo) return;
 
-        if (faceVerification.status === "mismatch") {
-            setMessage("Verifikasi wajah gagal. Tidak dapat melakukan absensi.");
+        if (faceVerification.status !== "match") {
+            setMessage("Verifikasi wajah harus berhasil sebelum melakukan absensi.");
             return;
         }
 
@@ -295,8 +365,8 @@ export default function AttendancePage() {
     const isClockOut = todayRecord?.clockIn && !todayRecord?.clockOut;
     const isDone = todayRecord?.clockIn && todayRecord?.clockOut;
 
-    /** Can submit: photo taken, GPS valid, face not mismatched */
-    const canSubmit = photo && gpsInfo?.isValid && faceVerification.status !== "mismatch" && status !== "submitting";
+    /** Absensi hanya boleh dikirim setelah identitas wajah benar-benar cocok. */
+    const canSubmit = photo && gpsInfo?.isValid && faceVerification.status === "match" && status !== "submitting";
 
     return (
         <div className="space-y-4 animate-[fadeIn_0.5s_ease]">
