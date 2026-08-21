@@ -1,7 +1,7 @@
 /**
  * Face Recognition — face-api.js wrapper
- * Dilengkapi dengan 3-Tier Multi-Level Detection Ladder
- * untuk mendeteksi wajah dalam berbagai kondisi pencahayaan dan sudut kamera HP.
+ * Dual-Engine: TinyFaceDetector (utama, ringan untuk mobile) +
+ *              SSD MobileNet v1 (fallback, akurat untuk desktop).
  *
  * Logging: hanya warn & error yang dikirim ke server.
  * Info/debug di-drop oleh clientLogger (silent).
@@ -35,14 +35,13 @@ export const FACE_SCAN_ATTEMPTS = 5;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
 export const FACE_SCAN_INTERVAL_MS = 150;
 
-/** Confidence detektor dasar (0.10) toleran terhadap kamera HP. */
-const FACE_DETECTION_MIN_CONFIDENCE = 0.10;
-
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
 
 /**
  * Load face-api.js models dari /models/.
+ * Memuat Dual-Engine: TinyFaceDetector (ringan, cepat untuk mobile)
+ * dan SSD MobileNet v1 (akurat, fallback untuk desktop/kasus sulit).
  * Hanya load sekali — panggilan berikutnya langsung return.
  */
 export async function loadFaceModels(): Promise<void> {
@@ -53,12 +52,18 @@ export async function loadFaceModels(): Promise<void> {
 
     modelLoadPromise = (async () => {
         await Promise.all([
+            // Engine Utama: TinyFaceDetector (190KB, ultra-cepat di mobile)
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+            // Engine Fallback: SSD MobileNet v1 (5.4MB, akurat)
             faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+            // Landmark: Tiny (77KB, cepat) + Standard (350KB, fallback)
+            faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
             faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            // Recognition: 128-d descriptor embedding
             faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
         modelsLoaded = true;
-        log.info("Face-api models berhasil dimuat");
+        log.info("Face-api Dual-Engine models berhasil dimuat");
     })()
         .catch((err) => {
             log.error("Gagal load face-api models", {
@@ -74,16 +79,21 @@ export async function loadFaceModels(): Promise<void> {
     return modelLoadPromise;
 }
 
+type FaceInput = HTMLVideoElement | HTMLImageElement | HTMLCanvasElement;
+
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
- * Menggunakan 3-Tier Multi-Level Detection Ladder:
- * Tier 1: detectSingleFace standar (confidence 0.10)
- * Tier 2: detectAllFaces fallback (memilih wajah terbesar, toleran terhadap boundary clipping)
- * Tier 3: Low-light fallback (confidence 0.05 untuk pencahayaan minim/backlight)
- * Return `null` jika tidak ada wajah terdeteksi.
+ *
+ * Dual-Engine Detection Strategy:
+ * 1. TinyFaceDetector + TinyLandmarks  (tercepat, ~20ms di HP)
+ * 2. TinyFaceDetector + StandardLandmarks (jika tiny landmarks gagal)
+ * 3. SSD MobileNet v1 + StandardLandmarks (fallback berat, paling akurat)
+ * 4. SSD MobileNet v1 (low confidence 0.05) (kondisi pencahayaan redup)
+ *
+ * Return `null` jika tidak ada wajah terdeteksi di semua engine.
  */
 export async function detectFaceDescriptor(
-    input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
+    input: FaceInput
 ): Promise<Float32Array | null> {
     if (!modelsLoaded) {
         await loadFaceModels();
@@ -96,23 +106,48 @@ export async function detectFaceDescriptor(
     }
 
     try {
-        const options = new faceapi.SsdMobilenetv1Options({
-            minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
+        // ── Engine 1: TinyFaceDetector + TinyLandmarks (tercepat) ──
+        const tinyOptions = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.3,
         });
 
-        // Tier 1: Deteksi single face utama
-        const single = await faceapi
-            .detectSingleFace(input, options)
+        const tinyResult = await faceapi
+            .detectSingleFace(input, tinyOptions)
+            .withFaceLandmarks(true)
+            .withFaceDescriptor();
+
+        if (tinyResult?.descriptor) {
+            return tinyResult.descriptor;
+        }
+
+        // ── Engine 2: TinyFaceDetector + Standard Landmarks ──
+        const tinyWithStdLandmarks = await faceapi
+            .detectSingleFace(input, tinyOptions)
             .withFaceLandmarks()
             .withFaceDescriptor();
 
-        if (single?.descriptor) {
-            return single.descriptor;
+        if (tinyWithStdLandmarks?.descriptor) {
+            return tinyWithStdLandmarks.descriptor;
         }
 
-        // Tier 2: Fallback detectAllFaces (mengambil bounding box wajah paling dominan)
+        // ── Engine 3: SSD MobileNet v1 (fallback berat, sangat akurat) ──
+        const ssdOptions = new faceapi.SsdMobilenetv1Options({
+            minConfidence: 0.10,
+        });
+
+        const ssdResult = await faceapi
+            .detectSingleFace(input, ssdOptions)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+        if (ssdResult?.descriptor) {
+            return ssdResult.descriptor;
+        }
+
+        // ── Engine 4: SSD detectAllFaces fallback (boundary clipping) ──
         const allDetections = await faceapi
-            .detectAllFaces(input, options)
+            .detectAllFaces(input, ssdOptions)
             .withFaceLandmarks()
             .withFaceDescriptors();
 
@@ -127,17 +162,17 @@ export async function detectFaceDescriptor(
             }
         }
 
-        // Tier 3: Fallback untuk pencahayaan redup / backlight (confidence 0.05)
+        // ── Engine 5: Low-light last resort (confidence 0.05) ──
         const lowConfOptions = new faceapi.SsdMobilenetv1Options({
             minConfidence: 0.05,
         });
-        const lowConfSingle = await faceapi
+        const lowConfResult = await faceapi
             .detectSingleFace(input, lowConfOptions)
             .withFaceLandmarks()
             .withFaceDescriptor();
 
-        if (lowConfSingle?.descriptor) {
-            return lowConfSingle.descriptor;
+        if (lowConfResult?.descriptor) {
+            return lowConfResult.descriptor;
         }
 
         return null;
@@ -161,7 +196,7 @@ interface MultiFrameDetectionOptions {
  * Pada deteksi pertama yang berhasil, proses dapat langsung selesai.
  */
 export async function detectFaceDescriptors(
-    input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+    input: FaceInput,
     options: MultiFrameDetectionOptions = {}
 ): Promise<Float32Array[]> {
     if (!modelsLoaded) {
