@@ -1,7 +1,7 @@
 /**
  * Face Recognition — face-api.js wrapper
- * Dual-Engine: TinyFaceDetector (utama, ringan untuk mobile) +
- *              SSD MobileNet v1 (fallback, akurat untuk desktop).
+ * Menggunakan TinyFaceDetector teroptimasi (scoreThreshold 0.15)
+ * untuk inferensi ultra-cepat (< 30ms) pada perangkat mobile Android/iOS.
  *
  * Logging: hanya warn & error yang dikirim ke server.
  * Info/debug di-drop oleh clientLogger (silent).
@@ -33,16 +33,14 @@ export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 /** Konfigurasi scan multi-frame untuk kamera. */
 export const FACE_SCAN_ATTEMPTS = 5;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 150;
+export const FACE_SCAN_INTERVAL_MS = 100;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
 
 /**
  * Load face-api.js models dari /models/.
- * Memuat Dual-Engine: TinyFaceDetector (ringan, cepat untuk mobile)
- * dan SSD MobileNet v1 (akurat, fallback untuk desktop/kasus sulit).
- * Hanya load sekali — panggilan berikutnya langsung return.
+ * Hanya memuat model ringan TinyFaceDetector, TinyLandmarks, dan FaceRecognition.
  */
 export async function loadFaceModels(): Promise<void> {
     if (modelsLoaded) return;
@@ -52,18 +50,13 @@ export async function loadFaceModels(): Promise<void> {
 
     modelLoadPromise = (async () => {
         await Promise.all([
-            // Engine Utama: TinyFaceDetector (190KB, ultra-cepat di mobile)
             faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-            // Engine Fallback: SSD MobileNet v1 (5.4MB, akurat)
-            faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-            // Landmark: Tiny (77KB, cepat) + Standard (350KB, fallback)
             faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
             faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-            // Recognition: 128-d descriptor embedding
             faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
         modelsLoaded = true;
-        log.info("Face-api Dual-Engine models berhasil dimuat");
+        log.info("Face-api Tiny models berhasil dimuat");
     })()
         .catch((err) => {
             log.error("Gagal load face-api models", {
@@ -84,13 +77,10 @@ type FaceInput = HTMLVideoElement | HTMLImageElement | HTMLCanvasElement;
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
  *
- * Dual-Engine Detection Strategy:
- * 1. TinyFaceDetector + TinyLandmarks  (tercepat, ~20ms di HP)
- * 2. TinyFaceDetector + StandardLandmarks (jika tiny landmarks gagal)
- * 3. SSD MobileNet v1 + StandardLandmarks (fallback berat, paling akurat)
- * 4. SSD MobileNet v1 (low confidence 0.05) (kondisi pencahayaan redup)
+ * Menggunakan TinyFaceDetector dengan scoreThreshold 0.15 (toleran terhadap selfie HP):
+ * Execution time: ~20-30ms per frame di mobile.
  *
- * Return `null` jika tidak ada wajah terdeteksi di semua engine.
+ * Return `null` jika tidak ada wajah terdeteksi.
  */
 export async function detectFaceDescriptor(
     input: FaceInput
@@ -106,73 +96,44 @@ export async function detectFaceDescriptor(
     }
 
     try {
-        // ── Engine 1: TinyFaceDetector + TinyLandmarks (tercepat) ──
-        const tinyOptions = new faceapi.TinyFaceDetectorOptions({
-            inputSize: 416,
-            scoreThreshold: 0.3,
+        // Tier 1: TinyFaceDetector 320px (scoreThreshold 0.15) — ultra cepat (~20ms)
+        const tinyOptions320 = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 320,
+            scoreThreshold: 0.15,
         });
 
-        const tinyResult = await faceapi
-            .detectSingleFace(input, tinyOptions)
+        const result320 = await faceapi
+            .detectSingleFace(input, tinyOptions320)
             .withFaceLandmarks(true)
             .withFaceDescriptor();
 
-        if (tinyResult?.descriptor) {
-            return tinyResult.descriptor;
+        if (result320?.descriptor) {
+            return result320.descriptor;
         }
 
-        // ── Engine 2: TinyFaceDetector + Standard Landmarks ──
-        const tinyWithStdLandmarks = await faceapi
-            .detectSingleFace(input, tinyOptions)
-            .withFaceLandmarks()
-            .withFaceDescriptor();
-
-        if (tinyWithStdLandmarks?.descriptor) {
-            return tinyWithStdLandmarks.descriptor;
-        }
-
-        // ── Engine 3: SSD MobileNet v1 (fallback berat, sangat akurat) ──
-        const ssdOptions = new faceapi.SsdMobilenetv1Options({
-            minConfidence: 0.10,
+        // Tier 2: Fallback TinyFaceDetector 416px (jika wajah berukuran lebih besar di frame)
+        const tinyOptions416 = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.15,
         });
 
-        const ssdResult = await faceapi
-            .detectSingleFace(input, ssdOptions)
+        const result416 = await faceapi
+            .detectSingleFace(input, tinyOptions416)
+            .withFaceLandmarks(true)
+            .withFaceDescriptor();
+
+        if (result416?.descriptor) {
+            return result416.descriptor;
+        }
+
+        // Tier 3: Fallback ke Standard Landmarks jika Tiny Landmarks terlewat
+        const resultStdLandmarks = await faceapi
+            .detectSingleFace(input, tinyOptions320)
             .withFaceLandmarks()
             .withFaceDescriptor();
 
-        if (ssdResult?.descriptor) {
-            return ssdResult.descriptor;
-        }
-
-        // ── Engine 4: SSD detectAllFaces fallback (boundary clipping) ──
-        const allDetections = await faceapi
-            .detectAllFaces(input, ssdOptions)
-            .withFaceLandmarks()
-            .withFaceDescriptors();
-
-        if (allDetections && allDetections.length > 0) {
-            const best = allDetections.reduce((largest, curr) => {
-                const currArea = curr.detection.box.width * curr.detection.box.height;
-                const largestArea = largest.detection.box.width * largest.detection.box.height;
-                return currArea > largestArea ? curr : largest;
-            });
-            if (best.descriptor) {
-                return best.descriptor;
-            }
-        }
-
-        // ── Engine 5: Low-light last resort (confidence 0.05) ──
-        const lowConfOptions = new faceapi.SsdMobilenetv1Options({
-            minConfidence: 0.05,
-        });
-        const lowConfResult = await faceapi
-            .detectSingleFace(input, lowConfOptions)
-            .withFaceLandmarks()
-            .withFaceDescriptor();
-
-        if (lowConfResult?.descriptor) {
-            return lowConfResult.descriptor;
+        if (resultStdLandmarks?.descriptor) {
+            return resultStdLandmarks.descriptor;
         }
 
         return null;
