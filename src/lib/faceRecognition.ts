@@ -30,6 +30,7 @@ let coreModelsLoaded = false;
 let coreModelLoadPromise: Promise<void> | null = null;
 let ssdModelsLoaded = false;
 let ssdModelLoadPromise: Promise<void> | null = null;
+let cpuBackendPromise: Promise<void> | null = null;
 
 type FaceInput = HTMLVideoElement | HTMLImageElement | HTMLCanvasElement;
 
@@ -40,6 +41,29 @@ export type FaceDetectionResult =
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Jalur WebGL pada sejumlah browser Android dapat berhenti tanpa melempar
+ * error saat inferensi. Pendaftaran memilih backend CPU yang lebih lambat,
+ * tetapi stabil dan tidak bergantung pada driver GPU perangkat.
+ */
+export async function useStableFaceRecognitionBackend(): Promise<void> {
+    if (faceapi.tf.getBackend() === "cpu") return;
+    if (cpuBackendPromise) return cpuBackendPromise;
+
+    cpuBackendPromise = (async () => {
+        const switched = await faceapi.tf.setBackend("cpu");
+        await faceapi.tf.ready();
+        if (!switched || faceapi.tf.getBackend() !== "cpu") {
+            throw new Error("Backend CPU TensorFlow tidak tersedia pada browser ini.");
+        }
+        log.info("Face recognition memakai backend CPU stabil");
+    })().finally(() => {
+        cpuBackendPromise = null;
+    });
+
+    return cpuBackendPromise;
 }
 
 /** Muat model inti yang ringan untuk kamera ponsel. */

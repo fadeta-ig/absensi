@@ -20,6 +20,11 @@ vi.mock("face-api.js", () => ({
     euclideanDistance: vi.fn((first: number[], second: number[]) => (
         Math.sqrt(first.reduce((sum, value, index) => sum + (value - second[index]) ** 2, 0))
     )),
+    tf: {
+        getBackend: vi.fn(() => "cpu"),
+        setBackend: vi.fn(() => Promise.resolve(true)),
+        ready: vi.fn(() => Promise.resolve()),
+    },
     nets: {
         tinyFaceDetector: { loadFromUri: vi.fn() },
         faceLandmark68TinyNet: { loadFromUri: vi.fn() },

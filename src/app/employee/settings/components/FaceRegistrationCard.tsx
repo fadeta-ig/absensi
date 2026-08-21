@@ -175,7 +175,13 @@ export function FaceRegistrationCard() {
             if (analysisRunRef.current !== runId) return;
             setSelectedImageSrc(scaledCanvas.toDataURL("image/jpeg", 0.9));
 
-            const { loadFaceModels, detectFaceDescriptorDetailed } = await import("@/lib/faceRecognition");
+            const { useStableFaceRecognitionBackend, loadFaceModels, detectFaceDescriptorDetailed } = await import("@/lib/faceRecognition");
+            await withTimeout(
+                useStableFaceRecognitionBackend(),
+                MODEL_LOAD_TIMEOUT_MS,
+                "Persiapan mesin pemindai"
+            );
+            if (analysisRunRef.current !== runId) return;
             await withTimeout(loadFaceModels(), MODEL_LOAD_TIMEOUT_MS, "Pemuatan mesin wajah");
             if (analysisRunRef.current !== runId) return;
 
@@ -203,7 +209,7 @@ export function FaceRegistrationCard() {
             setAnalysisState("error");
             setErrorMessage(
                 err instanceof FaceAnalysisTimeoutError
-                    ? "Pemindaian terlalu lama dan dihentikan agar tidak macet. Coba ambil foto ulang."
+                    ? `${err.message}. Proses dihentikan agar tidak macet; coba ambil foto ulang atau muat ulang halaman.`
                     : err instanceof Error
                         ? err.message
                         : "Terjadi kesalahan saat menganalisis foto. Silakan coba ambil foto kembali."
