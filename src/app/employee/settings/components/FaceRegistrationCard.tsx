@@ -27,6 +27,7 @@ export function FaceRegistrationCard() {
     const confirm = useConfirm();
     const toast = useToast();
     const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
 
     const [faceStatus, setFaceStatus] = useState<FaceStatus>("loading");
@@ -124,7 +125,7 @@ export function FaceRegistrationCard() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+                video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
             });
 
             streamRef.current = stream;
@@ -136,12 +137,12 @@ export function FaceRegistrationCard() {
                         .then(() => {
                             setFaceStreaming(true);
                             setStep("ready");
-                            setModalMessage({ type: "info", text: "Posisikan wajah tepat di dalam oval, lalu tekan tombol di bawah." });
+                            setModalMessage({ type: "info", text: "Posisikan wajah tepat di dalam oval, lalu tekan Scan & Simpan." });
                         })
                         .catch(() => {
                             setFaceStreaming(true);
                             setStep("ready");
-                            setModalMessage({ type: "info", text: "Posisikan wajah tepat di dalam oval, lalu tekan tombol di bawah." });
+                            setModalMessage({ type: "info", text: "Posisikan wajah tepat di dalam oval, lalu tekan Scan & Simpan." });
                         });
                 };
             }
@@ -156,16 +157,37 @@ export function FaceRegistrationCard() {
 
     const registerFace = useCallback(async () => {
         const video = videoRef.current;
+        const canvas = canvasRef.current;
         if (!video || !streamRef.current) return;
 
         setFaceProcessing(true);
         setStep("detecting");
-        setModalMessage({ type: "info", text: "Memindai fitur wajah. Tetap diam dan tatap kamera sejenak..." });
+        setModalMessage({ type: "info", text: "Memindai fitur wajah. Tetap diam sebentar..." });
 
         try {
             const { detectFaceDescriptors, averageFaceDescriptors, FACE_SCAN_ATTEMPTS } = await import("@/lib/faceRecognition");
-            const descriptors = await detectFaceDescriptors(video, {
+
+            // Gunakan canvas ringan (320px) agar inferensi AI instan (< 100ms) di HP
+            let inputTarget: HTMLCanvasElement | HTMLVideoElement = video;
+            if (canvas && video.videoWidth > 0 && video.videoHeight > 0) {
+                const targetDim = 320;
+                const scale = Math.min(1, targetDim / Math.max(video.videoWidth, video.videoHeight));
+                canvas.width = Math.max(160, Math.round(video.videoWidth * scale));
+                canvas.height = Math.max(120, Math.round(video.videoHeight * scale));
+                const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                if (ctx) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    inputTarget = canvas;
+                }
+            }
+
+            const descriptors = await detectFaceDescriptors(inputTarget, {
                 onAttempt: (attempt, total) => {
+                    // Update frame snapshot pada setiap attempt
+                    if (inputTarget === canvas && canvas && video.videoWidth > 0) {
+                        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    }
                     setModalMessage({
                         type: "info",
                         text: `Memindai frame (${attempt}/${total}). Tahan posisi wajah Anda...`,
@@ -368,15 +390,15 @@ export function FaceRegistrationCard() {
                 </div>
             </div>
 
-            {/* ── Camera Registration Modal Popup ── */}
+            {/* ── Camera Registration Modal Popup (Z-[99999] Topmost Layer) ── */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.15s_ease]">
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-[fadeIn_0.15s_ease]">
                     <div
-                        className="relative w-full max-w-sm bg-[var(--card)] rounded-3xl overflow-hidden shadow-2xl border border-[var(--border)] flex flex-col animate-[scaleIn_0.2s_ease]"
+                        className="relative w-full max-w-sm max-h-[92vh] bg-[var(--card)] rounded-3xl overflow-hidden shadow-2xl border border-[var(--border)] flex flex-col animate-[scaleIn_0.2s_ease]"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
-                        <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+                        <div className="p-3.5 sm:p-4 border-b border-[var(--border)] flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-2 min-w-0">
                                 <div className="w-7 h-7 rounded-lg bg-[var(--accent)] flex items-center justify-center shrink-0">
                                     <ScanFace className="w-4 h-4 text-[var(--accent-foreground)]" />
@@ -411,7 +433,7 @@ export function FaceRegistrationCard() {
                         </div>
 
                         {/* Modal Camera Viewport (Portrait 3:4) */}
-                        <div className="relative aspect-[3/4] bg-black overflow-hidden select-none">
+                        <div className="relative aspect-[3/4] max-h-[52vh] bg-black overflow-hidden select-none shrink-0">
                             <video
                                 ref={videoRef}
                                 autoPlay
@@ -422,6 +444,9 @@ export function FaceRegistrationCard() {
                                 }`}
                                 style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
                             />
+
+                            {/* Hidden canvas for ultra-fast downscaled inference */}
+                            <canvas ref={canvasRef} className="hidden" />
 
                             {/* Loading Camera / Models Overlay */}
                             {!faceStreaming && (
@@ -440,10 +465,10 @@ export function FaceRegistrationCard() {
                             {faceStreaming && (
                                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                                     {/* Dark vignette outside oval */}
-                                    <div className="absolute inset-0 bg-black/30" />
+                                    <div className="absolute inset-0 bg-black/25" />
 
                                     {/* Responsive Oval */}
-                                    <div className={`relative w-48 h-64 rounded-[50%] border-2 transition-all duration-300 bg-transparent ${
+                                    <div className={`relative w-44 h-60 rounded-[50%] border-2 transition-all duration-300 bg-transparent ${
                                         step === "detecting"
                                             ? "border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.6)]"
                                             : step === "saving"
@@ -459,7 +484,7 @@ export function FaceRegistrationCard() {
                                     </div>
 
                                     {/* Distance / Lighting Tip */}
-                                    <div className="absolute bottom-3 left-0 right-0 flex justify-center px-4">
+                                    <div className="absolute bottom-2.5 left-0 right-0 flex justify-center px-4">
                                         <span className="text-[10px] font-semibold px-3 py-1 rounded-full bg-black/60 text-white backdrop-blur-sm border border-white/10 shadow-sm text-center">
                                             {step === "detecting"
                                                 ? "Memindai wajah... Tahan posisi"
@@ -473,7 +498,7 @@ export function FaceRegistrationCard() {
                         </div>
 
                         {/* Modal Footer / Feedback & Actions */}
-                        <div className="p-4 bg-[var(--card)] space-y-3">
+                        <div className="p-3.5 sm:p-4 bg-[var(--card)] space-y-3 shrink-0">
                             {/* In-Modal Alert Message */}
                             {modalMessage && (
                                 <div
