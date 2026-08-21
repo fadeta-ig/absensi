@@ -49,6 +49,7 @@ import {
     detectFaceDescriptorDetailed,
     detectFaceDescriptors,
     FACE_THRESHOLD,
+    ensureStableFaceRecognitionBackend,
     loadFaceModels,
 } from "@/lib/faceRecognition";
 
@@ -69,6 +70,10 @@ describe("faceRecognition", () => {
         expect(FACE_THRESHOLD).toBe(0.92);
         expect(compareFaces([0], [0.91]).match).toBe(true);
         expect(compareFaces([0], [0.93]).match).toBe(false);
+    });
+
+    it("menginisialisasi backend CPU stabil tanpa error", async () => {
+        await expect(ensureStableFaceRecognitionBackend()).resolves.toBeUndefined();
     });
 
     it("mencoba frame berikutnya saat wajah tidak terdeteksi", async () => {

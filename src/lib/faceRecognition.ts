@@ -48,7 +48,7 @@ function errorMessage(error: unknown): string {
  * error saat inferensi. Pendaftaran memilih backend CPU yang lebih lambat,
  * tetapi stabil dan tidak bergantung pada driver GPU perangkat.
  */
-export async function useStableFaceRecognitionBackend(): Promise<void> {
+export async function ensureStableFaceRecognitionBackend(): Promise<void> {
     if (faceapi.tf.getBackend() === "cpu") return;
     if (cpuBackendPromise) return cpuBackendPromise;
 

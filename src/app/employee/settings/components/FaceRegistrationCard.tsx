@@ -175,9 +175,9 @@ export function FaceRegistrationCard() {
             if (analysisRunRef.current !== runId) return;
             setSelectedImageSrc(scaledCanvas.toDataURL("image/jpeg", 0.9));
 
-            const { useStableFaceRecognitionBackend, loadFaceModels, detectFaceDescriptorDetailed } = await import("@/lib/faceRecognition");
+            const { ensureStableFaceRecognitionBackend, loadFaceModels, detectFaceDescriptorDetailed } = await import("@/lib/faceRecognition");
             await withTimeout(
-                useStableFaceRecognitionBackend(),
+                ensureStableFaceRecognitionBackend(),
                 MODEL_LOAD_TIMEOUT_MS,
                 "Persiapan mesin pemindai"
             );
