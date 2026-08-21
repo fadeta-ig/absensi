@@ -1,5 +1,7 @@
 /**
  * Face Recognition — face-api.js wrapper
+ * Dilengkapi dengan 3-Tier Multi-Level Detection Ladder
+ * untuk mendeteksi wajah dalam berbagai kondisi pencahayaan dan sudut kamera HP.
  *
  * Logging: hanya warn & error yang dikirim ke server.
  * Info/debug di-drop oleh clientLogger (silent).
@@ -29,12 +31,12 @@ const DEFAULT_THRESHOLD = (() => {
 export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 
 /** Konfigurasi scan multi-frame untuk kamera. */
-export const FACE_SCAN_ATTEMPTS = 4;
-export const FACE_SCAN_MIN_DETECTIONS = 2;
-export const FACE_SCAN_INTERVAL_MS = 180;
+export const FACE_SCAN_ATTEMPTS = 5;
+export const FACE_SCAN_MIN_DETECTIONS = 1;
+export const FACE_SCAN_INTERVAL_MS = 150;
 
-/** Confidence detektor; 0.20 optimal untuk mendeteksi wajah dengan akurat tanpa delay. */
-const FACE_DETECTION_MIN_CONFIDENCE = 0.20;
+/** Confidence detektor dasar (0.10) toleran terhadap kamera HP. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.10;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
@@ -74,14 +76,17 @@ export async function loadFaceModels(): Promise<void> {
 
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
+ * Menggunakan 3-Tier Multi-Level Detection Ladder:
+ * Tier 1: detectSingleFace standar (confidence 0.10)
+ * Tier 2: detectAllFaces fallback (memilih wajah terbesar, toleran terhadap boundary clipping)
+ * Tier 3: Low-light fallback (confidence 0.05 untuk pencahayaan minim/backlight)
  * Return `null` jika tidak ada wajah terdeteksi.
  */
 export async function detectFaceDescriptor(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> {
     if (!modelsLoaded) {
-        log.error("detectFaceDescriptor dipanggil sebelum model selesai di-load");
-        return null;
+        await loadFaceModels();
     }
 
     if (typeof HTMLVideoElement !== "undefined" && input instanceof HTMLVideoElement) {
@@ -94,16 +99,48 @@ export async function detectFaceDescriptor(
         const options = new faceapi.SsdMobilenetv1Options({
             minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
         });
-        const detection = await faceapi
+
+        // Tier 1: Deteksi single face utama
+        const single = await faceapi
             .detectSingleFace(input, options)
             .withFaceLandmarks()
             .withFaceDescriptor();
 
-        if (!detection) {
-            return null;
+        if (single?.descriptor) {
+            return single.descriptor;
         }
 
-        return detection.descriptor;
+        // Tier 2: Fallback detectAllFaces (mengambil bounding box wajah paling dominan)
+        const allDetections = await faceapi
+            .detectAllFaces(input, options)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+
+        if (allDetections && allDetections.length > 0) {
+            const best = allDetections.reduce((largest, curr) => {
+                const currArea = curr.detection.box.width * curr.detection.box.height;
+                const largestArea = largest.detection.box.width * largest.detection.box.height;
+                return currArea > largestArea ? curr : largest;
+            });
+            if (best.descriptor) {
+                return best.descriptor;
+            }
+        }
+
+        // Tier 3: Fallback untuk pencahayaan redup / backlight (confidence 0.05)
+        const lowConfOptions = new faceapi.SsdMobilenetv1Options({
+            minConfidence: 0.05,
+        });
+        const lowConfSingle = await faceapi
+            .detectSingleFace(input, lowConfOptions)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+        if (lowConfSingle?.descriptor) {
+            return lowConfSingle.descriptor;
+        }
+
+        return null;
     } catch (err) {
         log.error("Error saat deteksi wajah", {
             error: err instanceof Error ? err.message : String(err),
@@ -121,7 +158,7 @@ interface MultiFrameDetectionOptions {
 
 /**
  * Pindai beberapa frame video dan kumpulkan descriptor yang berhasil.
- * Pada kamera bagus fungsi berhenti setelah dua hasil.
+ * Pada deteksi pertama yang berhasil, proses dapat langsung selesai.
  */
 export async function detectFaceDescriptors(
     input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
