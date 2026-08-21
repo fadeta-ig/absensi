@@ -80,18 +80,41 @@ export function FaceRegistrationCard() {
             const { loadFaceModels, detectFaceDescriptor } = await import("@/lib/faceRecognition");
             await loadFaceModels();
 
-            // 2. Buat objek HTMLImageElement untuk membaca piksel murni
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.src = imageSrc;
-
-            await new Promise<void>((resolve, reject) => {
-                img.onload = () => resolve();
-                img.onerror = () => reject(new Error("Gagal memuat gambar foto."));
+            // 2. Decode dan resize foto ke dimensi optimal (max 800px)
+            // Foto native HP berukuran 12MP-48MP (4000x3000) yang jika tidak di-resize
+            // akan menyebabkan WebGL crash / Out of Memory di browser HP.
+            const scaledCanvas = await new Promise<HTMLCanvasElement>((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxDim = 800;
+                    let { width, height } = img;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+                    const canvas = document.createElement("canvas");
+                    canvas.width = Math.max(1, width);
+                    canvas.height = Math.max(1, height);
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) {
+                        reject(new Error("Canvas context error"));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas);
+                };
+                img.onerror = () => reject(new Error("Gagal membaca file foto."));
+                // JANGAN pasang crossOrigin untuk Base64 data: URI karena memicu hang di Chrome Android
+                img.src = imageSrc;
             });
 
-            // 3. Jalankan deteksi wajah pada foto statis
-            const descriptor = await detectFaceDescriptor(img);
+            // 3. Jalankan deteksi wajah pada foto teroptimasi
+            const descriptor = await detectFaceDescriptor(scaledCanvas);
 
             if (descriptor) {
                 setDetectedDescriptor(descriptor);
