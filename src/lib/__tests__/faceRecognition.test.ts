@@ -8,9 +8,6 @@ vi.mock("face-api.js", () => ({
     SsdMobilenetv1Options: class {
         constructor(public options: { minConfidence: number }) {}
     },
-    TinyFaceDetectorOptions: class {
-        constructor(public options: { inputSize?: number; scoreThreshold?: number } = {}) {}
-    },
     detectSingleFace,
     detectAllFaces: vi.fn(() => ({
         withFaceLandmarks: () => ({
@@ -21,9 +18,7 @@ vi.mock("face-api.js", () => ({
         Math.sqrt(first.reduce((sum, value, index) => sum + (value - second[index]) ** 2, 0))
     )),
     nets: {
-        tinyFaceDetector: { loadFromUri: vi.fn() },
         ssdMobilenetv1: { loadFromUri: vi.fn() },
-        faceLandmark68TinyNet: { loadFromUri: vi.fn() },
         faceLandmark68Net: { loadFromUri: vi.fn() },
         faceRecognitionNet: { loadFromUri: vi.fn() },
     },
@@ -65,23 +60,21 @@ describe("faceRecognition", () => {
         expect(compareFaces([0], [0.93]).match).toBe(false);
     });
 
-    it("mencoba dual-engine: TinyFaceDetector lalu SSD fallback", async () => {
+    it("mencoba frame berikutnya saat wajah tidak terdeteksi", async () => {
         await loadFaceModels();
         const descriptor = new Float32Array([1, 0]);
-
-        // Engine 1 (Tiny+TinyLandmarks) gagal, Engine 2 (Tiny+StdLandmarks) berhasil
         detectSingleFace
             .mockImplementationOnce(() => detectionChain(null))
             .mockImplementationOnce(() => detectionChain(descriptor));
 
         const results = await detectFaceDescriptors({} as HTMLVideoElement, {
-            attempts: 1,
+            attempts: 2,
             minimumDetections: 1,
             intervalMs: 0,
         });
 
-        // Dipanggil minimal 2x: Engine 1 (Tiny) gagal, Engine 2 (Tiny+StdLandmarks) sukses
         expect(detectSingleFace).toHaveBeenCalledTimes(2);
+        expect(detectSingleFace.mock.calls[0][1].options.minConfidence).toBe(0.15);
         expect(results).toEqual([descriptor]);
     });
 

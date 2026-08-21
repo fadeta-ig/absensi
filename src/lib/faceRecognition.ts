@@ -1,7 +1,7 @@
 /**
  * Face Recognition — face-api.js wrapper
- * Menggunakan TinyFaceDetector teroptimasi (scoreThreshold 0.15)
- * untuk inferensi ultra-cepat (< 30ms) pada perangkat mobile Android/iOS.
+ * Menggunakan SSD MobileNet v1 presisi tinggi (minConfidence 0.15)
+ * dengan fallback detectAllFaces (bounding box terbesar) untuk menangkap selfie HP.
  *
  * Logging: hanya warn & error yang dikirim ke server.
  * Info/debug di-drop oleh clientLogger (silent).
@@ -33,14 +33,17 @@ export const FACE_THRESHOLD = DEFAULT_THRESHOLD;
 /** Konfigurasi scan multi-frame untuk kamera. */
 export const FACE_SCAN_ATTEMPTS = 5;
 export const FACE_SCAN_MIN_DETECTIONS = 1;
-export const FACE_SCAN_INTERVAL_MS = 100;
+export const FACE_SCAN_INTERVAL_MS = 150;
+
+/** Confidence detektor SSD MobileNet v1 (0.15) toleran terhadap kamera selfie HP. */
+const FACE_DETECTION_MIN_CONFIDENCE = 0.15;
 
 let modelsLoaded = false;
 let modelLoadPromise: Promise<void> | null = null;
 
 /**
  * Load face-api.js models dari /models/.
- * Hanya memuat model ringan TinyFaceDetector, TinyLandmarks, dan FaceRecognition.
+ * Hanya load sekali — panggilan berikutnya langsung return.
  */
 export async function loadFaceModels(): Promise<void> {
     if (modelsLoaded) return;
@@ -50,13 +53,12 @@ export async function loadFaceModels(): Promise<void> {
 
     modelLoadPromise = (async () => {
         await Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-            faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+            faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
             faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
             faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
         ]);
         modelsLoaded = true;
-        log.info("Face-api Tiny models berhasil dimuat");
+        log.info("Face-api SSD MobileNet v1 models berhasil dimuat");
     })()
         .catch((err) => {
             log.error("Gagal load face-api models", {
@@ -76,9 +78,9 @@ type FaceInput = HTMLVideoElement | HTMLImageElement | HTMLCanvasElement;
 
 /**
  * Detect a single face dan kembalikan 128-point descriptor.
- *
- * Menggunakan TinyFaceDetector dengan scoreThreshold 0.15 (toleran terhadap selfie HP):
- * Execution time: ~20-30ms per frame di mobile.
+ * 
+ * Menggunakan SSD MobileNet v1 (minConfidence 0.15) dengan fallback detectAllFaces
+ * (memilih wajah terbesar jika posisi selfie terpotong di tepi dahi/layar).
  *
  * Return `null` jika tidak ada wajah terdeteksi.
  */
@@ -96,44 +98,35 @@ export async function detectFaceDescriptor(
     }
 
     try {
-        // Tier 1: TinyFaceDetector 320px (scoreThreshold 0.15) — ultra cepat (~20ms)
-        const tinyOptions320 = new faceapi.TinyFaceDetectorOptions({
-            inputSize: 320,
-            scoreThreshold: 0.15,
+        const options = new faceapi.SsdMobilenetv1Options({
+            minConfidence: FACE_DETECTION_MIN_CONFIDENCE,
         });
 
-        const result320 = await faceapi
-            .detectSingleFace(input, tinyOptions320)
-            .withFaceLandmarks(true)
-            .withFaceDescriptor();
-
-        if (result320?.descriptor) {
-            return result320.descriptor;
-        }
-
-        // Tier 2: Fallback TinyFaceDetector 416px (jika wajah berukuran lebih besar di frame)
-        const tinyOptions416 = new faceapi.TinyFaceDetectorOptions({
-            inputSize: 416,
-            scoreThreshold: 0.15,
-        });
-
-        const result416 = await faceapi
-            .detectSingleFace(input, tinyOptions416)
-            .withFaceLandmarks(true)
-            .withFaceDescriptor();
-
-        if (result416?.descriptor) {
-            return result416.descriptor;
-        }
-
-        // Tier 3: Fallback ke Standard Landmarks jika Tiny Landmarks terlewat
-        const resultStdLandmarks = await faceapi
-            .detectSingleFace(input, tinyOptions320)
+        // Pass 1: Single face detection utama
+        const single = await faceapi
+            .detectSingleFace(input, options)
             .withFaceLandmarks()
             .withFaceDescriptor();
 
-        if (resultStdLandmarks?.descriptor) {
-            return resultStdLandmarks.descriptor;
+        if (single?.descriptor) {
+            return single.descriptor;
+        }
+
+        // Pass 2: Fallback detectAllFaces (mengambil bounding box wajah paling dominan di selfie)
+        const allDetections = await faceapi
+            .detectAllFaces(input, options)
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+
+        if (allDetections && allDetections.length > 0) {
+            const best = allDetections.reduce((largest, curr) => {
+                const currArea = curr.detection.box.width * curr.detection.box.height;
+                const largestArea = largest.detection.box.width * largest.detection.box.height;
+                return currArea > largestArea ? curr : largest;
+            });
+            if (best.descriptor) {
+                return best.descriptor;
+            }
         }
 
         return null;
