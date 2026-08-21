@@ -296,7 +296,7 @@ export default function AttendancePage() {
                 setFaceVerification({
                     status: "mismatch",
                     distance: result.distance,
-                    message: `Wajah belum cocok dari ${descriptors.length} frame. Bersihkan lensa, hadapkan wajah ke cahaya, lalu coba lagi.`,
+                    message: "Wajah belum cocok. Bersihkan lensa, hadapkan wajah ke cahaya, lalu coba lagi.",
                 });
             }
         } catch (err) {
