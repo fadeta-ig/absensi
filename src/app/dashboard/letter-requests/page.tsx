@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-    FileText, Search, Filter
+    FileText, Search, Filter, RotateCcw
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -128,6 +128,21 @@ export default function LetterRequestsPage() {
         setActionNotes(req.notes ?? "");
     };
 
+    const resetFilters = () => {
+        setSearch("");
+        setStatusFilter("ALL");
+        setTypeFilter("ALL");
+        setCurrentPage(1);
+    };
+
+    const hasActiveFilters = Boolean(search || statusFilter !== "ALL" || typeFilter !== "ALL");
+
+    const activeFilterCount = [
+        Boolean(search),
+        statusFilter !== "ALL",
+        typeFilter !== "ALL",
+    ].filter(Boolean).length;
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
 
@@ -162,12 +177,12 @@ export default function LetterRequestsPage() {
             </div>
 
             {/* ── Filters ─────────────────────────────────────────────────── */}
-            <div className="card p-4">
+            <div className="card p-4 space-y-3">
                 <div className="flex flex-wrap gap-3">
                     <div className="relative flex-1 min-w-[220px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                         <input
-                            className="form-input pl-10"
+                            className="form-input pl-10 w-full"
                             placeholder="Cari nama, ID, atau tujuan..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -176,17 +191,33 @@ export default function LetterRequestsPage() {
                     <div className="relative min-w-[160px]">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                         <select
-                            className="form-select pl-10"
+                            className="form-select pl-10 w-full"
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value as LetterType | "ALL")}
                         >
-                            <option value="ALL">Semua Jenis</option>
+                            <option value="ALL">Semua Jenis Surat</option>
                             {Object.entries(TYPE_CONFIG).map(([k, v]) => (
                                 <option key={k} value={k}>{v.label}</option>
                             ))}
                         </select>
                     </div>
                 </div>
+
+                {hasActiveFilters && (
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                        <span className="text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2.5 py-0.5 rounded-full">
+                            {activeFilterCount} filter aktif {statusFilter !== "ALL" && `(${STATUS_CONFIG[statusFilter].label})`}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Reset Filter
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* ── Table ───────────────────────────────────────────────────── */}

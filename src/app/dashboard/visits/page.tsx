@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MapPinned, Search, Filter } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { MapPinned, Search, Filter, Calendar, RotateCcw } from "lucide-react";
 import { VisitStatus } from "@/types";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { getToday, getThisWeekRange, getThisMonthRange, isDateInRange } from "@/lib/datePresets";
 
 import { VisitListTable } from "./components/VisitListTable";
 import { VisitDetailModal } from "./components/VisitDetailModal";
@@ -15,6 +16,9 @@ export default function DashboardVisitsPage() {
     const [visits, setVisits] = useState<VisitReport[]>([]);
     const [search, setSearch] = useState("");
     const [filterStatus, setFilterStatus] = useState<"all" | "unchecked" | "checked">("all");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [datePreset, setDatePreset] = useState<"all" | "today" | "this_week" | "this_month" | "custom">("all");
     const [selectedVisit, setSelectedVisit] = useState<VisitReport | null>(null);
     const [updating, setUpdating] = useState<string | null>(null);
     const [initialLoading, setInitialLoading] = useState(true);
@@ -68,20 +72,23 @@ export default function DashboardVisitsPage() {
         }
     };
 
-    const filtered = visits.filter((v) => {
-        const searchLower = search.toLowerCase();
-        const matchSearch = v.clientName.toLowerCase().includes(searchLower) ||
-            v.employeeId.toLowerCase().includes(searchLower) ||
-            (v.employeeName || "").toLowerCase().includes(searchLower) ||
-            v.purpose.toLowerCase().includes(searchLower);
-        let matchStatus = true;
-        if (filterStatus === "unchecked") {
-            matchStatus = !v.hrChecked;
-        } else if (filterStatus === "checked") {
-            matchStatus = v.hrChecked;
-        }
-        return matchSearch && matchStatus;
-    });
+    const filtered = useMemo(() => {
+        return visits.filter((v) => {
+            const searchLower = search.toLowerCase();
+            const matchSearch = v.clientName.toLowerCase().includes(searchLower) ||
+                v.employeeId.toLowerCase().includes(searchLower) ||
+                (v.employeeName || "").toLowerCase().includes(searchLower) ||
+                v.purpose.toLowerCase().includes(searchLower);
+            let matchStatus = true;
+            if (filterStatus === "unchecked") {
+                matchStatus = !v.hrChecked;
+            } else if (filterStatus === "checked") {
+                matchStatus = v.hrChecked;
+            }
+            const matchDate = isDateInRange(v.date, startDate || undefined, endDate || undefined);
+            return matchSearch && matchStatus && matchDate;
+        });
+    }, [visits, search, filterStatus, startDate, endDate]);
 
     const statusCounts = {
         all: visits.length,
@@ -90,6 +97,42 @@ export default function DashboardVisitsPage() {
         unchecked: visits.filter((v) => v.status === "clocked_out" && !v.hrChecked).length,
         checked: visits.filter((v) => v.status === "clocked_out" && v.hrChecked).length,
     };
+
+    const applyDatePreset = (preset: "all" | "today" | "this_week" | "this_month") => {
+        setDatePreset(preset);
+        if (preset === "all") {
+            setStartDate("");
+            setEndDate("");
+        } else if (preset === "today") {
+            const today = getToday();
+            setStartDate(today);
+            setEndDate(today);
+        } else if (preset === "this_week") {
+            const range = getThisWeekRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        } else if (preset === "this_month") {
+            const range = getThisMonthRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        }
+    };
+
+    const resetFilters = () => {
+        setSearch("");
+        setFilterStatus("all");
+        setStartDate("");
+        setEndDate("");
+        setDatePreset("all");
+    };
+
+    const hasActiveFilters = Boolean(search || filterStatus !== "all" || startDate || endDate);
+
+    const activeFilterCount = [
+        Boolean(search),
+        filterStatus !== "all",
+        Boolean(startDate || endDate),
+    ].filter(Boolean).length;
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -117,33 +160,103 @@ export default function DashboardVisitsPage() {
                 ))}
             </div>
 
-            {/* Search & Filter */}
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                    <input
-                        type="text"
-                        className="form-input pl-10"
-                        placeholder="Cari nama, ID karyawan, klien, atau tujuan..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
+            {/* Search & Filter Bar */}
+            <div className="card p-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+                    <div className="relative sm:col-span-2 lg:col-span-5">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                        <input
+                            type="text"
+                            className="form-input pl-10 w-full"
+                            placeholder="Cari nama, ID karyawan, klien, atau tujuan..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <div className="lg:col-span-3 flex items-center gap-1.5 flex-wrap">
+                        {FILTER_OPTIONS.map((opt) => (
+                            <button
+                                key={opt.key}
+                                type="button"
+                                onClick={() => setFilterStatus(opt.key)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                    filterStatus === opt.key
+                                        ? "bg-[var(--primary)] text-white shadow-sm"
+                                        : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
+                                }`}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-4">
+                        <div className="relative flex-1">
+                            <input
+                                type="date"
+                                className="form-input text-xs w-full"
+                                value={startDate}
+                                onChange={(e) => { setStartDate(e.target.value); setDatePreset("custom"); }}
+                                title="Tanggal Mulai"
+                            />
+                        </div>
+                        <span className="text-xs text-[var(--text-muted)] shrink-0">s/d</span>
+                        <div className="relative flex-1">
+                            <input
+                                type="date"
+                                className="form-input text-xs w-full"
+                                value={endDate}
+                                onChange={(e) => { setEndDate(e.target.value); setDatePreset("custom"); }}
+                                title="Tanggal Selesai"
+                            />
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <Filter className="w-4 h-4 text-[var(--text-muted)]" />
-                    {FILTER_OPTIONS.map((opt) => (
-                        <button
-                            key={opt.key}
-                            onClick={() => setFilterStatus(opt.key)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                                filterStatus === opt.key
-                                    ? "bg-[var(--primary)] text-white"
-                                    : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
+
+                {/* Secondary Row: Quick Date Presets & Reset */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-medium text-[var(--text-muted)] mr-1 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Periode:
+                        </span>
+                        {[
+                            { key: "all", label: "Semua" },
+                            { key: "today", label: "Hari Ini" },
+                            { key: "this_week", label: "Minggu Ini" },
+                            { key: "this_month", label: "Bulan Ini" },
+                        ].map((preset) => (
+                            <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => applyDatePreset(preset.key as "all" | "today" | "this_week" | "this_month")}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                    datePreset === preset.key
+                                        ? "bg-[var(--primary)] text-white shadow-sm"
+                                        : "bg-[var(--secondary)]/50 text-[var(--text-secondary)] hover:bg-[var(--secondary)]"
+                                }`}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        {activeFilterCount > 0 && (
+                            <span className="text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2.5 py-0.5 rounded-full">
+                                {activeFilterCount} filter aktif
+                            </span>
+                        )}
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Reset Filter
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

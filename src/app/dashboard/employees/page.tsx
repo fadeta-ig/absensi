@@ -16,7 +16,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
-interface MasterOption { id: string; name: string; divisionId?: string; }
+interface MasterOption { id: string; name: string; divisionId?: string; division?: { name: string }; }
 interface Employee {
     id: string; employeeId: string; name: string; email: string; phone: string;
     department: string; division?: string | null; position: string; isActive: boolean; joinDate: string; shiftId?: string;
@@ -156,6 +156,21 @@ export default function EmployeesPage() {
 
     const clearSelection = () => setSelectedIds(new Set());
 
+    const availableDepartments = useMemo(() => {
+        if (divisionFilter === "all") return departments;
+        const selectedDiv = divisions.find(d => d.name === divisionFilter);
+        return departments.filter(d => {
+            if (d.division?.name) return d.division.name === divisionFilter;
+            if (selectedDiv && d.divisionId) return d.divisionId === selectedDiv.id;
+            return true;
+        });
+    }, [departments, divisions, divisionFilter]);
+
+    const handleDivisionChange = (val: string) => {
+        setDivisionFilter(val);
+        setDepartmentFilter("all");
+    };
+
     const resetFilters = () => {
         setSearch("");
         setStatusFilter("all");
@@ -164,7 +179,15 @@ export default function EmployeesPage() {
         setTypeFilter("all");
     };
 
-    const hasActiveFilters = search || statusFilter !== "all" || divisionFilter !== "all" || departmentFilter !== "all" || typeFilter !== "all";
+    const hasActiveFilters = Boolean(search || statusFilter !== "all" || divisionFilter !== "all" || departmentFilter !== "all" || typeFilter !== "all");
+
+    const activeFilterCount = [
+        Boolean(search),
+        statusFilter !== "all",
+        divisionFilter !== "all",
+        departmentFilter !== "all",
+        typeFilter !== "all",
+    ].filter(Boolean).length;
 
     const getShiftName = (sId?: string) => {
         if (!sId) return "-";
@@ -307,7 +330,7 @@ export default function EmployeesPage() {
                         <select
                             className="form-select w-full"
                             value={divisionFilter}
-                            onChange={(e) => setDivisionFilter(e.target.value)}
+                            onChange={(e) => handleDivisionChange(e.target.value)}
                         >
                             <option value="all">Semua Divisi</option>
                             {divisions.map(d => (
@@ -323,8 +346,10 @@ export default function EmployeesPage() {
                             value={departmentFilter}
                             onChange={(e) => setDepartmentFilter(e.target.value)}
                         >
-                            <option value="all">Semua Departemen</option>
-                            {departments.map(d => (
+                            <option value="all">
+                                {divisionFilter === "all" ? "Semua Departemen" : `Semua Dept (${divisionFilter})`}
+                            </option>
+                            {availableDepartments.map(d => (
                                 <option key={d.id} value={d.name}>{d.name}</option>
                             ))}
                         </select>
@@ -346,7 +371,7 @@ export default function EmployeesPage() {
                     </div>
                 </div>
 
-                {/* Secondary row: Status segmented toggle and Reset */}
+                {/* Secondary row: Status segmented toggle, Counter, and Reset */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
                     <div className="flex w-fit rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 p-1">
                         {([
@@ -365,16 +390,23 @@ export default function EmployeesPage() {
                         ))}
                     </div>
 
-                    {hasActiveFilters && (
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
-                        >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            Reset Filter
-                        </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                        {activeFilterCount > 0 && (
+                            <span className="text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2.5 py-0.5 rounded-full">
+                                {activeFilterCount} filter aktif
+                            </span>
+                        )}
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Reset Filter
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

@@ -11,6 +11,7 @@ import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { exportToExcel } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { getThisMonthRange, getLastMonthRange, getThisYearRange, isDateInRange } from "@/lib/datePresets";
 
 interface OvertimeRequest {
     id: string;
@@ -39,6 +40,9 @@ export default function DashboardOvertimePage() {
     const [requests, setRequests] = useState<OvertimeRequest[]>([]);
     const [search, setSearch] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [datePreset, setDatePreset] = useState<"all" | "this_month" | "last_month" | "this_year" | "custom">("all");
     const [selectedReq, setSelectedReq] = useState<OvertimeRequest | null>(null);
     const [updating, setUpdating] = useState<string | null>(null);
     const [approvedHoursInput, setApprovedHoursInput] = useState<number>(0);
@@ -79,7 +83,7 @@ export default function DashboardOvertimePage() {
     // Reset pagination to page 1 on filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, filterStatus, pageSize]);
+    }, [search, filterStatus, startDate, endDate, pageSize]);
 
     const handleStatusUpdate = async (id: string, status: "approved" | "rejected") => {
         setUpdating(id);
@@ -193,9 +197,10 @@ export default function DashboardOvertimePage() {
                 empName.toLowerCase().includes(search.toLowerCase()) ||
                 r.reason.toLowerCase().includes(search.toLowerCase());
             const matchStatus = filterStatus === "all" || r.status === filterStatus;
-            return matchSearch && matchStatus;
+            const matchDate = isDateInRange(r.date, startDate || undefined, endDate || undefined);
+            return matchSearch && matchStatus && matchDate;
         });
-    }, [requests, search, filterStatus]);
+    }, [requests, search, filterStatus, startDate, endDate]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedRequests = useMemo(() => {
@@ -243,12 +248,41 @@ export default function DashboardOvertimePage() {
 
     const totalApprovedHours = requests.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.hours, 0);
 
+    const applyDatePreset = (preset: "all" | "this_month" | "last_month" | "this_year") => {
+        setDatePreset(preset);
+        if (preset === "all") {
+            setStartDate("");
+            setEndDate("");
+        } else if (preset === "this_month") {
+            const range = getThisMonthRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        } else if (preset === "last_month") {
+            const range = getLastMonthRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        } else if (preset === "this_year") {
+            const range = getThisYearRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        }
+    };
+
     const resetFilters = () => {
         setSearch("");
         setFilterStatus("all");
+        setStartDate("");
+        setEndDate("");
+        setDatePreset("all");
     };
 
-    const hasActiveFilters = search || filterStatus !== "all";
+    const hasActiveFilters = Boolean(search || filterStatus !== "all" || startDate || endDate);
+
+    const activeFilterCount = [
+        Boolean(search),
+        filterStatus !== "all",
+        Boolean(startDate || endDate),
+    ].filter(Boolean).length;
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -286,8 +320,8 @@ export default function DashboardOvertimePage() {
 
             {/* Search & Filter Bar */}
             <div className="card p-4 space-y-3">
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+                    <div className="relative sm:col-span-2 lg:col-span-4">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                         <input
                             type="text"
@@ -297,10 +331,11 @@ export default function DashboardOvertimePage() {
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="lg:col-span-4 flex items-center gap-1.5 flex-wrap">
                         {(["all", "pending", "approved", "rejected"] as const).map((s) => (
                             <button
                                 key={s}
+                                type="button"
                                 onClick={() => setFilterStatus(s)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filterStatus === s ? "bg-[var(--primary)] text-white shadow-sm" : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"}`}
                             >
@@ -308,20 +343,75 @@ export default function DashboardOvertimePage() {
                             </button>
                         ))}
                     </div>
+                    <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-4">
+                        <div className="relative flex-1">
+                            <input
+                                type="date"
+                                className="form-input text-xs w-full"
+                                value={startDate}
+                                onChange={(e) => { setStartDate(e.target.value); setDatePreset("custom"); }}
+                                title="Tanggal Mulai"
+                            />
+                        </div>
+                        <span className="text-xs text-[var(--text-muted)] shrink-0">s/d</span>
+                        <div className="relative flex-1">
+                            <input
+                                type="date"
+                                className="form-input text-xs w-full"
+                                value={endDate}
+                                onChange={(e) => { setEndDate(e.target.value); setDatePreset("custom"); }}
+                                title="Tanggal Selesai"
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                {hasActiveFilters && (
-                    <div className="flex justify-end pt-2 border-t border-[var(--border)]">
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
-                        >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            Reset Filter
-                        </button>
+                {/* Secondary Row: Quick Date Presets & Reset */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-medium text-[var(--text-muted)] mr-1 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Periode:
+                        </span>
+                        {[
+                            { key: "all", label: "Semua" },
+                            { key: "this_month", label: "Bulan Ini" },
+                            { key: "last_month", label: "Bulan Lalu" },
+                            { key: "this_year", label: "Tahun Ini" },
+                        ].map((preset) => (
+                            <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => applyDatePreset(preset.key as "all" | "this_month" | "last_month" | "this_year")}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                    datePreset === preset.key
+                                        ? "bg-[var(--primary)] text-white shadow-sm"
+                                        : "bg-[var(--secondary)]/50 text-[var(--text-secondary)] hover:bg-[var(--secondary)]"
+                                }`}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
                     </div>
-                )}
+
+                    <div className="flex items-center gap-3">
+                        {activeFilterCount > 0 && (
+                            <span className="text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2.5 py-0.5 rounded-full">
+                                {activeFilterCount} filter aktif
+                            </span>
+                        )}
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Reset Filter
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Table */}

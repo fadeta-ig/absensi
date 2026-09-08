@@ -838,6 +838,7 @@ Panduan bagi pengembang berikutnya jika ingin menambahkan fitur baru ke dalam pr
 | **Employee Service**| `src/lib/services/employeeService.ts` | Layanan direktori karyawan & traversal hierarki bawahan BFS. |
 | **Bulk Import** | `src/lib/services/bulk-import/` | Engine validasi & eksekusi impor massal karyawan via Excel. |
 | **Payroll Engine** | `src/lib/services/pph21Service.ts` & `bpjsService.ts` | Kalkulator pajak PPh 21 TER dan jaminan sosial BPJS regulasi Indonesia. |
+| **Date Presets** | `src/lib/datePresets.ts` | Standarisasi preset rentang tanggal (Hari Ini, Kemarin, Minggu Ini, Bulan Ini) & filter memori. |
 | **Test Helper** | `tests/utils/apiTestHelper.ts` | Utilitas autentikasi dan HTTP fetch otomatis untuk testing Vitest. |
 
 ---
@@ -851,3 +852,22 @@ Panduan bagi pengembang berikutnya jika ingin menambahkan fitur baru ke dalam pr
 - **Backend:** Mengutamakan keamanan berlapis: validasi token JWT dengan pengecekan database `sessionVersion`, proteksi brute force rate limiting ganda (IP & akun), sanitasi XSS input, telemetri error client, dan pencatatan audit log otomatis pada setiap mutasi data.
 - **Important Rules:** Seluruh kalkulasi tanggal wajib berpatokan pada zona waktu Indonesia Barat (`Asia/Jakarta` / WIB); data identitas sensitif (KTP/Bank/BPJS) wajib terenkripsi; aset inventaris wajib memiliki rekam jejak riwayat mutasi dan BAST; berkas foto kunjungan wajib divalidasi keaslian hash SHA-256 dan distamp watermark sebelum diarsipkan.
 - **How To Extend:** Buat model di Prisma jika diperlukan ➔ tambahkan skema validasi Zod di `validationSchemas.ts` ➔ implementasikan logika di `src/lib/services/` ➔ buat route handler di `src/app/api/` dengan `requireAuth` & `validateBody` ➔ bangun halaman di `src/app/<portal>/` menggunakan komponen `AppShell` dan atomik UI yang ada ➔ lengkapi dengan automated test di `tests/`.
+
+---
+
+## 15. Standardized HR UI/UX Filter Architecture (New 2026)
+
+Untuk memastikan pengalaman pengguna HR konsisten, cepat, dan intuitif di seluruh modul portal HR (`/dashboard/*`, tidak mencakup GA):
+1. **Quick Date Presets:**
+   - Menyediakan tombol pintas 1-klik: `Semua`, `Hari Ini`, `Kemarin`, `Minggu Ini`, `Bulan Ini`, `Bulan Lalu`.
+   - Menggunakan kalkulator terpusat di `src/lib/datePresets.ts` (`getToday()`, `getYesterday()`, `getThisWeekRange()`, `getThisMonthRange()`, `getLastMonthRange()`, `isDateInRange()`).
+2. **Cascading Dropdowns (Division ➔ Department):**
+   - Pemilihan Divisi secara otomatis memfilter opsi Departemen yang relevan.
+   - Saat Divisi diubah atau di-reset, filter Departemen otomatis di-reset ke nilai default (`all`/`""`), mencegah anomali data kombinasi divisi-departemen yang tidak valid.
+3. **1-Click Reset Filter & Active Filter Counter:**
+   - Setiap bilah filter dilengkapi tombol **Reset Filter** (ikon `RotateCcw`) yang membersihkan semua parameter filter secara instan tanpa perlu me-reload browser.
+   - Indikator badge `X filter aktif` tampil dinamis memberikan kejelasan visual kepada HR kapan data sedang tersegmentasi.
+4. **Zero-Database Risk:**
+   - Seluruh filtering beroperasi murni pada *client-side reactive state* (`useMemo`) dan/atau parameter query HTTP `GET` read-only.
+   - Tidak ada mutasi, skema, tabel, maupun data production database yang disentuh.
+

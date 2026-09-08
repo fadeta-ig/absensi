@@ -31,6 +31,8 @@ export interface AttendanceRecord {
 export interface MasterData {
     id: string;
     name: string;
+    divisionId?: string;
+    division?: { name: string };
 }
 
 export interface AttendanceCorrection {

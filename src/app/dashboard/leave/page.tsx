@@ -27,6 +27,7 @@ import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { exportToExcel } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { getThisMonthRange, getLastMonthRange, getThisYearRange, isRangeOverlapping } from "@/lib/datePresets";
 
 interface LeaveRequest {
     id: string;
@@ -47,6 +48,9 @@ export default function LeaveManagementPage() {
     const [filterStatus, setFilterStatus] = useState("all");
     const [filterType, setFilterType] = useState("all");
     const [searchTerm, setSearchTerm] = useState("");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [datePreset, setDatePreset] = useState<"all" | "this_month" | "last_month" | "this_year" | "custom">("all");
     
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -93,7 +97,7 @@ export default function LeaveManagementPage() {
     // Reset pagination to page 1 on filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [filterStatus, filterType, searchTerm, pageSize]);
+    }, [filterStatus, filterType, searchTerm, startDate, endDate, pageSize]);
 
     const stats = useMemo(() => ({
         total: leaves.length,
@@ -109,9 +113,10 @@ export default function LeaveManagementPage() {
             const matchesSearch = l.employee?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 l.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 l.reason.toLowerCase().includes(searchTerm.toLowerCase());
-            return matchesStatus && matchesType && matchesSearch;
+            const matchesDate = isRangeOverlapping(l.startDate, l.endDate, startDate || undefined, endDate || undefined);
+            return matchesStatus && matchesType && matchesSearch && matchesDate;
         });
-    }, [leaves, filterStatus, filterType, searchTerm]);
+    }, [leaves, filterStatus, filterType, searchTerm, startDate, endDate]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedLeaves = useMemo(() => {
@@ -315,13 +320,49 @@ export default function LeaveManagementPage() {
         { label: "Ditolak", value: stats.rejected, icon: XCircle, color: "text-red-600", bg: "bg-red-500/10" },
     ];
 
+    const applyDatePreset = (preset: "all" | "this_month" | "last_month" | "this_year") => {
+        setDatePreset(preset);
+        if (preset === "all") {
+            setStartDate("");
+            setEndDate("");
+        } else if (preset === "this_month") {
+            const range = getThisMonthRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        } else if (preset === "last_month") {
+            const range = getLastMonthRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        } else if (preset === "this_year") {
+            const range = getThisYearRange();
+            setStartDate(range.start);
+            setEndDate(range.end);
+        }
+    };
+
     const resetFilters = () => {
         setSearchTerm("");
         setFilterStatus("all");
         setFilterType("all");
+        setStartDate("");
+        setEndDate("");
+        setDatePreset("all");
     };
 
-    const hasActiveFilters = searchTerm || filterStatus !== "all" || filterType !== "all";
+    const hasActiveFilters = Boolean(
+        searchTerm ||
+        filterStatus !== "all" ||
+        filterType !== "all" ||
+        startDate ||
+        endDate
+    );
+
+    const activeFilterCount = [
+        Boolean(searchTerm),
+        filterStatus !== "all",
+        filterType !== "all",
+        Boolean(startDate || endDate),
+    ].filter(Boolean).length;
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -365,8 +406,9 @@ export default function LeaveManagementPage() {
 
             {/* Filter Bar */}
             <div className="card p-4 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="relative md:col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+                    {/* Search */}
+                    <div className="relative sm:col-span-2 lg:col-span-4">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                         <input
                             type="text"
@@ -376,7 +418,8 @@ export default function LeaveManagementPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <div>
+                    {/* Status */}
+                    <div className="lg:col-span-2">
                         <select
                             className="form-select w-full"
                             value={filterStatus}
@@ -388,7 +431,8 @@ export default function LeaveManagementPage() {
                             <option value="rejected">Ditolak</option>
                         </select>
                     </div>
-                    <div>
+                    {/* Type */}
+                    <div className="lg:col-span-2">
                         <select
                             className="form-select w-full"
                             value={filterType}
@@ -401,20 +445,76 @@ export default function LeaveManagementPage() {
                             <option value="maternity">Melahirkan</option>
                         </select>
                     </div>
+                    {/* Date Inputs */}
+                    <div className="flex items-center gap-1.5 sm:col-span-2 lg:col-span-4">
+                        <div className="relative flex-1">
+                            <input
+                                type="date"
+                                className="form-input text-xs w-full"
+                                value={startDate}
+                                onChange={(e) => { setStartDate(e.target.value); setDatePreset("custom"); }}
+                                title="Tanggal Mulai"
+                            />
+                        </div>
+                        <span className="text-xs text-[var(--text-muted)] shrink-0">s/d</span>
+                        <div className="relative flex-1">
+                            <input
+                                type="date"
+                                className="form-input text-xs w-full"
+                                value={endDate}
+                                onChange={(e) => { setEndDate(e.target.value); setDatePreset("custom"); }}
+                                title="Tanggal Selesai"
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                {hasActiveFilters && (
-                    <div className="flex justify-end pt-2 border-t border-[var(--border)]">
-                        <button
-                            type="button"
-                            onClick={resetFilters}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
-                        >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            Reset Filter
-                        </button>
+                {/* Secondary Row: Quick Date Presets & Reset */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-medium text-[var(--text-muted)] mr-1 flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Periode:
+                        </span>
+                        {[
+                            { key: "all", label: "Semua" },
+                            { key: "this_month", label: "Bulan Ini" },
+                            { key: "last_month", label: "Bulan Lalu" },
+                            { key: "this_year", label: "Tahun Ini" },
+                        ].map((preset) => (
+                            <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => applyDatePreset(preset.key as "all" | "this_month" | "last_month" | "this_year")}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                    datePreset === preset.key
+                                        ? "bg-[var(--primary)] text-white shadow-sm"
+                                        : "bg-[var(--secondary)]/50 text-[var(--text-secondary)] hover:bg-[var(--secondary)]"
+                                }`}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
                     </div>
-                )}
+
+                    <div className="flex items-center gap-3">
+                        {activeFilterCount > 0 && (
+                            <span className="text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2.5 py-0.5 rounded-full">
+                                {activeFilterCount} filter aktif
+                            </span>
+                        )}
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Reset Filter
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Table */}

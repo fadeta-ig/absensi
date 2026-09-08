@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight, AlertCircle, RotateCcw } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface AuditUser {
@@ -100,6 +100,21 @@ export default function AuditTrailPage() {
         return <span className="text-[var(--text-primary)] font-semibold">{action}</span>;
     };
 
+    const resetFilters = () => {
+        setSearch("");
+        setActionFilter("");
+        setEntityFilter("");
+        setPage(1);
+    };
+
+    const hasActiveFilters = Boolean(search || actionFilter || entityFilter);
+
+    const activeFilterCount = [
+        Boolean(search),
+        Boolean(actionFilter),
+        Boolean(entityFilter),
+    ].filter(Boolean).length;
+
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             {/* Header */}
@@ -110,18 +125,13 @@ export default function AuditTrailPage() {
                         Sistem Audit Trail
                     </h1>
                     <p className="text-sm text-[var(--text-secondary)] mt-1">
-                        Rekam jejak aktivitas kritikal Administrator di dalam sistem.
+                        Memantau aktivitas perubahan data krusial secara real-time dan immutable.
                     </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="badge bg-[var(--secondary)] text-[var(--text-secondary)] font-mono text-xs">
-                        {pagination ? `${pagination.total} records` : "Memuat..."}
-                    </span>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="card p-4">
+            <div className="card p-4 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {/* Global Search */}
                     <div className="relative md:col-span-2">
@@ -175,6 +185,22 @@ export default function AuditTrailPage() {
                         </select>
                     </div>
                 </div>
+
+                {hasActiveFilters && (
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                        <span className="text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 px-2.5 py-0.5 rounded-full">
+                            {activeFilterCount} filter aktif
+                        </span>
+                        <button
+                            type="button"
+                            onClick={resetFilters}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Reset Filter
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Table */}

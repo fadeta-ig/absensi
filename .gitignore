@@ -59,3 +59,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# agents & local ai configs
+/.agents/
