@@ -409,3 +409,36 @@ export const attendanceCorrectionUpdateSchema = z.object({
 // and src/app/api/bpjs/calculate/route.ts) because they have different
 // field names and logic than what a centralized schema would provide.
 // ────────────────────────────────────────────────────────────────
+
+/* ───────────────────── Birthday Management ───────────────────── */
+
+export const birthdayPreparationUpdateSchema = z.object({
+    employeeId: z.string().min(1, "ID Pegawai wajib diisi"),
+    year: z.number().int().min(2000, "Tahun tidak valid"),
+    statusId: z.string().nullable().optional(),
+    notes: z.string().max(2000, "Catatan maksimal 2000 karakter").nullable().optional(),
+});
+
+export const birthdayStatusCreateSchema = z.object({
+    name: z.string().min(1, "Nama status wajib diisi").max(100, "Nama status maksimal 100 karakter"),
+    color: z.string().min(1).max(50).default("#800020"),
+    order: z.number().int().min(0).default(0),
+});
+
+export const birthdayStatusUpdateSchema = z.object({
+    name: z.string().min(1, "Nama status wajib diisi").max(100).optional(),
+    color: z.string().min(1).max(50).optional(),
+    order: z.number().int().min(0).optional(),
+    isActive: z.boolean().optional(),
+});
+
+export const birthdayReminderSettingSchema = z.object({
+    isEmailEnabled: z.boolean(),
+    recipientEmails: z.string().default(""),
+    reminderDays: z.string().default("30,14,7"),
+});
+
+export const birthdayTestEmailSchema = z.object({
+    recipients: z.string().optional(),
+});
+

@@ -25,17 +25,32 @@ export default function AccessibleModal({
     closeOnBackdrop = true,
 }: AccessibleModalProps) {
     const dialogRef = useRef<HTMLDivElement>(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
 
+    // Focus management on mount and unmount ONLY
     useEffect(() => {
         const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const focusTimer = window.setTimeout(() => {
-            const focusable = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+            if (!dialogRef.current) return;
+            // If user has already focused an element inside the dialog, do not steal focus!
+            if (dialogRef.current.contains(document.activeElement)) return;
+
+            const focusable = dialogRef.current.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
             (focusable ?? dialogRef.current)?.focus();
         }, 0);
 
+        return () => {
+            window.clearTimeout(focusTimer);
+            previousFocus?.focus();
+        };
+    }, []);
+
+    // Keyboard navigation (Tab trapping and Escape)
+    useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
-                if (!disableClose) onClose();
+                if (!disableClose) onCloseRef.current();
                 return;
             }
 
@@ -63,11 +78,9 @@ export default function AccessibleModal({
         document.addEventListener("keydown", handleKeyDown);
 
         return () => {
-            window.clearTimeout(focusTimer);
             document.removeEventListener("keydown", handleKeyDown);
-            previousFocus?.focus();
         };
-    }, [disableClose, onClose]);
+    }, [disableClose]);
 
     const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
         if (!closeOnBackdrop || disableClose || event.target !== event.currentTarget) return;

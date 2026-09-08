@@ -16,7 +16,7 @@ import {
     groupBirthdaysByDay,
     normalizeBirthdayPayload,
     type EmployeeBirthday,
-} from "@/lib/services/birthdayService";
+} from "@/lib/birthdayUtils";
 
 interface LeaveRequest {
     id: string;

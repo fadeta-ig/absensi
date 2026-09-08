@@ -17,6 +17,7 @@ import {
     Package,
     FileText,
     ShieldAlert,
+    Cake,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
     { href: "/dashboard/attendance", icon: ClipboardList, label: "Absensi" },
     { href: "/dashboard/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/dashboard/leave", icon: CalendarOff, label: "Cuti" },
+    { href: "/dashboard/birthdays", icon: Cake, label: "Ulang Tahun" },
     {
         label: "Master Data",
         icon: Database,

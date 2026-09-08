@@ -61,10 +61,22 @@ export async function sendPasswordEmail(
 
     try {
         const transporter = createTransporter()!;
+        const text = `WIG Attendance System
+PT Wijaya Inovasi Gemilang
+==================================================
+Halo ${name},
+
+Berikut adalah password akun Anda untuk login ke sistem absensi:
+${password}
+
+Perhatian: Segera ubah password Anda setelah login pertama melalui menu Pengaturan.
+Email ini dikirim secara otomatis. Jangan bagikan password Anda kepada siapapun.`;
+
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
             subject: "Password Akun WIG Attendance",
+            text,
             html,
         });
         logger.info("[Email] Password email berhasil dikirim", {
@@ -113,10 +125,20 @@ export async function sendPasswordChangedEmail(
         const transporter = createTransporter();
         if (!transporter) return false;
 
+        const text = `WIG Attendance System - Pemberitahuan Keamanan
+PT Wijaya Inovasi Gemilang
+==================================================
+Halo ${name},
+
+Password akun absensi Anda baru saja berhasil diubah.
+Penting: Jika Anda merasa tidak melakukan perubahan ini, segera hubungi tim IT atau Administrator.
+Email ini dikirim secara otomatis oleh sistem.`;
+
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
             subject: "Pemberitahuan Keamanan - Password Diubah",
+            text,
             html,
         });
         return true;
@@ -128,3 +150,355 @@ export async function sendPasswordChangedEmail(
         return false;
     }
 }
+
+export function isEmailConfigured(): boolean {
+    return isSmtpConfigured;
+}
+
+export interface BirthdayReminderEmailItem {
+    employeeId: string;
+    name: string;
+    position: string;
+    department: string;
+    birthDateFormatted: string;
+    ageTurning: number;
+    daysUntil: number;
+    milestone: string;
+    statusName?: string | null;
+}
+
+export async function sendBirthdayReminderEmail(
+    recipients: string[],
+    items: BirthdayReminderEmailItem[],
+    milestoneTitle?: string
+): Promise<{ success: boolean; message: string }> {
+    if (!recipients.length) {
+        return { success: false, message: "Tidak ada alamat email penerima yang ditentukan." };
+    }
+    if (!isSmtpConfigured) {
+        logger.warn("[Email] SMTP belum dikonfigurasi — reminder ulang tahun tidak dapat dikirim", {
+            recipients,
+            itemCount: items.length,
+        });
+        return { success: false, message: "Layanan SMTP belum dikonfigurasi pada server (.env)." };
+    }
+
+    const timestamp = new Date().toLocaleString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
+    const rowsHtml = items.map((item) => {
+        const scheduleBadge = item.daysUntil === 0
+            ? '<span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#fee2e2;color:#991b1b;">Hari Ini</span>'
+            : item.daysUntil <= 7
+            ? `<span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;">${item.daysUntil} Hari Lagi (${item.milestone})</span>`
+            : `<span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#f1f5f9;color:#334155;">${item.daysUntil} Hari Lagi (${item.milestone})</span>`;
+
+        const statusLabel = item.statusName
+            ? `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:#e2e8f0;color:#334155;">${item.statusName}</span>`
+            : '<span style="color:#94a3b8;font-size:12px;">Belum Diproses</span>';
+
+        return `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 10px 12px; font-weight: 600; color: #1e293b;">
+                ${item.name}
+                <div style="font-size: 11px; color: #64748b; font-weight: normal;">Usia ke-${item.ageTurning}</div>
+            </td>
+            <td style="padding: 10px 12px; color: #475569; font-size: 12px;">${item.department} &bull; ${item.position}</td>
+            <td style="padding: 10px 12px; color: #800020; font-weight: 600; font-size: 12px;">${item.birthDateFormatted}</td>
+            <td style="padding: 10px 12px; text-align: center;">${scheduleBadge}</td>
+            <td style="padding: 10px 12px;">${statusLabel}</td>
+        </tr>`;
+    }).join("");
+
+    const title = milestoneTitle || "Pengingat Persiapan Ulang Tahun Pegawai";
+
+    const textContent = `PENGINGAT ULANG TAHUN PEGAWAI
+PT Wijaya Inovasi Gemilang - HRIS System
+==================================================
+
+Berikut adalah daftar pegawai yang memiliki jadwal ulang tahun mendatang:
+
+${items.map((item) => `- ${item.name} (${item.department} - ${item.position})
+  Tanggal Lahir: ${item.birthDateFormatted} (Usia ke-${item.ageTurning})
+  Jadwal: ${item.daysUntil === 0 ? "Hari Ini" : `${item.daysUntil} hari lagi (${item.milestone})`}
+  Status: ${item.statusName || "Belum Diproses"}`).join("\n\n")}
+
+==================================================
+Catatan: Pembaruan status persiapan dan catatan dapat dilakukan melalui menu Ulang Tahun di Dashboard HRIS.
+Waktu Pengiriman: ${timestamp} WIB
+Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG.`;
+
+    const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:24px 16px;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+    <div style="height:4px;background:#800020;"></div>
+    <div style="padding:28px 24px;">
+      <div style="border-bottom:1px solid #f1f5f9;padding-bottom:16px;margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:#64748b;text-transform:uppercase;margin-bottom:4px;">
+          PT Wijaya Inovasi Gemilang
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#0f172a;">
+          ${title}
+        </div>
+      </div>
+
+      <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#475569;">
+        Berikut adalah daftar pegawai yang memiliki jadwal ulang tahun dalam waktu dekat. Mohon periksa dan siapkan kebutuhan yang diperlukan sesuai dengan SOP internal.
+      </p>
+
+      <div style="overflow-x:auto;margin-bottom:20px;border:1px solid #e2e8f0;border-radius:6px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;text-align:left;">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;color:#475569;">
+              <th style="padding:10px 12px;font-weight:600;">Nama Pegawai</th>
+              <th style="padding:10px 12px;font-weight:600;">Divisi / Jabatan</th>
+              <th style="padding:10px 12px;font-weight:600;">Tgl Lahir</th>
+              <th style="padding:10px 12px;font-weight:600;text-align:center;">Jadwal</th>
+              <th style="padding:10px 12px;font-weight:600;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="background:#f8fafc;border-left:3px solid #800020;padding:12px 16px;border-radius:0 6px 6px 0;margin-bottom:24px;">
+        <p style="margin:0;font-size:12px;line-height:1.5;color:#475569;">
+          <strong>Petunjuk HR:</strong> Untuk memperbarui status persiapan atau menambahkan catatan detail perayaan, silakan akses menu <strong>Ulang Tahun</strong> pada Dashboard HRIS.
+        </p>
+      </div>
+
+      <div style="border-top:1px solid #f1f5f9;padding-top:16px;font-size:11px;color:#94a3b8;line-height:1.5;">
+        <div>Email otomatis dari Sistem HRIS PT Wijaya Inovasi Gemilang.</div>
+        <div style="margin-top:2px;">Waktu pengiriman: ${timestamp} WIB</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+        const transporter = createTransporter();
+        if (!transporter) {
+            return { success: false, message: "Gagal membuat koneksi SMTP." };
+        }
+
+        await transporter.sendMail({
+            from: SMTP_FROM,
+            to: recipients.join(", "),
+            subject: `Pengingat Ulang Tahun Pegawai - WIG HRIS (${items.length} Pegawai)`,
+            text: textContent,
+            html,
+        });
+
+        logger.info("[Email] Reminder ulang tahun berhasil dikirim", {
+            recipients,
+            itemCount: items.length,
+        });
+
+        return {
+            success: true,
+            message: `Email reminder berhasil dikirim ke ${recipients.length} alamat email.`,
+        };
+    } catch (error) {
+        logger.error("[Email] Gagal mengirim reminder email", {
+            recipients,
+            error,
+        });
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Terjadi kesalahan saat pengiriman email melalui SMTP.",
+        };
+    }
+}
+
+export async function sendTestBirthdayReminderEmail(
+    recipients: string[]
+): Promise<{ success: boolean; message: string }> {
+    if (!recipients.length) {
+        return { success: false, message: "Tentukan minimal satu alamat email penerima uji coba." };
+    }
+    if (!isSmtpConfigured) {
+        return {
+            success: false,
+            message: "SMTP belum dikonfigurasi di file environment (.env). Pastikan SMTP_HOST, SMTP_USER, dan SMTP_PASS sudah terisi.",
+        };
+    }
+
+    const testItems: BirthdayReminderEmailItem[] = [
+        {
+            employeeId: "WIG-TEST-01",
+            name: "Budi Santoso",
+            position: "Senior Software Engineer",
+            department: "IT & Digital",
+            birthDateFormatted: "15 September",
+            ageTurning: 29,
+            daysUntil: 7,
+            milestone: "H-7",
+            statusName: "Kue Dipesan",
+        },
+        {
+            employeeId: "WIG-TEST-02",
+            name: "Siti Rahma",
+            position: "Account Executive",
+            department: "Marketing",
+            birthDateFormatted: "22 September",
+            ageTurning: 26,
+            daysUntil: 14,
+            milestone: "H-14",
+            statusName: "Kirim Ucapan",
+        },
+        {
+            employeeId: "WIG-TEST-03",
+            name: "Ahmad Fauzi",
+            position: "Operational Supervisor",
+            department: "General Affairs",
+            birthDateFormatted: "08 Oktober",
+            ageTurning: 32,
+            daysUntil: 30,
+            milestone: "H-30",
+            statusName: null,
+        },
+    ];
+
+    const timestamp = new Date().toLocaleString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
+    const textContent = `UJI COBA SISTEM EMAIL PENGINGAT ULANG TAHUN
+PT Wijaya Inovasi Gemilang - HRIS System
+==================================================
+
+Konfigurasi koneksi SMTP berhasil diverifikasi.
+Ini adalah email uji coba untuk memastikan bahwa notifikasi pengingat ulang tahun pegawai dapat terkirim dan terbaca dengan baik.
+
+Simulasi Data Penerima Reminder:
+${testItems.map((item) => `- ${item.name} (${item.department} - ${item.position})
+  Tanggal Lahir: ${item.birthDateFormatted} (Usia ke-${item.ageTurning})
+  Jadwal: ${item.daysUntil} hari lagi (${item.milestone})
+  Status: ${item.statusName || "Belum Diproses"}`).join("\n\n")}
+
+==================================================
+Waktu Pengujian: ${timestamp} WIB
+Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG. Tidak memerlukan balasan.`;
+
+    const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uji Coba Pengingat Ulang Tahun Pegawai</title>
+</head>
+<body style="margin:0;padding:24px 16px;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;-webkit-font-smoothing:antialiased;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+    <div style="height:4px;background:#800020;"></div>
+    <div style="padding:28px 24px;">
+      <div style="border-bottom:1px solid #f1f5f9;padding-bottom:16px;margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:#64748b;text-transform:uppercase;margin-bottom:4px;">
+          PT Wijaya Inovasi Gemilang
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#0f172a;">
+          Uji Coba Pengingat Ulang Tahun Pegawai
+        </div>
+      </div>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;padding:12px 16px;border-radius:6px;margin-bottom:20px;">
+        <div style="font-size:13px;font-weight:600;color:#166534;margin-bottom:2px;">Konfigurasi SMTP Berfungsi Normal</div>
+        <div style="font-size:12px;color:#15803d;line-height:1.5;">
+          Email uji coba ini mengonfirmasi bahwa pengiriman notifikasi pengingat ulang tahun pegawai siap digunakan dan terkirim dengan baik.
+        </div>
+      </div>
+
+      <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:8px;">
+        Simulasi Format Data Reminder:
+      </div>
+
+      <div style="overflow-x:auto;margin-bottom:20px;border:1px solid #e2e8f0;border-radius:6px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;text-align:left;">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;color:#475569;">
+              <th style="padding:10px 12px;font-weight:600;">Nama Pegawai</th>
+              <th style="padding:10px 12px;font-weight:600;">Divisi / Jabatan</th>
+              <th style="padding:10px 12px;font-weight:600;">Tgl Lahir</th>
+              <th style="padding:10px 12px;font-weight:600;text-align:center;">Jadwal</th>
+              <th style="padding:10px 12px;font-weight:600;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${testItems.map((item) => `
+              <tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:10px 12px;font-weight:600;color:#1e293b;">
+                  ${item.name}
+                  <div style="font-size:11px;color:#64748b;font-weight:normal;">Usia ke-${item.ageTurning}</div>
+                </td>
+                <td style="padding:10px 12px;color:#475569;font-size:12px;">${item.department} &bull; ${item.position}</td>
+                <td style="padding:10px 12px;color:#800020;font-weight:600;font-size:12px;">${item.birthDateFormatted}</td>
+                <td style="padding:10px 12px;text-align:center;">
+                  <span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#f1f5f9;color:#334155;">
+                    ${item.daysUntil} Hari Lagi (${item.milestone})
+                  </span>
+                </td>
+                <td style="padding:10px 12px;">
+                  ${item.statusName ? `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:#e2e8f0;color:#334155;">${item.statusName}</span>` : '<span style="color:#94a3b8;font-size:12px;">Belum Diproses</span>'}
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="border-top:1px solid #f1f5f9;padding-top:16px;font-size:11px;color:#94a3b8;line-height:1.5;">
+        <div>Email uji coba dari Sistem HRIS PT Wijaya Inovasi Gemilang.</div>
+        <div style="margin-top:2px;">Waktu pengujian: ${timestamp} WIB</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    try {
+        const transporter = createTransporter();
+        if (!transporter) {
+            return { success: false, message: "Gagal membuat koneksi SMTP." };
+        }
+
+        await transporter.sendMail({
+            from: SMTP_FROM,
+            to: recipients.join(", "),
+            subject: "Uji Coba Pengingat Ulang Tahun - WIG HRIS",
+            text: textContent,
+            html,
+        });
+
+        logger.info("[Email] Test email reminder berhasil dikirim", { recipients });
+        return {
+            success: true,
+            message: `Email uji coba berhasil dikirim ke: ${recipients.join(", ")}`,
+        };
+    } catch (error) {
+        logger.error("[Email] Gagal mengirim test email reminder", { recipients, error });
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "Gagal mengirim email uji coba.",
+        };
+    }
+}
+
