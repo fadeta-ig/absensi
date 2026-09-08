@@ -322,7 +322,7 @@ export default function AppShell({
             )}
 
             {/* ── Main Content ──────────────────────────────────── */}
-            <main className={`flex-1 pt-14 lg:pt-0 min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"} ${mobileBottomNav ? "pb-16 lg:pb-0" : ""}`}>
+            <main className={`flex-1 pt-14 lg:pt-0 min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"} ${mobileBottomNav ? "pb-28 lg:pb-8" : "pb-8"}`}>
                 <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto">
                     {children}
                 </div>

@@ -5,7 +5,7 @@ import { ChangePasswordCard } from "./components/ChangePasswordCard";
 
 export default function SettingsPage() {
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Settings className="w-5 h-5 text-[var(--primary)]" />

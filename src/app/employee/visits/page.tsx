@@ -132,7 +132,7 @@ export default function VisitsPage() {
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             {/* Header */}
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
@@ -191,7 +191,7 @@ export default function VisitsPage() {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {paginatedVisits.map((visit) => (
                             <VisitCard
                                 key={visit.id}

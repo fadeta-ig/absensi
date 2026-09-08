@@ -35,10 +35,11 @@ export default async function Employee360ViewPage({ params }: { params: Promise<
     }
 
     return (
-        <div className="md:py-4">
+        <div>
             <Employee360View
                 {...data}
                 backLink="/employee/monitoring"
+                compact={true}
             />
         </div>
     );

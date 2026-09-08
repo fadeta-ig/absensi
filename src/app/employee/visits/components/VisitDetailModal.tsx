@@ -2,7 +2,7 @@
 
 import {
     X, Clock, FileText, Navigation, MapPin, CheckCircle,
-    AlertCircle, Building2, LogIn, LogOut
+    AlertCircle, Building2, LogIn, LogOut, ArrowRight
 } from "lucide-react";
 import { VisitReport } from "@/types";
 import { VISIT_STATUS_CONFIG } from "../visitTypes";
@@ -146,7 +146,9 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                                         {visit.clockInTime || "-"}
                                     </p>
                                 </div>
-                                <div className="text-[var(--text-muted)] text-center">→</div>
+                                <div className="text-[var(--text-muted)] flex justify-center">
+                                    <ArrowRight className="w-4 h-4 text-[var(--text-muted)]" />
+                                </div>
                                 <div>
                                     <p className="text-[10px] text-[var(--text-muted)] uppercase flex items-center gap-1">
                                         <LogOut className="w-3 h-3" /> Clock Out

@@ -190,7 +190,7 @@ export default function ProfilePage() {
     const leaveRemaining = profile.totalLeave - profile.usedLeave;
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex items-center justify-between flex-wrap gap-3">

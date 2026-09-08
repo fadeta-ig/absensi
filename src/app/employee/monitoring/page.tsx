@@ -110,8 +110,8 @@ export default function MonitoringPage() {
 
             {/* Filter Bar */}
             <div className="card p-4 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="relative sm:col-span-2">
+                <div className="space-y-2.5">
+                    <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                         <input
                             type="text"
@@ -163,7 +163,7 @@ export default function MonitoringPage() {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 gap-3">
                         {paginatedEmployees.map((e) => (
                             <div
                                 key={e.id}

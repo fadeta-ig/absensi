@@ -119,7 +119,7 @@ export default function EmployeeAssetsPage() {
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-6">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -141,7 +141,7 @@ export default function EmployeeAssetsPage() {
                     <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-6">
                     {/* Daftar Aset */}
                     <div className="space-y-4">
                         <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">

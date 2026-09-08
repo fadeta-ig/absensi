@@ -13,6 +13,7 @@ import {
     Building2,
     CalendarDays,
     ArrowUpRight,
+    ArrowRight,
     Package,
     Smartphone,
     Laptop,
@@ -40,6 +41,7 @@ interface Employee360ViewProps {
     assignedAssets: AssetWithHistory[];
     statusHistory?: EmployeeStatusHistory[];
     backLink: string;
+    compact?: boolean;
 }
 
 export function Employee360View({
@@ -51,7 +53,8 @@ export function Employee360View({
     recentPayslips,
     assignedAssets,
     statusHistory,
-    backLink
+    backLink,
+    compact = false
 }: Employee360ViewProps) {
     const [activeTab, setActiveTab] = useState("attendance");
 
@@ -88,7 +91,7 @@ export function Employee360View({
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className={compact ? "grid grid-cols-2 gap-2.5" : "grid grid-cols-2 lg:grid-cols-5 gap-4"}>
                 <StatCard label="Kehadiran" value={`${stats.attendanceRate.toFixed(1)}%`} sub="Rata-rata" icon={Activity} color="text-blue-600" bg="bg-blue-500/10" />
                 <StatCard label="Terlambat" value={stats.lateCount.toString()} sub="Kejadian" icon={Clock} color="text-orange-600" bg="bg-orange-500/10" />
                 <StatCard label="Kunjungan" value={stats.visitCount.toString()} sub="Laporan" icon={MapPin} color="text-green-600" bg="bg-green-500/10" />
@@ -96,9 +99,9 @@ export function Employee360View({
                 <StatCard label="Aset Dipegang" value={assignedAssets.length.toString()} sub="Aset aktif" icon={Package} color="text-purple-600" bg="bg-purple-500/10" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className={compact ? "space-y-6" : "grid grid-cols-1 lg:grid-cols-12 gap-6"}>
                 {/* Left: Info */}
-                <div className="lg:col-span-4 space-y-4">
+                <div className={compact ? "space-y-4" : "lg:col-span-4 space-y-4"}>
                     {/* Personalia Card */}
                     <div className="card overflow-hidden">
                         <div className="bg-[var(--secondary)]/50 px-5 py-3 border-b border-[var(--border)]">
@@ -148,7 +151,7 @@ export function Employee360View({
                 </div>
 
                 {/* Right: Activity Tabs */}
-                <div className="lg:col-span-8">
+                <div className={compact ? "space-y-4" : "lg:col-span-8"}>
                     {/* Tab Buttons */}
                     <div className="flex gap-1 mb-4 bg-[var(--secondary)] p-1 rounded-lg w-fit">
                         {[
@@ -252,7 +255,7 @@ export function Employee360View({
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="h-3.5 w-3.5 text-[var(--primary)]" />
                                                         <span className="font-medium text-[var(--text-primary)]">{l.startDate}</span>
-                                                        <span className="text-[var(--text-muted)]">»</span>
+                                                        <ArrowRight className="w-3 h-3 text-[var(--text-muted)]" />
                                                         <span className="font-medium text-[var(--text-primary)]">{l.endDate}</span>
                                                     </div>
                                                 </td>

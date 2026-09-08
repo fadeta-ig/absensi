@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Navigation, Clock, LogIn, LogOut, Trash2 } from "lucide-react";
+import { Building2, Navigation, Clock, LogIn, LogOut, Trash2, ArrowRight } from "lucide-react";
 import { VisitReport } from "@/types";
 import { VISIT_STATUS_CONFIG } from "../visitTypes";
 
@@ -95,7 +95,7 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
                     )}
                     {!["draft", "clocked_in"].includes(visit.status) && (
                         <span className="text-xs font-bold text-[var(--primary)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 translate-x-2 group-hover:translate-x-0">
-                            Lihat Detail &rarr;
+                            Lihat Detail <ArrowRight className="w-3.5 h-3.5" />
                         </span>
                     )}
                 </div>

@@ -138,7 +138,7 @@ export default function DocumentsPage() {
     const paginated  = requests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -181,8 +181,11 @@ export default function DocumentsPage() {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Pilih Jenis Surat */}
                         <div className="form-group !mb-0">
-                            <label className="form-label">Jenis Surat</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="form-label !mb-0 font-semibold">Pilih Jenis Surat</label>
+                                <span className="text-[11px] text-[var(--text-muted)]">Pilih salah satu</span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5" role="radiogroup" aria-label="Pilih Jenis Surat">
                                 {(Object.entries(LETTER_TYPE_CONFIG) as [LetterType, typeof LETTER_TYPE_CONFIG[LetterType]][]).map(
                                     ([type, cfg]) => {
                                         const TypeIcon = cfg.icon;
@@ -191,26 +194,72 @@ export default function DocumentsPage() {
                                             <button
                                                 key={type}
                                                 type="button"
+                                                role="radio"
+                                                aria-checked={isSelected}
                                                 onClick={() => setSelectedType(type)}
-                                                className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                                                className={`group relative flex items-center justify-between gap-3 p-3.5 rounded-xl text-left transition-all duration-200 cursor-pointer ${
                                                     isSelected
-                                                        ? "border-[var(--primary)] bg-[var(--primary)]/5"
-                                                        : "border-[var(--border)] hover:border-[var(--primary)]/40 hover:bg-[var(--secondary)]"
+                                                        ? "border-2 border-[var(--primary)] bg-gradient-to-r from-[var(--primary)]/15 via-[var(--primary)]/5 to-transparent ring-2 ring-[var(--primary)]/20 shadow-md translate-x-1"
+                                                        : "border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)]/40 hover:bg-[var(--secondary)]/40 opacity-70 hover:opacity-100"
                                                 }`}
                                             >
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${cfg.iconBg}`}>
-                                                    <TypeIcon className={`w-4 h-4 ${cfg.iconColor}`} />
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 ${
+                                                        isSelected ? "bg-[var(--primary)] text-white shadow-sm ring-2 ring-[var(--primary)]/20" : `${cfg.iconBg} ${cfg.iconColor}`
+                                                    }`}>
+                                                        <TypeIcon className="w-4.5 h-4.5" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className={`text-xs font-bold transition-colors ${
+                                                                isSelected ? "text-[var(--primary)]" : "text-[var(--text-primary)]"
+                                                            }`}>
+                                                                {cfg.label}
+                                                            </p>
+                                                            {isSelected && (
+                                                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--primary)] text-white shadow-xs">
+                                                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                                    Dipilih
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[10px] text-[var(--text-muted)] mt-0.5 line-clamp-1">
+                                                            {cfg.description}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className={`text-xs font-bold ${isSelected ? "text-[var(--primary)]" : "text-[var(--text-primary)]"}`}>
-                                                        {cfg.label}
-                                                    </p>
-                                                    <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{cfg.description}</p>
+
+                                                <div className="shrink-0 pl-2">
+                                                    {isSelected ? (
+                                                        <div className="w-6 h-6 rounded-full bg-[var(--primary)] text-white flex items-center justify-center shadow-sm ring-2 ring-[var(--primary)]/30">
+                                                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-6 h-6 rounded-full border-2 border-[var(--border)] group-hover:border-[var(--text-muted)] transition-colors" />
+                                                    )}
                                                 </div>
                                             </button>
                                         );
                                     }
                                 )}
+                            </div>
+
+                            {/* Active Selection Summary Callout */}
+                            <div className="mt-3 p-3 rounded-xl border border-[var(--primary)]/25 bg-[var(--primary)]/5 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center shrink-0 shadow-xs">
+                                        <Check className="w-4 h-4 stroke-[2.5]" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[10px] text-[var(--text-muted)] font-medium">Surat yang dipilih:</p>
+                                        <p className="text-xs font-bold text-[var(--primary)] truncate">
+                                            {LETTER_TYPE_CONFIG[selectedType]?.label}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span className="badge badge-primary text-[10px] font-semibold shrink-0">
+                                    Siap Dibuat
+                                </span>
                             </div>
                         </div>
 

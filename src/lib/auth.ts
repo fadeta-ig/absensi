@@ -75,7 +75,7 @@ export interface UserPrincipal {
 }
 
 /** Session payload stored in JWT. The database remains authoritative. */
-export interface SessionPayload extends JWTPayload, UserPrincipal {}
+export interface SessionPayload extends JWTPayload, UserPrincipal { }
 
 function toPrincipal(user: NonNullable<UserWithAccess>): UserPrincipal | null {
     const roles = user.roles.map(({ role }) => role.code) as SystemRole[];

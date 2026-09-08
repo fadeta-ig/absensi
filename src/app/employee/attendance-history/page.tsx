@@ -369,63 +369,8 @@ export default function AttendanceHistoryPage() {
                 </div>
             ) : (
                 <div className="card overflow-hidden">
-                    {/* Desktop Table (hidden on mobile) */}
-                    <div className="hidden sm:block overflow-x-auto">
-                        <table className="data-table w-full">
-                            <thead className="bg-[var(--secondary)]">
-                                <tr>
-                                    <th>Tanggal</th>
-                                    <th>Clock In</th>
-                                    <th>Clock Out</th>
-                                    <th>Durasi</th>
-                                    <th>Status</th>
-                                    <th>Catatan</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {paginatedRecords.map((r) => {
-                                    const si = STATUS_MAP[r.status] ?? STATUS_MAP["present"];
-                                    const StatusIcon = si.icon;
-                                    return (
-                                        <tr key={r.id}>
-                                            <td className="font-semibold text-xs text-[var(--text-primary)] whitespace-nowrap">
-                                                {fmtDate(r.date)}
-                                            </td>
-                                            <td className="text-xs">
-                                                <div className="flex items-center gap-1.5 font-mono text-blue-600 font-medium">
-                                                    <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                                                    <span>{fmtTime(r.clockIn)}</span>
-                                                </div>
-                                            </td>
-                                            <td className="text-xs">
-                                                <div className="flex items-center gap-1.5 font-mono text-orange-600 font-medium">
-                                                    <Clock className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                                    <span>{fmtTime(r.clockOut)}</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className="text-xs px-2 py-0.5 bg-[var(--secondary)] text-[var(--text-secondary)] rounded-full font-semibold whitespace-nowrap">
-                                                    {calcDuration(r.clockIn, r.clockOut)}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${si.badge} flex items-center gap-1 w-fit text-[10px]`}>
-                                                    <StatusIcon className="w-3 h-3" />
-                                                    {si.label}
-                                                </span>
-                                            </td>
-                                            <td className="text-xs text-[var(--text-muted)] italic max-w-[150px] truncate">
-                                                {r.notes || "-"}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Mobile Card List (visible only on small screens) */}
-                    <div className="sm:hidden divide-y divide-[var(--border)]">
+                    {/* Unified Card List (Consistent across mobile and desktop canvas) */}
+                    <div className="divide-y divide-[var(--border)]">
                         {paginatedRecords.map((r) => {
                             const si = STATUS_MAP[r.status] ?? STATUS_MAP["present"];
                             const StatusIcon = si.icon;

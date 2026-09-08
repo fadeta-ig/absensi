@@ -98,7 +98,7 @@ export default function EmployeeHomePage() {
     const remainingLeave = leaveBalance.total - leaveBalance.used;
 
     return (
-        <div className="w-full max-w-md mx-auto space-y-5 pb-24 pt-2 px-3">
+        <div className="space-y-5">
             
             {/* ─── Header ──────────────────────────────────────── */}
             <div className="flex items-start justify-between">
@@ -155,14 +155,14 @@ export default function EmployeeHomePage() {
             {/* ─── Quick Actions ───────────────────────────────── */}
             <div className="grid grid-cols-4 gap-y-4 gap-x-2">
                 {[
-                    { href: "/employee/leave", icon: CalendarOff, label: "Cuti", bg: "bg-rose-50", color: "text-rose-600" },
-                    { href: "/employee/payslip", icon: Receipt, label: "Slip Gaji", bg: "bg-amber-50", color: "text-amber-600" },
-                    { href: "/employee/overtime", icon: Clock, label: "Lembur", bg: "bg-sky-50", color: "text-sky-600" },
-                    { href: "/employee/visits", icon: LayoutDashboard, label: "Kunjungan", bg: "bg-indigo-50", color: "text-indigo-600" },
-                    { href: "/employee/attendance/correction", icon: ClipboardList, label: "Koreksi", bg: "bg-teal-50", color: "text-teal-600" },
-                    { href: "/employee/todos", icon: LogIn, label: "To-Do", bg: "bg-violet-50", color: "text-violet-600" },
-                    { href: "/employee/documents", icon: Newspaper, label: "Dokumen", bg: "bg-orange-50", color: "text-orange-600" },
-                    { href: "/employee/attendance-history", icon: TrendingUp, label: "Riwayat", bg: "bg-emerald-50", color: "text-emerald-600" },
+                    { href: "/employee/leave", icon: CalendarOff, label: "Cuti", bg: "bg-rose-50 dark:bg-rose-950/40", color: "text-rose-600 dark:text-rose-400" },
+                    { href: "/employee/payslip", icon: Receipt, label: "Slip Gaji", bg: "bg-amber-50 dark:bg-amber-950/40", color: "text-amber-600 dark:text-amber-400" },
+                    { href: "/employee/overtime", icon: Clock, label: "Lembur", bg: "bg-sky-50 dark:bg-sky-950/40", color: "text-sky-600 dark:text-sky-400" },
+                    { href: "/employee/visits", icon: LayoutDashboard, label: "Kunjungan", bg: "bg-indigo-50 dark:bg-indigo-950/40", color: "text-indigo-600 dark:text-indigo-400" },
+                    { href: "/employee/attendance/correction", icon: ClipboardList, label: "Koreksi", bg: "bg-teal-50 dark:bg-teal-950/40", color: "text-teal-600 dark:text-teal-400" },
+                    { href: "/employee/todos", icon: LogIn, label: "To-Do", bg: "bg-violet-50 dark:bg-violet-950/40", color: "text-violet-600 dark:text-violet-400" },
+                    { href: "/employee/documents", icon: Newspaper, label: "Dokumen", bg: "bg-orange-50 dark:bg-orange-950/40", color: "text-orange-600 dark:text-orange-400" },
+                    { href: "/employee/attendance-history", icon: TrendingUp, label: "Riwayat", bg: "bg-emerald-50 dark:bg-emerald-950/40", color: "text-emerald-600 dark:text-emerald-400" },
                 ].map((item, i) => (
                     <Link key={i} href={item.href} className="flex flex-col items-center gap-1.5 group">
                         <div className={`w-[52px] h-[52px] rounded-2xl ${item.bg} border border-[var(--border)] flex items-center justify-center transition-all duration-200 active:scale-95 group-hover:border-[var(--primary)]`}>

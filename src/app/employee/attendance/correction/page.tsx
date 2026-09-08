@@ -183,7 +183,7 @@ export default function AttendanceCorrectionPage() {
     const paginated = requests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -241,8 +241,8 @@ export default function AttendanceCorrectionPage() {
                                 required
                             />
                             {form.targetDate && !isValidTargetDate(form.targetDate) && (
-                                <p className="text-[10px] text-red-500 mt-1 font-medium">
-                                    ⚠️ Tanggal tidak boleh hari ini atau masa depan
+                                <p className="text-[10px] text-red-500 mt-1 font-medium flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3 shrink-0" /> Tanggal tidak boleh hari ini atau masa depan
                                 </p>
                             )}
                         </div>
@@ -304,7 +304,7 @@ export default function AttendanceCorrectionPage() {
                                 className="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-[var(--border)] rounded-lg hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all text-sm text-[var(--text-muted)] hover:text-[var(--primary)]"
                             >
                                 {attachmentName
-                                    ? <span className="text-green-600 font-medium text-xs">✅ {attachmentName}</span>
+                                    ? <span className="text-green-600 font-medium text-xs flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> {attachmentName}</span>
                                     : "Klik untuk lampirkan foto/dokumen (maks 2MB)"
                                 }
                             </button>

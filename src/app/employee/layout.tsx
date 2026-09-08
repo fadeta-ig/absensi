@@ -232,7 +232,9 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 />
             }
         >
-            {children}
+            <div className="w-full max-w-md mx-auto">
+                {children}
+            </div>
         </AppShell>
     );
 }

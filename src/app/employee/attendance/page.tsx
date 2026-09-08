@@ -249,9 +249,9 @@ export default function AttendancePage() {
             setStatus("success");
             setTodayRecord(data);
             if (data.clockOut) {
-                toast("Clock Out berhasil! Selamat beristirahat 🏠", "success");
+                toast("Clock Out berhasil! Selamat beristirahat.", "success");
             } else {
-                toast("Clock In berhasil! Selamat bekerja 💼", "success");
+                toast("Clock In berhasil! Selamat bekerja.", "success");
             }
             setTimeout(() => router.push("/employee"), 1500);
         } catch (err) {
@@ -273,7 +273,7 @@ export default function AttendancePage() {
     const canSubmit = photo && isNetworkOk && isGpsOk && status !== "submitting";
 
     return (
-        <div className="space-y-4 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-4 animate-[fadeIn_0.5s_ease]">
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Camera className="w-5 h-5 text-[var(--primary)]" />

@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- data URL preview kamera tidak melewati image optimizer */
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { AlertCircle, Camera, VideoOff, X, Loader2, SwitchCamera } from "lucide-react";
+import { AlertCircle, Camera, VideoOff, X, Loader2, SwitchCamera, Check } from "lucide-react";
 import type { VisitPhotoCategory, VisitPhotoDraft } from "@/types";
 import { MIN_PHOTOS_REQUIRED, VISIT_PHOTO_CATEGORY_OPTIONS } from "../visitTypes";
 
@@ -243,13 +243,14 @@ export function MultiPhotoCapture({
                     </span>
                 </label>
                 <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                         isFulfilled
                             ? "bg-green-50 text-green-700 border border-green-200"
                             : "bg-yellow-50 text-yellow-700 border border-yellow-200"
                     }`}
                 >
-                    {photos.length}/{minPhotos} foto {isFulfilled ? "✓" : "(min)"}
+                    <span>{photos.length}/{minPhotos} foto</span>
+                    {isFulfilled ? <Check className="w-3 h-3 stroke-[2.5]" /> : <span>(min)</span>}
                 </span>
             </div>
 

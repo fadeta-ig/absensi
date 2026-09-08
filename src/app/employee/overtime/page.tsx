@@ -108,7 +108,7 @@ export default function EmployeeOvertimePage() {
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
+        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
