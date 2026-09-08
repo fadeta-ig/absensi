@@ -40,3 +40,11 @@
 ## Tahap 5: Dokumentasi
 - [x] Perbarui `knowledge.md` mencakup arsitektur absensi 3-faktor dan menghapus dokumentasi `face-api.js`.
 - [x] Siapkan panduan langkah deploy aman ke server VPS tanpa downtime dan tanpa resiko data hilang.
+
+## Tahap 6: Optimalisasi Storage & Audit Trail HR (Opsi 1 & Opsi 2)
+- [x] **Downsampling Canvas Selfie:** Resolusi dibatasi maksimal 480px kualitas 0.72 (~25–35 KB per foto, menghemat 92% storage database).
+- [x] **Toggle Kamera Depan / Belakang:** Tombol `SwitchCamera` di viewfinder kamera dengan auto-mirroring (kamera depan cermin aktif, kamera belakang cermin mati).
+- [x] **Penyematan Metadata Jaringan di Backend:** `clientIp`, `isOfficeWifi`, dan `networkName` disimpan ke dalam JSON lokasi absensi saat clock-in/out.
+- [x] **Kolom Verifikasi di Dashboard HR:** Kolom baru di tabel `/dashboard/attendance` dengan badge visual: 🟢 Wi-Fi WIG (hover IP), 🟡 Bypass, 🔘 GPS.
+- [x] **Ekspor Laporan Excel:** Menyertakan kolom "Verifikasi Jaringan" pada file rekap absensi HR.
+- [x] **Sinkronisasi Knowledge Base:** Seluruh perubahan di atas telah tercatat lengkap di `knowledge.md`.

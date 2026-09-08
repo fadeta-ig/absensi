@@ -10,6 +10,20 @@ import { toDateString, toISOOrNull } from "@/lib/utils";
  * Diperlukan setelah migrasi DateTime. API JSON response akan serialize ISO string ke client.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseLocation(val: any): AttendanceRecord["clockInLocation"] {
+    if (!val) return null;
+    if (typeof val === "object") return val;
+    if (typeof val === "string") {
+        try {
+            return JSON.parse(val);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toAttendanceRecord(row: any): AttendanceRecord {
     return {
         id: row.id,
@@ -17,8 +31,8 @@ function toAttendanceRecord(row: any): AttendanceRecord {
         date: toDateString(row.date),
         clockIn: toISOOrNull(row.clockIn),
         clockOut: toISOOrNull(row.clockOut),
-        clockInLocation: row.clockInLocation as AttendanceRecord["clockInLocation"],
-        clockOutLocation: row.clockOutLocation as AttendanceRecord["clockOutLocation"],
+        clockInLocation: parseLocation(row.clockInLocation),
+        clockOutLocation: parseLocation(row.clockOutLocation),
         clockInPhoto: row.clockInPhoto ?? null,
         clockOutPhoto: row.clockOutPhoto ?? null,
         status: row.status as AttendanceRecord["status"],

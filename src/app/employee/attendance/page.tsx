@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
     Camera, MapPin, Clock, CheckCircle, AlertCircle, Loader2,
-    Video, VideoOff, ShieldCheck, ShieldAlert, Wifi, WifiOff, FlipHorizontal, RefreshCw
+    Video, VideoOff, ShieldCheck, ShieldAlert, Wifi, WifiOff, FlipHorizontal, RefreshCw, SwitchCamera
 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
@@ -34,6 +34,7 @@ export default function AttendancePage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [streaming, setStreaming] = useState(false);
+    const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
     const [isMirrored, setIsMirrored] = useState(true);
     const [photo, setPhoto] = useState<string | null>(null);
     const [gpsInfo, setGpsInfo] = useState<GpsInfo | null>(null);
@@ -107,7 +108,7 @@ export default function AttendancePage() {
             });
     }, [toast, checkNetworkStatus, checkGpsStatus]);
 
-    const startCamera = useCallback(async () => {
+    const startCamera = useCallback(async (modeOverride?: "user" | "environment") => {
         if (!navigator.mediaDevices?.getUserMedia) {
             const errMsg = "Browser tidak mendukung camera API atau halaman tidak menggunakan HTTPS.";
             log.error(errMsg, { protocol: window.location.protocol });
@@ -115,9 +116,15 @@ export default function AttendancePage() {
             return;
         }
 
+        const mode = (typeof modeOverride === "string") ? modeOverride : facingMode;
+
         try {
+            if (videoRef.current?.srcObject) {
+                (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+                video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } },
             });
 
             if (videoRef.current) {
@@ -138,7 +145,14 @@ export default function AttendancePage() {
             reportClientError("AttendancePage", "Gagal mengakses kamera", err, { errorName: errName });
             setMessage(`Gagal mengakses kamera: ${errName}. Berikan izin akses kamera.`);
         }
-    }, [streaming]);
+    }, [facingMode, streaming]);
+
+    const toggleFacingMode = useCallback(() => {
+        const nextMode = facingMode === "user" ? "environment" : "user";
+        setFacingMode(nextMode);
+        setIsMirrored(nextMode === "user");
+        void startCamera(nextMode);
+    }, [facingMode, startCamera]);
 
     const stopCamera = useCallback(() => {
         if (videoRef.current?.srcObject) {
@@ -154,8 +168,25 @@ export default function AttendancePage() {
         const vid = videoRef.current;
         const canvas = canvasRef.current;
 
-        canvas.width = vid.videoWidth || 640;
-        canvas.height = vid.videoHeight || 480;
+        // Downsample ke max dimensi 480px untuk menghemat storage 92% (~30KB per foto)
+        const srcWidth = vid.videoWidth || 640;
+        const srcHeight = vid.videoHeight || 480;
+        const maxDim = 480;
+
+        let targetWidth = srcWidth;
+        let targetHeight = srcHeight;
+        if (srcWidth > maxDim || srcHeight > maxDim) {
+            if (srcWidth > srcHeight) {
+                targetWidth = maxDim;
+                targetHeight = Math.round((srcHeight * maxDim) / srcWidth);
+            } else {
+                targetHeight = maxDim;
+                targetWidth = Math.round((srcWidth * maxDim) / srcHeight);
+            }
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
 
         const ctx = canvas.getContext("2d");
         if (!ctx) {
@@ -163,8 +194,8 @@ export default function AttendancePage() {
             return;
         }
 
-        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-        const photoData = canvas.toDataURL("image/jpeg", 0.85);
+        ctx.drawImage(vid, 0, 0, targetWidth, targetHeight);
+        const photoData = canvas.toDataURL("image/jpeg", 0.72);
         setPhoto(photoData);
         stopCamera();
     }, [stopCamera, toast]);
@@ -383,15 +414,25 @@ export default function AttendancePage() {
                         />
 
                         {streaming && (
-                            <button
-                                type="button"
-                                onClick={() => setIsMirrored((prev) => !prev)}
-                                className="absolute top-3 right-3 z-10 px-2.5 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center gap-1.5 backdrop-blur-md transition-all border border-white/20 shadow-sm"
-                                title="Klik untuk membalik tampilan kamera"
-                            >
-                                <FlipHorizontal className="w-3.5 h-3.5" />
-                                <span>{isMirrored ? "Cermin: ON" : "Cermin: OFF"}</span>
-                            </button>
+                            <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={toggleFacingMode}
+                                    className="px-2.5 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center gap-1.5 backdrop-blur-md transition-all border border-white/20 shadow-sm"
+                                    title="Ganti Kamera Depan / Belakang"
+                                >
+                                    <SwitchCamera className="w-3.5 h-3.5" />
+                                    <span>{facingMode === "user" ? "Kamera Depan" : "Kamera Belakang"}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMirrored((prev) => !prev)}
+                                    className="p-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center backdrop-blur-md transition-all border border-white/20 shadow-sm"
+                                    title="Klik untuk membalik cermin kamera"
+                                >
+                                    <FlipHorizontal className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
                         )}
 
                         {!streaming && !photo && (
@@ -405,7 +446,7 @@ export default function AttendancePage() {
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={startCamera}
+                                    onClick={() => void startCamera()}
                                     className="btn btn-primary text-xs py-2.5 px-4 font-bold shadow-lg"
                                 >
                                     <Camera className="w-4 h-4" /> Buka Kamera

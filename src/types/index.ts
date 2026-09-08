@@ -96,14 +96,23 @@ export type PayrollComponentInput = {
     amount: number;
 };
 
+export type AttendanceLocation = {
+    lat: number;
+    lng: number;
+    accuracy?: number;
+    clientIp?: string;
+    isOfficeWifi?: boolean;
+    networkName?: string;
+};
+
 export type AttendanceRecord = {
     id: string;
     employeeId: string;
     date: string;
     clockIn?: string | null;
     clockOut?: string | null;
-    clockInLocation?: { lat: number; lng: number } | null;
-    clockOutLocation?: { lat: number; lng: number } | null;
+    clockInLocation?: AttendanceLocation | null;
+    clockOutLocation?: AttendanceLocation | null;
     clockInPhoto?: string | null;
     clockOutPhoto?: string | null;
     status: "present" | "late" | "absent" | "leave";

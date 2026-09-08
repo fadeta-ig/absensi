@@ -423,7 +423,7 @@ Semua endpoint API berlokasi di bawah direktori `src/app/api/` (77 Route Handler
 ### 3. Absensi & Koreksi (`/api/attendance/*`)
 - **`GET /api/attendance`:** Mengambil rekaman log kehadiran (filter per karyawan / tanggal).
 - **`GET /api/attendance/network`:** Mendeteksi status koneksi Wi-Fi kantor (`192.168.20.1`) secara real-time untuk validasi sebelum submit.
-- **`POST /api/attendance`:** Melakukan clock-in atau clock-out dengan validasi IP Wi-Fi kantor (192.168.20.1), GPS geofencing Haversine, deteksi mock-location, dan penyimpanan foto selfie kehadiran.
+- **`POST /api/attendance`:** Melakukan clock-in atau clock-out dengan validasi IP Wi-Fi kantor (192.168.20.1), GPS geofencing Haversine, deteksi mock-location, penyimpanan foto selfie terkompresi downsampling 480px (~30KB), serta penyematan audit metadata jaringan (`clientIp`, `isOfficeWifi`, `networkName`) ke dalam JSON lokasi.
 - **`GET /api/attendance/correction` & `POST ...` & `PUT ...`:** Pengajuan koreksi jam absensi oleh karyawan dan persetujuan/penolakan oleh Manager/HR.
 
 ### 4. Kunjungan Klien Lapangan (`/api/visits/*`)
@@ -538,7 +538,7 @@ Total terdapat **56 rute halaman tampilan** (`page.tsx`):
 | Route | Tujuan | Komponen Utama | Data Source | Akses |
 | :--- | :--- | :--- | :--- | :--- |
 | `/dashboard` | Dashboard analitik HR (statistik absensi hari ini, cuti pending, aktivitas terbaru). | `DashboardPage` | `/api/analytics`, `/api/attendance`, `/api/leave` | HR Admin |
-| `/dashboard/attendance` | Monitoring rekaman absensi seluruh karyawan & live status. | `AttendancePage` | `/api/attendance` | HR Admin |
+| `/dashboard/attendance` | Monitoring rekaman absensi seluruh karyawan, audit verifikasi Wi-Fi kantor & IP, live status, & ekspor Excel. | `AttendancePage` | `/api/attendance` | HR Admin |
 | `/dashboard/attendance/correction` | Verifikasi & persetujuan koreksi absensi. | `AttendanceCorrectionPage` | `/api/attendance/correction` | HR Admin |
 | `/dashboard/visits` | Monitoring laporan kunjungan klien & verifikasi foto lapangan ber-watermark. | `VisitsPage` | `/api/visits` | HR Admin |
 | `/dashboard/leave` | Manajemen permohonan cuti tahunan, sakit, & izin. | `LeavePage` | `/api/leave` | HR Admin |
@@ -566,7 +566,7 @@ Total terdapat **56 rute halaman tampilan** (`page.tsx`):
 | Route | Tujuan | Komponen Utama | Data Source | Akses |
 | :--- | :--- | :--- | :--- | :--- |
 | `/employee` | Dashboard beranda karyawan (jam kerja hari ini, shortcut cepat, status clock-in).| `EmployeeDashboard` | `/api/attendance`, `/api/notifications/employee` | Karyawan |
-| `/employee/attendance` | Absensi 3-faktor: verifikasi Wi-Fi kantor (192.168.20.1), validasi GPS geofencing, & foto selfie instan. | `AttendanceCameraPage`| `/api/attendance/network`, `/api/attendance` | Karyawan |
+| `/employee/attendance` | Absensi 3-faktor: verifikasi Wi-Fi kantor (192.168.20.1), validasi GPS geofencing, foto selfie terkompresi 480px, toggle kamera depan/belakang, & cek ulang jaringan instan. | `AttendanceCameraPage`| `/api/attendance/network`, `/api/attendance` | Karyawan |
 | `/employee/attendance-history` | Riwayat log kehadiran pribadi & ringkasan kehadiran bulanan. | `AttendanceHistory` | `/api/attendance` | Karyawan |
 | `/employee/attendance/correction`| Formulir pengajuan koreksi jam absensi. | `AttendanceCorrection` | `/api/attendance/correction` | Karyawan |
 | `/employee/visits` | Pelaporan kunjungan klien luar kantor (check-in, check-out, multi-photo). | `EmployeeVisitsPage` | `/api/visits` | Karyawan |
@@ -647,8 +647,14 @@ Komponen tak kasat mata yang terpasang di portal karyawan untuk mendaftarkan Web
 - **Geofencing & Anti-Spoofing:**
   - Pengecekan jarak koordinat pengguna terhadap titik kantor (`Office WIG` & `Office MKI`) menggunakan formula **Haversine** (`calculateDistance`, toleransi radius 100 meter).
   - `gpsValidator.ts` memeriksa integritas data lokasi: mendeteksi akurasi yang terlalu rendah (>100m), akurasi palsu/mock (<1m atau 0m), dan anomali kecepatan gerak tidak wajar (>14 m/s atau 50 km/jam).
-- **Foto Selfie Bukti Kehadiran:**
-  - Pengambilan foto selfie cepat menggunakan HTML5 MediaDevices Canvas tanpa model neural network yang berat, menghasilkan proses absensi instan (< 1 detik) tanpa beban pemanasan CPU pada ponsel karyawan.
+- **Foto Selfie Cepat & Downsampling Ringan:**
+  - Pengambilan foto selfie cepat menggunakan HTML5 MediaDevices Canvas tanpa beban pemindaian neural network yang lambat.
+  - **Downsampling Canvas:** Resolusi dibatasi maksimal lebar `480px` pada kualitas JPEG `0.72`, mereduksi ukuran Base64 dari ~400 KB menjadi hanya **~25–35 KB per foto (hemat 92%)**. Untuk 70 karyawan, konsumsi storage VPS hanya bertambah ~105 MB / bulan.
+  - **Toggle Kamera Depan / Belakang:** Fitur pembalik kamera (`facingMode: "user"` vs `"environment"`) berikon `SwitchCamera` dengan penyesuaian cermin (*mirroring*) otomatis.
+- **Audit Trail Jaringan di Dashboard HR:**
+  - Metadata jaringan (`clientIp`, `isOfficeWifi`, `networkName`) disematkan ke dalam JSON kolom `clockInLocation` dan `clockOutLocation` tanpa perlu migrasi skema database.
+  - Tabel absensi HR ([`/dashboard/attendance`](file:///c:/Users/ITSupportWIG/Desktop/hriswig/src/app/dashboard/attendance/page.tsx)) menampilkan kolom **Verifikasi** dengan badge visual: 🟢 **Wi-Fi WIG** (dengan hover tooltip menampilkan IP perangkat karyawan), 🟡 **Bypass**, dan 🔘 **GPS**.
+  - Ekspor laporan Excel otomatis menyertakan kolom "Verifikasi Jaringan".
 
 ### 2. Pelaporan Kunjungan Lapangan (Field Visits) & Watermarking
 - Staf lapangan (sales/teknisi) membuat draft kunjungan ke klien.

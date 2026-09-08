@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, CheckSquare, Square, FileSpreadsheet } from "lucide-react";
+import { Camera, CheckSquare, Square, FileSpreadsheet, Wifi, ShieldCheck, MapPin } from "lucide-react";
 import { AttendanceRecord, Employee } from "../types";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
@@ -67,6 +67,11 @@ export function AttendanceLogTab({
 
         const data = targetList.map(r => {
             const info = getEmpInfo(r.employeeId);
+            const loc = (typeof r.clockInLocation === "object" ? r.clockInLocation : null) ||
+                        (typeof r.clockOutLocation === "object" ? r.clockOutLocation : null);
+            const verification = loc?.isOfficeWifi ? `Wi-Fi Kantor (${loc.clientIp || "192.168.20.1"})` :
+                                 loc?.networkName ? loc.networkName :
+                                 loc?.lat ? `GPS (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})` : "-";
             return {
                 employeeId: r.employeeId,
                 name: info.name,
@@ -75,6 +80,7 @@ export function AttendanceLogTab({
                 date: r.date,
                 clockIn: r.clockIn ? formatTime(r.clockIn) : "-",
                 clockOut: r.clockOut ? formatTime(r.clockOut) : "-",
+                verification,
                 status: statusLabel(r.status),
             };
         });
@@ -89,6 +95,7 @@ export function AttendanceLogTab({
                 { key: "date", label: "Tanggal" },
                 { key: "clockIn", label: "Jam Masuk" },
                 { key: "clockOut", label: "Jam Pulang" },
+                { key: "verification", label: "Verifikasi Jaringan" },
                 { key: "status", label: "Status" },
             ],
             `Log_Absensi_Terpilih_${new Date().toISOString().slice(0, 10)}`,
@@ -123,6 +130,7 @@ export function AttendanceLogTab({
                             <th className="w-32">Tanggal</th>
                             <th className="w-24">Clock In</th>
                             <th className="w-24">Clock Out</th>
+                            <th className="w-28 text-center">Verifikasi</th>
                             <th className="w-20 text-center hidden md:table-cell">Foto</th>
                             <th className="w-32 text-center">Status</th>
                         </tr>
@@ -130,7 +138,7 @@ export function AttendanceLogTab({
                     <tbody className="divide-y divide-[var(--border)]">
                         {paginatedRecords.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="text-center py-12 text-[var(--text-muted)] italic">
+                                <td colSpan={10} className="text-center py-12 text-[var(--text-muted)] italic">
                                     Tidak ada data absensi ditemukan untuk kriteria ini.
                                 </td>
                             </tr>
@@ -138,6 +146,8 @@ export function AttendanceLogTab({
                             paginatedRecords.map((r) => {
                                 const info = getEmpInfo(r.employeeId);
                                 const isSelected = selectedIds.has(r.id);
+                                const loc = (typeof r.clockInLocation === "object" ? r.clockInLocation : null) ||
+                                            (typeof r.clockOutLocation === "object" ? r.clockOutLocation : null);
                                 return (
                                     <tr key={r.id} className={`hover:bg-[var(--secondary)]/50 transition-colors ${isSelected ? "bg-[var(--primary)]/5" : ""}`}>
                                         <td className="text-center">
@@ -170,6 +180,35 @@ export function AttendanceLogTab({
                                         </td>
                                         <td className="text-sm font-medium text-orange-600">
                                             {formatTime(r.clockOut)}
+                                        </td>
+                                        <td className="text-center">
+                                            {loc?.isOfficeWifi ? (
+                                                <span
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                                                    title={`Terverifikasi Wi-Fi Kantor WIG (IP: ${loc.clientIp || "192.168.20.1"})`}
+                                                >
+                                                    <Wifi className="w-3 h-3 shrink-0" />
+                                                    Wi-Fi WIG
+                                                </span>
+                                            ) : loc?.networkName === "Bypass Khusus" ? (
+                                                <span
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                                                    title="Bypass Lokasi / Jaringan Khusus"
+                                                >
+                                                    <ShieldCheck className="w-3 h-3 shrink-0" />
+                                                    Bypass
+                                                </span>
+                                            ) : loc?.lat ? (
+                                                <span
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                                                    title={`Koordinat GPS: ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`}
+                                                >
+                                                    <MapPin className="w-3 h-3 shrink-0" />
+                                                    GPS
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-[var(--text-muted)]">-</span>
+                                            )}
                                         </td>
                                         <td className="hidden md:table-cell">
                                             <div className="flex items-center justify-center gap-1">

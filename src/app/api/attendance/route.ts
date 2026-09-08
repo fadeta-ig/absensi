@@ -65,8 +65,12 @@ export async function POST(request: NextRequest) {
         }
 
         // ── Validasi Jaringan Wi-Fi Kantor WIG ──
+        const isOfficeWifi = isOfficeWifiNetwork(clientIp);
+        const networkName = isOfficeWifi
+            ? "Wi-Fi Kantor WIG"
+            : (employee.bypassLocation ? "Bypass Khusus" : "Jaringan Luar");
+
         if (!employee.bypassLocation) {
-            const isOfficeWifi = isOfficeWifiNetwork(clientIp);
             if (!isOfficeWifi) {
                 logger.warn("Attendance rejected: non-office network", {
                     employeeId: session.employeeId,
@@ -162,9 +166,18 @@ export async function POST(request: NextRequest) {
                 }
             }
 
+            const locationWithNetwork = body.location ? {
+                lat: body.location.lat,
+                lng: body.location.lng,
+                accuracy: body.location.accuracyMeters ?? undefined,
+                clientIp,
+                isOfficeWifi,
+                networkName,
+            } : null;
+
             const updated = await updateAttendance(existing.id, {
                 clockOut: new Date().toISOString(),
-                clockOutLocation: body.location,
+                clockOutLocation: locationWithNetwork,
                 clockOutPhoto: body.photo,
             });
             if (!updated) {
@@ -219,11 +232,20 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        const locationWithNetwork = body.location ? {
+            lat: body.location.lat,
+            lng: body.location.lng,
+            accuracy: body.location.accuracyMeters ?? undefined,
+            clientIp,
+            isOfficeWifi,
+            networkName,
+        } : null;
+
         const record = await createAttendance({
             employeeId: session.employeeId,
             date: today,
             clockIn: now.toISOString(),
-            clockInLocation: body.location,
+            clockInLocation: locationWithNetwork,
             clockInPhoto: body.photo,
             status,
         });
