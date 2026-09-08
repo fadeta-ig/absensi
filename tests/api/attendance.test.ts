@@ -17,4 +17,16 @@ describe("Attendance API Endpoints", () => {
             expect(data).toBeDefined();
         });
     });
+
+    describe("GET /api/attendance/network", () => {
+        it("should return network verification status for authenticated user", async () => {
+            const res = await fetchWithAuth("/attendance/network", hrCookie, { method: "GET" });
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data).toHaveProperty("isOfficeWifi");
+            expect(data).toHaveProperty("clientIp");
+            expect(data).toHaveProperty("networkName");
+        });
+    });
 });

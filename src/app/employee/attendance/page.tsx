@@ -3,48 +3,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
     Camera, MapPin, Clock, CheckCircle, AlertCircle, Loader2,
-    Video, VideoOff, ShieldCheck, ShieldAlert, ScanFace, AlertTriangle, FlipHorizontal
+    Video, VideoOff, ShieldCheck, ShieldAlert, Wifi, WifiOff, FlipHorizontal, RefreshCw
 } from "lucide-react";
-import Link from "next/link";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const log = createClientLogger("AttendancePage");
-const FACE_OPERATION_TIMEOUT_MS = 25_000;
-
-class FaceVerificationTimeoutError extends Error {
-    constructor(stage: string) {
-        super(`${stage} melebihi batas waktu`);
-        this.name = "FaceVerificationTimeoutError";
-    }
-}
-
-function withFaceTimeout<T>(operation: Promise<T>, stage: string): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-        const timeoutId = window.setTimeout(
-            () => reject(new FaceVerificationTimeoutError(stage)),
-            FACE_OPERATION_TIMEOUT_MS
-        );
-        operation.then(
-            (value) => {
-                window.clearTimeout(timeoutId);
-                resolve(value);
-            },
-            (error: unknown) => {
-                window.clearTimeout(timeoutId);
-                reject(error);
-            }
-        );
-    });
-}
-
-interface FaceVerification {
-    status: "idle" | "checking" | "match" | "mismatch" | "no_face" | "not_registered" | "error";
-    distance?: number;
-    message?: string;
-}
 
 interface GpsInfo {
     lat: number;
@@ -54,48 +20,72 @@ interface GpsInfo {
     warnings: string[];
 }
 
+interface NetworkInfo {
+    isOfficeWifi: boolean;
+    clientIp: string;
+    bypassLocation: boolean;
+    networkName: string;
+}
+
 export default function AttendancePage() {
     const toast = useToast();
     const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const verificationRunRef = useRef(0);
 
     const [streaming, setStreaming] = useState(false);
     const [isMirrored, setIsMirrored] = useState(true);
     const [photo, setPhoto] = useState<string | null>(null);
     const [gpsInfo, setGpsInfo] = useState<GpsInfo | null>(null);
+    const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
+    const [isNetworkChecking, setIsNetworkChecking] = useState(true);
     const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
     const [message, setMessage] = useState("");
     const [todayRecord, setTodayRecord] = useState<{ clockIn?: string; clockOut?: string } | null>(null);
 
-    // Face verification state
-    const [faceVerification, setFaceVerification] = useState<FaceVerification>({ status: "idle" });
-    const [registeredDescriptor, setRegisteredDescriptor] = useState<number[] | null>(null);
-    const [faceDescriptorError, setFaceDescriptorError] = useState("");
+    // ── 1. Fetch Network Status (Wi-Fi Kantor) ──
+    const checkNetworkStatus = useCallback(async () => {
+        setIsNetworkChecking(true);
+        try {
+            const res = await fetch("/api/attendance/network");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memeriksa status jaringan"));
+            const data: NetworkInfo = await res.json();
+            setNetworkInfo(data);
+            if (!data.isOfficeWifi && !data.bypassLocation) {
+                log.warn("Karyawan tidak terhubung ke Wi-Fi kantor", { ip: data.clientIp });
+            }
+        } catch (err) {
+            reportClientError("AttendancePage", "Gagal memeriksa status jaringan", err);
+        } finally {
+            setIsNetworkChecking(false);
+        }
+    }, []);
+
+    // ── 2. Fetch GPS with Validation ──
+    const checkGpsStatus = useCallback(async () => {
+        try {
+            const { getValidatedPosition } = await import("@/lib/gpsValidator");
+            const { position, validation } = await getValidatedPosition();
+            setGpsInfo({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                isValid: validation.isValid,
+                warnings: validation.warnings,
+            });
+            if (!validation.isValid) {
+                log.warn("GPS tidak valid", { warnings: validation.warnings });
+            }
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            reportClientError("AttendancePage", "Gagal mendapatkan lokasi GPS", err);
+            setMessage(errMsg || "Gagal mendapatkan lokasi. Aktifkan GPS pada perangkat Anda.");
+        }
+    }, []);
 
     useEffect(() => {
-        // Fetch GPS with validation
-        (async () => {
-            try {
-                const { getValidatedPosition } = await import("@/lib/gpsValidator");
-                const { position, validation } = await getValidatedPosition();
-                setGpsInfo({
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    accuracy: position.coords.accuracy,
-                    isValid: validation.isValid,
-                    warnings: validation.warnings,
-                });
-                if (!validation.isValid) {
-                    log.warn("GPS tidak valid", { warnings: validation.warnings });
-                }
-            } catch (err) {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                reportClientError("AttendancePage", "Gagal mendapatkan lokasi GPS", err);
-                setMessage(errMsg || "Gagal mendapatkan lokasi. Aktifkan GPS.");
-            }
-        })();
+        void checkNetworkStatus();
+        void checkGpsStatus();
 
         // Fetch today's attendance record
         fetch("/api/attendance")
@@ -115,35 +105,11 @@ export default function AttendancePage() {
                 setMessage(message);
                 toast(message, "error");
             });
-
-        // Fetch registered face descriptor
-        fetch("/api/auth/face")
-            .then(async (r) => {
-                if (!r.ok) {
-                    throw new Error(await getResponseErrorMessage(r, "Gagal memuat data wajah terdaftar."));
-                }
-                return r.json();
-            })
-            .then((data) => {
-                setFaceDescriptorError("");
-                if (data.hasFace && data.descriptor) {
-                    setRegisteredDescriptor(data.descriptor);
-                } else {
-                    log.warn("Wajah belum terdaftar", { hasFace: data.hasFace });
-                }
-            })
-            .catch((err) => {
-                const message = err instanceof Error ? err.message : "Gagal memuat data wajah terdaftar.";
-                reportClientError("AttendancePage", "Gagal memuat face descriptor", err);
-                setFaceDescriptorError(message);
-                setFaceVerification({ status: "error", message: `${message} Muat ulang halaman atau buka Pengaturan.` });
-                toast(message, "error");
-            });
-    }, [toast]);
+    }, [toast, checkNetworkStatus, checkGpsStatus]);
 
     const startCamera = useCallback(async () => {
         if (!navigator.mediaDevices?.getUserMedia) {
-            const errMsg = "Browser tidak mendukung camera API atau halaman tidak HTTPS.";
+            const errMsg = "Browser tidak mendukung camera API atau halaman tidak menggunakan HTTPS.";
             log.error(errMsg, { protocol: window.location.protocol });
             setMessage(errMsg);
             return;
@@ -161,7 +127,6 @@ export default function AttendancePage() {
                         .then(() => setStreaming(true))
                         .catch(() => setStreaming(true));
                 };
-                // Fallback: jika onloadedmetadata tidak terpicu dalam 5 detik
                 setTimeout(() => {
                     if (!streaming && videoRef.current?.readyState && videoRef.current.readyState >= 1) {
                         setStreaming(true);
@@ -171,7 +136,7 @@ export default function AttendancePage() {
         } catch (err) {
             const errName = err instanceof Error ? err.name : "UnknownError";
             reportClientError("AttendancePage", "Gagal mengakses kamera", err, { errorName: errName });
-            setMessage(`Gagal mengakses kamera: ${errName}. Berikan izin kamera.`);
+            setMessage(`Gagal mengakses kamera: ${errName}. Berikan izin akses kamera.`);
         }
     }, [streaming]);
 
@@ -184,148 +149,52 @@ export default function AttendancePage() {
         }
     }, []);
 
-    const captureAndVerify = useCallback(async () => {
+    const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current) return;
-        const verificationRun = verificationRunRef.current + 1;
-        verificationRunRef.current = verificationRun;
-        setPhoto(null);
-
         const vid = videoRef.current;
-        if (vid.videoWidth === 0 || vid.videoHeight === 0) {
-            log.warn("Video frame belum siap saat capture", { readyState: vid.readyState });
-        }
-
         const canvas = canvasRef.current;
+
         canvas.width = vid.videoWidth || 640;
         canvas.height = vid.videoHeight || 480;
+
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-            log.error("Gagal mendapatkan 2D context dari canvas");
-            const errorMessage = "Gagal mengambil foto dari kamera. Muat ulang halaman lalu coba lagi.";
-            setFaceVerification({ status: "error", message: errorMessage });
-            setStatus("error");
-            setMessage(errorMessage);
-            toast(errorMessage, "error");
+            toast("Gagal mengambil foto dari kamera.", "error");
             return;
         }
 
-        const captureCurrentFrame = () => {
-            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-            return canvas.toDataURL("image/jpeg", 0.85);
-        };
-
-        if (faceDescriptorError) {
-            const photoData = captureCurrentFrame();
-            setPhoto(photoData);
-            setFaceVerification({ status: "error", message: `${faceDescriptorError} Muat ulang halaman atau buka Pengaturan.` });
-            stopCamera();
-            return;
-        }
-
-        if (!registeredDescriptor) {
-            const photoData = captureCurrentFrame();
-            setPhoto(photoData);
-            setFaceVerification({ status: "not_registered", message: "Wajah belum terdaftar. Daftarkan di Pengaturan." });
-            stopCamera();
-            return;
-        }
-
-        setFaceVerification({ status: "checking", message: "Memindai beberapa frame wajah..." });
-
-        try {
-            const {
-                ensureStableFaceRecognitionBackend,
-                loadFaceModels,
-                detectFaceDescriptorDetailed,
-                compareFaces,
-                FACE_SCAN_ATTEMPTS,
-                FACE_SCAN_INTERVAL_MS,
-            } = await import("@/lib/faceRecognition");
-
-            await withFaceTimeout(ensureStableFaceRecognitionBackend(), "Persiapan mesin pemindai");
-            if (verificationRunRef.current !== verificationRun) return;
-            await withFaceTimeout(loadFaceModels(), "Pemuatan model wajah");
-            if (verificationRunRef.current !== verificationRun) return;
-
-            let descriptor: Float32Array | null = null;
-            for (let attempt = 0; attempt < FACE_SCAN_ATTEMPTS; attempt += 1) {
-                const scanResult = await withFaceTimeout(
-                    detectFaceDescriptorDetailed(vid),
-                    `Pemindaian wajah percobaan ${attempt + 1}`
-                );
-                if (verificationRunRef.current !== verificationRun) return;
-
-                if (scanResult.status === "success") {
-                    descriptor = scanResult.descriptor;
-                    break;
-                }
-                if (scanResult.status === "error") {
-                    reportClientError("AttendancePage", "Mesin deteksi wajah gagal", scanResult, { stage: scanResult.stage });
-                    setFaceVerification({
-                        status: "error",
-                        message: "Mesin pemindai wajah gagal dijalankan. Muat ulang halaman lalu coba lagi.",
-                    });
-                    return;
-                }
-                if (attempt < FACE_SCAN_ATTEMPTS - 1) {
-                    await new Promise<void>((resolve) => window.setTimeout(resolve, FACE_SCAN_INTERVAL_MS));
-                }
-            }
-
-            if (!descriptor) {
-                setFaceVerification({
-                    status: "no_face",
-                    message: `Wajah belum terdeteksi setelah ${FACE_SCAN_ATTEMPTS} percobaan. Bersihkan lensa dan coba lagi.`,
-                });
-                return;
-            }
-
-            const result = compareFaces(descriptor, registeredDescriptor);
-
-            if (result.match) {
-                const photoData = captureCurrentFrame();
-                setPhoto(photoData);
-                setFaceVerification({
-                    status: "match",
-                    distance: result.distance,
-                    message: `Identitas terverifikasi (${((1 - result.distance) * 100).toFixed(0)}% match)`,
-                });
-                stopCamera();
-            } else {
-                // compareFaces mencatat mismatch sebagai info-level client log.
-                setFaceVerification({
-                    status: "mismatch",
-                    distance: result.distance,
-                    message: "Wajah belum cocok. Bersihkan lensa, hadapkan wajah ke cahaya, lalu coba lagi.",
-                });
-            }
-        } catch (err) {
-            if (verificationRunRef.current !== verificationRun) return;
-            reportClientError("AttendancePage", "Error saat verifikasi wajah", err);
-            setFaceVerification({
-                status: "error",
-                message: err instanceof FaceVerificationTimeoutError
-                    ? `${err.message}. Proses dihentikan agar tidak terus memverifikasi; coba lagi.`
-                    : "Gagal memverifikasi wajah. Muat ulang halaman lalu coba lagi.",
-            });
-        }
-    }, [registeredDescriptor, faceDescriptorError, stopCamera, toast]);
+        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+        const photoData = canvas.toDataURL("image/jpeg", 0.85);
+        setPhoto(photoData);
+        stopCamera();
+    }, [stopCamera, toast]);
 
     const submitAttendance = useCallback(async () => {
-        if (!photo || !gpsInfo) return;
-
-        if (faceVerification.status !== "match") {
-            setMessage("Verifikasi wajah harus berhasil sebelum melakukan absensi.");
+        if (!photo) {
+            setMessage("Silakan ambil foto selfie kehadiran terlebih dahulu.");
             return;
         }
 
-        if (!gpsInfo.isValid) {
-            log.warn("Submit diblokir — GPS tidak valid", { warnings: gpsInfo.warnings });
-            setMessage("Lokasi GPS tidak valid. Pastikan GPS aktif dan tidak menggunakan lokasi palsu.");
+        const isBypass = networkInfo?.bypassLocation ?? false;
+
+        // Validasi Wi-Fi Kantor
+        if (!isBypass && (!networkInfo || !networkInfo.isOfficeWifi)) {
+            const err = `Anda harus terhubung ke Wi-Fi resmi kantor WIG (IP saat ini: ${networkInfo?.clientIp || "unknown"}).`;
+            setMessage(err);
+            toast(err, "error");
+            return;
+        }
+
+        // Validasi GPS
+        if (!isBypass && (!gpsInfo || !gpsInfo.isValid)) {
+            const err = "Lokasi GPS tidak valid. Pastikan GPS aktif dan berada di area kantor.";
+            setMessage(err);
+            toast(err, "error");
             return;
         }
 
         setStatus("submitting");
+        setMessage("");
 
         try {
             const res = await fetch("/api/attendance", {
@@ -333,9 +202,10 @@ export default function AttendancePage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     photo,
-                    location: { lat: gpsInfo.lat, lng: gpsInfo.lng },
+                    location: gpsInfo ? { lat: gpsInfo.lat, lng: gpsInfo.lng } : undefined,
                 }),
             });
+
             if (!res.ok) {
                 const errorMessage = await getResponseErrorMessage(res, "Gagal melakukan absensi");
                 setStatus("error");
@@ -356,75 +226,127 @@ export default function AttendancePage() {
         } catch (err) {
             reportClientError("AttendancePage", "Koneksi error saat submit absensi", err);
             setStatus("error");
-            toast("Absensi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
-            setMessage("Absensi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.");
+            const errText = "Absensi belum terkirim karena kendala koneksi. Coba lagi.";
+            toast(errText, "error");
+            setMessage(errText);
         }
-    }, [photo, gpsInfo, faceVerification.status, todayRecord]);
+    }, [photo, gpsInfo, networkInfo, router, toast]);
 
     const isClockIn = !todayRecord?.clockIn;
     const isClockOut = todayRecord?.clockIn && !todayRecord?.clockOut;
     const isDone = todayRecord?.clockIn && todayRecord?.clockOut;
 
-    /** Absensi hanya boleh dikirim setelah identitas wajah benar-benar cocok. */
-    const canSubmit = photo && gpsInfo?.isValid && faceVerification.status === "match" && status !== "submitting";
+    const isBypass = networkInfo?.bypassLocation ?? false;
+    const isNetworkOk = isBypass || (networkInfo?.isOfficeWifi ?? false);
+    const isGpsOk = isBypass || (gpsInfo?.isValid ?? false);
+    const canSubmit = photo && isNetworkOk && isGpsOk && status !== "submitting";
 
     return (
-        <div className="space-y-4 animate-[fadeIn_0.5s_ease]">
+        <div className="space-y-4 animate-[fadeIn_0.5s_ease] pb-20 lg:pb-0">
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Camera className="w-5 h-5 text-[var(--primary)]" />
-                    Absensi
+                    Absensi Kehadiran
                 </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Rekam kehadiran dengan foto, lokasi, dan verifikasi wajah</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">Verifikasi kehadiran via Wi-Fi Kantor & GPS</p>
             </div>
 
-            {/* Security Status Bar */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* ── Status Bar: Wi-Fi Kantor & GPS ── */}
+            <div className="grid grid-cols-2 gap-2.5">
+                {/* Wi-Fi Status */}
+                <div className={`flex items-center gap-2 p-3 rounded-2xl text-xs font-semibold border transition-all ${
+                    isNetworkChecking
+                        ? "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
+                        : isNetworkOk
+                            ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
+                            : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800"
+                }`}>
+                    {isNetworkChecking ? (
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0 text-[var(--primary)]" />
+                    ) : isNetworkOk ? (
+                        <Wifi className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                        <WifiOff className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                        <span className="block truncate">
+                            {isNetworkChecking
+                                ? "Memeriksa Wi-Fi..."
+                                : isNetworkOk
+                                    ? isBypass ? "Bypass Jaringan Aktif" : "Wi-Fi Kantor WIG"
+                                    : "Bukan Wi-Fi Kantor"}
+                        </span>
+                        {!isNetworkChecking && (
+                            <span className="text-[10px] opacity-75 block truncate">
+                                {networkInfo?.clientIp || "IP tidak terdeteksi"}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
                 {/* GPS Status */}
-                <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${!gpsInfo ? "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
-                        : gpsInfo.isValid ? "bg-green-50 text-green-700 border-green-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                    }`}>
-                    {!gpsInfo ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                        : gpsInfo.isValid ? <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                            : <ShieldAlert className="w-3.5 h-3.5 shrink-0" />}
-                    <span className="truncate">
-                        {!gpsInfo ? "Mencari GPS..."
-                            : gpsInfo.isValid ? `GPS Valid (±${Math.round(gpsInfo.accuracy)}m)`
-                                : "GPS Tidak Valid"}
-                    </span>
-                </div>
-
-                {/* Face Status */}
-                <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${faceVerification.status === "idle" ? "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
-                        : faceVerification.status === "match" ? "bg-green-50 text-green-700 border-green-200"
-                            : faceVerification.status === "checking" ? "bg-blue-50 text-blue-600 border-blue-200"
-                                : faceVerification.status === "not_registered" ? "bg-orange-50 text-orange-600 border-orange-200"
-                                    : faceVerification.status === "mismatch" ? "bg-red-50 text-red-700 border-red-200"
-                                        : "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
-                    }`}>
-                    {faceVerification.status === "checking" ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                        : faceVerification.status === "match" ? <ScanFace className="w-3.5 h-3.5 shrink-0" />
-                            : faceVerification.status === "mismatch" ? <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                                : faceVerification.status === "not_registered" ? <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                                    : <ScanFace className="w-3.5 h-3.5 shrink-0" />}
-                    <span className="truncate">
-                        {faceVerification.status === "idle" ? "Menunggu foto"
-                            : faceVerification.status === "match" ? "Wajah Cocok"
-                                : faceVerification.status === "checking" ? "Memverifikasi..."
-                                    : faceVerification.status === "not_registered" ? "Belum Daftar"
-                                        : faceVerification.status === "mismatch" ? "Tidak Cocok"
-                                            : faceVerification.status === "no_face" ? "Tidak Terdeteksi"
-                                                : "Error"}
-                    </span>
+                <div className={`flex items-center gap-2 p-3 rounded-2xl text-xs font-semibold border transition-all ${
+                    !gpsInfo
+                        ? "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
+                        : isGpsOk
+                            ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
+                            : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-300 dark:border-red-800"
+                }`}>
+                    {!gpsInfo ? (
+                        <Loader2 className="w-4 h-4 animate-spin shrink-0 text-[var(--primary)]" />
+                    ) : isGpsOk ? (
+                        <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                        <ShieldAlert className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                        <span className="block truncate">
+                            {!gpsInfo
+                                ? "Mencari GPS..."
+                                : isGpsOk
+                                    ? isBypass ? "Bypass GPS Aktif" : `GPS Valid (±${Math.round(gpsInfo.accuracy)}m)`
+                                    : "GPS Tidak Valid"}
+                        </span>
+                        {gpsInfo && (
+                            <span className="text-[10px] opacity-75 block truncate">
+                                {`${gpsInfo.lat.toFixed(4)}, ${gpsInfo.lng.toFixed(4)}`}
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            {/* Warning jika bukan Wi-Fi Kantor */}
+            {!isNetworkChecking && !isNetworkOk && (
+                <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                    <div className="flex items-center justify-between">
+                        <p className="font-bold flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                            Gunakan Wi-Fi Kantor WIG
+                        </p>
+                        <button
+                            type="button"
+                            onClick={checkNetworkStatus}
+                            className="text-[11px] font-bold text-[var(--primary)] hover:underline flex items-center gap-1"
+                        >
+                            <RefreshCw className="w-3 h-3" /> Cek Ulang
+                        </button>
+                    </div>
+                    <p className="text-[11px] leading-relaxed opacity-90">
+                        Perangkat Anda terdeteksi menggunakan paket data seluler atau jaringan luar (IP: {networkInfo?.clientIp || "-"}). Hubungkan HP Anda ke Wi-Fi kantor WIG untuk dapat melakukan absensi.
+                    </p>
+                </div>
+            )}
 
             {/* GPS Warnings */}
             {gpsInfo && gpsInfo.warnings.length > 0 && (
-                <div className={`p-3 rounded-lg space-y-1 border ${gpsInfo.isValid ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"}`}>
+                <div className={`p-3 rounded-2xl space-y-1 border text-xs ${
+                    gpsInfo.isValid
+                        ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
+                        : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
+                }`}>
                     {gpsInfo.warnings.map((w, i) => (
-                        <p key={i} className={`text-xs flex items-start gap-1.5 ${gpsInfo.isValid ? "text-yellow-700" : "text-red-700"}`}>
+                        <p key={i} className="flex items-start gap-1.5 leading-relaxed">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                             {w}
                         </p>
@@ -432,125 +354,170 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            {/* Status Banner */}
+            {/* ── Status Banner Selesai ── */}
             {isDone && (
-                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
+                    <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <div>
-                        <p className="text-sm font-semibold text-green-800">Absensi hari ini selesai</p>
-                        <p className="text-xs text-green-600">
-                            In: {todayRecord?.clockIn ? new Date(todayRecord.clockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
+                        <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Absensi Hari Ini Selesai</p>
+                        <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                            Clock In: {todayRecord?.clockIn ? new Date(todayRecord.clockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
                             {" • "}
-                            Out: {todayRecord?.clockOut ? new Date(todayRecord.clockOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
+                            Clock Out: {todayRecord?.clockOut ? new Date(todayRecord.clockOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
                         </p>
                     </div>
                 </div>
             )}
 
-            {/* Camera */}
+            {/* ── Kamera & Form Absensi ── */}
             {!isDone && (
                 <div className="card overflow-hidden">
-                    <div className="relative w-full aspect-[4/3] sm:aspect-video bg-[var(--foreground)] text-[var(--background)] rounded-t-xl overflow-hidden">
-                        <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`} style={{ transform: isMirrored ? "scaleX(-1)" : "none" }} />
+                    <div className="relative w-full aspect-[4/3] sm:aspect-video bg-black text-white rounded-t-2xl overflow-hidden">
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className={`w-full h-full object-cover ${streaming ? "block" : "hidden"}`}
+                            style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
+                        />
+
                         {streaming && (
                             <button
                                 type="button"
                                 onClick={() => setIsMirrored((prev) => !prev)}
-                                className="absolute top-3 right-3 z-10 px-2.5 py-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center gap-1.5 backdrop-blur-sm transition-all border border-white/20 shadow-sm"
-                                title="Klik untuk membalik/cermin tampilan kamera"
+                                className="absolute top-3 right-3 z-10 px-2.5 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-white text-[11px] font-medium flex items-center gap-1.5 backdrop-blur-md transition-all border border-white/20 shadow-sm"
+                                title="Klik untuk membalik tampilan kamera"
                             >
                                 <FlipHorizontal className="w-3.5 h-3.5" />
                                 <span>{isMirrored ? "Cermin: ON" : "Cermin: OFF"}</span>
                             </button>
                         )}
+
                         {!streaming && !photo && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/50">
-                                <Video className="w-12 h-12 opacity-30" />
-                                <p className="text-sm">Kamera belum aktif</p>
-                                <button onClick={startCamera} className="btn btn-primary btn-sm">
-                                    <Camera className="w-4 h-4" /> Aktifkan Kamera
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/60 p-4 text-center">
+                                <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center">
+                                    <Camera className="w-7 h-7 text-white/80" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-white">Kamera Belum Aktif</p>
+                                    <p className="text-xs text-white/60 mt-0.5">Aktifkan kamera untuk mengambil foto selfie kehadiran</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={startCamera}
+                                    className="btn btn-primary text-xs py-2.5 px-4 font-bold shadow-lg"
+                                >
+                                    <Camera className="w-4 h-4" /> Buka Kamera
                                 </button>
                             </div>
                         )}
+
                         {photo && (
-                            <img src={photo} alt="Captured" className="w-full h-full object-cover" style={{ transform: isMirrored ? "scaleX(-1)" : "none" }} />
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                                src={photo}
+                                alt="Foto Absensi"
+                                className="w-full h-full object-cover"
+                                style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
+                            />
                         )}
+
                         {streaming && (
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                <div className="w-[35%] aspect-[3/4] border-2 border-[var(--primary)]/60 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.15)]" />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                                <div className="w-48 h-64 border-2 border-white/40 rounded-[50%] shadow-[0_0_0_9999px_rgba(0,0,0,0.25)]" />
                             </div>
                         )}
+
                         <canvas ref={canvasRef} className="hidden" />
                     </div>
 
                     <div className="p-4 space-y-3">
-                        {/* Face verification message */}
-                        {faceVerification.status !== "idle" && faceVerification.message && (
-                            <div className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium border ${faceVerification.status === "match" ? "bg-green-50 text-green-700 border-green-200"
-                                    : faceVerification.status === "checking" ? "bg-blue-50 text-blue-600 border-blue-200"
-                                        : faceVerification.status === "not_registered" ? "bg-orange-50 text-orange-600 border-orange-200"
-                                            : "bg-red-50 text-red-700 border-red-200"
-                                }`}>
-                                {faceVerification.status === "checking" ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                                    : faceVerification.status === "match" ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
-                                        : <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
-                                <span>{faceVerification.message}</span>
-                                {faceVerification.status === "not_registered" && (
-                                    <Link href="/employee/settings" className="ml-auto text-[var(--primary)] underline font-semibold whitespace-nowrap">
-                                        Daftar →
-                                    </Link>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Controls */}
+                        {/* Tombol Kontrol Kamera */}
                         <div className="flex gap-2">
                             {streaming ? (
                                 <>
-                                    <button onClick={captureAndVerify} className="btn btn-primary flex-1" disabled={faceVerification.status === "checking"}>
-                                        {faceVerification.status === "checking"
-                                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                                            : <Camera className="w-4 h-4" />}
-                                        Ambil Foto
+                                    <button
+                                        type="button"
+                                        onClick={capturePhoto}
+                                        className="btn btn-primary flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold shadow-md"
+                                    >
+                                        <Camera className="w-4 h-4" />
+                                        Jepret Foto
                                     </button>
-                                    <button onClick={stopCamera} className="btn btn-secondary">
+                                    <button
+                                        type="button"
+                                        onClick={stopCamera}
+                                        className="btn btn-secondary px-3.5 py-3"
+                                        title="Tutup Kamera"
+                                    >
                                         <VideoOff className="w-4 h-4" />
                                     </button>
                                 </>
                             ) : photo ? (
                                 <>
-                                    <button onClick={() => { setPhoto(null); setFaceVerification({ status: "idle" }); startCamera(); }} className="btn btn-secondary flex-1">Ulang</button>
-                                    <button onClick={submitAttendance} className="btn btn-primary flex-1" disabled={!canSubmit}>
-                                        {status === "submitting" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                                        {isClockIn ? "Clock In" : isClockOut ? "Clock Out" : "Submit"}
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPhoto(null); void startCamera(); }}
+                                        disabled={status === "submitting"}
+                                        className="btn btn-secondary flex-1 py-3 text-xs font-semibold"
+                                    >
+                                        Foto Ulang
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={submitAttendance}
+                                        disabled={!canSubmit}
+                                        className={`btn btn-primary flex-1 flex items-center justify-center gap-2 py-3 text-xs font-bold shadow-md ${
+                                            !canSubmit ? "opacity-60 cursor-not-allowed" : ""
+                                        }`}
+                                    >
+                                        {status === "submitting" ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Mengirim...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="w-4 h-4" />
+                                                {isClockIn ? "Kirim Clock In" : isClockOut ? "Kirim Clock Out" : "Kirim Absensi"}
+                                            </>
+                                        )}
                                     </button>
                                 </>
                             ) : null}
                         </div>
 
-                        {/* Info */}
-                        <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
+                        {/* Info Footer Waktu & Koordinat */}
+                        <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-1 border-t border-[var(--border)]">
                             <div className="flex items-center gap-1.5">
                                 <MapPin className="w-3.5 h-3.5" />
-                                {gpsInfo ? `${gpsInfo.lat.toFixed(4)}, ${gpsInfo.lng.toFixed(4)}` : "Mendapatkan lokasi..."}
+                                {gpsInfo ? `${gpsInfo.lat.toFixed(4)}, ${gpsInfo.lng.toFixed(4)}` : "Mencari GPS..."}
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <Clock className="w-3.5 h-3.5" />
-                                {new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                                {new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Message */}
+            {/* Notifikasi / Error Message */}
             {message && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${status === "success" ? "bg-green-50 text-green-700 border border-green-200"
-                        : status === "error" ? "bg-red-50 text-red-700 border border-red-200"
-                            : "bg-yellow-50 text-yellow-700 border border-yellow-200"
-                    }`}>
-                    {status === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                    {message}
+                <div className={`flex items-start gap-2.5 p-3.5 rounded-2xl text-xs leading-relaxed border ${
+                    status === "success"
+                        ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                        : status === "error"
+                            ? "bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-800"
+                            : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                }`}>
+                    {status === "success" ? (
+                        <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                    ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                    )}
+                    <span>{message}</span>
                 </div>
             )}
         </div>

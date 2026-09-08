@@ -38,7 +38,7 @@ export const attendanceSchema = z.object({
     /** Optional karena employees dengan bypassLocation=true tidak kirim lokasi. Validasi conditional di route handler. */
     location: locationSchema.optional(),
     photo: z.string()
-        .min(1, "Foto absensi wajib disertakan untuk keperluan face recognition")
+        .min(1, "Foto absensi wajib disertakan sebagai bukti kehadiran")
         .max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)"),
 });
 
@@ -348,14 +348,6 @@ export const todoUpdateSchema = z.object({
     text: z.string().min(1).optional(),
     completed: z.boolean().optional(),
     // ⛔ employeeId tidak bisa diubah via update
-});
-
-/* ───────────────────── Face Descriptor ───────────────────── */
-
-export const faceDescriptorSchema = z.object({
-    descriptor: z
-        .array(z.number())
-        .length(128, "Face descriptor harus berupa array 128 angka"),
 });
 
 /* ───────────────────── Master Data ───────────────────── */

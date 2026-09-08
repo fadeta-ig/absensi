@@ -7,6 +7,7 @@ import {
     updateAttendance,
 } from "@/lib/services/attendanceService";
 import { prisma } from "@/lib/prisma";
+import { extractClientIp, isOfficeWifiNetwork } from "@/lib/networkValidator";
 import { calculateDistance } from "@/lib/utils";
 import { toWIBDateString, getWIBHoursMinutes, getWIBDayOfWeek } from "@/lib/timezone";
 import { attendanceSchema } from "@/lib/validations/validationSchemas";
@@ -49,12 +50,7 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, attendanceSchema);
         if ("error" in result) return result.error;
         const body = result.data;
-        // Photo validation is enforced by attendanceSchema (min(1) + max(2.8MB))
-        //
-        // ⚠️ KNOWN LIMITATION: Face verification saat ini hanya dilakukan client-side
-        // via face-api.js. Server menerima foto tanpa re-verifikasi descriptor.
-        // TODO: Implementasi server-side face descriptor verification memerlukan
-        // @tensorflow/tfjs-node + model loading. Tracked as future enhancement.
+        const clientIp = extractClientIp(request);
 
         const today = toWIBDateString();
 
@@ -66,6 +62,21 @@ export async function POST(request: NextRequest) {
 
         if (!employee) {
             return NextResponse.json({ error: "Data karyawan tidak ditemukan" }, { status: 404 });
+        }
+
+        // ── Validasi Jaringan Wi-Fi Kantor WIG ──
+        if (!employee.bypassLocation) {
+            const isOfficeWifi = isOfficeWifiNetwork(clientIp);
+            if (!isOfficeWifi) {
+                logger.warn("Attendance rejected: non-office network", {
+                    employeeId: session.employeeId,
+                    clientIp,
+                });
+                return NextResponse.json(
+                    { error: `Absensi ditolak. Anda harus terhubung ke Wi-Fi resmi kantor WIG (Terdeteksi IP luar/seluler: ${clientIp || "unknown"}).` },
+                    { status: 403 }
+                );
+            }
         }
 
         // Location verification logic

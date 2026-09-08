@@ -1,7 +1,6 @@
 "use client";
 
 import { Settings } from "lucide-react";
-import { FaceRegistrationCard } from "./components/FaceRegistrationCard";
 import { ChangePasswordCard } from "./components/ChangePasswordCard";
 
 export default function SettingsPage() {
@@ -14,9 +13,6 @@ export default function SettingsPage() {
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Kelola akun dan keamanan Anda</p>
             </div>
-
-            {/* ═══ Face Registration Card ═══ */}
-            <FaceRegistrationCard />
 
             {/* ═══ Change Password Card ═══ */}
             <ChangePasswordCard />
