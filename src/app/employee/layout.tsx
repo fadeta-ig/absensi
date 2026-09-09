@@ -37,7 +37,7 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
     pathname: string;
     onNavigate: (href: string) => void;
 }) {
-    // Custom mobile order: Beranda, Riwayat, Absensi (tengah), Koreksi, Kunjungan
+    // Mobile nav items: Beranda, Riwayat, Absensi, Koreksi, Kunjungan
     const mobileItems = [
         items.find(i => i.href === "/employee"),
         items.find(i => i.href === "/employee/attendance-history"),
@@ -53,26 +53,10 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
                 {/* Ambient liquid glow behind the nav */}
                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-r from-primary/10 via-transparent to-accent/10 blur-xl -z-10" />
 
-                {mobileItems.map((item, i) => {
+                {mobileItems.map((item) => {
                     if (!item) return null;
                     const isActive = pathname === item.href;
                     const Icon = item.icon;
-                    const isCenter = i === 2; // Absensi
-
-                    if (isCenter) {
-                        return (
-                            <div key={item.href} className="relative -top-7">
-                                {/* Glowing liquid aura for center button */}
-                                <div className="absolute inset-0 bg-primary/40 blur-xl rounded-full scale-125 animate-pulse" />
-                                <button
-                                    onClick={() => onNavigate(item.href!)}
-                                    className="relative flex flex-col items-center justify-center w-[68px] h-[68px] rounded-full bg-gradient-to-tr from-primary-700 via-primary to-primary-light text-white shadow-[0_8px_20px_rgba(128,0,32,0.4),inset_0_2px_4px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.2)] border border-white/20 transition-all duration-300 active:scale-95 hover:scale-105"
-                                >
-                                    <Icon className="w-8 h-8 drop-shadow-md" />
-                                </button>
-                            </div>
-                        );
-                    }
 
                     return (
                         <button
