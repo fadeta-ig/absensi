@@ -55,6 +55,8 @@ interface AppShellProps {
     onLogout: () => void;
     /** Status proses logout */
     logoutLoading?: boolean;
+    /** Sembunyikan hamburger menu di mobile header jika navigasi mobile terpusat pada beranda/bottom-nav */
+    hideMobileHamburger?: boolean;
     children: React.ReactNode;
 }
 
@@ -72,6 +74,7 @@ export default function AppShell({
     mobileBottomNav,
     onLogout,
     logoutLoading = false,
+    hideMobileHamburger = false,
     children,
 }: AppShellProps) {
     const toast = useToast();
@@ -197,18 +200,29 @@ export default function AppShell({
 
             {/* ── Mobile Header ─────────────────────────────────── */}
             <header className="fixed top-0 left-0 right-0 h-14 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
-                <button
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--secondary)] transition-colors"
-                >
-                    <Menu className="w-5 h-5 text-[var(--text-primary)]" />
-                </button>
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 relative">
-                        <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
+                {hideMobileHamburger ? (
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 relative shrink-0">
+                            <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" priority />
+                        </div>
+                        <span className="text-sm font-bold tracking-tight text-[var(--primary)]">{mobileTitle}</span>
                     </div>
-                    <span className="text-sm font-bold text-[var(--primary)]">{mobileTitle}</span>
-                </div>
+                ) : (
+                    <>
+                        <button
+                            onClick={() => setSidebarOpen(!sidebarOpen)}
+                            className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--secondary)] transition-colors"
+                        >
+                            <Menu className="w-5 h-5 text-[var(--text-primary)]" />
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 relative">
+                                <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
+                            </div>
+                            <span className="text-sm font-bold text-[var(--primary)]">{mobileTitle}</span>
+                        </div>
+                    </>
+                )}
                 <div className="flex items-center gap-1">
                     {mobileHeaderRight}
                 </div>

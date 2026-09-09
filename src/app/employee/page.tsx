@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { 
     Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, 
-    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard, AlertCircle, Loader2
+    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard, AlertCircle, Loader2,
+    Grid, ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import AllMenusSheet from "./components/AllMenusSheet";
 
 interface NewsItem { id: string; title: string; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
@@ -22,6 +24,8 @@ export default function EmployeeHomePage() {
         departmentRel?: { name: string };
         divisionRel?: { name: string };
         positionRel?: { name: string };
+        hasSubordinates?: boolean;
+        subordinates?: unknown[];
     } | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [news, setNews] = useState<NewsItem[]>([]);
@@ -29,6 +33,7 @@ export default function EmployeeHomePage() {
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
+    const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
 
     useEffect(() => {
         const loadHomeData = async () => {
@@ -175,6 +180,33 @@ export default function EmployeeHomePage() {
                 ))}
             </div>
 
+            {/* ─── Tombol Buka Menu Presensi ───────────────────── */}
+            <button
+                type="button"
+                onClick={() => setIsAllMenusOpen(true)}
+                className="w-full py-3 px-4 rounded-2xl bg-[var(--card)] hover:bg-[var(--secondary)] border border-[var(--border)] hover:border-[var(--primary)]/40 shadow-sm transition-all duration-200 flex items-center justify-between group active:scale-[0.99]"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                        <Grid className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                        <span className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors block leading-tight">
+                            Buka Menu Presensi
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] block mt-0.5 leading-tight">
+                            Akses seluruh menu & layanan HRIS
+                        </span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full">
+                        14 Layanan
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
+                </div>
+            </button>
+
             {/* ─── Stats Row (Compact) ─────────────────────────── */}
             <div className="grid grid-cols-2 gap-3">
                 {/* Total Kehadiran */}
@@ -242,6 +274,13 @@ export default function EmployeeHomePage() {
                     </div>
                 )}
             </div>
+
+            {/* ─── All Menus Bottom Sheet ──────────────────────── */}
+            <AllMenusSheet
+                isOpen={isAllMenusOpen}
+                onClose={() => setIsAllMenusOpen(false)}
+                hasSubordinates={Boolean(user?.hasSubordinates || (Array.isArray(user?.subordinates) && user.subordinates.length > 0))}
+            />
 
         </div>
     );

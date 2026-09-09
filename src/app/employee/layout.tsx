@@ -198,6 +198,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             storageKey="employee-sidebar-collapsed"
             onLogout={handleLogout}
             logoutLoading={loggingOut}
+            hideMobileHamburger={true}
             extraNav={monitoringNav}
             mobileHeaderRight={
                 <div className="flex items-center gap-1">
