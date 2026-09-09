@@ -102,7 +102,7 @@ export async function GET() {
             notifications.push({
                 id:      `correction-${corr.id}`,
                 type:    "correction",
-                title:   corr.status === "APPROVED" ? "Koreksi Absensi Disetujui" : "Koreksi Absensi Ditolak",
+                title:   corr.status === "APPROVED" ? "Koreksi Presensi Disetujui" : "Koreksi Presensi Ditolak",
                 message: `Koreksi tanggal ${new Date(corr.targetDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" })} ${corr.status === "APPROVED" ? "telah disetujui" : "ditolak oleh HR"}`,
                 href:    "/employee/attendance/correction",
                 time:    corr.updatedAt.toISOString(),

@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
                 where: { date: dateRange, employeeId: { in: validEmpIds } },
                 orderBy: { date: "asc" },
             });
-            sheetName = "Laporan Absensi";
+            sheetName = "Laporan Presensi";
 
             if (mode === "matrix") {
                 finalHeaders = ["Nama Karyawan", "ID Karyawan", "Departemen"];
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
 
                     return row;
                 });
-                sheetName = `Rekap_Absensi_${startDateStr}_${endDateStr}`;
+                sheetName = `Rekap_Presensi_${startDateStr}_${endDateStr}`;
             } else if (isGrouped) {
                 // Group by employee
                 const groupedMap = new Map<string, typeof records>();

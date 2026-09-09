@@ -176,7 +176,7 @@ export default function AuditTrailPage() {
                             <option value="">Semua Entitas</option>
                             <option value="PAYSLIP">Slip Gaji</option>
                             <option value="OVERTIME">Lembur</option>
-                            <option value="ATTENDANCE">Absensi</option>
+                            <option value="ATTENDANCE">Presensi</option>
                             <option value="EMPLOYEE">Karyawan</option>
                             <option value="NEWS">Berita</option>
                             {uniqueEntities.filter(e => !["PAYSLIP","OVERTIME","ATTENDANCE","EMPLOYEE","NEWS"].includes(e)).map(e => (

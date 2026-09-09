@@ -18,7 +18,7 @@ interface PreviewData {
 }
 
 const REPORT_TYPES = [
-    { value: "attendance", label: "Laporan Absensi", icon: ClipboardList, description: "Data kehadiran karyawan per periode" },
+    { value: "attendance", label: "Laporan Presensi", icon: ClipboardList, description: "Data kehadiran karyawan per periode" },
     { value: "visits", label: "Laporan Kunjungan", icon: MapPinned, description: "Data kunjungan bisnis per periode" },
     { value: "overtime", label: "Laporan Lembur", icon: Clock4, description: "Data pengajuan lembur per periode" },
     { value: "leave", label: "Laporan Cuti", icon: CalendarOff, description: "Data pengajuan cuti karyawan per periode" },
@@ -172,8 +172,8 @@ export default function ReportsPage() {
                     exportToPdfMatrix(
                         body,
                         headers,
-                        `REKAP ABSENSI KARYAWAN`,
-                        `Rekap_Absensi_${startDate}_${endDate}`,
+                        `REKAP PRESENSI KARYAWAN`,
+                        `Rekap_Presensi_${startDate}_${endDate}`,
                         `Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} | H=Hadir, T=Terlambat, A=Alpa, C=Cuti`
                     );
                 } else {
@@ -181,7 +181,7 @@ export default function ReportsPage() {
                     const headers = result.headers || Object.keys(result.data[0] || {});
                     const body = result.data.map((r: Record<string, string | number>) => headers.map((h: string) => r[h] ?? "-"));
                     const titleMap: Record<string, string> = {
-                        attendance: "LAPORAN ABSENSI KARYAWAN",
+                        attendance: "LAPORAN PRESENSI KARYAWAN",
                         visits:     "LAPORAN KUNJUNGAN BISNIS",
                         overtime:   "LAPORAN LEMBUR KARYAWAN",
                     };

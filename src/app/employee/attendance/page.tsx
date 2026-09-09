@@ -91,7 +91,7 @@ export default function AttendancePage() {
         // Fetch today's attendance record
         fetch("/api/attendance")
             .then(async (r) => {
-                if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat data absensi hari ini."));
+                if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat data presensi hari ini."));
                 return r.json();
             })
             .then((data) => {
@@ -100,8 +100,8 @@ export default function AttendancePage() {
                 if (found) setTodayRecord(found);
             })
             .catch((err) => {
-                const message = err instanceof Error ? err.message : "Gagal memuat data absensi hari ini.";
-                reportClientError("AttendancePage", "Gagal memuat data absensi hari ini", err);
+                const message = err instanceof Error ? err.message : "Gagal memuat data presensi hari ini.";
+                reportClientError("AttendancePage", "Gagal memuat data presensi hari ini", err);
                 setStatus("error");
                 setMessage(message);
                 toast(message, "error");
@@ -238,7 +238,7 @@ export default function AttendancePage() {
             });
 
             if (!res.ok) {
-                const errorMessage = await getResponseErrorMessage(res, "Gagal melakukan absensi");
+                const errorMessage = await getResponseErrorMessage(res, "Gagal melakukan presensi");
                 setStatus("error");
                 toast(errorMessage, "error");
                 setMessage(errorMessage);
@@ -255,9 +255,9 @@ export default function AttendancePage() {
             }
             setTimeout(() => router.push("/employee"), 1500);
         } catch (err) {
-            reportClientError("AttendancePage", "Koneksi error saat submit absensi", err);
+            reportClientError("AttendancePage", "Koneksi error saat submit presensi", err);
             setStatus("error");
-            const errText = "Absensi belum terkirim karena kendala koneksi. Coba lagi.";
+            const errText = "Presensi belum terkirim karena kendala koneksi. Coba lagi.";
             toast(errText, "error");
             setMessage(errText);
         }
@@ -277,7 +277,7 @@ export default function AttendancePage() {
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Camera className="w-5 h-5 text-[var(--primary)]" />
-                    Absensi Kehadiran
+                    Presensi Kehadiran
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Verifikasi kehadiran via Wi-Fi Kantor & GPS</p>
             </div>
@@ -364,7 +364,7 @@ export default function AttendancePage() {
                         </button>
                     </div>
                     <p className="text-[11px] leading-relaxed opacity-90">
-                        Perangkat Anda terdeteksi menggunakan paket data seluler atau jaringan luar (IP: {networkInfo?.clientIp || "-"}). Hubungkan HP Anda ke Wi-Fi kantor WIG untuk dapat melakukan absensi.
+                        Perangkat Anda terdeteksi menggunakan paket data seluler atau jaringan luar (IP: {networkInfo?.clientIp || "-"}). Hubungkan HP Anda ke Wi-Fi kantor WIG untuk dapat melakukan presensi.
                     </p>
                 </div>
             )}
@@ -390,7 +390,7 @@ export default function AttendancePage() {
                 <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl">
                     <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <div>
-                        <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Absensi Hari Ini Selesai</p>
+                        <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">Presensi Hari Ini Selesai</p>
                         <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
                             Clock In: {todayRecord?.clockIn ? new Date(todayRecord.clockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
                             {" • "}
@@ -400,7 +400,7 @@ export default function AttendancePage() {
                 </div>
             )}
 
-            {/* ── Kamera & Form Absensi ── */}
+            {/* ── Kamera & Form Presensi ── */}
             {!isDone && (
                 <div className="card overflow-hidden">
                     <div className="relative w-full aspect-[4/3] sm:aspect-video bg-black text-white rounded-t-2xl overflow-hidden">
@@ -458,7 +458,7 @@ export default function AttendancePage() {
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img
                                 src={photo}
-                                alt="Foto Absensi"
+                                alt="Foto Presensi"
                                 className="w-full h-full object-cover"
                                 style={{ transform: isMirrored ? "scaleX(-1)" : "none" }}
                             />
@@ -521,7 +521,7 @@ export default function AttendancePage() {
                                         ) : (
                                             <>
                                                 <CheckCircle className="w-4 h-4" />
-                                                {isClockIn ? "Kirim Clock In" : isClockOut ? "Kirim Clock Out" : "Kirim Absensi"}
+                                                {isClockIn ? "Kirim Clock In" : isClockOut ? "Kirim Clock Out" : "Kirim Presensi"}
                                             </>
                                         )}
                                     </button>

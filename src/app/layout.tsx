@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "WIG HRIS - PT Wijaya Inovasi Gemilang",
-  description: "Sistem Absensi Karyawan PT Wijaya Inovasi Gemilang",
+  description: "Sistem HRIS & Presensi Karyawan PT Wijaya Inovasi Gemilang",
   manifest: "/manifest.json",
 };
 

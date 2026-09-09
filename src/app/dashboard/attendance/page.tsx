@@ -51,7 +51,7 @@ export default function AttendanceMonitorPage() {
 
     const loadAttendanceRecords = useCallback(async () => {
         const res = await fetch("/api/attendance");
-        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data absensi."));
+        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data presensi."));
         const data = await res.json();
         if (Array.isArray(data)) setRecords(data);
     }, []);
@@ -86,7 +86,7 @@ export default function AttendanceMonitorPage() {
                 ]);
 
                 const failedResponse = [employeeRes, departmentRes, divisionRes].find((res) => !res.ok);
-                if (failedResponse) throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat data absensi."));
+                if (failedResponse) throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat data presensi."));
 
                 await loadAttendanceRecords();
                 const [employeeData, departmentData, divisionData] = await Promise.all([
@@ -99,8 +99,8 @@ export default function AttendanceMonitorPage() {
                 if (Array.isArray(departmentData)) setDepartments(departmentData);
                 if (Array.isArray(divisionData)) setDivisions(divisionData);
             } catch (error) {
-                reportClientError("AttendanceMonitorPage", "Gagal memuat data absensi awal", error);
-                const message = error instanceof Error ? error.message : "Gagal memuat data absensi.";
+                reportClientError("AttendanceMonitorPage", "Gagal memuat data presensi awal", error);
+                const message = error instanceof Error ? error.message : "Gagal memuat data presensi.";
                 setLoadError(message);
                 toast(message, "error");
             } finally {
@@ -212,7 +212,7 @@ export default function AttendanceMonitorPage() {
             { key: "clockIn", label: "Clock In" },
             { key: "clockOut", label: "Clock Out" },
             { key: "status", label: "Status" },
-        ], `Laporan_Absensi_${startDate}_to_${endDate}`, "Absensi");
+        ], `Laporan_Presensi_${startDate}_to_${endDate}`, "Presensi");
     };
 
     const handleExportPdf = () => {
@@ -231,8 +231,8 @@ export default function AttendanceMonitorPage() {
         exportToPdfTable(
             data,
             ["ID", "Nama", "Dept", "Tanggal", "In", "Out", "Status"],
-            "Laporan Absensi Karyawan",
-            `Laporan_Absensi_${startDate}_to_${endDate}`,
+            "Laporan Presensi Karyawan",
+            `Laporan_Presensi_${startDate}_to_${endDate}`,
             `Periode: ${startDate} s/d ${endDate} • Total: ${filtered.length} baris`
         );
     };
@@ -267,7 +267,7 @@ export default function AttendanceMonitorPage() {
                 <div>
                     <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                         <ClipboardList className="w-5 h-5 text-[var(--primary)]" />
-                        Monitoring Absensi
+                        Monitoring Presensi
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">Pantau kehadiran karyawan</p>
                 </div>
@@ -294,7 +294,7 @@ export default function AttendanceMonitorPage() {
                     onClick={() => setActiveTab("log")}
                     className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === "log" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-secondary)]"}`}
                 >
-                    Log Absensi Utama
+                    Log Presensi Utama
                 </button>
                 <button
                     onClick={() => setActiveTab("corrections")}
@@ -311,7 +311,7 @@ export default function AttendanceMonitorPage() {
                 initialLoading ? (
                     <div className="card p-12 text-center text-[var(--text-muted)]">
                         <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
-                        <p className="text-sm font-medium">Memuat data absensi...</p>
+                        <p className="text-sm font-medium">Memuat data presensi...</p>
                     </div>
                 ) : (
                 <>

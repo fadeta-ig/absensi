@@ -98,7 +98,7 @@ export default function AttendanceCorrectionPage() {
                 setRequests(data.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
             }
         } catch (err) {
-            reportClientError("AttendanceCorrectionPage", "Gagal memuat data koreksi absensi", err);
+            reportClientError("AttendanceCorrectionPage", "Gagal memuat data koreksi presensi", err);
             toast(err instanceof Error ? err.message : "Gagal memuat data koreksi", "error");
         } finally {
             setLoadingList(false);
@@ -171,7 +171,7 @@ export default function AttendanceCorrectionPage() {
             setAttachmentName(null);
             toast("Pengajuan koreksi berhasil dikirim!", "success");
         } catch (error) {
-            reportClientError("AttendanceCorrectionPage", "Gagal mengirim koreksi absensi", error, { targetDate: form.targetDate });
+            reportClientError("AttendanceCorrectionPage", "Gagal mengirim koreksi presensi", error, { targetDate: form.targetDate });
             toast("Pengajuan koreksi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
@@ -190,7 +190,7 @@ export default function AttendanceCorrectionPage() {
                 <div>
                     <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                         <FileEdit className="w-5 h-5 text-[var(--primary)]" />
-                        Koreksi Absensi
+                        Koreksi Presensi
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">
                         Ajukan koreksi jam masuk/keluar yang terlewat atau salah
@@ -223,7 +223,7 @@ export default function AttendanceCorrectionPage() {
                 <div className="card p-6 border-2 border-[var(--primary)]/20 shadow-xl">
                     <h3 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                         <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
-                        Form Koreksi Absensi
+                        Form Koreksi Presensi
                     </h3>
 
                     <form onSubmit={handleSubmit} className="space-y-4">

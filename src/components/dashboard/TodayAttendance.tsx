@@ -50,7 +50,7 @@ export default function TodayAttendance({ todayAttendance, activeEmployees, empl
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                         <h2 className="text-[12px] font-bold text-[#800020] uppercase tracking-wider flex items-center gap-2">
-                            <ClipboardList className="w-4 h-4 text-[#16a34a]" /> Absensi Hari Ini
+                            <ClipboardList className="w-4 h-4 text-[#16a34a]" /> Presensi Hari Ini
                         </h2>
                         <button onClick={() => router.push("/dashboard/attendance")} className="text-[10px] font-bold text-[#800020] flex items-center gap-1 hover:underline">
                             Detail <ArrowRight className="w-3 h-3" />

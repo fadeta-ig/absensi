@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
                     clientIp,
                 });
                 return NextResponse.json(
-                    { error: `Absensi ditolak. Anda harus terhubung ke Wi-Fi resmi kantor WIG (Terdeteksi IP luar/seluler: ${clientIp || "unknown"}).` },
+                    { error: `Presensi ditolak. Anda harus terhubung ke Wi-Fi resmi kantor WIG (Terdeteksi IP luar/seluler: ${clientIp || "unknown"}).` },
                     { status: 403 }
                 );
             }
@@ -86,11 +86,11 @@ export async function POST(request: NextRequest) {
         // Location verification logic
         if (!employee.bypassLocation) {
             if (!body.location || typeof body.location.lat !== "number" || typeof body.location.lng !== "number") {
-                return NextResponse.json({ error: "Akses lokasi diperlukan untuk melakukan absensi." }, { status: 400 });
+                return NextResponse.json({ error: "Akses lokasi diperlukan untuk melakukan presensi." }, { status: 400 });
             }
 
             if (!employee.locations || employee.locations.length === 0) {
-                return NextResponse.json({ error: "Lokasi absensi Anda belum diatur oleh HR. Silakan hubungi admin." }, { status: 403 });
+                return NextResponse.json({ error: "Lokasi presensi Anda belum diatur oleh HR. Silakan hubungi admin." }, { status: 403 });
             }
 
             const isWithinRange = employee.locations.some((loc) => {

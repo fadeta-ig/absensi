@@ -98,10 +98,10 @@ export function AttendanceLogTab({
                 { key: "verification", label: "Verifikasi Jaringan" },
                 { key: "status", label: "Status" },
             ],
-            `Log_Absensi_Terpilih_${new Date().toISOString().slice(0, 10)}`,
-            "Absensi"
+            `Log_Presensi_Terpilih_${new Date().toISOString().slice(0, 10)}`,
+            "Presensi"
         );
-        toast(`${targetList.length} data absensi berhasil diekspor ke Excel.`, "success");
+        toast(`${targetList.length} data presensi berhasil diekspor ke Excel.`, "success");
     };
 
     return (

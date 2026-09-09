@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
-    Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor
+    Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
@@ -17,7 +17,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const navItems: NavItem[] = [
     { href: "/employee", icon: Home, label: "Beranda" },
-    { href: "/employee/attendance", icon: Camera, label: "Absensi" },
+    { href: "/employee/attendance", icon: Camera, label: "Presensi" },
     { href: "/employee/attendance-history", icon: ClipboardList, label: "Riwayat" },
     { href: "/employee/attendance/correction", icon: FileText, label: "Koreksi" },
     { href: "/employee/visits", icon: MapPinned, label: "Kunjungan" },
@@ -28,7 +28,7 @@ const navItems: NavItem[] = [
     { href: "/employee/assets", icon: Monitor, label: "Aset Saya" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
-    { href: "/employee/profile", icon: Settings, label: "Profil" },
+    { href: "/employee/profile", icon: User, label: "Profil" },
     { href: "/employee/settings", icon: Settings, label: "Pengaturan" },
 ];
 
@@ -37,7 +37,7 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
     pathname: string;
     onNavigate: (href: string) => void;
 }) {
-    // Mobile nav items: Beranda, Riwayat, Absensi, Koreksi, Kunjungan
+    // Mobile nav items: Beranda, Riwayat, Presensi, Koreksi, Kunjungan
     const mobileItems = [
         items.find(i => i.href === "/employee"),
         items.find(i => i.href === "/employee/attendance-history"),

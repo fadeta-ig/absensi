@@ -1,15 +1,41 @@
-import { useState } from "react";
-import { AlertCircle, CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck, LogIn } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { notifyAuthChanged } from "@/lib/authEvents";
 
 export function ChangePasswordCard() {
+    const router = useRouter();
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showCurrent, setShowCurrent] = useState(false);
     const [showNew, setShowNew] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [countdown, setCountdown] = useState(3);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+    useEffect(() => {
+        if (!isSuccess) return;
+        const timer = setInterval(() => {
+            setCountdown((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    notifyAuthChanged("logout");
+                    router.replace("/");
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [isSuccess, router]);
+
+    const handleRedirectNow = () => {
+        notifyAuthChanged("logout");
+        router.replace("/");
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,7 +61,11 @@ export function ChangePasswordCard() {
                 throw new Error(await getResponseErrorMessage(res, "Gagal mengubah password"));
             }
 
-            setMessage({ type: "success", text: "Password berhasil diubah!" });
+            const data = await res.json().catch(() => null);
+            const successMsg = data?.message || "Anda akan logout terlebih dulu di seluruh perangkat yang sudah login secara otomatis untuk keamanan.";
+
+            setMessage({ type: "success", text: successMsg });
+            setIsSuccess(true);
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
@@ -74,84 +104,108 @@ export function ChangePasswordCard() {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                {message && (
-                    <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${message.type === "success" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                        {message.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                        {message.text}
+            {isSuccess ? (
+                <div className="p-6 text-center space-y-4">
+                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
+                        <CheckCircle className="w-6 h-6" />
                     </div>
-                )}
-
-                <div className="form-group !mb-0">
-                    <label className="form-label">
-                        <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password Saat Ini</span>
-                    </label>
-                    <div className="relative">
-                        <input
-                            type={showCurrent ? "text" : "password"}
-                            className="form-input pr-10"
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
-                            placeholder="Masukkan password saat ini"
-                            required
-                        />
-                        <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
-                            {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <div className="space-y-1">
+                        <h3 className="text-base font-bold text-[var(--text-primary)]">Kata Sandi Berhasil Diperbarui</h3>
+                        <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto leading-relaxed">
+                            {message?.text}
+                        </p>
+                    </div>
+                    <div className="pt-2">
+                        <button
+                            type="button"
+                            onClick={handleRedirectNow}
+                            className="btn btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold shadow-sm"
+                        >
+                            <LogIn className="w-4 h-4" />
+                            Masuk Sekarang ({countdown}s)
                         </button>
                     </div>
                 </div>
+            ) : (
+                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                    {message && (
+                        <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${message.type === "success" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                            {message.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                            {message.text}
+                        </div>
+                    )}
 
-                <div className="form-group !mb-0">
-                    <label className="form-label">
-                        <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password Baru</span>
-                    </label>
-                    <div className="relative">
+                    <div className="form-group !mb-0">
+                        <label className="form-label">
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password Saat Ini</span>
+                        </label>
+                        <div className="relative">
+                            <input
+                                type={showCurrent ? "text" : "password"}
+                                className="form-input pr-10"
+                                value={currentPassword}
+                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                placeholder="Masukkan password saat ini"
+                                required
+                            />
+                            <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                                {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="form-group !mb-0">
+                        <label className="form-label">
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password Baru</span>
+                        </label>
+                        <div className="relative">
+                            <input
+                                type={showNew ? "text" : "password"}
+                                className="form-input pr-10"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="Minimal 8 karakter"
+                                required
+                                minLength={8}
+                            />
+                            <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
+                        {strength && (
+                            <div className="mt-2">
+                                <div className="w-full h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden">
+                                    <div className={`h-full ${strength.color} ${strength.width} rounded-full transition-all duration-300`} />
+                                </div>
+                                <p className="text-[10px] text-[var(--text-muted)] mt-1">Kekuatan: {strength.label}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="form-group !mb-0">
+                        <label className="form-label">
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Konfirmasi Password Baru</span>
+                        </label>
                         <input
-                            type={showNew ? "text" : "password"}
-                            className="form-input pr-10"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="Minimal 8 karakter"
+                            type="password"
+                            className="form-input"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Ulangi password baru"
                             required
                             minLength={8}
                         />
-                        <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
-                            {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
+                        {confirmPassword && newPassword !== confirmPassword && (
+                            <p className="text-[10px] text-red-500 mt-1">Password tidak cocok</p>
+                        )}
                     </div>
-                    {strength && (
-                        <div className="mt-2">
-                            <div className="w-full h-1.5 bg-[var(--secondary)] rounded-full overflow-hidden">
-                                <div className={`h-full ${strength.color} ${strength.width} rounded-full transition-all duration-300`} />
-                            </div>
-                            <p className="text-[10px] text-[var(--text-muted)] mt-1">Kekuatan: {strength.label}</p>
-                        </div>
-                    )}
-                </div>
 
-                <div className="form-group !mb-0">
-                    <label className="form-label">
-                        <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Konfirmasi Password Baru</span>
-                    </label>
-                    <input
-                        type="password"
-                        className="form-input"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Ulangi password baru"
-                        required
-                        minLength={8}
-                    />
-                    {confirmPassword && newPassword !== confirmPassword && (
-                        <p className="text-[10px] text-red-500 mt-1">Password tidak cocok</p>
-                    )}
-                </div>
-
-                <button type="submit" className="btn btn-primary w-full" disabled={loading || !currentPassword || !newPassword || newPassword !== confirmPassword}>
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                    Ubah Password
-                </button>
-            </form>
+                    <button type="submit" className="btn btn-primary w-full" disabled={loading || !currentPassword || !newPassword || newPassword !== confirmPassword}>
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                        Ubah Password
+                    </button>
+                </form>
+            )}
         </div>
     );
 }

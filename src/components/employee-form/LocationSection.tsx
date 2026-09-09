@@ -14,7 +14,7 @@ export function LocationSection({ form, setForm, masterLocations, toggleLocation
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border)]">
                 <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-orange-600" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Lokasi Absensi</h2>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">Lokasi Presensi</h2>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form.bypassLocation} onChange={(e) => setForm({ ...form, bypassLocation: e.target.checked })} className="w-3.5 h-3.5 rounded text-orange-600" />

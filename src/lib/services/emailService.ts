@@ -5,7 +5,7 @@ const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
-const SMTP_FROM = process.env.SMTP_FROM || "WIG Attendance <noreply@wig.co.id>";
+const SMTP_FROM = process.env.SMTP_FROM || "WIG HRIS <noreply@wijayainovasi.co.id>";
 
 const isSmtpConfigured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
@@ -149,7 +149,7 @@ export async function sendPasswordEmail(
                     <strong>Ubah Kata Sandi:</strong> Segera lakukan perubahan kata sandi Anda setelah berhasil masuk pertama kali melalui menu Pengaturan demi menjaga keamanan akun.
                   </li>
                   <li style="margin-bottom: 4px;">
-                    <strong>Syarat Presensi Masuk &amp; Pulang:</strong> Absensi kehadiran harian (Clock In dan Clock Out) wajib dilakukan saat terhubung ke jaringan Wi-Fi kantor resmi dan GPS aktif.
+                    <strong>Syarat Presensi Masuk &amp; Pulang:</strong> Presensi kehadiran harian (Clock In dan Clock Out) wajib dilakukan saat terhubung ke jaringan Wi-Fi kantor resmi dan GPS aktif.
                   </li>
                   <li>
                     <strong>Kerahasiaan Akun:</strong> Jangan membagikan informasi akun ini kepada siapa pun. Pihak manajemen atau tim IT tidak pernah meminta kata sandi Anda.
@@ -244,15 +244,27 @@ Email ini dikirimkan secara otomatis oleh sistem.`;
 
 export async function sendPasswordChangedEmail(
     email: string,
-    name: string
+    name: string,
+    changedAt?: Date
 ): Promise<boolean> {
+    const timeFormatted = (changedAt || new Date()).toLocaleString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }) + " WIB";
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://hris.wijayainovasi.co.id").replace(/\/$/, "");
+
     const html = `
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pemberitahuan Keamanan - Kata Sandi Diubah</title>
+  <title>Pemberitahuan Keamanan: Kata Sandi Berhasil Diperbarui - PT Wijaya Inovasi Gemilang</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #18181b;">
   <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 16px;">
@@ -279,10 +291,27 @@ export async function sendPasswordChangedEmail(
               <p style="font-size: 14px; line-height: 1.6; color: #27272a; margin: 0 0 16px;">
                 Halo <strong>${name}</strong>,
               </p>
-              <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 24px;">
-                Kata sandi untuk akun HRIS &amp; Presensi Anda baru saja berhasil diperbarui. Seluruh sesi aktif di perangkat lain telah dihentikan secara otomatis demi menjaga keamanan akun Anda.
+              <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 20px;">
+                Kata sandi untuk akun HRIS &amp; Presensi Anda baru saja berhasil diperbarui pada <strong>${timeFormatted}</strong>.
               </p>
               
+              <!-- Security Notice -->
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 16px; margin-bottom: 24px;">
+                <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #0f172a; font-weight: 600;">
+                  Anda akan logout terlebih dulu di seluruh perangkat yang sudah login secara otomatis untuk keamanan.
+                </p>
+              </div>
+
+              <!-- Action Button -->
+              <div style="text-align: center; margin-bottom: 28px;">
+                <a href="${appUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                  Masuk ke Portal HRIS
+                </a>
+                <div style="margin-top: 10px; font-size: 11.5px; color: #71717a;">
+                  Tautan akses: <a href="${appUrl}" style="color: #0f172a; text-decoration: underline;">${appUrl}</a>
+                </div>
+              </div>
+
               <!-- Security Warning Box -->
               <div style="background-color: #fafafa; border: 1px solid #e4e4e7; border-radius: 6px; padding: 14px 16px;">
                 <div style="color: #18181b; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
@@ -299,7 +328,7 @@ export async function sendPasswordChangedEmail(
           <tr>
             <td style="padding: 20px 32px; border-top: 1px solid #f4f4f5; text-align: center;">
               <p style="margin: 0 0 4px; font-size: 11px; color: #71717a; line-height: 1.5;">
-                Email ini dikirimkan secara otomatis oleh Sistem HRIS PT Wijaya Inovasi Gemilang.
+                Email ini dikirimkan secara otomatis oleh Sistem HRIS &amp; Presensi PT Wijaya Inovasi Gemilang.
               </p>
               <p style="margin: 0; font-size: 11px; color: #a1a1aa;">
                 &copy; 2026 PT Wijaya Inovasi Gemilang. Seluruh hak cipta dilindungi undang-undang.
@@ -327,12 +356,17 @@ export async function sendPasswordChangedEmail(
         if (!transporter) return false;
 
         const text = `PT WIJAYA INOVASI GEMILANG
-Pemberitahuan Keamanan Akun HRIS
+Pemberitahuan Keamanan Akun HRIS & Presensi
 --------------------------------------------------
 
 Halo ${name},
 
-Kata sandi untuk akun HRIS & Presensi Anda baru saja berhasil diperbarui. Seluruh sesi aktif di perangkat lain telah dihentikan secara otomatis demi menjaga keamanan akun Anda.
+Kata sandi untuk akun HRIS & Presensi Anda baru saja berhasil diperbarui pada ${timeFormatted}.
+
+Anda akan logout terlebih dulu di seluruh perangkat yang sudah login secara otomatis untuk keamanan.
+
+Silakan masuk kembali menggunakan kata sandi baru Anda melalui tautan portal berikut:
+${appUrl}
 
 PEMBERITAHUAN PENTING:
 Jika Anda tidak merasa melakukan perubahan kata sandi ini, segera hubungi tim IT Support atau Administrator HR perusahaan untuk mengamankan akun Anda.
@@ -344,8 +378,7 @@ Email ini dikirim secara otomatis oleh sistem.`;
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
-            subject: "Pemberitahuan Keamanan - Kata Sandi Diubah",
-
+            subject: "Pemberitahuan Keamanan: Kata Sandi Berhasil Diperbarui - PT Wijaya Inovasi Gemilang",
             text,
             html,
         });

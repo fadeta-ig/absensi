@@ -45,8 +45,9 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        const changedAt = new Date();
         // Dispatch background email notification
-        sendPasswordChangedEmail(user.email, user.displayName).catch((error) => {
+        sendPasswordChangedEmail(user.email, user.displayName, changedAt).catch((error) => {
             logger.warn("Password changed notification email failed", {
                 userId: user.id,
                 email: user.email,
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
 
         const response = NextResponse.json({
             success: true,
-            message: "Password berhasil diubah. Silakan login kembali.",
+            message: "Anda akan logout terlebih dulu di seluruh perangkat yang sudah login secara otomatis untuk keamanan.",
         });
         response.cookies.delete("session");
         return response;

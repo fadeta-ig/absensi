@@ -155,7 +155,7 @@ export function Employee360View({
                     {/* Tab Buttons */}
                     <div className="flex gap-1 mb-4 bg-[var(--secondary)] p-1 rounded-lg w-fit">
                         {[
-                            { id: "attendance", label: "Absensi" },
+                            { id: "attendance", label: "Presensi" },
                             { id: "visits", label: "Kunjungan" },
                             { id: "leaves", label: "Cuti" },
                             { id: "assets", label: "Aset" },

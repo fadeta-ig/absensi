@@ -27,7 +27,7 @@ export default function QuickMenu({ employeeCount, todayAttendanceCount, pending
 
     const menuItems: MenuItem[] = [
         { label: "Karyawan", desc: "Kelola data karyawan", href: "/dashboard/employees", icon: Users, count: employeeCount },
-        { label: "Absensi", desc: "Monitor kehadiran", href: "/dashboard/attendance", icon: ClipboardList, count: todayAttendanceCount },
+        { label: "Presensi", desc: "Monitor kehadiran", href: "/dashboard/attendance", icon: ClipboardList, count: todayAttendanceCount },
         { label: "Kunjungan", desc: "Kelola kunjungan", href: "/dashboard/visits", icon: MapPinned },
         { label: "Lembur", desc: "Kelola lembur", href: "/dashboard/overtime", icon: Clock4 },
         { label: "Payroll", desc: "Buat slip gaji", href: "/dashboard/payroll", icon: Wallet },

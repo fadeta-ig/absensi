@@ -38,7 +38,7 @@ export default function CorrectionPage() {
             const data = await res.json();
             setHistory(Array.isArray(data) ? data : []);
         } catch (err) {
-            reportClientError("DashboardAttendanceCorrectionPage", "Gagal memuat riwayat koreksi absensi", err);
+            reportClientError("DashboardAttendanceCorrectionPage", "Gagal memuat riwayat koreksi presensi", err);
             setHistory([]);
             setHistoryError(err instanceof Error ? err.message : "Gagal memuat riwayat pengajuan.");
         } finally {
@@ -81,7 +81,7 @@ export default function CorrectionPage() {
             });
 
             if (res.ok) {
-                setMessage({ type: "success", text: "Pengajuan koreksi absensi berhasil dikirim." });
+                setMessage({ type: "success", text: "Pengajuan koreksi presensi berhasil dikirim." });
                 setTargetDate("");
                 setProposedClockIn("");
                 setProposedClockOut("");
@@ -91,7 +91,7 @@ export default function CorrectionPage() {
                 setMessage({ type: "error", text: await getResponseErrorMessage(res, "Gagal mengirim pengajuan.") });
             }
         } catch (error) {
-            reportClientError("DashboardAttendanceCorrectionPage", "Gagal mengirim pengajuan koreksi absensi", error, { targetDate });
+            reportClientError("DashboardAttendanceCorrectionPage", "Gagal mengirim pengajuan koreksi presensi", error, { targetDate });
             setMessage({ type: "error", text: "Pengajuan koreksi belum terkirim karena server tidak merespons. Coba lagi beberapa saat lagi." });
         } finally {
             setSubmitting(false);
@@ -119,10 +119,10 @@ export default function CorrectionPage() {
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <History className="w-5 h-5 text-[var(--primary)]" />
-                    Koreksi Absensi
+                    Koreksi Presensi
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                    Ajukan koreksi jika mesin error, lupa absen, atau error lokasi.
+                    Ajukan koreksi jika lupa presensi, mesin error, atau kendala lokasi.
                 </p>
             </div>
 
@@ -140,7 +140,7 @@ export default function CorrectionPage() {
 
                         <form onSubmit={onSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Tanggal Absensi *</label>
+                                <label className="block text-sm font-medium mb-1">Tanggal Presensi *</label>
                                 <div className="relative">
                                     <Calendar className="w-4 h-4 absolute left-3 top-3 text-[var(--text-muted)]" />
                                     <input type="date" className="form-input pl-10" required value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />

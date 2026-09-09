@@ -29,7 +29,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const navItems: NavItem[] = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/dashboard/attendance", icon: ClipboardList, label: "Absensi" },
+    { href: "/dashboard/attendance", icon: ClipboardList, label: "Presensi" },
     { href: "/dashboard/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/dashboard/leave", icon: CalendarOff, label: "Cuti" },
     { href: "/dashboard/birthdays", icon: Cake, label: "Ulang Tahun" },
