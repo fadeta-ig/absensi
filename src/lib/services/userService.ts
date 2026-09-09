@@ -211,6 +211,7 @@ export async function resetAdminUserPassword(id: string, actorUserId: string, pa
             username: true,
             displayName: true,
             email: true,
+            employeeId: true,
             isActive: true,
             roles: { select: { role: { select: { code: true } } } },
         },

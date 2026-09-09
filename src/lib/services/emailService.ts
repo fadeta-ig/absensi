@@ -20,37 +20,166 @@ function createTransporter() {
     });
 }
 
+export interface SendPasswordOptions {
+    employeeId?: string | null;
+    username?: string | null;
+    loginUrl?: string | null;
+}
+
 export async function sendPasswordEmail(
     email: string,
     name: string,
-    password: string
+    password: string,
+    options?: string | SendPasswordOptions
 ): Promise<boolean> {
+    const opts: SendPasswordOptions = typeof options === "string"
+        ? { employeeId: options, username: options }
+        : (options ?? {});
+
+    const employeeId = opts.employeeId?.trim() || null;
+    const username = opts.username?.trim() || employeeId || email;
+    const appUrl = (opts.loginUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://hris.wijayainovasi.co.id").replace(/\/$/, "");
+
     const html = `
-    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fff;border-radius:12px;border:1px solid #e5e7eb">
-      <div style="text-align:center;margin-bottom:24px">
-        <h2 style="margin:0;color:#1a1a2e;font-size:20px">WIG Attendance System</h2>
-        <p style="margin:4px 0 0;color:#6b7280;font-size:13px">PT Wijaya Inovasi Gemilang</p>
-      </div>
-      <div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:20px">
-        <p style="margin:0 0 8px;color:#374151;font-size:14px">Halo <strong>${name}</strong>,</p>
-        <p style="margin:0 0 16px;color:#6b7280;font-size:13px">Berikut adalah password akun Anda untuk login ke sistem absensi:</p>
-        <div style="background:#1a1a2e;color:#fff;padding:16px;border-radius:8px;text-align:center;font-size:22px;letter-spacing:3px;font-weight:bold;font-family:monospace">
-          ${password}
-        </div>
-      </div>
-      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:16px">
-        <p style="margin:0;color:#92400e;font-size:12px"><strong>Perhatian:</strong> Segera ubah password Anda setelah login pertama melalui menu <strong>Pengaturan</strong>.</p>
-      </div>
-      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">Email ini dikirim secara otomatis. Jangan bagikan password Anda kepada siapapun.</p>
-    </div>`;
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aktivasi Akun HRIS - PT Wijaya Inovasi Gemilang</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #18181b;">
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container Card -->
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 540px; background-color: #ffffff; border-radius: 8px; border: 1px solid #e4e4e7;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding: 32px 32px 24px; border-bottom: 1px solid #f4f4f5;">
+              <div style="color: #71717a; font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;">
+                PT WIJAYA INOVASI GEMILANG
+              </div>
+              <h1 style="color: #09090b; font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.3px;">
+                Aktivasi Akun HRIS
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 28px 32px 32px;">
+              
+              <p style="font-size: 14px; line-height: 1.6; color: #27272a; margin: 0 0 16px;">
+                Halo <strong>${name}</strong>,
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 24px;">
+                Akun HRIS dan Presensi Kehadiran Anda pada PT Wijaya Inovasi Gemilang telah aktif. Berikut adalah rincian informasi kredensial akun Anda:
+              </p>
+
+              <!-- Account Details Table -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="border: 1px solid #e4e4e7; border-radius: 6px; margin-bottom: 24px;">
+                <tr>
+                  <td width="36%" style="padding: 11px 14px; font-size: 12.5px; color: #71717a; border-bottom: 1px solid #f4f4f5; font-weight: 500;">
+                    Nama Lengkap
+                  </td>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; border-bottom: 1px solid #f4f4f5; font-weight: 600;">
+                    ${name}
+                  </td>
+                </tr>
+                ${employeeId ? `
+                <tr>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #71717a; border-bottom: 1px solid #f4f4f5; font-weight: 500;">
+                    NIP / ID Karyawan
+                  </td>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; border-bottom: 1px solid #f4f4f5; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Consolas, Monaco, monospace;">
+                    ${employeeId}
+                  </td>
+                </tr>
+                ` : ''}
+                <tr>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #71717a; border-bottom: 1px solid #f4f4f5; font-weight: 500;">
+                    Username Login
+                  </td>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; border-bottom: 1px solid #f4f4f5; font-weight: 600;">
+                    ${username}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #71717a; font-weight: 500;">
+                    Email Terdaftar
+                  </td>
+                  <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; font-weight: 500;">
+                    ${email}
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Password Highlight Card -->
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; text-align: center; margin-bottom: 24px;">
+                <div style="color: #64748b; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px;">
+                  KATA SANDI SEMENTARA
+                </div>
+                <div style="color: #0f172a; font-size: 20px; font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Consolas, Monaco, monospace; font-weight: 700; letter-spacing: 3px; padding: 4px 0;">
+                  ${password}
+                </div>
+                <div style="color: #94a3b8; font-size: 11.5px; margin-top: 4px;">
+                  Perhatikan penggunaan huruf besar, huruf kecil, dan angka saat memasukkan kata sandi
+                </div>
+              </div>
+
+              <!-- Action Button -->
+              <div style="text-align: center; margin-bottom: 28px;">
+                <a href="${appUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                  Masuk ke Portal HRIS
+                </a>
+                <div style="margin-top: 10px; font-size: 11.5px; color: #71717a;">
+                  Tautan akses: <a href="${appUrl}" style="color: #0f172a; text-decoration: underline;">${appUrl}</a>
+                </div>
+              </div>
+
+              <!-- Important Security Guidelines -->
+              <div style="background-color: #fafafa; border: 1px solid #e4e4e7; border-radius: 6px; padding: 14px 16px;">
+                <div style="color: #18181b; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                  Panduan Keamanan &amp; Penggunaan
+                </div>
+                <ul style="margin: 0; padding-left: 18px; color: #52525b; font-size: 12px; line-height: 1.6;">
+                  <li style="margin-bottom: 4px;">
+                    <strong>Ubah Kata Sandi:</strong> Segera lakukan perubahan kata sandi Anda setelah berhasil masuk pertama kali melalui menu Pengaturan demi menjaga keamanan akun.
+                  </li>
+                  <li style="margin-bottom: 4px;">
+                    <strong>Syarat Presensi Masuk &amp; Pulang:</strong> Absensi kehadiran harian (Clock In dan Clock Out) wajib dilakukan saat terhubung ke jaringan Wi-Fi kantor resmi dan GPS aktif.
+                  </li>
+                  <li>
+                    <strong>Kerahasiaan Akun:</strong> Jangan membagikan informasi akun ini kepada siapa pun. Pihak manajemen atau tim IT tidak pernah meminta kata sandi Anda.
+                  </li>
+                </ul>
+              </div>
+
+            </td>
+          </tr>
+
+          <!-- Corporate Footer -->
+          <tr>
+            <td style="padding: 20px 32px; border-top: 1px solid #f4f4f5; text-align: center;">
+              <p style="margin: 0 0 4px; font-size: 11px; color: #71717a; line-height: 1.5;">
+                Email ini dikirimkan secara otomatis oleh Sistem HRIS &amp; Presensi PT Wijaya Inovasi Gemilang.
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a1a1aa;">
+                &copy; 2026 PT Wijaya Inovasi Gemilang. Seluruh hak cipta dilindungi undang-undang.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     if (!isSmtpConfigured) {
-        /**
-         * SECURITY: SMTP belum dikonfigurasi.
-         * Hanya catat bahwa email AKAN dikirim ke siapa — TIDAK mencatat nilai password.
-         * Untuk mengaktifkan pengiriman email, konfigurasi SMTP_HOST, SMTP_USER,
-         * SMTP_PASS di file .env.
-         */
         logger.warn("[Email] SMTP tidak dikonfigurasi — email tidak terkirim", {
             action: "send-password",
             recipient: email,
@@ -61,27 +190,47 @@ export async function sendPasswordEmail(
 
     try {
         const transporter = createTransporter()!;
-        const text = `WIG Attendance System
-PT Wijaya Inovasi Gemilang
-==================================================
+        const text = `PT WIJAYA INOVASI GEMILANG
+Sistem Informasi SDM & Layanan Mandiri Karyawan (HRIS)
+--------------------------------------------------
+
+INFORMASI KREDENSIAL AKUN LOGIN
+
 Halo ${name},
 
-Berikut adalah password akun Anda untuk login ke sistem absensi:
-${password}
+Akun HRIS dan Presensi Kehadiran Anda pada PT Wijaya Inovasi Gemilang telah aktif. Berikut adalah rincian kredensial akun Anda:
 
-Perhatian: Segera ubah password Anda setelah login pertama melalui menu Pengaturan.
-Email ini dikirim secara otomatis. Jangan bagikan password Anda kepada siapapun.`;
+- Nama Lengkap       : ${name}
+${employeeId ? `- NIP / ID Karyawan  : ${employeeId}\n` : ""}- Username Login     : ${username}
+- Email Terdaftar    : ${email}
+- Alamat Web Portal  : ${appUrl}
+
+--------------------------------------------------
+KATA SANDI SEMENTARA:
+${password}
+--------------------------------------------------
+(Salin atau ketik kata sandi di atas dengan teliti, perhatikan huruf besar dan kecil)
+
+PANDUAN KEAMANAN & PENGGUNAAN:
+1. Segera lakukan perubahan kata sandi Anda setelah login pertama kali melalui menu Pengaturan.
+2. Presensi kehadiran harian (Clock In & Clock Out) wajib dilakukan saat terhubung ke jaringan Wi-Fi kantor resmi dan GPS aktif.
+3. Jaga kerahasiaan akun dan jangan berikan kata sandi kepada siapa pun.
+
+--------------------------------------------------
+PT Wijaya Inovasi Gemilang
+Email ini dikirimkan secara otomatis oleh sistem.`;
 
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
-            subject: "Password Akun WIG Attendance",
+            subject: "Informasi Kredensial Akun HRIS - PT Wijaya Inovasi Gemilang",
             text,
             html,
         });
         logger.info("[Email] Password email berhasil dikirim", {
             recipient: email,
             recipientName: name,
+            employeeId,
         });
         return true;
     } catch (error) {
@@ -98,20 +247,72 @@ export async function sendPasswordChangedEmail(
     name: string
 ): Promise<boolean> {
     const html = `
-    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fff;border-radius:12px;border:1px solid #e5e7eb">
-      <div style="text-align:center;margin-bottom:24px">
-        <h2 style="margin:0;color:#1a1a2e;font-size:20px">WIG Attendance System</h2>
-        <p style="margin:4px 0 0;color:#6b7280;font-size:13px">Pemberitahuan Keamanan</p>
-      </div>
-      <div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:20px">
-        <p style="margin:0 0 8px;color:#374151;font-size:14px">Halo <strong>${name}</strong>,</p>
-        <p style="margin:0;color:#6b7280;font-size:13px">Password akun absensi Anda baru saja berhasil diubah.</p>
-      </div>
-      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:16px">
-        <p style="margin:0;color:#92400e;font-size:12px"><strong>Penting:</strong> Jika Anda merasa tidak melakukan perubahan ini, segera hubungi tim IT atau Administrator.</p>
-      </div>
-      <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">Email ini dikirim secara otomatis oleh sistem.</p>
-    </div>`;
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pemberitahuan Keamanan - Kata Sandi Diubah</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #18181b;">
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container Card -->
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 540px; background-color: #ffffff; border-radius: 8px; border: 1px solid #e4e4e7;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding: 32px 32px 24px; border-bottom: 1px solid #f4f4f5;">
+              <div style="color: #71717a; font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;">
+                PT WIJAYA INOVASI GEMILANG
+              </div>
+              <h1 style="color: #09090b; font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.3px;">
+                Pemberitahuan Keamanan Akun
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 28px 32px 32px;">
+              <p style="font-size: 14px; line-height: 1.6; color: #27272a; margin: 0 0 16px;">
+                Halo <strong>${name}</strong>,
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 24px;">
+                Kata sandi untuk akun HRIS &amp; Presensi Anda baru saja berhasil diperbarui. Seluruh sesi aktif di perangkat lain telah dihentikan secara otomatis demi menjaga keamanan akun Anda.
+              </p>
+              
+              <!-- Security Warning Box -->
+              <div style="background-color: #fafafa; border: 1px solid #e4e4e7; border-radius: 6px; padding: 14px 16px;">
+                <div style="color: #18181b; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+                  Pemberitahuan Penting
+                </div>
+                <div style="color: #52525b; font-size: 12.5px; line-height: 1.6;">
+                  Jika Anda <strong>tidak</strong> merasa melakukan perubahan kata sandi ini, segera hubungi tim IT Support atau Administrator HR perusahaan untuk mengamankan akun Anda.
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Corporate Footer -->
+          <tr>
+            <td style="padding: 20px 32px; border-top: 1px solid #f4f4f5; text-align: center;">
+              <p style="margin: 0 0 4px; font-size: 11px; color: #71717a; line-height: 1.5;">
+                Email ini dikirimkan secara otomatis oleh Sistem HRIS PT Wijaya Inovasi Gemilang.
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #a1a1aa;">
+                &copy; 2026 PT Wijaya Inovasi Gemilang. Seluruh hak cipta dilindungi undang-undang.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
     if (!isSmtpConfigured) {
         logger.warn("[Email] SMTP tidak dikonfigurasi — email peringatan password change tidak terkirim", {
@@ -125,19 +326,26 @@ export async function sendPasswordChangedEmail(
         const transporter = createTransporter();
         if (!transporter) return false;
 
-        const text = `WIG Attendance System - Pemberitahuan Keamanan
-PT Wijaya Inovasi Gemilang
-==================================================
+        const text = `PT WIJAYA INOVASI GEMILANG
+Pemberitahuan Keamanan Akun HRIS
+--------------------------------------------------
+
 Halo ${name},
 
-Password akun absensi Anda baru saja berhasil diubah.
-Penting: Jika Anda merasa tidak melakukan perubahan ini, segera hubungi tim IT atau Administrator.
+Kata sandi untuk akun HRIS & Presensi Anda baru saja berhasil diperbarui. Seluruh sesi aktif di perangkat lain telah dihentikan secara otomatis demi menjaga keamanan akun Anda.
+
+PEMBERITAHUAN PENTING:
+Jika Anda tidak merasa melakukan perubahan kata sandi ini, segera hubungi tim IT Support atau Administrator HR perusahaan untuk mengamankan akun Anda.
+
+--------------------------------------------------
+PT Wijaya Inovasi Gemilang
 Email ini dikirim secara otomatis oleh sistem.`;
 
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
-            subject: "Pemberitahuan Keamanan - Password Diubah",
+            subject: "Pemberitahuan Keamanan - Kata Sandi Diubah",
+
             text,
             html,
         });

@@ -109,7 +109,10 @@ export async function POST(request: NextRequest) {
         let emailWarning = false;
         try {
             const { sendPasswordEmail } = await import("@/lib/services/emailService");
-            const emailSent = await sendPasswordEmail(employee.email, employee.name, plainPassword);
+            const emailSent = await sendPasswordEmail(employee.email, employee.name, plainPassword, {
+                employeeId: employee.employeeId,
+                username: employee.employeeId,
+            });
             emailWarning = !emailSent;
         } catch (emailErr) {
             logger.warn("Gagal kirim email password untuk karyawan baru", { employeeId: employee.employeeId, error: emailErr });

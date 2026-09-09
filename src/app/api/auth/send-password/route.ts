@@ -83,7 +83,11 @@ export async function POST(request: NextRequest) {
         const emailSent = await sendPasswordEmail(
             employee.email,
             employee.name,
-            plainPassword
+            plainPassword,
+            {
+                employeeId: employee.employeeId,
+                username: employee.employeeId,
+            }
         );
 
         await logAction("RESET_PASSWORD", "USER_ACCOUNT", actorFromSession(session), employee.userAccount.id, {

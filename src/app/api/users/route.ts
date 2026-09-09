@@ -110,7 +110,10 @@ export async function POST(request: NextRequest) {
         let emailSent = true;
         const wasExistingEmployeeAccount = result.data.source === "employee";
         if (!wasExistingEmployeeAccount) {
-            emailSent = await sendPasswordEmail(user.email, user.displayName, plainPassword);
+            emailSent = await sendPasswordEmail(user.email, user.displayName, plainPassword, {
+                employeeId: user.employeeId ?? undefined,
+                username: user.username,
+            });
         }
 
         await logAction("CREATE_ADMIN_USER", "USER_ACCOUNT", actorFromSession(session), user.id, {
@@ -153,7 +156,10 @@ export async function PATCH(request: NextRequest) {
             const plainPassword = generatePassword();
             const passwordHash = await bcrypt.hash(plainPassword, 12);
             const user = await resetAdminUserPassword(result.data.id, session.userId, passwordHash);
-            const emailSent = await sendPasswordEmail(user.email, user.displayName, plainPassword);
+            const emailSent = await sendPasswordEmail(user.email, user.displayName, plainPassword, {
+                employeeId: user.employeeId ?? undefined,
+                username: user.username,
+            });
             await logAction("RESET_ADMIN_PASSWORD", "USER_ACCOUNT", actorFromSession(session), user.id, {
                 username: user.username,
                 emailSent,

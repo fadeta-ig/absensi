@@ -247,7 +247,10 @@ export async function executeImport(buffer: ArrayBuffer, performedBy: AuditActor
 
         const { sendPasswordEmail } = await import("../emailService");
         for (const item of transactionResult.emailQueue) {
-            sendPasswordEmail(item.email, item.name, item.password)
+            sendPasswordEmail(item.email, item.name, item.password, {
+                employeeId: item.employeeId,
+                username: item.employeeId,
+            })
                 .then((sent) => {
                     if (!sent) {
                         logger.warn("Bulk import: email password tidak terkirim", {
