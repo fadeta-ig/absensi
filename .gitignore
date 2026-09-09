@@ -62,3 +62,8 @@ next-env.d.ts
 
 # agents & local ai configs
 /.agents/
+
+# documents & manuals (dokumen panduan lokal & generator)
+*.docx
+~$*.docx
+/scripts/
