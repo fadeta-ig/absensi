@@ -1,7 +1,7 @@
 {
     "name": "WIG HRIS - PT Wijaya Inovasi Gemilang",
-    "short_name": "WIG Absensi",
-    "description": "Sistem Absensi Karyawan PT Wijaya Inovasi Gemilang",
+    "short_name": "WIG HRIS",
+    "description": "Sistem HRIS & Presensi Karyawan PT Wijaya Inovasi Gemilang",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",

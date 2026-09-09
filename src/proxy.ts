@@ -5,8 +5,10 @@
  * Berjalan di Edge Runtime SEBELUM halaman/API di-render.
  *
  * Alur:
+ * - Request ke / (login) → jika sudah login, redirect ke portal sesuai role
  * - Request ke /dashboard/* → hanya role "hr"
  * - Request ke /employee/* → hanya role "employee"
+ * - Request ke /ga/* → hanya role "ga"
  * - Token tidak valid / tidak ada → redirect ke / (login)
  * - Role salah → redirect ke portal yang sesuai
  */
@@ -19,7 +21,6 @@ import { PERMISSIONS } from "@/lib/permissions";
 const HR_ONLY_PREFIX = "/dashboard";
 const EMPLOYEE_PREFIX = "/employee";
 const GA_PREFIX = "/ga";
-
 
 // ─── Session Helper ───────────────────────────────────────────
 /**
@@ -65,6 +66,21 @@ export async function proxy(request: NextRequest) {
     const isEmployee = pathname.startsWith(EMPLOYEE_PREFIX);
     const isGa = pathname.startsWith(GA_PREFIX);
 
+    // Route root login (/) → jika sesi masih aktif, arahkan langsung ke portal
+    if (pathname === "/") {
+        const session = await getSession(request);
+        if (session) {
+            const permissions = Array.isArray(session.permissions) ? session.permissions : [];
+            const canHr = permissions.includes(PERMISSIONS.HR_MANAGE);
+            const canGa = permissions.includes(PERMISSIONS.GA_MANAGE);
+            const canEmployee = Boolean(session.employeeId) && permissions.includes(PERMISSIONS.EMPLOYEE_SELF);
+            const landing = canHr ? HR_ONLY_PREFIX : canGa ? GA_PREFIX : canEmployee ? EMPLOYEE_PREFIX : null;
+            if (landing) {
+                return NextResponse.redirect(new URL(landing, request.url));
+            }
+        }
+        return NextResponse.next();
+    }
 
     // Route tidak memerlukan auth → lewatkan
     if (!isDashboard && !isEmployee && !isGa) {

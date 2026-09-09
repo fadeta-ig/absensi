@@ -99,12 +99,59 @@ export default function AppShell({
         return true;
     }, [pathname, searchParams]);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const sidebarOpenRef = useRef(sidebarOpen);
+    useEffect(() => {
+        sidebarOpenRef.current = sidebarOpen;
+    }, [sidebarOpen]);
+
     // Lazy initializer — membaca localStorage saat pertama render saja untuk menghindari setState-in-effect
     const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
         if (typeof window === "undefined") return false;
         return localStorage.getItem(storageKey) === "true";
     });
     const [openMenus, setOpenMenus] = useState<string[]>([]);
+
+    // Intersepsi tombol kembali pada rute root portal (Double-back to exit)
+    const isRootPath = pathname === "/employee" || pathname === "/dashboard" || pathname === "/ga";
+    useEffect(() => {
+        if (!isRootPath) return;
+
+        if (typeof window !== "undefined" && !window.history.state?.rootGuard) {
+            window.history.pushState({ ...window.history.state, rootGuard: true }, "", window.location.href);
+        }
+
+        let lastBackPressTime = 0;
+
+        const handlePopState = () => {
+            // Jika drawer/sidebar mobile sedang terbuka, prioritaskan tutup drawer
+            if (sidebarOpenRef.current) {
+                setSidebarOpen(false);
+                window.history.pushState({ ...window.history.state, rootGuard: true }, "", window.location.href);
+                return;
+            }
+
+            const now = Date.now();
+            if (now - lastBackPressTime < 2000) {
+                // Tekanan kedua dalam rentang 2 detik: keluar aplikasi
+                try {
+                    window.close();
+                } catch {
+                    // Fallback jika dibatasi kebijakan browser
+                }
+                return;
+            }
+
+            // Tekanan pertama: beri instruksi dan pertahankan guard
+            lastBackPressTime = now;
+            toast("Tekan sekali lagi untuk keluar dari aplikasi", "info");
+            window.history.pushState({ ...window.history.state, rootGuard: true }, "", window.location.href);
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [isRootPath, toast]);
 
     useEffect(() => {
         const message = consumeAuthRedirectMessage();

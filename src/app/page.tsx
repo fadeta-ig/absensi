@@ -7,6 +7,7 @@ import { User, Lock, LogIn, Loader2, KeyRound, Eye, EyeOff } from "lucide-react"
 import { consumeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { reportClientError } from "@/lib/clientErrors";
+import { getLandingPath } from "@/lib/permissions";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,10 +16,38 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState(() => consumeAuthRedirectMessage() ?? "");
   const [cooldown, setCooldown] = useState(0);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const isSubmitting = useRef(false);
+
+  // Cek sesi aktif saat pertama kali dibuka
+  useEffect(() => {
+    let isMounted = true;
+    async function checkActiveSession() {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            const target = getLandingPath(data);
+            router.replace(target || "/employee");
+            return;
+          }
+        }
+      } catch {
+        // Biarkan tetap di halaman login jika gagal verifikasi
+      }
+      if (isMounted) {
+        setCheckingSession(false);
+      }
+    }
+    void checkActiveSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
 
   // Cooldown timer effect
   useEffect(() => {
@@ -70,7 +99,7 @@ export default function LoginPage() {
       await new Promise((r) => setTimeout(r, 200));
 
       notifyAuthChanged("login");
-      router.push(data.landingPath || "/");
+      router.replace(data.landingPath || "/employee");
     } catch (error) {
       reportClientError("LoginPage", "Login request failed", error, { username });
       setError("Login belum berhasil karena koneksi ke server bermasalah. Periksa internet lalu coba lagi.");
@@ -78,6 +107,28 @@ export default function LoginPage() {
       isSubmitting.current = false;
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#FFF5F7] via-white to-[#FFF0F0]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 relative">
+            <Image
+              src="/assets/Logo WIG.png"
+              alt="WIG Logo"
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-[var(--text-muted)] font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--primary)]" />
+            <span>Memverifikasi sesi...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#FFF5F7] via-white to-[#FFF0F0] relative overflow-hidden">

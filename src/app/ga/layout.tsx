@@ -48,13 +48,13 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
             const res = await fetch("/api/auth/me");
             if (!res.ok) {
                 storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
-                router.push("/");
+                router.replace("/");
                 return;
             }
             const data = await res.json();
             if (!data.permissions?.includes("ga.manage")) {
                 storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
-                router.push(
+                router.replace(
                     data.permissions?.includes("hr.manage")
                         ? "/dashboard"
                         : data.employeeId && data.permissions?.includes("employee.self")
@@ -67,7 +67,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
         } catch (error) {
             reportClientError("GaLayout", "Gagal memverifikasi sesi GA", error);
             storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
-            router.push("/");
+            router.replace("/");
         } finally {
             setLoading(false);
         }
@@ -98,7 +98,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
             notifyAuthChanged("logout");
-            router.push("/");
+            router.replace("/");
         } catch (error) {
             reportClientError("GaLayout", "Logout GA gagal", error);
             toast(error instanceof Error ? error.message : "Gagal logout.", "error");
