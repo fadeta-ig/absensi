@@ -59,7 +59,7 @@ Alur validasi kehadiran memastikan karyawan benar-benar berada di lingkungan fis
        │<── 11. Response: Status Kehadiran (Sukses) ────│<── Hasil catatan absensi ──────────────────│
 ```
 
-1. **Pengambilan Bukti di Klien**: Aplikasi PWA meminta izin akses kamera dan lokasi geografis. Foto selfie dikompresi ringan di peramban untuk menghemat bandwidth.
+1. **Pengambilan Bukti Instan di Klien**: Saat karyawan membuka halaman presensi, aplikasi PWA langsung menyalakan kamera (kamera depan atau belakang) dan menginisialisasi verifikasi Wi-Fi serta GPS di latar belakang dalam satu layar (*single-screen HUD*). Karyawan dapat langsung menjepret foto kehadiran (selfie atau foto lokasi meja kerja), yang dikompresi ringan di peramban ke dimensi maksimal 480px untuk menghemat bandwidth.
 2. **Validasi Jaringan (Faktor 1)**: Kecuali karyawan memiliki bendera `bypass_location: true`, IP publik pengirim dicocokkan dengan IP statis ISP Citranet (`202.152.141.27`) atau subnet lokal router kantor WIG (`192.168.20.0/24`).
 3. **Validasi Geofence (Faktor 2)**: Koordinat GPS pengguna dihitung deviasinya terhadap koordinat titik kantor menggunakan rumus Haversine. Jarak harus berada di dalam batas toleransi radius lokasi kantor (default 100 meter).
 4. **Evaluasi Shift & Penyimpanan**: Waktu server dicocokkan dengan jadwal kerja aktif karyawan (`WorkShiftDay`). Sistem menentukan apakah presensi berstatus tepat waktu atau terlambat, menyimpan file foto, dan membuat entri permanen pada tabel `attendance_records`.

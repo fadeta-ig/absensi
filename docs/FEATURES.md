@@ -28,7 +28,8 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **A
 ### A. Presensi Terpadu 3-Faktor
 - **Faktor 1 — Jaringan Wi-Fi Kantor**: Memverifikasi IP pengirim terhadap subnet lokal router kantor (`192.168.20.0/24`) atau IP publik statis ISP Citranet (`202.152.141.27`).
 - **Faktor 2 — Geofencing GPS**: Memverifikasi koordinat perangkat terhadap radius geofence kantor (default 100 meter) menggunakan formula jarak Haversine.
-- **Faktor 3 — Foto Selfie**: Mengambil foto wajah selfie langsung dari kamera perangkat (downsampled di browser) untuk audit bukti fisik kehadiran.
+- **Faktor 3 — Foto Kehadiran & Lokasi Kerja**: Mengambil foto bukti fisik langsung dari kamera perangkat (downsampled di browser ke max 480px) untuk audit kehadiran. Mendukung kamera depan (selfie) maupun kamera belakang (meja/lokasi kerja) dengan pembalik kamera instan tanpa batasan overlay biometrik artifisial.
+- **Pengalaman Pengguna Instan (Single-Screen HUD)**: Kamera langsung aktif otomatis saat halaman dibuka tanpa tombol perantara, dilengkapi HUD mengambang terpadu untuk indikator status Wi-Fi dan GPS, serta tombol rana taktil di jangkauan jempol.
 - **Bypass Location**: Dukungan flag pengecualian lokasi (`bypass_location: true`) bagi karyawan tugas luar atau manajemen tingkat atas.
 
 ### B. Alur Penyesuaian & Monitoring

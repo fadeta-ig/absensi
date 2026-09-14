@@ -33,7 +33,7 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 - **Reason**: Kecepatan eksekusi presensi seketika (< 1 detik), reliabilitas jaringan kantor yang sulit dipalsukan tanpa akses fisik, serta kompatibilitas penuh dengan segala jenis smartphone karyawan.
 - **Alternatives**: Mempertahankan model TensorFlow.js / face-api di browser atau menjalankan verifikasi wajah di backend (server-side).
 - **Consequences**:
-  - Positif: Aplikasi PWA sangat ringan, proses presensi instan dan hemat baterai/kuota.
+  - Positif: Aplikasi PWA sangat ringan, proses presensi instan dan hemat baterai/kuota. Desain UX disederhanakan menjadi *instant-on camera* dengan *single-screen HUD* dan peniadaan *overlay* biometrik wajah artifisial, memungkinkan karyawan leluasa mengambil selfie atau memotret meja/lokasi kerja dengan kamera belakang.
   - Negatif: Kolom `faceDescriptor` di skema Prisma dan `NEXT_PUBLIC_FACE_THRESHOLD` di `.env.example` menjadi peninggalan legacy yang sudah tidak digunakan di alur verifikasi utama.
 
 ---

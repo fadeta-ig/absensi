@@ -1,60 +1,46 @@
-# Task Plan: Project Brain Initialization
+# Task Plan: Streamlined Attendance Page UX (Expert Clean Redesign)
 
-Use this file as the durable roadmap for building the canonical Project Brain in `/docs/`.
+Use this file as the durable roadmap for improving the UX of `/employee/attendance` to provide an instant, seamless, camera-first mobile experience similar to Gojek/Grab/Shopee.
 
 ## Goal
-Transform `/docs/` into a pure, durable "Project Brain" (18 canonical knowledge files) that enables future AI coding agents to immediately build a mental model of the system without an audit/issue-tracking focus. Zero source code changes.
+Redesign `/employee/attendance` with expert UX principles:
+1. **Remove all artificial biometric overlays**: No face oval, no crosshairs, no "posisikan wajah di dalam lingkaran". The system is photo evidence on site, allowing both selfie and rear-camera workplace/location shots.
+2. **Eliminate redundant information & duplicate alerts**: Remove stacked duplicate alert boxes, duplicate coordinate footers, and redundant text. Consolidate Wi-Fi, GPS, and system state into a single, cohesive, smart floating status header.
+3. **Ergonomic Camera Deck**: Place the shutter and camera-flip buttons in natural thumb-reach at the bottom (like iOS/Android/Instagram native cameras).
+4. **Zero-Scroll Viewport**: Fit the entire flow (live view -> snap -> submit) within the mobile viewport without scrolling.
+5. **Strict Design & Icon Consistency**: Corporate Red (#DC2626 / var(--primary)), Geist typography, 100% Lucide icons, ZERO emojis.
 
 ## Current Phase
-Complete (Project Brain Fully Initialized & Validated)
-
-## Next Step
-Maintain Project Brain in `/docs/` according to `AGENT_RULES.md` whenever new features or schema changes introduce durable project knowledge.
-
-## Constraints & Principles
-- **NOT A CODE AUDIT**: No bug hunting, vulnerability hunting, duplicate code analysis, dead code, code smell, TODO discovery, refactoring backlog, or audit scoring.
-- **DO NOT CREATE**: `TODO.md`, `CHANGELOG.md`, `BUGS.md`, `TECHNICAL_DEBT.md`, `CURRENT_STATE.md`, `AUDIT.md`.
-- **EXACT 18 FILES in `/docs/`**:
-  `README.md`, `AGENT_RULES.md`, `PROJECT.md`, `CODEBASE_MAP.md`, `ARCHITECTURE.md`, `DOMAIN.md`, `DATA_MODEL.md`, `FEATURES.md`, `FLOWS.md`, `API.md`, `INTEGRATIONS.md`, `CONVENTIONS.md`, `DECISIONS.md`, `CONSTRAINTS.md`, `SECURITY.md`, `TESTING.md`, `WORKFLOWS.md`, `GOTCHAS.md`.
-- **Zero source code modification**: `src/`, `prisma/`, `package.json`, etc. must remain untouched.
-- **Portability**: Relative dynamic links (`./*.md`), zero absolute paths, zero secrets/PII.
+Complete (Implemented & Verified)
 
 ## Phases
 
-### Phase 1: Planning & Cleanup
-- [x] Review requirements and user prompt instructions.
-- [x] Remove non-brain files from `/docs/` (`TODO.md`, `CHANGELOG.md`, `CURRENT_STATE.md`).
-- [x] Create/update `AGENTS.md` at repository root with Project Brain routing and rules.
+### Phase 1: Context & Feedback Analysis
+- [x] Analyze user feedback: remove biometric mask (not face recognition), remove repetitive alerts, allow effortless selfie or location photo, streamline layout.
+- [x] Audit all displayed texts and eliminate duplicate state representations.
 - **Status:** complete
 
-### Phase 2: Create New Knowledge Files
-- [x] Create `docs/CODEBASE_MAP.md`: Map entry points, directories, layers, modules, services, utilities, and relationships.
-- [x] Create `docs/FEATURES.md`: Capabilities and feature breakdown (Auth/RBAC, Attendance, GA Assets, Payroll, Visits, Self-service).
-- [x] Create `docs/FLOWS.md`: End-to-end system flows (3-factor attendance flow, payroll generation & calculation flow, asset handover flow, visit verification & watermark flow, auth & edge guard flow).
-- [x] Create `docs/API.md`: HTTP route map, `apiGuard` contract, request/response formats, query/body schemas.
+### Phase 2: Design Architecture
+- [x] Define single-screen viewfinder layout with integrated smart status pill (Wi-Fi + GPS + Mode in one line).
+- [x] Define bottom ergonomic control bar (Flip camera on left, large central tactile shutter, live clock/info on right).
+- [x] Define post-capture preview state (clean retake vs submit buttons).
 - **Status:** complete
 
-### Phase 3: Update & Align Existing Knowledge Files
-- [x] Update `docs/README.md`: Entry point, Project Brain definition, 18-file index, 10-step startup procedure, task mental model routing table.
-- [x] Update `docs/AGENT_RULES.md`: How AI agents must operate, source-of-truth hierarchy, memory maintenance rules, secrets policy.
-- [x] Verify & refine `docs/PROJECT.md`, `docs/ARCHITECTURE.md`, `docs/DOMAIN.md`, `docs/DATA_MODEL.md`, `docs/INTEGRATIONS.md`, `docs/CONVENTIONS.md`, `docs/DECISIONS.md`, `docs/CONSTRAINTS.md`, `docs/SECURITY.md`, `docs/TESTING.md`, `docs/WORKFLOWS.md`, `docs/GOTCHAS.md` to ensure pure knowledge tone.
+### Phase 3: Implementation
+- [x] Overhaul `src/app/employee/attendance/page.tsx` with the clean camera-first layout.
+- [x] Remove all face oval guides and facial alignment constraints.
+- [x] Replace multiple warning banners with a single contextual alert / smart status chip.
+- [x] Verify zero emoji usage and full Lucide icon compliance.
 - **Status:** complete
 
-### Phase 4: Validation Pass
-- [x] Verify all 18 files exist in `/docs/` and only these 18.
-- [x] Check link validity across all documents (0 broken links).
-- [x] Check for absolute paths, secrets, or temporary logs (0 violations).
-- [x] Confirm git status: ZERO source code modification.
+### Phase 4: Verification & Quality Checks
+- [x] Run `npx eslint src/app/employee/attendance/page.tsx` (0 errors, 0 warnings).
+- [x] Run `npx tsc --noEmit` to verify type integrity.
+- [x] Run Vitest test suites (`tests/services/` and `tests/utils/` - all 52 tests passed).
+- [x] Verify port 3000 remains clean and free.
 - **Status:** complete
 
-### Phase 5: Final Report Delivery
-- [x] Deliver comprehensive final report in response to user.
+### Phase 5: Project Brain Assessment & Delivery
+- [x] Mandatory Project Brain Assessment (`AGENT_RULES.md`).
+- [x] Deliver final concise report to user.
 - **Status:** complete
-
-## Key Decisions Made
-| Decision | Rationale |
-|----------|-----------|
-| Purge `TODO.md`, `CHANGELOG.md`, `CURRENT_STATE.md` | Excluded by user specification; Project Brain is durable knowledge, not an issue tracker or audit log. |
-| Add `CODEBASE_MAP.md`, `FEATURES.md`, `FLOWS.md`, `API.md` | Required to provide complete architectural, feature, endpoint, and dataflow mental models. |
-| Use relative dynamic markdown links (`./*.md`) | Ensures full portability across local environments, Linux servers, and GitHub preview. |
-| Zero source code modifications | Strict constraint across all project memory phases. |
