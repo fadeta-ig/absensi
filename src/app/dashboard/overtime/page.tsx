@@ -7,6 +7,7 @@ import {
     CheckSquare, Square, FileSpreadsheet, Check, RotateCcw
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
@@ -39,6 +40,7 @@ const STATUS_CONFIG = {
 
 function DashboardOvertimeContent() {
     const toast = useToast();
+    const confirm = useConfirm();
     const [requests, setRequests] = useState<OvertimeRequest[]>([]);
     const [search, setSearch] = useState("");
     const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -108,41 +110,78 @@ function DashboardOvertimeContent() {
         }
     };
 
+    const selectedPendingOvertime = useMemo(() => {
+        return requests.filter(r => selectedIds.has(r.id) && r.status === "pending");
+    }, [requests, selectedIds]);
+
+    const pendingOvertimeCount = selectedPendingOvertime.length;
+    const skippedOvertimeCount = selectedIds.size - pendingOvertimeCount;
+
     const handleBulkStatusUpdate = async (status: "approved" | "rejected") => {
-        const targetList = requests.filter(r => selectedIds.has(r.id) && r.status === "pending");
-        if (targetList.length === 0) {
+        if (bulkProcessing) return;
+        if (selectedPendingOvertime.length === 0) {
             toast("Tidak ada pengajuan lembur berstatus menunggu yang dipilih.", "warning");
             return;
         }
 
-        setBulkProcessing(true);
-        try {
-            for (const r of targetList) {
-                await fetch("/api/overtime", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        id: r.id,
-                        status,
-                        approvedHours: r.hours,
-                        isHoliday: r.isHoliday
-                    }),
-                });
-            }
-            // Reload requests
-            const res = await fetch("/api/overtime");
-            if (res.ok) {
-                const data = await res.json();
-                setRequests(Array.isArray(data) ? data : []);
-            }
-            clearSelection();
-            toast(`${targetList.length} pengajuan lembur berhasil ${status === "approved" ? "disetujui" : "ditolak"}.`, "success");
-        } catch (error) {
-            reportClientError("DashboardOvertimePage", "Gagal memproses persetujuan lembur massal", error);
-            toast("Sebagian persetujuan lembur massal gagal diperbarui.", "error");
-        } finally {
-            setBulkProcessing(false);
-        }
+        const actionWord = status === "approved" ? "disetujui" : "ditolak";
+        const actionTitle = status === "approved" ? "Setujui Lembur Massal?" : "Tolak Lembur Massal?";
+
+        confirm({
+            title: actionTitle,
+            message: `Sebanyak ${pendingOvertimeCount} pengajuan lembur akan ${actionWord}.${skippedOvertimeCount > 0 ? ` (${skippedOvertimeCount} pengajuan yang sudah diproses akan dilewati).` : ""}`,
+            confirmLabel: status === "approved" ? "Ya, Setujui Semua" : "Ya, Tolak Semua",
+            variant: status === "approved" ? "info" : "danger",
+            onConfirm: async () => {
+                setBulkProcessing(true);
+                const succeededIds: string[] = [];
+                let failedCount = 0;
+                try {
+                    for (const r of selectedPendingOvertime) {
+                        try {
+                            const res = await fetch("/api/overtime", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    id: r.id,
+                                    status,
+                                    approvedHours: r.hours,
+                                    isHoliday: r.isHoliday
+                                }),
+                            });
+                            if (res.ok) {
+                                succeededIds.push(r.id);
+                            } else {
+                                failedCount++;
+                            }
+                        } catch {
+                            failedCount++;
+                        }
+                    }
+                    // Reload requests
+                    const res = await fetch("/api/overtime");
+                    if (res.ok) {
+                        const data = await res.json();
+                        setRequests(Array.isArray(data) ? data : []);
+                    }
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        succeededIds.forEach(id => next.delete(id));
+                        return next;
+                    });
+                    if (failedCount === 0) {
+                        toast(`${succeededIds.length} pengajuan lembur berhasil ${actionWord}.`, "success");
+                    } else {
+                        toast(`${succeededIds.length} lembur berhasil ${actionWord}, ${failedCount} gagal diproses.`, "error");
+                    }
+                } catch (error) {
+                    reportClientError("DashboardOvertimePage", "Gagal memproses persetujuan lembur massal", error);
+                    toast("Sebagian persetujuan lembur massal gagal diperbarui.", "error");
+                } finally {
+                    setBulkProcessing(false);
+                }
+            },
+        });
     };
 
     const handleBulkExportExcel = () => {
@@ -570,24 +609,31 @@ function DashboardOvertimeContent() {
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="lembur"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${pendingOvertimeCount} menunggu konfirmasi${skippedOvertimeCount > 0 ? `, ${skippedOvertimeCount} sudah diproses` : ""}`
+                        : undefined
+                }
             >
                 <button
                     type="button"
                     onClick={() => handleBulkStatusUpdate("approved")}
-                    disabled={bulkProcessing}
-                    className="btn btn-success btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || pendingOvertimeCount === 0}
+                    className="btn btn-success btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={pendingOvertimeCount === 0 ? "Pilih minimal 1 pengajuan berstatus menunggu" : `Setujui ${pendingOvertimeCount} pengajuan lembur`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Setujui Terpilih
+                    Setujui {pendingOvertimeCount > 0 ? `(${pendingOvertimeCount} Pending)` : "Terpilih"}
                 </button>
                 <button
                     type="button"
                     onClick={() => handleBulkStatusUpdate("rejected")}
-                    disabled={bulkProcessing}
-                    className="btn btn-danger btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || pendingOvertimeCount === 0}
+                    className="btn btn-danger btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={pendingOvertimeCount === 0 ? "Pilih minimal 1 pengajuan berstatus menunggu" : `Tolak ${pendingOvertimeCount} pengajuan lembur`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                    Tolak Terpilih
+                    Tolak {pendingOvertimeCount > 0 ? `(${pendingOvertimeCount} Pending)` : "Terpilih"}
                 </button>
                 <button
                     type="button"
@@ -595,7 +641,7 @@ function DashboardOvertimeContent() {
                     className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
                 >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
-                    Ekspor Excel
+                    Ekspor Excel ({selectedIds.size})
                 </button>
             </BulkActionBar>
 

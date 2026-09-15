@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { MapPinned, Search, Filter, Calendar, RotateCcw } from "lucide-react";
-import { VisitStatus } from "@/types";
+import { MapPinned, Search, Calendar, RotateCcw } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { getToday, getThisWeekRange, getThisMonthRange, isDateInRange } from "@/lib/datePresets";
 
 import { VisitListTable } from "./components/VisitListTable";
 import { VisitDetailModal } from "./components/VisitDetailModal";
-import { VisitReport, STATUS_CONFIG, FILTER_OPTIONS } from "./types";
+import { VisitReport, FILTER_OPTIONS } from "./types";
 
 export default function DashboardVisitsPage() {
     const toast = useToast();
@@ -47,7 +46,7 @@ export default function DashboardVisitsPage() {
         void loadVisits();
     }, [toast]);
 
-    const handleStatusUpdate = async (id: string, isChecked: boolean) => {
+    const handleStatusUpdate = async (id: string, isChecked: boolean, options?: { silent?: boolean }): Promise<boolean> => {
         setUpdating(id);
         try {
             const res = await fetch("/api/visits", {
@@ -63,10 +62,16 @@ export default function DashboardVisitsPage() {
             const updated = await res.json();
             setVisits((prev) => prev.map((v) => (v.id === id ? updated : v)));
             if (selectedVisit?.id === id) setSelectedVisit(updated);
-            toast(isChecked ? "Kunjungan ditandai sudah dicek." : "Status cek kunjungan dibatalkan.", "success");
+            if (!options?.silent) {
+                toast(isChecked ? "Kunjungan ditandai sudah dicek." : "Status cek kunjungan dibatalkan.", "success");
+            }
+            return true;
         } catch (err) {
             reportClientError("DashboardVisitsPage", "Gagal memperbarui status kunjungan", err, { visitId: id, isChecked });
-            toast(err instanceof Error ? err.message : "Gagal memperbarui status kunjungan.", "error");
+            if (!options?.silent) {
+                toast(err instanceof Error ? err.message : "Gagal memperbarui status kunjungan.", "error");
+            }
+            return false;
         } finally {
             setUpdating(null);
         }

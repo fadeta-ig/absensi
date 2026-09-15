@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { FileText, Eye, Download, Trash2, FileSpreadsheet, Loader2, CheckSquare, Square, Printer } from "lucide-react";
-import { Payslip, Employee, PayslipItem } from "../types";
+import { Payslip, Employee } from "../types";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
@@ -119,24 +119,44 @@ export function PayrollHistoryTab({
     };
 
     const handleBulkDelete = () => {
+        if (bulkDeleting) return;
         const targetList = filteredHistoryPayslips.filter(p => selectedIds.has(p.id));
         if (targetList.length === 0) return;
 
         confirm({
             title: "Hapus Slip Gaji Terpilih?",
-            message: `Sebanyak ${targetList.length} slip gaji akan dihapus permanen dari riwayat.`,
+            message: `Sebanyak ${targetList.length} slip gaji akan dihapus permanen dari riwayat database.`,
             confirmLabel: "Hapus Semua Terpilih",
             cancelLabel: "Batal",
             variant: "danger",
             onConfirm: async () => {
                 setBulkDeleting(true);
+                const succeededIds: string[] = [];
+                let failedCount = 0;
                 try {
                     for (const p of targetList) {
-                        await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
+                        try {
+                            const res = await fetch(`/api/payslips?id=${p.id}`, { method: "DELETE" });
+                            if (res.ok) {
+                                succeededIds.push(p.id);
+                            } else {
+                                failedCount++;
+                            }
+                        } catch {
+                            failedCount++;
+                        }
                     }
-                    setPayslips(prev => prev.filter(x => !selectedIds.has(x.id)));
-                    clearSelection();
-                    toast(`${targetList.length} slip gaji berhasil dihapus.`, "success");
+                    setPayslips(prev => prev.filter(x => !succeededIds.includes(x.id)));
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        succeededIds.forEach(id => next.delete(id));
+                        return next;
+                    });
+                    if (failedCount === 0) {
+                        toast(`${succeededIds.length} slip gaji berhasil dihapus.`, "success");
+                    } else {
+                        toast(`${succeededIds.length} slip gaji berhasil dihapus, ${failedCount} gagal.`, "error");
+                    }
                 } catch (error) {
                     reportClientError("PayrollHistoryTab", "Gagal menghapus batch slip gaji", error);
                     toast("Sebagian slip gaji gagal dihapus.", "error");
@@ -292,6 +312,11 @@ export function PayrollHistoryTab({
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="slip gaji"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${selectedIds.size} slip gaji terpilih untuk dicetak atau dikelola`
+                        : undefined
+                }
             >
                 <button
                     type="button"
@@ -299,7 +324,7 @@ export function PayrollHistoryTab({
                     className="btn btn-primary btn-sm flex items-center gap-1.5"
                 >
                     <Download className="w-3.5 h-3.5" />
-                    Unduh Slip Terpilih (PDF)
+                    Unduh PDF ({selectedIds.size})
                 </button>
                 <button
                     type="button"
@@ -308,7 +333,7 @@ export function PayrollHistoryTab({
                     className="btn btn-danger btn-sm flex items-center gap-1.5"
                 >
                     {bulkDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                    Hapus Terpilih
+                    Hapus Terpilih ({selectedIds.size})
                 </button>
             </BulkActionBar>
         </div>

@@ -8,6 +8,7 @@ import BulkActionBar from "@/components/ui/BulkActionBar";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportToExcel } from "@/lib/export";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { useTablePagination } from "@/hooks/useTablePagination";
 
 interface Props {
@@ -16,13 +17,14 @@ interface Props {
     error: string;
     updating: string | null;
     setSelectedVisit: (v: VisitReport | null) => void;
-    handleStatusUpdate: (id: string, isChecked: boolean) => void;
+    handleStatusUpdate: (id: string, isChecked: boolean, options?: { silent?: boolean }) => Promise<boolean>;
 }
 
 export function VisitListTable({
     filtered, loading, error, updating, setSelectedVisit, handleStatusUpdate
 }: Props) {
     const toast = useToast();
+    const confirm = useConfirm();
     const {
         currentPage,
         pageSize,
@@ -43,6 +45,13 @@ export function VisitListTable({
 
     const isAllCurrentPageSelected = paginatedVisits.length > 0 && paginatedVisits.every(v => selectedIds.has(v.id));
     const isAllFilteredSelected = filtered.length > 0 && filtered.every(v => selectedIds.has(v.id));
+
+    const selectedUncheckedVisits = useMemo(() => {
+        return filtered.filter(v => selectedIds.has(v.id) && v.status === "clocked_out" && !v.hrChecked);
+    }, [filtered, selectedIds]);
+
+    const eligibleVisitsCount = selectedUncheckedVisits.length;
+    const skippedVisitsCount = selectedIds.size - eligibleVisitsCount;
 
     const toggleSelectAllCurrentPage = () => {
         const next = new Set(selectedIds);
@@ -73,24 +82,47 @@ export function VisitListTable({
     const clearSelection = () => setSelectedIds(new Set());
 
     const handleBulkVerify = async () => {
-        const targetList = filtered.filter(v => selectedIds.has(v.id) && v.status === "clocked_out" && !v.hrChecked);
-        if (targetList.length === 0) {
+        if (bulkProcessing) return;
+        if (selectedUncheckedVisits.length === 0) {
             toast("Tidak ada kunjungan selesai yang belum dicek.", "warning");
             return;
         }
 
-        setBulkProcessing(true);
-        try {
-            for (const v of targetList) {
-                await handleStatusUpdate(v.id, true);
-            }
-            clearSelection();
-            toast(`${targetList.length} kunjungan berhasil ditandai sudah dicek.`, "success");
-        } catch {
-            toast("Sebagian verifikasi massal kunjungan gagal.", "error");
-        } finally {
-            setBulkProcessing(false);
-        }
+        confirm({
+            title: "Verifikasi Kunjungan Massal?",
+            message: `Sebanyak ${eligibleVisitsCount} kunjungan lapangan akan ditandai sudah diperiksa HR.${skippedVisitsCount > 0 ? ` (${skippedVisitsCount} data kunjungan yang belum selesai atau sudah dicek akan dilewati).` : ""}`,
+            confirmLabel: "Ya, Tandai Sudah Dicek",
+            variant: "info",
+            onConfirm: async () => {
+                setBulkProcessing(true);
+                const succeededIds: string[] = [];
+                let failedCount = 0;
+                try {
+                    for (const v of selectedUncheckedVisits) {
+                        const ok = await handleStatusUpdate(v.id, true, { silent: true });
+                        if (ok) {
+                            succeededIds.push(v.id);
+                        } else {
+                            failedCount++;
+                        }
+                    }
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        succeededIds.forEach(id => next.delete(id));
+                        return next;
+                    });
+                    if (failedCount === 0) {
+                        toast(`${succeededIds.length} kunjungan berhasil ditandai sudah dicek.`, "success");
+                    } else {
+                        toast(`${succeededIds.length} kunjungan berhasil dicek, ${failedCount} gagal.`, "error");
+                    }
+                } catch {
+                    toast("Sebagian verifikasi massal kunjungan gagal.", "error");
+                } finally {
+                    setBulkProcessing(false);
+                }
+            },
+        });
     };
 
     const handleBulkExportExcel = () => {
@@ -280,15 +312,21 @@ export function VisitListTable({
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="kunjungan"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${eligibleVisitsCount} kunjungan selesai belum dicek${skippedVisitsCount > 0 ? `, ${skippedVisitsCount} dilewati` : ""}`
+                        : undefined
+                }
             >
                 <button
                     type="button"
                     onClick={handleBulkVerify}
-                    disabled={bulkProcessing}
-                    className="btn btn-success btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || eligibleVisitsCount === 0}
+                    className="btn btn-success btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={eligibleVisitsCount === 0 ? "Pilih minimal 1 kunjungan selesai yang belum dicek" : `Tandai ${eligibleVisitsCount} kunjungan sudah dicek`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Tandai Sudah Dicek
+                    Tandai Sudah Dicek {eligibleVisitsCount > 0 ? `(${eligibleVisitsCount})` : ""}
                 </button>
                 <button
                     type="button"
@@ -296,7 +334,7 @@ export function VisitListTable({
                     className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
                 >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
-                    Ekspor Excel
+                    Ekspor Excel ({selectedIds.size})
                 </button>
             </BulkActionBar>
         </div>

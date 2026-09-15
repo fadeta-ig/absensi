@@ -10,6 +10,7 @@ interface BulkActionBarProps {
     onSelectAll?: () => void;
     allSelected?: boolean;
     itemLabel?: string;
+    subtitle?: React.ReactNode;
     children: React.ReactNode;
     className?: string;
 }
@@ -21,6 +22,7 @@ export default function BulkActionBar({
     onSelectAll,
     allSelected = false,
     itemLabel = "data",
+    subtitle,
     children,
     className = "",
 }: BulkActionBarProps) {
@@ -40,8 +42,13 @@ export default function BulkActionBar({
                         <p className="text-xs font-bold leading-tight">
                             <span className="text-[var(--primary)]">{selectedCount}</span> {itemLabel} terpilih
                         </p>
+                        {subtitle && (
+                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 font-medium">
+                                {subtitle}
+                            </p>
+                        )}
                         <div className="flex items-center gap-2 mt-0.5">
-                            {onSelectAll && totalCount !== undefined && totalCount > selectedCount && (
+                            {onSelectAll && totalCount !== undefined && totalCount > selectedCount && !allSelected && (
                                 <button
                                     type="button"
                                     onClick={onSelectAll}

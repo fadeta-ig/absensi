@@ -47,6 +47,7 @@ export default function PayrollPage() {
     const [showBulkModal, setShowBulkModal] = useState(false);
     const [bulkLoading, setBulkLoading] = useState(false);
     const [bulkResult, setBulkResult] = useState<{ created: number; skipped: number; message: string } | null>(null);
+    const [bulkTargetEmployeeIds, setBulkTargetEmployeeIds] = useState<string[] | null>(null);
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -250,8 +251,12 @@ export default function PayrollPage() {
         ], "History_Payroll", "History");
     };
 
-    const handleExportRecapExcel = () => {
-        const data = filteredRecapEmployees.map(e => {
+    const handleExportRecapExcel = (targetEmployeeIds?: string[]) => {
+        const baseEmployees = targetEmployeeIds && targetEmployeeIds.length > 0
+            ? filteredRecapEmployees.filter(e => targetEmployeeIds.includes(e.employeeId))
+            : filteredRecapEmployees;
+
+        const data = baseEmployees.map(e => {
             const hasPayslip = payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod);
             const empAllowances = e.payrollComponents?.filter(pc => pc.component.type === "earning").reduce((s, pc) => s + pc.amount, 0) || 0;
             const empDeductions = e.payrollComponents?.filter(pc => pc.component.type === "deduction").reduce((s, pc) => s + pc.amount, 0) || 0;
@@ -310,7 +315,7 @@ export default function PayrollPage() {
                 fmt(empOvertime),
                 fmt(empDeductions),
                 fmt(estNet),
-                hasPayslip ? "Sudah" : "Belum"
+                hasPayslip ? "Sudah Terbit" : "Belum Terbit"
             ];
         });
 
@@ -326,21 +331,27 @@ export default function PayrollPage() {
         });
     };
 
-    const handleBulkGenerate = () => {
+    const handleBulkGenerate = (targetEmployeeIds?: string[]) => {
+        setBulkTargetEmployeeIds(targetEmployeeIds && targetEmployeeIds.length > 0 ? targetEmployeeIds : null);
         setBulkResult(null);
         setShowBulkModal(true);
     };
 
     const confirmBulk = async () => {
+        if (bulkLoading) return;
         setBulkLoading(true);
         setBulkResult(null);
         try {
-            const toGenerate = filteredRecapEmployees
+            const baseEmployees = bulkTargetEmployeeIds
+                ? filteredRecapEmployees.filter(e => bulkTargetEmployeeIds.includes(e.employeeId))
+                : filteredRecapEmployees;
+
+            const toGenerate = baseEmployees
                 .filter((e) => !payslips.some((p) => p.employeeId === e.employeeId && p.period === selectedPeriod))
                 .map((e) => e.employeeId);
 
             if (toGenerate.length === 0) {
-                setBulkResult({ created: 0, skipped: filteredRecapEmployees.length, message: "Semua karyawan sudah memiliki slip gaji untuk periode ini." });
+                setBulkResult({ created: 0, skipped: baseEmployees.length, message: "Semua karyawan sudah memiliki slip gaji untuk periode ini." });
                 setBulkLoading(false);
                 return;
             }
@@ -486,7 +497,12 @@ export default function PayrollPage() {
             <PayrollBulkModal 
                 showBulkModal={showBulkModal} setShowBulkModal={setShowBulkModal}
                 bulkLoading={bulkLoading} bulkResult={bulkResult}
-                selectedPeriod={selectedPeriod} filteredRecapEmployees={filteredRecapEmployees}
+                selectedPeriod={selectedPeriod}
+                filteredRecapEmployees={
+                    bulkTargetEmployeeIds
+                        ? filteredRecapEmployees.filter(e => bulkTargetEmployeeIds.includes(e.employeeId))
+                        : filteredRecapEmployees
+                }
                 payslips={payslips} confirmBulk={confirmBulk} setTab={setTab}
             />
 

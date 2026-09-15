@@ -7,6 +7,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { useTablePagination } from "@/hooks/useTablePagination";
 import { AttendanceCorrectionDetailModal } from "./AttendanceCorrectionDetailModal";
 
@@ -16,13 +17,14 @@ interface Props {
     error: string;
     processingId: string | null;
     getEmpInfo: (id: string) => { name: string; department: string; division: string };
-    handleCorrectionAction: (id: string, s: "APPROVED" | "REJECTED") => void;
+    handleCorrectionAction: (id: string, s: "APPROVED" | "REJECTED", options?: { silent?: boolean }) => Promise<boolean>;
 }
 
 export function AttendanceCorrectionTab({
     corrections, loading, error, processingId, getEmpInfo, handleCorrectionAction
 }: Props) {
     const toast = useToast();
+    const confirm = useConfirm();
     const [selectedCorrection, setSelectedCorrection] = useState<AttendanceCorrection | null>(null);
 
     const {
@@ -46,6 +48,13 @@ export function AttendanceCorrectionTab({
 
     const isAllCurrentPageSelected = paginatedCorrections.length > 0 && paginatedCorrections.every(c => selectedIds.has(c.id));
     const isAllFilteredSelected = corrections.length > 0 && corrections.every(c => selectedIds.has(c.id));
+
+    const selectedPendingCorrections = useMemo(() => {
+        return corrections.filter(c => selectedIds.has(c.id) && c.status === "PENDING");
+    }, [corrections, selectedIds]);
+
+    const pendingCount = selectedPendingCorrections.length;
+    const skippedCount = selectedIds.size - pendingCount;
 
     const toggleSelectAllCurrentPage = () => {
         const next = new Set(selectedIds);
@@ -76,24 +85,50 @@ export function AttendanceCorrectionTab({
     const clearSelection = () => setSelectedIds(new Set());
 
     const handleBulkAction = async (status: "APPROVED" | "REJECTED") => {
-        const targetList = corrections.filter(c => selectedIds.has(c.id) && c.status === "PENDING");
-        if (targetList.length === 0) {
+        if (bulkProcessing) return;
+        if (selectedPendingCorrections.length === 0) {
             toast("Tidak ada pengajuan koreksi berstatus PENDING yang dipilih.", "warning");
             return;
         }
 
-        setBulkProcessing(true);
-        try {
-            for (const item of targetList) {
-                await handleCorrectionAction(item.id, status);
-            }
-            clearSelection();
-            toast(`${targetList.length} koreksi absensi berhasil ${status === "APPROVED" ? "disetujui" : "ditolak"}.`, "success");
-        } catch {
-            toast("Sebagian proses koreksi massal gagal.", "error");
-        } finally {
-            setBulkProcessing(false);
-        }
+        const actionWord = status === "APPROVED" ? "disetujui" : "ditolak";
+        const actionTitle = status === "APPROVED" ? "Setujui Koreksi Massal?" : "Tolak Koreksi Massal?";
+
+        confirm({
+            title: actionTitle,
+            message: `Sebanyak ${pendingCount} pengajuan koreksi kehadiran akan ${actionWord}.${skippedCount > 0 ? ` (${skippedCount} pengajuan yang sudah diproses akan dilewati).` : ""}`,
+            confirmLabel: status === "APPROVED" ? "Ya, Setujui Semua" : "Ya, Tolak Semua",
+            variant: status === "APPROVED" ? "info" : "danger",
+            onConfirm: async () => {
+                setBulkProcessing(true);
+                const succeededIds: string[] = [];
+                let failedCount = 0;
+                try {
+                    for (const item of selectedPendingCorrections) {
+                        const ok = await handleCorrectionAction(item.id, status, { silent: true });
+                        if (ok) {
+                            succeededIds.push(item.id);
+                        } else {
+                            failedCount++;
+                        }
+                    }
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        succeededIds.forEach(id => next.delete(id));
+                        return next;
+                    });
+                    if (failedCount === 0) {
+                        toast(`${succeededIds.length} koreksi absensi berhasil ${actionWord}.`, "success");
+                    } else {
+                        toast(`${succeededIds.length} koreksi berhasil ${actionWord}, ${failedCount} gagal diproses.`, "error");
+                    }
+                } catch {
+                    toast("Sebagian proses koreksi massal gagal.", "error");
+                } finally {
+                    setBulkProcessing(false);
+                }
+            },
+        });
     };
 
     return (
@@ -249,24 +284,31 @@ export function AttendanceCorrectionTab({
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="koreksi"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${pendingCount} pending siap diproses${skippedCount > 0 ? `, ${skippedCount} sudah selesai` : ""}`
+                        : undefined
+                }
             >
                 <button
                     type="button"
                     onClick={() => handleBulkAction("APPROVED")}
-                    disabled={bulkProcessing}
-                    className="btn btn-success btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || pendingCount === 0}
+                    className="btn btn-success btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={pendingCount === 0 ? "Pilih minimal 1 pengajuan berstatus PENDING" : `Setujui ${pendingCount} pengajuan pending`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Setujui Terpilih
+                    Setujui {pendingCount > 0 ? `(${pendingCount} Pending)` : "Terpilih"}
                 </button>
                 <button
                     type="button"
                     onClick={() => handleBulkAction("REJECTED")}
-                    disabled={bulkProcessing}
-                    className="btn btn-danger btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || pendingCount === 0}
+                    className="btn btn-danger btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={pendingCount === 0 ? "Pilih minimal 1 pengajuan berstatus PENDING" : `Tolak ${pendingCount} pengajuan pending`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                    Tolak Terpilih
+                    Tolak {pendingCount > 0 ? `(${pendingCount} Pending)` : "Terpilih"}
                 </button>
             </BulkActionBar>
 

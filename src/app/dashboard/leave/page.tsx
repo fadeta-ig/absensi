@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { formatIndonesianDate } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
@@ -46,6 +47,7 @@ interface LeaveRequest {
 
 function LeaveManagementContent() {
     const toast = useToast();
+    const confirm = useConfirm();
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [filterStatus, setFilterStatus] = useState("all");
     const [filterType, setFilterType] = useState("all");
@@ -149,6 +151,13 @@ function LeaveManagementContent() {
     const isAllCurrentPageSelected = paginatedLeaves.length > 0 && paginatedLeaves.every(l => selectedIds.has(l.id));
     const isAllFilteredSelected = filtered.length > 0 && filtered.every(l => selectedIds.has(l.id));
 
+    const selectedPendingLeaves = useMemo(() => {
+        return leaves.filter(l => selectedIds.has(l.id) && l.status === "pending");
+    }, [leaves, selectedIds]);
+
+    const pendingLeavesCount = selectedPendingLeaves.length;
+    const skippedLeavesCount = selectedIds.size - pendingLeavesCount;
+
     const toggleSelectAllCurrentPage = () => {
         const next = new Set(selectedIds);
         if (isAllCurrentPageSelected) {
@@ -235,35 +244,65 @@ function LeaveManagementContent() {
     };
 
     const handleBulkStatusUpdate = async (status: "approved" | "rejected") => {
-        const targetLeaves = leaves.filter(l => selectedIds.has(l.id) && l.status === "pending");
-        if (targetLeaves.length === 0) {
-            toast("Tidak ada pengajuan berstatus menunggu yang dipilih.", "warning");
+        if (bulkProcessing) return;
+        if (selectedPendingLeaves.length === 0) {
+            toast("Tidak ada pengajuan cuti berstatus menunggu yang dipilih.", "warning");
             return;
         }
 
-        setBulkProcessing(true);
-        try {
-            for (const item of targetLeaves) {
-                await fetch("/api/leave", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        id: item.id,
-                        status,
-                        startDate: item.startDate,
-                        endDate: item.endDate,
-                    }),
-                });
-            }
-            await fetchLeaves();
-            clearSelection();
-            toast(`${targetLeaves.length} pengajuan cuti berhasil ${status === "approved" ? "disetujui" : "ditolak"}.`, "success");
-        } catch (error) {
-            reportClientError("LeaveManagementPage", "Gagal memproses persetujuan cuti massal", error);
-            toast("Sebagian proses cuti massal gagal diperbarui.", "error");
-        } finally {
-            setBulkProcessing(false);
-        }
+        const actionWord = status === "approved" ? "disetujui" : "ditolak";
+        const actionTitle = status === "approved" ? "Setujui Cuti Massal?" : "Tolak Cuti Massal?";
+
+        confirm({
+            title: actionTitle,
+            message: `Sebanyak ${pendingLeavesCount} pengajuan cuti akan ${actionWord}.${skippedLeavesCount > 0 ? ` (${skippedLeavesCount} pengajuan yang sudah diproses akan dilewati).` : ""}`,
+            confirmLabel: status === "approved" ? "Ya, Setujui Semua" : "Ya, Tolak Semua",
+            variant: status === "approved" ? "info" : "danger",
+            onConfirm: async () => {
+                setBulkProcessing(true);
+                const succeededIds: string[] = [];
+                let failedCount = 0;
+                try {
+                    for (const item of selectedPendingLeaves) {
+                        try {
+                            const res = await fetch("/api/leave", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    id: item.id,
+                                    status,
+                                    startDate: item.startDate,
+                                    endDate: item.endDate,
+                                }),
+                            });
+                            if (res.ok) {
+                                succeededIds.push(item.id);
+                            } else {
+                                failedCount++;
+                            }
+                        } catch {
+                            failedCount++;
+                        }
+                    }
+                    await fetchLeaves();
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        succeededIds.forEach(id => next.delete(id));
+                        return next;
+                    });
+                    if (failedCount === 0) {
+                        toast(`${succeededIds.length} pengajuan cuti berhasil ${actionWord}.`, "success");
+                    } else {
+                        toast(`${succeededIds.length} cuti berhasil ${actionWord}, ${failedCount} gagal diproses.`, "error");
+                    }
+                } catch (error) {
+                    reportClientError("LeaveManagementPage", "Gagal memproses persetujuan cuti massal", error);
+                    toast("Sebagian proses cuti massal gagal diperbarui.", "error");
+                } finally {
+                    setBulkProcessing(false);
+                }
+            },
+        });
     };
 
     const handleBulkExportExcel = () => {
@@ -721,24 +760,31 @@ function LeaveManagementContent() {
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="pengajuan"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${pendingLeavesCount} menunggu konfirmasi${skippedLeavesCount > 0 ? `, ${skippedLeavesCount} sudah diproses` : ""}`
+                        : undefined
+                }
             >
                 <button
                     type="button"
                     onClick={() => handleBulkStatusUpdate("approved")}
-                    disabled={bulkProcessing}
-                    className="btn btn-success btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || pendingLeavesCount === 0}
+                    className="btn btn-success btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={pendingLeavesCount === 0 ? "Pilih minimal 1 pengajuan berstatus menunggu" : `Setujui ${pendingLeavesCount} pengajuan cuti`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Setujui Terpilih
+                    Setujui {pendingLeavesCount > 0 ? `(${pendingLeavesCount} Pending)` : "Terpilih"}
                 </button>
                 <button
                     type="button"
                     onClick={() => handleBulkStatusUpdate("rejected")}
-                    disabled={bulkProcessing}
-                    className="btn btn-danger btn-sm flex items-center gap-1.5"
+                    disabled={bulkProcessing || pendingLeavesCount === 0}
+                    className="btn btn-danger btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={pendingLeavesCount === 0 ? "Pilih minimal 1 pengajuan berstatus menunggu" : `Tolak ${pendingLeavesCount} pengajuan cuti`}
                 >
                     {bulkProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                    Tolak Terpilih
+                    Tolak {pendingLeavesCount > 0 ? `(${pendingLeavesCount} Pending)` : "Terpilih"}
                 </button>
                 <button
                     type="button"
@@ -746,7 +792,7 @@ function LeaveManagementContent() {
                     className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
                 >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
-                    Ekspor Excel
+                    Ekspor Excel ({selectedIds.size})
                 </button>
             </BulkActionBar>
 

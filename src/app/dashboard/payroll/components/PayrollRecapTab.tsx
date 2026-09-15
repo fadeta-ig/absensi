@@ -13,8 +13,8 @@ export interface PayrollRecapTabProps {
     selectedPeriod: string;
     overtimeRequests: { employeeId: string; date: string; overtimePay: number; status: string }[];
     fmt: (n: number) => string;
-    handleBulkGenerate: () => void;
-    handleExportRecapExcel: () => void;
+    handleBulkGenerate: (targetEmployeeIds?: string[]) => void;
+    handleExportRecapExcel: (targetEmployeeIds?: string[]) => void;
     handleExportRecapPdf: () => void;
     handleProsesRecap: (e: Employee) => void;
 }
@@ -49,6 +49,18 @@ export function PayrollRecapTab({
 
     const isAllCurrentPageSelected = paginatedEmployees.length > 0 && paginatedEmployees.every(e => selectedIds.has(e.id));
     const isAllFilteredSelected = filteredRecapEmployees.length > 0 && filteredRecapEmployees.every(e => selectedIds.has(e.id));
+
+    const selectedEmployees = useMemo(() => {
+        return filteredRecapEmployees.filter(e => selectedIds.has(e.id));
+    }, [filteredRecapEmployees, selectedIds]);
+
+    const unissuedCount = useMemo(() => {
+        return selectedEmployees.filter(
+            e => !payslips.some(p => p.employeeId === e.employeeId && p.period === selectedPeriod)
+        ).length;
+    }, [selectedEmployees, payslips, selectedPeriod]);
+
+    const issuedCount = selectedEmployees.length - unissuedCount;
 
     const toggleSelectAllCurrentPage = () => {
         const next = new Set(selectedIds);
@@ -85,10 +97,10 @@ export function PayrollRecapTab({
                     Total: <strong className="text-[var(--text-primary)]">{filteredRecapEmployees.length}</strong> karyawan pada periode <strong>{selectedPeriod}</strong>
                 </p>
                 <div className="flex flex-wrap gap-2">
-                    <button onClick={handleBulkGenerate} className="btn btn-primary btn-sm" disabled={filteredRecapEmployees.length === 0}>
+                    <button onClick={() => handleBulkGenerate()} className="btn btn-primary btn-sm" disabled={filteredRecapEmployees.length === 0}>
                         <Zap className="w-3.5 h-3.5" /> Generate Massal
                     </button>
-                    <button onClick={handleExportRecapExcel} className="btn btn-secondary btn-sm" disabled={filteredRecapEmployees.length === 0}>
+                    <button onClick={() => handleExportRecapExcel()} className="btn btn-secondary btn-sm" disabled={filteredRecapEmployees.length === 0}>
                         <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
                     </button>
                     <button onClick={handleExportRecapPdf} className="btn btn-secondary btn-sm" disabled={filteredRecapEmployees.length === 0}>
@@ -210,14 +222,35 @@ export function PayrollRecapTab({
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="karyawan"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${unissuedCount} belum memiliki slip gaji${issuedCount > 0 ? `, ${issuedCount} sudah terbit` : ""}`
+                        : undefined
+                }
             >
                 <button
                     type="button"
-                    onClick={handleExportRecapExcel}
+                    onClick={() => {
+                        const empIdsToGenerate = selectedEmployees.map(e => e.employeeId);
+                        handleBulkGenerate(empIdsToGenerate);
+                    }}
+                    disabled={unissuedCount === 0}
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={unissuedCount === 0 ? "Semua karyawan terpilih sudah memiliki slip gaji" : `Generate slip untuk ${unissuedCount} karyawan belum terbit`}
+                >
+                    <Zap className="w-3.5 h-3.5" />
+                    Generate Terpilih {unissuedCount > 0 ? `(${unissuedCount} Belum)` : ""}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        const empIds = selectedEmployees.map(e => e.employeeId);
+                        handleExportRecapExcel(empIds);
+                    }}
                     className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
                 >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
-                    Ekspor Excel
+                    Ekspor Excel ({selectedIds.size})
                 </button>
             </BulkActionBar>
         </div>

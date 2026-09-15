@@ -49,6 +49,7 @@ function EmployeesPageContent() {
 
     const [loadingEmployees, setLoadingEmployees] = useState(true);
     const [sendingPassword, setSendingPassword] = useState<string | null>(null);
+    const [bulkSendingPassword, setBulkSendingPassword] = useState(false);
     const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [showImportModal, setShowImportModal] = useState(false);
     const [statusEmployee, setStatusEmployee] = useState<Employee | null>(null);
@@ -150,6 +151,17 @@ function EmployeesPageContent() {
     // Selection helpers
     const isAllCurrentPageSelected = paginatedEmployees.length > 0 && paginatedEmployees.every(e => selectedIds.has(e.id));
     const isAllFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
+
+    const selectedEmployees = useMemo(() => {
+        return employees.filter(e => selectedIds.has(e.id));
+    }, [employees, selectedIds]);
+
+    const eligiblePasswordEmployees = useMemo(() => {
+        return selectedEmployees.filter(e => e.isActive && Boolean(e.email?.trim()));
+    }, [selectedEmployees]);
+
+    const eligiblePasswordCount = eligiblePasswordEmployees.length;
+    const skippedPasswordCount = selectedEmployees.length - eligiblePasswordCount;
 
     const toggleSelectAllCurrentPage = () => {
         const next = new Set(selectedIds);
@@ -261,6 +273,60 @@ function EmployeesPageContent() {
                     toast("Gagal mengirim password.", "error");
                 }
                 setSendingPassword(null);
+            },
+        });
+    };
+
+    const handleBulkSendPassword = () => {
+        if (bulkSendingPassword) return;
+        if (eligiblePasswordCount === 0) {
+            toast("Tidak ada karyawan aktif dengan alamat email valid yang dipilih.", "warning");
+            return;
+        }
+
+        confirm({
+            title: "Kirim Password Massal?",
+            message: `Generate dan kirim password baru via email untuk ${eligiblePasswordCount} karyawan aktif terpilih?${skippedPasswordCount > 0 ? ` (${skippedPasswordCount} karyawan nonaktif atau tanpa email akan dilewati).` : ""} Sesi login aktif mereka sebelumnya akan otomatis dicabut demi keamanan.`,
+            confirmLabel: `Ya, Kirim ke ${eligiblePasswordCount} Karyawan`,
+            variant: "warning",
+            onConfirm: async () => {
+                setBulkSendingPassword(true);
+                setPasswordMsg(null);
+                const succeededIds: string[] = [];
+                let failedCount = 0;
+                try {
+                    for (const emp of eligiblePasswordEmployees) {
+                        try {
+                            const res = await fetch("/api/auth/send-password", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ employeeId: emp.employeeId }),
+                            });
+                            if (res.ok) {
+                                succeededIds.push(emp.id);
+                            } else {
+                                failedCount++;
+                            }
+                        } catch {
+                            failedCount++;
+                        }
+                    }
+                    setSelectedIds(prev => {
+                        const next = new Set(prev);
+                        succeededIds.forEach(id => next.delete(id));
+                        return next;
+                    });
+                    if (failedCount === 0) {
+                        toast(`${succeededIds.length} password baru berhasil dikirim ke email masing-masing karyawan.`, "success");
+                    } else {
+                        toast(`${succeededIds.length} password berhasil dikirim, ${failedCount} gagal diproses.`, "error");
+                    }
+                } catch (error) {
+                    reportClientError("EmployeesPage", "Gagal memproses pengiriman password massal", error);
+                    toast("Sebagian pengiriman password massal gagal.", "error");
+                } finally {
+                    setBulkSendingPassword(false);
+                }
             },
         });
     };
@@ -586,11 +652,26 @@ function EmployeesPageContent() {
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
                 itemLabel="karyawan"
+                subtitle={
+                    selectedIds.size > 0
+                        ? `${eligiblePasswordCount} karyawan aktif siap dikirimi password${skippedPasswordCount > 0 ? `, ${skippedPasswordCount} dilewati (nonaktif/tanpa email)` : ""}`
+                        : undefined
+                }
             >
                 <button
                     type="button"
+                    onClick={handleBulkSendPassword}
+                    disabled={bulkSendingPassword || eligiblePasswordCount === 0}
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={eligiblePasswordCount === 0 ? "Pilih minimal 1 karyawan aktif yang memiliki email" : `Kirim password ke ${eligiblePasswordCount} karyawan aktif`}
+                >
+                    {bulkSendingPassword ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Key className="w-3.5 h-3.5" />}
+                    Kirim Password {eligiblePasswordCount > 0 ? `(${eligiblePasswordCount})` : ""}
+                </button>
+                <button
+                    type="button"
                     onClick={handleBulkExportExcel}
-                    className="btn btn-primary btn-sm flex items-center gap-1.5"
+                    className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
                 >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                     Ekspor Excel ({selectedIds.size})

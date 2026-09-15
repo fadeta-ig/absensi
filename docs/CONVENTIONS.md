@@ -138,3 +138,10 @@ export async function POST(request: NextRequest) {
    - **Persistent User Preference**: Nilai `pageSize` disimpan di `localStorage` per modul (`hris_pagesize_<key>`), dan nilai `page` terakhir diingat via `sessionStorage`.
    - **Smart Clamping**: Berkurangnya baris data karena penghapusan/koreksi dibatasi dengan cerdas (`Math.min(currentPage, totalPages)`), dilarang melempar paksa pengguna ke halaman 1 kecuali pada perubahan kata kunci pencarian atau filter utama.
    - **Jump-to-Page Navigation**: Komponen `DataTablePagination` menyediakan input lompat halaman otomatis ketika total halaman melebihi 5.
+
+7. **Standarisasi Aksi Massal Antarmuka Data (`BulkActionBar` & Status-Aware Mutation)**:
+   - **Status Eligibility Breakdown**: Komponen `BulkActionBar` (`@/components/ui/BulkActionBar`) wajib menyertakan prop `subtitle` untuk membedakan jumlah baris yang memenuhi syarat (*eligible*) vs yang dilewati (*skipped/ineligible*).
+   - **Dynamic Action Counts & Disabled State**: Tombol aksi massal wajib menampilkan jumlah pasti data yang akan diproses (contoh: `Setujui (X Pending)`, `Kirim Password (X)`, `Generate Terpilih (X Belum)`) dan dinonaktifkan (`disabled`) jika data eligible adalah 0.
+   - **Double-Submit Prevention & Confirmation Dialog**: Seluruh aksi mutasi massal wajib dilindungi dialog konfirmasi terpadu (`useConfirm`) dan guard eksekusi awal (`if (processing) return;`) untuk mencegah *race conditions*.
+   - **Partial-Failure Resilience**: Pada pemrosesan loop/batch asinkron, hanya ID baris yang sukses yang dihapus dari `selectedIds`; ID yang gagal tetap berstatus terpilih (*selected*) sehingga pengguna dapat mencoba kembali (*retry*) tanpa harus mengulang seleksi manual dari awal.
+   - **Silent Execution Mode**: Handler aksi induk yang dipanggil berulang dalam loop mutasi massal wajib mendukung opsi `{ silent: true }` untuk mencegah banjir notifikasi (*toast storm*) dan mengembalikan boolean status keberhasilan pemrosesan.

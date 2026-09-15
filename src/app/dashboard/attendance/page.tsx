@@ -237,7 +237,7 @@ export default function AttendanceMonitorPage() {
         );
     };
 
-    const handleCorrectionAction = async (id: string, s: "APPROVED" | "REJECTED") => {
+    const handleCorrectionAction = async (id: string, s: "APPROVED" | "REJECTED", options?: { silent?: boolean }): Promise<boolean> => {
         setProcessingId(id);
         try {
             const res = await fetch("/api/attendance/correction", {
@@ -248,14 +248,20 @@ export default function AttendanceMonitorPage() {
             if (res.ok) {
                 // Refresh data
                 setCorrections(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
-                toast(s === "APPROVED" ? "Pengajuan koreksi disetujui." : "Pengajuan koreksi ditolak.", "success");
+                if (!options?.silent) {
+                    toast(s === "APPROVED" ? "Pengajuan koreksi disetujui." : "Pengajuan koreksi ditolak.", "success");
+                }
                 await loadAttendanceRecords();
+                return true;
             } else {
                 throw new Error(await getResponseErrorMessage(res, "Gagal memproses pengajuan koreksi."));
             }
         } catch (error) {
             reportClientError("AttendanceMonitorPage", "Gagal memproses pengajuan koreksi", error, { correctionId: id, status: s });
-            toast(error instanceof Error ? error.message : "Gagal memproses pengajuan koreksi.", "error");
+            if (!options?.silent) {
+                toast(error instanceof Error ? error.message : "Gagal memproses pengajuan koreksi.", "error");
+            }
+            return false;
         } finally {
             setProcessingId(null);
         }
