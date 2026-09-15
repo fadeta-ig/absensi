@@ -32,6 +32,7 @@ import type {
     BirthdayEmployeeDetail,
     BirthdayPreparationInfo,
 } from "@/lib/birthdayUtils";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 interface StatusItem {
     id: string;
@@ -732,20 +733,19 @@ export default function BirthdayManagementPage() {
 
                     {/* Table View */}
                     <div className="card overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Pegawai</th>
-                                        <th className="hidden md:table-cell">Jabatan &amp; Dept</th>
-                                        <th>Tanggal Lahir</th>
-                                        <th className="text-center">Sisa Waktu</th>
-                                        <th>Status Persiapan</th>
-                                        <th className="hidden lg:table-cell">Catatan</th>
-                                        <th className="text-right">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Pegawai</TableHead>
+                                    <TableHead className="hidden md:table-cell">Jabatan &amp; Dept</TableHead>
+                                    <TableHead>Tanggal Lahir</TableHead>
+                                    <TableHead className="text-center">Sisa Waktu</TableHead>
+                                    <TableHead>Status Persiapan</TableHead>
+                                    <TableHead className="hidden lg:table-cell">Catatan</TableHead>
+                                    <TableHead className="text-right">Aksi</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
                                     {filteredDirectoryEmployees.length === 0 ? (
                                         <tr>
                                             <td colSpan={7} className="text-center py-10 text-sm text-[var(--text-muted)]">
@@ -824,9 +824,8 @@ export default function BirthdayManagementPage() {
                                             </tr>
                                         ))
                                     )}
-                                </tbody>
-                            </table>
-                        </div>
+                                </TableBody>
+                        </Table>
                     </div>
                 </div>
             )}

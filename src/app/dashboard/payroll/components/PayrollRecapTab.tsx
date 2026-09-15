@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { CheckCircle2, AlertCircle, Zap, FileSpreadsheet, FileText, CheckSquare, Square } from "lucide-react";
 import { Employee, Payslip } from "../types";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 export interface PayrollRecapTabProps {
     filteredRecapEmployees: Employee[];
@@ -33,9 +34,12 @@ export function PayrollRecapTab({
     const [pageSize, setPageSize] = useState(10);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    useEffect(() => {
+    const [prevDep, setPrevDep] = useState(`${filteredRecapEmployees.length}-${selectedPeriod}-${pageSize}`);
+    const currentDep = `${filteredRecapEmployees.length}-${selectedPeriod}-${pageSize}`;
+    if (prevDep !== currentDep) {
+        setPrevDep(currentDep);
         setCurrentPage(1);
-    }, [filteredRecapEmployees.length, selectedPeriod, pageSize]);
+    }
 
     const totalPages = Math.ceil(filteredRecapEmployees.length / pageSize) || 1;
     const paginatedEmployees = useMemo(() => {
@@ -94,35 +98,34 @@ export function PayrollRecapTab({
             </div>
 
             <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th className="w-10 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={toggleSelectAllCurrentPage}
-                                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                        title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                    >
-                                        {isAllCurrentPageSelected ? (
-                                            <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                        ) : (
-                                            <Square className="w-4 h-4" />
-                                        )}
-                                    </button>
-                                </th>
-                                <th>Karyawan</th>
-                                <th>Gaji Pokok</th>
-                                <th className="hidden lg:table-cell">Tunjangan</th>
-                                <th className="hidden lg:table-cell">Lembur</th>
-                                <th className="hidden lg:table-cell">Potongan</th>
-                                <th>Estimasi Bersih</th>
-                                <th>Status</th>
-                                <th className="text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-10 text-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAllCurrentPage}
+                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                >
+                                    {isAllCurrentPageSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                    ) : (
+                                        <Square className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </TableHead>
+                            <TableHead>Karyawan</TableHead>
+                            <TableHead>Gaji Pokok</TableHead>
+                            <TableHead className="hidden lg:table-cell">Tunjangan</TableHead>
+                            <TableHead className="hidden lg:table-cell">Lembur</TableHead>
+                            <TableHead className="hidden lg:table-cell">Potongan</TableHead>
+                            <TableHead>Estimasi Bersih</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                             {filteredRecapEmployees.length === 0 ? (
                                 <tr><td colSpan={9} className="text-center py-8 text-sm text-[var(--text-muted)]">Data tidak ditemukan</td></tr>
                             ) : (
@@ -186,9 +189,8 @@ export function PayrollRecapTab({
                                     );
                                 })
                             )}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableBody>
+                        </Table>
 
                 <DataTablePagination
                     currentPage={currentPage}

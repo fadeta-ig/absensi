@@ -6,6 +6,7 @@ import { AssetCategory } from "@/lib/types/asset";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 export default function CategoriesPage() {
     const toast = useToast();
@@ -204,78 +205,76 @@ export default function CategoriesPage() {
                         </button>
                     </div>
                     
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
-                            <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider">
-                                <tr>
-                                    <th className="px-5 py-3 font-semibold">Kategori</th>
-                                    <th className="px-5 py-3 font-semibold">Prefix</th>
-                                    <th className="px-5 py-3 font-semibold text-center">Total Aset</th>
-                                    <th className="px-5 py-3 font-semibold text-right">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {loading && categories.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Memuat kategori...</td>
-                                    </tr>
-                                ) : loadError ? (
-                                    <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-[var(--destructive)]">
-                                            <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-70" />
-                                            <span className="font-semibold">{loadError}</span>
-                                        </td>
-                                    </tr>
-                                ) : categories.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Tidak ada kategori data.</td>
-                                    </tr>
-                                ) : (
-                                    categories.map((cat) => (
-                                        <tr key={cat.id} className="hover:bg-[var(--secondary)]/80 transition-colors">
-                                            <td className="px-5 py-3 font-medium text-[var(--text-primary)] flex items-center gap-2">
-                                                <Archive size={14} className="text-[var(--text-muted)]" />
-                                                {editingId === cat.id ? (
-                                                    <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm w-32" />
-                                                ) : cat.name}
-                                            </td>
-                                            <td className="px-5 py-3">
-                                                {editingId === cat.id ? (
-                                                    <input type="text" value={editPrefix} maxLength={5} onChange={e => setEditPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm font-mono w-20 uppercase" />
-                                                ) : (
-                                                    <span className="font-mono text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] px-2 rounded py-0.5">{cat.prefix}</span>
-                                                )}
-                                            </td>
-                                            <td className="px-5 py-3 text-[var(--text-secondary)] text-center">
-                                                <span className="bg-[var(--secondary)] text-[var(--text-secondary)] font-semibold px-2 py-0.5 rounded-full text-xs">
-                                                    {cat._count?.assets ?? 0} Aset
-                                                </span>
-                                            </td>
-                                            <td className="px-5 py-3 text-right">
-                                                {editingId === cat.id ? (
-                                                    <div className="flex justify-end gap-2">
-                                                        <button disabled={savingEditId === cat.id} onClick={cancelEdit} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--secondary)] rounded-lg transition-colors disabled:opacity-50"><X size={16} /></button>
-                                                        <button disabled={savingEditId === cat.id} onClick={() => handleSaveEdit(cat.id)} className="p-1.5 text-[var(--success)] hover:bg-[var(--success-bg)] rounded-lg transition-colors disabled:opacity-50">
-                                                            {savingEditId === cat.id ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={() => startEdit(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info-bg)] rounded-lg transition-colors" title="Edit">
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                        <button onClick={() => handleDelete(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--destructive)] hover:bg-[var(--destructive-bg)] rounded-lg transition-colors" title="Hapus">
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    <Table className="whitespace-nowrap">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Kategori</TableHead>
+                                <TableHead>Prefix</TableHead>
+                                <TableHead className="text-center">Total Aset</TableHead>
+                                <TableHead className="text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loading && categories.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Memuat kategori...</TableCell>
+                                </TableRow>
+                            ) : loadError ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="px-5 py-10 text-center text-[var(--destructive)]">
+                                        <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-70" />
+                                        <span className="font-semibold">{loadError}</span>
+                                    </TableCell>
+                                </TableRow>
+                            ) : categories.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="px-5 py-10 text-center text-[var(--text-muted)]">Tidak ada kategori data.</TableCell>
+                                </TableRow>
+                            ) : (
+                                categories.map((cat) => (
+                                    <TableRow key={cat.id} className="hover:bg-[var(--secondary)]/80 transition-colors">
+                                        <TableCell className="font-medium text-[var(--text-primary)] flex items-center gap-2">
+                                            <Archive size={14} className="text-[var(--text-muted)]" />
+                                            {editingId === cat.id ? (
+                                                <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm w-32" />
+                                            ) : cat.name}
+                                        </TableCell>
+                                        <TableCell>
+                                            {editingId === cat.id ? (
+                                                <input type="text" value={editPrefix} maxLength={5} onChange={e => setEditPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} className="px-2 py-1 border rounded focus:ring-2 focus:outline-none focus:ring-[var(--ring)] text-sm font-mono w-20 uppercase" />
+                                            ) : (
+                                                <span className="font-mono text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] px-2 rounded py-0.5">{cat.prefix}</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-[var(--text-secondary)] text-center">
+                                            <span className="bg-[var(--secondary)] text-[var(--text-secondary)] font-semibold px-2 py-0.5 rounded-full text-xs">
+                                                {cat._count?.assets ?? 0} Aset
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {editingId === cat.id ? (
+                                                <div className="flex justify-end gap-2">
+                                                    <button disabled={savingEditId === cat.id} onClick={cancelEdit} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--secondary)] rounded-lg transition-colors disabled:opacity-50"><X size={16} /></button>
+                                                    <button disabled={savingEditId === cat.id} onClick={() => handleSaveEdit(cat.id)} className="p-1.5 text-[var(--success)] hover:bg-[var(--success-bg)] rounded-lg transition-colors disabled:opacity-50">
+                                                        {savingEditId === cat.id ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => startEdit(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info-bg)] rounded-lg transition-colors" title="Edit">
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button onClick={() => handleDelete(cat)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--destructive)] hover:bg-[var(--destructive-bg)] rounded-lg transition-colors" title="Hapus">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
                 </div>
             </div>
         </div>

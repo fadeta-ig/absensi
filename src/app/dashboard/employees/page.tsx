@@ -1,18 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import {
     Users, Plus, Search, Pencil, X, Loader2, Key, Layers, Upload, UserCheck, UserX,
-    Filter, RotateCcw, FileSpreadsheet, CheckSquare, Square
+    RotateCcw, FileSpreadsheet, CheckSquare, Square
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import BulkImportModal from "@/components/BulkImportModal";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportToExcel } from "@/lib/export";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useTablePagination } from "@/hooks/useTablePagination";
 
 interface ShiftDay { dayOfWeek: number; startTime: string; endTime: string; isOff: boolean; }
 interface WorkShift { id: string; name: string; isDefault: boolean; days: ShiftDay[]; }
@@ -24,7 +27,8 @@ interface Employee {
     bypassLocation: boolean; locations?: { id: string; name: string }[];
 }
 
-export default function EmployeesPage() {
+function EmployeesPageContent() {
+    const router = useRouter();
     const toast = useToast();
     const confirm = useConfirm();
 
@@ -39,10 +43,6 @@ export default function EmployeesPage() {
     const [divisionFilter, setDivisionFilter] = useState("all");
     const [departmentFilter, setDepartmentFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
-
-    // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
 
     // Multi-Select
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -87,11 +87,6 @@ export default function EmployeesPage() {
         });
     }, [fetchEmployees]);
 
-    // Reset pagination to page 1 on filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, statusFilter, divisionFilter, departmentFilter, typeFilter, pageSize]);
-
     const counts = useMemo(() => ({
         all: employees.length,
         active: employees.filter((employee) => employee.isActive).length,
@@ -117,6 +112,34 @@ export default function EmployeesPage() {
             return matchesStatus && matchesDivision && matchesDepartment && matchesType && matchesSearch;
         });
     }, [employees, search, statusFilter, divisionFilter, departmentFilter, typeFilter]);
+
+    // Pagination with URL sync, localStorage pageSize, and smart clamping
+    const {
+        currentPage,
+        pageSize,
+        setPage: setCurrentPage,
+        setPageSize,
+        resetPage,
+    } = useTablePagination({
+        storageKey: "employees",
+        totalItems: filtered.length,
+    });
+
+    // Reset pagination to page 1 ONLY on explicit filter/search changes (not initial load)
+    const prevFiltersRef = useRef({ search, statusFilter, divisionFilter, departmentFilter, typeFilter });
+    useEffect(() => {
+        const prev = prevFiltersRef.current;
+        if (
+            prev.search !== search ||
+            prev.statusFilter !== statusFilter ||
+            prev.divisionFilter !== divisionFilter ||
+            prev.departmentFilter !== departmentFilter ||
+            prev.typeFilter !== typeFilter
+        ) {
+            resetPage();
+            prevFiltersRef.current = { search, statusFilter, divisionFilter, departmentFilter, typeFilter };
+        }
+    }, [search, statusFilter, divisionFilter, departmentFilter, typeFilter, resetPage]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedEmployees = useMemo(() => {
@@ -210,7 +233,7 @@ export default function EmployeesPage() {
     };
 
     const handleEdit = (emp: Employee) => {
-        window.location.href = `/dashboard/employees/${emp.id}/edit`;
+        router.push(`/dashboard/employees/${emp.id}/edit?returnPage=${currentPage}`);
     };
 
     const handleSendPassword = async (emp: Employee) => {
@@ -294,7 +317,7 @@ export default function EmployeesPage() {
                     <button className="btn btn-secondary border border-[var(--border)]" onClick={() => setShowImportModal(true)}>
                         <Upload className="w-4 h-4 text-[var(--text-muted)]" /> Import Massal
                     </button>
-                    <button className="btn btn-primary" onClick={() => window.location.href = "/dashboard/employees/create"}>
+                    <button className="btn btn-primary" onClick={() => router.push(`/dashboard/employees/create?returnPage=${currentPage}`)}>
                         <Plus className="w-4 h-4" /> Tambah Karyawan
                     </button>
                 </div>
@@ -412,35 +435,34 @@ export default function EmployeesPage() {
 
             {/* Table */}
             <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th className="w-10 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={toggleSelectAllCurrentPage}
-                                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                        title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                    >
-                                        {isAllCurrentPageSelected ? (
-                                            <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                        ) : (
-                                            <Square className="w-4 h-4" />
-                                        )}
-                                    </button>
-                                </th>
-                                <th>ID</th>
-                                <th>Nama</th>
-                                <th className="hidden md:table-cell">Dept / Divisi</th>
-                                <th>Jabatan</th>
-                                <th className="hidden lg:table-cell">Lokasi</th>
-                                <th className="hidden lg:table-cell">Jam Kerja</th>
-                                <th>Status</th>
-                                <th className="text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-10 text-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAllCurrentPage}
+                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                >
+                                    {isAllCurrentPageSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                    ) : (
+                                        <Square className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </TableHead>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Nama</TableHead>
+                            <TableHead className="hidden md:table-cell">Dept / Divisi</TableHead>
+                            <TableHead>Jabatan</TableHead>
+                            <TableHead className="hidden lg:table-cell">Lokasi</TableHead>
+                            <TableHead className="hidden lg:table-cell">Jam Kerja</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                             {loadingEmployees ? (
                                 <tr><td colSpan={9} className="text-center py-12 text-sm text-[var(--text-muted)]"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-[var(--primary)] opacity-60" />Memuat karyawan...</td></tr>
                             ) : filtered.length === 0 ? (
@@ -541,9 +563,8 @@ export default function EmployeesPage() {
                                     );
                                 })
                             )}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableBody>
+                    </Table>
 
                 {/* Pagination */}
                 <DataTablePagination
@@ -596,5 +617,20 @@ export default function EmployeesPage() {
                 />
             )}
         </div>
+    );
+}
+
+export default function EmployeesPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)] animate-pulse">
+                    <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                    <p className="text-sm font-medium">Memuat data karyawan...</p>
+                </div>
+            }
+        >
+            <EmployeesPageContent />
+        </Suspense>
     );
 }

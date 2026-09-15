@@ -8,6 +8,7 @@ import {
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface PayrollComponent {
     id: string;
@@ -179,55 +180,53 @@ export default function MasterPayrollPage() {
                 </div>
             ) : (
                 <div className="card overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Nama Komponen</th>
-                                    <th>Tipe</th>
-                                    <th>Nilai Default</th>
-                                    <th>Status</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {components.length === 0 ? (
-                                    <tr><td colSpan={5} className="text-center py-12 text-[var(--text-muted)]">Belum ada komponen payroll</td></tr>
-                                ) : (
-                                    components.map((comp) => (
-                                        <tr key={comp.id}>
-                                            <td>
-                                                <div className="font-semibold text-[var(--text-primary)]">{comp.name}</div>
-                                                <div className="text-[10px] text-[var(--text-muted)] line-clamp-1 italic">{comp.description || "-"}</div>
-                                            </td>
-                                            <td>
-                                                <span className={`text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold uppercase ${comp.type === "earning" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
-                                                    {comp.type === "earning" ? <TrendingUp className="w-3" /> : <TrendingDown className="w-3" />}
-                                                    {comp.type === "earning" ? "Tunjangan" : "Potongan"}
-                                                </span>
-                                            </td>
-                                            <td className="font-medium">{fmt(comp.defaultAmount)}</td>
-                                            <td>
-                                                <span className={`badge ${comp.isActive ? "badge-success" : "badge-error"}`}>
-                                                    {comp.isActive ? "Aktif" : "Mati"}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => handleEdit(comp)} className="btn btn-ghost btn-sm !p-1.5 text-blue-600">
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => handleDelete(comp.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-600">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nama Komponen</TableHead>
+                                <TableHead>Tipe</TableHead>
+                                <TableHead>Nilai Default</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {components.length === 0 ? (
+                                <TableRow><TableCell colSpan={5} className="text-center py-12 text-[var(--text-muted)]">Belum ada komponen payroll</TableCell></TableRow>
+                            ) : (
+                                components.map((comp) => (
+                                    <TableRow key={comp.id}>
+                                        <TableCell>
+                                            <div className="font-semibold text-[var(--text-primary)]">{comp.name}</div>
+                                            <div className="text-[10px] text-[var(--text-muted)] line-clamp-1 italic">{comp.description || "-"}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className={`text-[10px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold uppercase ${comp.type === "earning" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                                                {comp.type === "earning" ? <TrendingUp className="w-3" /> : <TrendingDown className="w-3" />}
+                                                {comp.type === "earning" ? "Tunjangan" : "Potongan"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="font-medium">{fmt(comp.defaultAmount)}</TableCell>
+                                        <TableCell>
+                                            <span className={`badge ${comp.isActive ? "badge-success" : "badge-error"}`}>
+                                                {comp.isActive ? "Aktif" : "Mati"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button onClick={() => handleEdit(comp)} className="btn btn-ghost btn-sm !p-1.5 text-blue-600">
+                                                    <Pencil className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button onClick={() => handleDelete(comp.id)} className="btn btn-ghost btn-sm !p-1.5 text-red-600">
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
                 </div>
             )}
 

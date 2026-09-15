@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, RefreshCw, Smartphone as SimIcon, CheckCircle, AlertCircle, Download, Pencil, Trash2 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { HolderIcon } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -260,41 +261,41 @@ export default function SimCardDashboardPage() {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto flex-1">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider">
-                            <tr>
-                                <th className="px-6 py-4 font-semibold">Nomor SIM</th>
-                                <th className="px-6 py-4 font-semibold">Provider & Nama</th>
-                                <th className="px-6 py-4 font-semibold w-1">Status</th>
-                                <th className="px-6 py-4 font-semibold min-w-[200px]">Dipegang Oleh</th>
-                                <th className="px-6 py-4 font-semibold">Valid Until</th>
-                                <th className="px-6 py-4 font-semibold w-1 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
+                <div className="flex-1">
+                    <Table className="whitespace-nowrap">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nomor SIM</TableHead>
+                                <TableHead>Provider & Nama</TableHead>
+                                <TableHead className="w-1">Status</TableHead>
+                                <TableHead className="min-w-[200px]">Dipegang Oleh</TableHead>
+                                <TableHead>Valid Until</TableHead>
+                                <TableHead className="w-1 text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {loading && assets.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data SIM Card...</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data SIM Card...</TableCell>
+                                </TableRow>
                             ) : loadError ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--destructive)]">{loadError}</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={6} className="px-6 py-12 text-center text-[var(--destructive)]">{loadError}</TableCell>
+                                </TableRow>
                             ) : assets.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada SIM Card ditemukan.</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada SIM Card ditemukan.</TableCell>
+                                </TableRow>
                             ) : (
                                 assets.map((asset) => (
-                                    <tr 
+                                    <TableRow 
                                         key={asset.id} 
                                         className="hover:bg-[var(--secondary)]/80 transition-colors cursor-default group"
                                     >
-                                        <td className="px-6 py-4 font-mono font-bold text-[var(--text-primary)]">{asset.phoneNumber}</td>
-                                        <td className="px-6 py-4 font-medium text-[var(--text-secondary)]">{asset.provider}</td>
-                                        <td className="px-6 py-4"><StatusBadgeSIM status={"AVAILABLE"} /></td>
-                                        <td className="px-6 py-4">
+                                        <TableCell className="font-mono font-bold text-[var(--text-primary)]">{asset.phoneNumber}</TableCell>
+                                        <TableCell className="font-medium text-[var(--text-secondary)]">{asset.provider}</TableCell>
+                                        <TableCell><StatusBadgeSIM status={"AVAILABLE"} /></TableCell>
+                                        <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--secondary)] flex items-center justify-center border border-[var(--border)]">
                                                     <HolderIcon holderType={asset.assignedTo ? "EMPLOYEE" : "GA_POOL"} />
@@ -310,11 +311,11 @@ export default function SimCardDashboardPage() {
                                                     )}
                                                 </div>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4 font-mono text-xs">
+                                        </TableCell>
+                                        <TableCell className="font-mono text-xs">
                                             {asset.expiredDate ? new Date(asset.expiredDate).toLocaleDateString("id-ID", { month: "long", year: "numeric" }) : "-"}
-                                        </td>
-                                        <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+                                        </TableCell>
+                                        <TableCell onClick={e => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => router.push(`/ga/sim/${asset.id}/edit`)}
@@ -329,12 +330,12 @@ export default function SimCardDashboardPage() {
                                                     <Trash2 size={14} />
                                                 </button>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))
                             )}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
 
                 {Math.ceil(totalItems / PER_PAGE) > 1 && (

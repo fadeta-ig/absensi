@@ -6,6 +6,7 @@ import {
     FileText, HelpCircle, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 // ─── Types (mirroring pph21Service types for client) ─────────────────
 
@@ -393,28 +394,26 @@ export default function Pph21CalculatorPage() {
                                         <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2">
                                             Rincian Tarif Progresif
                                         </p>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs">
-                                                <thead>
-                                                    <tr className="text-[var(--text-muted)] border-b border-[var(--border)]">
-                                                        <th className="text-left py-1.5 pr-2">Lapisan PKP</th>
-                                                        <th className="text-center py-1.5 px-2">Tarif</th>
-                                                        <th className="text-right py-1.5 px-2">PKP Dikenakan</th>
-                                                        <th className="text-right py-1.5 pl-2">Pajak</th>
+                                        <Table className="text-xs">
+                                            <TableHeader>
+                                                <TableRow className="border-b border-[var(--border)]">
+                                                    <TableHead className="text-left py-1.5 pr-2">Lapisan PKP</TableHead>
+                                                    <TableHead className="text-center py-1.5 px-2">Tarif</TableHead>
+                                                    <TableHead className="text-right py-1.5 px-2">PKP Dikenakan</TableHead>
+                                                    <TableHead className="text-right py-1.5 pl-2">Pajak</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {result.december.progressiveBreakdown.map((item, i) => (
+                                                    <tr key={i} className="border-b border-[var(--border)]/50">
+                                                        <td className="py-1.5 pr-2 text-[var(--text-secondary)]">{item.bracket}</td>
+                                                        <td className="py-1.5 px-2 text-center font-semibold text-[var(--primary)]">{item.rate}</td>
+                                                        <td className="py-1.5 px-2 text-right">{fmt(item.taxable)}</td>
+                                                        <td className="py-1.5 pl-2 text-right font-semibold text-red-600">{fmt(item.tax)}</td>
                                                     </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {result.december.progressiveBreakdown.map((item, i) => (
-                                                        <tr key={i} className="border-b border-[var(--border)]/50">
-                                                            <td className="py-1.5 pr-2 text-[var(--text-secondary)]">{item.bracket}</td>
-                                                            <td className="py-1.5 px-2 text-center font-semibold text-[var(--primary)]">{item.rate}</td>
-                                                            <td className="py-1.5 px-2 text-right">{fmt(item.taxable)}</td>
-                                                            <td className="py-1.5 pl-2 text-right font-semibold text-red-600">{fmt(item.tax)}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
                                     </div>
                                 )}
 

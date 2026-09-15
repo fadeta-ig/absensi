@@ -5,6 +5,7 @@ import {
     ClipboardList, UserCheck, UserX, ArrowRight,
     Users, Megaphone,
 } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 interface Employee {
     id: string;
@@ -154,37 +155,35 @@ export default function TodayAttendance({ todayAttendance, activeEmployees, empl
                         </button>
                     </div>
                     <div className="card flex-1 flex flex-col overflow-hidden">
-                        <div className="overflow-x-auto flex-1">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Nama</th>
-                                        <th className="hidden sm:table-cell">Departemen</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {employees.length === 0 ? (
-                                        <tr><td colSpan={4} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data</td></tr>
-                                    ) : (
-                                        employees.slice(0, 5).map((e) => (
-                                            <tr key={e.id}>
-                                                <td className="font-mono text-xs">{e.employeeId}</td>
-                                                <td className="font-medium text-[var(--text-primary)]">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-[10px] font-bold shrink-0">{e.name.charAt(0)}</div>
-                                                        {e.name}
-                                                    </div>
-                                                </td>
-                                                <td className="hidden sm:table-cell">{e.department}</td>
-                                                <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>ID</TableHead>
+                                    <TableHead>Nama</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Departemen</TableHead>
+                                    <TableHead>Status</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {employees.length === 0 ? (
+                                    <tr><td colSpan={4} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data</td></tr>
+                                ) : (
+                                    employees.slice(0, 5).map((e) => (
+                                        <tr key={e.id}>
+                                            <td className="font-mono text-xs">{e.employeeId}</td>
+                                            <td className="font-medium text-[var(--text-primary)]">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-[10px] font-bold shrink-0">{e.name.charAt(0)}</div>
+                                                    {e.name}
+                                                </div>
+                                            </td>
+                                            <td className="hidden sm:table-cell">{e.department}</td>
+                                            <td><span className={`badge ${e.isActive ? "badge-success" : "badge-error"}`}>{e.isActive ? "Aktif" : "Nonaktif"}</span></td>
+                                        </tr>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
                     </div>
                 </div>
             </div>

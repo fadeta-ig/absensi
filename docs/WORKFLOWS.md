@@ -76,6 +76,7 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
 | `npm run db:seed:hr` | Menjalankan seed khusus master data HR (`prisma/seedHR.ts`) |
 | `npm run db:seed:ga` | Menjalankan seed khusus master data GA & aset (`prisma/seedGA.ts`) |
 | `npm run db:seed:employee`| Menjalankan seed khusus profil karyawan (`prisma/seedEmployee.ts`) |
+| `npm run db:seed:dummy50` | Menjalankan seed 50 karyawan dummy realistis untuk pengujian UX (`prisma/seedDummy50.ts`) |
 | `npm run db:seed:assets` | Menjalankan seed khusus aset fisik (`prisma/seedAssets.ts`) |
 | `npm run db:reset` | Mereset paksa database dan mengeksekusi seed utama (`prisma db push --force-reset && npm run db:seed`) |
 | `npm run db:reset:only` | Hanya mereset tabel database tanpa menjalankan seed |

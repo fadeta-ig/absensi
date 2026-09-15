@@ -5,6 +5,7 @@ import { KeyRound, Loader2, Pencil, Plus, Search, ShieldCheck, UserCheck, UserX,
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type RoleCode = "SUPER_ADMIN" | "HR_ADMIN" | "GA_ADMIN";
 
@@ -233,36 +234,43 @@ export default function UsersPage() {
             </div>
 
             <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead><tr><th>User</th><th>Role</th><th className="hidden md:table-cell">Keterkaitan Karyawan</th><th>Status</th><th className="hidden lg:table-cell">Login Terakhir</th><th>Aksi</th></tr></thead>
-                        <tbody>
-                            {loading ? (
-                                <tr><td colSpan={6} className="py-10 text-center text-sm text-[var(--text-muted)]"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Memuat user...</td></tr>
-                            ) : filteredUsers.length === 0 ? (
-                                <tr><td colSpan={6} className="py-10 text-center text-sm text-[var(--text-muted)]">Tidak ada user ditemukan.</td></tr>
-                            ) : filteredUsers.map((user) => {
-                                const roleCode = user.roles[0]?.code;
-                                const isSuper = roleCode === "SUPER_ADMIN";
-                                const busy = busyUserId === user.id;
-                                return (
-                                    <tr key={user.id} className={!user.isActive ? "opacity-70" : undefined}>
-                                        <td><p className="font-semibold text-[var(--text-primary)]">{user.displayName}</p><p className="text-xs text-[var(--text-muted)]">{user.username} · {user.email}</p></td>
-                                        <td><span className={`badge ${isSuper ? "badge-primary" : roleCode === "HR_ADMIN" ? "badge-success" : "badge-warning"}`}>{ROLE_LABELS[roleCode]}</span></td>
-                                        <td className="hidden md:table-cell">{user.employee ? <><p className="text-sm">{user.employee.name} ({user.employee.employeeId})</p><p className="text-xs text-[var(--text-muted)]">{user.employee.departmentRel.name} · {user.employee.positionRel.name}</p></> : <span className="text-xs text-[var(--text-muted)]">Akun admin mandiri</span>}</td>
-                                        <td><span className={`badge ${user.isActive ? "badge-success" : "badge-error"}`}>{user.isActive ? "Aktif" : "Nonaktif"}</span></td>
-                                        <td className="hidden lg:table-cell text-xs text-[var(--text-muted)]">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("id-ID") : "Belum pernah"}</td>
-                                        <td><div className="flex items-center gap-1">
-                                            <button className="btn btn-ghost btn-sm !p-1.5" disabled={busy || isSuper} title={isSuper ? "Super admin dilindungi" : "Edit user"} onClick={() => openEdit(user)}><Pencil className="h-3.5 w-3.5" /></button>
-                                            <button className="btn btn-ghost btn-sm !p-1.5 text-blue-600" disabled={busy} title="Reset password" onClick={() => resetPassword(user)}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}</button>
-                                            <button className={`btn btn-ghost btn-sm !p-1.5 ${user.isActive ? "text-red-600" : "text-emerald-600"}`} disabled={busy || isSuper} title={isSuper ? "Super admin dilindungi" : user.isActive ? "Nonaktifkan" : "Aktifkan"} onClick={() => updateStatus(user)}>{user.isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}</button>
-                                        </div></td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>User</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead className="hidden md:table-cell">Keterkaitan Karyawan</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="hidden lg:table-cell">Login Terakhir</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {loading ? (
+                            <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-[var(--text-muted)]"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Memuat user...</TableCell></TableRow>
+                        ) : filteredUsers.length === 0 ? (
+                            <TableRow><TableCell colSpan={6} className="py-10 text-center text-sm text-[var(--text-muted)]">Tidak ada user ditemukan.</TableCell></TableRow>
+                        ) : filteredUsers.map((user) => {
+                            const roleCode = user.roles[0]?.code;
+                            const isSuper = roleCode === "SUPER_ADMIN";
+                            const busy = busyUserId === user.id;
+                            return (
+                                <TableRow key={user.id} className={!user.isActive ? "opacity-70" : undefined}>
+                                    <TableCell><p className="font-semibold text-[var(--text-primary)]">{user.displayName}</p><p className="text-xs text-[var(--text-muted)]">{user.username} · {user.email}</p></TableCell>
+                                    <TableCell><span className={`badge ${isSuper ? "badge-primary" : roleCode === "HR_ADMIN" ? "badge-success" : "badge-warning"}`}>{ROLE_LABELS[roleCode]}</span></TableCell>
+                                    <TableCell className="hidden md:table-cell">{user.employee ? <><p className="text-sm">{user.employee.name} ({user.employee.employeeId})</p><p className="text-xs text-[var(--text-muted)]">{user.employee.departmentRel.name} · {user.employee.positionRel.name}</p></> : <span className="text-xs text-[var(--text-muted)]">Akun admin mandiri</span>}</TableCell>
+                                    <TableCell><span className={`badge ${user.isActive ? "badge-success" : "badge-error"}`}>{user.isActive ? "Aktif" : "Nonaktif"}</span></TableCell>
+                                    <TableCell className="hidden lg:table-cell text-xs text-[var(--text-muted)]">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString("id-ID") : "Belum pernah"}</TableCell>
+                                    <TableCell><div className="flex items-center justify-end gap-1">
+                                        <button className="btn btn-ghost btn-sm !p-1.5" disabled={busy || isSuper} title={isSuper ? "Super admin dilindungi" : "Edit user"} onClick={() => openEdit(user)}><Pencil className="h-3.5 w-3.5" /></button>
+                                        <button className="btn btn-ghost btn-sm !p-1.5 text-blue-600" disabled={busy} title="Reset password" onClick={() => resetPassword(user)}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}</button>
+                                        <button className={`btn btn-ghost btn-sm !p-1.5 ${user.isActive ? "text-red-600" : "text-emerald-600"}`} disabled={busy || isSuper} title={isSuper ? "Super admin dilindungi" : user.isActive ? "Nonaktifkan" : "Aktifkan"} onClick={() => updateStatus(user)}>{user.isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}</button>
+                                    </div></TableCell>
+                                </TableRow>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
             </div>
 
             {form && (

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, RefreshCw, QrCode, Package, TrendingUp, CheckCircle, Wrench, AlertCircle, Download, Pencil, Trash2 } from "lucide-react";
 import Pagination from "@/components/ui/Pagination";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { AssetWithHistory } from "@/lib/types/asset";
 import { KondisiBadge, StatusBadge, HolderIcon, CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
 import { StatCard, FilterPill } from "@/features/ga/components/AssetStatCards";
@@ -305,45 +306,45 @@ export default function AssetsPage() {
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto flex-1">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider">
-                            <tr>
-                                <th className="px-6 py-4 font-semibold">Kode Aset</th>
-                                <th className="px-6 py-4 font-semibold">Nama Aset</th>
-                                <th className="px-6 py-4 font-semibold w-1">Kategori</th>
-                                <th className="px-6 py-4 font-semibold w-1">Kondisi</th>
-                                <th className="px-6 py-4 font-semibold w-1">Status</th>
-                                <th className="px-6 py-4 font-semibold min-w-[200px]">Dipegang Oleh</th>
-                                <th className="px-6 py-4 font-semibold w-1 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
+                <div className="flex-1">
+                    <Table className="whitespace-nowrap">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Kode Aset</TableHead>
+                                <TableHead>Nama Aset</TableHead>
+                                <TableHead className="w-1">Kategori</TableHead>
+                                <TableHead className="w-1">Kondisi</TableHead>
+                                <TableHead className="w-1">Status</TableHead>
+                                <TableHead className="min-w-[200px]">Dipegang Oleh</TableHead>
+                                <TableHead className="w-1 text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {loading && assets.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data secara langsung (server-side)...</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">Memuat data secara langsung (server-side)...</TableCell>
+                                </TableRow>
                             ) : loadError ? (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--destructive)]">{loadError}</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={7} className="px-6 py-12 text-center text-[var(--destructive)]">{loadError}</TableCell>
+                                </TableRow>
                             ) : assets.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada aset ditemukan.</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)]">Tidak ada aset ditemukan.</TableCell>
+                                </TableRow>
                             ) : (
                                 assets.map((asset) => (
-                                    <tr 
+                                    <TableRow 
                                         key={asset.id} 
                                         onClick={() => router.push(`/ga/assets/${asset.id}`)}
                                         className="hover:bg-[var(--secondary)]/80 transition-colors cursor-pointer group"
                                     >
-                                        <td className="px-6 py-4 font-mono text-xs font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{asset.assetCode}</td>
-                                        <td className="px-6 py-4 font-medium text-[var(--text-primary)]">{asset.name}</td>
-                                        <td className="px-6 py-4"><CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} /></td>
-                                        <td className="px-6 py-4"><KondisiBadge kondisi={asset.kondisi} /></td>
-                                        <td className="px-6 py-4"><StatusBadge status={asset.status} /></td>
-                                        <td className="px-6 py-4">
+                                        <TableCell className="font-mono text-xs font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">{asset.assetCode}</TableCell>
+                                        <TableCell className="font-medium text-[var(--text-primary)]">{asset.name}</TableCell>
+                                        <TableCell><CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} /></TableCell>
+                                        <TableCell><KondisiBadge kondisi={asset.kondisi} /></TableCell>
+                                        <TableCell><StatusBadge status={asset.status} /></TableCell>
+                                        <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--secondary)] flex items-center justify-center border border-[var(--border)]">
                                                     <HolderIcon holderType={asset.holderType} />
@@ -361,9 +362,9 @@ export default function AssetsPage() {
                                                     )}
                                                 </div>
                                             </div>
-                                        </td>
+                                        </TableCell>
                                         {/* Aksi */}
-                                        <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+                                        <TableCell onClick={e => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => router.push(`/ga/assets/${asset.id}/edit`)}
@@ -380,12 +381,12 @@ export default function AssetsPage() {
                                                     <Trash2 size={14} />
                                                 </button>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))
                             )}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
 
                 {/* Footer Pagination */}

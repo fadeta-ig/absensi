@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import EmployeeForm from "@/components/EmployeeForm";
 import { useParams } from "next/navigation";
 import { Employee } from "@/types";
@@ -48,7 +48,16 @@ export default function EditEmployeePage() {
 
     return (
         <div className="animate-[fadeIn_0.5s_ease]">
-            <EmployeeForm initialData={employee} isEdit />
+            <Suspense
+                fallback={
+                    <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)] animate-pulse">
+                        <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                        <p className="text-sm font-medium">Memuat data formulir...</p>
+                    </div>
+                }
+            >
+                <EmployeeForm initialData={employee} isEdit />
+            </Suspense>
         </div>
     );
 }

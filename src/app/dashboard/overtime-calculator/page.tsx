@@ -5,6 +5,7 @@ import {
     Calculator, Clock4, CalendarCheck, DollarSign,
     Info, ArrowRight
 } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 type WorkDaySystem = 5 | 6;
 
@@ -178,16 +179,16 @@ export default function OvertimeCalculatorPage() {
                         <>
                             {/* Breakdown Table */}
                             <div className="overflow-hidden rounded-lg border border-[var(--border)]">
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="bg-[var(--secondary)]">
-                                            <th className="px-3 py-2 text-left font-bold text-[var(--text-primary)]">Jam</th>
-                                            <th className="px-3 py-2 text-center font-bold text-[var(--text-primary)]">Multiplier</th>
-                                            <th className="px-3 py-2 text-left font-bold text-[var(--text-primary)]">Rumus</th>
-                                            <th className="px-3 py-2 text-right font-bold text-[var(--text-primary)]">Upah</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
+                                <Table className="text-xs">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="px-3 py-2 text-left font-bold text-[var(--text-primary)]">Jam</TableHead>
+                                            <TableHead className="px-3 py-2 text-center font-bold text-[var(--text-primary)]">Multiplier</TableHead>
+                                            <TableHead className="px-3 py-2 text-left font-bold text-[var(--text-primary)]">Rumus</TableHead>
+                                            <TableHead className="px-3 py-2 text-right font-bold text-[var(--text-primary)]">Upah</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
                                         {result.breakdown.map((row) => (
                                             <tr key={row.hourNumber} className="border-t border-[var(--border)]">
                                                 <td className="px-3 py-2 font-medium text-[var(--text-primary)]">
@@ -207,8 +208,8 @@ export default function OvertimeCalculatorPage() {
                                                 </td>
                                             </tr>
                                         ))}
-                                    </tbody>
-                                </table>
+                                    </TableBody>
+                                </Table>
                             </div>
 
                             {/* Total */}

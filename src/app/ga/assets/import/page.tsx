@@ -7,6 +7,7 @@ import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { generateBulkImportTemplate } from "@/lib/utils/excelTemplateGenerator";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type ParsedRow = {
     [key: string]: string;
@@ -323,31 +324,31 @@ export default function BulkImportPage() {
                                 <Trash2 size={18} />
                             </button>
                         </div>
-                        <div className="overflow-x-auto max-h-[500px]">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider sticky top-0 z-10 shadow-sm">
-                                    <tr>
-                                        <th className="px-5 py-3 font-semibold">Tanda #</th>
-                                        <th className="px-5 py-3 font-semibold">Kategori</th>
-                                        <th className="px-5 py-3 font-semibold">Nama Aset</th>
-                                        <th className="px-5 py-3 font-semibold">S/N</th>
-                                        <th className="px-5 py-3 font-semibold">Kondisi</th>
-                                        <th className="px-5 py-3 font-semibold">Status Masa Depan</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[var(--border)]">
+                        <div className="max-h-[500px] overflow-auto">
+                            <Table className="whitespace-nowrap">
+                                <TableHeader className="sticky top-0 z-10 shadow-sm">
+                                    <TableRow>
+                                        <TableHead>Tanda #</TableHead>
+                                        <TableHead>Kategori</TableHead>
+                                        <TableHead>Nama Aset</TableHead>
+                                        <TableHead>S/N</TableHead>
+                                        <TableHead>Kondisi</TableHead>
+                                        <TableHead>Status Masa Depan</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {parsedData.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-[var(--secondary)]">
-                                            <td className="px-5 py-3 text-[var(--text-muted)] text-xs font-mono">{idx + 1}</td>
-                                            <td className="px-5 py-3"><span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{row.categoryPrefix}</span></td>
-                                            <td className="px-5 py-3 font-medium text-[var(--text-primary)]">{row.name}</td>
-                                            <td className="px-5 py-3 text-xs font-mono text-[var(--text-secondary)]">{row.serialNumber || "-"}</td>
-                                            <td className="px-5 py-3"><span className="text-[10px] font-black tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">{row.kondisi}</span></td>
-                                            <td className="px-5 py-3 text-xs text-[var(--text-secondary)] font-semibold italic">→ GA Pool (AVAILABLE)</td>
-                                        </tr>
+                                        <TableRow key={idx}>
+                                            <TableCell className="text-[var(--text-muted)] text-xs font-mono">{idx + 1}</TableCell>
+                                            <TableCell><span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">{row.categoryPrefix}</span></TableCell>
+                                            <TableCell className="font-medium text-[var(--text-primary)]">{row.name}</TableCell>
+                                            <TableCell className="text-xs font-mono text-[var(--text-secondary)]">{row.serialNumber || "-"}</TableCell>
+                                            <TableCell><span className="text-[10px] font-black tracking-widest text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">{row.kondisi}</span></TableCell>
+                                            <TableCell className="text-xs text-[var(--text-secondary)] font-semibold italic">→ GA Pool (AVAILABLE)</TableCell>
+                                        </TableRow>
                                     ))}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                         <div className="p-5 border-t bg-[var(--secondary)] flex items-center justify-between">
                             <div className="text-sm text-[var(--text-secondary)]">File: <span className="font-semibold">{file?.name}</span></div>

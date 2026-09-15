@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Employee } from "@/types";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -26,6 +26,10 @@ interface Props {
 
 export default function EmployeeForm({ initialData, isEdit }: Props) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const returnPage = searchParams.get("returnPage");
+    const returnDestination = returnPage ? `/dashboard/employees?page=${returnPage}` : "/dashboard/employees";
+
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const toast = useToast();
@@ -182,7 +186,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                 } else {
                     toast(isEdit ? "Data karyawan berhasil diperbarui!" : "Karyawan baru berhasil ditambahkan!", "success");
                 }
-                router.push("/dashboard/employees");
+                router.push(returnDestination);
                 router.refresh();
             } else {
                 toast(await getResponseErrorMessage(res, "Gagal menyimpan data karyawan."), "error");
@@ -242,7 +246,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
         <form onSubmit={handleSubmit} className="space-y-8 pb-10 max-w-5xl mx-auto">
             <div className="flex items-center justify-between sticky top-0 bg-[var(--background)]/80 backdrop-blur-sm z-10 py-4 border-b border-[var(--border)]">
                 <div className="flex items-center gap-4">
-                    <button type="button" onClick={() => router.back()} className="w-9 h-9 flex items-center justify-center rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] transition-colors">
+                    <button type="button" onClick={() => router.push(returnDestination)} className="w-9 h-9 flex items-center justify-center rounded-lg border border-[var(--border)] hover:bg-[var(--secondary)] transition-colors">
                         <ArrowLeft className="w-4 h-4" />
                     </button>
                     <div>
@@ -251,7 +255,7 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => router.back()} className="btn btn-secondary">Batal</button>
+                    <button type="button" onClick={() => router.push(returnDestination)} className="btn btn-secondary">Batal</button>
                     <button type="submit" className="btn btn-primary" disabled={loading}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         {isEdit ? "Simpan Perubahan" : "Simpan Karyawan"}

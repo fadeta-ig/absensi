@@ -6,6 +6,7 @@ import {
     HelpCircle, Building2, User, ArrowRight,
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -158,17 +159,17 @@ export default function BpjsCalculatorPage() {
                             <p className="font-bold text-[var(--text-primary)] flex items-center gap-1.5 mb-1">
                                 <HardHat className="w-3.5 h-3.5 text-amber-600" /> BPJS Ketenagakerjaan
                             </p>
-                            <div className="overflow-x-auto mt-2">
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="text-[var(--text-muted)] border-b border-[var(--border)]">
-                                            <th className="text-left py-1 pr-2">Program</th>
-                                            <th className="text-center py-1 px-2">Perusahaan</th>
-                                            <th className="text-center py-1 px-2">Karyawan</th>
-                                            <th className="text-left py-1 pl-2">Dasar Hukum</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-[var(--text-secondary)]">
+                            <div className="mt-2">
+                                <Table className="text-xs">
+                                    <TableHeader>
+                                        <TableRow className="border-b border-[var(--border)]">
+                                            <TableHead className="text-left py-1 pr-2">Program</TableHead>
+                                            <TableHead className="text-center py-1 px-2">Perusahaan</TableHead>
+                                            <TableHead className="text-center py-1 px-2">Karyawan</TableHead>
+                                            <TableHead className="text-left py-1 pl-2">Dasar Hukum</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody className="text-[var(--text-secondary)]">
                                         <tr className="border-b border-[var(--border)]/30">
                                             <td className="py-1 pr-2">JHT</td>
                                             <td className="py-1 px-2 text-center font-semibold">3,7%</td>
@@ -193,8 +194,8 @@ export default function BpjsCalculatorPage() {
                                             <td className="py-1 px-2 text-center font-semibold">1%</td>
                                             <td className="py-1 pl-2">PP 45/2015</td>
                                         </tr>
-                                    </tbody>
-                                </table>
+                                    </TableBody>
+                                </Table>
                             </div>
                             <p className="text-[10px] text-[var(--text-muted)] mt-2">
                                 * JP: batas upah Rp10.547.400/bulan (2025) · JKK: tarif tergantung tingkat risiko kerja
@@ -419,47 +420,45 @@ function ProgramCard({ title, icon, programs, totalCompany, totalEmployee, fmt }
                     {icon} {title}
                 </h3>
             </div>
-            <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                    <thead>
-                        <tr className="text-[var(--text-muted)] border-b border-[var(--border)]">
-                            <th className="text-left py-2.5 px-4">Program</th>
-                            <th className="text-center py-2.5 px-2">Tarif ER</th>
-                            <th className="text-center py-2.5 px-2">Tarif EE</th>
-                            <th className="text-right py-2.5 px-2">Perusahaan</th>
-                            <th className="text-right py-2.5 px-2">Karyawan</th>
-                            <th className="text-right py-2.5 px-4">Total</th>
+            <Table className="text-xs">
+                <TableHeader>
+                    <TableRow className="border-b border-[var(--border)]">
+                        <TableHead className="text-left py-2.5 px-4">Program</TableHead>
+                        <TableHead className="text-center py-2.5 px-2">Tarif ER</TableHead>
+                        <TableHead className="text-center py-2.5 px-2">Tarif EE</TableHead>
+                        <TableHead className="text-right py-2.5 px-2">Perusahaan</TableHead>
+                        <TableHead className="text-right py-2.5 px-2">Karyawan</TableHead>
+                        <TableHead className="text-right py-2.5 px-4">Total</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {programs.map((p) => (
+                        <tr key={p.name} className="border-b border-[var(--border)]/50 hover:bg-[var(--secondary)]/30 transition-colors">
+                            <td className="py-2.5 px-4">
+                                <span className="font-medium text-[var(--text-primary)]">{p.name}</span>
+                                {p.isCapped && (
+                                    <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                                        Cap {p.capLabel}
+                                    </span>
+                                )}
+                            </td>
+                            <td className="py-2.5 px-2 text-center font-semibold text-amber-600">{p.rateCompany}</td>
+                            <td className="py-2.5 px-2 text-center font-semibold text-red-600">{p.rateEmployee}</td>
+                            <td className="py-2.5 px-2 text-right text-amber-700">{fmt(p.company)}</td>
+                            <td className="py-2.5 px-2 text-right text-red-600">{p.employee > 0 ? fmt(p.employee) : "—"}</td>
+                            <td className="py-2.5 px-4 text-right font-semibold">{fmt(p.total)}</td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {programs.map((p) => (
-                            <tr key={p.name} className="border-b border-[var(--border)]/50 hover:bg-[var(--secondary)]/30 transition-colors">
-                                <td className="py-2.5 px-4">
-                                    <span className="font-medium text-[var(--text-primary)]">{p.name}</span>
-                                    {p.isCapped && (
-                                        <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
-                                            Cap {p.capLabel}
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="py-2.5 px-2 text-center font-semibold text-amber-600">{p.rateCompany}</td>
-                                <td className="py-2.5 px-2 text-center font-semibold text-red-600">{p.rateEmployee}</td>
-                                <td className="py-2.5 px-2 text-right text-amber-700">{fmt(p.company)}</td>
-                                <td className="py-2.5 px-2 text-right text-red-600">{p.employee > 0 ? fmt(p.employee) : "—"}</td>
-                                <td className="py-2.5 px-4 text-right font-semibold">{fmt(p.total)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                    <tfoot>
-                        <tr className="bg-[var(--secondary)]/30 font-bold text-[var(--text-primary)]">
-                            <td className="py-2.5 px-4" colSpan={3}>Subtotal {title}</td>
-                            <td className="py-2.5 px-2 text-right text-amber-700">{fmt(totalCompany)}</td>
-                            <td className="py-2.5 px-2 text-right text-red-600">{fmt(totalEmployee)}</td>
-                            <td className="py-2.5 px-4 text-right text-[var(--primary)]">{fmt(totalCompany + totalEmployee)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                    ))}
+                </TableBody>
+                <tfoot>
+                    <tr className="bg-[var(--secondary)]/30 font-bold text-[var(--text-primary)]">
+                        <td className="py-2.5 px-4" colSpan={3}>Subtotal {title}</td>
+                        <td className="py-2.5 px-2 text-right text-amber-700">{fmt(totalCompany)}</td>
+                        <td className="py-2.5 px-2 text-right text-red-600">{fmt(totalEmployee)}</td>
+                        <td className="py-2.5 px-4 text-right text-[var(--primary)]">{fmt(totalCompany + totalEmployee)}</td>
+                    </tr>
+                </tfoot>
+            </Table>
         </div>
     );
 }

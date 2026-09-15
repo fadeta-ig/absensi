@@ -5,6 +5,7 @@ import { Check, Eye, FileText, Loader2, CheckSquare, Square, FileSpreadsheet } f
 import { LetterRequest, TYPE_CONFIG, STATUS_CONFIG } from "../types";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportToExcel } from "@/lib/export";
 import { useToast } from "@/components/Toast";
 
@@ -110,33 +111,32 @@ export function LetterRequestTable({
 
     return (
         <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th className="w-10 text-center">
-                                <button
-                                    type="button"
-                                    onClick={toggleSelectAllCurrentPage}
-                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                >
-                                    {isAllCurrentPageSelected ? (
-                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                    ) : (
-                                        <Square className="w-4 h-4" />
-                                    )}
-                                </button>
-                            </th>
-                            <th>Karyawan</th>
-                            <th>Jenis Surat</th>
-                            <th className="hidden lg:table-cell">Tujuan</th>
-                            <th>Tanggal</th>
-                            <th>Status</th>
-                            <th className="text-right">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-10 text-center">
+                            <button
+                                type="button"
+                                onClick={toggleSelectAllCurrentPage}
+                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                            >
+                                {isAllCurrentPageSelected ? (
+                                    <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                ) : (
+                                    <Square className="w-4 h-4" />
+                                )}
+                            </button>
+                        </TableHead>
+                        <TableHead>Karyawan</TableHead>
+                        <TableHead>Jenis Surat</TableHead>
+                        <TableHead className="hidden lg:table-cell">Tujuan</TableHead>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                         {paginated.map((req) => {
                             const typeCfg = TYPE_CONFIG[req.type];
                             const statusCfg = STATUS_CONFIG[req.status];
@@ -225,9 +225,8 @@ export function LetterRequestTable({
                                 </tr>
                             );
                         })}
-                    </tbody>
-                </table>
-            </div>
+                    </TableBody>
+            </Table>
 
             {/* Reusable DataTablePagination */}
             <DataTablePagination

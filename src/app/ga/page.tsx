@@ -11,6 +11,7 @@ import { StatCard, CategoryStat } from "@/features/ga/components/AssetStatCards"
 import { CategoryBadge } from "@/features/ga/components/badges/AssetBadges";
 import { formatRupiah } from "@/lib/utils/formatters";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type AssetStats = {
     total: number;
@@ -148,40 +149,38 @@ export default function GaDashboard() {
                     <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">Aset Tersedia di GA</h2>
                     <Link href="/ga/assets?status=AVAILABLE" className="text-[13px] font-semibold text-[var(--category-1)] hover:opacity-80 transition-colors">Lihat semua &rarr;</Link>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full whitespace-nowrap text-left text-sm">
-                        <thead className="bg-[var(--secondary)] border-b border-[var(--border)] text-[var(--text-secondary)] text-xs uppercase tracking-wider">
-                            <tr>
-                                <th className="px-6 py-4 font-semibold">Kode Aset</th>
-                                <th className="px-6 py-4 font-semibold">Nama Aset</th>
-                                <th className="px-6 py-4 font-semibold">Kategori</th>
-                                <th className="px-6 py-4 font-semibold">Tipe Entitas</th>
-                                <th className="px-6 py-4 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {recent.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-6 text-[var(--text-muted)]">Tidak ada aset tersedia saat ini.</td></tr>
-                            ) : recent.map(asset => (
-                                <tr key={asset.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-xs font-semibold text-[var(--text-secondary)]">{asset.assetCode}</td>
-                                    <td className="px-6 py-4 font-medium text-[var(--text-primary)]">{asset.name}</td>
-                                    <td className="px-6 py-4">
-                                        <CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} />
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-xs text-[var(--text-secondary)] bg-[var(--secondary)] px-2 py-1 rounded-md font-medium border border-[var(--border)]">
-                                            {asset.holderType === "GA_POOL" ? "GA Pool" : "Company"}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] hover:opacity-90 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <Table className="whitespace-nowrap">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Kode Aset</TableHead>
+                            <TableHead>Nama Aset</TableHead>
+                            <TableHead>Kategori</TableHead>
+                            <TableHead>Tipe Entitas</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {recent.length === 0 ? (
+                            <TableRow><TableCell colSpan={5} className="text-center py-6 text-[var(--text-muted)]">Tidak ada aset tersedia saat ini.</TableCell></TableRow>
+                        ) : recent.map(asset => (
+                            <TableRow key={asset.id} className="hover:bg-[var(--secondary)]/50 transition-colors">
+                                <TableCell className="font-mono text-xs font-semibold text-[var(--text-secondary)]">{asset.assetCode}</TableCell>
+                                <TableCell className="font-medium text-[var(--text-primary)]">{asset.name}</TableCell>
+                                <TableCell>
+                                    <CategoryBadge prefix={asset.category?.prefix} name={asset.category?.name || "-"} />
+                                </TableCell>
+                                <TableCell>
+                                    <span className="text-xs text-[var(--text-secondary)] bg-[var(--secondary)] px-2 py-1 rounded-md font-medium border border-[var(--border)]">
+                                        {asset.holderType === "GA_POOL" ? "GA Pool" : "Company"}
+                                    </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                    <Link href={`/ga/assets/${asset.id}`} className="text-xs font-semibold text-[var(--category-1)] bg-[var(--category-1-bg)] hover:opacity-90 px-3 py-1.5 rounded-lg transition-colors">Detail</Link>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             </div>
         </div>
     );

@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportBatchPayslipsPdf } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
@@ -176,32 +177,31 @@ export function PayrollHistoryTab({
                 </div>
             ) : (
                 <div className="card overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th className="w-10 text-center">
-                                        <button
-                                            type="button"
-                                            onClick={toggleSelectAllCurrentPage}
-                                            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                            title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                        >
-                                            {isAllCurrentPageSelected ? (
-                                                <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                            ) : (
-                                                <Square className="w-4 h-4" />
-                                            )}
-                                        </button>
-                                    </th>
-                                    <th>Karyawan</th>
-                                    <th>Periode</th>
-                                    <th className="hidden md:table-cell">Gaji Pokok</th>
-                                    <th>Gaji Bersih</th>
-                                    <th className="text-right">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-10 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={toggleSelectAllCurrentPage}
+                                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                        title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                    >
+                                        {isAllCurrentPageSelected ? (
+                                            <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                        ) : (
+                                            <Square className="w-4 h-4" />
+                                        )}
+                                    </button>
+                                </TableHead>
+                                <TableHead>Karyawan</TableHead>
+                                <TableHead>Periode</TableHead>
+                                <TableHead className="hidden md:table-cell">Gaji Pokok</TableHead>
+                                <TableHead>Gaji Bersih</TableHead>
+                                <TableHead className="text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                                 {paginatedPayslips.map((p) => {
                                     const isSelected = selectedIds.has(p.id);
                                     return (
@@ -269,9 +269,8 @@ export function PayrollHistoryTab({
                                         </tr>
                                     );
                                 })}
-                            </tbody>
-                        </table>
-                    </div>
+                            </TableBody>
+                            </Table>
 
                     <DataTablePagination
                         currentPage={currentPage}

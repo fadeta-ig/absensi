@@ -14,6 +14,7 @@ import type { AssetWithHistory } from "@/lib/types/asset";
 import type { AssetStats } from "@/lib/services/assets/queries";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 type AssetCategoryParams = { id: string; name: string; prefix: string };
 
@@ -343,71 +344,69 @@ function HrAssetsPageInner() {
                     <div style={{ textAlign: "center", padding: 56 }}><div className="spinner" /></div>
                 ) : (
                     <>
-                        <div style={{ overflowX: "auto" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                                <thead>
-                                    <tr style={{ background: "var(--secondary)" }}>
-                                        {["Kode Aset", "Nama Aset", "Kategori", "Kondisi", "Status", "Pemegang Saat Ini", "Riwayat"].map(h => (
-                                            <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "var(--text-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {assets.length === 0 ? (
-                                        <tr><td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--text-muted)" }}>
-                                            <Package size={32} style={{ margin: "0 auto 8px", opacity: 0.25 }} />
-                                            <p>{search ? `Tidak ada hasil untuk "${search}"` : "Tidak ada aset ditemukan"}</p>
-                                        </td></tr>
-                                    ) : assets.map(a => (
-                                        <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                                            <td style={{ padding: "10px 14px" }}>
-                                                <span style={{ fontFamily: "monospace", background: "var(--neutral-bg)", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
-                                            </td>
-                                            <td style={{ padding: "10px 14px", maxWidth: 220 }}>
-                                                <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{a.name}</span>
-                                                {a.keterangan && (
-                                                    <span style={{ display: "block", fontSize: 11, color: "var(--warning)" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 26)}{a.keterangan.length > 26 ? "…" : ""}</span>
-                                                )}
-                                            </td>
-                                            <td style={{ padding: "10px 14px" }}><CategoryBadge cat={a.category?.name || "LAINNYA"} /></td>
-                                            <td style={{ padding: "10px 14px" }}><KondisiBadge kondisi={a.kondisi} /></td>
-                                            <td style={{ padding: "10px 14px" }}><StatusBadge status={a.status} /></td>
-                                            <td style={{ padding: "10px 14px" }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                    <div style={{ padding: 4, background: "var(--neutral-bg)", borderRadius: 6, display: "flex" }}>
-                                                        <HolderIcon holderType={a.holderType} />
-                                                    </div>
-                                                    <div>
-                                                        {a.assignedEmployee ? (
-                                                            <a href={`/dashboard/employees/${a.assignedEmployee.employeeId}/360-view`} style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }} className="hover:underline">
-                                                                {a.assignedEmployee.name}
-                                                            </a>
-                                                        ) : (
-                                                            <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal", fontWeight: 500 }}>
-                                                                {a.assignedToName ?? "GA — Tersedia"}
-                                                            </span>
-                                                        )}
-                                                        {a.assignedEmployee && (
-                                                            <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                                                                {a.assignedEmployee.department} — {a.assignedEmployee.position}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: "10px 14px" }}>
-                                                <button
-                                                    onClick={() => setHistoryTarget(a)}
-                                                    style={{ padding: "5px 10px", border: "1px solid var(--border)", background: "white", cursor: "pointer", borderRadius: 7, color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500 }}
-                                                >
-                                                    <History size={13} /> Riwayat
-                                                </button>
-                                            </td>
-                                        </tr>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    {["Kode Aset", "Nama Aset", "Kategori", "Kondisi", "Status", "Pemegang Saat Ini", "Riwayat"].map(h => (
+                                        <TableHead key={h} className="whitespace-nowrap">{h}</TableHead>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {assets.length === 0 ? (
+                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: 48, color: "var(--text-muted)" }}>
+                                        <Package size={32} style={{ margin: "0 auto 8px", opacity: 0.25 }} />
+                                        <p>{search ? `Tidak ada hasil untuk "${search}"` : "Tidak ada aset ditemukan"}</p>
+                                    </td></tr>
+                                ) : assets.map(a => (
+                                    <tr key={a.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                                        <td style={{ padding: "10px 14px" }}>
+                                            <span style={{ fontFamily: "monospace", background: "var(--neutral-bg)", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{a.assetCode}</span>
+                                        </td>
+                                        <td style={{ padding: "10px 14px", maxWidth: 220 }}>
+                                            <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{a.name}</span>
+                                            {a.keterangan && (
+                                                <span style={{ display: "block", fontSize: 11, color: "var(--warning)" }} title={a.keterangan}>[!] {a.keterangan.substring(0, 26)}{a.keterangan.length > 26 ? "…" : ""}</span>
+                                            )}
+                                        </td>
+                                        <td style={{ padding: "10px 14px" }}><CategoryBadge cat={a.category?.name || "LAINNYA"} /></td>
+                                        <td style={{ padding: "10px 14px" }}><KondisiBadge kondisi={a.kondisi} /></td>
+                                        <td style={{ padding: "10px 14px" }}><StatusBadge status={a.status} /></td>
+                                        <td style={{ padding: "10px 14px" }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <div style={{ padding: 4, background: "var(--neutral-bg)", borderRadius: 6, display: "flex" }}>
+                                                    <HolderIcon holderType={a.holderType} />
+                                                </div>
+                                                <div>
+                                                    {a.assignedEmployee ? (
+                                                        <a href={`/dashboard/employees/${a.assignedEmployee.employeeId}/360-view`} style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }} className="hover:underline">
+                                                            {a.assignedEmployee.name}
+                                                        </a>
+                                                    ) : (
+                                                        <span style={{ color: a.holderType === "GA_POOL" ? "var(--text-muted)" : "var(--text-primary)", fontStyle: a.holderType === "GA_POOL" ? "italic" : "normal", fontWeight: 500 }}>
+                                                            {a.assignedToName ?? "GA — Tersedia"}
+                                                        </span>
+                                                    )}
+                                                    {a.assignedEmployee && (
+                                                        <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                                                            {a.assignedEmployee.department} — {a.assignedEmployee.position}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: "10px 14px" }}>
+                                            <button
+                                                onClick={() => setHistoryTarget(a)}
+                                                style={{ padding: "5px 10px", border: "1px solid var(--border)", background: "white", cursor: "pointer", borderRadius: 7, color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500 }}
+                                            >
+                                                <History size={13} /> Riwayat
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </TableBody>
+                        </Table>
                         <Pagination
                             currentPage={currentPage}
                             totalItems={totalItems}

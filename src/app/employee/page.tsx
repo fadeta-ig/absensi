@@ -261,7 +261,7 @@ export default function EmployeeHomePage() {
                     <div className="flex flex-col">
                         {news.slice(0, 3).map((item, index) => (
                             <div key={item.id}>
-                                <Link href={`/employee/news/${item.id}`} className="block px-4 py-3.5 hover:bg-[var(--secondary)]/60 transition-colors">
+                                <Link href={`/employee/news?id=${item.id}`} className="block px-4 py-3.5 hover:bg-[var(--secondary)]/60 transition-colors">
                                     <div className="flex gap-3 items-center">
                                         <div className="w-1.5 h-1.5 rounded-full bg-[#800020]/60 shrink-0" />
                                         <p className="text-[13px] font-medium text-[var(--text-secondary)] leading-snug line-clamp-2">{item.title}</p>

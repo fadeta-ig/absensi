@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { AlertCircle, Loader2, CheckSquare, Square, Check, X } from "lucide-react";
+import { useState, useMemo } from "react";
+import { AlertCircle, Loader2, CheckSquare, Square, Check, X, Eye } from "lucide-react";
 import { AttendanceCorrection } from "../types";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { useToast } from "@/components/Toast";
+import { useTablePagination } from "@/hooks/useTablePagination";
+import { AttendanceCorrectionDetailModal } from "./AttendanceCorrectionDetailModal";
 
 interface Props {
     corrections: AttendanceCorrection[];
@@ -20,14 +23,20 @@ export function AttendanceCorrectionTab({
     corrections, loading, error, processingId, getEmpInfo, handleCorrectionAction
 }: Props) {
     const toast = useToast();
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [selectedCorrection, setSelectedCorrection] = useState<AttendanceCorrection | null>(null);
+
+    const {
+        currentPage,
+        pageSize,
+        setPage: setCurrentPage,
+        setPageSize,
+    } = useTablePagination({
+        storageKey: "attendance_corrections",
+        totalItems: corrections.length,
+    });
+
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkProcessing, setBulkProcessing] = useState(false);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [corrections.length, pageSize]);
 
     const totalPages = Math.ceil(corrections.length / pageSize) || 1;
     const paginatedCorrections = useMemo(() => {
@@ -97,33 +106,32 @@ export function AttendanceCorrectionTab({
                     Total: <strong className="text-[var(--text-primary)]">{corrections.length}</strong> pengajuan
                 </span>
             </div>
-            <div className="overflow-x-auto">
-                <table className="data-table">
-                    <thead className="bg-[#F9FAFB]">
-                        <tr>
-                            <th className="w-10 text-center">
-                                <button
-                                    type="button"
-                                    onClick={toggleSelectAllCurrentPage}
-                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                >
-                                    {isAllCurrentPageSelected ? (
-                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                    ) : (
-                                        <Square className="w-4 h-4" />
-                                    )}
-                                </button>
-                            </th>
-                            <th>Karyawan</th>
-                            <th>Target Tanggal</th>
-                            <th>Waktu Pengajuan</th>
-                            <th>Alasan</th>
-                            <th>Status</th>
-                            <th className="text-right">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-10 text-center">
+                            <button
+                                type="button"
+                                onClick={toggleSelectAllCurrentPage}
+                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                            >
+                                {isAllCurrentPageSelected ? (
+                                    <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                ) : (
+                                    <Square className="w-4 h-4" />
+                                )}
+                            </button>
+                        </TableHead>
+                        <TableHead>Karyawan</TableHead>
+                        <TableHead>Target Tanggal</TableHead>
+                        <TableHead>Waktu Pengajuan</TableHead>
+                        <TableHead>Alasan</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                         {loading ? (
                             <tr>
                                 <td colSpan={7} className="text-center py-10 text-[var(--text-muted)]">
@@ -178,36 +186,51 @@ export function AttendanceCorrectionTab({
                                             </span>
                                         </td>
                                         <td className="text-right">
-                                            {c.status === "PENDING" ? (
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <button
-                                                        onClick={() => handleCorrectionAction(c.id, "APPROVED")}
-                                                        disabled={processingId === c.id}
-                                                        className="btn btn-success btn-sm !py-1 !px-2.5 flex items-center gap-1"
-                                                    >
-                                                        {processingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                                                        Terima
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleCorrectionAction(c.id, "REJECTED")}
-                                                        disabled={processingId === c.id}
-                                                        className="btn btn-danger btn-sm !py-1 !px-2.5 flex items-center gap-1"
-                                                    >
-                                                        {processingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                                        Tolak
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-[var(--text-muted)] italic">Selesai</span>
-                                            )}
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedCorrection(c)}
+                                                    className="btn btn-secondary btn-sm !py-1 !px-2 flex items-center gap-1 text-xs"
+                                                    title="Lihat Detail Lengkap & Bukti Lampiran"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                                    <span>Detail</span>
+                                                </button>
+
+                                                {c.status === "PENDING" ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleCorrectionAction(c.id, "APPROVED")}
+                                                            disabled={processingId === c.id}
+                                                            className="btn btn-success btn-sm !py-1 !px-2 flex items-center gap-1 text-xs"
+                                                            title="Terima Langsung"
+                                                        >
+                                                            {processingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                                            <span>Terima</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleCorrectionAction(c.id, "REJECTED")}
+                                                            disabled={processingId === c.id}
+                                                            className="btn btn-danger btn-sm !py-1 !px-2 flex items-center gap-1 text-xs"
+                                                            title="Tolak Langsung"
+                                                        >
+                                                            {processingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                            <span>Tolak</span>
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-[11px] text-[var(--text-muted)] italic px-1">
+                                                        {c.status === "APPROVED" ? "Disetujui" : "Ditolak"}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 );
                             })
                         )}
-                    </tbody>
-                </table>
-            </div>
+                    </TableBody>
+            </Table>
 
             <DataTablePagination
                 currentPage={currentPage}
@@ -246,6 +269,20 @@ export function AttendanceCorrectionTab({
                     Tolak Terpilih
                 </button>
             </BulkActionBar>
+
+            {/* Detail Modal */}
+            {selectedCorrection && (
+                <AttendanceCorrectionDetailModal
+                    selectedCorrection={selectedCorrection}
+                    onClose={() => setSelectedCorrection(null)}
+                    empInfo={getEmpInfo(selectedCorrection.employeeId)}
+                    processingId={processingId}
+                    onAction={async (id, status) => {
+                        await handleCorrectionAction(id, status);
+                        setSelectedCorrection(null);
+                    }}
+                />
+            )}
         </div>
     );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe, Download, FileText, Paperclip, Loader2, AlertCircle } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
@@ -16,7 +17,11 @@ interface NewsItem {
     mediaName?: string | null;
 }
 
-export default function NewsPage() {
+function NewsPageContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const queryId = searchParams.get("id");
+
     const [news, setNews] = useState<NewsItem[]>([]);
     const [selected, setSelected] = useState<NewsItem | null>(null);
     const [filter, setFilter] = useState("all");
@@ -37,7 +42,16 @@ export default function NewsPage() {
                 }
 
                 const data = await res.json() as NewsItem[];
-                setNews(Array.isArray(data) ? data : []);
+                const newsList = Array.isArray(data) ? data : [];
+                setNews(newsList);
+
+                // Auto-open modal if URL has ?id=... parameter
+                if (queryId) {
+                    const matched = newsList.find((item) => item.id === queryId);
+                    if (matched) {
+                        setSelected(matched);
+                    }
+                }
             } catch (err) {
                 reportClientError("EmployeeNewsPage", "Gagal memuat berita employee", err);
                 setNews([]);
@@ -48,7 +62,15 @@ export default function NewsPage() {
         };
 
         void loadNews();
-    }, []);
+    }, [queryId]);
+
+    const handleCloseModal = () => {
+        setSelected(null);
+        // Clean URL if query parameter was used
+        if (queryId) {
+            router.replace("/employee/news", { scroll: false });
+        }
+    };
 
     const filtered = filter === "all" ? news : news.filter((n) => n.category === filter);
     const paginatedNews = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -161,11 +183,11 @@ export default function NewsPage() {
 
             {/* Detail Modal */}
             {selected && (
-                <div className="modal-overlay" onClick={() => setSelected(null)}>
+                <div className="modal-overlay" onClick={handleCloseModal}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2 className="modal-title">{selected.title}</h2>
-                            <button className="modal-close" onClick={() => setSelected(null)}><X className="w-4 h-4" /></button>
+                            <button className="modal-close" onClick={handleCloseModal}><X className="w-4 h-4" /></button>
                         </div>
                         <div className="flex items-center gap-3 mb-4 flex-wrap">
                             <span className="badge badge-primary">{getCategoryInfo(selected.category).label}</span>
@@ -179,6 +201,7 @@ export default function NewsPage() {
                             <div className="mt-5 pt-4 border-t border-[var(--border)]">
                                 {isImage(selected.mediaUrl) && (
                                     <div className="mb-3 rounded-lg overflow-hidden border border-[var(--border)]">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img src={selected.mediaUrl} alt={selected.mediaName || "Media"} className="w-full max-h-64 object-contain bg-[var(--bg-secondary)]" />
                                     </div>
                                 )}
@@ -199,5 +222,18 @@ export default function NewsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function NewsPage() {
+    return (
+        <Suspense fallback={
+            <div className="card p-12 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-60 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Memuat berita...</p>
+            </div>
+        }>
+            <NewsPageContent />
+        </Suspense>
     );
 }

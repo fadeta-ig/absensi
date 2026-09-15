@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import {
-    AlertCircle, Clock4, Search, CheckCircle, XCircle, Clock,
-    Calendar, FileText, User, Filter, Eye, X, Loader2,
+    AlertCircle, Clock4, Search, CheckCircle, XCircle,
+    Calendar, Eye, X, Loader2,
     CheckSquare, Square, FileSpreadsheet, Check, RotateCcw
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportToExcel } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useTablePagination } from "@/hooks/useTablePagination";
 import { getThisMonthRange, getLastMonthRange, getThisYearRange, isDateInRange } from "@/lib/datePresets";
 
 interface OvertimeRequest {
@@ -35,7 +37,7 @@ const STATUS_CONFIG = {
     rejected: { label: "Ditolak", class: "badge-error" },
 };
 
-export default function DashboardOvertimePage() {
+function DashboardOvertimeContent() {
     const toast = useToast();
     const [requests, setRequests] = useState<OvertimeRequest[]>([]);
     const [search, setSearch] = useState("");
@@ -49,10 +51,6 @@ export default function DashboardOvertimePage() {
     const [isHolidayInput, setIsHolidayInput] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
-
-    // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
 
     // Multi-Select
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -80,10 +78,6 @@ export default function DashboardOvertimePage() {
         void loadRequests();
     }, [toast]);
 
-    // Reset pagination to page 1 on filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [search, filterStatus, startDate, endDate, pageSize]);
 
     const handleStatusUpdate = async (id: string, status: "approved" | "rejected") => {
         setUpdating(id);
@@ -201,6 +195,33 @@ export default function DashboardOvertimePage() {
             return matchSearch && matchStatus && matchDate;
         });
     }, [requests, search, filterStatus, startDate, endDate]);
+
+    // Pagination with URL sync, localStorage pageSize, and smart clamping
+    const {
+        currentPage,
+        pageSize,
+        setPage: setCurrentPage,
+        setPageSize,
+        resetPage,
+    } = useTablePagination({
+        storageKey: "overtime",
+        totalItems: filtered.length,
+    });
+
+    // Reset pagination to page 1 ONLY on explicit filter/search changes
+    const prevFiltersRef = useRef({ search, filterStatus, startDate, endDate });
+    useEffect(() => {
+        const prev = prevFiltersRef.current;
+        if (
+            prev.search !== search ||
+            prev.filterStatus !== filterStatus ||
+            prev.startDate !== startDate ||
+            prev.endDate !== endDate
+        ) {
+            resetPage();
+            prevFiltersRef.current = { search, filterStatus, startDate, endDate };
+        }
+    }, [search, filterStatus, startDate, endDate, resetPage]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedRequests = useMemo(() => {
@@ -416,35 +437,34 @@ export default function DashboardOvertimePage() {
 
             {/* Table */}
             <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th className="w-10 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={toggleSelectAllCurrentPage}
-                                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                        title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                    >
-                                        {isAllCurrentPageSelected ? (
-                                            <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                        ) : (
-                                            <Square className="w-4 h-4" />
-                                        )}
-                                    </button>
-                                </th>
-                                <th>Karyawan</th>
-                                <th>Tanggal</th>
-                                <th className="hidden md:table-cell">Jam</th>
-                                <th className="hidden md:table-cell text-center">Durasi</th>
-                                <th className="hidden lg:table-cell">Alasan</th>
-                                <th>Upah Lembur</th>
-                                <th>Status</th>
-                                <th className="text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-10 text-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAllCurrentPage}
+                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                >
+                                    {isAllCurrentPageSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                    ) : (
+                                        <Square className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </TableHead>
+                            <TableHead>Karyawan</TableHead>
+                            <TableHead>Tanggal</TableHead>
+                            <TableHead className="hidden md:table-cell">Jam</TableHead>
+                            <TableHead className="hidden md:table-cell text-center">Durasi</TableHead>
+                            <TableHead className="hidden lg:table-cell">Alasan</TableHead>
+                            <TableHead>Upah Lembur</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                             {initialLoading ? (
                                 <tr>
                                     <td colSpan={9} className="text-center py-12 text-sm text-[var(--text-muted)]">
@@ -528,9 +548,8 @@ export default function DashboardOvertimePage() {
                                     );
                                 })
                             )}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableBody>
+                    </Table>
 
                 <DataTablePagination
                     currentPage={currentPage}
@@ -687,5 +706,20 @@ export default function DashboardOvertimePage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function DashboardOvertimePage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)] animate-pulse">
+                    <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                    <p className="text-sm font-medium">Memuat data lembur...</p>
+                </div>
+            }
+        >
+            <DashboardOvertimeContent />
+        </Suspense>
     );
 }

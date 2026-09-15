@@ -127,3 +127,14 @@ export async function POST(request: NextRequest) {
 
 4. **Edge Runtime Proxy**:
    - Next.js 16 menggunakan file `src/proxy.ts` yang mengekspor fungsi `proxy()`. File ini ringan dan tidak menggunakan Node module yang tidak kompatibel dengan Edge Runtime.
+
+5. **Standarisasi Shared UI Table Primitives (`src/components/ui/table.tsx`)**:
+   - Seluruh tabel di modul HR Dashboard, General Affairs (GA), dan Shared Components wajib menggunakan primitif tabel terpadu (`Table`, `TableHeader`, `TableBody`, `TableFooter`, `TableHead`, `TableRow`, `TableCell`, `TableCaption`).
+   - Dilarang menulis tag mentah `<table>`, `<th>` dengan kelas terisolasi atau hardcoded hex (seperti `#F9FAFB`) pada halaman fitur baru; seluruh styling tabel mengacu pada CSS variables token (`var(--secondary)`, `var(--border)`, `var(--text-muted)`).
+
+6. **Standarisasi Manajemen Status Tabel & Pagination (`useTablePagination`)**:
+   - Komponen tabel data wajib mempertahankan posisi pagination dan preferensi pengguna (`pageSize`) menggunakan hook terpusat `@/hooks/useTablePagination`.
+   - **URL Query Synchronization**: Posisi halaman diselaraskan ke parameter URL (`?page=...&limit=...`) sehingga aman saat refresh (F5), navigasi *back/forward*, dan dapat di-bookmark/dishare.
+   - **Persistent User Preference**: Nilai `pageSize` disimpan di `localStorage` per modul (`hris_pagesize_<key>`), dan nilai `page` terakhir diingat via `sessionStorage`.
+   - **Smart Clamping**: Berkurangnya baris data karena penghapusan/koreksi dibatasi dengan cerdas (`Math.min(currentPage, totalPages)`), dilarang melempar paksa pengguna ke halaman 1 kecuali pada perubahan kata kunci pencarian atau filter utama.
+   - **Jump-to-Page Navigation**: Komponen `DataTablePagination` menyediakan input lompat halaman otomatis ketika total halaman melebihi 5.

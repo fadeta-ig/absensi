@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { ShieldAlert, Search, Filter, Clock, Activity, FileJson, X, ChevronLeft, ChevronRight, AlertCircle, RotateCcw } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 interface AuditUser {
     displayName: string;
@@ -205,18 +206,17 @@ export default function AuditTrailPage() {
 
             {/* Table */}
             <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table w-full">
-                        <thead>
-                            <tr>
-                                <th><div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Waktu</div></th>
-                                <th>Aksi</th>
-                                <th>Entitas Target</th>
-                                <th>Aktor (Admin)</th>
-                                <th className="text-center">Payload</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead><div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Waktu</div></TableHead>
+                            <TableHead>Aksi</TableHead>
+                            <TableHead>Entitas Target</TableHead>
+                            <TableHead>Aktor (Admin)</TableHead>
+                            <TableHead className="text-center">Payload</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                             {loading ? (
                                 <tr>
                                     <td colSpan={5} className="py-12 text-center">
@@ -289,9 +289,8 @@ export default function AuditTrailPage() {
                                     </tr>
                                 ))
                             )}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableBody>
+                </Table>
                 
                 {/* Pagination Controls */}
                 {pagination && pagination.totalPages > 1 && (

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Clock, Calendar, CheckCircle2, History, XCircle, Send, AlertCircle, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface AttendanceCorrectionItem {
     id: string;
@@ -183,51 +184,51 @@ export default function CorrectionPage() {
                         <div className="p-4 border-b border-[var(--border)] bg-[var(--secondary)]/50">
                             <h2 className="text-lg font-bold">Riwayat Pengajuan Anda</h2>
                         </div>
-                        <div className="p-0 overflow-x-auto">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Target Tanggal</th>
-                                        <th>Diajukan (In - Out)</th>
-                                        <th>Alasan</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        <div className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Target Tanggal</TableHead>
+                                        <TableHead>Diajukan (In - Out)</TableHead>
+                                        <TableHead>Alasan</TableHead>
+                                        <TableHead>Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {historyLoading ? (
-                                        <tr>
-                                            <td colSpan={4} className="text-center py-8 text-[var(--text-secondary)]">
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-8 text-[var(--text-secondary)]">
                                                 <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-60" />
                                                 Memuat riwayat pengajuan...
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                     ) : historyError ? (
-                                        <tr>
-                                            <td colSpan={4} className="text-center py-8 text-[var(--destructive)]">
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-8 text-[var(--destructive)]">
                                                 <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-70" />
                                                 <span className="font-semibold">{historyError}</span>
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                     ) : history.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={4} className="text-center py-8 text-[var(--text-secondary)] italic">Belum ada riwayat pengajuan.</td>
-                                        </tr>
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center py-8 text-[var(--text-secondary)] italic">Belum ada riwayat pengajuan.</TableCell>
+                                        </TableRow>
                                     ) : (
                                         history.map(item => (
-                                            <tr key={item.id}>
-                                                <td className="font-medium">{item.targetDate}</td>
-                                                <td className="text-sm font-mono tracking-tight text-blue-600">
+                                            <TableRow key={item.id}>
+                                                <TableCell className="font-medium">{item.targetDate}</TableCell>
+                                                <TableCell className="text-sm font-mono tracking-tight text-blue-600">
                                                     {(item.proposedClockIn ? new Date(item.proposedClockIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
                                                     {" - "}
                                                     {(item.proposedClockOut ? new Date(item.proposedClockOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit'}) : '--:--')}
-                                                </td>
-                                                <td className="text-sm max-w-xs truncate" title={item.reason}>{item.reason}</td>
-                                                <td>{statusBadge(item.status)}</td>
-                                            </tr>
+                                                </TableCell>
+                                                <TableCell className="text-sm max-w-xs truncate" title={item.reason}>{item.reason}</TableCell>
+                                                <TableCell>{statusBadge(item.status)}</TableCell>
+                                            </TableRow>
                                         ))
                                     )}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </div>
                 </div>

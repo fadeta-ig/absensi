@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Camera, CheckSquare, Square, FileSpreadsheet, Wifi, ShieldCheck, MapPin } from "lucide-react";
-import { AttendanceRecord, Employee } from "../types";
+import { AttendanceRecord } from "../types";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { exportToExcel } from "@/lib/export";
@@ -106,42 +107,41 @@ export function AttendanceLogTab({
 
     return (
         <div className="card overflow-hidden border border-[var(--border)] shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="data-table">
-                    <thead className="bg-[#F9FAFB]">
-                        <tr>
-                            <th className="w-10 text-center">
-                                <button
-                                    type="button"
-                                    onClick={toggleSelectAllCurrentPage}
-                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                >
-                                    {isAllCurrentPageSelected ? (
-                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                    ) : (
-                                        <Square className="w-4 h-4" />
-                                    )}
-                                </button>
-                            </th>
-                            <th className="w-32">ID Karyawan</th>
-                            <th>Nama</th>
-                            <th className="hidden lg:table-cell">Departemen</th>
-                            <th className="w-32">Tanggal</th>
-                            <th className="w-24">Clock In</th>
-                            <th className="w-24">Clock Out</th>
-                            <th className="w-28 text-center">Verifikasi</th>
-                            <th className="w-20 text-center hidden md:table-cell">Foto</th>
-                            <th className="w-32 text-center">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border)]">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-10 text-center">
+                            <button
+                                type="button"
+                                onClick={toggleSelectAllCurrentPage}
+                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                            >
+                                {isAllCurrentPageSelected ? (
+                                    <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                ) : (
+                                    <Square className="w-4 h-4" />
+                                )}
+                            </button>
+                        </TableHead>
+                        <TableHead className="w-32">ID Karyawan</TableHead>
+                        <TableHead>Nama</TableHead>
+                        <TableHead className="hidden lg:table-cell">Departemen</TableHead>
+                        <TableHead className="w-32">Tanggal</TableHead>
+                        <TableHead className="w-24">Clock In</TableHead>
+                        <TableHead className="w-24">Clock Out</TableHead>
+                        <TableHead className="w-28 text-center">Verifikasi</TableHead>
+                        <TableHead className="w-20 text-center hidden md:table-cell">Foto</TableHead>
+                        <TableHead className="w-32 text-center">Status</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-[var(--border)]">
                         {paginatedRecords.length === 0 ? (
-                            <tr>
-                                <td colSpan={10} className="text-center py-12 text-[var(--text-muted)] italic">
+                            <TableRow>
+                                <TableCell colSpan={10} className="text-center py-12 text-[var(--text-muted)] italic">
                                     Tidak ada data absensi ditemukan untuk kriteria ini.
-                                </td>
-                            </tr>
+                                </TableCell>
+                            </TableRow>
                         ) : (
                             paginatedRecords.map((r) => {
                                 const info = getEmpInfo(r.employeeId);
@@ -149,8 +149,8 @@ export function AttendanceLogTab({
                                 const loc = (typeof r.clockInLocation === "object" ? r.clockInLocation : null) ||
                                             (typeof r.clockOutLocation === "object" ? r.clockOutLocation : null);
                                 return (
-                                    <tr key={r.id} className={`hover:bg-[var(--secondary)]/50 transition-colors ${isSelected ? "bg-[var(--primary)]/5" : ""}`}>
-                                        <td className="text-center">
+                                    <TableRow key={r.id} className={isSelected ? "bg-[var(--primary)]/5" : ""}>
+                                        <TableCell className="text-center">
                                             <button
                                                 type="button"
                                                 onClick={() => toggleSelectOne(r.id)}
@@ -162,7 +162,7 @@ export function AttendanceLogTab({
                                                     <Square className="w-4 h-4" />
                                                 )}
                                             </button>
-                                        </td>
+                                        </TableCell>
                                         <td className="font-mono text-xs font-semibold text-[var(--text-primary)]">
                                             {r.employeeId}
                                         </td>
@@ -240,7 +240,7 @@ export function AttendanceLogTab({
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="text-center">
+                                        <TableCell className="text-center">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${r.status === "present" ? "bg-green-100 text-green-700" :
                                                 r.status === "late" ? "bg-orange-100 text-orange-700" :
                                                     r.status === "absent" ? "bg-red-100 text-red-700" :
@@ -248,14 +248,13 @@ export function AttendanceLogTab({
                                                 }`}>
                                                 {statusLabel(r.status)}
                                             </span>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 );
                             })
                         )}
-                    </tbody>
-                </table>
-            </div>
+                    </TableBody>
+            </Table>
 
             {/* Reusable Pagination Controls */}
             <DataTablePagination

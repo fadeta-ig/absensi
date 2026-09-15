@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { AlertCircle, CheckCircle, Eye, Loader2, XCircle, LogIn, LogOut, CheckSquare, Square, FileSpreadsheet, Check } from "lucide-react";
 import { VisitReport, STATUS_CONFIG } from "../types";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportToExcel } from "@/lib/export";
 import { useToast } from "@/components/Toast";
+import { useTablePagination } from "@/hooks/useTablePagination";
 
 interface Props {
     filtered: VisitReport[];
@@ -21,14 +23,17 @@ export function VisitListTable({
     filtered, loading, error, updating, setSelectedVisit, handleStatusUpdate
 }: Props) {
     const toast = useToast();
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const {
+        currentPage,
+        pageSize,
+        setPage: setCurrentPage,
+        setPageSize,
+    } = useTablePagination({
+        storageKey: "visits",
+        totalItems: filtered.length,
+    });
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkProcessing, setBulkProcessing] = useState(false);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filtered.length, pageSize]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedVisits = useMemo(() => {
@@ -127,35 +132,34 @@ export function VisitListTable({
 
     return (
         <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th className="w-10 text-center">
-                                <button
-                                    type="button"
-                                    onClick={toggleSelectAllCurrentPage}
-                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                >
-                                    {isAllCurrentPageSelected ? (
-                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                    ) : (
-                                        <Square className="w-4 h-4" />
-                                    )}
-                                </button>
-                            </th>
-                            <th>Karyawan</th>
-                            <th>Klien</th>
-                            <th className="hidden md:table-cell">Tujuan</th>
-                            <th className="hidden lg:table-cell">Tanggal</th>
-                            <th className="hidden lg:table-cell">Clock In</th>
-                            <th className="hidden lg:table-cell">Clock Out</th>
-                            <th>Status</th>
-                            <th className="text-right">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead className="w-10 text-center">
+                            <button
+                                type="button"
+                                onClick={toggleSelectAllCurrentPage}
+                                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                            >
+                                {isAllCurrentPageSelected ? (
+                                    <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                ) : (
+                                    <Square className="w-4 h-4" />
+                                )}
+                            </button>
+                        </TableHead>
+                        <TableHead>Karyawan</TableHead>
+                        <TableHead>Klien</TableHead>
+                        <TableHead className="hidden md:table-cell">Tujuan</TableHead>
+                        <TableHead className="hidden lg:table-cell">Tanggal</TableHead>
+                        <TableHead className="hidden lg:table-cell">Clock In</TableHead>
+                        <TableHead className="hidden lg:table-cell">Clock Out</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                         {loading ? (
                             <tr>
                                 <td colSpan={9} className="text-center py-10 text-sm text-[var(--text-muted)]">
@@ -256,9 +260,8 @@ export function VisitListTable({
                                 );
                             })
                         )}
-                    </tbody>
-                </table>
-            </div>
+                    </TableBody>
+            </Table>
 
             <DataTablePagination
                 currentPage={currentPage}

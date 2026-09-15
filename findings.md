@@ -337,3 +337,123 @@ Zero application code files in `src/`, `prisma/`, or `package.json` were modifie
 - Repo root: `c:\Users\ITSupportWIG\Desktop\hriswig`
 - MariaDB bin: `D:\laragon\bin\mysql\mariadb-10.11.16-winx64\bin`
 
+---
+
+## UX Expert Audit: Table State Persistence & Enterprise Table Usability
+
+### 1. Diagnosis: Di Mana Letak Tanggung Jawab Kodenya?
+- **`src/components/ui/table.tsx`**: Bertanggung jawab murni pada **tampilan visual semantik** (HTML table markup, CSS variables, border, hover effect, padding). Ini adalah *presentational component* (dumb component), BUKAN tempat state management pagination.
+- **`src/components/ui/DataTablePagination.tsx`**: Bertanggung jawab merender **antarmuka kontrol navigasi** (tombol angka, first/last/prev/next, dropdown baris per halaman) dan menerima `currentPage`, `pageSize`, `onPageChange()`, `onPageSizeChange()`. Ini adalah *controlled component*.
+- **Akar Masalah Nyata**: Berada pada **State Management di Halaman Induk (Parent Page)**. Seluruh halaman saat ini mengelola pagination hanya menggunakan `const [currentPage, setCurrentPage] = useState(1)` lokal di memori React.
+
+### 2. Tiga Penyebab Utama Kenapa Halaman Balik ke Halaman 1:
+1. **Full Page Navigation saat Aksi Edit (`window.location.href`)**:
+   - Di `employees/page.tsx` line 214: `handleEdit` memanggil `window.location.href = '/dashboard/employees/${emp.id}/edit'`.
+   - Ini memicu *hard page reload*. Seluruh memori state React terhapus. Saat user selesai edit dan kembali ke `/dashboard/employees`, URL-nya bersih tanpa parameter, sehingga `useState(1)` dieksekusi kembali dari awal.
+2. **Aggressive `useEffect` Reset pada Data/Filter**:
+   - Di beberapa tabel (seperti `visits/components/VisitListTable.tsx`), terdapat efek:
+     ```tsx
+     useEffect(() => { setCurrentPage(1); }, [filtered.length, pageSize]);
+     ```
+   - Setiap kali sebuah aksi mengubah jumlah baris (misal menyetujui kunjungan atau menghapus data), `filtered.length` berubah, sehingga memicu reset paksa ke halaman 1!
+3. **Ketiadaan Sinkronisasi ke URL (URL-Driven State)**:
+   - URL browser tetap `/dashboard/employees` meskipun user berada di halaman 20. Jika user menekan F5, membuka link di tab baru, atau menekan tombol Back dari detail/edit, posisi halaman 20 hilang seketika.
+
+### 3. Rekomendasi Solusi UX Berstandar Industri:
+1. **Pola 1: URL Query State Synchronization (Gold Standard Next.js)**:
+   - URL: `/dashboard/employees?page=20&limit=25`
+   - Dibaca via `useSearchParams()` dan diubah via `router.replace(pathname + '?' + params, { scroll: false })`.
+   - Ketika user klik edit lalu kembali, browser Back otomatis membawa user kembali ke `?page=20`.
+2. **Pola 2: User Preference Persistence (`localStorage`) untuk `pageSize`**:
+   - Preferensi jumlah baris per halaman (10, 25, 50, 100) disimpan di `localStorage` per modul (misal `hris_table_pagesize_employees`).
+   - User tidak perlu menyetel ulang dropdown "Baris: 25" setiap kali membuka aplikasi.
+3. **Pola 3: In-Place Editing (Sheet / Modal / Drawer)**:
+   - Hindari navigasi keluar halaman untuk form edit yang dapat diselesaikan dalam Sheet/Modal (seperti yang sudah dilakukan pada `EmployeeStatusModal`). Tabel tetap ada di latar belakang dan `currentPage` tidak pernah unmount.
+4. **Pola 4: Smart Clamping (Bukan Reset ke 1)**:
+   - Jika item di halaman 20 dihapus dan halaman 20 menjadi kosong, clamp ke `Math.min(currentPage, totalPages)` (ke halaman 19), bukan reset ke halaman 1.
+
+---
+
+## Issue Investigation: Employee News 404 & Auto-Open Modal
+
+### 1. Root Cause
+- In `src/app/employee/page.tsx` line 264:
+  `<Link href={`/employee/news/${item.id}`} ...>`
+- The Next.js App Router tree only contains `src/app/employee/news/page.tsx`. No dynamic sub-route directory `[id]` was implemented under `src/app/employee/news/`.
+- As a result, clicking any item in the "Informasi / Pengumuman" card on the employee dashboard results in a **404 Not Found**.
+
+### 2. Architecture of News Page (`src/app/employee/news/page.tsx`)
+- The page manages active article display via local state `selected: NewsItem | null`.
+- When `selected` is truthy, it displays the full article modal with category badge, author, formatted date, content, and attachment/download links.
+- Currently, `NewsPage` only supports manual clicking on a card in `/employee/news` to set `selected`. It does not inspect URL query parameters.
+
+### 3. Resolution Plan
+1. In `src/app/employee/page.tsx`:
+   Update link to `/employee/news?id=${item.id}`.
+2. In `src/app/employee/news/page.tsx`:
+   - Use `useSearchParams()` to retrieve `?id=...`.
+   - When news data finishes loading (or when search param changes), automatically match `item.id === id` and call `setSelected(item)`.
+   - Wrap the component in `<Suspense>` for Next.js 16 build compliance.
+   - When the modal is closed, optionally update URL via `router.replace("/employee/news", { scroll: false })` to keep state clean.
+3. Create fallback `src/app/employee/news/[id]/page.tsx`:
+   - Redirect to `/employee/news?id=${id}` so that any legacy URLs or bookmarks never 404.
+
+---
+
+## Codebase Audit: Table Elements (`<table>` & `<th>`) Inventory & Uniformity Analysis
+
+### 1. Executive Summary
+- **Total Files with `<table>` / `<th>`**: 32 files.
+- **Total `<table>` Tags in Codebase**: 41 tables.
+- **Total `<th>` Header Tags in Codebase**: 197 `<th>` tags.
+- **Is it uniform across the codebase?**: **NO (TIDAK SERAGAM)**. There are 5 distinct table styling patterns plus 1 backend email pattern.
+
+### 2. Breakdown by Portal / Module
+| Group / Portal | Matching Files | Table Tags | `<th>` Tags | Primary Styling Pattern |
+|---|---|---|---|---|
+| **HR & Super Admin Dashboard** (`src/app/dashboard/`) | 23 files | 24 tables | 139 `<th>` | `.data-table` (mostly), with 3 calculators and 1 legacy inline style |
+| **General Affairs Module** (`src/app/ga/`) | 5 files | 5 tables | 28 `<th>` | Custom Tailwind (`px-6 py-4 font-semibold text-xs uppercase`) |
+| **Shared Components** (`src/components/`) | 3 files | 5 tables | 20 `<th>` | `.data-table` |
+| **Backend Services** (`src/lib/services/emailService.ts`) | 1 file | 7 tables | 10 `<th>` | HTML Email inline styles |
+| **Employee Portal** (`src/app/employee/`) | 0 files | 0 tables | 0 `<th>` | Mobile-first card/list views (no tables) |
+
+### 3. Detected Styling Patterns & Discrepancies
+1. **Pattern 1: Semantic Global Class (`.data-table`) [Dominant in HR Dashboard]**
+   - Implemented via `src/app/globals.css`:
+     ```css
+     .data-table { @apply w-full; border-collapse: collapse; }
+     .data-table th { @apply text-left px-4 py-3 text-xs uppercase font-semibold; letter-spacing: 0.05em; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--secondary); }
+     ```
+   - Used by 18 files (e.g. `employees`, `leave`, `overtime`, `payroll`, `master-data`, `audit`, `users`).
+   - **Discrepancy 1 (Hardcoded Hex Color)**: `AttendanceLogTab.tsx` and `AttendanceCorrectionTab.tsx` use `<thead className="bg-[#F9FAFB]">`, which introduces a hardcoded light-gray background that conflicts with Dark Mode (where background should be `var(--secondary)`).
+
+2. **Pattern 2: GA Module Inline Tailwind Architecture [GA Portal]**
+   - Used across all 5 files in `src/app/ga/` (`assets`, `assets/import`, `categories`, `page`, `sim`).
+   - Structure:
+     `<table className="w-full text-left text-sm whitespace-nowrap">`
+     `<thead className="bg-[var(--secondary)] border-b text-[var(--text-secondary)] text-xs uppercase tracking-wider">`
+     `<th className="px-6 py-4 font-semibold">`
+   - **Differences from `.data-table`**:
+     - Padding: `px-6 py-4` (GA) vs `px-4 py-3` (`.data-table`).
+     - Text Color: `text-[var(--text-secondary)]` (GA) vs `var(--text-muted)` (`.data-table`).
+     - Overflow: Forces `whitespace-nowrap` on the table root.
+
+3. **Pattern 3: Compact Calculator Tables [BPJS, Overtime, PPh 21]**
+   - Files: `dashboard/bpjs-calculator`, `dashboard/overtime-calculator`, `dashboard/pph21-calculator`.
+   - Structure: `<table className="w-full text-xs">` with tight padding (`py-1 pr-2` or `px-3 py-2`).
+   - Purpose: Designed for compact breakdown cards in simulation calculators.
+
+4. **Pattern 4: Dynamic Matrix Timesheet Grid [Reports]**
+   - File: `dashboard/reports/page.tsx`.
+   - Structure: `<table className="w-full text-left border-collapse min-w-[max-content]">` with dynamic column mapping: `<th key={h} className="p-2.5 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-tight border-r border-[var(--border)] ...">`.
+
+5. **Pattern 5: Legacy Inline Style Object (`dashboard/assets/page.tsx`)**
+   - File: `src/app/dashboard/assets/page.tsx`.
+   - Structure: `<table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>` and `<th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "var(--text-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>`.
+   - Outlier: Uses raw React `style={{...}}` properties instead of CSS classes or Tailwind tokens.
+
+6. **Pattern 6: HTML Email Templates (`src/lib/services/emailService.ts`)**
+   - File: `src/lib/services/emailService.ts`.
+   - Structure: HTML tables with inline HTML attributes (`cellpadding="0"`, `cellspacing="0"`, `style="padding:10px 12px;font-weight:600;"`).
+
+

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { exportToExcel, exportToPdfMatrix } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 interface PreviewData {
     sheetName: string;
@@ -399,47 +400,45 @@ export default function ReportsPage() {
                         </h2>
                     </div>
                     <div className="card overflow-hidden border border-[var(--border)] shadow-sm">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-[max-content]">
-                                <thead>
-                                    <tr className="bg-[var(--secondary)] border-b border-[var(--border)]">
-                                        {preview.headers.map((h) => (
-                                            <th key={h} className={`p-2.5 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-tight border-r border-[var(--border)] last:border-0 ${!isNaN(Number(h)) ? "text-center w-12" : ""}`}>
-                                                {h}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-[var(--card)] divide-y divide-gray-50 text-[11px]">
-                                    {preview.data.slice(0, 10).map((row, i) => (
-                                        <tr key={i} className="hover:bg-blue-50/20 transition-colors">
-                                            {preview.headers.map((h) => {
-                                                const val = row[h];
-                                                const isDateCol = !isNaN(Number(h));
-
-                                                if (isDateCol && typeof val === "string" && val.includes("\n")) {
-                                                    const [clockIn, clockOut] = val.split("\n");
-                                                    return (
-                                                        <td key={h} className="p-1 border-r border-[var(--border)] text-center last:border-0">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockIn === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-blue-50 text-blue-700"}`}>{clockIn}</span>
-                                                                <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockOut === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-orange-50 text-orange-700"}`}>{clockOut}</span>
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                }
-
-                                                return (
-                                                    <td key={h} className={`p-2.5 border-r border-[var(--border)] last:border-0 ${h === "Nama" || h === "Nama Karyawan" ? "font-bold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"} ${isDateCol || h === "Hadir" || h === "Lambat" || h === "Alpa" ? "text-center" : ""}`}>
-                                                        {val || "-"}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
+                        <Table className="min-w-[max-content]">
+                            <TableHeader>
+                                <TableRow>
+                                    {preview.headers.map((h) => (
+                                        <TableHead key={h} className={`p-2.5 text-[10px] font-bold uppercase tracking-tight border-r border-[var(--border)] last:border-0 ${!isNaN(Number(h)) ? "text-center w-12" : ""}`}>
+                                            {h}
+                                        </TableHead>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody className="bg-[var(--card)] divide-y divide-gray-50 text-[11px]">
+                                {preview.data.slice(0, 10).map((row, i) => (
+                                    <TableRow key={i} className="hover:bg-blue-50/20 transition-colors">
+                                        {preview.headers.map((h) => {
+                                            const val = row[h];
+                                            const isDateCol = !isNaN(Number(h));
+
+                                            if (isDateCol && typeof val === "string" && val.includes("\n")) {
+                                                const [clockIn, clockOut] = val.split("\n");
+                                                return (
+                                                    <TableCell key={h} className="p-1 border-r border-[var(--border)] text-center last:border-0">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockIn === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-blue-50 text-blue-700"}`}>{clockIn}</span>
+                                                            <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockOut === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-orange-50 text-orange-700"}`}>{clockOut}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                );
+                                            }
+
+                                            return (
+                                                <TableCell key={h} className={`p-2.5 border-r border-[var(--border)] last:border-0 ${h === "Nama" || h === "Nama Karyawan" ? "font-bold text-[var(--text-primary)]" : "text-[var(--text-secondary)]"} ${isDateCol || h === "Hadir" || h === "Lambat" || h === "Alpa" ? "text-center" : ""}`}>
+                                                    {val || "-"}
+                                                </TableCell>
+                                            );
+                                        })}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                         {preview.totalRecords > 10 && (
                             <div className="p-2.5 text-center border-t border-[var(--border)] bg-[var(--secondary)]/50">
                                 <p className="text-[10px] text-[var(--text-secondary)] italic">Menampilkan 10 dari {preview.totalRecords} baris. Download Excel/PDF untuk data lengkap.</p>

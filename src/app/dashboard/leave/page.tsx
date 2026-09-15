@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react";
 import {
     AlertCircle,
     CalendarOff,
@@ -25,8 +25,10 @@ import { formatIndonesianDate } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import { exportToExcel } from "@/lib/export";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useTablePagination } from "@/hooks/useTablePagination";
 import { getThisMonthRange, getLastMonthRange, getThisYearRange, isRangeOverlapping } from "@/lib/datePresets";
 
 interface LeaveRequest {
@@ -42,7 +44,7 @@ interface LeaveRequest {
     createdAt: string;
 }
 
-export default function LeaveManagementPage() {
+function LeaveManagementContent() {
     const toast = useToast();
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [filterStatus, setFilterStatus] = useState("all");
@@ -52,10 +54,6 @@ export default function LeaveManagementPage() {
     const [endDate, setEndDate] = useState("");
     const [datePreset, setDatePreset] = useState<"all" | "this_month" | "last_month" | "this_year" | "custom">("all");
     
-    // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
-
     // Multi-select
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkProcessing, setBulkProcessing] = useState(false);
@@ -94,18 +92,6 @@ export default function LeaveManagementPage() {
         void loadInitialData();
     }, [fetchLeaves, toast]);
 
-    // Reset pagination to page 1 on filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filterStatus, filterType, searchTerm, startDate, endDate, pageSize]);
-
-    const stats = useMemo(() => ({
-        total: leaves.length,
-        pending: leaves.filter(l => l.status === "pending").length,
-        approved: leaves.filter(l => l.status === "approved").length,
-        rejected: leaves.filter(l => l.status === "rejected").length,
-    }), [leaves]);
-
     const filtered = useMemo(() => {
         return leaves.filter((l) => {
             const matchesStatus = filterStatus === "all" || l.status === filterStatus;
@@ -117,6 +103,41 @@ export default function LeaveManagementPage() {
             return matchesStatus && matchesType && matchesSearch && matchesDate;
         });
     }, [leaves, filterStatus, filterType, searchTerm, startDate, endDate]);
+
+    // Pagination with URL sync, localStorage pageSize, and smart clamping
+    const {
+        currentPage,
+        pageSize,
+        setPage: setCurrentPage,
+        setPageSize,
+        resetPage,
+    } = useTablePagination({
+        storageKey: "leave",
+        totalItems: filtered.length,
+    });
+
+    // Reset pagination to page 1 ONLY on explicit filter changes
+    const prevFiltersRef = useRef({ filterStatus, filterType, searchTerm, startDate, endDate });
+    useEffect(() => {
+        const prev = prevFiltersRef.current;
+        if (
+            prev.filterStatus !== filterStatus ||
+            prev.filterType !== filterType ||
+            prev.searchTerm !== searchTerm ||
+            prev.startDate !== startDate ||
+            prev.endDate !== endDate
+        ) {
+            resetPage();
+            prevFiltersRef.current = { filterStatus, filterType, searchTerm, startDate, endDate };
+        }
+    }, [filterStatus, filterType, searchTerm, startDate, endDate, resetPage]);
+
+    const stats = useMemo(() => ({
+        total: leaves.length,
+        pending: leaves.filter(l => l.status === "pending").length,
+        approved: leaves.filter(l => l.status === "approved").length,
+        rejected: leaves.filter(l => l.status === "rejected").length,
+    }), [leaves]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedLeaves = useMemo(() => {
@@ -519,35 +540,34 @@ export default function LeaveManagementPage() {
 
             {/* Table */}
             <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th className="w-10 text-center">
-                                    <button
-                                        type="button"
-                                        onClick={toggleSelectAllCurrentPage}
-                                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
-                                        title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
-                                    >
-                                        {isAllCurrentPageSelected ? (
-                                            <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
-                                        ) : (
-                                            <Square className="w-4 h-4" />
-                                        )}
-                                    </button>
-                                </th>
-                                <th>Karyawan</th>
-                                <th>Jenis Cuti</th>
-                                <th>Periode</th>
-                                <th className="text-center">Durasi</th>
-                                <th>Sisa Kuota Cuti</th>
-                                <th className="hidden lg:table-cell">Alasan</th>
-                                <th>Status</th>
-                                <th className="text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-10 text-center">
+                                <button
+                                    type="button"
+                                    onClick={toggleSelectAllCurrentPage}
+                                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-0.5"
+                                    title={isAllCurrentPageSelected ? "Batalkan halaman ini" : "Pilih halaman ini"}
+                                >
+                                    {isAllCurrentPageSelected ? (
+                                        <CheckSquare className="w-4 h-4 text-[var(--primary)]" />
+                                    ) : (
+                                        <Square className="w-4 h-4" />
+                                    )}
+                                </button>
+                            </TableHead>
+                            <TableHead>Karyawan</TableHead>
+                            <TableHead>Jenis Cuti</TableHead>
+                            <TableHead>Periode</TableHead>
+                            <TableHead className="text-center">Durasi</TableHead>
+                            <TableHead>Sisa Kuota Cuti</TableHead>
+                            <TableHead className="hidden lg:table-cell">Alasan</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Aksi</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                             {initialLoading ? (
                                 <tr>
                                     <td colSpan={9} className="text-center py-12 text-sm text-[var(--text-muted)]">
@@ -678,9 +698,8 @@ export default function LeaveManagementPage() {
                                     );
                                 })
                             )}
-                        </tbody>
-                    </table>
-                </div>
+                        </TableBody>
+                    </Table>
 
                 {/* Pagination */}
                 <DataTablePagination
@@ -883,5 +902,20 @@ export default function LeaveManagementPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function LeaveManagementPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)] animate-pulse">
+                    <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                    <p className="text-sm font-medium">Memuat data permohonan cuti...</p>
+                </div>
+            }
+        >
+            <LeaveManagementContent />
+        </Suspense>
     );
 }

@@ -24,6 +24,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { AssetWithHistory } from "@/lib/types/asset";
+import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 
 interface Employee360ViewProps {
     employee: Employee;
@@ -177,38 +178,36 @@ export function Employee360View({
                     {/* Tab Content: Attendance */}
                     {activeTab === "attendance" && (
                         <div className="card overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Tanggal</th>
-                                            <th>Masuk / Keluar</th>
-                                            <th className="text-right">Status</th>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Tanggal</TableHead>
+                                        <TableHead>Masuk / Keluar</TableHead>
+                                        <TableHead className="text-right">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {recentAttendance.length > 0 ? recentAttendance.map(att => (
+                                        <tr key={att.id}>
+                                            <td className="font-medium text-[var(--text-primary)]">{att.date}</td>
+                                            <td>
+                                                <div className="flex items-center gap-2 text-xs font-medium">
+                                                    <span className="bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded">{att.clockIn || "--:--"}</span>
+                                                    <span className="text-[var(--text-muted)]">→</span>
+                                                    <span className="bg-[var(--secondary)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded">{att.clockOut || "--:--"}</span>
+                                                </div>
+                                            </td>
+                                            <td className="text-right">
+                                                <span className={`badge ${att.status === "present" ? "badge-success" : att.status === "late" ? "badge-warning" : "badge-error"}`}>
+                                                    {att.status}
+                                                </span>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {recentAttendance.length > 0 ? recentAttendance.map(att => (
-                                            <tr key={att.id}>
-                                                <td className="font-medium text-[var(--text-primary)]">{att.date}</td>
-                                                <td>
-                                                    <div className="flex items-center gap-2 text-xs font-medium">
-                                                        <span className="bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded">{att.clockIn || "--:--"}</span>
-                                                        <span className="text-[var(--text-muted)]">→</span>
-                                                        <span className="bg-[var(--secondary)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded">{att.clockOut || "--:--"}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="text-right">
-                                                    <span className={`badge ${att.status === "present" ? "badge-success" : att.status === "late" ? "badge-warning" : "badge-error"}`}>
-                                                        {att.status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data absensi</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                    )) : (
+                                        <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data absensi</td></tr>
+                                    )}
+                                </TableBody>
+                            </Table>
                         </div>
                     )}
 
@@ -239,88 +238,84 @@ export function Employee360View({
                     {/* Tab Content: Leave */}
                     {activeTab === "leaves" && (
                         <div className="card overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Durasi</th>
-                                            <th>Tipe</th>
-                                            <th className="text-right">Status</th>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Durasi</TableHead>
+                                        <TableHead>Tipe</TableHead>
+                                        <TableHead className="text-right">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {recentLeaves.length > 0 ? recentLeaves.map(l => (
+                                        <tr key={l.id}>
+                                            <td>
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="h-3.5 w-3.5 text-[var(--primary)]" />
+                                                    <span className="font-medium text-[var(--text-primary)]">{l.startDate}</span>
+                                                    <ArrowRight className="w-3 h-3 text-[var(--text-muted)]" />
+                                                    <span className="font-medium text-[var(--text-primary)]">{l.endDate}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="badge badge-info">{l.type}</span>
+                                            </td>
+                                            <td className="text-right">
+                                                <span className={`badge ${l.status === "approved" ? "badge-success" : l.status === "pending" ? "badge-warning" : "badge-error"}`}>
+                                                    {l.status}
+                                                </span>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {recentLeaves.length > 0 ? recentLeaves.map(l => (
-                                            <tr key={l.id}>
-                                                <td>
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar className="h-3.5 w-3.5 text-[var(--primary)]" />
-                                                        <span className="font-medium text-[var(--text-primary)]">{l.startDate}</span>
-                                                        <ArrowRight className="w-3 h-3 text-[var(--text-muted)]" />
-                                                        <span className="font-medium text-[var(--text-primary)]">{l.endDate}</span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span className="badge badge-info">{l.type}</span>
-                                                </td>
-                                                <td className="text-right">
-                                                    <span className={`badge ${l.status === "approved" ? "badge-success" : l.status === "pending" ? "badge-warning" : "badge-error"}`}>
-                                                        {l.status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada riwayat cuti</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                    )) : (
+                                        <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada riwayat cuti</td></tr>
+                                    )}
+                                </TableBody>
+                            </Table>
                         </div>
                     )}
 
                     {/* Tab Content: Assets */}
                     {activeTab === "assets" && (
                         <div className="card overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Aset</th>
-                                            <th>Kategori</th>
-                                            <th className="text-right">Kondisi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {assignedAssets.length > 0 ? assignedAssets.map(a => (
-                                            <tr key={a.id}>
-                                                <td>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
-                                                            {a.category?.prefix === "HANDPHONE" ? <Smartphone size={16} /> :
-                                                             a.category?.prefix === "LAPTOP" ? <Laptop size={16} /> :
-                                                             a.category?.prefix === "NOMOR_HP" ? <Phone size={16} /> :
-                                                             <Package size={16} />}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-semibold text-[var(--text-primary)] text-sm">{a.name}</p>
-                                                            <p className="font-mono text-xs text-[var(--text-secondary)] mt-0.5">{a.assetCode}</p>
-                                                        </div>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Aset</TableHead>
+                                        <TableHead>Kategori</TableHead>
+                                        <TableHead className="text-right">Kondisi</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {assignedAssets.length > 0 ? assignedAssets.map(a => (
+                                        <tr key={a.id}>
+                                            <td>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded bg-[var(--secondary)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
+                                                        {a.category?.prefix === "HANDPHONE" ? <Smartphone size={16} /> :
+                                                         a.category?.prefix === "LAPTOP" ? <Laptop size={16} /> :
+                                                         a.category?.prefix === "NOMOR_HP" ? <Phone size={16} /> :
+                                                         <Package size={16} />}
                                                     </div>
-                                                </td>
-                                                <td>
-                                                    <span className="badge badge-info">{a.category?.name || "Lainnya"}</span>
-                                                </td>
-                                                <td className="text-right">
-                                                    <span className={`badge ${a.kondisi === "BAIK" ? "badge-success" : a.kondisi === "KURANG_BAIK" ? "badge-warning" : "badge-error"}`}>
-                                                        {a.kondisi.replace("_", " ")}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Karyawan ini tidak memegang aset perusahaan</td></tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                    <div>
+                                                        <p className="font-semibold text-[var(--text-primary)] text-sm">{a.name}</p>
+                                                        <p className="font-mono text-xs text-[var(--text-secondary)] mt-0.5">{a.assetCode}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="badge badge-info">{a.category?.name || "Lainnya"}</span>
+                                            </td>
+                                            <td className="text-right">
+                                                <span className={`badge ${a.kondisi === "BAIK" ? "badge-success" : a.kondisi === "KURANG_BAIK" ? "badge-warning" : "badge-error"}`}>
+                                                    {a.kondisi.replace("_", " ")}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Karyawan ini tidak memegang aset perusahaan</td></tr>
+                                    )}
+                                </TableBody>
+                            </Table>
                         </div>
                     )}
 
