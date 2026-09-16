@@ -139,7 +139,7 @@ export function AttendanceLogTab({
                         {paginatedRecords.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={10} className="text-center py-12 text-[var(--text-muted)] italic">
-                                    Tidak ada data absensi ditemukan untuk kriteria ini.
+                                    Tidak ada data presensi ditemukan untuk kriteria ini.
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -264,7 +264,7 @@ export function AttendanceLogTab({
                 pageSize={itemsPerPage}
                 onPageChange={setCurrentPage}
                 onPageSizeChange={setItemsPerPage}
-                itemLabel="catatan absensi"
+                itemLabel="catatan presensi"
             />
 
             {/* Bulk Action Bar */}
@@ -274,7 +274,7 @@ export function AttendanceLogTab({
                 allSelected={isAllFilteredSelected}
                 onSelectAll={selectAllFiltered}
                 onClearSelection={clearSelection}
-                itemLabel="absensi"
+                itemLabel="presensi"
             >
                 <button
                     type="button"

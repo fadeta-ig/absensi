@@ -1,4 +1,4 @@
-# AI Agent Rules & Operational Contract — Absensi & HRIS WIG
+# AI Agent Rules & Operational Contract — Presensi & HRIS WIG
 
 > **Purpose**: Cara AI agent harus menggunakan Project Brain dan batasan operasional.  
 > **Source of Truth**: Panduan operasional repositori dan protokol Project Brain.  

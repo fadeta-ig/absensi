@@ -1,4 +1,4 @@
-# Testing Strategy & Configuration — Absensi & HRIS WIG
+# Testing Strategy & Configuration — Presensi & HRIS WIG
 
 > **Purpose**: Testing strategy and procedures.  
 > **Source of Truth**: `vitest.config.ts` and test suites in `tests/`.  

@@ -1,10 +1,10 @@
-# System Features & Capabilities — Absensi & HRIS WIG
+# System Features & Capabilities — Presensi & HRIS WIG
 
 > **Purpose**: Pengetahuan kapabilitas, modul fitur, dan batasan fungsional sistem.  
 > **Source of Truth**: Implementasi fitur di layer UI (`src/app/`) dan service bisnis (`src/lib/services/`).  
 > **Last Verified**: 2026-09-10  
 
-Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **Absensi & HRIS WIG** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
+Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **Presensi & HRIS WIG** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
 
 ---
 
@@ -33,7 +33,7 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **A
 - **Bypass Location**: Dukungan flag pengecualian lokasi (`bypass_location: true`) bagi karyawan tugas luar atau manajemen tingkat atas.
 
 ### B. Alur Penyesuaian & Monitoring
-- **Koreksi Absensi (Attendance Correction)**: Karyawan dapat mengajukan perbaikan jam clock-in/out jika terjadi kendala teknis, lengkap dengan alasan dan bukti, yang memerlukan persetujuan manajer/atasan.
+- **Koreksi Presensi (Attendance Correction)**: Karyawan dapat mengajukan perbaikan jam clock-in/out jika terjadi kendala teknis, lengkap dengan alasan dan bukti, yang memerlukan persetujuan manajer/atasan.
 - **Monitoring Tim Subordinat**: Atasan langsung dapat memantau log kehadiran, status keterlambatan, dan riwayat presensi bawahan langsungnya di `/employee/monitoring`.
 - **Rekapitulasi HR**: Dasbor monitoring harian bagi tim HR dengan rekap status kehadiran bulanan dan opsi ekspor data ke file spreadsheet Excel.
 

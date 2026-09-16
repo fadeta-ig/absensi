@@ -1,4 +1,4 @@
-# End-to-End System Flows — Absensi & HRIS WIG
+# End-to-End System Flows — Presensi & HRIS WIG
 
 > **Purpose**: Alur sistem end-to-end utama (Data & Request Flows).  
 > **Source of Truth**: Alur navigasi UI, route handler API, dan service bisnis terpadu.  
@@ -56,7 +56,7 @@ Alur validasi kehadiran memastikan karyawan benar-benar berada di lingkungan fis
        │                                                │                                            │── 8. Hitung deviasi jarak GPS
        │                                                │                                            │── 9. Evaluasi shift kerja & jam
        │                                                │                                            │── 10. Simpan foto & persistensi DB
-       │<── 11. Response: Status Kehadiran (Sukses) ────│<── Hasil catatan absensi ──────────────────│
+       │<── 11. Response: Status Kehadiran (Sukses) ────│<── Hasil catatan presensi ──────────────────│
 ```
 
 1. **Pengambilan Bukti Instan di Klien**: Saat karyawan membuka halaman presensi, aplikasi PWA langsung menyalakan kamera (kamera depan atau belakang) dan menginisialisasi verifikasi Wi-Fi serta GPS di latar belakang dalam satu layar (*single-screen HUD*). Karyawan dapat langsung menjepret foto kehadiran (selfie atau foto lokasi meja kerja), yang dikompresi ringan di peramban ke dimensi maksimal 480px untuk menghemat bandwidth.

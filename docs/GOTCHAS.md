@@ -1,4 +1,4 @@
-# Gotchas & Pitfalls — Absensi & HRIS WIG
+# Gotchas & Pitfalls — Presensi & HRIS WIG
 
 > **Purpose**: Things that are easy to get wrong or surprising.  
 > **Source of Truth**: Verified technical gotchas, Edge runtime peculiarities, and historical migration artifacts.  

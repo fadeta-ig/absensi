@@ -1,10 +1,10 @@
-# Domain Model & Business Rules — Absensi & HRIS WIG
+# Domain Model & Business Rules — Presensi & HRIS WIG
 
 > **Purpose**: Business/domain knowledge.  
 > **Source of Truth**: Business services logic, calculations, and domain workflows.  
 > **Last Verified**: 2026-09-10  
 
-Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan relasi utama dalam ekosistem **Absensi & HRIS WIG**.
+Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan relasi utama dalam ekosistem **Presensi & HRIS WIG**.
 
 
 ---

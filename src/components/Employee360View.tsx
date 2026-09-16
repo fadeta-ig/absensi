@@ -204,7 +204,7 @@ export function Employee360View({
                                             </td>
                                         </tr>
                                     )) : (
-                                        <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data absensi</td></tr>
+                                        <tr><td colSpan={3} className="text-center py-8 text-sm text-[var(--text-muted)]">Belum ada data presensi</td></tr>
                                     )}
                                 </TableBody>
                             </Table>

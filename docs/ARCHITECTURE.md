@@ -1,4 +1,4 @@
-# Architecture — Absensi & HRIS WIG
+# Architecture — Presensi & HRIS WIG
 
 > **Purpose**: How the system is structured.  
 > **Source of Truth**: Repository implementation, `src/`, `next.config.ts`, and runtime components.  

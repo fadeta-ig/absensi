@@ -1,4 +1,4 @@
-# Integrations & External Services — Absensi & HRIS WIG
+# Integrations & External Services — Presensi & HRIS WIG
 
 > **Purpose**: External and internal integrations.  
 > **Source of Truth**: Integration implementations (`nodemailer`, `web-push`, network validator, and cron endpoints).  

@@ -354,6 +354,6 @@ export async function deleteEmployee(id: string): Promise<boolean> {
         return true;
     } catch (err: unknown) {
         logger.error("deleteEmployee Gagal", { id, error: err });
-        throw new Error("Penghapusan ditolak. Karyawan ini mungkin masih memiliki riwayat absensi, gaji, atau peminjaman yang tak terhapus (onDelete: Restrict). Disarankan menonaktifkan status karyawan (isActive: false) alih-alih menghapus data permanen.");
+        throw new Error("Penghapusan ditolak. Karyawan ini mungkin masih memiliki riwayat presensi, gaji, atau peminjaman yang tak terhapus (onDelete: Restrict). Disarankan menonaktifkan status karyawan (isActive: false) alih-alih menghapus data permanen.");
     }
 }

@@ -46,10 +46,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             clearedRecords: result.count,
-            message: "Foto absensi lama berhasil dibersihkan untuk menghemat kapasitas database."
+            message: "Foto presensi lama berhasil dibersihkan untuk menghemat kapasitas database."
         });
     } catch (error) {
-        logger.error("Cron: Gagal membersihkan foto absensi", { error });
+        logger.error("Cron: Gagal membersihkan foto presensi", { error });
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

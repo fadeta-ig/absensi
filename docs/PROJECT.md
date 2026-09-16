@@ -1,4 +1,4 @@
-# Project Overview — Absensi & HRIS WIG
+# Project Overview — Presensi & HRIS WIG
 
 > **Purpose**: What this project is and what it does.  
 > **Source of Truth**: Repository scope, `package.json`, and business capabilities.  
@@ -7,7 +7,7 @@
 ## 1. Project Purpose
 
 
-Project **Absensi & HRIS WIG** (`fadeta-ig/absensi`) adalah platform terintegrasi Human Resource Information System (HRIS), General Affairs (GA) Asset Management, dan Portal Layanan Mandiri Karyawan berbasis Progressive Web App (PWA) untuk lingkungan perusahaan PT Wahana Inti Ganda (WIG) dan grup MKI.
+Project **Presensi & HRIS WIG** (`fadeta-ig/absensi`) adalah platform terintegrasi Human Resource Information System (HRIS), General Affairs (GA) Asset Management, dan Portal Layanan Mandiri Karyawan berbasis Progressive Web App (PWA) untuk lingkungan perusahaan PT Wahana Inti Ganda (WIG) dan grup MKI.
 
 Project ini dirancang untuk:
 - Mengotomatisasi dan memvalidasi presensi karyawan secara akurat dengan 3 faktor keamanan (jaringan Wi-Fi kantor, geofencing GPS, dan foto selfie).

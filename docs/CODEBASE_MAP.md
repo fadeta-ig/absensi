@@ -1,4 +1,4 @@
-# Codebase Map — Absensi & HRIS WIG
+# Codebase Map — Presensi & HRIS WIG
 
 > **Purpose**: Peta repository dan lokasi implementation penting.  
 > **Source of Truth**: Struktur file dan direktori aktual repository.  
@@ -76,13 +76,13 @@ hriswig/
 - **Responsibility**: Pengelolaan data master pegawai, persetujuan cuti & lembur, monitoring presensi harian, kalkulator penggajian (payroll), penghitungan pajak PPh 21 TER, rekapitulasi iuran BPJS, dan manajemen akun pengguna.
 - **Important Files**:
   - `src/app/dashboard/employees/page.tsx`: Katalog dan tabel direktori karyawan.
-  - `src/app/dashboard/attendance/page.tsx`: Monitoring absensi harian dan rekap kehadiran.
+  - `src/app/dashboard/attendance/page.tsx`: Monitoring presensi harian dan rekap kehadiran.
   - `src/app/dashboard/payroll/page.tsx`: Pemrosesan dan penerbitan slip gaji bulanan.
   - `src/app/dashboard/users/page.tsx`: Manajemen akun login sistem dan role RBAC.
 
 ### B. Portal Mandiri Karyawan (`src/app/employee/`)
 - **Purpose**: Aplikasi antarmuka responsif (PWA) untuk staf dan karyawan umum.
-- **Responsibility**: Presensi harian 3-faktor (Wi-Fi/GPS/Selfie), pengajuan cuti, pengajuan koreksi absensi, pelaporan kunjungan dinas luar (visit), akses slip gaji mandiri, dan monitoring tim subordinat.
+- **Responsibility**: Presensi harian 3-faktor (Wi-Fi/GPS/Selfie), pengajuan cuti, pengajuan koreksi presensi, pelaporan kunjungan dinas luar (visit), akses slip gaji mandiri, dan monitoring tim subordinat.
 - **Important Files**:
   - `src/app/employee/attendance/page.tsx`: Halaman clock-in / clock-out terpadu dengan kamera selfie.
   - `src/app/employee/visits/page.tsx`: Formulir pelaporan kunjungan klien dan unggah foto bukti.

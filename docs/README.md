@@ -1,4 +1,4 @@
-# Project Brain Entry Point — Absensi & HRIS WIG
+# Project Brain Entry Point — Presensi & HRIS WIG
 
 > **Purpose**: Entry point dan navigation map untuk AI coding agents.  
 > **Source of Truth**: Struktur repository dan spesifikasi Project Brain.  

@@ -1,113 +1,71 @@
-# Task Plan: Schema-Safe Bulk Actions Audit & Implementation Readiness
-
-## Mode
-**Analysis & Planning Only (Awaiting User Instruction).** No code executed, no database changes, no schema modifications.
+# Task Plan: Standardisasi Terminologi "Presensi" vs "Absensi" (KBBI)
 
 ## Goal
-Implement and verify schema-safe Bulk "Kirim Password Massal" (Bulk Send Password) in `src/app/dashboard/employees/page.tsx`.
-Active/Inactive bulk actions have been discarded per user instruction.
+Menyelaraskan seluruh istilah penggunaan "Absensi" menjadi "Presensi" pada teks antarmuka pengguna (UI/UX), pesan error/validasi, feedback toast, dan dokumentasi Project Brain (`/docs/*.md`) sesuai kaidah Kamus Besar Bahasa Indonesia (KBBI), tanpa menyentuh skema basis data (`prisma/schema.prisma`), tanpa mengubah enum database internal (`status: "absent"`), dan tanpa mengubah URL remote git (`absensi.git`).
 
 ## Current Phase
-Comprehensive Review & Hardening Complete
+Complete (All Phases Implemented, Verified, and Pushed)
+
+## Constraints & Principles
+1. **Standar KBBI**:
+   - Presensi = Kehadiran (tanda bukti hadir, jam kerja, clock-in/out, foto kehadiran).
+   - Absensi = Ketidakhadiran (alpa, tidak hadir).
+2. **Zero Schema Modification**:
+   - Dilarang memodifikasi file `prisma/schema.prisma` atau model Prisma.
+   - Dilarang menjalankan `prisma db push`, `prisma migrate`, atau `prisma db reset`.
+3. **Preserve Database Enum**:
+   - Status internal `"absent"` tetap dipertahankan karena secara bahasa Inggris dan semantik KBBI memang berarti tidak hadir/alpa.
+4. **Preserve Git Remote Link**:
+   - Link `https://github.com/fadeta-ig/absensi.git` tetap dipertahankan tanpa perubahan.
+5. **Strict Verification**:
+   - TypeScript `tsc --noEmit` wajib 0 error.
+   - ESLint wajib 0 error.
+   - Vitest suite (services/utils) wajib lulus 100%.
+
+---
 
 ## Planned Phases
 
-### Phase 7 — Comprehensive Code Review & Hardening
-- [x] Race condition audit: added immediate `if (bulkProcessing) return;` / `if (bulkSendingPassword) return;` / `if (bulkLoading) return;` guards across all bulk handlers.
-- [x] Toast flooding & return value fix: updated `handleCorrectionAction` in `attendance/page.tsx` and `handleStatusUpdate` in `visits/page.tsx` with `{ silent?: boolean }` options and boolean return contract.
-- [x] Error-handling audit: verified that failed bulk items retain their IDs in `selectedIds` for transparent retry.
-- [x] Email validation audit: hardened employee email filtering to `Boolean(e.email?.trim())`.
-- [x] Unused import cleanup in `visits/page.tsx` (`Filter`, `VisitStatus`, `STATUS_CONFIG`).
-- [x] Run full ESLint, TypeScript (`tsc --noEmit`), and Vitest (52 passed).
+### Phase 1 — Comprehensive Audit & Lexical Analysis
+- [x] Scan seluruh kemunculan kata `absensi` dan `absen` di `/docs/`, `src/`, dan root file.
+- [x] Klasifikasikan temuan: Project Brain docs, UI render text, API messages, Service/Validation, dan item yang wajib dipertahankan.
+- [x] Tuliskan laporan audit lengkap dengan rincian path dan nomor baris ke `findings.md`.
 - **Status:** complete
 
-## Findings Summary
-1. **Bulk Kirim Password**:
-   - **BISA.** Zero schema changes.
-   - Endpoint: `POST /api/auth/send-password`.
-   - Syarat: Karyawan aktif, memiliki akun login aktif, dan memiliki email.
-   - Dampak: Reset password hash, update sessionVersion, kirim email SMTP, log audit.
-   - Guard: Karyawan non-aktif atau tanpa email otomatis dilewati.
-2. **Bulk Aktifkan / Nonaktifkan**:
-   - **DIBATALKAN / DIHAPUS DARI SCOPE** sesuai arahan user. Status perubahan tetap menggunakan alur individual yang sudah ada (`EmployeeStatusModal`).
-
-## Planned Phases
-
-### Phase 6 — Bulk Kirim Password Implementation & Verification
-- [x] Compute `selectedEmployees` and `eligiblePasswordEmployees` in `EmployeesPageContent`.
-- [x] Add `subtitle` to `BulkActionBar` in `employees/page.tsx` showing eligible count vs skipped.
-- [x] Add dynamic button `<Key /> Kirim Password (X)` with disabled state when 0 eligible.
-- [x] Add `useConfirm` dialog before sending passwords.
-- [x] Implement sequential SMTP loop with loading/progress state.
-- [x] Handle partial failure: only remove succeeded IDs from `selectedIds`.
-- [x] Provide toast feedback with succeeded and failed/skipped counts.
-- [x] Verify ESLint (0 errors).
-- [x] Verify `tsc --noEmit` (0 errors).
-- [x] Verify Vitest test suites (52 passed).
-- [x] Verify Git diff (zero schema changes).
+### Phase 2 — Project Brain Alignment (`docs/*.md`)
+- [x] Perbarui 18 dokumen canonical di `/docs/` (ganti judul `# ... — Absensi & HRIS WIG` menjadi `# ... — Presensi & HRIS WIG`).
+- [x] Perbarui narasi semantik di `docs/CODEBASE_MAP.md`, `docs/FEATURES.md`, `docs/DATA_MODEL.md`, `docs/FLOWS.md`, `docs/PROJECT.md`, `docs/API.md`, `docs/SECURITY.md`, dan `docs/DOMAIN.md`.
+- [x] Pastikan link `absensi.git` di `docs/WORKFLOWS.md` tetap dipertahankan.
 - **Status:** complete
 
-## Planned Phases
-
-### Phase 1 — Re-establish verified baseline
-- [x] Read relevant Project Brain documents (`README.md`, `AGENT_RULES.md`, `API.md`, `DATA_MODEL.md`, `FLOWS.md`, `CONSTRAINTS.md`, `CONVENTIONS.md`, `TESTING.md`).
-- [x] Read `findings.md`, `progress.md`, and `task_plan.md`.
-- [x] Inspect current git status and diff (clean baseline).
-- [x] Inventory all shared `Table` consumers and trace actual callers.
+### Phase 3 — Frontend Render Alignment
+- [x] Perbarui teks modal judul: `AttendanceCorrectionDetailModal.tsx` (`Detail Pengajuan Koreksi Presensi`).
+- [x] Perbarui toast feedback: `AttendanceCorrectionTab.tsx` (`koreksi presensi berhasil`).
+- [x] Perbarui placeholder tabel & itemLabel: `AttendanceLogTab.tsx` (`data presensi`, `catatan presensi`, `presensi`).
+- [x] Perbarui deskripsi menu: `AllMenusSheet.tsx` (`presensi harian`).
+- [x] Perbarui placeholder data: `Employee360View.tsx` (`Belum ada data presensi`).
+- [x] Perbarui helper teks: `LocationSection.tsx` (`Karyawan dapat melakukan presensi dari mana saja.`).
 - **Status:** complete
 
-### Phase 2 — Verify existing contracts, without schema changes
-- [x] Verify `POST /api/payslips/bulk` handles subset `employeeIds` safely.
-- [x] Verify `AttendanceCorrectionTab` uses existing `handleCorrectionAction`.
-- [x] Verify `Leave` uses existing `PUT /api/leave`.
-- [x] Verify `Overtime` uses existing `PUT /api/overtime`.
-- [x] Verify `Visits` uses existing `handleStatusUpdate` for HR check.
+### Phase 4 — API & Validation Messages Alignment
+- [x] Perbarui pesan error radius lokasi: `src/app/api/attendance/route.ts`.
+- [x] Perbarui pesan waktu clock-in: `src/app/api/attendance/route.ts`.
+- [x] Perbarui log & pesan cron cleanup: `src/app/api/cron/cleanup-photos/route.ts`.
+- [x] Perbarui pesan notifikasi karyawan: `src/app/api/notifications/route.ts`.
+- [x] Perbarui pesan error hapus karyawan: `src/lib/services/employeeService.ts`.
+- [x] Perbarui pesan validasi foto: `src/lib/validations/validationSchemas.ts`.
+- [x] Perbarui service logger: `src/lib/logger.ts`.
 - **Status:** complete
 
-### Phase 3 — Define UX behavior for ready actions
-- [x] Add `subtitle` to `BulkActionBar` for dynamic status breakdown.
-- [x] Add dynamic eligible count to action buttons (e.g. `Setujui (X Pending)`).
-- [x] Disable mutation buttons when eligible count is 0.
-- [x] Add `useConfirm` modal to prevent accidental bulk updates.
-- [x] Add partial-failure resilience (retain failed IDs in selection for retry).
-- [x] Provide precise summary toast messages.
+### Phase 5 — Verification & Health Check
+- [x] Jalankan ESLint pada file yang dimodifikasi (0 errors).
+- [x] Jalankan `npx tsc --noEmit` (0 error).
+- [x] Jalankan Vitest test suite (`npm test` / `vitest run` — 52 passed).
+- [x] Periksa `git status` dan pastikan zero database schema modifications.
 - **Status:** complete
 
-### Phase 4 — Safety design review before code execution
-- [x] Zero schema/migration file changes.
-- [x] Zero database push/reset/seed.
-- [x] All endpoints and actions rely strictly on existing contracts.
+### Phase 6 — Delivery & Project Brain Assessment
+- [x] Lakukan assessment perubahan pengetahuan durable pada `/docs/` (seluruh 18 dokumen canonical telah diselaraskan).
+- [x] Commit dan push ke remote git dengan pesan detail dan jelas.
+- [x] Laporkan hasil lengkap ke pengguna.
 - **Status:** complete
-
-### Phase 5 — Implementation & Verification
-- [x] Upgrade `BulkActionBar.tsx` with `subtitle` prop and `!allSelected` helper.
-- [x] Upgrade `AttendanceCorrectionTab.tsx` with dynamic counts, confirmation modal, partial-failure resilience.
-- [x] Upgrade `src/app/dashboard/leave/page.tsx` with dynamic counts, confirmation modal, partial-failure resilience, dynamic excel export count.
-- [x] Upgrade `src/app/dashboard/overtime/page.tsx` with dynamic counts, confirmation modal, partial-failure resilience, dynamic excel export count.
-- [x] Upgrade `VisitListTable.tsx` with dynamic counts, confirmation modal, partial-failure resilience, dynamic excel export count.
-- [x] Upgrade `PayrollRecapTab.tsx` and `payroll/page.tsx` with selective bulk generation (`Generate Terpilih (X Belum)`) and selective export (`Ekspor Excel (N)`).
-- [x] Upgrade `PayrollHistoryTab.tsx` with dynamic count labels, subtitle, and partial-failure delete resilience.
-- [x] Verify ESLint (0 errors, 0 warnings).
-- [x] Verify TypeScript (`tsc --noEmit` exit 0).
-- [x] Verify Vitest test suites (52 passed).
-- [x] Verify Git diff (0 schema or migration files touched).
-- **Status:** complete
-
-## Acceptance Criteria
-- No changes to `prisma/schema.prisma` or migration files.
-- No `db push`, migration, reset, seed, or production data operation.
-- Only existing API/service contracts are used unless separately approved.
-- Bulk actions are shown only when the selected records are eligible.
-- Mixed eligible/ineligible selections produce accurate counts and result messaging.
-- Existing row actions, filters, pagination, RBAC, audit, and status workflows remain intact.
-- Export actions do not mutate data.
-- Payroll generation respects existing period uniqueness and skip behavior.
-- Asset and employee imports retain existing validation and permission rules.
-- Relevant lint, typecheck, and tests pass after execution is authorized.
-- Git diff contains only approved files.
-
-## Current Phase
-Planning complete — awaiting explicit authorization before execution.
-
-## Project Brain Assessment
-No Project Brain update is required at planning stage. This file is an execution plan, not durable system knowledge. If implementation changes a durable API, workflow, convention, or feature contract, update only the affected `/docs/` file after implementation and verification.

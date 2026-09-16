@@ -50,7 +50,7 @@ export function LocationSection({ form, setForm, masterLocations, toggleLocation
             )}
             {form.bypassLocation && (
                 <div className="p-4 bg-orange-50 rounded-lg border border-orange-100 text-center">
-                    <p className="text-xs text-orange-800 font-medium">Bypass aktif: Karyawan dapat absen dari mana saja.</p>
+                    <p className="text-xs text-orange-800 font-medium">Bypass aktif: Karyawan dapat melakukan presensi dari mana saja.</p>
                 </div>
             )}
         </div>

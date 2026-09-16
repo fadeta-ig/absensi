@@ -118,7 +118,7 @@ export function AttendanceCorrectionTab({
                         return next;
                     });
                     if (failedCount === 0) {
-                        toast(`${succeededIds.length} koreksi absensi berhasil ${actionWord}.`, "success");
+                        toast(`${succeededIds.length} koreksi presensi berhasil ${actionWord}.`, "success");
                     } else {
                         toast(`${succeededIds.length} koreksi berhasil ${actionWord}, ${failedCount} gagal diproses.`, "error");
                     }

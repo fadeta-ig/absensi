@@ -1,4 +1,4 @@
-# Coding Conventions — Absensi & HRIS WIG
+# Coding Conventions — Presensi & HRIS WIG
 
 > **Purpose**: How code is normally written.  
 > **Source of Truth**: Established patterns in `src/` and project styling.  

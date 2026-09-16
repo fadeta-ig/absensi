@@ -1,10 +1,10 @@
-# Security Architecture & Rules — Absensi & HRIS WIG
+# Security Architecture & Rules — Presensi & HRIS WIG
 
 > **Purpose**: Security architecture and rules.  
 > **Source of Truth**: Authentication, authorization, PII encryption, and security middleware in `src/lib/`.  
 > **Last Verified**: 2026-09-10  
 
-Dokumen ini mendokumentasikan mekanisme keamanan, autentikasi, otorisasi, penanganan rahasia (*secrets handling*), dan praktik yang dilarang pada sistem **Absensi & HRIS WIG**.
+Dokumen ini mendokumentasikan mekanisme keamanan, autentikasi, otorisasi, penanganan rahasia (*secrets handling*), dan praktik yang dilarang pada sistem **Presensi & HRIS WIG**.
 
 
 ---

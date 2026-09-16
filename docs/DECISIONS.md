@@ -1,4 +1,4 @@
-# Architectural Decisions — Absensi & HRIS WIG
+# Architectural Decisions — Presensi & HRIS WIG
 
 > **Purpose**: Why important architectural decisions were made.  
 > **Source of Truth**: Architectural Decision Records verified via commit history and codebase.  

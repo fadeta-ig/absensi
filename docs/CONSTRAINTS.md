@@ -1,4 +1,4 @@
-# Technical & Business Constraints — Absensi & HRIS WIG
+# Technical & Business Constraints — Presensi & HRIS WIG
 
 > **Purpose**: What must or must not be done.  
 > **Source of Truth**: Framework constraints, Edge runtime, security policies, and business rules.  

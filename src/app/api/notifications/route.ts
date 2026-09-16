@@ -94,7 +94,7 @@ export async function GET() {
                     id: `absent-${emp.employeeId}`,
                     type: "absent",
                     title: "Belum Hadir",
-                    message: `${emp.name} belum absen hari ini`,
+                    message: `${emp.name} belum melakukan presensi hari ini`,
                     href: "/dashboard/attendance",
                     time: todayStr,
                 });

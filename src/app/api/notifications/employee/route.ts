@@ -47,7 +47,7 @@ export async function GET() {
                 take: 5,
                 select: { id: true, status: true, hours: true, createdAt: true, date: true },
             }),
-            // Koreksi absensi yang sudah diresolved
+            // Koreksi presensi yang sudah diresolved
             prisma.attendanceCorrection.findMany({
                 where: {
                     employeeId,

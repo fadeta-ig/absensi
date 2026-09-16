@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
             if (!isWithinRange) {
                 return NextResponse.json(
-                    { error: "Anda berada di luar radius lokasi absensi yang diizinkan." },
+                    { error: "Anda berada di luar radius lokasi presensi yang diizinkan." },
                     { status: 403 }
                 );
             }
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
 
             if (clockInMinutes < earliestIn) {
                 return NextResponse.json(
-                    { error: `Belum waktunya clock-in. Anda bisa absen mulai pukul ${formatMinutes(earliestIn)}.` },
+                    { error: `Belum waktunya clock-in. Anda bisa melakukan presensi mulai pukul ${formatMinutes(earliestIn)}.` },
                     { status: 400 }
                 );
             }

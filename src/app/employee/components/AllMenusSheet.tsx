@@ -108,7 +108,7 @@ export default function AllMenusSheet({
                 {
                     href: "/employee/attendance-history",
                     label: "Riwayat Presensi",
-                    description: "Catatan log jam kerja dan absensi harian",
+                    description: "Catatan log jam kerja dan presensi harian",
                     icon: ClipboardList,
                     bg: "bg-blue-50 dark:bg-blue-950/40",
                     color: "text-blue-600 dark:text-blue-400",

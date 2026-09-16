@@ -1,10 +1,10 @@
-# API Map & HTTP Contracts — Absensi & HRIS WIG
+# API Map & HTTP Contracts — Presensi & HRIS WIG
 
 > **Purpose**: Peta rute API, struktur endpoint, dan kontrak payload HTTP.  
 > **Source of Truth**: Route Handlers di `src/app/api/**/route.ts` dan middleware `src/lib/middleware/apiGuard.ts`.  
 > **Last Verified**: 2026-09-10  
 
-Dokumen ini mendokumentasikan konvensi antarmuka API RESTful, pola guard otorisasi, struktur envelope data, dan direktori endpoint backend platform **Absensi & HRIS WIG**.
+Dokumen ini mendokumentasikan konvensi antarmuka API RESTful, pola guard otorisasi, struktur envelope data, dan direktori endpoint backend platform **Presensi & HRIS WIG**.
 
 ---
 

@@ -96,7 +96,7 @@ export function AttendanceCorrectionDetailModal({
                             </div>
                             <div>
                                 <h2 className="modal-title text-base font-bold text-[var(--text-primary)]">
-                                    Detail Pengajuan Koreksi Absensi
+                                    Detail Pengajuan Koreksi Presensi
                                 </h2>
                                 <p className="text-xs text-[var(--text-muted)]">
                                     Pemeriksaan data pengajuan sebelum tindakan persetujuan HR
