@@ -1,71 +1,45 @@
-# Task Plan: Standardisasi Terminologi "Presensi" vs "Absensi" (KBBI)
+# Task Plan: Perbaikan Masalah Preview PDF & 404 pada `/uploads/news/...`
 
 ## Goal
-Menyelaraskan seluruh istilah penggunaan "Absensi" menjadi "Presensi" pada teks antarmuka pengguna (UI/UX), pesan error/validasi, feedback toast, dan dokumentasi Project Brain (`/docs/*.md`) sesuai kaidah Kamus Besar Bahasa Indonesia (KBBI), tanpa menyentuh skema basis data (`prisma/schema.prisma`), tanpa mengubah enum database internal (`status: "absent"`), dan tanpa mengubah URL remote git (`absensi.git`).
+Menyelesaikan dua kendala pada pratinjau dan akses berkas PDF:
+1. Menghilangkan pesan `localhost refused to connect` pada iframe dengan mengonfigurasi `X-Frame-Options: SAMEORIGIN` di `next.config.ts`.
+2. Menghilangkan 404 pada URL `/uploads/news/...` dengan membuat dynamic Route Handler `src/app/uploads/[...path]/route.ts` yang menyajikan file uploads langsung dari disk dengan MIME type dan header `inline` yang tepat.
 
 ## Current Phase
-Complete (All Phases Implemented, Verified, and Pushed)
+Complete (Diagnosed, Fixed, Verified, and Documented)
 
 ## Constraints & Principles
-1. **Standar KBBI**:
-   - Presensi = Kehadiran (tanda bukti hadir, jam kerja, clock-in/out, foto kehadiran).
-   - Absensi = Ketidakhadiran (alpa, tidak hadir).
+1. **Security**:
+   - `X-Frame-Options: SAMEORIGIN` tetap memblokir embedding dari situs luar (anti-clickjacking).
+   - Sanitasi path pada route handler `uploads/[...path]` untuk mencegah serangan path traversal (`..`).
 2. **Zero Schema Modification**:
-   - Dilarang memodifikasi file `prisma/schema.prisma` atau model Prisma.
-   - Dilarang menjalankan `prisma db push`, `prisma migrate`, atau `prisma db reset`.
-3. **Preserve Database Enum**:
-   - Status internal `"absent"` tetap dipertahankan karena secara bahasa Inggris dan semantik KBBI memang berarti tidak hadir/alpa.
-4. **Preserve Git Remote Link**:
-   - Link `https://github.com/fadeta-ig/absensi.git` tetap dipertahankan tanpa perubahan.
-5. **Strict Verification**:
-   - TypeScript `tsc --noEmit` wajib 0 error.
-   - ESLint wajib 0 error.
-   - Vitest suite (services/utils) wajib lulus 100%.
+   - Skema database `prisma/schema.prisma` tetap utuh 100%.
+3. **No Unprompted Git**:
+   - Dilarang menjalankan git commit/push tanpa perintah eksplisit dari pengguna.
 
 ---
 
 ## Planned Phases
 
-### Phase 1 — Comprehensive Audit & Lexical Analysis
-- [x] Scan seluruh kemunculan kata `absensi` dan `absen` di `/docs/`, `src/`, dan root file.
-- [x] Klasifikasikan temuan: Project Brain docs, UI render text, API messages, Service/Validation, dan item yang wajib dipertahankan.
-- [x] Tuliskan laporan audit lengkap dengan rincian path dan nomor baris ke `findings.md`.
+### Phase 1 — Root Cause Analysis & Planning
+- [x] Temukan penyebab iframe error `localhost refused to connect`: header `X-Frame-Options: DENY` di `next.config.ts`.
+- [x] Temukan penyebab 404: Next.js dev server tidak auto-index file runtime di `public/` tanpa route handler.
+- [x] Tuliskan laporan analisis detail di `findings.md`.
 - **Status:** complete
 
-### Phase 2 — Project Brain Alignment (`docs/*.md`)
-- [x] Perbarui 18 dokumen canonical di `/docs/` (ganti judul `# ... — Absensi & HRIS WIG` menjadi `# ... — Presensi & HRIS WIG`).
-- [x] Perbarui narasi semantik di `docs/CODEBASE_MAP.md`, `docs/FEATURES.md`, `docs/DATA_MODEL.md`, `docs/FLOWS.md`, `docs/PROJECT.md`, `docs/API.md`, `docs/SECURITY.md`, dan `docs/DOMAIN.md`.
-- [x] Pastikan link `absensi.git` di `docs/WORKFLOWS.md` tetap dipertahankan.
+### Phase 2 — Implementation of Fixes
+- [x] Ubah `X-Frame-Options: DENY` menjadi `X-Frame-Options: SAMEORIGIN` di `next.config.ts`.
+- [x] Buat Route Handler `src/app/uploads/[...path]/route.ts` yang aman (dengan pencegahan directory traversal) untuk melayani berkas `/uploads/*` secara dinamis dengan MIME type yang tepat (`application/pdf`, `image/*`, dsb.).
 - **Status:** complete
 
-### Phase 3 — Frontend Render Alignment
-- [x] Perbarui teks modal judul: `AttendanceCorrectionDetailModal.tsx` (`Detail Pengajuan Koreksi Presensi`).
-- [x] Perbarui toast feedback: `AttendanceCorrectionTab.tsx` (`koreksi presensi berhasil`).
-- [x] Perbarui placeholder tabel & itemLabel: `AttendanceLogTab.tsx` (`data presensi`, `catatan presensi`, `presensi`).
-- [x] Perbarui deskripsi menu: `AllMenusSheet.tsx` (`presensi harian`).
-- [x] Perbarui placeholder data: `Employee360View.tsx` (`Belum ada data presensi`).
-- [x] Perbarui helper teks: `LocationSection.tsx` (`Karyawan dapat melakukan presensi dari mana saja.`).
+### Phase 3 — Verification & Diagnostics
+- [x] Jalankan ESLint dan `npx tsc --noEmit` (0 error).
+- [x] Jalankan Vitest test suite (52 passed).
+- [x] Uji pengambilan file `2349b742-f9bf-411c-8ac6-d53b3a64d9cf.pdf` via script (Status 200, Content-Type application/pdf, X-Frame-Options SAMEORIGIN).
+- [x] Uji proteksi path traversal (Status 403).
 - **Status:** complete
 
-### Phase 4 — API & Validation Messages Alignment
-- [x] Perbarui pesan error radius lokasi: `src/app/api/attendance/route.ts`.
-- [x] Perbarui pesan waktu clock-in: `src/app/api/attendance/route.ts`.
-- [x] Perbarui log & pesan cron cleanup: `src/app/api/cron/cleanup-photos/route.ts`.
-- [x] Perbarui pesan notifikasi karyawan: `src/app/api/notifications/route.ts`.
-- [x] Perbarui pesan error hapus karyawan: `src/lib/services/employeeService.ts`.
-- [x] Perbarui pesan validasi foto: `src/lib/validations/validationSchemas.ts`.
-- [x] Perbarui service logger: `src/lib/logger.ts`.
-- **Status:** complete
-
-### Phase 5 — Verification & Health Check
-- [x] Jalankan ESLint pada file yang dimodifikasi (0 errors).
-- [x] Jalankan `npx tsc --noEmit` (0 error).
-- [x] Jalankan Vitest test suite (`npm test` / `vitest run` — 52 passed).
-- [x] Periksa `git status` dan pastikan zero database schema modifications.
-- **Status:** complete
-
-### Phase 6 — Delivery & Project Brain Assessment
-- [x] Lakukan assessment perubahan pengetahuan durable pada `/docs/` (seluruh 18 dokumen canonical telah diselaraskan).
-- [x] Commit dan push ke remote git dengan pesan detail dan jelas.
-- [x] Laporkan hasil lengkap ke pengguna.
+### Phase 4 — Delivery & Explanation to User
+- [x] Jelaskan mengapa di lokal pengguna terjadi `localhost refused to connect` dan 404.
+- [x] Berikan petunjuk verifikasi di browser pengguna.
 - **Status:** complete
