@@ -145,3 +145,9 @@ export async function POST(request: NextRequest) {
    - **Double-Submit Prevention & Confirmation Dialog**: Seluruh aksi mutasi massal wajib dilindungi dialog konfirmasi terpadu (`useConfirm`) dan guard eksekusi awal (`if (processing) return;`) untuk mencegah *race conditions*.
    - **Partial-Failure Resilience**: Pada pemrosesan loop/batch asinkron, hanya ID baris yang sukses yang dihapus dari `selectedIds`; ID yang gagal tetap berstatus terpilih (*selected*) sehingga pengguna dapat mencoba kembali (*retry*) tanpa harus mengulang seleksi manual dari awal.
    - **Silent Execution Mode**: Handler aksi induk yang dipanggil berulang dalam loop mutasi massal wajib mendukung opsi `{ silent: true }` untuk mencegah banjir notifikasi (*toast storm*) dan mengembalikan boolean status keberhasilan pemrosesan.
+
+8. **Standarisasi Konfigurasi Tema (Default Light Mode & Preferensi Pengguna)**:
+   - **Default Light Mode**: Aplikasi secara default menggunakan Mode Terang (`defaultTheme="light"`, `enableSystem={false}` pada `ThemeProvider` di `src/app/layout.tsx`) untuk seluruh pengunjung baru.
+   - **Penyimpanan Preferensi Persisten**: Ketika pengguna beralih ke Mode Gelap (*Dark Mode*) melalui tombol `ThemeToggle`, preferensi tersebut otomatis disimpan di `localStorage` peramban dengan kunci `"theme"`.
+   - **Pemulihan Otomatis**: Pada kunjungan/muat ulang berikutnya, `next-themes` secara otomatis memulihkan mode gelap yang dipilih pengguna tanpa kedipan (*anti-FOUC* via script inline di `<head>`).
+   - **CSS Variables Mapping**: Seluruh komponen antarmuka wajib mengacu pada token variabel CSS di `src/app/globals.css` (`:root` untuk mode terang dan `.dark` untuk mode gelap) dengan konfigurasi Tailwind `darkMode: "class"`.
