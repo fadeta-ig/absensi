@@ -37,6 +37,8 @@ function toAttendanceRecord(row: any): AttendanceRecord {
         clockOutPhoto: row.clockOutPhoto ?? null,
         status: row.status as AttendanceRecord["status"],
         notes: row.notes ?? null,
+        isOffDay: Boolean(row.isOffDay),
+        offDayReason: row.offDayReason ?? null,
     };
 }
 
@@ -69,7 +71,7 @@ export async function getAttendanceByDate(employeeId: string, date: string): Pro
 }
 
 export async function createAttendance(data: Omit<AttendanceRecord, "id">): Promise<AttendanceRecord> {
-    logger.info("Clock-in recorded", { employeeId: data.employeeId, date: data.date, status: data.status });
+    logger.info("Clock-in recorded", { employeeId: data.employeeId, date: data.date, status: data.status, isOffDay: data.isOffDay });
 
     // Parse date string → DateTime untuk Prisma
     const dateObj = new Date(data.date);
@@ -88,6 +90,8 @@ export async function createAttendance(data: Omit<AttendanceRecord, "id">): Prom
             clockOutPhoto: data.clockOutPhoto,
             status: data.status,
             notes: data.notes,
+            isOffDay: data.isOffDay ?? false,
+            offDayReason: data.offDayReason ?? null,
         },
     });
     return toAttendanceRecord(row);
@@ -110,6 +114,8 @@ export async function updateAttendance(id: string, data: Partial<AttendanceRecor
                 ...(data.clockOutPhoto !== undefined && { clockOutPhoto: data.clockOutPhoto }),
                 ...(data.status !== undefined && { status: data.status }),
                 ...(data.notes !== undefined && { notes: data.notes }),
+                ...(data.isOffDay !== undefined && { isOffDay: data.isOffDay }),
+                ...(data.offDayReason !== undefined && { offDayReason: data.offDayReason }),
             },
         });
         return toAttendanceRecord(row);

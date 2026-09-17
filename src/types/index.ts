@@ -117,6 +117,8 @@ export type AttendanceRecord = {
     clockOutPhoto?: string | null;
     status: "present" | "late" | "absent" | "leave";
     notes?: string | null;
+    isOffDay?: boolean;
+    offDayReason?: string | null;
 };
 
 export type PayslipItem = {

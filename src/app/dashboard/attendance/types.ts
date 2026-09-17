@@ -26,6 +26,8 @@ export interface AttendanceRecord {
     clockInPhoto?: string | null;
     clockOutPhoto?: string | null;
     status: string;
+    isOffDay?: boolean;
+    offDayReason?: string | null;
 }
 
 export interface MasterData {

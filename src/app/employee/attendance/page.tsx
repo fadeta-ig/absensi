@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import {
     Camera, MapPin, Clock, CheckCircle2, AlertCircle, Loader2,
     Wifi, WifiOff, FlipHorizontal, RotateCcw, SwitchCamera,
-    ArrowRight, VideoOff, RefreshCw
+    ArrowRight, VideoOff, RefreshCw, CalendarClock
 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
@@ -26,6 +26,9 @@ interface NetworkInfo {
     clientIp: string;
     bypassLocation: boolean;
     networkName: string;
+    isOffDay?: boolean;
+    shiftName?: string | null;
+    todaySchedule?: { startTime: string; endTime: string; isOff: boolean } | null;
 }
 
 export default function AttendancePage() {
@@ -48,6 +51,9 @@ export default function AttendancePage() {
     const [isGpsChecking, setIsGpsChecking] = useState(true);
     const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
     const [isNetworkChecking, setIsNetworkChecking] = useState(true);
+
+    // Off-day attendance reason state
+    const [offDayReason, setOffDayReason] = useState("");
 
     // Submission & attendance record
     const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -301,6 +307,19 @@ export default function AttendancePage() {
         setStatus("submitting");
         setMessage("");
 
+        const isOffDay = networkInfo?.isOffDay ?? false;
+        const isClockInAction = !todayRecord?.clockIn;
+
+        if (isClockInAction && isOffDay) {
+            if (!offDayReason || offDayReason.trim().length < 3) {
+                const err = "Keperluan/alasan presensi hari libur wajib diisi (minimal 3 karakter).";
+                setMessage(err);
+                toast(err, "error");
+                setStatus("idle");
+                return;
+            }
+        }
+
         try {
             const res = await fetch("/api/attendance", {
                 method: "POST",
@@ -308,6 +327,7 @@ export default function AttendancePage() {
                 body: JSON.stringify({
                     photo,
                     location: gpsInfo ? { lat: gpsInfo.lat, lng: gpsInfo.lng } : undefined,
+                    offDayReason: isClockInAction && isOffDay ? offDayReason.trim() : undefined,
                 }),
             });
 
@@ -335,7 +355,7 @@ export default function AttendancePage() {
             toast(errText, "error");
             setMessage(errText);
         }
-    }, [photo, gpsInfo, networkInfo, router, toast]);
+    }, [photo, gpsInfo, networkInfo, offDayReason, todayRecord, router, toast]);
 
     const isClockIn = !todayRecord?.clockIn;
     const isClockOut = Boolean(todayRecord?.clockIn && !todayRecord?.clockOut);
@@ -344,7 +364,9 @@ export default function AttendancePage() {
     const isBypass = networkInfo?.bypassLocation ?? false;
     const isNetworkOk = isBypass || (networkInfo?.isOfficeWifi ?? false);
     const isGpsOk = isBypass || (gpsInfo?.isValid ?? false);
-    const canSubmit = Boolean(photo && isNetworkOk && isGpsOk && status !== "submitting");
+    const isOffDay = networkInfo?.isOffDay ?? false;
+    const isReasonValid = !isClockIn || !isOffDay || offDayReason.trim().length >= 3;
+    const canSubmit = Boolean(photo && isNetworkOk && isGpsOk && isReasonValid && status !== "submitting");
 
     // Has blocker warning?
     const hasNetworkBlocker = !isNetworkChecking && !isNetworkOk;
@@ -473,8 +495,10 @@ export default function AttendancePage() {
                         <div className="relative z-20 m-3 p-2 px-3 rounded-2xl bg-black/45 backdrop-blur-md border border-white/10 flex items-center justify-between shadow-lg">
                             {/* Kiri: Action Badge (Clock In / Clock Out) & Waktu Live */}
                             <div className="flex items-center gap-2">
-                                <span className="px-2.5 py-1 rounded-xl text-[11px] font-extrabold bg-[var(--primary)] text-white shadow-sm tracking-wide">
-                                    {isClockIn ? "CLOCK IN" : "CLOCK OUT"}
+                                <span className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white shadow-sm tracking-wide ${
+                                    isClockIn && isOffDay ? "bg-amber-600" : "bg-[var(--primary)]"
+                                }`}>
+                                    {isClockIn ? (isOffDay ? "CLOCK IN (HARI LIBUR)" : "CLOCK IN") : isOffDay ? "CLOCK OUT (HARI LIBUR)" : "CLOCK OUT"}
                                 </span>
                                 {currentTime && (
                                     <span className="text-[11px] font-medium text-white/90 flex items-center gap-1">
@@ -611,7 +635,13 @@ export default function AttendancePage() {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <span>{isClockIn ? "Kirim Clock In" : isClockOut ? "Kirim Clock Out" : "Kirim Presensi"}</span>
+                                                    <span>
+                                                        {isClockIn
+                                                            ? (isOffDay ? "Presensi Masuk (Hari Libur)" : "Kirim Clock In")
+                                                            : isClockOut
+                                                                ? "Kirim Clock Out"
+                                                                : "Kirim Presensi"}
+                                                    </span>
                                                     <ArrowRight className="w-4 h-4" />
                                                 </>
                                             )}
@@ -621,6 +651,46 @@ export default function AttendancePage() {
                             )}
                         </div>
                     </div>
+
+                    {/* ── Contextual Off-Day Attendance Banner & Reason Input ── */}
+                    {isClockIn && isOffDay && (
+                        <div className="p-4 rounded-3xl border border-amber-500/30 bg-amber-500/10 text-[var(--text-primary)] space-y-3 shadow-sm">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                                    <CalendarClock className="w-5 h-5" />
+                                </div>
+                                <div className="space-y-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="text-xs font-bold text-[var(--text-primary)]">Jadwal Hari Libur</h3>
+                                        {networkInfo?.shiftName && (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                                {networkInfo.shiftName}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                        Anda terdeteksi masuk di luar jadwal kerja resmi. Masukkan keperluan/alasan penugasan untuk verifikasi HR.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="pt-0.5">
+                                <input
+                                    type="text"
+                                    value={offDayReason}
+                                    onChange={(e) => setOffDayReason(e.target.value)}
+                                    placeholder="Contoh: Piket darurat pemeliharaan jaringan"
+                                    maxLength={500}
+                                    className="w-full px-3.5 py-2.5 rounded-2xl border border-amber-500/30 bg-[var(--card)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all shadow-inner"
+                                />
+                                {offDayReason.length > 0 && offDayReason.trim().length < 3 && (
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                                        Alasan kehadiran minimal 3 karakter.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* ── Single Contextual Alert: Hanya Muncul Jika Ada Kendala Validasi ── */}
                     {hasNetworkBlocker && (

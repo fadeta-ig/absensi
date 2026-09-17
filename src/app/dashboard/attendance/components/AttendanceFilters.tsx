@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Search, Calendar, Building2, Layers, Filter, RotateCcw } from "lucide-react";
+import { Search, Calendar, Building2, Layers, Filter, RotateCcw, CalendarClock } from "lucide-react";
 import { MasterData } from "../types";
 import { getToday, getYesterday, getThisWeekRange, getThisMonthRange } from "@/lib/datePresets";
 
@@ -16,6 +16,8 @@ interface Props {
     setDivFilter: (val: string) => void;
     statusFilter: string;
     setStatusFilter: (val: string) => void;
+    typeFilter: string;
+    setTypeFilter: (val: string) => void;
     departments: MasterData[];
     divisions: MasterData[];
 }
@@ -27,6 +29,7 @@ export function AttendanceFilters({
     deptFilter, setDeptFilter,
     divFilter, setDivFilter,
     statusFilter, setStatusFilter,
+    typeFilter, setTypeFilter,
     departments, divisions
 }: Props) {
     const today = getToday();
@@ -76,7 +79,8 @@ export function AttendanceFilters({
         !isToday ||
         deptFilter !== "all" ||
         divFilter !== "all" ||
-        statusFilter !== "all"
+        statusFilter !== "all" ||
+        typeFilter !== "all"
     );
 
     const activeFilterCount = [
@@ -85,6 +89,7 @@ export function AttendanceFilters({
         deptFilter !== "all",
         divFilter !== "all",
         statusFilter !== "all",
+        typeFilter !== "all",
     ].filter(Boolean).length;
 
     const handleReset = () => {
@@ -94,6 +99,7 @@ export function AttendanceFilters({
         setDeptFilter("all");
         setDivFilter("all");
         setStatusFilter("all");
+        setTypeFilter("all");
     };
 
     return (
@@ -168,7 +174,7 @@ export function AttendanceFilters({
                 </div>
 
                 {/* Status Filter */}
-                <div className="relative flex-1 min-w-[200px]">
+                <div className="relative flex-1 min-w-[180px]">
                     <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                     <select
                         className="form-select pl-10 h-11 w-full"
@@ -181,6 +187,20 @@ export function AttendanceFilters({
                         <option value="absent">Alpa</option>
                         <option value="leave">Cuti</option>
                         <option value="sick">Sakit</option>
+                    </select>
+                </div>
+
+                {/* Tipe Presensi Filter */}
+                <div className="relative flex-1 min-w-[180px]">
+                    <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                    <select
+                        className="form-select pl-10 h-11 w-full"
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                    >
+                        <option value="all">Semua Presensi</option>
+                        <option value="normal">Presensi Normal</option>
+                        <option value="off_day">Presensi Hari Libur</option>
                     </select>
                 </div>
             </div>

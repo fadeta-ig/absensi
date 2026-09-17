@@ -40,6 +40,7 @@ export const attendanceSchema = z.object({
     photo: z.string()
         .min(1, "Foto presensi wajib disertakan sebagai bukti kehadiran")
         .max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)"),
+    offDayReason: z.string().trim().max(500, "Alasan presensi hari libur maksimal 500 karakter").optional(),
 });
 
 /* ───────────────────── Employee ───────────────────── */

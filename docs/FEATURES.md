@@ -32,7 +32,13 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Pengalaman Pengguna Instan (Single-Screen HUD)**: Kamera langsung aktif otomatis saat halaman dibuka tanpa tombol perantara, dilengkapi HUD mengambang terpadu untuk indikator status Wi-Fi dan GPS, serta tombol rana taktil di jangkauan jempol.
 - **Bypass Location**: Dukungan flag pengecualian lokasi (`bypass_location: true`) bagi karyawan tugas luar atau manajemen tingkat atas.
 
-### B. Alur Penyesuaian & Monitoring
+### B. Presensi Hari Libur (Off-Day Attendance)
+- **Soft-Allow Hari Libur Shift**: Mengizinkan presensi masuk (Clock-In) dan pulang (Clock-Out) pada hari libur kerja shift dengan wajib menginput alasan penugasan/keperluan dinas minimal 3 karakter.
+- **Integritas Lokasi Penuh**: Verifikasi Wi-Fi kantor WIG dan geofencing GPS tetap diwajibkan 100% untuk mencegah fraud presensi dari rumah.
+- **Bypass Pembatasan Jam**: Aturan jam masuk/pulang shift (`earlyCheckIn`, `lateCheckIn`, `earlyCheckOut`, `lateCheckOut`) dilewati untuk hari libur, dan status kehadiran tercatat sebagai `present` tanpa vonis terlambat.
+- **Penanda Verifikasi HR**: Tampilan log presensi HR menampilkan badge teks elegan `Hari Libur` (ungu pastel) dengan tooltip alasan dinas, opsi filter cepat (Semua / Normal / Hari Libur), dan pencatatan kolom tipe kehadiran pada ekspor spreadsheet Excel.
+
+### C. Alur Penyesuaian & Monitoring
 - **Koreksi Presensi (Attendance Correction)**: Karyawan dapat mengajukan perbaikan jam clock-in/out jika terjadi kendala teknis, lengkap dengan alasan dan bukti, yang memerlukan persetujuan manajer/atasan.
 - **Monitoring Tim Subordinat**: Atasan langsung dapat memantau log kehadiran, status keterlambatan, dan riwayat presensi bawahan langsungnya di `/employee/monitoring`.
 - **Rekapitulasi HR**: Dasbor monitoring harian bagi tim HR dengan rekap status kehadiran bulanan dan opsi ekspor data ke file spreadsheet Excel.

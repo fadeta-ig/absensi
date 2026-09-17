@@ -25,6 +25,7 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **Aturan Jaringan Wi-Fi Kantor**: Memvalidasi IP pengirim terhadap subnet lokal MikroTik RB4011 (`192.168.20.0/24`) dan IP gateway `192.168.20.1` serta IP publik statis Citranet (`202.152.141.27`).
 - **Aturan Geofencing**: Menghitung jarak Haversine antara koordinat perangkat saat presensi dengan titik lokasi kantor di tabel `Location` (`radius` default 100 meter).
 - **Bypass Location**: Atribut khusus pada pegawai (`bypass_location: true`) yang membebaskan validasi jaringan Wi-Fi dan geofencing (diperuntukkan bagi staf lapangan, kurir, atau level manajemen tertentu).
+- **Presensi Hari Libur (`isOffDay = true`)**: Karyawan yang masuk pada hari libur shift diizinkan melakukan presensi masuk dan pulang asalkan tetap memenuhi validasi jaringan Wi-Fi kantor dan GPS (radius ≤ 100m). Karyawan wajib mencantumkan alasan kehadiran (`offDayReason` minimal 3 karakter). Aturan toleransi keterlambatan dan pembatasan jam pulang dilewati, dan status kehadiran tercatat `present`. Kehadiran hari libur tidak secara otomatis mencairkan upah lembur (lembur tetap memerlukan tiket persetujuan resmi `OvertimeRequest` sesuai PP 35/2021).
 - **AttendanceCorrection (`attendance_corrections`)**: Permohonan perbaikan jam masuk/keluar oleh karyawan yang membutuhkan persetujuan (`AssessmentStatus`: `PENDING`, `APPROVED`, `REJECTED`) dari atasan/manajer.
 
 ### C. General Affairs (GA) & Asset Management

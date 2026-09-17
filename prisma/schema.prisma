@@ -306,9 +306,12 @@ model AttendanceRecord {
   clockOutPhoto    String?   @map("clock_out_photo") @db.LongText
   status           String    @default("present")
   notes            String?   @db.Text
+  isOffDay         Boolean   @default(false) @map("is_off_day")
+  offDayReason     String?   @map("off_day_reason") @db.Text
   employee         Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@unique([employeeId, date])
+  @@index([isOffDay], map: "idx_attendance_is_off_day")
   @@map("attendance_records")
 }
 

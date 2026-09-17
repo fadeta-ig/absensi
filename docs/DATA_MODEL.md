@@ -52,7 +52,7 @@ Basis data terdiri dari **47 model Prisma** yang dipetakan ke **50 tabel fisik**
 22. `EmployeeTaxHistory` (`employee_tax_histories`): Riwayat audit perubahan PTKP karyawan.
 
 ### D. Presensi & Kunjungan Lapangan (5 Model)
-23. `AttendanceRecord` (`attendance_records`): Kehadiran harian (`date`, `clock_in`, `clock_out`, `clock_in_location`, `clock_out_location`, `clock_in_photo`, `clock_out_photo`, `status`). Constraint unik: `[employeeId, date]`.
+23. `AttendanceRecord` (`attendance_records`): Kehadiran harian (`date`, `clock_in`, `clock_out`, `clock_in_location`, `clock_out_location`, `clock_in_photo`, `clock_out_photo`, `status`, `is_off_day`, `off_day_reason`). Constraint unik: `[employeeId, date]`. Indeks: `[is_off_day]`.
 24. `AttendanceCorrection` (`attendance_corrections`): Permohonan koreksi presensi (`target_date`, `proposed_clock_in`, `proposed_clock_out`, `status`, `assigned_manager_id`).
 25. `VisitReport` (`visit_reports`): Laporan kunjungan dinas luar (`client_name`, `client_address`, `visit_location`, `clock_in_location`, `clock_out_location`, `status`).
 26. `VisitPhoto` (`visit_photos`): Foto kunjungan dengan hash `sha256_original`, deviasi jarak `distance_to_target_meters`, dan path gambar watermark `stamped_path`.

@@ -29,6 +29,7 @@ export default function AttendanceMonitorPage() {
     });
     const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
     const [statusFilter, setStatusFilter] = useState("all");
+    const [typeFilter, setTypeFilter] = useState("all");
     const [deptFilter, setDeptFilter] = useState("all");
     const [divFilter, setDivFilter] = useState("all");
     const [search, setSearch] = useState("");
@@ -115,7 +116,7 @@ export default function AttendanceMonitorPage() {
     // Reset page to 1 on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [startDate, endDate, statusFilter, deptFilter, divFilter, search]);
+    }, [startDate, endDate, statusFilter, typeFilter, deptFilter, divFilter, search]);
 
     const getEmpInfo = useCallback((empId: string) => {
         const emp = employees.find((e) => e.employeeId === empId);
@@ -161,15 +162,16 @@ export default function AttendanceMonitorPage() {
             const withinDate = r.date >= startDate && r.date <= endDate;
 
             const matchStatus = statusFilter === "all" || r.status === statusFilter;
+            const matchType = typeFilter === "all" || (typeFilter === "off_day" ? Boolean(r.isOffDay) : !r.isOffDay);
             const matchDept = deptFilter === "all" || empInfo.department === deptFilter;
             const matchDiv = divFilter === "all" || empInfo.division === divFilter;
 
             const matchSearch = r.employeeId.toLowerCase().includes(search.toLowerCase()) ||
                 empInfo.name.toLowerCase().includes(search.toLowerCase());
 
-            return withinDate && matchStatus && matchDept && matchDiv && matchSearch;
+            return withinDate && matchStatus && matchType && matchDept && matchDiv && matchSearch;
         });
-    }, [records, employees, startDate, endDate, statusFilter, deptFilter, divFilter, search]);
+    }, [records, employees, startDate, endDate, statusFilter, typeFilter, deptFilter, divFilter, search]);
 
     // Paginated records
     const paginatedRecords = useMemo(() => {
@@ -200,6 +202,7 @@ export default function AttendanceMonitorPage() {
                 date: r.date,
                 clockIn: formatTime(r.clockIn),
                 clockOut: formatTime(r.clockOut),
+                attendanceType: r.isOffDay ? (r.offDayReason ? `Hari Libur (${r.offDayReason})` : "Hari Libur") : "Normal",
                 status: statusLabel(r.status),
             };
         });
@@ -211,6 +214,7 @@ export default function AttendanceMonitorPage() {
             { key: "date", label: "Tanggal" },
             { key: "clockIn", label: "Clock In" },
             { key: "clockOut", label: "Clock Out" },
+            { key: "attendanceType", label: "Tipe Kehadiran" },
             { key: "status", label: "Status" },
         ], `Laporan_Presensi_${startDate}_to_${endDate}`, "Presensi");
     };
@@ -225,12 +229,13 @@ export default function AttendanceMonitorPage() {
                 r.date,
                 formatTime(r.clockIn),
                 formatTime(r.clockOut),
+                r.isOffDay ? (r.offDayReason ? `Hari Libur (${r.offDayReason})` : "Hari Libur") : "Normal",
                 statusLabel(r.status),
             ];
         });
         exportToPdfTable(
             data,
-            ["ID", "Nama", "Dept", "Tanggal", "In", "Out", "Status"],
+            ["ID", "Nama", "Dept", "Tanggal", "In", "Out", "Tipe Kehadiran", "Status"],
             "Laporan Presensi Karyawan",
             `Laporan_Presensi_${startDate}_to_${endDate}`,
             `Periode: ${startDate} s/d ${endDate} • Total: ${filtered.length} baris`
@@ -334,6 +339,7 @@ export default function AttendanceMonitorPage() {
                         deptFilter={deptFilter} setDeptFilter={setDeptFilter}
                         divFilter={divFilter} setDivFilter={setDivFilter}
                         statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+                        typeFilter={typeFilter} setTypeFilter={setTypeFilter}
                         departments={departments} divisions={divisions}
                     />
 

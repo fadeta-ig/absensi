@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, CheckSquare, Square, FileSpreadsheet, Wifi, ShieldCheck, MapPin } from "lucide-react";
+import { Camera, CheckSquare, Square, FileSpreadsheet, Wifi, ShieldCheck, MapPin, CalendarClock } from "lucide-react";
 import { AttendanceRecord } from "../types";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import DataTablePagination from "@/components/ui/DataTablePagination";
@@ -81,6 +81,7 @@ export function AttendanceLogTab({
                 date: r.date,
                 clockIn: r.clockIn ? formatTime(r.clockIn) : "-",
                 clockOut: r.clockOut ? formatTime(r.clockOut) : "-",
+                attendanceType: r.isOffDay ? (r.offDayReason ? `Hari Libur (${r.offDayReason})` : "Hari Libur") : "Normal",
                 verification,
                 status: statusLabel(r.status),
             };
@@ -96,6 +97,7 @@ export function AttendanceLogTab({
                 { key: "date", label: "Tanggal" },
                 { key: "clockIn", label: "Jam Masuk" },
                 { key: "clockOut", label: "Jam Pulang" },
+                { key: "attendanceType", label: "Tipe Kehadiran" },
                 { key: "verification", label: "Verifikasi Jaringan" },
                 { key: "status", label: "Status" },
             ],
@@ -173,7 +175,18 @@ export function AttendanceLogTab({
                                             {info.department}
                                         </td>
                                         <td className="text-sm text-[var(--text-secondary)]">
-                                            {r.date}
+                                            <div className="flex flex-col gap-1 items-start">
+                                                <span>{r.date}</span>
+                                                {r.isOffDay && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                                        title={r.offDayReason ? `Alasan: ${r.offDayReason}` : "Presensi Hari Libur"}
+                                                    >
+                                                        <CalendarClock className="w-3 h-3 shrink-0 text-purple-600 dark:text-purple-400" />
+                                                        Hari Libur
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="text-sm font-medium text-blue-600">
                                             {formatTime(r.clockIn)}

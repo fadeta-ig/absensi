@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
         }
 
         const todaySchedule = shift?.days.find((d) => d.dayOfWeek === todayDay);
+        const isOffDay = Boolean(shift && (!todaySchedule || todaySchedule.isOff));
 
         if (existing) {
             if (existing.clockOut) {
@@ -143,8 +144,8 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // ── Clock-Out Hard-Block Enforcement ──
-            if (shift && todaySchedule && !todaySchedule.isOff) {
+            // ── Clock-Out Hard-Block Enforcement (Hanya berlaku untuk hari kerja normal) ──
+            if (!existing.isOffDay && shift && todaySchedule && !todaySchedule.isOff) {
                 const [endH, endM] = todaySchedule.endTime.split(":").map(Number);
                 const shiftEndMinutes = endH * 60 + endM;
                 const clockOutMinutes = clockMinutes;
@@ -187,21 +188,23 @@ export async function POST(request: NextRequest) {
                 });
             }
 
-            logger.info("Clock-out success", { employeeId: session.employeeId });
+            logger.info("Clock-out success", { employeeId: session.employeeId, isOffDay: existing.isOffDay });
             return NextResponse.json(updated);
         }
 
-        if (shift) {
-            if (!todaySchedule || todaySchedule.isOff) {
+        // ── Validasi Kehadiran Hari Libur (Off-Day Attendance) ──
+        if (isOffDay) {
+            const reason = body.offDayReason?.trim();
+            if (!reason || reason.length < 3) {
                 return NextResponse.json(
-                    { error: "Hari ini bukan merupakan hari kerja Anda sesuai jadwal shift." },
+                    { error: "Keperluan/alasan presensi hari libur wajib diisi (minimal 3 karakter) untuk verifikasi HR." },
                     { status: 400 }
                 );
             }
         }
 
-        // ── Clock-In Early Block ──
-        if (shift && todaySchedule && !todaySchedule.isOff) {
+        // ── Clock-In Early Block (Hanya berlaku untuk hari kerja resmi) ──
+        if (!isOffDay && shift && todaySchedule && !todaySchedule.isOff) {
             const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
             const shiftStartMinutes = shiftHour * 60 + shiftMin;
             const earliestIn = shiftStartMinutes - (shift.earlyCheckIn ?? 0);
@@ -217,7 +220,7 @@ export async function POST(request: NextRequest) {
 
         let status: "present" | "late" = "present";
 
-        if (shift && todaySchedule && !todaySchedule.isOff) {
+        if (!isOffDay && shift && todaySchedule && !todaySchedule.isOff) {
             const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
             const shiftStartMinutes = shiftHour * 60 + shiftMin;
             const tolerance = shift.lateCheckIn ?? 0;
@@ -226,7 +229,7 @@ export async function POST(request: NextRequest) {
             if (clockMinutes > deadlineMinutes) {
                 status = "late";
             }
-        } else if (!shift) {
+        } else if (!shift && !isOffDay) {
             if (nowH > 9) {
                 status = "late";
             }
@@ -248,9 +251,11 @@ export async function POST(request: NextRequest) {
             clockInLocation: locationWithNetwork,
             clockInPhoto: body.photo,
             status,
+            isOffDay,
+            offDayReason: isOffDay ? body.offDayReason?.trim() ?? null : null,
         });
 
-        logger.info("Clock-in success", { employeeId: session.employeeId, status });
+        logger.info("Clock-in success", { employeeId: session.employeeId, status, isOffDay });
         return NextResponse.json(record);
     } catch (err) {
         return serverErrorResponse("AttendancePOST", err);
