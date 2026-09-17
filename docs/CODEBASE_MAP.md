@@ -91,12 +91,20 @@ hriswig/
   - `src/app/employee/news/page.tsx`: Papan pengumuman dan berita internal perusahaan dengan detail modal.
 
 ### C. Portal General Affairs (`src/app/ga/`)
-- **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat.
-- **Responsibility**: Registrasi aset baru, pelacakan mutasi penyerahan/pengembalian, pencatatan dokumen BAST, checklist inspeksi fisik, servis vendor, dan tiket perbaikan perangkat.
+- **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat dan Green Meeting.
+- **Responsibility**: Registrasi aset, mutasi/BAST, inspeksi, servis, tiket, serta pengelolaan penuh kalender, presensi, notulen, tindak lanjut, dan laporan Green Meeting.
 - **Important Files**:
   - `src/app/ga/assets/page.tsx`: Katalog seluruh aset korporat dengan filter kategori & status.
   - `src/app/ga/tickets/page.tsx`: Manajemen tiket keluhan kerusakan dari karyawan.
   - `src/app/ga/scan/page.tsx`: Scanner kamera web untuk membaca barcode/QR inventaris.
+  - `src/app/ga/layout.tsx`: Sidebar GA; menu Green Meeting memakai sub-dropdown lima halaman.
+  - `src/app/ga/green-meeting/page.tsx`: Entry route yang mengarahkan ke halaman presensi.
+  - `src/app/ga/green-meeting/attendance/page.tsx`: Presensi departemen, ringkasan, aksi cepat, dan pemilihan tanggal/jam.
+  - `src/app/ga/green-meeting/notes/page.tsx`: Pencatatan dan daftar notulen DARI → KEPADA.
+  - `src/app/ga/green-meeting/tasks/page.tsx`: Pelacak tindak lanjut dan riwayat multi-deadline.
+  - `src/app/ga/green-meeting/settings/page.tsx`: Kalender operasional, konfigurasi, dan partisipasi departemen.
+  - `src/app/ga/green-meeting/recap/page.tsx`: Rekap rentang tanggal serta ekspor Excel/PDF.
+  - `src/app/ga/green-meeting/components/`: Komponen native bersama untuk header, navigasi submodul, presensi, notulen, tugas, pengaturan, dan rekap.
 
 ---
 
@@ -110,6 +118,7 @@ hriswig/
   - `src/app/api/visits/route.ts`: Pelaporan dan verifikasi foto kunjungan lapangan.
   - `src/app/api/payslips/route.ts`: Handler penerbitan slip gaji bulanan.
   - `src/app/api/cron/[...]/route.ts`: 5 endpoint terjadwal yang diamankan dengan header `Bearer CRON_SECRET`.
+  - `src/app/api/green-meeting/`: Sembilan route handler untuk config, units, sessions, attendance, notes, deadlines, holidays, employee autocomplete, dan recap.
 
 ---
 
@@ -125,13 +134,14 @@ hriswig/
   - `assetService.ts`: Siklus hidup aset, mutasi, inspeksi, dan dokumen BAST.
   - `visitService.ts` & `visitPhotoService.ts`: Audit trail kunjungan dan watermarking citra via Sharp.
   - `emailService.ts`: Pengiriman email transaksional kredensial dan pengingat via SMTP Nodemailer.
+  - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi departemen, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap Green Meeting.
 
 ---
 
 ## 6. Data Layer (`prisma/`)
 
 - **Purpose**: Definisi skema basis data relasional dan koneksi ORM.
-- **Responsibility**: Menentukan 47 model entitas, indeks unik, foreign keys, serta penyediaan singleton client database.
+- **Responsibility**: Menentukan 57 model entitas aktual, indeks unik, foreign keys, serta penyediaan singleton client database.
 - **Important Files**:
   - `prisma/schema.prisma`: Skema canonical untuk MariaDB 10.11 / MySQL.
   - `src/lib/prisma.ts`: Inisialisasi singleton `PrismaClient` dengan manajemen pool koneksi.

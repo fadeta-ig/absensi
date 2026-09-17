@@ -17,6 +17,8 @@
     "db:seed:employee": "npx tsx prisma/seedEmployee.ts",
     "db:seed:dummy50": "npx tsx prisma/seedDummy50.ts",
     "db:seed:assets": "npx tsx prisma/seedAssets.ts",
+    "db:seed:green-meeting": "npx tsx prisma/seedGreenMeeting.ts",
+    "db:seed:company": "npx tsx prisma/seedCompanyStructure.ts",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "db:reset:only": "prisma db push --force-reset",
     "db:reset:dev": "prisma db push --force-reset && npm run db:seed:dev",

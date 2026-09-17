@@ -40,7 +40,17 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **AssetTicket (`asset_tickets`)**: Tiket keluhan kerusakan atau permintaan perangkat baru dari karyawan ke tim GA (`TicketStatus`: `PENDING`, `IN_PROGRESS`, `APPROVED`, `REJECTED`, `RESOLVED`).
 - **SimCard (`sim_cards`)**: Inventaris kartu SIM korporat yang dipinjamkan ke staf tertentu.
 
-### D. Payroll, BPJS, & Perpajakan (PPh 21)
+### D. Green Meeting
+- **Pemilik Operasional**: General Affairs bertanggung jawab permanen atas konfigurasi, sesi, presensi departemen, notulen, tindak lanjut, dan laporan. HR dan karyawan berperan sebagai pembaca/pemantau; Super Admin memiliki override sistem.
+- **Peserta Rapat**: Partisipasi dikelola per `Department` melalui `GreenMeetingUnit`. Menonaktifkan departemen mengeluarkannya dari daftar presensi rapat.
+- **Status Presensi**: `HADIR`, `IZIN`, dan `ALPA`. Semua peserta sesi baru dimulai sebagai `ALPA`; alasan wajib untuk `IZIN`.
+- **Jenis Notulen**: `INFORMASI` hanya menyampaikan informasi; `TUGAS` membutuhkan tindak lanjut dan Deadline 1.
+- **Rute DARI**: Sumber pembahasan dapat berupa direksi/pimpinan, departemen, divisi, seorang karyawan, atau pihak kustom/eksternal.
+- **Rute KEPADA**: Sasaran dapat berupa semua karyawan, satu atau beberapa departemen, satu atau beberapa divisi, atau beberapa karyawan lintas struktur organisasi. Scope bersifat eksklusif sesuai `targetType`: target karyawan hanya cocok ke `employeeId`, target departemen hanya ke `departmentId`, dan target divisi hanya ke `divisionId`; metadata organisasi target personal tidak boleh memperluas relevansi.
+- **Multi-Deadline**: Deadline awal dan setiap perpanjangan disimpan kronologis. Perpanjangan membutuhkan alasan dan tidak boleh melebihi `maxDeadlineExtensions`.
+- **Kalender Operasional**: Hari libur dapat ditentukan secara mingguan dan per tanggal khusus. Ruangan serta jam mulai dapat berubah per sesi.
+
+### E. Payroll, BPJS, & Perpajakan (PPh 21)
 - **PayrollComponent (`payroll_components`)**: Master komponen gaji berupa tunjangan (`ALLOWANCE`) atau potongan (`DEDUCTION`).
 - **EmployeePayrollComponent**: Nilai spesifik komponen gaji per karyawan.
 - **PayslipRecord (`payslip_records`)**: Rekap slip gaji bulanan per pegawai (`period`), terdiri dari gaji pokok, lembur, dan rincian item tunjangan/potongan (`payslip_items`).
@@ -58,14 +68,14 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
     - Kategori C: K/3.
   - Pajak bulanan dihitung: `Penghasilan Bruto * Tarif Efektif Rata-rata (TER)`.
 
-### E. Pelaporan Kunjungan Dinas (Field Visits)
+### F. Pelaporan Kunjungan Dinas (Field Visits)
 - **VisitReport (`visit_reports`)**: Pelaporan kunjungan ke lokasi klien dengan jam clock-in/out, nama klien, alamat, tujuan, dan ringkasan hasil.
 - **VisitPhoto (`visit_photos`)**: Bukti visual kunjungan. Dilengkapi verifikasi integritas:
   - `sha256Original`: Hash gambar mentah.
   - `distanceToTargetMeters`: Jarak deviasi posisi GPS perangkat terhadap koordinat tujuan klien.
   - `stampedPath`: File gambar yang telah dicetak stempel resmi anti-manipulasi via engine `sharp`.
 
-### F. Layanan Mandiri Karyawan (Self-Service)
+### G. Layanan Mandiri Karyawan (Self-Service)
 - **LeaveRequest (`leave_requests`)**: Pengajuan cuti (Cuti Tahunan, Sakit, dsb.). Saldo cuti tahunan default 12 hari per tahun. Cuti disetujui mengurangi saldo `usedLeave`.
 - **LetterRequest (`letter_requests`)**: Permohonan surat keterangan resmi: `SK_KERJA`, `KET_PENGHASILAN`, `KET_MASIH_BEKERJA`, `BPJS`.
 - **TodoItem (`todo_items`)**: Catatan tugas personal karyawan.

@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
-    Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User
+    Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User,
+    CalendarCheck,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
     { href: "/employee/documents", icon: FileText, label: "Dokumen" },
     { href: "/employee/assets", icon: Monitor, label: "Aset Saya" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
+    { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
     { href: "/employee/profile", icon: User, label: "Profil" },
     { href: "/employee/settings", icon: Settings, label: "Pengaturan" },

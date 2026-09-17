@@ -1,85 +1,42 @@
-# Findings: Audit Konfigurasi Tema (Dark Mode / Light Mode & Preferensi Pengguna)
+# Findings & Audit: Penyesuaian Kepemilikan Permanen GA (WIG002)
 
-## 1. Lokasi Berkas & Arsitektur Setup Tema
-
-Sistem tema aplikasi diatur secara modular menggunakan pustaka industri **`next-themes`** yang dipadukan dengan **Tailwind CSS (`darkMode: "class"`)** dan **CSS Custom Properties (Variables)**:
-
-1. **Root Layout Provider**:
-   - **Lokasi**: `src/app/layout.tsx` (baris 29–34)
-   - **Implementasi**:
-     ```tsx
-     <ThemeProvider
-       attribute="class"
-       defaultTheme="system"
-       enableSystem
-       disableTransitionOnChange
-     >
-       {children}
-       <ConfirmModal />
-       <ToastContainer />
-     </ThemeProvider>
-     ```
-2. **Komponen Pembungkus Provider**:
-   - **Lokasi**: `src/components/ThemeProvider.tsx`
-   - **Isi**: Menginisialisasi `NextThemesProvider` dari package `next-themes`.
-3. **Komponen Pengubah Tema (Toggle Button)**:
-   - **Lokasi**: `src/components/ThemeToggle.tsx`
-   - **Mekanisme**: Membaca `useTheme()` (`theme`, `setTheme`, `resolvedTheme`), merender ikon `Sun` (jika gelap) atau `Moon` (jika terang), dan mengeksekusi `setTheme(isDark ? "light" : "dark")`.
-4. **Penempatan UI Toggle**:
-   - Terintegrasi di bagian bawah sidebar pada `src/components/layout/AppShell.tsx` (baris 357–360):
-     ```tsx
-     <div className={`mt-auto pt-3 flex ${sidebarCollapsed ? "justify-center" : "justify-between items-center"}`}>
-         {!sidebarCollapsed && <span className="text-xs font-medium text-[var(--text-muted)] pl-1">Tema Tampilan</span>}
-         <ThemeToggle />
-     </div>
-     ```
-   - Shell ini membungkus seluruh portal aplikasi:
-     - `/dashboard` (HR Admin Portal)
-     - `/employee` (Employee Self Service Portal)
-     - `/ga` (General Affairs Portal)
-5. **Konfigurasi Tailwind**:
-   - **Lokasi**: `tailwind.config.js` (baris 9)
-   - **Atribut**: `darkMode: "class"`, artinya Tailwind mengaktifkan varian kelas `dark:` saat tag `<html class="dark">` memiliki kelas `dark`.
-6. **Definisi Token Warna Global**:
-   - **Lokasi**: `src/app/globals.css` (baris 7–91)
-   - Menggunakan token variabel CSS untuk `:root` (Light) dan `.dark` (Dark).
+## 1. Arahan Baru Direksi
+- **Kepemilikan Permanen**: Modul "Green Meeting" selamanya menjadi tanggung jawab dan dikelola penuh oleh **General Affairs (GA / WIG002)**.
+- **Eliminasi Fitur Mutasi PIC**: Tidak ada lagi fitur pengalihan hak kelola (*no PIC reassignment*) ke divisi atau role lain.
+- **Akses Pengguna**:
+  - **Pengelola Penuh (Write & Manage)**: Hanya akun tim GA (`WIG002` / `GA_ADMIN` / `ga.manage`).
+  - **Pemantauan (Monitoring) & Open Access (Read-Only)**: Seluruh insan perusahaan (termasuk tim HR, direksi, manajer, dan karyawan umum) memiliki hak baca (*read-only*) terhadap agenda, transparansi presensi, notulen, dan progres tugas.
 
 ---
 
-## 2. Nilai Default Tema Aplikasi
+## 2. Audit Dampak pada Kode Fase 1 & Fase 2
 
-- **Default Theme**: **`"system"`** (`defaultTheme="system"`).
-- **Perilaku**: Saat pengguna pertama kali membuka aplikasi tanpa ada preferensi tersimpan:
-  - Jika perangkat/OS pengguna (Windows, macOS, Android, iOS) sedang dalam mode gelap (*Dark Mode*), aplikasi otomatis merender tema **Gelap**.
-  - Jika perangkat/OS pengguna dalam mode terang (*Light Mode*), aplikasi otomatis merender tema **Terang**.
-- **Opsi Aktif**: `enableSystem={true}` memastikan deteksi media query `(prefers-color-scheme: dark)` berjalan otomatis.
+### A. Fase 1 — Skema Basis Data (`prisma/schema.prisma`)
+- **Tabel `green_meeting_configs`**:
+  - Field `picRole` (default: `"GA"`) dan `assignedPicUserId` tidak lagi membutuhkan logika mutasi.
+  - Kita dapat mengunci `picRole` secara permanen ke `"GA"` atau membersihkan relasi `assignedPicUserId` yang tidak terpakai agar skema bersih dan patuh pada prinsip *YAGNI*.
+  - Field operasional rapat lainnya (`defaultRoom`, `defaultTime`, `maxDeadlineExtensions`, `offDaysWeekly`) tetap aktif dan dikelola oleh GA.
+- **Tabel Lainnya**:
+  - `GreenMeetingUnit`, `GreenMeetingHoliday`, `GreenMeetingSession`, `GreenMeetingAttendance`, `GreenMeetingNote`, `GreenMeetingNoteTarget`, `GreenMeetingDeadlineHistory` **100% tetap utuh dan sempurna**, karena kebutuhan bisnis presensi cepat 1-klik, multi-deadline bertingkat, dan penargetan *From ➔ To* tidak berubah.
 
----
-
-## 3. Penyimpanan Preferensi Pengguna (Persistence)
-
-- **Apakah Preferensi Sudah Disimpan?**: **SUDAH (100% Tersimpan Otomatis).**
-- **Media Penyimpanan**: **`localStorage` peramban (browser client-side)**.
-- **Kunci Penyimpanan (Storage Key)**: **`"theme"`** (kunci standar bawaan `next-themes`).
-- **Nilai yang Disimpan**:
-  - `"light"` saat pengguna memilih mode terang.
-  - `"dark"` saat pengguna memilih mode gelap.
-  - `"system"` saat pengguna memilih mengikuti sistem.
-- **Pencegahan Kedipan Layar (Anti-FOUC)**:
-  `next-themes` menyuntikkan script inline berukuran sangat kecil ke dalam tag `<head>` sebelum halaman digambar (*paint*). Script ini langsung membaca `localStorage.getItem("theme")` dan menambahkan kelas `class="dark"` atau `class="light"` ke elemen `<html>`, sehingga tidak terjadi kedipan putih saat pengguna dalam mode gelap. Hal ini didukung oleh atribut `suppressHydrationWarning` pada tag `<html>` dan `<body>` di `src/app/layout.tsx`.
+### B. Fase 2 — Service Layer & API Routes
+- **`src/lib/services/greenMeetingService.ts`**:
+  - `canManageGreenMeeting(session)`: Disederhanakan total. Hanya memeriksa otorisasi GA (`ga.manage` atau `GA_ADMIN`). Seluruh logika dinamis pengecekan IT atau departemen lain dihapus.
+  - `updateGreenMeetingConfig()`: Menghapus kemampuan mengubah `picRole` dan `assignedPicUserId`. GA hanya memperbarui `defaultRoom`, `defaultTime`, `maxDeadlineExtensions`, dan `offDaysWeekly`.
+- **`src/lib/validations/validationSchemas.ts`**:
+  - `greenMeetingConfigSchema`: Menghapus `picRole` dan `assignedPicUserId` dari skema payload update, sehingga endpoint tidak menerima perubahan PIC.
+- **`src/app/api/green-meeting/config/route.ts`**:
+  - Otorisasi PATCH dikunci khusus untuk GA.
 
 ---
 
-## 4. Rincian Palet Warna Token (`src/app/globals.css`)
+## 3. Penyesuaian Roadmap Fase 3, 4, 5, 6
 
-| Token CSS | Light Mode (`:root`) | Dark Mode (`.dark`) | Fungsi / Penggunaan |
+| Fase | Rencana Awal | Penyesuaian Pasca Arahan Direksi | Status |
 |---|---|---|---|
-| `--background` | `#FAFAFA` (Abu-abu sangat terang) | `#0D0D11` (Hitam pekat lembut) | Latar belakang halaman |
-| `--card` | `#FFFFFF` (Putih bersih) | `#15151C` (Abu-abu gelap pekat) | Kartu, modal, dropdown |
-| `--foreground` | `#1A1A2E` | `#F1EDED` | Teks utama body |
-| `--primary` | `#800020` (Corporate Burgundy/Dark Red) | `#9B1B30` (Crimson Red terang) | Tombol utama, branding |
-| `--secondary` | `#F5F0F0` | `#1F1F2A` | Background sekunder, zebra row |
-| `--border` | `#E5DEDE` | `#272736` / border gelap | Garis tepi tabel, input, modal |
-| `--text-primary` | `#1A1A2E` | `#F1EDED` | Judul, label penting |
-| `--text-secondary`| `#4A4A5A` | `#E5DEDE` | Teks keterangan, deskripsi |
-| `--text-muted` | `#71717A` | `#A1A1AA` | Teks placeholder, waktu, info |
+| **Fase 1** | Skema Prisma & Seeding awal | Kunci PIC permanen di GA; pertahankan konfigurasi operasional rapat. | ✅ Selesai (Perlu penyesuaian minor) |
+| **Fase 2** | Service Layer & API Routes | Sederhanakan `canManageGreenMeeting` khusus GA, hapus mutasi PIC. | ✅ Selesai (Perlu penyesuaian minor) |
+| **Fase 3** | GA Management Dashboard (`/ga/green-meeting`) | Menjadi **dashboard sentral tunggal** untuk seluruh operasional rapat, presensi 1-klik, notulen From ➔ To, pelacak multi-deadline, kalender libur, dan ekspor data. | ⏳ Fase Berikutnya |
+| **Fase 4** | Employee Open Access Portal (`/employee/green-meeting`) | Portal baca transparan bagi seluruh karyawan, termasuk tim HR dan seluruh unit kerja. | ⏳ Akan Dijalankan |
+| **Fase 5** | HR Governance & PIC Reassignment (`/dashboard/green-meeting-governance`) | **DIHAPUS / DITIADAKAN** (Sesuai arahan direksi, tidak ada fitur pemindahan PIC). | ❌ Dihapus |
+| **Fase 6** | Verifikasi, Pengujian, & Update `/docs/` | Menyelaraskan seluruh unit test dan dokumentasi Project Brain. | ⏳ Fase Penutup |

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Phone, Package, QrCode, Ticket } from "lucide-react";
+import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
@@ -12,6 +12,17 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const GA_NAV_ITEMS: NavItem[] = [
     { href: "/ga", icon: LayoutDashboard, label: "Dashboard" },
+    {
+        icon: CalendarCheck,
+        label: "Green Meeting",
+        subItems: [
+            { href: "/ga/green-meeting/attendance", label: "Presensi Hari Ini" },
+            { href: "/ga/green-meeting/notes", label: "Notulensi Rapat" },
+            { href: "/ga/green-meeting/tasks", label: "Pelacak Tindak Lanjut" },
+            { href: "/ga/green-meeting/settings", label: "Kalender & Departemen" },
+            { href: "/ga/green-meeting/recap", label: "Laporan & Ekspor" },
+        ],
+    },
     {
         icon: Package,
         label: "Data Master",

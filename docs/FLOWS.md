@@ -130,7 +130,42 @@ Alur pelaporan aktivitas dinas luar kantor dengan jaminan keaslian data:
 
 ---
 
-## 5. Flow: Penyerahan & BAST Aset General Affairs
+## 5. Flow: Green Meeting Harian
+
+```text
+[ GA / SUPER_ADMIN ]          [ API /api/green-meeting/* ]       [ greenMeetingService ]
+          │                                 │                              │
+          │── Pilih tanggal / buka sesi ───>│── requireAuth ──────────────>│
+          │                                 │                              │── Cek kalender libur
+          │                                 │                              │── Ambil/buat sesi harian
+          │                                 │                              │── Buat presensi unit aktif = ALPA
+          │<── Sesi + presensi + notulen ───│<─────────────────────────────│
+          │                                 │                              │
+          │── Catat DARI → KEPADA ─────────>│── Validasi payload ─────────>│
+          │                                 │                              │── Simpan informasi/tugas
+          │                                 │                              │── Simpan target polymorphic
+          │                                 │                              │── Buat Deadline 1 jika tugas
+          │                                 │                              │
+          │── Hadir/Izin/Alpa atau bulk ───>│─────────────────────────────>│
+          │── Perpanjang deadline + alasan >│─────────────────────────────>│
+          │<── Data mutakhir ───────────────│<─────────────────────────────│
+
+[ HR / Karyawan ] ── GET read-only ────────> sesi, notulen, tugas relevan, presensi, rekap
+```
+
+1. **Pemilihan Tanggal & Sesi**: GA, HR, dan karyawan dapat memilih tanggal melalui panah harian atau pemilih tanggal native. `getOrCreateTodaySession()` menggunakan satu sesi per tanggal dan membuat sesi bila belum ada.
+2. **Hari Libur**: Hari yang terdapat dalam daftar mingguan `offDaysWeekly` atau `GreenMeetingHoliday` ditandai sebagai off-day. Konfigurasi kalender dikelola GA.
+3. **Inisialisasi Presensi**: Hanya `GreenMeetingUnit` aktif yang dimasukkan ke sesi. Setiap baris dimulai sebagai `ALPA`; GA mengubahnya menjadi `HADIR` atau `IZIN`, dengan alasan wajib untuk izin. Aksi massal tersedia untuk semua atau pilihan departemen.
+4. **Sinkronisasi Partisipasi**: Menonaktifkan departemen menghapus keikutsertaan presensinya; mengaktifkan kembali membuat record `ALPA` pada sesi terkini yang disinkronkan.
+5. **Notulen DARI → KEPADA**: Sumber dapat berupa direksi/pimpinan, departemen, divisi, karyawan, atau pihak lainnya. Sasaran dapat berupa seluruh perusahaan atau kombinasi multi-departemen, multi-divisi, dan multi-karyawan. Pencarian orang membaca master `Employee` berdasarkan nama/ID beserta jabatan dan struktur organisasi.
+6. **Tugas & Multi-Deadline**: Catatan `TUGAS` wajib memiliki Deadline 1. Setiap perpanjangan membuat `GreenMeetingDeadlineHistory` baru dengan nomor urut dan alasan; kuota mengikuti `maxDeadlineExtensions`.
+7. **Koreksi Terlacak**: Edit notulensi oleh GA mewajibkan alasan dan berjalan atomik: snapshot lama disimpan ke `GreenMeetingNoteRevision`, target diganti, note diperbarui, lalu audit log dibuat. Tugas yang sudah berjalan/selesai/dibatalkan atau pernah diperpanjang tidak dapat dikonversi menjadi informasi; deadline awal tidak dapat diganti setelah ada perpanjangan.
+8. **Akses & Smart Filter**: Mutasi memerlukan `ga.manage`, role `GA_ADMIN`, atau override `SUPER_ADMIN`. HR dan karyawan memakai halaman read-only. Filter Semua tetap menampilkan seluruh notulensi sesi; filter relevansi mencocokkan `EMPLOYEE`, `DEPARTMENT`, dan `DIVISION` hanya melalui ID scope yang sesuai `targetType`, sedangkan `isAllTarget` relevan bagi semua pengguna. Daftar tugas relevan tetap mencakup seluruh waktu.
+9. **Navigasi GA**: Modul GA terdiri dari rute presensi, notulensi, tindak lanjut, pengaturan, dan rekap di bawah sub-dropdown Green Meeting. Root `/ga/green-meeting` mengarah ke presensi.
+
+---
+
+## 6. Flow: Penyerahan & BAST Aset General Affairs
 
 Alur serah terima aset korporat dari GA ke karyawan:
 

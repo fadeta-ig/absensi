@@ -4,7 +4,7 @@
 > **Source of Truth**: `prisma/schema.prisma` and live database tables.  
 > **Last Verified**: 2026-09-10  
 
-Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, 47 model entitas, relasi antar tabel, dan strategi migrasi.
+Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, model entitas, relasi antar tabel, dan strategi migrasi. Skema aktual memuat **57 model Prisma** yang masing-masing dipetakan ke tabel fisik.
 
 
 ---
@@ -21,7 +21,7 @@ Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Pr
 
 ## 2. Comprehensive Model & Table Catalog
 
-Basis data terdiri dari **47 model Prisma** yang dipetakan ke **50 tabel fisik** pada basis data MariaDB (`hris_local`):
+Basis data terdiri dari **57 model Prisma** yang dipetakan ke **57 tabel fisik** melalui deklarasi `@@map` pada schema Prisma:
 
 ### A. Autentikasi & RBAC (5 Model)
 1. `UserAccount` (`user_accounts`): Akun pengguna aplikasi. Kolom penting: `id`, `username`, `email`, `password_hash`, `session_version`, `is_active`, `employee_id`.
@@ -84,6 +84,28 @@ Basis data terdiri dari **47 model Prisma** yang dipetakan ke **50 tabel fisik**
 48. `BirthdayReminderSetting` (`birthday_reminder_settings`): Konfigurasi pengingat email ulang tahun.
 49. `BirthdayPreparationStatus` (`birthday_preparation_statuses`): Status alur persiapan ulang tahun.
 50. `EmployeeBirthdayPreparation` (`employee_birthday_preparations`): Rekap persiapan per karyawan per tahun.
+
+> Penomoran katalog lama di atas bersifat indeks domain historis dan memasukkan tabel pivot sebagai item tersendiri. Jumlah canonical skema tetap mengikuti deklarasi `model` aktual di `prisma/schema.prisma`.
+
+### G. Green Meeting (9 Model)
+- `GreenMeetingConfig` (`green_meeting_configs`): Konfigurasi tunggal modul (`id = "default"`) yang mengunci `picRole = "GA"`, ruangan dan jam default, daftar hari libur mingguan, serta kuota maksimum perpanjangan deadline.
+- `GreenMeetingUnit` (`green_meeting_units`): Pemetaan satu-ke-satu ke `Department`; menentukan apakah departemen aktif sebagai peserta rapat dan apakah kehadirannya diwajibkan secara default.
+- `GreenMeetingHoliday` (`green_meeting_holidays`): Tanggal libur khusus beserta deskripsi dan flag pengulangan.
+- `GreenMeetingSession` (`green_meeting_sessions`): Satu sesi per `meetingDate`, menyimpan ruangan, jam mulai, status, notulis, serta relasi presensi dan notulen.
+- `GreenMeetingAttendance` (`green_meeting_attendances`): Presensi unik per kombinasi sesi dan departemen (`[sessionId, unitId]`), berstatus `HADIR`, `IZIN`, atau `ALPA`; nilai awal adalah `ALPA`, dan `IZIN` wajib memiliki alasan.
+- `GreenMeetingNote` (`green_meeting_notes`): Butir informasi atau tugas. `originType` mendukung `DIREKSI`, `DEPARTMENT`, `DIVISION`, `EMPLOYEE`, dan `LAINNYA`; `originName` menyimpan label sumber yang human-readable, sedangkan `lastEditedAt` dan `lastEditedBy` menandai koreksi terakhir.
+- `GreenMeetingNoteRevision` (`green_meeting_note_revisions`): Riwayat revisi append-only berisi nomor revisi, alasan wajib, aktor, timestamp, dan snapshot JSON notulensi sebelum perubahan.
+- `GreenMeetingNoteTarget` (`green_meeting_note_targets`): Sasaran many-to-one untuk notulen. Setiap baris bertipe `DEPARTMENT`, `DIVISION`, atau `EMPLOYEE` dan menyimpan foreign key terkait serta label tampilan. Sasaran seluruh perusahaan direpresentasikan oleh `GreenMeetingNote.isAllTarget = true` tanpa baris target.
+- `GreenMeetingDeadlineHistory` (`green_meeting_deadline_histories`): Riwayat Deadline 1 dan setiap perpanjangan tugas secara berurutan (`sequence`), lengkap dengan alasan dan pembuat. Riwayat lama tidak ditimpa.
+
+Relasi inti Green Meeting:
+
+1. `Department` 1 ── 0..1 `GreenMeetingUnit`.
+2. `GreenMeetingSession` 1 ── * `GreenMeetingAttendance`; setiap sesi/departemen unik.
+3. `GreenMeetingSession` 1 ── * `GreenMeetingNote`.
+4. `GreenMeetingNote` 1 ── * `GreenMeetingNoteTarget`.
+5. `GreenMeetingNote` 1 ── * `GreenMeetingDeadlineHistory`.
+6. `Division`, `Department`, dan `Employee` menjadi sumber master HR bagi target notulen; data organisasi tidak diduplikasi ke master baru Green Meeting.
 
 ---
 

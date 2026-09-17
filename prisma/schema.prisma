@@ -68,6 +68,7 @@ model Employee {
   taxProfile            EmployeeTaxProfile?
   taxHistories          EmployeeTaxHistory[]
   birthdayPreparations  EmployeeBirthdayPreparation[]
+  greenMeetingTargets   GreenMeetingNoteTarget[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -479,18 +480,21 @@ model Department {
   createdAt   DateTime   @default(now()) @map("created_at")
   division    Division   @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   employees   Employee[] @relation("EmployeeDepartment")
+  greenMeetingUnit    GreenMeetingUnit?
+  greenMeetingTargets GreenMeetingNoteTarget[]
 
   @@index([divisionId], map: "departments_division_id_fkey")
   @@map("departments")
 }
 
 model Division {
-  id          String       @id @default(uuid())
-  name        String       @unique
-  isActive    Boolean      @default(true) @map("is_active")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  departments Department[]
-  employees   Employee[]   @relation("EmployeeDivision")
+  id                  String                   @id @default(uuid())
+  name                String                   @unique
+  isActive            Boolean                  @default(true) @map("is_active")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  departments         Department[]
+  employees           Employee[]               @relation("EmployeeDivision")
+  greenMeetingTargets GreenMeetingNoteTarget[]
 
   @@map("divisions")
 }
@@ -1044,5 +1048,185 @@ model EmployeeBirthdayPreparation {
   @@index([employeeId], map: "idx_emp_bday_prep_employee_id")
   @@index([statusId], map: "idx_emp_bday_prep_status_id")
   @@map("employee_birthday_preparations")
+}
+
+// ─── Green Meeting (Rapat Koordinasi Harian Internal) ───────────
+
+enum GreenMeetingNoteType {
+  INFORMASI
+  TUGAS
+}
+
+enum GreenMeetingTaskStatus {
+  BELUM_DIMULAI
+  SEDANG_BERJALAN
+  SELESAI
+  DIBATALKAN
+}
+
+enum GreenMeetingAttendanceStatus {
+  HADIR
+  IZIN
+  ALPA
+}
+
+enum GreenMeetingOriginType {
+  DIREKSI
+  DEPARTMENT
+  DIVISION
+  EMPLOYEE
+  LAINNYA
+}
+
+model GreenMeetingConfig {
+  id                    String   @id @default("default")
+  picRole               String   @default("GA") @map("pic_role") // Tim pengelola tetap permanen: "GA" (WIG002)
+  defaultRoom           String   @default("Ruang Rapat Utama Lt. 2") @map("default_room")
+  defaultTime           String   @default("08:30") @map("default_time")
+  maxDeadlineExtensions Int      @default(3) @map("max_deadline_extensions")
+  offDaysWeekly         String   @default("0,6") @map("off_days_weekly") // 0=Min, 6=Sab
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  updatedBy             String?  @map("updated_by")
+
+  @@map("green_meeting_configs")
+}
+
+model GreenMeetingUnit {
+  id                String   @id @default(uuid())
+  departmentId      String   @unique @map("department_id")
+  isActiveInMeeting Boolean  @default(true) @map("is_active_in_meeting")
+  isDefaultRequired Boolean  @default(true) @map("is_default_required")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  department  Department                 @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  attendances GreenMeetingAttendance[]
+
+  @@map("green_meeting_units")
+}
+
+model GreenMeetingHoliday {
+  id          String   @id @default(uuid())
+  date        DateTime @unique
+  description String
+  isRecurring Boolean  @default(false) @map("is_recurring")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("green_meeting_holidays")
+}
+
+model GreenMeetingSession {
+  id           String    @id @default(uuid())
+  meetingDate  DateTime  @unique @map("meeting_date")
+  startTime    String    @default("08:30") @map("start_time")
+  endTime      String?   @map("end_time")
+  room         String    @default("Ruang Rapat Utama Lt. 2")
+  notaryName   String?   @map("notary_name")
+  generalNotes String?   @map("general_notes") @db.Text
+  isCancelled  Boolean   @default(false) @map("is_cancelled")
+  cancelReason String?   @map("cancel_reason") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  attendances GreenMeetingAttendance[]
+  notes       GreenMeetingNote[]
+
+  @@map("green_meeting_sessions")
+}
+
+model GreenMeetingAttendance {
+  id                 String                       @id @default(uuid())
+  sessionId          String                       @map("session_id")
+  unitId             String                       @map("unit_id")
+  status             GreenMeetingAttendanceStatus @default(ALPA)
+  representativeName String?                      @map("representative_name")
+  permitReason       String?                      @map("permit_reason") @db.Text
+  confirmedAt        DateTime?                    @map("confirmed_at")
+  confirmedBy        String?                      @map("confirmed_by")
+
+  session GreenMeetingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  unit    GreenMeetingUnit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, unitId], map: "idx_gm_attendance_session_unit")
+  @@index([sessionId], map: "idx_gm_attendance_session")
+  @@index([unitId], map: "idx_gm_attendance_unit")
+  @@map("green_meeting_attendances")
+}
+
+model GreenMeetingNote {
+  id          String                 @id @default(uuid())
+  sessionId   String                 @map("session_id")
+  type        GreenMeetingNoteType   @default(INFORMASI)
+  content     String                 @db.Text
+  originType  GreenMeetingOriginType @default(DIREKSI) @map("origin_type")
+  originName  String                 @default("Direksi") @map("origin_name")
+  isAllTarget Boolean                @default(true) @map("is_all_target")
+  taskStatus  GreenMeetingTaskStatus @default(BELUM_DIMULAI) @map("task_status")
+  completedAt  DateTime?              @map("completed_at")
+  lastEditedAt DateTime?              @map("last_edited_at")
+  lastEditedBy String?                @map("last_edited_by")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @updatedAt @map("updated_at")
+
+  session   GreenMeetingSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  targets   GreenMeetingNoteTarget[]
+  deadlines GreenMeetingDeadlineHistory[]
+  revisions GreenMeetingNoteRevision[]
+
+  @@index([sessionId], map: "idx_gm_note_session")
+  @@index([taskStatus], map: "idx_gm_note_task_status")
+  @@map("green_meeting_notes")
+}
+
+model GreenMeetingNoteRevision {
+  id             String   @id @default(uuid())
+  noteId         String   @map("note_id")
+  revisionNumber Int      @map("revision_number")
+  changeReason   String   @map("change_reason") @db.Text
+  changedBy      String   @map("changed_by")
+  previousData   Json     @map("previous_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  note GreenMeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, revisionNumber], map: "idx_gm_note_revision_number")
+  @@index([noteId], map: "idx_gm_note_revision_note")
+  @@map("green_meeting_note_revisions")
+}
+
+model GreenMeetingNoteTarget {
+  id           String  @id @default(uuid())
+  noteId       String  @map("note_id")
+  targetType   String  @default("DEPARTMENT") @map("target_type") // "DEPARTMENT" | "DIVISION" | "EMPLOYEE"
+  departmentId String? @map("department_id")
+  divisionId   String? @map("division_id")
+  employeeId   String? @map("employee_id")
+  label        String? // Nama/label ringkas target (misal: "Aditya Pratama (IT)", "Divisi SGA", dll.)
+
+  note       GreenMeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  department Department?      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  division   Division?        @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  employee   Employee?        @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade)
+
+  @@index([noteId], map: "idx_gm_note_target_note")
+  @@index([departmentId], map: "idx_gm_note_target_dept")
+  @@index([divisionId], map: "idx_gm_note_target_div")
+  @@index([employeeId], map: "idx_gm_note_target_emp")
+  @@map("green_meeting_note_targets")
+}
+
+model GreenMeetingDeadlineHistory {
+  id           String   @id @default(uuid())
+  noteId       String   @map("note_id")
+  sequence     Int      @default(1) // 1 = Deadline Awal, 2 = Perpanjangan 1, dst.
+  deadlineDate DateTime @map("deadline_date")
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  createdBy    String?  @map("created_by")
+
+  note GreenMeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId], map: "idx_gm_deadline_note")
+  @@map("green_meeting_deadline_histories")
 }
 

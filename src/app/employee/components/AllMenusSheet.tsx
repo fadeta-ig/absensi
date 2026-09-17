@@ -20,6 +20,7 @@ import {
     X,
     ChevronRight,
     LucideIcon,
+    CalendarCheck,
 } from "lucide-react";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { useToast } from "@/components/Toast";
@@ -186,6 +187,14 @@ export default function AllMenusSheet({
                     icon: Newspaper,
                     bg: "bg-amber-50 dark:bg-amber-950/40",
                     color: "text-amber-600 dark:text-amber-400",
+                },
+                {
+                    href: "/employee/green-meeting",
+                    label: "Green Meeting",
+                    description: "Agenda rapat harian, notulensi, dan tugas departemen",
+                    icon: CalendarCheck,
+                    bg: "bg-emerald-50 dark:bg-emerald-950/40",
+                    color: "text-emerald-600 dark:text-emerald-400",
                 },
                 {
                     href: "/employee/todos",

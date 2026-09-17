@@ -6,10 +6,8 @@ import {
     LayoutDashboard,
     Users,
     ClipboardList,
-    Wallet,
     CalendarOff,
     Megaphone,
-    Clock4,
     MapPinned,
     FileDown,
     Database,
@@ -18,6 +16,7 @@ import {
     FileText,
     ShieldAlert,
     Cake,
+    CalendarCheck,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
@@ -164,6 +163,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     label: cat.name
                 }))
             ],
+        },
+        {
+            href: "/dashboard/green-meeting",
+            icon: CalendarCheck,
+            label: "Green Meeting (GA)",
         }
     ];
 

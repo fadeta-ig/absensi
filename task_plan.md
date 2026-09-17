@@ -1,45 +1,17 @@
-# Task Plan: Konfigurasi Default Light Mode & Persistensi Dark Mode
+# Task Plan: Implementasi & Penyempurnaan Lengkap Modul Green Meeting
 
 ## Goal
-Mengubah konfigurasi tema aplikasi agar secara default menggunakan **Light Mode** untuk seluruh pengguna baru/tanpa preferensi, dengan tetap mempertahankan dan menyimpan pilihan pengguna ke **Dark Mode** secara persisten di `localStorage` melalui `next-themes`, serta memperbarui dokumentasi Project Brain di `/docs/CONVENTIONS.md`.
+Membangun dan menyempurnakan modul **Green Meeting** (Rapat Koordinasi Harian Internal Perusahaan) yang dikelola permanen oleh General Affairs (`GA_ADMIN` / `ga.manage`), dipantau oleh HR secara read-only, dan dapat diakses transparan oleh seluruh karyawan dengan fitur presensi 1-klik, notulensi fleksibel DARI ➔ KEPADA, pelacak multi-deadline, kalender kerja, audit revisi notulensi terlacak, arsitektur multi-page dengan sidebar sub-dropdown, serta smart filter relevansi employee yang praktis.
 
-## Current Phase
-Complete (Implemented, Verified, and Documented)
+## Status
+**Completed & Verified 100%**. Siap untuk di-push ke repository remote.
 
-## Constraints & Principles
-1. **Default Light Mode**:
-   - `defaultTheme="light"`
-   - `enableSystem={false}` agar tidak terpengaruh otomatis oleh OS dark mode saat pertama kali berkunjung.
-2. **Persistence Guarantee**:
-   - Pilihan pengguna saat menekan tombol `ThemeToggle` tetap tersimpan ke `localStorage` (kunci `"theme"`).
-   - Saat pengguna memilih dark mode, aplikasi langsung mengingatnya pada reload/kunjungan berikutnya.
-3. **Project Brain Documentation**:
-   - Dokumentasikan aturan tema di `docs/CONVENTIONS.md` (Poin 8).
-4. **Git Rule**:
-   - Dilarang keras melakukan `git commit` / `git push` tanpa perintah eksplisit dari pengguna.
-
----
-
-## Planned Phases
-
-### Phase 1 — Planning & Design
-- [x] Rancang konfigurasi `ThemeProvider` di `src/app/layout.tsx`.
-- [x] Verifikasi mekanisme `setTheme` dan penyimpanan `localStorage` pada `src/components/ThemeToggle.tsx`.
-- [x] Siapkan materi dokumentasi standar tema untuk `docs/CONVENTIONS.md`.
-- **Status:** complete
-
-### Phase 2 — Implementation in Codebase & Project Brain
-- [x] Ubah konfigurasi `ThemeProvider` di `src/app/layout.tsx` (`defaultTheme="light"`, `enableSystem={false}`).
-- [x] Tambahkan poin konvensi tema ke `docs/CONVENTIONS.md` (Poin 8: Standarisasi Tema & Persistensi).
-- **Status:** complete
-
-### Phase 3 — Verification Pass
-- [x] Jalankan ESLint pada `src/app/layout.tsx` (0 errors).
-- [x] Jalankan `npx tsc --noEmit` (0 error).
-- [x] Jalankan Vitest test suite (52 passed).
-- [x] Pastikan tidak ada server background yang tertinggal.
-- **Status:** complete
-
-### Phase 4 — Delivery to User
-- [x] Berikan penjelasan perubahan dan status Project Brain kepada pengguna.
-- **Status:** complete
+## Tahapan yang Telah Diselesaikan
+- [x] **Fase 1 — Fondasi Skema & Database**: Model Prisma, enum, relasi sesi, presensi default `ALPA`, notulen, target, deadline history, dan revision history.
+- [x] **Fase 2 — Service Layer & REST API**: `greenMeetingService.ts` dan 9 route API `/api/green-meeting/*` dengan RBAC ketat.
+- [x] **Fase 3 — Fleksibilitas DARI & KEPADA**: Segmented scope selector & live employee search autocomplete untuk DARI; target polymorphic untuk KEPADA.
+- [x] **Fase 4 — Multi-Page & Sidebar Sub-Dropdown GA**: Memecah halaman monolitik menjadi 5 sub-halaman terdedikasi (`attendance`, `notes`, `tasks`, `settings`, `recap`) dengan navigasi ganda (`AppShell` subItems + `GreenMeetingNavTabs`).
+- [x] **Fase 5 — Koreksi Notulensi & Revision Ledger**: Kemampuan GA mengedit butir notulen dengan alasan wajib, snapshot revisi append-only, audit log, dan proteksi mutasi tugas.
+- [x] **Fase 6 — UX Smart Filter Employee**: Filter relevansi presisi (`Semua`, `Untuk Saya & Dept`, `Khusus Saya`, `Tugas`, `Arahan Direksi`) dengan visual relevance badges dan pencegahan kebocoran lintas divisi.
+- [x] **Fase 7 — Project Brain & Dokumentasi**: Menyelaraskan seluruh 9 dokumen canonical di `/docs/`.
+- [x] **Fase 8 — Verifikasi & Quality Gates**: Typecheck (0 error), targeted ESLint (0 warning), unit tests (25 passed), dan production build Next.js (130 static pages).

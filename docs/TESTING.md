@@ -59,6 +59,7 @@ tests/
 │   ├── employeeStatusService.test.ts
 │   ├── holidayService.test.ts
 │   ├── leaveService.test.ts
+│   ├── greenMeetingService.test.ts # Validasi presensi, multi-deadline, RBAC, serta DARI/KEPADA fleksibel
 │   ├── pii.test.ts
 │   ├── userManagement.integration.test.ts
 │   └── visitPhotoService.test.ts

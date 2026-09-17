@@ -58,6 +58,17 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Helpdesk & Tiket Permintaan**: Karyawan dapat mengajukan tiket pelaporan kerusakan perangkat atau permohonan aset baru ke tim GA.
 - **Kartu SIM Korporat**: Modul khusus pencatatan kartu SIM perusahaan, masa aktif kuota, dan status peminjaman staf.
 
+### C. Green Meeting
+- **Kepemilikan Operasional GA**: General Affairs mengelola konfigurasi, kalender, sesi, presensi departemen, notulen, tindak lanjut, dan laporan. Portal HR dan karyawan menyediakan pemantauan read-only; `SUPER_ADMIN` tetap memiliki override sistem pada mutasi API.
+- **Antarmuka GA Multi-Page**: Operasional dipisahkan menjadi lima rute fokus: Presensi Hari Ini, Notulensi Rapat, Pelacak Tindak Lanjut, Kalender & Departemen, serta Laporan & Ekspor. Sidebar GA menggunakan sub-dropdown dan `/ga/green-meeting` mengarah ke halaman presensi.
+- **Sesi Harian & Kalender**: Sesi menggunakan pemilih tanggal native, jam mulai yang dapat dipilih, ruangan dinamis, hari libur mingguan, dan tanggal libur khusus.
+- **Presensi Perwakilan Departemen**: Departemen aktif dibuatkan baris presensi berstatus awal `ALPA`. GA dapat menetapkan `HADIR`, `IZIN` dengan alasan wajib, atau `ALPA`, termasuk aksi massal. Menonaktifkan partisipasi departemen mengeluarkannya dari presensi sesi.
+- **Notulen DARI → KEPADA**: Asal pembahasan mendukung pimpinan/direksi, departemen, divisi, seorang karyawan, atau pihak kustom. Sasaran mendukung seluruh karyawan, multi-departemen, multi-divisi, atau multi-karyawan lintas struktur organisasi dengan pencarian nama/ID.
+- **Koreksi Notulensi Terlacak**: GA dapat memperbaiki isi, asal, sasaran, jenis catatan, dan deadline yang masih memenuhi aturan dengan alasan wajib. Sistem menyimpan snapshot sebelum perubahan sebagai riwayat revisi append-only, metadata editor, dan audit log; HR serta karyawan tetap read-only.
+- **Tindak Lanjut Bertingkat**: Catatan bertipe tugas wajib memiliki Deadline 1. Perpanjangan menambah riwayat deadline baru beserta alasan tanpa menimpa riwayat terdahulu dan dibatasi kuota konfigurasi.
+- **Transparansi & Smart Filter**: HR memantau melalui `/dashboard/green-meeting`; karyawan tetap dapat membaca seluruh notulensi sesi melalui filter Semua. Portal `/employee/green-meeting` menyediakan filter relevansi Personal, Departemen, Divisi, dan Untuk Semua yang mencocokkan target secara eksklusif berdasarkan `targetType`, serta daftar tugas relevan lintas waktu.
+- **Laporan**: GA dan pemantau terautentikasi dapat melihat rekap rentang tanggal; UI GA menyediakan ekspor Excel dan PDF.
+
 ---
 
 ## 4. Modul HR & Penggajian (Payroll)

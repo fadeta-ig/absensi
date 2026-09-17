@@ -74,3 +74,20 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 - **Consequences**:
   - Positif: Bukti audit dinas luar memiliki kekuatan forensik yang tinggi.
   - Negatif: Memerlukan dependensi native modul `sharp` dan kapasitas penyimpanan disk lokal untuk file gambar asli dan stempel.
+
+---
+
+## ADR-006: Kepemilikan Permanen GA dan Pemisahan Green Meeting Menjadi Multi-Page
+
+- **Decision**: Menetapkan General Affairs sebagai pemilik operasional permanen Green Meeting dan memisahkan dashboard GA menjadi lima halaman fokus di bawah sub-dropdown sidebar.
+- **Context**: Modul menggabungkan pekerjaan harian yang berbeda: presensi, pencatatan notulen, monitoring tindak lanjut, kalender/partisipasi departemen, serta laporan. Satu halaman bertab menjadi padat dan tidak memberikan URL khusus per fungsi.
+- **Chosen Approach**:
+  1. `GreenMeetingConfig.picRole` dikunci ke `GA`; tidak tersedia alur transfer PIC.
+  2. Mutasi API diotorisasi oleh `canManageGreenMeeting()` untuk `ga.manage`, `GA_ADMIN`, dan override `SUPER_ADMIN`; HR dan karyawan hanya membaca.
+  3. Portal GA memakai rute `/ga/green-meeting/attendance`, `/notes`, `/tasks`, `/settings`, dan `/recap`, dengan sub-dropdown `AppShell` serta navigasi konteks `GreenMeetingNavTabs`.
+  4. Root `/ga/green-meeting` mengarahkan pengguna ke halaman presensi.
+- **Reason**: Memisahkan tanggung jawab UI, membuat setiap fungsi dapat di-bookmark, mempertahankan pola navigasi native `AppShell`, dan menghindari perpindahan kepemilikan yang bertentangan dengan mandat operasional.
+- **Alternatives**: Mempertahankan satu halaman besar dengan tab atau membuat role/PIC Green Meeting dapat dipindahkan secara dinamis.
+- **Consequences**:
+  - Positif: Navigasi lebih jelas, halaman lebih fokus, URL stabil per fungsi, dan boundary pengelolaan GA eksplisit.
+  - Negatif: Beberapa halaman perlu memuat data Green Meeting secara mandiri dan komponen navigasi bersama harus dijaga konsisten.

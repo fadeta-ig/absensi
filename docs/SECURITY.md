@@ -42,6 +42,11 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
 - **Pemeriksaan Izin API**:
   - API handler memeriksa keberadaan kode izin spesifik: `session.permissions.includes("hr.manage")`.
   - Bidang `session.role` (string "hr" | "ga" | "employee") telah ditandai `@deprecated` dan hanya dipertahankan untuk kompatibilitas ke belakang (*backward compatibility*).
+- **Boundary Green Meeting**:
+  - Kepemilikan operasional berada pada General Affairs; `picRole` dikunci ke `GA` dan tidak ada workflow transfer PIC.
+  - Endpoint baca `/api/green-meeting/*` memerlukan autentikasi dan mendukung transparansi internal bagi GA, HR, dan karyawan.
+  - Endpoint mutasi memanggil `canManageGreenMeeting()` dan hanya menerima permission `ga.manage`, role `GA_ADMIN`, atau override role `SUPER_ADMIN`.
+  - Portal `/dashboard/green-meeting` dan `/employee/green-meeting` tidak menyediakan kontrol mutasi; seluruh pengelolaan operasional ada pada portal GA multi-page.
 
 ---
 
