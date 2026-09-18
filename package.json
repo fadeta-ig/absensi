@@ -19,6 +19,7 @@
     "db:seed:assets": "npx tsx prisma/seedAssets.ts",
     "db:seed:green-meeting": "npx tsx prisma/seedGreenMeeting.ts",
     "db:seed:company": "npx tsx prisma/seedCompanyStructure.ts",
+    "db:seed:shifts": "npx tsx prisma/seed3Shifts.ts",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "db:reset:only": "prisma db push --force-reset",
     "db:reset:dev": "prisma db push --force-reset && npm run db:seed:dev",

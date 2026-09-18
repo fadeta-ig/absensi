@@ -16,6 +16,12 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **Department (`departments`)**: Departemen spesifik yang bernaung di bawah divisi.
 - **Position (`positions`)**: Jabatan struktural atau fungsional (contoh: `Manager`, `Staff`).
 - **WorkShift (`work_shifts`) & WorkShiftDay (`work_shift_days`)**: Pola jadwal kerja karyawan. Menentukan jam masuk (`startTime`), jam pulang (`endTime`), hari libur (`isOff`), serta toleransi keterlambatan (`lateCheckIn`) dan pulang awal (`earlyCheckOut`).
+- **Pola Operasional 24 Jam 3-Shift & Rotasi**: Operasional 24 jam non-stop di WIG dikelola melalui 3 shift kerja terstandarisasi berbasis format `07:00`:
+  - **Shift 1 (Pagi)**: `07:00 – 15:00` WIB (8 jam kerja).
+  - **Shift 2 (Siang)**: `15:00 – 23:00` WIB (8 jam kerja).
+  - **Shift 3 (Malam / Lintas Hari)**: `23:00 – 07:00` WIB (8 jam kerja, melintasi tengah malam ke H+1).
+  - **Shift Lintas Hari (Overnight / Cross-Day)**: Jika `endTime < startTime`, shift diidentifikasi sebagai lintas hari. Rekor presensi diatribusikan ke tanggal mulai shift (`shiftDate = H-1`). Saat Clock-Out di pagi hari H+1 (s.d. 14:00 WIB), sistem secara otomatis mencocokkannya ke record `H-1` yang belum memiliki `clockOut`. Perhitungan toleransi dinormalisasi dengan offset +1440 menit (24 jam).
+  - **Model Rotasi Karyawan**: Karyawan berotasi antar shift dengan memperbarui relasi `shiftId` pada master `Employee`.
 - **Employee (`employees`)**: Data induk karyawan yang memuat biodata, tipe ikatan kerja, kuota cuti tahunan, gaji pokok, serta relasi hierarki atasan-bawahan (`managerId` merujuk ke `employeeId` atasan).
 - **EmploymentType**: Status kepegawaian: `PERMANENT`, `CONTRACT`, `PROBATION`, atau `INTERN`.
 - **Status Kepegawaian & Riwayat**: Transisi status aktif/non-aktif dicatat ke `employee_status_histories` lengkap dengan tanggal efektif, alasan, dan identitas admin yang mengubah status.

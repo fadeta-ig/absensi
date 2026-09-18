@@ -55,6 +55,7 @@ export default function ShiftsPage() {
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [actionId, setActionId] = useState<string | null>(null);
+    const [initializingPackage, setInitializingPackage] = useState(false);
 
     useEffect(() => {
         const loadShifts = async () => {
@@ -148,6 +149,35 @@ export default function ShiftsPage() {
         }
     };
 
+    const handleInitializePackage = () => {
+        confirm({
+            title: "Inisialisasi Paket 3-Shift 24 Jam",
+            message: "Sistem akan membuat otomatis 3 Master Shift standar format 07:00 (Pagi 07:00–15:00, Siang 15:00–23:00, dan Malam 23:00–07:00) ke database jika belum ada. Lanjutkan?",
+            variant: "info",
+            confirmLabel: "Ya, Inisialisasi",
+            onConfirm: async () => {
+                setInitializingPackage(true);
+                try {
+                    const res = await fetch("/api/shifts/preset", { method: "POST" });
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menginisialisasi paket 3-shift."));
+                    const data = await res.json();
+                    if (Array.isArray(data.shifts)) {
+                        setShifts(data.shifts);
+                    } else {
+                        const latestRes = await fetch("/api/shifts");
+                        if (latestRes.ok) setShifts(await latestRes.json());
+                    }
+                    toast("Paket 3-Shift 24 Jam berhasil diinisialisasi!", "success");
+                } catch (err) {
+                    reportClientError("ShiftsPage", "Gagal inisialisasi paket 3 shift", err);
+                    toast(err instanceof Error ? err.message : "Gagal menginisialisasi paket shift.", "error");
+                } finally {
+                    setInitializingPackage(false);
+                }
+            },
+        });
+    };
+
     const openEdit = (shift: WorkShift) => {
         setEditId(shift.id);
         const sortedDays = [...shift.days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
@@ -205,6 +235,61 @@ export default function ShiftsPage() {
         return `${Math.floor(diff / 60)}j ${diff % 60}m`;
     };
 
+    const isDayOvernight = (start: string, end: string) => {
+        const [sh, sm] = start.split(":").map(Number);
+        const [eh, em] = end.split(":").map(Number);
+        return (eh * 60 + em) < (sh * 60 + sm);
+    };
+
+    const hasOvernightDays = (days: ShiftDay[]) =>
+        days.some((d) => !d.isOff && isDayOvernight(d.startTime, d.endTime));
+
+    const apply3ShiftPreset = (type: "pagi" | "siang" | "malam") => {
+        if (type === "pagi") {
+            setForm((f) => ({
+                ...f,
+                name: f.name || "Shift 1 — Pagi",
+                earlyCheckIn: 30,
+                lateCheckIn: 15,
+                earlyCheckOut: 0,
+                lateCheckOut: 60,
+                days: f.days.map((d) => ({
+                    ...d,
+                    startTime: "07:00",
+                    endTime: "15:00",
+                })),
+            }));
+        } else if (type === "siang") {
+            setForm((f) => ({
+                ...f,
+                name: f.name || "Shift 2 — Siang",
+                earlyCheckIn: 30,
+                lateCheckIn: 15,
+                earlyCheckOut: 0,
+                lateCheckOut: 60,
+                days: f.days.map((d) => ({
+                    ...d,
+                    startTime: "15:00",
+                    endTime: "23:00",
+                })),
+            }));
+        } else if (type === "malam") {
+            setForm((f) => ({
+                ...f,
+                name: f.name || "Shift 3 — Malam",
+                earlyCheckIn: 30,
+                lateCheckIn: 15,
+                earlyCheckOut: 0,
+                lateCheckOut: 60,
+                days: f.days.map((d) => ({
+                    ...d,
+                    startTime: "23:00",
+                    endTime: "07:00",
+                })),
+            }));
+        }
+    };
+
     const hasTolerance = (s: WorkShift) =>
         s.lateCheckIn > 0 || s.earlyCheckIn > 0 || s.lateCheckOut > 0 || s.earlyCheckOut > 0;
 
@@ -225,9 +310,21 @@ export default function ShiftsPage() {
                     </h1>
                     <p className="text-sm text-[var(--text-muted)] mt-1">Kelola shift dan jadwal kerja per hari</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
-                    <Plus className="w-4 h-4" /> Tambah Shift
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        className="btn btn-secondary text-xs flex items-center gap-1.5 border border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                        onClick={handleInitializePackage}
+                        disabled={initializingPackage}
+                        title="Inisialisasi otomatis Shift 1 (Pagi), Shift 2 (Siang), dan Shift 3 (Malam) ke database"
+                    >
+                        {initializingPackage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
+                        Paket 3-Shift 24 Jam
+                    </button>
+                    <button className="btn btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
+                        <Plus className="w-4 h-4" /> Tambah Shift
+                    </button>
+                </div>
             </div>
 
             {loadError && (
@@ -253,13 +350,18 @@ export default function ShiftsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {shifts.map((shift) => (
                         <div key={shift.id} className={`card p-5 relative ${shift.isDefault ? "ring-2 ring-[var(--primary)]" : ""}`}>
-                            {shift.isDefault && (
-                                <div className="absolute top-3 right-3">
+                            <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                                {hasOvernightDays(shift.days) && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="Shift melintasi tengah malam (pulang hari berikutnya)">
+                                        🌙 Lintas Hari (+1)
+                                    </span>
+                                )}
+                                {shift.isDefault && (
                                     <span className="badge badge-primary flex items-center gap-1">
                                         <Star className="w-3 h-3" /> Default
                                     </span>
-                                </div>
-                            )}
+                                )}
+                            </div>
                             <div className="space-y-3">
                                 <div>
                                     <h3 className="text-base font-bold text-[var(--text-primary)]">{shift.name}</h3>
@@ -276,8 +378,13 @@ export default function ShiftsPage() {
                                                 {day.isOff ? (
                                                     <span className="text-red-400 font-medium">Libur</span>
                                                 ) : (
-                                                    <span className="font-mono text-[var(--primary)] font-bold">
+                                                    <span className="font-mono text-[var(--primary)] font-bold flex items-center gap-1">
                                                         {day.startTime} – {day.endTime}
+                                                        {isDayOvernight(day.startTime, day.endTime) && (
+                                                            <span className="text-[10px] px-1 py-0.2 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-bold" title="Pulang keesokan harinya">
+                                                                +1H
+                                                            </span>
+                                                        )}
                                                         <span className="text-[var(--text-muted)] font-normal ml-1.5">({calcHours(day.startTime, day.endTime)})</span>
                                                     </span>
                                                 )}
@@ -339,6 +446,41 @@ export default function ShiftsPage() {
                             <button className="modal-close" onClick={closeForm}><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            {/* Quick 3-Shift Presets */}
+                            <div className="rounded-lg border border-[var(--border)] p-3 bg-[var(--bg-secondary)] space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                                        ⚡ Template Cepat 3-Shift 24 Jam (Format 07:00):
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => apply3ShiftPreset("pagi")}
+                                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors"
+                                        title="Atur otomatis ke Shift Pagi 07:00 – 15:00"
+                                    >
+                                        ☀️ Shift 1: Pagi (07:00 – 15:00)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => apply3ShiftPreset("siang")}
+                                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
+                                        title="Atur otomatis ke Shift Siang 15:00 – 23:00"
+                                    >
+                                        🌤️ Shift 2: Siang (15:00 – 23:00)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => apply3ShiftPreset("malam")}
+                                        className="px-2.5 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition-colors"
+                                        title="Atur otomatis ke Shift Malam 23:00 – 07:00 (Lintas Hari)"
+                                    >
+                                        🌙 Shift 3: Malam (23:00 – 07:00)
+                                    </button>
+                                </div>
+                            </div>
+
                             <div className="form-group !mb-0">
                                 <label className="form-label">Nama Shift</label>
                                 <input className="form-input" placeholder="contoh: Shift Reguler" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -371,7 +513,12 @@ export default function ShiftsPage() {
                                                     <span className="text-[10px] text-red-500 font-medium">Libur</span>
                                                 </label>
                                                 {!day.isOff && (
-                                                    <div className="flex items-center gap-2 flex-1 justify-end">
+                                                    <div className="flex items-center gap-2 flex-1 justify-end flex-wrap">
+                                                        {isDayOvernight(day.startTime, day.endTime) && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 font-semibold">
+                                                                🌙 Pulang H+1
+                                                            </span>
+                                                        )}
                                                         <input
                                                             type="time"
                                                             className="form-input !py-1 !text-xs !w-24"

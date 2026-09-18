@@ -49,6 +49,13 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
   - Tindakan cepat HR berupa tombol kontak WhatsApp langsung (`wa.me`) dengan template pesan konfirmasi kehadiran.
   - Ekspor data mandiri ke format Excel dan PDF khusus daftar karyawan belum hadir.
 
+### D. Manajemen Shift & Operasional 24 Jam (Format 07:00)
+- **Template Cepat 3-Shift 24 Jam**: Tombol preset satu-klik pada formulir shift HR (`/dashboard/shifts`) untuk mengonfigurasi jadwal standar:
+  - **Shift 1: Pagi** (`07:00 – 15:00`)
+  - **Shift 2: Siang** (`15:00 – 23:00`)
+  - **Shift 3: Malam** (`23:00 – 07:00`, Lintas Hari / Overnight)
+- **Indikator Visual Shift Lintas Hari**: Badge penanda otomatis `🌙 Lintas Hari (+1)` pada kartu shift dan tag `🌙 Pulang H+1` pada baris jadwal harian saat `endTime < startTime`.
+- **Dukungan Backend Lintas Hari**: Perhitungan offset toleransi kepulangan (+1440 menit) dan resolusi otomatis clock-out shift malam ke rekor presensi hari kemarin ($H-1$).
 
 ---
 

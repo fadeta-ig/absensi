@@ -111,13 +111,8 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const existing = await getAttendanceByDate(session.employeeId, today);
-
         // ── Resolve shift early (needed for both clock-in and clock-out) ──
         const now = new Date();
-        const todayDay = getWIBDayOfWeek(now);
-        const { hours: nowH, minutes: nowM } = getWIBHoursMinutes(now);
-        const clockMinutes = nowH * 60 + nowM;
 
         let shift = null;
         if (employee.shiftId) {
@@ -133,35 +128,43 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        const todaySchedule = shift?.days.find((d) => d.dayOfWeek === todayDay);
-        const isOffDay = Boolean(shift && (!todaySchedule || todaySchedule.isOff));
+        const {
+            resolveAttendanceTargetForEmployee,
+            getNormalizedShiftWindows,
+            formatMinutes: formatShiftMinutes,
+        } = await import("@/lib/services/attendanceShiftHelper");
 
-        if (existing) {
-            if (existing.clockOut) {
-                return NextResponse.json(
-                    { error: "Anda sudah melakukan clock-in dan clock-out hari ini." },
-                    { status: 400 }
-                );
-            }
+        const target = await resolveAttendanceTargetForEmployee(
+            session.employeeId,
+            now,
+            shift?.days ?? []
+        );
+
+        if (target.mode === "ALREADY_COMPLETED") {
+            return NextResponse.json(
+                { error: "Anda sudah melakukan clock-in dan clock-out untuk shift hari ini." },
+                { status: 400 }
+            );
+        }
+
+        if (target.mode === "CLOCK_OUT") {
+            const existing = target.existingRecord;
 
             // ── Clock-Out Hard-Block Enforcement (Hanya berlaku untuk hari kerja normal) ──
-            if (!existing.isOffDay && shift && todaySchedule && !todaySchedule.isOff) {
-                const [endH, endM] = todaySchedule.endTime.split(":").map(Number);
-                const shiftEndMinutes = endH * 60 + endM;
-                const clockOutMinutes = clockMinutes;
+            if (!existing.isOffDay && shift && target.scheduleDay && !target.scheduleDay.isOff) {
+                const windows = getNormalizedShiftWindows(target.scheduleDay, shift);
+                const clockOutMinutes = target.relativeClockMinutes;
 
-                const earliestOut = shiftEndMinutes - (shift.earlyCheckOut ?? 0);
-                if (clockOutMinutes < earliestOut) {
+                if (clockOutMinutes < windows.earliestOutMinutes) {
                     return NextResponse.json(
-                        { error: `Belum waktunya clock-out. Anda bisa pulang mulai pukul ${formatMinutes(earliestOut)}.` },
+                        { error: `Belum waktunya clock-out. Anda bisa pulang mulai pukul ${formatShiftMinutes(windows.earliestOutMinutes)}.` },
                         { status: 400 }
                     );
                 }
 
-                const latestOut = shiftEndMinutes + (shift.lateCheckOut ?? 0);
-                if (shift.lateCheckOut > 0 && clockOutMinutes > latestOut) {
+                if (shift.lateCheckOut > 0 && clockOutMinutes > windows.latestOutMinutes) {
                     return NextResponse.json(
-                        { error: `Waktu clock-out sudah melewati batas pukul ${formatMinutes(latestOut)}. Hubungi HR.` },
+                        { error: `Waktu clock-out sudah melewati batas pukul ${formatShiftMinutes(windows.latestOutMinutes)}. Hubungi HR.` },
                         { status: 400 }
                     );
                 }
@@ -177,7 +180,7 @@ export async function POST(request: NextRequest) {
             } : null;
 
             const updated = await updateAttendance(existing.id, {
-                clockOut: new Date().toISOString(),
+                clockOut: now.toISOString(),
                 clockOutLocation: locationWithNetwork,
                 clockOutPhoto: body.photo,
             });
@@ -188,9 +191,17 @@ export async function POST(request: NextRequest) {
                 });
             }
 
-            logger.info("Clock-out success", { employeeId: session.employeeId, isOffDay: existing.isOffDay });
+            logger.info("Clock-out success", {
+                employeeId: session.employeeId,
+                isOffDay: existing.isOffDay,
+                shiftDate: target.shiftDate,
+                isOvernight: target.isOvernight,
+            });
             return NextResponse.json(updated);
         }
+
+        // ── target.mode === "CLOCK_IN" ──
+        const isOffDay = Boolean(shift && (!target.scheduleDay || target.scheduleDay.isOff));
 
         // ── Validasi Kehadiran Hari Libur (Off-Day Attendance) ──
         if (isOffDay) {
@@ -203,33 +214,25 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // ── Clock-In Early Block (Hanya berlaku untuk hari kerja resmi) ──
-        if (!isOffDay && shift && todaySchedule && !todaySchedule.isOff) {
-            const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
-            const shiftStartMinutes = shiftHour * 60 + shiftMin;
-            const earliestIn = shiftStartMinutes - (shift.earlyCheckIn ?? 0);
-            const clockInMinutes = clockMinutes;
+        let status: "present" | "late" = "present";
 
-            if (clockInMinutes < earliestIn) {
+        // ── Clock-In Early Block & Tolerance ──
+        if (!isOffDay && shift && target.scheduleDay && !target.scheduleDay.isOff) {
+            const windows = getNormalizedShiftWindows(target.scheduleDay, shift);
+            const clockInMinutes = target.relativeClockMinutes;
+
+            if (clockInMinutes < windows.earliestInMinutes) {
                 return NextResponse.json(
-                    { error: `Belum waktunya clock-in. Anda bisa melakukan presensi mulai pukul ${formatMinutes(earliestIn)}.` },
+                    { error: `Belum waktunya clock-in. Anda bisa melakukan presensi mulai pukul ${formatShiftMinutes(windows.earliestInMinutes)}.` },
                     { status: 400 }
                 );
             }
-        }
 
-        let status: "present" | "late" = "present";
-
-        if (!isOffDay && shift && todaySchedule && !todaySchedule.isOff) {
-            const [shiftHour, shiftMin] = todaySchedule.startTime.split(":").map(Number);
-            const shiftStartMinutes = shiftHour * 60 + shiftMin;
-            const tolerance = shift.lateCheckIn ?? 0;
-            const deadlineMinutes = shiftStartMinutes + tolerance;
-
-            if (clockMinutes > deadlineMinutes) {
+            if (clockInMinutes > windows.lateDeadlineMinutes) {
                 status = "late";
             }
         } else if (!shift && !isOffDay) {
+            const { hours: nowH } = getWIBHoursMinutes(now);
             if (nowH > 9) {
                 status = "late";
             }
@@ -246,7 +249,7 @@ export async function POST(request: NextRequest) {
 
         const record = await createAttendance({
             employeeId: session.employeeId,
-            date: today,
+            date: target.shiftDate,
             clockIn: now.toISOString(),
             clockInLocation: locationWithNetwork,
             clockInPhoto: body.photo,

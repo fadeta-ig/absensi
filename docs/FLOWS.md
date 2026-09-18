@@ -68,6 +68,11 @@ Alur validasi kehadiran memastikan karyawan benar-benar berada di lingkungan fis
    - Status kehadiran otomatis diset `present` (tanpa vonis terlambat).
    - Catatan disimpan dengan flag `is_off_day = true` untuk verifikasi audit HR.
    Pada hari kerja reguler, sistem mengevaluasi apakah jam clock-in memenuhi toleransi keterlambatan (`lateCheckIn`) serta memblokir kepulangan sebelum jam shift berakhir. Entri disimpan secara permanen pada tabel `attendance_records`.
+5. **Resolusi Presensi Shift Lintas Hari (Overnight / Cross-Day)**:
+   - Pada shift malam (`23:00 – 07:00`), karyawan melakukan Clock-In pada malam hari tanggal $D$ dan Clock-Out pada pagi hari $D+1$.
+   - Saat karyawan menekan Clock-Out di pagi hari (hingga pukul 14:00 WIB), `resolveAttendanceTargetForEmployee` memeriksa apakah terdapat catatan kehadiran terbuka dari hari kemarin ($D$).
+   - Jika ditemukan dan terverifikasi sebagai shift lintas hari, sistem menetapkan mode `CLOCK_OUT` terhadap record hari kemarin ($D$) dengan tanggal shift tetap diatribusikan ke $D$, bukan membuka entri baru hari $D+1$.
+   - Waktu jam kepulangan dinormalisasi dengan offset $+1440$ menit (misal: 07:00 WIB dinormalisasi menjadi menit ke-$1860$) sehingga toleransi `earlyCheckOut` dan `lateCheckOut` dievaluasi secara akurat tanpa kesalahan perhitungan selisih negatif.
 
 ---
 

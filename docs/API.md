@@ -87,7 +87,7 @@ export const POST = apiGuard(
 | `/api/attendance` | `GET` | `attendance:read` | Mengambil riwayat log kehadiran pegawai atau seluruh kantor. |
 | `/api/attendance` | `POST` | `attendance:create` | Melakukan clock-in atau clock-out dengan validasi Wi-Fi, GPS, & Foto. Mendukung presensi hari libur (`offDayReason` wajib jika `isOffDay`). |
 | `/api/attendance/correction` | `GET`, `POST`, `PUT` | `attendance:correct` | Pengajuan dan persetujuan koreksi jam kehadiran oleh atasan. |
-| `/api/attendance/network` | `GET` | Autentikasi | Memeriksa status kesesuaian IP terhadap jaringan kantor, status bypass, serta status shift & jadwal hari libur (`isOffDay`, `shiftName`, `todaySchedule`). |
+| `/api/attendance/network` | `GET` | Autentikasi | Memeriksa status kesesuaian IP terhadap jaringan kantor, status bypass, serta status shift & jadwal lintas hari (`isOffDay`, `shiftName`, `todaySchedule`, `isOvernight`, `activeMode`, `shiftDate`). |
 
 ### C. Manajemen Karyawan (`/api/employees`)
 | Rute | Metode | Permission / Akses | Deskripsi |

@@ -43,6 +43,7 @@ function EmployeesPageContent() {
     const [divisionFilter, setDivisionFilter] = useState("all");
     const [departmentFilter, setDepartmentFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
+    const [shiftFilter, setShiftFilter] = useState("all");
 
     // Multi-Select
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -105,14 +106,16 @@ function EmployeesPageContent() {
                 || employee.department === departmentFilter;
             const matchesType = typeFilter === "all"
                 || employee.employmentType === typeFilter;
+            const matchesShift = shiftFilter === "all"
+                || employee.shiftId === shiftFilter;
             const matchesSearch = !query
                 || employee.name.toLowerCase().includes(query)
                 || employee.employeeId.toLowerCase().includes(query)
                 || employee.department.toLowerCase().includes(query)
                 || Boolean(employee.division?.toLowerCase().includes(query));
-            return matchesStatus && matchesDivision && matchesDepartment && matchesType && matchesSearch;
+            return matchesStatus && matchesDivision && matchesDepartment && matchesType && matchesShift && matchesSearch;
         });
-    }, [employees, search, statusFilter, divisionFilter, departmentFilter, typeFilter]);
+    }, [employees, search, statusFilter, divisionFilter, departmentFilter, typeFilter, shiftFilter]);
 
     // Pagination with URL sync, localStorage pageSize, and smart clamping
     const {
@@ -127,7 +130,7 @@ function EmployeesPageContent() {
     });
 
     // Reset pagination to page 1 ONLY on explicit filter/search changes (not initial load)
-    const prevFiltersRef = useRef({ search, statusFilter, divisionFilter, departmentFilter, typeFilter });
+    const prevFiltersRef = useRef({ search, statusFilter, divisionFilter, departmentFilter, typeFilter, shiftFilter });
     useEffect(() => {
         const prev = prevFiltersRef.current;
         if (
@@ -135,12 +138,13 @@ function EmployeesPageContent() {
             prev.statusFilter !== statusFilter ||
             prev.divisionFilter !== divisionFilter ||
             prev.departmentFilter !== departmentFilter ||
-            prev.typeFilter !== typeFilter
+            prev.typeFilter !== typeFilter ||
+            prev.shiftFilter !== shiftFilter
         ) {
             resetPage();
-            prevFiltersRef.current = { search, statusFilter, divisionFilter, departmentFilter, typeFilter };
+            prevFiltersRef.current = { search, statusFilter, divisionFilter, departmentFilter, typeFilter, shiftFilter };
         }
-    }, [search, statusFilter, divisionFilter, departmentFilter, typeFilter, resetPage]);
+    }, [search, statusFilter, divisionFilter, departmentFilter, typeFilter, shiftFilter, resetPage]);
 
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     const paginatedEmployees = useMemo(() => {
@@ -212,9 +216,10 @@ function EmployeesPageContent() {
         setDivisionFilter("all");
         setDepartmentFilter("all");
         setTypeFilter("all");
+        setShiftFilter("all");
     };
 
-    const hasActiveFilters = Boolean(search || statusFilter !== "all" || divisionFilter !== "all" || departmentFilter !== "all" || typeFilter !== "all");
+    const hasActiveFilters = Boolean(search || statusFilter !== "all" || divisionFilter !== "all" || departmentFilter !== "all" || typeFilter !== "all" || shiftFilter !== "all");
 
     const activeFilterCount = [
         Boolean(search),
@@ -222,6 +227,7 @@ function EmployeesPageContent() {
         divisionFilter !== "all",
         departmentFilter !== "all",
         typeFilter !== "all",
+        shiftFilter !== "all",
     ].filter(Boolean).length;
 
     const getShiftName = (sId?: string) => {
@@ -401,7 +407,7 @@ function EmployeesPageContent() {
 
             {/* Filters Bar */}
             <div className="card p-4 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                     {/* Search Input */}
                     <div className="relative lg:col-span-2">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
@@ -440,6 +446,20 @@ function EmployeesPageContent() {
                             </option>
                             {availableDepartments.map(d => (
                                 <option key={d.id} value={d.name}>{d.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Shift Filter */}
+                    <div>
+                        <select
+                            className="form-select w-full"
+                            value={shiftFilter}
+                            onChange={(e) => setShiftFilter(e.target.value)}
+                        >
+                            <option value="all">Semua Shift</option>
+                            {shifts.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                         </select>
                     </div>
