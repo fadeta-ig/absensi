@@ -4,6 +4,11 @@ export interface Employee {
     name: string;
     department: string;
     division?: string | null;
+    position?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    isActive?: boolean;
+    shiftId?: string | null;
 }
 
 export interface AttendanceLocationInfo {
@@ -49,4 +54,29 @@ export interface AttendanceCorrection {
     assignedManagerId: string | null;
     createdAt: string;
     employee?: { name: string; employeeId: string };
+}
+
+export type AbsentStatusType = "unpresent" | "on_leave" | "off_day";
+
+export interface AbsentEmployee {
+    employeeId: string;
+    name: string;
+    department: string;
+    division: string;
+    position: string;
+    phone: string | null;
+    email: string | null;
+    statusType: AbsentStatusType;
+    statusLabel: string;
+    notes?: string | null;
+}
+
+export interface LeaveRecordLite {
+    id: string;
+    employeeId: string;
+    type: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    status: string;
 }

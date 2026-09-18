@@ -10,7 +10,8 @@ import { AttendanceSummary } from "./components/AttendanceSummary";
 import { AttendanceFilters } from "./components/AttendanceFilters";
 import { AttendanceLogTab } from "./components/AttendanceLogTab";
 import { AttendanceCorrectionTab } from "./components/AttendanceCorrectionTab";
-import { Employee, AttendanceRecord, MasterData, AttendanceCorrection } from "./types";
+import { AttendanceAbsentTab } from "./components/AttendanceAbsentTab";
+import { Employee, AttendanceRecord, MasterData, AttendanceCorrection, AbsentEmployee, LeaveRecordLite } from "./types";
 import { useCallback } from "react";
 
 export default function AttendanceMonitorPage() {
@@ -35,10 +36,14 @@ export default function AttendanceMonitorPage() {
     const [search, setSearch] = useState("");
 
     // Tabs
-    const [activeTab, setActiveTab] = useState<"log" | "corrections">("log");
+    const [activeTab, setActiveTab] = useState<"log" | "absent" | "corrections">("log");
     const [corrections, setCorrections] = useState<AttendanceCorrection[]>([]);
     const [correctionsLoading, setCorrectionsLoading] = useState(true);
     const [correctionsError, setCorrectionsError] = useState("");
+
+    // Absent / Leaves state
+    const [leaves, setLeaves] = useState<LeaveRecordLite[]>([]);
+    const [targetDateAbsent, setTargetDateAbsent] = useState(() => new Date().toISOString().split("T")[0]);
 
     // Correction modal
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -80,10 +85,11 @@ export default function AttendanceMonitorPage() {
             setInitialLoading(true);
             setLoadError("");
             try {
-                const [employeeRes, departmentRes, divisionRes] = await Promise.all([
+                const [employeeRes, departmentRes, divisionRes, leaveRes] = await Promise.all([
                     fetch("/api/employees"),
                     fetch("/api/master/departments"),
                     fetch("/api/master/divisions"),
+                    fetch("/api/leave").catch(() => null),
                 ]);
 
                 const failedResponse = [employeeRes, departmentRes, divisionRes].find((res) => !res.ok);
@@ -99,6 +105,13 @@ export default function AttendanceMonitorPage() {
                 if (Array.isArray(employeeData)) setEmployees(employeeData);
                 if (Array.isArray(departmentData)) setDepartments(departmentData);
                 if (Array.isArray(divisionData)) setDivisions(divisionData);
+
+                if (leaveRes && leaveRes.ok) {
+                    const leaveData = await leaveRes.json();
+                    if (Array.isArray(leaveData)) {
+                        setLeaves(leaveData);
+                    }
+                }
             } catch (error) {
                 reportClientError("AttendanceMonitorPage", "Gagal memuat data presensi awal", error);
                 const message = error instanceof Error ? error.message : "Gagal memuat data presensi.";
@@ -190,6 +203,54 @@ export default function AttendanceMonitorPage() {
             total: forRange.length
         };
     }, [records, startDate, endDate]);
+
+    // Calculate absent employees for target evaluation date
+    const absentEmployeesList = useMemo<AbsentEmployee[]>(() => {
+        const recordsOnDate = records.filter(r => r.date === targetDateAbsent);
+        const attendedIds = new Set(recordsOnDate.map(r => r.employeeId));
+
+        const activeEmployees = employees.filter(e => e.isActive !== false);
+
+        return activeEmployees
+            .filter(e => !attendedIds.has(e.employeeId))
+            .map(emp => {
+                const activeLeave = leaves.find(l => {
+                    if (l.employeeId !== emp.employeeId || l.status !== "approved") return false;
+                    const startStr = typeof l.startDate === "string" ? l.startDate.slice(0, 10) : "";
+                    const endStr = typeof l.endDate === "string" ? l.endDate.slice(0, 10) : "";
+                    return targetDateAbsent >= startStr && targetDateAbsent <= endStr;
+                });
+
+                let statusType: "unpresent" | "on_leave" | "off_day" = "unpresent";
+                let statusLabel = "Belum Hadir";
+                let notes: string | null = null;
+
+                if (activeLeave) {
+                    statusType = "on_leave";
+                    const typeMap: Record<string, string> = {
+                        annual: "Cuti Tahunan",
+                        sick: "Izin Sakit",
+                        personal: "Izin Pribadi",
+                        maternity: "Cuti Melahirkan",
+                    };
+                    statusLabel = typeMap[activeLeave.type] || `Cuti (${activeLeave.type})`;
+                    notes = activeLeave.reason || null;
+                }
+
+                return {
+                    employeeId: emp.employeeId,
+                    name: emp.name,
+                    department: emp.department || "-",
+                    division: emp.division || "-",
+                    position: emp.position || "-",
+                    phone: emp.phone || null,
+                    email: emp.email || null,
+                    statusType,
+                    statusLabel,
+                    notes,
+                };
+            });
+    }, [records, employees, leaves, targetDateAbsent]);
 
     const handleExportExcel = () => {
         const data = filtered.map((r) => {
@@ -299,17 +360,39 @@ export default function AttendanceMonitorPage() {
                 </div>
             )}
 
+            {/* Summary Cards */}
+            {!initialLoading && (
+                <AttendanceSummary
+                    present={summaryData.present}
+                    late={summaryData.late}
+                    absent={absentEmployeesList.length}
+                    total={summaryData.total}
+                    onSelectAbsentTab={() => setActiveTab("absent")}
+                />
+            )}
+
             {/* Tab Navigators */}
-            <div className="flex space-x-1 bg-[var(--secondary)] p-1 rounded-lg w-max">
+            <div className="flex space-x-1 bg-[var(--secondary)] p-1 rounded-lg w-max flex-wrap gap-1">
                 <button
                     onClick={() => setActiveTab("log")}
-                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === "log" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-secondary)]"}`}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${activeTab === "log" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
                 >
                     Log Presensi Utama
                 </button>
                 <button
+                    onClick={() => setActiveTab("absent")}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "absent" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                >
+                    Belum Hadir
+                    {absentEmployeesList.length > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                            {absentEmployeesList.length}
+                        </span>
+                    )}
+                </button>
+                <button
                     onClick={() => setActiveTab("corrections")}
-                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "corrections" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-secondary)]"}`}
+                    className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "corrections" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
                 >
                     Persetujuan Koreksi
                     {corrections.filter(c => c.status === "PENDING").length > 0 && (
@@ -318,58 +401,65 @@ export default function AttendanceMonitorPage() {
                 </button>
             </div>
 
-            {activeTab === "log" && (
-                initialLoading ? (
-                    <div className="card p-12 text-center text-[var(--text-muted)]">
-                        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
-                        <p className="text-sm font-medium">Memuat data presensi...</p>
-                    </div>
-                ) : (
+            {initialLoading ? (
+                <div className="card p-12 text-center text-[var(--text-muted)]">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[var(--primary)] opacity-50" />
+                    <p className="text-sm font-medium">Memuat data presensi...</p>
+                </div>
+            ) : (
                 <>
-                    <AttendanceSummary
-                        present={summaryData.present}
-                        late={summaryData.late}
-                        total={summaryData.total}
-                    />
+                    {activeTab === "log" && (
+                        <>
+                            <AttendanceFilters
+                                search={search} setSearch={setSearch}
+                                startDate={startDate} setStartDate={setStartDate}
+                                endDate={endDate} setEndDate={setEndDate}
+                                deptFilter={deptFilter} setDeptFilter={setDeptFilter}
+                                divFilter={divFilter} setDivFilter={setDivFilter}
+                                statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+                                typeFilter={typeFilter} setTypeFilter={setTypeFilter}
+                                departments={departments} divisions={divisions}
+                            />
 
-                    <AttendanceFilters
-                        search={search} setSearch={setSearch}
-                        startDate={startDate} setStartDate={setStartDate}
-                        endDate={endDate} setEndDate={setEndDate}
-                        deptFilter={deptFilter} setDeptFilter={setDeptFilter}
-                        divFilter={divFilter} setDivFilter={setDivFilter}
-                        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-                        typeFilter={typeFilter} setTypeFilter={setTypeFilter}
-                        departments={departments} divisions={divisions}
-                    />
+                            <AttendanceLogTab
+                                paginatedRecords={paginatedRecords}
+                                filteredRecords={filtered}
+                                filteredLength={filtered.length}
+                                currentPage={currentPage}
+                                itemsPerPage={itemsPerPage}
+                                totalPages={totalPages}
+                                setCurrentPage={setCurrentPage}
+                                setItemsPerPage={setItemsPerPage}
+                                getEmpInfo={getEmpInfo}
+                                formatTime={formatTime}
+                                statusLabel={statusLabel}
+                                setPhotoPreview={setPhotoPreview}
+                            />
+                        </>
+                    )}
 
-                    <AttendanceLogTab
-                        paginatedRecords={paginatedRecords}
-                        filteredRecords={filtered}
-                        filteredLength={filtered.length}
-                        currentPage={currentPage}
-                        itemsPerPage={itemsPerPage}
-                        totalPages={totalPages}
-                        setCurrentPage={setCurrentPage}
-                        setItemsPerPage={setItemsPerPage}
-                        getEmpInfo={getEmpInfo}
-                        formatTime={formatTime}
-                        statusLabel={statusLabel}
-                        setPhotoPreview={setPhotoPreview}
-                    />
+                    {activeTab === "absent" && (
+                        <AttendanceAbsentTab
+                            targetDate={targetDateAbsent}
+                            onTargetDateChange={setTargetDateAbsent}
+                            absentEmployees={absentEmployeesList}
+                            departments={departments}
+                            divisions={divisions}
+                            onRefresh={loadAttendanceRecords}
+                        />
+                    )}
+
+                    {activeTab === "corrections" && (
+                        <AttendanceCorrectionTab
+                            corrections={corrections}
+                            loading={correctionsLoading}
+                            error={correctionsError}
+                            processingId={processingId}
+                            getEmpInfo={getEmpInfo}
+                            handleCorrectionAction={handleCorrectionAction}
+                        />
+                    )}
                 </>
-                )
-            )}
-
-            {activeTab === "corrections" && (
-                <AttendanceCorrectionTab
-                    corrections={corrections}
-                    loading={correctionsLoading}
-                    error={correctionsError}
-                    processingId={processingId}
-                    getEmpInfo={getEmpInfo}
-                    handleCorrectionAction={handleCorrectionAction}
-                />
             )}
 
             {/* Photo Preview Modal */}

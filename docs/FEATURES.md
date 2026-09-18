@@ -42,6 +42,13 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Koreksi Presensi (Attendance Correction)**: Karyawan dapat mengajukan perbaikan jam clock-in/out jika terjadi kendala teknis, lengkap dengan alasan dan bukti, yang memerlukan persetujuan manajer/atasan.
 - **Monitoring Tim Subordinat**: Atasan langsung dapat memantau log kehadiran, status keterlambatan, dan riwayat presensi bawahan langsungnya di `/employee/monitoring`.
 - **Rekapitulasi HR**: Dasbor monitoring harian bagi tim HR dengan rekap status kehadiran bulanan dan opsi ekspor data ke file spreadsheet Excel.
+- **Monitoring Karyawan Belum Hadir**: Tab khusus pada Monitoring Presensi HR (`/dashboard/attendance`) untuk melacak karyawan aktif yang belum hadir pada tanggal evaluasi. Dilengkapi:
+  - Klasifikasi status pintar: membedakan antara *Belum Hadir (Alpa)*, *Sedang Cuti / Sakit / Izin* (terintegrasi otomatis dengan pengajuan cuti yang disetujui HR), dan *Libur Shift*.
+  - Kartu ringkasan interaktif (*AttendanceSummary*) 4-kolom (`Hadir`, `Terlambat`, `Belum Hadir`, `Total Record`) dengan kemampuan klik untuk langsung beralih ke tab Belum Hadir.
+  - Pencarian instan (NIP & Nama), filter cascading Divisi & Departemen, serta filter kategori ketidakhadiran.
+  - Tindakan cepat HR berupa tombol kontak WhatsApp langsung (`wa.me`) dengan template pesan konfirmasi kehadiran.
+  - Ekspor data mandiri ke format Excel dan PDF khusus daftar karyawan belum hadir.
+
 
 ---
 
