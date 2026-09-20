@@ -25,6 +25,19 @@ const REPORT_TYPES = [
     { value: "leave", label: "Laporan Cuti", icon: CalendarOff, description: "Data pengajuan cuti karyawan per periode" },
 ];
 
+function formatDisplayDate(dateStr: string): string {
+    if (!dateStr) return "-";
+    const parts = dateStr.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return dateStr;
+    const [y, m, d] = parts;
+    const months = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    const monthName = months[m - 1] || String(m);
+    return `${d} ${monthName} ${y}`;
+}
+
 export default function ReportsPage() {
     const [type, setType] = useState("attendance");
     const [startDate, setStartDate] = useState(() => {
@@ -175,7 +188,7 @@ export default function ReportsPage() {
                         headers,
                         `REKAP PRESENSI KARYAWAN`,
                         `Rekap_Presensi_${startDate}_${endDate}`,
-                        `Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} | H=Hadir, T=Terlambat, A=Alpa, C=Cuti`
+                        `Periode: ${formatDisplayDate(startDate)} s/d ${formatDisplayDate(endDate)} | H=Hadir, T=Terlambat, A=Alpa, C=Cuti`
                     );
                 } else {
                     // Flat/Table PDF for all types
@@ -192,7 +205,7 @@ export default function ReportsPage() {
                         headers,
                         titleMap[type] || "LAPORAN",
                         `Laporan_${type}_${startDate}_${endDate}`,
-                        `Periode: ${new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d ${new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} | Total: ${result.totalRecords} baris`
+                        `Periode: ${formatDisplayDate(startDate)} s/d ${formatDisplayDate(endDate)} | Total: ${result.totalRecords} baris`
                     );
                 }
             }
@@ -377,7 +390,7 @@ export default function ReportsPage() {
                 <FileDown className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <div>
                     <p className="text-xs font-bold text-blue-700">
-                        {selectedType?.label} — {new Date(startDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} s/d {new Date(endDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                        {selectedType?.label} — {formatDisplayDate(startDate)} s/d {formatDisplayDate(endDate)}
                         {isGrouped && type === "attendance" && <span className="ml-2 px-1.5 py-0.5 bg-blue-600 text-white text-[9px] rounded-sm uppercase">Mode Grouped</span>}
                     </p>
                     <p className="text-[10px] text-blue-600 mt-0.5 font-medium">Format: .xlsx (Excel) atau .pdf. Pastikan periode sudah sesuai sebelum mendownload.</p>
@@ -403,11 +416,14 @@ export default function ReportsPage() {
                         <Table className="min-w-[max-content]">
                             <TableHeader>
                                 <TableRow>
-                                    {preview.headers.map((h) => (
-                                        <TableHead key={h} className={`p-2.5 text-[10px] font-bold uppercase tracking-tight border-r border-[var(--border)] last:border-0 ${!isNaN(Number(h)) ? "text-center w-12" : ""}`}>
-                                            {h}
-                                        </TableHead>
-                                    ))}
+                                    {preview.headers.map((h) => {
+                                        const isDateHeader = /^\d{2}-\d{2}$/.test(h) || !isNaN(Number(h));
+                                        return (
+                                            <TableHead key={h} className={`p-2.5 text-[10px] font-bold uppercase tracking-tight border-r border-[var(--border)] last:border-0 ${isDateHeader ? "text-center w-12" : ""}`}>
+                                                {h}
+                                            </TableHead>
+                                        );
+                                    })}
                                 </TableRow>
                             </TableHeader>
                             <TableBody className="bg-[var(--card)] divide-y divide-gray-50 text-[11px]">
@@ -415,7 +431,7 @@ export default function ReportsPage() {
                                     <TableRow key={i} className="hover:bg-blue-50/20 transition-colors">
                                         {preview.headers.map((h) => {
                                             const val = row[h];
-                                            const isDateCol = !isNaN(Number(h));
+                                            const isDateCol = /^\d{2}-\d{2}$/.test(h) || !isNaN(Number(h));
 
                                             if (isDateCol && typeof val === "string" && val.includes("\n")) {
                                                 const [clockIn, clockOut] = val.split("\n");

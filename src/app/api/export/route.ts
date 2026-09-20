@@ -35,16 +35,25 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Parameter tipe data, tanggal mulai, dan selesai harus diisi." }, { status: 400 });
         }
 
-        const startDate = new Date(`${startDateStr}T00:00:00`);
-        const endDate = new Date(`${endDateStr}T23:59:59`);
+        // Explicit WIB offset (+07:00) ensures consistent boundaries regardless of server timezone
+        const startDate = new Date(`${startDateStr}T00:00:00+07:00`);
+        const endDate = new Date(`${endDateStr}T23:59:59.999+07:00`);
         const dateRange = { gte: startDate, lte: endDate };
 
-        // Buat list tanggal untuk matrix (max 31 hari)
+        // Buat list tanggal untuk matrix (max 31 hari) berbasis kalender murni
+        // Menghindari bug pergeseran tanggal akibat toISOString() pada waktu lokal
+        const [sY, sM, sD] = startDateStr.split("-").map(Number);
+        const [eY, eM, eD] = endDateStr.split("-").map(Number);
+        const currCalendar = new Date(Date.UTC(sY, sM - 1, sD, 12, 0, 0));
+        const endCalendar = new Date(Date.UTC(eY, eM - 1, eD, 12, 0, 0));
+
         const dateList: string[] = [];
-        const curr = new Date(startDate);
-        while (curr <= endDate && dateList.length <= 31) {
-            dateList.push(curr.toISOString().split("T")[0]); // YYYY-MM-DD
-            curr.setDate(curr.getDate() + 1);
+        while (currCalendar <= endCalendar && dateList.length <= 31) {
+            const y = currCalendar.getUTCFullYear();
+            const m = String(currCalendar.getUTCMonth() + 1).padStart(2, "0");
+            const d = String(currCalendar.getUTCDate()).padStart(2, "0");
+            dateList.push(`${y}-${m}-${d}`);
+            currCalendar.setUTCDate(currCalendar.getUTCDate() + 1);
         }
 
         const employees = await prisma.employee.findMany({
@@ -235,8 +244,12 @@ export async function GET(request: NextRequest) {
         } else if (type === "leave") {
             finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tipe Cuti", "Tanggal Mulai", "Tanggal Selesai", "Durasi (Hari)", "Alasan", "Status"];
             const records = await prisma.leaveRequest.findMany({
-                where: { createdAt: dateRange, employeeId: { in: validEmpIds } },
-                orderBy: { createdAt: "asc" },
+                where: {
+                    startDate: { lte: endDate },
+                    endDate: { gte: startDate },
+                    employeeId: { in: validEmpIds }
+                },
+                orderBy: { startDate: "asc" },
             });
             sheetName = "Laporan Cuti";
 
@@ -288,7 +301,7 @@ export async function GET(request: NextRequest) {
                 if (h === "Departemen") return { wch: 18 };
                 if (h === "No") return { wch: 5 };
                 if (h === "ID Karyawan") return { wch: 15 };
-                if (!isNaN(Number(h))) return { wch: 8 };
+                if (/^\d{2}-\d{2}$/.test(h) || !isNaN(Number(h))) return { wch: 8 };
                 return { wch: 12 };
             });
 

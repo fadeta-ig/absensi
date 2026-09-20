@@ -54,7 +54,8 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 
 - **Gotcha**: Pada versi awal sistem, kolom tanggal (`date`, `clockIn`, `clockOut`) disimpan sebagai string. Setelah migrasi, kolom tersebut diubah menjadi `DateTime` di Prisma.
 - **Pitfall**: Query pencarian kehadiran satu hari harus menggunakan range jam (`dayRange(dateString)` di `attendanceService.ts`), bukan perbandingan string langsung `where: { date: "2026-09-10" }` karena pergeseran zona waktu UTC/WIB.
-- Selalu gunakan helper dari `@/lib/timezone` (`toWIBDateString`, `getWIBHoursMinutes`) untuk memanipulasi tanggal presensi.
+- Selalu gunakan helper dari `@/lib/timezone` (`toWIBDateString`, `getWIBHoursMinutes`) atau `@/lib/utils` (`toDateDisplay`, `toTimeString`) untuk memanipulasi tanggal presensi.
+- Saat membuat boundary query Prisma dari string input tanggal, selalu sertakan offset WIB eksplisit: `${startDateStr}T00:00:00+07:00` dan `${endDateStr}T23:59:59.999+07:00` agar rentang waktu query konsisten di server mana pun (lokal maupun cloud UTC).
 
 ---
 
@@ -64,3 +65,16 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 - **Pitfall**:
   - Menjalankan query SQL atau Prisma `where: { nationalId: { contains: "123" } }` akan gagal karena ciphertext selalu berbeda (menggunakan IV acak 12-byte).
   - Untuk pencarian eksak, *wajib* menggunakan kolom hash yang sesuai: `where: { nationalIdHash: hashPii(input) }`.
+
+---
+
+## 8. Pergeseran Tanggal Laporan Matriks (`toISOString()` Pitfall)
+
+- **Gotcha**: Pembuatan daftar tanggal matriks laporan (`dateList`) di `src/app/api/export/route.ts` sebelumnya menggunakan `curr.toISOString().split("T")[0]`.
+- **Pitfall**:
+  - Di environment UTC+7 (WIB), parsing `new Date("2026-09-15T00:00:00")` menghasilkan objek waktu lokal `00:00:00 WIB`.
+  - Memanggil `.toISOString()` mengubah waktu tersebut ke UTC: `2026-09-14T17:00:00.000Z`.
+  - Mengambil `.split("T")[0]` menghasilkan tanggal H-1 (`"2026-09-14"` bukannya `"2026-09-15"`).
+  - Kolom matriks menjadi `"09-14"` dan mencocokkan data presensi tanggal 14 September.
+- **Solusi**: Selalu lakukan iterasi tanggal kalender menggunakan UTC midday (`Date.UTC(y, m - 1, d, 12, 0, 0)`) dengan `getUTCFullYear()`, `getUTCMonth()`, dan `getUTCDate()` agar kebal terhadap pergeseran jam lokal maupun UTC.
+

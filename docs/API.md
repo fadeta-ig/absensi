@@ -188,3 +188,9 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/cron/cleanup-photos` | Mingguan | Pembersihan cache foto selfie sementara yang sudah diverifikasi dan kadaluarsa. |
 | `/api/cron/generate-payroll` | Bulanan | Otomasi kalkulasi draf rekapitulasi penggajian bulanan periode berjalan. |
 | `/api/cron/reset-leave` | Tahunan | Reset dan alokasi ulang kuota saldo cuti tahunan karyawan setiap awal tahun. |
+
+### K. Ekspor & Penarikan Laporan (`/api/export`)
+| Rute | Metode | Permission / Akses | Deskripsi |
+|---|---|---|---|
+| `/api/export` | `GET` | Role `hr` | Penarikan data dan ekspor file laporan (Excel `.xlsx` atau JSON preview). Parameter wajib: `type` (`attendance`, `visits`, `overtime`, `leave`), `startDate` (`YYYY-MM-DD`), `endDate` (`YYYY-MM-DD`). Opsional: `mode=matrix`, `grouped=true`, `format=excel\|preview`, `divisionId`, `departmentId`, `employeeId`. Rentang waktu dihitung presisi menggunakan WIB offset (`+07:00`). |
+

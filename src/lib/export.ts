@@ -431,7 +431,8 @@ export function exportToPdfMatrix(
         margin: { left: 10, right: 10 },
         didParseCell: (data) => {
             // Highlight Sunday or specific headers if needed
-            if (data.section === "head" && !isNaN(Number(data.cell.text[0]))) {
+            const cellText = data.cell.text?.[0] || "";
+            if (data.section === "head" && (/^\d{2}-\d{2}$/.test(cellText) || !isNaN(Number(cellText)))) {
                 data.cell.styles.fillColor = [160, 30, 60]; // Slightly lighter maroon for dates
             }
         }
