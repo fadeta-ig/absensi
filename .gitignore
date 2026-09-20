@@ -67,3 +67,4 @@ next-env.d.ts
 *.docx
 ~$*.docx
 /scripts/
+!/scripts/*.sh
