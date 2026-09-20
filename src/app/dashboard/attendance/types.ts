@@ -80,3 +80,20 @@ export interface LeaveRecordLite {
     reason: string;
     status: string;
 }
+
+export interface WorkShiftDayInfo {
+    id?: string;
+    shiftId?: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    isOff: boolean;
+}
+
+export interface WorkShiftInfo {
+    id: string;
+    name: string;
+    isDefault: boolean;
+    days: WorkShiftDayInfo[];
+}
+

@@ -433,7 +433,7 @@ export function AttendanceAbsentTab({
                         {paginated.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="text-center py-12 text-[var(--text-muted)] italic">
-                                    Tidak ada karyawan belum hadir untuk kriteria ini.
+                                    Tidak ada data karyawan untuk kriteria ini.
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -509,14 +509,21 @@ export function AttendanceAbsentTab({
                                                     )}
                                                 </div>
                                             ) : (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-900">
-                                                    <CalendarClock className="w-3 h-3 shrink-0" />
-                                                    Libur Shift
-                                                </span>
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-900">
+                                                        <CalendarClock className="w-3 h-3 shrink-0" />
+                                                        {emp.statusLabel}
+                                                    </span>
+                                                    {emp.notes && (
+                                                        <span className="text-[10px] text-[var(--text-muted)] italic max-w-[150px] truncate" title={emp.notes}>
+                                                            {emp.notes}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            {waUrl ? (
+                                            {emp.statusType === "unpresent" && waUrl ? (
                                                 <a
                                                     href={waUrl}
                                                     target="_blank"
@@ -528,7 +535,12 @@ export function AttendanceAbsentTab({
                                                     WhatsApp
                                                 </a>
                                             ) : (
-                                                <span className="text-xs text-[var(--text-muted)]">-</span>
+                                                <span
+                                                    className="text-xs text-[var(--text-muted)]"
+                                                    title={emp.statusType === "off_day" ? "Libur Shift (Tidak perlu pengingat)" : (emp.statusType === "on_leave" ? "Sedang Cuti (Tidak perlu pengingat)" : undefined)}
+                                                >
+                                                    -
+                                                </span>
                                             )}
                                         </TableCell>
                                     </TableRow>

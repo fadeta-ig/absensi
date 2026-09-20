@@ -11,7 +11,8 @@ import { AttendanceFilters } from "./components/AttendanceFilters";
 import { AttendanceLogTab } from "./components/AttendanceLogTab";
 import { AttendanceCorrectionTab } from "./components/AttendanceCorrectionTab";
 import { AttendanceAbsentTab } from "./components/AttendanceAbsentTab";
-import { Employee, AttendanceRecord, MasterData, AttendanceCorrection, AbsentEmployee, LeaveRecordLite } from "./types";
+import { Employee, AttendanceRecord, MasterData, AttendanceCorrection, AbsentEmployee, LeaveRecordLite, WorkShiftInfo } from "./types";
+import { resolveAbsentEmployees } from "@/lib/services/attendanceAbsentResolver";
 import { useCallback } from "react";
 
 export default function AttendanceMonitorPage() {
@@ -41,8 +42,10 @@ export default function AttendanceMonitorPage() {
     const [correctionsLoading, setCorrectionsLoading] = useState(true);
     const [correctionsError, setCorrectionsError] = useState("");
 
-    // Absent / Leaves state
+    // Absent / Leaves / Shift state
     const [leaves, setLeaves] = useState<LeaveRecordLite[]>([]);
+    const [shifts, setShifts] = useState<WorkShiftInfo[]>([]);
+    const [holidays, setHolidays] = useState<Array<{ date: string; name: string }>>([]);
     const [targetDateAbsent, setTargetDateAbsent] = useState(() => new Date().toISOString().split("T")[0]);
 
     // Correction modal
@@ -85,11 +88,14 @@ export default function AttendanceMonitorPage() {
             setInitialLoading(true);
             setLoadError("");
             try {
-                const [employeeRes, departmentRes, divisionRes, leaveRes] = await Promise.all([
+                const currentYear = new Date().getFullYear();
+                const [employeeRes, departmentRes, divisionRes, leaveRes, shiftRes, holidayRes] = await Promise.all([
                     fetch("/api/employees"),
                     fetch("/api/master/departments"),
                     fetch("/api/master/divisions"),
                     fetch("/api/leave").catch(() => null),
+                    fetch("/api/shifts").catch(() => null),
+                    fetch(`/api/holidays?year=${currentYear}`).catch(() => null),
                 ]);
 
                 const failedResponse = [employeeRes, departmentRes, divisionRes].find((res) => !res.ok);
@@ -110,6 +116,20 @@ export default function AttendanceMonitorPage() {
                     const leaveData = await leaveRes.json();
                     if (Array.isArray(leaveData)) {
                         setLeaves(leaveData);
+                    }
+                }
+
+                if (shiftRes && shiftRes.ok) {
+                    const shiftData = await shiftRes.json();
+                    if (Array.isArray(shiftData)) {
+                        setShifts(shiftData);
+                    }
+                }
+
+                if (holidayRes && holidayRes.ok) {
+                    const holidayPayload = await holidayRes.json();
+                    if (holidayPayload && Array.isArray(holidayPayload.data)) {
+                        setHolidays(holidayPayload.data);
                     }
                 }
             } catch (error) {
@@ -204,53 +224,22 @@ export default function AttendanceMonitorPage() {
         };
     }, [records, startDate, endDate]);
 
-    // Calculate absent employees for target evaluation date
+    // Calculate absent employees for target evaluation date using centralized resolver
     const absentEmployeesList = useMemo<AbsentEmployee[]>(() => {
-        const recordsOnDate = records.filter(r => r.date === targetDateAbsent);
-        const attendedIds = new Set(recordsOnDate.map(r => r.employeeId));
+        return resolveAbsentEmployees({
+            targetDate: targetDateAbsent,
+            employees,
+            records,
+            leaves,
+            shifts,
+            holidays,
+        });
+    }, [records, employees, leaves, shifts, holidays, targetDateAbsent]);
 
-        const activeEmployees = employees.filter(e => e.isActive !== false);
-
-        return activeEmployees
-            .filter(e => !attendedIds.has(e.employeeId))
-            .map(emp => {
-                const activeLeave = leaves.find(l => {
-                    if (l.employeeId !== emp.employeeId || l.status !== "approved") return false;
-                    const startStr = typeof l.startDate === "string" ? l.startDate.slice(0, 10) : "";
-                    const endStr = typeof l.endDate === "string" ? l.endDate.slice(0, 10) : "";
-                    return targetDateAbsent >= startStr && targetDateAbsent <= endStr;
-                });
-
-                let statusType: "unpresent" | "on_leave" | "off_day" = "unpresent";
-                let statusLabel = "Belum Hadir";
-                let notes: string | null = null;
-
-                if (activeLeave) {
-                    statusType = "on_leave";
-                    const typeMap: Record<string, string> = {
-                        annual: "Cuti Tahunan",
-                        sick: "Izin Sakit",
-                        personal: "Izin Pribadi",
-                        maternity: "Cuti Melahirkan",
-                    };
-                    statusLabel = typeMap[activeLeave.type] || `Cuti (${activeLeave.type})`;
-                    notes = activeLeave.reason || null;
-                }
-
-                return {
-                    employeeId: emp.employeeId,
-                    name: emp.name,
-                    department: emp.department || "-",
-                    division: emp.division || "-",
-                    position: emp.position || "-",
-                    phone: emp.phone || null,
-                    email: emp.email || null,
-                    statusType,
-                    statusLabel,
-                    notes,
-                };
-            });
-    }, [records, employees, leaves, targetDateAbsent]);
+    // Count only employees who are scheduled to work today but have not clocked in (True Alpa/Belum Hadir)
+    const unpresentCount = useMemo(() => {
+        return absentEmployeesList.filter(e => e.statusType === "unpresent").length;
+    }, [absentEmployeesList]);
 
     const handleExportExcel = () => {
         const data = filtered.map((r) => {
@@ -365,7 +354,7 @@ export default function AttendanceMonitorPage() {
                 <AttendanceSummary
                     present={summaryData.present}
                     late={summaryData.late}
-                    absent={absentEmployeesList.length}
+                    absent={unpresentCount}
                     total={summaryData.total}
                     onSelectAbsentTab={() => setActiveTab("absent")}
                 />
@@ -384,11 +373,15 @@ export default function AttendanceMonitorPage() {
                     className={`px-4 py-2 text-sm font-bold rounded-md transition-all flex items-center gap-2 ${activeTab === "absent" ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
                 >
                     Belum Hadir
-                    {absentEmployeesList.length > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                            {absentEmployeesList.length}
+                    {unpresentCount > 0 ? (
+                        <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold" title={`${unpresentCount} karyawan wajib hadir belum presensi`}>
+                            {unpresentCount}
                         </span>
-                    )}
+                    ) : absentEmployeesList.length > 0 ? (
+                        <span className="bg-[var(--card)] text-[var(--text-muted)] text-[10px] px-2 py-0.5 rounded-full font-semibold border border-[var(--border)]" title="Tidak ada alpa. Karyawan berstatus libur shift / cuti.">
+                            0
+                        </span>
+                    ) : null}
                 </button>
                 <button
                     onClick={() => setActiveTab("corrections")}

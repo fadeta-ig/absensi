@@ -128,6 +128,7 @@ hriswig/
 - **Responsibility**: Perhitungan rumus domain (overtime PP 35/2021, TER PPh 21, BPJS), manipulasi data di database, pemrosesan citra (Sharp), dan orkestrasi integrasi email/notifikasi.
 - **Important Files**:
   - `attendanceService.ts`: Validasi presensi 3-faktor dan persistensi `AttendanceRecord`.
+  - `attendanceAbsentResolver.ts`: Klasifikasi status ketidakhadiran karyawan (cuti, libur shift, libur nasional, dan alpa/belum hadir).
   - `overtimeCalcService.ts` & `overtimeService.ts`: Perhitungan jam lembur dan nominal upah.
   - `pph21Service.ts`: Perhitungan pajak bulanan berbasis tabel TER Kategori A, B, C.
   - `bpjsService.ts`: Perhitungan pemotongan iuran BPJS Kesehatan dan Ketenagakerjaan.
