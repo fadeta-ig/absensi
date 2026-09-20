@@ -115,3 +115,30 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    npm run build
    ```
    Proses ini akan mengompilasi rute Next.js, mengoptimasi aset, dan men-generate berkas PWA (`public/sw.js`).
+
+3. **Menjalankan Layanan Produksi dengan PM2**:
+   ```bash
+   pm2 start ecosystem.config.js
+   pm2 save
+   ```
+
+4. **Konfigurasi Auto-Start saat VPS Reboot**:
+   Agar aplikasi dan PM2 otomatis hidup kembali saat server VPS melakukan reboot:
+   ```bash
+   pm2 startup
+   # Jalankan perintah 'sudo env PATH=...' yang direkomendasikan di terminal
+   pm2 save
+   ```
+
+5. **Pemulihan Cepat Pasca-Reboot VPS**:
+   Gunakan script otomatis:
+   ```bash
+   chmod +x scripts/vps-service-manager.sh
+   ./scripts/vps-service-manager.sh
+   ```
+   Atau pemulihan manual:
+   ```bash
+   sudo systemctl start mariadb nginx
+   pm2 resurrect || pm2 start ecosystem.config.js
+   ```
+
