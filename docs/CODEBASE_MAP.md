@@ -89,6 +89,7 @@ hriswig/
   - `src/app/employee/leaves/page.tsx`: Pengajuan dan riwayat saldo cuti tahunan.
   - `src/app/employee/payslips/page.tsx`: Daftar dan unduh slip gaji terenkripsi.
   - `src/app/employee/news/page.tsx`: Papan pengumuman dan berita internal perusahaan dengan detail modal.
+  - `src/app/employee/green-meeting/page.tsx`: Pemantauan notulensi rapat, tindak lanjut tugas pribadi/departemen, dan transparansi presensi unit dengan antarmuka mobile-first responsif (zero-leak).
 
 ### C. Portal General Affairs (`src/app/ga/`)
 - **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat dan Green Meeting.

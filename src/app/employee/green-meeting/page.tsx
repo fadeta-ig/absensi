@@ -18,6 +18,7 @@ import {
     User,
     XCircle,
     History,
+    Send,
 } from "lucide-react";
 import {
     Table,
@@ -107,34 +108,34 @@ function renderTaskStatusBadge(status: string) {
     switch (status) {
         case "SELESAI":
             return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <CheckCircle2 size={12} />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                    <CheckCircle2 size={11} />
                     Selesai
                 </span>
             );
         case "SEDANG_BERJALAN":
             return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                    <Clock size={12} />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
+                    <Clock size={11} />
                     Sedang Berjalan
                 </span>
             );
         case "BELUM_DIMULAI":
             return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                    <Clock size={12} />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                    <Clock size={11} />
                     Belum Dimulai
                 </span>
             );
         case "DIBATALKAN":
             return (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border border-border">
-                    <XCircle size={12} />
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-muted text-muted-foreground border border-border shrink-0">
+                    <XCircle size={11} />
                     Dibatalkan
                 </span>
             );
         default:
-            return <span className="text-xs font-medium text-muted-foreground">{status}</span>;
+            return <span className="text-[11px] font-medium text-muted-foreground shrink-0">{status}</span>;
     }
 }
 
@@ -276,65 +277,69 @@ export default function EmployeeGreenMeetingPage() {
     });
 
     return (
-        <div className="p-3 sm:p-5 max-w-4xl mx-auto space-y-4">
-            {/* Header Super Compact: Tanggal, Lokasi, Jam, dan Kehadiran dalam 1 Baris */}
-            <div className="bg-card border border-border rounded-xl p-2.5 sm:p-3 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-                    {/* Date Navigation */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                        <div className="flex items-center bg-muted/60 border border-border rounded-lg p-0.5">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const d = new Date(`${currentDateStr}T00:00:00`);
-                                    d.setDate(d.getDate() - 1);
-                                    setCurrentDateStr(d.toISOString().split("T")[0]);
+        <div className="w-full space-y-4 min-w-0 pb-6">
+            {/* Header Super Compact: Tanggal, Lokasi, Jam, dan Kehadiran */}
+            <div className="bg-card border border-border/80 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3 min-w-0 overflow-hidden">
+                {/* Top Row: Date Navigation & Quick Actions */}
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                    {/* Date Navigator */}
+                    <div className="flex items-center bg-muted/60 border border-border rounded-xl p-1 min-w-0 flex-1 max-w-[260px] sm:max-w-[280px]">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const d = new Date(`${currentDateStr}T00:00:00`);
+                                d.setDate(d.getDate() - 1);
+                                setCurrentDateStr(d.toISOString().split("T")[0]);
+                            }}
+                            className="p-1 sm:p-1.5 hover:bg-background rounded-lg text-foreground transition-colors shrink-0"
+                            title="Hari Sebelumnya"
+                            aria-label="Hari Sebelumnya"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <label
+                            className="relative flex items-center justify-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-background/80 rounded-lg cursor-pointer transition-colors group flex-1 min-w-0"
+                            title="Klik untuk memilih tanggal dari kalender"
+                            onClick={(e) => {
+                                try {
+                                    const input = e.currentTarget.querySelector("input[type='date']") as HTMLInputElement | null;
+                                    input?.showPicker?.();
+                                } catch {}
+                            }}
+                        >
+                            <Calendar size={13} className="text-primary shrink-0 group-hover:scale-110 transition-transform" />
+                            <span className="select-none truncate">{formattedDate}</span>
+                            <input
+                                type="date"
+                                value={currentDateStr}
+                                onChange={(e) => {
+                                    if (e.target.value) setCurrentDateStr(e.target.value);
                                 }}
-                                className="p-1 hover:bg-background rounded text-foreground transition-colors"
-                                title="Hari Sebelumnya"
-                            >
-                                <ChevronLeft size={15} />
-                            </button>
-                            <label
-                                className="relative flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-background/80 rounded cursor-pointer transition-colors group"
-                                title="Klik untuk memilih tanggal dari kalender"
-                                onClick={(e) => {
-                                    try {
-                                        const input = e.currentTarget.querySelector("input[type='date']") as HTMLInputElement | null;
-                                        input?.showPicker?.();
-                                    } catch {}
-                                }}
-                            >
-                                <Calendar size={13} className="text-primary group-hover:scale-110 transition-transform" />
-                                <span className="select-none">{formattedDate}</span>
-                                <input
-                                    type="date"
-                                    value={currentDateStr}
-                                    onChange={(e) => {
-                                        if (e.target.value) setCurrentDateStr(e.target.value);
-                                    }}
-                                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                                    aria-label="Pilih tanggal rapat"
-                                />
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const d = new Date(`${currentDateStr}T00:00:00`);
-                                    d.setDate(d.getDate() + 1);
-                                    setCurrentDateStr(d.toISOString().split("T")[0]);
-                                }}
-                                className="p-1 hover:bg-background rounded text-foreground transition-colors"
-                                title="Hari Berikutnya"
-                            >
-                                <ChevronRight size={15} />
-                            </button>
-                        </div>
+                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                aria-label="Pilih tanggal rapat"
+                            />
+                        </label>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const d = new Date(`${currentDateStr}T00:00:00`);
+                                d.setDate(d.getDate() + 1);
+                                setCurrentDateStr(d.toISOString().split("T")[0]);
+                            }}
+                            className="p-1 sm:p-1.5 hover:bg-background rounded-lg text-foreground transition-colors shrink-0"
+                            title="Hari Berikutnya"
+                            aria-label="Hari Berikutnya"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
 
+                    {/* Quick Actions (Hari Ini & Refresh) */}
+                    <div className="flex items-center gap-1.5 shrink-0">
                         <button
                             type="button"
                             onClick={() => setCurrentDateStr(todayStr)}
-                            className="px-2 py-1 text-xs font-medium rounded-lg border border-border bg-card hover:bg-muted text-foreground transition-colors"
+                            className="px-2.5 py-1.5 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted text-foreground transition-all shadow-2xs"
                         >
                             Hari Ini
                         </button>
@@ -343,106 +348,143 @@ export default function EmployeeGreenMeetingPage() {
                             type="button"
                             onClick={handleRefresh}
                             disabled={loading}
-                            className="p-1.5 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                            className="p-2 rounded-xl border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-all shadow-2xs disabled:opacity-50 shrink-0"
                             title="Muat Ulang"
+                            aria-label="Muat Ulang Data"
                         >
-                            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+                            <RefreshCw size={14} className={loading ? "animate-spin text-primary" : ""} />
                         </button>
+                    </div>
+                </div>
 
-                        {offDayInfo?.isOffDay && (
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center gap-1">
-                                <AlertCircle size={11} />
-                                {offDayInfo.reason || "Hari Libur"}
-                            </span>
-                        )}
+                {/* Off-Day Alert Banner if Active */}
+                {offDayInfo?.isOffDay && (
+                    <div className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 flex items-center gap-2">
+                        <AlertCircle size={14} className="shrink-0" />
+                        <span className="truncate">{offDayInfo.reason || "Hari Libur Rutin / Libur Nasional"}</span>
+                    </div>
+                )}
+
+                {/* Meeting Metadata Strip */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-border/60 text-xs">
+                    <div className="flex items-center gap-2 p-2 rounded-xl bg-muted/40 border border-border/50 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <MapPin size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Lokasi</p>
+                            <p className="text-xs font-semibold text-foreground truncate" title={session?.room || "Ruang Rapat Utama Lt. 2"}>
+                                {session?.room || "Ruang Rapat Utama Lt. 2"}
+                            </p>
+                        </div>
                     </div>
 
-                    {/* Quick Badges: Lokasi, Jam, dan Kehadiran */}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 border border-border text-foreground font-medium">
-                            <MapPin size={12} className="text-primary" />
-                            <span>{session?.room || "Ruang Rapat Utama Lt. 2"}</span>
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/60 border border-border text-foreground font-medium">
-                            <Clock size={12} />
-                            <span>{session?.startTime || "08:30"} WIB</span>
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold">
-                            <CheckCircle2 size={12} />
-                            <span>{hadirCount} / {attendances.length} Dept Hadir</span>
-                        </span>
+                    <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                            <Clock size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Waktu Mulai</p>
+                            <p className="text-xs font-semibold text-foreground truncate">
+                                {session?.startTime || "08:30"} WIB
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 p-2 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <CheckCircle2 size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wider">Kehadiran Dept</p>
+                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 truncate">
+                                {hadirCount} dari {attendances.length} Hadir
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {loadError && (
                 <div className="p-3 text-xs rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 flex items-center gap-2">
-                    <AlertCircle size={14} />
+                    <AlertCircle size={14} className="shrink-0" />
                     <span>{loadError}</span>
                 </div>
             )}
 
             {/* Segmented Minimalist Tab Navigation */}
-            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border overflow-x-auto scrollbar-none">
+            <div className={`grid ${userDeptId ? "grid-cols-3" : "grid-cols-2"} gap-1.5 bg-muted/70 p-1.5 rounded-2xl border border-border/80 min-w-0`}>
                 <button
                     type="button"
                     onClick={() => setActiveTab("NOTES")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-w-0 ${
+                    className={`flex items-center justify-center gap-1.5 py-2 px-1.5 sm:px-3 text-xs font-semibold rounded-xl transition-all min-w-0 ${
                         activeTab === "NOTES"
-                            ? "bg-card text-foreground shadow-xs"
-                            : "text-muted-foreground hover:text-foreground"
+                            ? "bg-card text-foreground shadow-xs ring-1 ring-border/50"
+                            : "text-muted-foreground hover:text-foreground hover:bg-card/40"
                     }`}
                 >
-                    <FileText size={14} className="shrink-0" />
-                    <span className="truncate sm:hidden">Notulen ({allNotes.length})</span>
-                    <span className="hidden sm:inline">Notulensi ({allNotes.length})</span>
+                    <FileText size={14} className="shrink-0 text-primary" />
+                    <span className="truncate">Notulensi</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                        activeTab === "NOTES" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    }`}>
+                        {allNotes.length}
+                    </span>
                 </button>
 
                 {userDeptId && (
                     <button
                         type="button"
                         onClick={() => setActiveTab("MY_DEPT_TASKS")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-w-0 ${
+                        className={`flex items-center justify-center gap-1.5 py-2 px-1.5 sm:px-3 text-xs font-semibold rounded-xl transition-all min-w-0 ${
                             activeTab === "MY_DEPT_TASKS"
-                                ? "bg-card text-foreground shadow-xs"
-                                : "text-muted-foreground hover:text-foreground"
+                                ? "bg-card text-foreground shadow-xs ring-1 ring-border/50"
+                                : "text-muted-foreground hover:text-foreground hover:bg-card/40"
                         }`}
                     >
-                        <ListTodo size={14} className="shrink-0" />
-                        <span className="truncate sm:hidden">Tugas ({myDeptTasks.filter((t) => t.taskStatus !== "SELESAI").length})</span>
-                        <span className="hidden sm:inline">Tugas Saya & Dept ({myDeptTasks.filter((t) => t.taskStatus !== "SELESAI").length})</span>
+                        <ListTodo size={14} className="shrink-0 text-purple-600" />
+                        <span className="truncate">Tugas Dept</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                            activeTab === "MY_DEPT_TASKS" ? "bg-purple-500/15 text-purple-600 dark:text-purple-400" : "bg-muted text-muted-foreground"
+                        }`}>
+                            {myDeptTasks.filter((t) => t.taskStatus !== "SELESAI").length}
+                        </span>
                     </button>
                 )}
 
                 <button
                     type="button"
                     onClick={() => setActiveTab("ATTENDANCE")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-all whitespace-nowrap min-w-0 ${
+                    className={`flex items-center justify-center gap-1.5 py-2 px-1.5 sm:px-3 text-xs font-semibold rounded-xl transition-all min-w-0 ${
                         activeTab === "ATTENDANCE"
-                            ? "bg-card text-foreground shadow-xs"
-                            : "text-muted-foreground hover:text-foreground"
+                            ? "bg-card text-foreground shadow-xs ring-1 ring-border/50"
+                            : "text-muted-foreground hover:text-foreground hover:bg-card/40"
                     }`}
                 >
-                    <Building2 size={14} className="shrink-0" />
-                    <span className="truncate sm:hidden">Presensi ({attendances.length})</span>
-                    <span className="hidden sm:inline">Presensi Dept ({attendances.length})</span>
+                    <Building2 size={14} className="shrink-0 text-blue-600" />
+                    <span className="truncate">Presensi</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                        activeTab === "ATTENDANCE" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-muted text-muted-foreground"
+                    }`}>
+                        {attendances.length}
+                    </span>
                 </button>
             </div>
 
             {/* TAB CONTENTS */}
-            <div className="space-y-3">
+            <div className="space-y-3 min-w-0">
                 {/* TAB 1: NOTULENSI RAPAT */}
                 {activeTab === "NOTES" && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 min-w-0">
                         {/* Sub-filter Pills */}
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1 min-w-0">
                             <button
                                 type="button"
                                 onClick={() => setNoteFilter("ALL")}
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 ${
                                     noteFilter === "ALL"
-                                        ? "bg-primary text-white shadow-xs"
-                                        : "bg-muted text-muted-foreground hover:text-foreground"
+                                        ? "bg-foreground text-background shadow-xs"
+                                        : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
                                 }`}
                             >
                                 Semua Notulen ({allNotes.length})
@@ -451,10 +493,10 @@ export default function EmployeeGreenMeetingPage() {
                                 <button
                                     type="button"
                                     onClick={() => setNoteFilter("RELEVANT")}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                                         noteFilter === "RELEVANT"
                                             ? "bg-emerald-600 text-white shadow-xs"
-                                            : "bg-muted text-muted-foreground hover:text-foreground"
+                                            : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
                                     }`}
                                     title="Tampilkan notulensi yang ditujukan untuk Anda atau departemen Anda"
                                 >
@@ -463,7 +505,7 @@ export default function EmployeeGreenMeetingPage() {
                                         className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                                             noteFilter === "RELEVANT"
                                                 ? "bg-white/20 text-white"
-                                                : "bg-background text-foreground"
+                                                : "bg-card text-foreground"
                                         }`}
                                     >
                                         {countRelevant}
@@ -474,10 +516,10 @@ export default function EmployeeGreenMeetingPage() {
                                 <button
                                     type="button"
                                     onClick={() => setNoteFilter("PERSONAL")}
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                                         noteFilter === "PERSONAL"
-                                            ? "bg-emerald-600 text-white shadow-xs"
-                                            : "bg-muted text-muted-foreground hover:text-foreground"
+                                            ? "bg-teal-600 text-white shadow-xs"
+                                            : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
                                     }`}
                                     title="Tampilkan butir notulensi yang khusus ditujukan kepada Anda pribadi"
                                 >
@@ -486,7 +528,7 @@ export default function EmployeeGreenMeetingPage() {
                                         className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                                             noteFilter === "PERSONAL"
                                                 ? "bg-white/20 text-white"
-                                                : "bg-background text-foreground"
+                                                : "bg-card text-foreground"
                                         }`}
                                     >
                                         {countPersonal}
@@ -496,10 +538,10 @@ export default function EmployeeGreenMeetingPage() {
                             <button
                                 type="button"
                                 onClick={() => setNoteFilter("TUGAS")}
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                                     noteFilter === "TUGAS"
                                         ? "bg-purple-600 text-white shadow-xs"
-                                        : "bg-muted text-muted-foreground hover:text-foreground"
+                                        : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
                                 }`}
                             >
                                 <span>Tugas Tindak Lanjut</span>
@@ -507,7 +549,7 @@ export default function EmployeeGreenMeetingPage() {
                                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                                         noteFilter === "TUGAS"
                                             ? "bg-white/20 text-white"
-                                            : "bg-background text-foreground"
+                                            : "bg-card text-foreground"
                                     }`}
                                 >
                                     {countTasks}
@@ -516,10 +558,10 @@ export default function EmployeeGreenMeetingPage() {
                             <button
                                 type="button"
                                 onClick={() => setNoteFilter("DIREKSI")}
-                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                                className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 ${
                                     noteFilter === "DIREKSI"
                                         ? "bg-amber-600 text-white shadow-xs"
-                                        : "bg-muted text-muted-foreground hover:text-foreground"
+                                        : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
                                 }`}
                             >
                                 <span>Arahan Direksi</span>
@@ -527,7 +569,7 @@ export default function EmployeeGreenMeetingPage() {
                                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                                         noteFilter === "DIREKSI"
                                             ? "bg-white/20 text-white"
-                                            : "bg-background text-foreground"
+                                            : "bg-card text-foreground"
                                     }`}
                                 >
                                     {countDireksi}
@@ -536,9 +578,9 @@ export default function EmployeeGreenMeetingPage() {
                         </div>
 
                         {/* Note Cards List */}
-                        <div className="space-y-2.5">
+                        <div className="space-y-3 min-w-0">
                             {filteredNotes.length === 0 ? (
-                                <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground space-y-2">
+                                <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground space-y-2 shadow-xs">
                                     <Info size={28} className="mx-auto text-muted-foreground opacity-50" />
                                     <p className="text-sm font-semibold text-foreground">
                                         {noteFilter === "RELEVANT" || noteFilter === "PERSONAL"
@@ -570,20 +612,20 @@ export default function EmployeeGreenMeetingPage() {
                                     return (
                                         <div
                                             key={note.id}
-                                            className={`bg-card border rounded-xl p-3.5 sm:p-4 shadow-xs space-y-2.5 transition-all ${
+                                            className={`bg-card border rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 transition-all min-w-0 overflow-hidden ${
                                                 isTask
                                                     ? isComplete
                                                         ? "border-emerald-500/30 bg-emerald-500/[0.01]"
                                                         : "border-purple-500/30 bg-purple-500/[0.01]"
-                                                    : "border-border"
+                                                    : "border-border/80"
                                             }`}
                                         >
-                                            {/* Top Row: Type, Routing, and Human-Friendly Status */}
-                                            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/60">
-                                                <div className="flex items-center gap-2 flex-wrap">
+                                            {/* Top Row: Type, Relevance Badges, and Status */}
+                                            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60 min-w-0 flex-wrap">
+                                                <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                                     {/* Type Pill */}
                                                     <span
-                                                        className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                                        className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold border shrink-0 ${
                                                             isTask
                                                                 ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
                                                                 : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
@@ -594,64 +636,79 @@ export default function EmployeeGreenMeetingPage() {
 
                                                     {/* Smart Relevance Badges */}
                                                     {isForMe && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                                                             <User size={10} />
                                                             Untuk Anda
                                                         </span>
                                                     )}
                                                     {!isForMe && isForMyDept && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
                                                             <Building2 size={10} />
                                                             Dept Anda
                                                         </span>
                                                     )}
                                                     {!isForMe && !isForMyDept && isForMyDiv && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0">
                                                             Divisi Anda
                                                         </span>
                                                     )}
                                                     {note.lastEditedAt && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-medium bg-muted text-muted-foreground border border-border shrink-0">
                                                             <History size={10} />
                                                             Direvisi
                                                         </span>
                                                     )}
+                                                </div>
 
-                                                    {/* Routing Pill: Dari ➔ Kepada */}
-                                                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-muted border border-border text-foreground font-medium flex-wrap">
-                                                        <span className="font-bold">Dari: {note.originName}</span>
-                                                        <ArrowRight size={10} className="text-muted-foreground" />
-                                                        <span>
-                                                            Kepada:{" "}
+                                                {/* Human-Friendly Status Badge */}
+                                                {isTask && (
+                                                    <div className="shrink-0">
+                                                        {renderTaskStatusBadge(note.taskStatus)}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Dedicated Routing Panel: Dari ➔ Kepada (Zero Leak Guarantee) */}
+                                            <div className="bg-muted/40 border border-border/50 rounded-xl p-2 sm:p-2.5 text-xs text-muted-foreground min-w-0">
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+                                                    <div className="flex items-center gap-1.5 shrink-0 text-foreground">
+                                                        <span className="font-semibold text-muted-foreground text-[11px] flex items-center gap-1">
+                                                            <Send size={11} className="text-primary" /> Dari:
+                                                        </span>
+                                                        <span className="font-bold text-foreground">{note.originName}</span>
+                                                    </div>
+
+                                                    <span className="hidden sm:inline text-muted-foreground/50">•</span>
+
+                                                    <div className="flex items-start sm:items-center gap-1.5 min-w-0 flex-1">
+                                                        <span className="font-semibold text-muted-foreground text-[11px] shrink-0">Kepada:</span>
+                                                        <div className="font-semibold text-foreground break-words [overflow-wrap:anywhere] min-w-0 flex-1 leading-snug">
                                                             {note.isAllTarget ? (
-                                                                <strong className="text-primary font-bold">Semua Karyawan (ALL)</strong>
+                                                                <span className="text-primary font-bold">Semua Karyawan (ALL)</span>
                                                             ) : (
-                                                                <strong>
+                                                                <span>
                                                                     {note.targets
                                                                         ?.map((t: GreenMeetingNoteTarget) => t.label || t.employee?.name || t.division?.name || t.department?.name)
                                                                         .filter(Boolean)
                                                                         .join(" • ") || "Target Spesifik"}
-                                                                </strong>
+                                                                </span>
                                                             )}
-                                                        </span>
+                                                        </div>
                                                     </div>
                                                 </div>
-
-                                                {/* Human-Friendly Status Badge */}
-                                                {isTask && renderTaskStatusBadge(note.taskStatus)}
                                             </div>
 
                                             {/* Note Body */}
-                                            <div className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-normal">
+                                            <div className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-normal break-words [overflow-wrap:anywhere] min-w-0">
                                                 {note.content}
                                             </div>
 
                                             {/* Footer Info (Tenggat Waktu) */}
                                             {isTask && note.deadlines && note.deadlines.length > 0 && (
-                                                <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Clock size={12} className="text-primary" />
-                                                        <span>
+                                                <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-2 min-w-0">
+                                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                                        <Clock size={12} className="text-primary shrink-0" />
+                                                        <span className="truncate">
                                                             Tenggat:{" "}
                                                             <strong className="text-foreground font-semibold">
                                                                 {new Date(note.deadlines[note.deadlines.length - 1].deadlineDate).toLocaleDateString("id-ID", {
@@ -662,14 +719,14 @@ export default function EmployeeGreenMeetingPage() {
                                                             </strong>
                                                         </span>
                                                         {note.deadlines.length > 1 && (
-                                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 shrink-0">
                                                                 Perpanjangan ke-{note.deadlines.length - 1}
                                                             </span>
                                                         )}
                                                     </div>
 
                                                     {note.completedAt && (
-                                                        <span className="text-emerald-600 font-medium inline-flex items-center gap-1">
+                                                        <span className="text-emerald-600 font-medium inline-flex items-center gap-1 shrink-0">
                                                             <CheckCircle2 size={11} />
                                                             Selesai {new Date(note.completedAt).toLocaleDateString("id-ID")}
                                                         </span>
@@ -686,18 +743,18 @@ export default function EmployeeGreenMeetingPage() {
 
                 {/* TAB 2: TUGAS SAYA & DEPARTEMEN */}
                 {activeTab === "MY_DEPT_TASKS" && (
-                    <div className="space-y-2.5">
-                        <div className="bg-muted/40 p-2.5 rounded-xl border border-border text-xs text-muted-foreground flex items-center justify-between">
-                            <span>
-                                Pekerjaan tindak lanjut untuk <strong className="text-foreground">{userDeptName || "Departemen Anda"}</strong>:
+                    <div className="space-y-3 min-w-0">
+                        <div className="bg-muted/40 p-3 rounded-2xl border border-border/80 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 min-w-0">
+                            <span className="truncate">
+                                Tindak lanjut untuk <strong className="text-foreground font-semibold">{userDeptName || "Departemen Anda"}</strong>:
                             </span>
-                            <span className="font-semibold text-foreground">
+                            <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold border border-purple-500/20 shrink-0 self-start sm:self-auto">
                                 {myDeptTasks.filter((t) => t.taskStatus !== "SELESAI").length} Tugas Aktif
                             </span>
                         </div>
 
                         {myDeptTasks.length === 0 ? (
-                            <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
+                            <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground shadow-xs">
                                 <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500 opacity-60" />
                                 <p className="text-sm font-semibold text-foreground">Tidak ada tugas aktif saat ini.</p>
                                 <p className="text-xs mt-0.5">Seluruh instruksi rapat telah selesai dikerjakan.</p>
@@ -712,44 +769,46 @@ export default function EmployeeGreenMeetingPage() {
                                 return (
                                     <div
                                         key={task.id}
-                                        className={`bg-card border rounded-xl p-3.5 shadow-xs space-y-2 transition-all ${
-                                            isCompleted ? "opacity-75 border-border" : "border-primary/30"
+                                        className={`bg-card border rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2.5 transition-all min-w-0 overflow-hidden ${
+                                            isCompleted ? "opacity-75 border-border" : "border-purple-500/30 bg-purple-500/[0.01]"
                                         }`}
                                     >
-                                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                                            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                                                <span>
-                                                    Instruksi Dari: <strong className="text-foreground font-semibold">{task.originName}</strong>
+                                        <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground min-w-0">
+                                                <span className="truncate">
+                                                    Dari: <strong className="text-foreground font-semibold">{task.originName}</strong>
                                                 </span>
                                                 {task.session?.meetingDate && (
-                                                    <span className="text-[11px] text-muted-foreground">
-                                                        • Rapat {new Date(task.session.meetingDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                                    <span className="text-[11px] text-muted-foreground shrink-0">
+                                                        • {new Date(task.session.meetingDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                                                     </span>
                                                 )}
                                                 {isPersonalTask ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                                                         <User size={10} />
                                                         Tugas Pribadi
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
                                                         <Building2 size={10} />
                                                         Departemen
                                                     </span>
                                                 )}
                                             </div>
-                                            {renderTaskStatusBadge(task.taskStatus)}
+                                            <div className="shrink-0">
+                                                {renderTaskStatusBadge(task.taskStatus)}
+                                            </div>
                                         </div>
 
-                                        <div className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed">
+                                        <div className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] min-w-0">
                                             {task.content}
                                         </div>
 
                                         {currentDeadline && (
-                                            <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Clock size={12} className="text-primary" />
-                                                    <span>
+                                            <div className="pt-2 border-t border-border/50 flex items-center justify-between flex-wrap gap-2 text-[11px] text-muted-foreground min-w-0">
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <Clock size={12} className="text-primary shrink-0" />
+                                                    <span className="truncate">
                                                         Batas Waktu:{" "}
                                                         <strong className="text-foreground font-semibold">
                                                             {new Date(currentDeadline.deadlineDate).toLocaleDateString("id-ID", {
@@ -762,7 +821,7 @@ export default function EmployeeGreenMeetingPage() {
                                                     </span>
                                                 </div>
                                                 {task.deadlines.length > 1 && (
-                                                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0">
                                                         Diperpanjang {task.deadlines.length - 1}x
                                                     </span>
                                                 )}
@@ -777,75 +836,90 @@ export default function EmployeeGreenMeetingPage() {
 
                 {/* TAB 3: TRANSPARANSI PRESENSI DEPARTEMEN */}
                 {activeTab === "ATTENDANCE" && (
-                    <div className="space-y-3">
-                        {/* Mobile View: Clean Compact Cards (sm:hidden - Tidak akan pernah terpotong di HP) */}
-                        <div className="sm:hidden divide-y divide-border bg-card border border-border rounded-xl overflow-hidden shadow-xs">
+                    <div className="space-y-3 min-w-0">
+                        {/* Mobile View: Clean Modern Cards with left status stripe */}
+                        <div className="sm:hidden space-y-2.5 min-w-0">
                             {attendances.length === 0 ? (
-                                <div className="p-6 text-center text-xs text-muted-foreground">
+                                <div className="p-8 text-center text-xs text-muted-foreground bg-card border border-border rounded-2xl shadow-xs">
                                     Tidak ada data kehadiran untuk sesi rapat ini.
                                 </div>
                             ) : (
-                                attendances.map((att, idx) => (
-                                    <div key={att.id} className="p-3 space-y-1.5">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] font-mono text-muted-foreground shrink-0">{idx + 1}.</span>
-                                                    <span className="text-xs font-bold text-foreground truncate">
-                                                        {att.unit.department.name}
-                                                    </span>
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground pl-4 truncate">
-                                                    <span className="font-medium text-foreground/70">Divisi:</span>{" "}
-                                                    {att.unit.department.division?.name || "-"}
-                                                </p>
-                                            </div>
-                                            <div className="shrink-0">
-                                                {att.status === "HADIR" && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                                                        <CheckCircle2 size={11} /> Hadir
-                                                    </span>
-                                                )}
-                                                {att.status === "IZIN" && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                                        Izin
-                                                    </span>
-                                                )}
-                                                {att.status === "ALPA" && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
-                                                        Alpa
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
+                                attendances.map((att, idx) => {
+                                    const isHadir = att.status === "HADIR";
+                                    const isIzin = att.status === "IZIN";
 
-                                        {(att.representativeName || (att.status === "IZIN" && att.permitReason)) && (
-                                            <div className="text-[11px] text-muted-foreground pl-4 pt-1 flex flex-wrap items-center gap-2 border-t border-border/40">
-                                                {att.representativeName && (
-                                                    <span className="inline-flex items-center gap-1 text-foreground font-medium">
-                                                        <User size={10} className="text-muted-foreground" />
-                                                        {att.representativeName}
-                                                    </span>
-                                                )}
-                                                {att.status === "IZIN" && att.permitReason && (
-                                                    <span className="text-amber-700 dark:text-amber-300 italic">
-                                                        Alasan: &ldquo;{att.permitReason}&rdquo;
-                                                    </span>
-                                                )}
+                                    return (
+                                        <div
+                                            key={att.id}
+                                            className={`p-3 rounded-2xl bg-card border shadow-xs space-y-2 min-w-0 border-l-4 ${
+                                                isHadir
+                                                    ? "border-l-emerald-500 border-border"
+                                                    : isIzin
+                                                    ? "border-l-amber-500 border-border"
+                                                    : "border-l-rose-500 border-border"
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2 min-w-0">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <span className="text-[10px] font-mono text-muted-foreground shrink-0">{idx + 1}.</span>
+                                                        <span className="text-xs font-bold text-foreground truncate">
+                                                            {att.unit.department.name}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground pl-4 truncate">
+                                                        <span className="font-medium text-foreground/70">Divisi:</span>{" "}
+                                                        {att.unit.department.division?.name || "-"}
+                                                    </p>
+                                                </div>
+                                                <div className="shrink-0">
+                                                    {isHadir && (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                                            <CheckCircle2 size={11} /> Hadir
+                                                        </span>
+                                                    )}
+                                                    {isIzin && (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                                            Izin
+                                                        </span>
+                                                    )}
+                                                    {!isHadir && !isIzin && (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                                            Alpa
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                ))
+
+                                            {(att.representativeName || (isIzin && att.permitReason)) && (
+                                                <div className="text-[11px] text-muted-foreground pl-4 pt-1.5 flex flex-col gap-1 border-t border-border/50 min-w-0">
+                                                    {att.representativeName && (
+                                                        <div className="flex items-center gap-1.5 text-foreground font-medium min-w-0 truncate">
+                                                            <User size={11} className="text-primary shrink-0" />
+                                                            <span className="text-muted-foreground text-[10px]">Perwakilan:</span>
+                                                            <span className="truncate">{att.representativeName}</span>
+                                                        </div>
+                                                    )}
+                                                    {isIzin && att.permitReason && (
+                                                        <div className="text-amber-700 dark:text-amber-300 italic break-words [overflow-wrap:anywhere] min-w-0 bg-amber-500/[0.06] p-1.5 rounded-lg border border-amber-500/20">
+                                                            Alasan: &ldquo;{att.permitReason}&rdquo;
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
 
-                        {/* Desktop View: Full Responsive Table (hidden sm:block) */}
-                        <div className="hidden sm:block bg-card border border-border rounded-xl overflow-hidden shadow-xs">
+                        {/* Desktop View: Full Responsive Table */}
+                        <div className="hidden sm:block bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
                             <div className="w-full overflow-x-auto">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[35px] text-center">No</TableHead>
+                                            <TableHead className="w-[45px] text-center">No</TableHead>
                                             <TableHead>Departemen</TableHead>
                                             <TableHead>Divisi</TableHead>
                                             <TableHead>Status Kehadiran</TableHead>
@@ -855,7 +929,7 @@ export default function EmployeeGreenMeetingPage() {
                                     <TableBody>
                                         {attendances.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="text-center py-6 text-xs text-muted-foreground">
+                                                <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
                                                     Tidak ada data kehadiran untuk sesi rapat ini.
                                                 </TableCell>
                                             </TableRow>
@@ -871,24 +945,24 @@ export default function EmployeeGreenMeetingPage() {
                                                     </TableCell>
                                                     <TableCell>
                                                         {att.status === "HADIR" && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                                                                 <CheckCircle2 size={11} /> Hadir
                                                             </span>
                                                         )}
                                                         {att.status === "IZIN" && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
                                                                 Izin
                                                             </span>
                                                         )}
                                                         {att.status === "ALPA" && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
                                                                 Alpa
                                                             </span>
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="text-xs text-foreground">
                                                         {att.status === "IZIN" && att.permitReason ? (
-                                                            <span className="text-amber-700 dark:text-amber-300 italic">
+                                                            <span className="text-amber-700 dark:text-amber-300 italic break-words">
                                                                 &ldquo;{att.permitReason}&rdquo;
                                                             </span>
                                                         ) : att.representativeName ? (
