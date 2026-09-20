@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "absensi-wig",
+      name: "hris",
       script: "npm",
       args: "run start:host",
       cwd: "./",

@@ -59,20 +59,25 @@ if ! command -v pm2 &> /dev/null; then
     echo -e "  ❌ PM2 belum terpasang global. Jalankan: npm install -g pm2"
 else
     pm2 resurrect || true
-    if pm2 describe absensi-wig > /dev/null 2>&1; then
-        STATUS=$(pm2 jlist | grep -o '"name":"absensi-wig"[^}]*' | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    APP_NAME="hris"
+    if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+        STATUS=$(pm2 jlist | grep -o "\"name\":\"$APP_NAME\"[^}]*" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
         if [ "$STATUS" != "online" ]; then
-            echo -e "  🔄 Restarting absensi-wig..."
-            pm2 restart absensi-wig
+            echo -e "  🔄 Restarting $APP_NAME..."
+            pm2 restart "$APP_NAME"
         else
-            echo -e "  ✅ Proses absensi-wig sudah ONLINE."
+            echo -e "  ✅ Proses $APP_NAME sudah ONLINE."
         fi
+    elif pm2 describe "absensi-wig" > /dev/null 2>&1; then
+        echo -e "  🔄 Menemukan proses lama absensi-wig. Menghapus dan mengganti ke hris..."
+        pm2 delete absensi-wig || true
+        pm2 start ecosystem.config.js
     else
-        echo -e "  🚀 Memulai absensi-wig via ecosystem.config.js..."
+        echo -e "  🚀 Memulai proses $APP_NAME via ecosystem.config.js..."
         if [ -f "ecosystem.config.js" ]; then
             pm2 start ecosystem.config.js
         else
-            pm2 start npm --name "absensi-wig" -- run start:host
+            pm2 start npm --name "$APP_NAME" -- run start:host
         fi
     fi
     pm2 save
