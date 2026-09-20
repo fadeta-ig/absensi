@@ -277,7 +277,7 @@ export default function EmployeeGreenMeetingPage() {
     });
 
     return (
-        <div className="w-full space-y-4 min-w-0 pb-6">
+        <div className="w-full space-y-4 min-w-0 pb-6 max-w-full overflow-x-hidden">
             {/* Header Super Compact: Tanggal, Lokasi, Jam, dan Kehadiran */}
             <div className="bg-card border border-border/80 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3 min-w-0 overflow-hidden">
                 {/* Top Row: Date Navigation & Quick Actions */}
@@ -359,46 +359,46 @@ export default function EmployeeGreenMeetingPage() {
 
                 {/* Off-Day Alert Banner if Active */}
                 {offDayInfo?.isOffDay && (
-                    <div className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 flex items-center gap-2">
-                        <AlertCircle size={14} className="shrink-0" />
+                    <div className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 flex items-center gap-2 min-w-0">
+                        <AlertCircle size={14} className="shrink-0 text-amber-600" />
                         <span className="truncate">{offDayInfo.reason || "Hari Libur Rutin / Libur Nasional"}</span>
                     </div>
                 )}
 
-                {/* Meeting Metadata Strip */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-border/60 text-xs">
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-muted/40 border border-border/50 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                            <MapPin size={14} />
+                {/* Meeting Metadata Strip: 3-column micro card layout */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1 border-t border-border/60 text-xs min-w-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-muted/40 border border-border/50 min-w-0 overflow-hidden">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <MapPin size={13} />
                         </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Lokasi</p>
-                            <p className="text-xs font-semibold text-foreground truncate" title={session?.room || "Ruang Rapat Utama Lt. 2"}>
+                        <div className="min-w-0 flex-1 w-full">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground font-medium uppercase tracking-wider truncate">Lokasi</p>
+                            <p className="text-[11px] sm:text-xs font-semibold text-foreground truncate" title={session?.room || "Ruang Rapat Utama Lt. 2"}>
                                 {session?.room || "Ruang Rapat Utama Lt. 2"}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                            <Clock size={14} />
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 min-w-0 overflow-hidden">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                            <Clock size={13} />
                         </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Waktu Mulai</p>
-                            <p className="text-xs font-semibold text-foreground truncate">
+                        <div className="min-w-0 flex-1 w-full">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground font-medium uppercase tracking-wider truncate">Mulai</p>
+                            <p className="text-[11px] sm:text-xs font-semibold text-foreground truncate">
                                 {session?.startTime || "08:30"} WIB
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 p-2 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                            <CheckCircle2 size={14} />
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 min-w-0 overflow-hidden">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <CheckCircle2 size={13} />
                         </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wider">Kehadiran Dept</p>
-                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 truncate">
-                                {hadirCount} dari {attendances.length} Hadir
+                        <div className="min-w-0 flex-1 w-full">
+                            <p className="text-[9px] sm:text-[10px] text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wider truncate">Kehadiran</p>
+                            <p className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-300 truncate">
+                                {hadirCount}/{attendances.length} Hadir
                             </p>
                         </div>
                     </div>
@@ -477,7 +477,7 @@ export default function EmployeeGreenMeetingPage() {
                 {activeTab === "NOTES" && (
                     <div className="space-y-3 min-w-0">
                         {/* Sub-filter Pills */}
-                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1 min-w-0">
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none w-full max-w-full min-w-0">
                             <button
                                 type="button"
                                 onClick={() => setNoteFilter("ALL")}
@@ -580,9 +580,9 @@ export default function EmployeeGreenMeetingPage() {
                         {/* Note Cards List */}
                         <div className="space-y-3 min-w-0">
                             {filteredNotes.length === 0 ? (
-                                <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground space-y-2 shadow-xs">
+                                <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 text-center text-muted-foreground space-y-2 shadow-xs w-full min-w-0 overflow-hidden">
                                     <Info size={28} className="mx-auto text-muted-foreground opacity-50" />
-                                    <p className="text-sm font-semibold text-foreground">
+                                    <p className="text-xs sm:text-sm font-semibold text-foreground px-2 break-words [overflow-wrap:anywhere]">
                                         {noteFilter === "RELEVANT" || noteFilter === "PERSONAL"
                                             ? "Tidak ada notulensi khusus untuk Anda atau departemen Anda pada tanggal ini."
                                             : noteFilter === "TUGAS"

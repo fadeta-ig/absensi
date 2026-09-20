@@ -219,7 +219,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 />
             }
         >
-            <div className={`w-full mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") ? "max-w-4xl" : "max-w-md"}`}>
+            <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") ? "max-w-4xl" : "max-w-md"}`}>
                 {children}
             </div>
         </AppShell>

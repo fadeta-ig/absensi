@@ -383,8 +383,8 @@ export default function AppShell({
             )}
 
             {/* ── Main Content ──────────────────────────────────── */}
-            <main className={`flex-1 pt-14 lg:pt-0 min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"} ${mobileBottomNav ? "pb-28 lg:pb-8" : "pb-8"}`}>
-                <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto">
+            <main className={`flex-1 min-w-0 w-full pt-14 lg:pt-0 min-h-screen transition-all duration-300 overflow-x-hidden ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"} ${mobileBottomNav ? "pb-28 lg:pb-8" : "pb-8"}`}>
+                <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto w-full min-w-0">
                     {children}
                 </div>
             </main>
