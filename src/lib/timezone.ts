@@ -8,6 +8,18 @@
 
 const WIB_TIMEZONE = "Asia/Jakarta";
 
+/** Validate a calendar date in strict YYYY-MM-DD form. */
+export function isValidCalendarDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+    const [year, month, day] = value.split("-").map(Number);
+    if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+
+    const isLeapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+    const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return day <= daysInMonth[month - 1];
+}
+
 /** Get current date as "YYYY-MM-DD" in WIB timezone. */
 export function toWIBDateString(date: Date = new Date()): string {
     const parts = new Intl.DateTimeFormat("en-CA", {

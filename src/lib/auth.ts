@@ -103,7 +103,9 @@ function toPrincipal(user: NonNullable<UserWithAccess>): UserPrincipal | null {
             ? "hr"
             : permissions.includes("ga.manage")
                 ? "ga"
-                : "employee",
+                : permissions.includes("cleaning.execute")
+                    ? "cleaning" as "hr" | "ga" | "employee"
+                    : "employee",
         sessionVersion: user.sessionVersion,
         hasSubordinates: (user.employee?.subordinates.length ?? 0) > 0,
     };

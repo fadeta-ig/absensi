@@ -3,6 +3,7 @@ export const SYSTEM_ROLES = {
     HR_ADMIN: "HR_ADMIN",
     GA_ADMIN: "GA_ADMIN",
     EMPLOYEE_USER: "EMPLOYEE_USER",
+    CLEANING_WORKER: "CLEANING_WORKER",
 } as const;
 
 export type SystemRole = typeof SYSTEM_ROLES[keyof typeof SYSTEM_ROLES];
@@ -13,6 +14,7 @@ export const PERMISSIONS = {
     GA_MANAGE: "ga.manage",
     EMPLOYEE_SELF: "employee.self",
     ASSET_READ: "asset.read",
+    CLEANING_EXECUTE: "cleaning.execute",
 } as const;
 
 export type PermissionCode = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -55,16 +57,22 @@ export function canReadAssets(principal: AccessPrincipal): boolean {
     return hasPermission(principal, PERMISSIONS.ASSET_READ);
 }
 
+export function canExecuteCleaning(principal: AccessPrincipal): boolean {
+    return hasPermission(principal, PERMISSIONS.CLEANING_EXECUTE);
+}
+
 export function getPrimaryRole(roles: string[]): SystemRole {
     if (roles.includes(SYSTEM_ROLES.SUPER_ADMIN)) return SYSTEM_ROLES.SUPER_ADMIN;
     if (roles.includes(SYSTEM_ROLES.HR_ADMIN)) return SYSTEM_ROLES.HR_ADMIN;
     if (roles.includes(SYSTEM_ROLES.GA_ADMIN)) return SYSTEM_ROLES.GA_ADMIN;
+    if (roles.includes(SYSTEM_ROLES.CLEANING_WORKER)) return SYSTEM_ROLES.CLEANING_WORKER;
     return SYSTEM_ROLES.EMPLOYEE_USER;
 }
 
 export function getLandingPath(principal: AccessPrincipal): string {
     if (canManageHr(principal)) return "/dashboard";
     if (canManageGa(principal)) return "/ga";
+    if (canExecuteCleaning(principal)) return "/cleaning";
     if (canUseEmployeePortal(principal)) return "/employee";
     return "/";
 }

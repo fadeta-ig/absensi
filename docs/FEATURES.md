@@ -83,6 +83,15 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Transparansi & Smart Filter**: HR memantau melalui `/dashboard/green-meeting`; karyawan tetap dapat membaca seluruh notulensi sesi melalui filter Semua. Portal `/employee/green-meeting` menyediakan filter relevansi Personal, Departemen, Divisi, dan Untuk Semua yang mencocokkan target secara eksklusif berdasarkan `targetType`, serta daftar tugas relevan lintas waktu. Antarmuka karyawan dirancang mobile-first (zero-leak) dengan navigasi grid tersegmentasi, routing strip anti-overflow, dan kartu presensi unit adaptif.
 - **Laporan**: GA dan pemantau terautentikasi dapat melihat rekap rentang tanggal; UI GA menyediakan ekspor Excel dan PDF.
 
+### D. Kebersihan Harian (Core Cleaning Loop)
+- **Portal Petugas Terbatas (`/cleaning`)**: Petugas kebersihan yang ditetapkan masuk ke portal khusus terpisah dari portal GA. Akses dikontrol oleh role `CLEANING_WORKER` dengan permission `cleaning.execute` yang dikelola otomatis berdasarkan penetapan ruangan aktif.
+- **Checklist Harian Bersama**: Satu checklist per ruangan per tanggal WIB. Beberapa petugas yang ditetapkan ke ruangan yang sama dapat mengubah item secara bersamaan pada tanggal hari ini. Item yang belum disentuh menampilkan status `Belum diubah` tanpa aktor atau waktu.
+- **Snapshot Immutable**: Checklist harian menyalin nama ruangan dan item template aktif saat pertama kali dibuat. Perubahan master (template, item) tidak pernah mengubah snapshot harian yang sudah ada.
+- **Status Turunan**: Status harian dihitung dari item aktif, bukan disimpan terpisah. `SELESAI` hanya jika semua item aktif sudah selesai; jika ada yang dibatalkan, kembali ke `BELUM`.
+- **Administrasi WIG002**: Hanya username `WIG002` dengan permission `ga.manage` yang dapat mengelola ruangan, template, item template, dan penetapan petugas melalui `/ga/cleaning/settings`. Penetapan petugas mendukung `applyToToday` yang berlaku pada hari yang sama atau menunggu tanggal WIB berikutnya.
+- **Sinkronisasi Role Atomik**: Penetapan aktif pertama menambahkan role `CLEANING_WORKER`; pencabutan penetapan aktif terakhir menghapus role dalam satu transaksi database yang sama.
+- **Rekap Bulanan (`/ga/cleaning/recap`)**: WIG002 melihat matriks per ruangan untuk bulan lampau atau berjalan. Tanggal tanpa record menampilkan `BELUM`. Tanggal mendatang menampilkan pratinjau template tanpa membuat record.
+
 ---
 
 ## 4. Modul HR & Penggajian (Payroll)

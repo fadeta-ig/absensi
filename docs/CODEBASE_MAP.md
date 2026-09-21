@@ -19,6 +19,7 @@ hriswig/
 │   ├── app/                   # Next.js 16 App Router (halaman, layout, & API routes)
 │   │   ├── (auth)/            # Alur autentikasi dan login
 │   │   ├── api/               # Endpoint backend API RESTful
+│   │   ├── cleaning/          # Portal operasional petugas kebersihan
 │   │   ├── dashboard/         # Portal manajemen HR & Super Admin
 │   │   ├── employee/          # Portal mandiri karyawan (Employee Self-Service)
 │   │   ├── ga/                # Portal operasional General Affairs & Aset
@@ -92,8 +93,8 @@ hriswig/
   - `src/app/employee/green-meeting/page.tsx`: Pemantauan notulensi rapat, tindak lanjut tugas pribadi/departemen, dan transparansi presensi unit dengan antarmuka mobile-first responsif (zero-leak).
 
 ### C. Portal General Affairs (`src/app/ga/`)
-- **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat dan Green Meeting.
-- **Responsibility**: Registrasi aset, mutasi/BAST, inspeksi, servis, tiket, serta pengelolaan penuh kalender, presensi, notulen, tindak lanjut, dan laporan Green Meeting.
+- **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat, Green Meeting, dan Kebersihan Harian.
+- **Responsibility**: Registrasi aset, mutasi/BAST, inspeksi, servis, tiket, pengelolaan penuh kalender, presensi, notulen, tindak lanjut, dan laporan Green Meeting, serta pengaturan ruangan, template, penetapan petugas, dan rekap bulanan Kebersihan Harian.
 - **Important Files**:
   - `src/app/ga/assets/page.tsx`: Katalog seluruh aset korporat dengan filter kategori & status.
   - `src/app/ga/tickets/page.tsx`: Manajemen tiket keluhan kerusakan dari karyawan.
@@ -106,6 +107,15 @@ hriswig/
   - `src/app/ga/green-meeting/settings/page.tsx`: Kalender operasional, konfigurasi, dan partisipasi departemen.
   - `src/app/ga/green-meeting/recap/page.tsx`: Rekap rentang tanggal serta ekspor Excel/PDF.
   - `src/app/ga/green-meeting/components/`: Komponen native bersama untuk header, navigasi submodul, presensi, notulen, tugas, pengaturan, dan rekap.
+  - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, dan penetapan petugas kebersihan.
+  - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan kebersihan per ruangan.
+
+### D. Portal Kebersihan Harian (`src/app/cleaning/`)
+- **Purpose**: Portal operasional terbatas untuk petugas kebersihan.
+- **Responsibility**: Menampilkan ruangan yang ditetapkan, membuat atau membaca checklist harian, dan mengubah status item aktif pada tanggal WIB hari ini.
+- **Important Files**:
+  - `src/app/cleaning/layout.tsx`: Layout portal kebersihan dengan AppShell dan auth check.
+  - `src/app/cleaning/page.tsx`: Halaman checklist harian petugas.
 
 ---
 
@@ -120,6 +130,8 @@ hriswig/
   - `src/app/api/payslips/route.ts`: Handler penerbitan slip gaji bulanan.
   - `src/app/api/cron/[...]/route.ts`: 5 endpoint terjadwal yang diamankan dengan header `Bearer CRON_SECRET`.
   - `src/app/api/green-meeting/`: Sembilan route handler untuk config, units, sessions, attendance, notes, deadlines, holidays, employee autocomplete, dan recap.
+  - `src/app/api/cleaning/`: Tiga route handler untuk petugas: rooms (GET), checklists (GET/POST), dan checklist-items/[id] (PATCH).
+  - `src/app/api/ga/cleaning/`: Lima route handler untuk WIG002: rooms (GET/POST/PATCH), templates (GET/POST/PATCH), template-items (GET/POST/PATCH), assignments (GET/POST/PATCH), recap (GET), dan checklists (GET).
 
 ---
 
@@ -137,13 +149,14 @@ hriswig/
   - `visitService.ts` & `visitPhotoService.ts`: Audit trail kunjungan dan watermarking citra via Sharp.
   - `emailService.ts`: Pengiriman email transaksional kredensial dan pengingat via SMTP Nodemailer.
   - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi departemen, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap Green Meeting.
+  - `cleaningService.ts`: Domain service kebersihan harian: CRUD ruangan, template, template item, penetapan petugas, sinkronisasi role CLEANING_WORKER, pembuatan checklist harian dengan snapshot, perubahan status item, dan rekap bulanan.
 
 ---
 
 ## 6. Data Layer (`prisma/`)
 
 - **Purpose**: Definisi skema basis data relasional dan koneksi ORM.
-- **Responsibility**: Menentukan 57 model entitas aktual, indeks unik, foreign keys, serta penyediaan singleton client database.
+- **Responsibility**: Menentukan 66 model entitas aktual (termasuk 2 enum baru), indeks unik, foreign keys, serta penyediaan singleton client database.
 - **Important Files**:
   - `prisma/schema.prisma`: Skema canonical untuk MariaDB 10.11 / MySQL.
   - `src/lib/prisma.ts`: Inisialisasi singleton `PrismaClient` dengan manajemen pool koneksi.

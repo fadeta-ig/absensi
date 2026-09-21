@@ -113,6 +113,8 @@ model UserAccount {
   employeeDocuments   EmployeeDocument[]      @relation("EmployeeDocumentUploader")
   taxChanges          EmployeeTaxHistory[]    @relation("EmployeeTaxHistoryActor")
   employeeImportJobs  EmployeeImportJob[]     @relation("EmployeeImportActor")
+  cleaningAssignments      CleaningWorkerAssignment[]
+  cleaningItemChanges      CleaningDailyChecklistItem[] @relation("CleaningItemActor")
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -1228,5 +1230,113 @@ model GreenMeetingDeadlineHistory {
 
   @@index([noteId], map: "idx_gm_deadline_note")
   @@map("green_meeting_deadline_histories")
+}
+
+// ─── Cleaning (Kebersihan Harian) ───────────
+
+model CleaningRoom {
+  id             String   @id @default(uuid())
+  name           String   @db.VarChar(200)
+  nameNormalized String   @unique @map("name_normalized") @db.VarChar(200)
+  templateId     String   @map("template_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  template    CleaningTemplate           @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assignments CleaningWorkerAssignment[]
+  checklists  CleaningDailyChecklist[]
+
+  @@index([templateId], map: "idx_cleaning_room_template")
+  @@index([isActive], map: "idx_cleaning_room_active")
+  @@map("cleaning_rooms")
+}
+
+model CleaningTemplate {
+  id             String   @id @default(uuid())
+  name           String   @db.VarChar(200)
+  nameNormalized String   @unique @map("name_normalized") @db.VarChar(200)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  items CleaningTemplateItem[]
+  rooms CleaningRoom[]
+
+  @@map("cleaning_templates")
+}
+
+model CleaningTemplateItem {
+  id             String   @id @default(uuid())
+  templateId     String   @map("template_id")
+  name           String   @db.VarChar(200)
+  nameNormalized String   @map("name_normalized") @db.VarChar(200)
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  template       CleaningTemplate             @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  checklistItems CleaningDailyChecklistItem[]
+
+  @@unique([templateId, nameNormalized], map: "idx_cleaning_tpl_item_name")
+  @@index([templateId, sortOrder], map: "idx_cleaning_tpl_item_order")
+  @@map("cleaning_template_items")
+}
+
+model CleaningWorkerAssignment {
+  id               String   @id @default(uuid())
+  roomId           String   @map("room_id")
+  userId           String   @map("user_id")
+  isActive         Boolean  @default(true) @map("is_active")
+  effectiveWibDate String   @map("effective_wib_date") @db.VarChar(10)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  room CleaningRoom @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user UserAccount  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([roomId, userId], map: "idx_cleaning_assignment_pair")
+  @@index([userId, isActive], map: "idx_cleaning_assignment_user")
+  @@index([roomId, isActive], map: "idx_cleaning_assignment_room")
+  @@map("cleaning_worker_assignments")
+}
+
+model CleaningDailyChecklist {
+  id               String   @id @default(uuid())
+  roomId           String   @map("room_id")
+  wibDate          String   @map("wib_date") @db.VarChar(10)
+  roomNameSnapshot String   @map("room_name_snapshot") @db.VarChar(200)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  room  CleaningRoom                @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  items CleaningDailyChecklistItem[]
+
+  @@unique([roomId, wibDate], map: "idx_cleaning_checklist_room_date")
+  @@map("cleaning_daily_checklists")
+}
+
+model CleaningDailyChecklistItem {
+  id                  String    @id @default(uuid())
+  checklistId         String    @map("checklist_id")
+  templateItemId      String?   @map("template_item_id")
+  itemNameSnapshot    String    @map("item_name_snapshot") @db.VarChar(200)
+  sortOrder           Int       @default(0) @map("sort_order")
+  isActive            Boolean   @default(true) @map("is_active")
+  isComplete          Boolean   @default(false) @map("is_complete")
+  lastChangedByUserId String?   @map("last_changed_by_user_id")
+  lastChangedAt       DateTime? @map("last_changed_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  checklist      CleaningDailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  templateItem   CleaningTemplateItem?  @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastChangedBy  UserAccount?           @relation("CleaningItemActor", fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([checklistId, sortOrder], map: "idx_cleaning_daily_item_order")
+  @@index([templateItemId], map: "idx_cleaning_daily_item_tpl")
+  @@index([lastChangedByUserId], map: "idx_cleaning_daily_item_actor")
+  @@map("cleaning_daily_checklist_items")
 }
 

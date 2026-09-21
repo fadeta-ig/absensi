@@ -39,6 +39,7 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
   - `HR_ADMIN`: Hak akses HR, portal mandiri, dan baca aset (`hr.manage`, `employee.self`, `asset.read`).
   - `GA_ADMIN`: Hak akses GA, portal mandiri, dan baca aset (`ga.manage`, `employee.self`, `asset.read`).
   - `EMPLOYEE_USER`: Hak akses portal karyawan mandiri (`employee.self`).
+  - `CLEANING_WORKER`: Hak akses operasional kebersihan (`cleaning.execute`). Role ini dikelola secara otomatis oleh sistem: ditambahkan saat penetapan aktif pertama dan dihapus saat penetapan aktif terakhir dicabut, dalam satu transaksi atomik.
 - **Pemeriksaan Izin API**:
   - API handler memeriksa keberadaan kode izin spesifik: `session.permissions.includes("hr.manage")`.
   - Bidang `session.role` (string "hr" | "ga" | "employee") telah ditandai `@deprecated` dan hanya dipertahankan untuk kompatibilitas ke belakang (*backward compatibility*).
@@ -47,6 +48,12 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
   - Endpoint baca `/api/green-meeting/*` memerlukan autentikasi dan mendukung transparansi internal bagi GA, HR, dan karyawan.
   - Endpoint mutasi memanggil `canManageGreenMeeting()` dan hanya menerima permission `ga.manage`, role `GA_ADMIN`, atau override role `SUPER_ADMIN`.
   - Portal `/dashboard/green-meeting` dan `/employee/green-meeting` tidak menyediakan kontrol mutasi; seluruh pengelolaan operasional ada pada portal GA multi-page.
+- **Boundary Kebersihan Harian (Core Cleaning Loop)**:
+  - Portal `/cleaning` memerlukan permission `cleaning.execute` melalui route guard di `proxy.ts` dan pemeriksaan `requireAuth()` di setiap API route.
+  - Petugas hanya dapat melihat ruangan dengan penetapan aktif dan mengubah item hanya pada tanggal WIB hari ini. Pencabutan penetapan segera menghilangkan akses termasuk riwayat.
+  - Administrasi di `/ga/cleaning/*` memerlukan username `WIG002` DAN permission `ga.manage`. Tidak ada fallback role atau akun lain.
+  - Penetapan petugas (`CleaningWorkerAssignment`) menjadi satu satunya sumber role `CLEANING_WORKER`; sinkronisasi role terjadi secara transaksional.
+  - `proxy.ts` menduplikasi string literal `"cleaning.execute"` karena berjalan di Edge Runtime dan tidak dapat mengimpor dari modul server.
 
 ---
 

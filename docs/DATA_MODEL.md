@@ -4,7 +4,7 @@
 > **Source of Truth**: `prisma/schema.prisma` and live database tables.  
 > **Last Verified**: 2026-09-10  
 
-Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, model entitas, relasi antar tabel, dan strategi migrasi. Skema aktual memuat **57 model Prisma** yang masing-masing dipetakan ke tabel fisik.
+Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, model entitas, relasi antar tabel, dan strategi migrasi. Skema aktual memuat **66 model Prisma** (termasuk 2 enum baru) yang masing-masing dipetakan ke tabel fisik.
 
 
 ---
@@ -21,7 +21,7 @@ Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Pr
 
 ## 2. Comprehensive Model & Table Catalog
 
-Basis data terdiri dari **57 model Prisma** yang dipetakan ke **57 tabel fisik** melalui deklarasi `@@map` pada schema Prisma:
+Basis data terdiri dari **66 model Prisma** yang dipetakan ke tabel fisik melalui deklarasi `@@map` pada schema Prisma:
 
 ### A. Autentikasi & RBAC (5 Model)
 1. `UserAccount` (`user_accounts`): Akun pengguna aplikasi. Kolom penting: `id`, `username`, `email`, `password_hash`, `session_version`, `is_active`, `employee_id`.
@@ -106,6 +106,28 @@ Relasi inti Green Meeting:
 4. `GreenMeetingNote` 1 ── * `GreenMeetingNoteTarget`.
 5. `GreenMeetingNote` 1 ── * `GreenMeetingDeadlineHistory`.
 6. `Division`, `Department`, dan `Employee` menjadi sumber master HR bagi target notulen; data organisasi tidak diduplikasi ke master baru Green Meeting.
+
+### H. Kebersihan Harian / Core Cleaning Loop (7 Model)
+- `CleaningRoom` (`cleaning_rooms`): Ruangan yang dikelola kebersihan hariannya. Kolom penting: `id`, `name`, `normalizedName` (unik), `templateId` (FK ke `CleaningTemplate`), `isActive`, timestamps.
+- `CleaningTemplate` (`cleaning_templates`): Template item checklist yang dapat dipakai ulang oleh banyak ruangan. Kolom penting: `id`, `name`, `normalizedName` (unik), `isActive`, timestamps. Tidak dapat dinonaktifkan selama masih dipakai ruangan aktif.
+- `CleaningTemplateItem` (`cleaning_template_items`): Item checklist di dalam template. Kolom penting: `id`, `templateId`, `name`, `normalizedName` (unik per template), `sortOrder`, `isActive`, timestamps.
+- `CleaningWorkerAssignment` (`cleaning_worker_assignments`): Penetapan petugas ke ruangan. Kolom penting: `id`, `roomId`, `userId`, `isActive`, `effectiveWibDate`, timestamps. Unik: `[roomId, userId]`. Menjadi satu satunya sumber role `CLEANING_WORKER`; penetapan pertama menambah role, pencabutan terakhir menghapus role secara atomik.
+- `CleaningDailyChecklist` (`cleaning_daily_checklists`): Satu record per ruangan dan tanggal WIB. Kolom penting: `id`, `roomId`, `wibDate`, `roomNameSnapshot`, timestamps. Unik: `[roomId, wibDate]`.
+- `CleaningDailyChecklistItem` (`cleaning_daily_checklist_items`): Snapshot item checklist harian. Kolom penting: `id`, `checklistId`, `templateItemId` (nullable), `itemNameSnapshot`, `sortOrder`, `isActive`, `status` (enum `BELUM`/`BERSIH`/`KOTOR`), `lastChangedByUserId` (nullable), `lastChangedAt` (nullable), timestamps. Item yang belum disentuh tidak memiliki aktor atau waktu.
+- `CleaningDailyChecklistPhoto` (`cleaning_daily_checklist_photos`): Foto bukti per item checklist harian. Kolom penting: `id`, `checklistItemId`, `filePath`, timestamps.
+
+Relasi inti Cleaning:
+
+1. `CleaningRoom` * ── 1 `CleaningTemplate` (wajib saat aktif).
+2. `CleaningRoom` 1 ── * `CleaningWorkerAssignment`.
+3. `CleaningRoom` 1 ── * `CleaningDailyChecklist`.
+4. `CleaningDailyChecklist` 1 ── * `CleaningDailyChecklistItem`.
+5. `CleaningDailyChecklistItem` 1 ── * `CleaningDailyChecklistPhoto`.
+6. `UserAccount` 1 ── * `CleaningWorkerAssignment` (petugas).
+7. `UserAccount` 1 ── * `CleaningDailyChecklistItem` via `lastChangedByUserId` (aktor perubahan).
+8. Enum: `CleaningItemStatus` (`BELUM`, `BERSIH`, `KOTOR`); `CleaningChecklistStatus` (`DRAFT`, `SELESAI`).
+
+RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`.
 
 ---
 

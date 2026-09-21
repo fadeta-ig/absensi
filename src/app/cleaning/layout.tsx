@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck, SprayCan } from "lucide-react";
+import { SprayCan } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
@@ -10,51 +10,14 @@ import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
-const GA_NAV_ITEMS: NavItem[] = [
-    { href: "/ga", icon: LayoutDashboard, label: "Dashboard" },
-    {
-        icon: CalendarCheck,
-        label: "Green Meeting",
-        subItems: [
-            { href: "/ga/green-meeting/attendance", label: "Presensi Hari Ini" },
-            { href: "/ga/green-meeting/notes", label: "Notulensi Rapat" },
-            { href: "/ga/green-meeting/tasks", label: "Pelacak Tindak Lanjut" },
-            { href: "/ga/green-meeting/settings", label: "Kalender & Departemen" },
-            { href: "/ga/green-meeting/recap", label: "Laporan & Ekspor" },
-        ],
-    },
-    {
-        icon: Package,
-        label: "Data Master",
-        subItems: [
-            { href: "/ga/categories", label: "Master Kategori" },
-            { href: "/ga/assets", label: "Master Aset" },
-        ],
-    },
-    {
-        icon: QrCode,
-        label: "Operasional QR",
-        subItems: [
-            { href: "/ga/scan", label: "Scan / Pindai QR" },
-            { href: "/ga/assets/print", label: "Cetak Label QR" },
-        ],
-    },
-    { href: "/ga/tickets", icon: Ticket, label: "Ticketing Aset" },
-    { href: "/ga/sim", icon: Phone, label: "Manajemen SIM" },
-    {
-        icon: SprayCan,
-        label: "Kebersihan",
-        subItems: [
-            { href: "/ga/cleaning/settings", label: "Pengaturan" },
-            { href: "/ga/cleaning/recap", label: "Rekap Bulanan" },
-        ],
-    },
+const CLEANING_NAV_ITEMS: NavItem[] = [
+    { href: "/cleaning", icon: SprayCan, label: "Checklist Hari Ini" },
 ];
 
-export default function GaLayout({ children }: { children: React.ReactNode }) {
+export default function CleaningLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const toast = useToast();
-    const [user, setUser] = useState<{ name: string; employeeId: string | null; username: string; permissions: string[] } | null>(null);
+    const [user, setUser] = useState<{ name: string; employeeId: string | null; username: string; roles: string[]; permissions: string[] } | null>(null);
     const [loading, setLoading] = useState(true);
     const [loggingOut, setLoggingOut] = useState(false);
     const fetchedRef = useRef(false);
@@ -71,20 +34,22 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
                 return;
             }
             const data = await res.json();
-            if (!data.permissions?.includes("ga.manage")) {
+            if (!data.roles?.includes("CLEANING_WORKER") || !data.permissions?.includes("cleaning.execute")) {
                 storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
                 router.replace(
                     data.permissions?.includes("hr.manage")
                         ? "/dashboard"
-                        : data.employeeId && data.permissions?.includes("employee.self")
-                            ? "/employee"
-                            : "/"
+                        : data.permissions?.includes("ga.manage")
+                            ? "/ga"
+                            : data.employeeId && data.permissions?.includes("employee.self")
+                                ? "/employee"
+                                : "/"
                 );
                 return;
             }
             setUser(data);
         } catch (error) {
-            reportClientError("GaLayout", "Gagal memverifikasi sesi GA", error);
+            reportClientError("CleaningLayout", "Gagal memverifikasi sesi petugas kebersihan", error);
             storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
             router.replace("/");
         } finally {
@@ -119,22 +84,22 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
             notifyAuthChanged("logout");
             router.replace("/");
         } catch (error) {
-            reportClientError("GaLayout", "Logout GA gagal", error);
+            reportClientError("CleaningLayout", "Logout petugas gagal", error);
             toast(error instanceof Error ? error.message : "Gagal logout.", "error");
             setLoggingOut(false);
         }
     }, [loggingOut, router, toast]);
 
-    if (loading || !user) return <AppShellLoading message="Memuat portal GA..." />;
+    if (loading || !user) return <AppShellLoading message="Memuat portal kebersihan..." />;
 
     return (
         <AppShell
             user={user}
-            navItems={GA_NAV_ITEMS}
-            brandTitle="WIG GA"
-            brandSubtitle="General Affairs"
-            mobileTitle="WIG GA"
-            storageKey="ga-sidebar-collapsed"
+            navItems={CLEANING_NAV_ITEMS}
+            brandTitle="WIG Cleaning"
+            brandSubtitle="Checklist Kebersihan"
+            mobileTitle="Kebersihan"
+            storageKey="cleaning-sidebar-collapsed"
             onLogout={handleLogout}
             logoutLoading={loggingOut}
             mobileHeaderRight={<ThemeToggle />}

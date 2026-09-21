@@ -7,12 +7,14 @@ export const RBAC_DEFINITIONS = {
         ["ga.manage", "Kelola GA"],
         ["employee.self", "Portal Karyawan"],
         ["asset.read", "Baca Aset"],
+        ["cleaning.execute", "Eksekusi Kebersihan"],
     ] as const,
     roles: [
         ["SUPER_ADMIN", "Super Admin HR", ["user.manage", "hr.manage", "ga.manage", "employee.self", "asset.read"]],
         ["HR_ADMIN", "Admin HR", ["hr.manage", "employee.self", "asset.read"]],
         ["GA_ADMIN", "Admin GA", ["ga.manage", "employee.self", "asset.read"]],
         ["EMPLOYEE_USER", "Karyawan", ["employee.self"]],
+        ["CLEANING_WORKER", "Petugas Kebersihan", ["cleaning.execute"]],
     ] as const,
 };
 
