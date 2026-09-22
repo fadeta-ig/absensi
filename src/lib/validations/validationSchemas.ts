@@ -388,7 +388,7 @@ export const attendanceCorrectionCreateSchema = z.object({
     proposedClockIn: z.string().nullable().optional(),
     proposedClockOut: z.string().nullable().optional(),
     reason: z.string().min(1, "Alasan harus diisi"),
-    attachmentUrl: z.string().nullable().optional()
+    attachmentUrl: z.string().max(1000, "URL lampiran terlalu panjang").nullable().optional()
 });
 
 export const attendanceCorrectionUpdateSchema = z.object({

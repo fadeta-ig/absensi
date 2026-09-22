@@ -368,7 +368,7 @@ model AttendanceCorrection {
   proposedClockOut DateTime? @map("proposed_clock_out")
 
   reason        String  @db.Text
-  attachmentUrl String? @map("attachment_url")
+  attachmentUrl String? @map("attachment_url") @db.VarChar(1000)
 
   status            AssessmentStatus @default(PENDING)
   assignedManagerId String?          @map("assigned_manager_id")

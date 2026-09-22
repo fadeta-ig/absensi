@@ -81,7 +81,7 @@ export default function AttendanceCorrectionPage() {
         reason:           "",
     });
 
-    const [attachmentBase64, setAttachmentBase64] = useState<string | null>(null);
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
     const [attachmentName, setAttachmentName] = useState<string | null>(null);
 
     // ── Fetch List ─────────────────────────────────────────────────────────────
@@ -117,14 +117,15 @@ export default function AttendanceCorrectionPage() {
             return;
         }
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setAttachmentBase64(reader.result as string);
-            setAttachmentName(file.name);
-            toast("Dokumen berhasil dilampirkan", "success");
-        };
-        reader.onerror = () => toast("Gagal membaca file", "error");
-        reader.readAsDataURL(file);
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+        if (!allowedTypes.includes(file.type)) {
+            toast("Format file harus JPG, PNG, WEBP, atau PDF", "warning");
+            return;
+        }
+
+        setAttachmentFile(file);
+        setAttachmentName(file.name);
+        toast("Dokumen berhasil dilampirkan", "success");
     }, [toast]);
 
     // ── Submit Handler ─────────────────────────────────────────────────────────
@@ -146,6 +147,18 @@ export default function AttendanceCorrectionPage() {
         setSubmitting(true);
 
         try {
+            let attachmentUrl: string | null = null;
+            if (attachmentFile) {
+                const uploadData = new FormData();
+                uploadData.append("file", attachmentFile);
+                const uploadResponse = await fetch("/api/attendance/correction/upload", { method: "POST", body: uploadData });
+                if (!uploadResponse.ok) {
+                    toast(await getResponseErrorMessage(uploadResponse, "Gagal mengunggah lampiran."), "error");
+                    return;
+                }
+                attachmentUrl = (await uploadResponse.json() as { url: string }).url;
+            }
+
             const res = await fetch("/api/attendance/correction", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -154,7 +167,7 @@ export default function AttendanceCorrectionPage() {
                     proposedClockIn:  form.proposedClockIn  ? `${form.targetDate}T${form.proposedClockIn}:00` : null,
                     proposedClockOut: form.proposedClockOut ? `${form.targetDate}T${form.proposedClockOut}:00` : null,
                     reason:           form.reason,
-                    attachmentUrl:    attachmentBase64 ?? null,
+                    attachmentUrl,
                 }),
             });
 
@@ -167,7 +180,7 @@ export default function AttendanceCorrectionPage() {
             setRequests((prev) => [data, ...prev]);
             setShowForm(false);
             setForm({ targetDate: yesterdayStr, proposedClockIn: "", proposedClockOut: "", reason: "" });
-            setAttachmentBase64(null);
+            setAttachmentFile(null);
             setAttachmentName(null);
             toast("Pengajuan koreksi berhasil dikirim!", "success");
         } catch (error) {
