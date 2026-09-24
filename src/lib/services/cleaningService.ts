@@ -2,8 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { toWIBDateString } from "@/lib/timezone";
 import { PERMISSIONS, SYSTEM_ROLES } from "@/lib/permissions";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
+import type { AuditActor } from "@/lib/services/auditService";
 import type { SessionPayload } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
+
+type TxClient = Prisma.TransactionClient;
 
 // ─── Error ────────────────────────────────────────────────────
 
@@ -49,6 +53,119 @@ function captureWibDate(): string {
     return toWIBDateString(new Date());
 }
 
+function nextWibDate(today: string): string {
+    const d = new Date(today + "T00:00:00+07:00");
+    d.setDate(d.getDate() + 1);
+    return toWIBDateString(d);
+}
+
+// ─── Assignment interval helpers ──────────────────────────────
+
+/** Check if an assignment is effective (active) on a given WIB date. */
+function isEffectiveOnDate(assignment: { startsOnWibDate: string; endsOnWibDate: string | null }, wibDate: string): boolean {
+    return assignment.startsOnWibDate <= wibDate && (assignment.endsOnWibDate === null || assignment.endsOnWibDate > wibDate);
+}
+
+/** Prisma where clause fragment for assignments effective on a given WIB date. */
+function effectiveOnDateWhere(wibDate: string) {
+    return {
+        startsOnWibDate: { lte: wibDate },
+        OR: [{ endsOnWibDate: null }, { endsOnWibDate: { gt: wibDate } }],
+    };
+}
+
+/** Check for overlapping assignment intervals for a room+user pair. Excludes a specific assignment ID if provided. */
+async function hasOverlappingAssignment(
+    tx: TxClient,
+    roomId: string,
+    userId: string,
+    startsOn: string,
+    endsOn: string | null,
+    excludeId?: string
+): Promise<boolean> {
+    // Two intervals [s1, e1) and [s2, e2) overlap if s1 < e2 AND s2 < e1
+    // With null meaning infinity: null end means always overlaps with any start after it
+    const where: Prisma.CleaningWorkerAssignmentWhereInput = {
+        roomId,
+        userId,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        // Existing interval starts before new interval ends (or new has no end)
+        ...(endsOn ? { startsOnWibDate: { lt: endsOn } } : {}),
+        // Existing interval ends after new interval starts (or existing has no end)
+        OR: [
+            { endsOnWibDate: null },
+            { endsOnWibDate: { gt: startsOn } },
+        ],
+    };
+    const count = await tx.cleaningWorkerAssignment.count({ where });
+    return count > 0;
+}
+
+// ─── CLEANING_WORKER role sync ────────────────────────────────
+
+/** Add or remove the CLEANING_WORKER role based on effective assignments for a given WIB date. */
+export async function syncCleaningWorkerRole(tx: TxClient, userId: string, wibToday: string) {
+    const effectiveCount = await tx.cleaningWorkerAssignment.count({
+        where: {
+            userId,
+            ...effectiveOnDateWhere(wibToday),
+        },
+    });
+    const cleaningRole = await tx.role.findUnique({ where: { code: SYSTEM_ROLES.CLEANING_WORKER } });
+    if (!cleaningRole) {
+        logger.error("[CleaningService] CLEANING_WORKER role not found in database. Run seed.");
+        throw new CleaningError("Role CLEANING_WORKER tidak ditemukan. Jalankan seed terlebih dahulu.", 500);
+    }
+
+    const existingAssignment = await tx.userRoleAssignment.findFirst({
+        where: { userId, roleId: cleaningRole.id },
+    });
+
+    if (effectiveCount > 0 && !existingAssignment) {
+        await tx.userRoleAssignment.create({ data: { userId, roleId: cleaningRole.id } });
+        await tx.userAccount.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
+    } else if (effectiveCount === 0 && existingAssignment) {
+        await tx.userRoleAssignment.delete({
+            where: { userId_roleId: { userId, roleId: cleaningRole.id } },
+        });
+        await tx.userAccount.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
+    }
+}
+
+// ─── Eligibility checks ──────────────────────────────────────
+
+const EXCLUDED_ASSIGNMENT_ROLES = [SYSTEM_ROLES.SUPER_ADMIN, SYSTEM_ROLES.HR_ADMIN, SYSTEM_ROLES.GA_ADMIN] as string[];
+
+async function validateEligibility(tx: TxClient, userId: string, workerType: "INTERNAL" | "OUTSOURCE", currentSessionUserId: string) {
+    const user = await tx.userAccount.findUnique({
+        where: { id: userId },
+        include: {
+            employee: { select: { isActive: true } },
+            roles: { select: { role: { select: { code: true } } } },
+        },
+    });
+    if (!user || !user.isActive) throw new CleaningError("Akun pengguna tidak valid atau sudah tidak aktif.", 422);
+
+    // WIG002 may not assign itself or accounts with admin roles
+    if (userId === currentSessionUserId) {
+        throw new CleaningError("Tidak dapat menugaskan akun WIG002 sendiri.", 422);
+    }
+    const userRoles = user.roles.map((r) => r.role.code);
+    if (userRoles.some((r) => EXCLUDED_ASSIGNMENT_ROLES.includes(r))) {
+        throw new CleaningError("Akun dengan role admin tidak dapat ditugaskan sebagai petugas kebersihan.", 422);
+    }
+
+    if (workerType === "INTERNAL") {
+        if (!user.employeeId || !user.employee?.isActive) {
+            throw new CleaningError("Petugas internal harus memiliki employee aktif.", 422);
+        }
+    } else {
+        if (user.employeeId) {
+            throw new CleaningError("Petugas outsource tidak boleh terhubung ke employee.", 422);
+        }
+    }
+}
+
 // ─── Template management (WIG002) ─────────────────────────────
 
 export async function getTemplates() {
@@ -79,7 +196,6 @@ export async function updateTemplate(session: SessionPayload, id: string, data: 
     const template = await prisma.cleaningTemplate.findUnique({ where: { id }, include: { _count: { select: { rooms: { where: { isActive: true } } } } } });
     if (!template) throw new CleaningError("Template tidak ditemukan.", 404);
 
-    // Cannot deactivate a template still referenced by active rooms
     if (data.isActive === false && template._count.rooms > 0) {
         throw new CleaningError("Template masih digunakan oleh ruangan aktif. Nonaktifkan atau ganti template ruangan terlebih dahulu.", 422);
     }
@@ -122,7 +238,6 @@ export async function createTemplateItem(session: SessionPayload, data: { templa
     });
     if (existing) throw new CleaningError("Item dengan nama tersebut sudah ada dalam template ini.", 409);
 
-    // Auto sort order: next available
     const sortOrder = data.sortOrder ?? ((await prisma.cleaningTemplateItem.count({ where: { templateId: data.templateId } })) + 1);
 
     const item = await prisma.cleaningTemplateItem.create({
@@ -166,11 +281,12 @@ export async function updateTemplateItem(session: SessionPayload, id: string, da
 
 export async function getRooms(session: SessionPayload) {
     requireWig002(session);
+    const wibToday = captureWibDate();
     return prisma.cleaningRoom.findMany({
         include: {
             template: { select: { id: true, name: true } },
             assignments: {
-                where: { isActive: true },
+                where: effectiveOnDateWhere(wibToday),
                 include: { user: { select: { id: true, username: true, displayName: true } } },
             },
             _count: { select: { checklists: true } },
@@ -226,95 +342,290 @@ export async function updateRoom(session: SessionPayload, id: string, data: { na
 
 // ─── Assignment management (WIG002) ───────────────────────────
 
-export async function getAssignments(session: SessionPayload, roomId?: string) {
-    requireWig002(session);
-    return prisma.cleaningWorkerAssignment.findMany({
-        where: roomId ? { roomId } : undefined,
-        include: {
-            room: { select: { id: true, name: true } },
-            user: { select: { id: true, username: true, displayName: true } },
-        },
-        orderBy: { createdAt: "desc" },
-    });
-}
-
-export async function createOrUpdateAssignment(
+export async function getAssignments(
     session: SessionPayload,
-    data: { roomId: string; userId: string; isActive: boolean; applyToToday?: boolean }
+    filters?: { roomId?: string; workerType?: "INTERNAL" | "OUTSOURCE"; includeInactive?: boolean }
 ) {
     requireWig002(session);
     const wibToday = captureWibDate();
 
+    const where: Prisma.CleaningWorkerAssignmentWhereInput = {};
+    if (filters?.roomId) where.roomId = filters.roomId;
+    if (filters?.workerType) where.workerType = filters.workerType;
+    if (!filters?.includeInactive) {
+        // Only show currently effective assignments
+        Object.assign(where, effectiveOnDateWhere(wibToday));
+    }
+
+    const assignments = await prisma.cleaningWorkerAssignment.findMany({
+        where,
+        include: {
+            room: { select: { id: true, name: true } },
+            user: { select: { id: true, username: true, displayName: true, employeeId: true } },
+        },
+        orderBy: { createdAt: "desc" },
+    });
+
+    return assignments.map((a) => ({
+        ...a,
+        isEffective: isEffectiveOnDate(a, wibToday),
+    }));
+}
+
+export type CreateAssignmentInput = {
+    roomId: string;
+    userId: string;
+    workerType: "INTERNAL" | "OUTSOURCE";
+    applyToToday?: boolean;
+};
+
+export async function createAssignment(session: SessionPayload, data: CreateAssignmentInput) {
+    requireWig002(session);
+    const wibToday = captureWibDate();
+    const startsOn = data.applyToToday ? wibToday : nextWibDate(wibToday);
+
     const room = await prisma.cleaningRoom.findUnique({ where: { id: data.roomId } });
     if (!room || !room.isActive) throw new CleaningError("Ruangan tidak valid atau sudah tidak aktif.", 422);
 
-    const user = await prisma.userAccount.findUnique({ where: { id: data.userId } });
-    if (!user || !user.isActive) throw new CleaningError("Akun pengguna tidak valid atau sudah tidak aktif.", 422);
+    await validateEligibility(prisma as unknown as TxClient, data.userId, data.workerType, session.userId);
 
-    const effectiveWibDate = data.applyToToday ? wibToday : nextWibDate(wibToday);
-
-    // Use a transaction for atomic assignment + role sync
     const result = await prisma.$transaction(async (tx) => {
-        const assignment = await tx.cleaningWorkerAssignment.upsert({
-            where: { roomId_userId: { roomId: data.roomId, userId: data.userId } },
-            update: { isActive: data.isActive, effectiveWibDate },
-            create: {
+        // Check for overlapping assignment
+        const overlaps = await hasOverlappingAssignment(tx, data.roomId, data.userId, startsOn, null);
+        if (overlaps) {
+            throw new CleaningError("Penugasan aktif untuk akun dan ruangan tersebut sudah ada atau periodenya tumpang tindih.", 409);
+        }
+
+        const assignment = await tx.cleaningWorkerAssignment.create({
+            data: {
                 roomId: data.roomId,
                 userId: data.userId,
-                isActive: data.isActive,
-                effectiveWibDate,
+                workerType: data.workerType,
+                startsOnWibDate: startsOn,
             },
         });
 
-        // Sync Cleaning Worker role based on active assignments
-        await syncCleaningWorkerRole(tx, data.userId);
-
+        await syncCleaningWorkerRole(tx, data.userId, wibToday);
         return assignment;
     });
 
-    await logAction("UPSERT_CLEANING_ASSIGNMENT", "CLEANING_WORKER_ASSIGNMENT", actorFromSession(session), result.id, {
+    await logAction("CREATE_CLEANING_ASSIGNMENT", "CLEANING_WORKER_ASSIGNMENT", actorFromSession(session), result.id, {
         roomId: data.roomId,
         userId: data.userId,
-        isActive: data.isActive,
+        workerType: data.workerType,
         applyToToday: data.applyToToday,
-        effectiveWibDate,
+        startsOnWibDate: startsOn,
     });
-
     return result;
 }
 
-/** Add or remove the CLEANING_WORKER role based on whether the user has any active assignments. */
-async function syncCleaningWorkerRole(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], userId: string) {
-    const activeCount = await tx.cleaningWorkerAssignment.count({ where: { userId, isActive: true } });
-    const cleaningRole = await tx.role.findUnique({ where: { code: SYSTEM_ROLES.CLEANING_WORKER } });
-    if (!cleaningRole) {
-        logger.error("[CleaningService] CLEANING_WORKER role not found in database. Run seed.");
-        throw new CleaningError("Role CLEANING_WORKER tidak ditemukan. Jalankan seed terlebih dahulu.", 500);
-    }
+export type EndAssignmentInput = {
+    assignmentId: string;
+    applyToToday?: boolean;
+    reason: string;
+};
 
-    const existingAssignment = await tx.userRoleAssignment.findFirst({
-        where: { userId, roleId: cleaningRole.id },
+export async function endAssignment(session: SessionPayload, data: EndAssignmentInput) {
+    requireWig002(session);
+    const wibToday = captureWibDate();
+    const endsOn = data.applyToToday ? wibToday : nextWibDate(wibToday);
+
+    const result = await prisma.$transaction(async (tx) => {
+        const assignment = await tx.cleaningWorkerAssignment.findUnique({ where: { id: data.assignmentId } });
+        if (!assignment) throw new CleaningError("Penugasan tidak ditemukan.", 404);
+        if (assignment.endsOnWibDate !== null) throw new CleaningError("Penugasan sudah diakhiri.", 409);
+        if (!isEffectiveOnDate(assignment, wibToday) && assignment.startsOnWibDate > wibToday) {
+            // Planned assignment: end before it starts
+        }
+
+        const ended = await tx.cleaningWorkerAssignment.update({
+            where: { id: assignment.id },
+            data: { endsOnWibDate: endsOn },
+        });
+
+        await syncCleaningWorkerRole(tx, assignment.userId, wibToday);
+        return ended;
     });
 
-    if (activeCount > 0 && !existingAssignment) {
-        // Add the role
-        await tx.userRoleAssignment.create({ data: { userId, roleId: cleaningRole.id } });
-        // Bump session version to force re-login
-        await tx.userAccount.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
-    } else if (activeCount === 0 && existingAssignment) {
-        // Remove the role
-        await tx.userRoleAssignment.delete({
-            where: { userId_roleId: { userId, roleId: cleaningRole.id } },
-        });
-        // Bump session version
-        await tx.userAccount.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
-    }
+    await logAction("END_CLEANING_ASSIGNMENT", "CLEANING_WORKER_ASSIGNMENT", actorFromSession(session), result.id, {
+        roomId: result.roomId,
+        userId: result.userId,
+        endsOnWibDate: endsOn,
+        applyToToday: data.applyToToday,
+        reason: data.reason,
+    });
+    return result;
 }
 
-function nextWibDate(today: string): string {
-    const d = new Date(today + "T00:00:00+07:00");
-    d.setDate(d.getDate() + 1);
-    return toWIBDateString(d);
+export type ReplaceAssignmentInput = {
+    assignmentId: string;
+    newUserId: string;
+    newWorkerType: "INTERNAL" | "OUTSOURCE";
+    applyToToday?: boolean;
+    reason: string;
+};
+
+export async function replaceAssignment(session: SessionPayload, data: ReplaceAssignmentInput) {
+    requireWig002(session);
+    const wibToday = captureWibDate();
+    const effectiveDate = data.applyToToday ? wibToday : nextWibDate(wibToday);
+
+    await validateEligibility(prisma as unknown as TxClient, data.newUserId, data.newWorkerType, session.userId);
+
+    const result = await prisma.$transaction(async (tx) => {
+        const oldAssignment = await tx.cleaningWorkerAssignment.findUnique({ where: { id: data.assignmentId } });
+        if (!oldAssignment) throw new CleaningError("Penugasan tidak ditemukan.", 404);
+        if (oldAssignment.endsOnWibDate !== null) throw new CleaningError("Penugasan sudah diakhiri.", 409);
+
+        // End the old assignment
+        const ended = await tx.cleaningWorkerAssignment.update({
+            where: { id: oldAssignment.id },
+            data: { endsOnWibDate: effectiveDate },
+        });
+
+        // Check for overlaps on the new assignment
+        const overlaps = await hasOverlappingAssignment(tx, oldAssignment.roomId, data.newUserId, effectiveDate, null);
+        if (overlaps) {
+            throw new CleaningError("Petugas pengganti sudah memiliki penugasan aktif atau periodenya tumpang tindih di ruangan ini.", 409);
+        }
+
+        // Create the new assignment
+        const newAssignment = await tx.cleaningWorkerAssignment.create({
+            data: {
+                roomId: oldAssignment.roomId,
+                userId: data.newUserId,
+                workerType: data.newWorkerType,
+                startsOnWibDate: effectiveDate,
+            },
+        });
+
+        // Sync roles for both old and new user
+        await syncCleaningWorkerRole(tx, oldAssignment.userId, wibToday);
+        await syncCleaningWorkerRole(tx, data.newUserId, wibToday);
+
+        return { ended, newAssignment };
+    });
+
+    await logAction("REPLACE_CLEANING_ASSIGNMENT", "CLEANING_WORKER_ASSIGNMENT", actorFromSession(session), result.newAssignment.id, {
+        oldAssignmentId: data.assignmentId,
+        newUserId: data.newUserId,
+        newWorkerType: data.newWorkerType,
+        applyToToday: data.applyToToday,
+        effectiveDate,
+        reason: data.reason,
+    });
+    return result;
+}
+
+// ─── Available users for assignment (WIG002) ──────────────────
+
+export async function getAvailableUsersForAssignment(session: SessionPayload, workerType: "INTERNAL" | "OUTSOURCE") {
+    requireWig002(session);
+
+    if (workerType === "INTERNAL") {
+        return prisma.userAccount.findMany({
+            where: {
+                isActive: true,
+                employeeId: { not: null },
+                employee: { isActive: true },
+                // Exclude admin roles and current WIG002
+                id: { not: session.userId },
+                roles: {
+                    none: {
+                        role: { code: { in: EXCLUDED_ASSIGNMENT_ROLES } },
+                    },
+                },
+            },
+            select: {
+                id: true,
+                username: true,
+                displayName: true,
+                employeeId: true,
+                employee: { select: { name: true } },
+            },
+            orderBy: { displayName: "asc" },
+        });
+    }
+
+    // OUTSOURCE: active accounts without employee relation
+    return prisma.userAccount.findMany({
+        where: {
+            isActive: true,
+            employeeId: null,
+            id: { not: session.userId },
+            roles: {
+                none: {
+                    role: { code: { in: EXCLUDED_ASSIGNMENT_ROLES } },
+                },
+            },
+        },
+        select: {
+            id: true,
+            username: true,
+            displayName: true,
+            employeeId: true,
+        },
+        orderBy: { displayName: "asc" },
+    });
+}
+
+// ─── Automatic revocation (for source status transactions) ────
+
+/**
+ * Revoke all effective cleaning assignments for a user when their account
+ * or employee eligibility changes. Called from within the source status transaction.
+ * Returns the count of revoked assignments.
+ */
+export async function revokeCleaningAssignments(
+    tx: TxClient,
+    userId: string,
+    reason: string,
+    actor: AuditActor
+): Promise<number> {
+    const wibToday = toWIBDateString(new Date());
+    const effectiveAssignments = await tx.cleaningWorkerAssignment.findMany({
+        where: {
+            userId,
+            ...effectiveOnDateWhere(wibToday),
+        },
+        include: {
+            room: { select: { id: true, name: true } },
+        },
+    });
+
+    if (effectiveAssignments.length === 0) return 0;
+
+    for (const assignment of effectiveAssignments) {
+        await tx.cleaningWorkerAssignment.update({
+            where: { id: assignment.id },
+            data: { endsOnWibDate: wibToday },
+        });
+
+        await tx.auditLog.create({
+            data: {
+                action: "REVOKE_CLEANING_ASSIGNMENT",
+                entity: "CLEANING_WORKER_ASSIGNMENT",
+                entityId: assignment.id,
+                actorType: actor.type ?? "SYSTEM",
+                actorUserId: actor.userId ?? null,
+                actorIdentifier: actor.identifier,
+                actorName: actor.name ?? null,
+                actorRole: actor.role ?? null,
+                details: JSON.stringify({
+                    userId: assignment.userId,
+                    roomId: assignment.roomId,
+                    roomName: assignment.room.name,
+                    workerType: assignment.workerType,
+                    startsOnWibDate: assignment.startsOnWibDate,
+                    endsOnWibDate: wibToday,
+                    reason,
+                }),
+            },
+        });
+    }
+
+    await syncCleaningWorkerRole(tx, userId, wibToday);
+    return effectiveAssignments.length;
 }
 
 // ─── Petugas: list assigned rooms ─────────────────────────────
@@ -326,8 +637,7 @@ export async function getWorkerRooms(session: SessionPayload) {
     const assignments = await prisma.cleaningWorkerAssignment.findMany({
         where: {
             userId: session.userId,
-            isActive: true,
-            effectiveWibDate: { lte: wibToday },
+            ...effectiveOnDateWhere(wibToday),
         },
         include: {
             room: {
@@ -341,7 +651,6 @@ export async function getWorkerRooms(session: SessionPayload) {
         },
     });
 
-    // Only return active rooms
     return assignments
         .filter((a) => a.room.isActive)
         .map((a) => a.room);
@@ -353,7 +662,6 @@ export async function getOrCreateDailyChecklist(session: SessionPayload, roomId:
     requireCleaningWorker(session);
     const wibToday = captureWibDate();
 
-    // Verify active assignment for this room
     await verifyRoomAssignment(session.userId, roomId, wibToday);
 
     const room = await prisma.cleaningRoom.findUnique({
@@ -366,7 +674,6 @@ export async function getOrCreateDailyChecklist(session: SessionPayload, roomId:
     const activeItems = room.template.items;
     if (activeItems.length === 0) throw new CleaningError("ROOM_NOT_READY", 422);
 
-    // Attempt to find or create atomically
     let checklist = await prisma.cleaningDailyChecklist.findUnique({
         where: { roomId_wibDate: { roomId, wibDate: wibToday } },
         include: {
@@ -379,7 +686,6 @@ export async function getOrCreateDailyChecklist(session: SessionPayload, roomId:
 
     if (!checklist) {
         try {
-            // Create with snapshot items
             checklist = await prisma.$transaction(async (tx) => {
                 const created = await tx.cleaningDailyChecklist.create({
                     data: {
@@ -440,7 +746,6 @@ export async function getChecklist(session: SessionPayload, roomId: string, date
     requireCleaningWorker(session);
     const wibToday = captureWibDate();
 
-    // Verify active assignment
     await verifyRoomAssignment(session.userId, roomId, wibToday);
 
     const checklist = await prisma.cleaningDailyChecklist.findUnique({
@@ -478,7 +783,6 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
         throw new CleaningError("Hanya item hari ini (WIB) yang dapat diubah.", 422);
     }
 
-    // Verify assignment for this room
     await verifyRoomAssignment(session.userId, item.checklist.roomId, wibToday);
 
     const updated = await prisma.cleaningDailyChecklistItem.update({
@@ -496,7 +800,6 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
         isComplete,
     });
 
-    // Re-derive status for the whole checklist
     const allItems = await prisma.cleaningDailyChecklistItem.findMany({
         where: { checklistId: item.checklistId },
     });
@@ -513,25 +816,21 @@ export async function getRecap(session: SessionPayload, month: string) {
     requireWig002(session);
     const wibToday = captureWibDate();
 
-    // Validate month format YYYY-MM
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
         throw new CleaningError("Format bulan tidak valid. Gunakan YYYY-MM.", 422);
     }
 
-    // Future month check
     const todayMonth = wibToday.substring(0, 7);
     if (month > todayMonth) {
         throw new CleaningError("Tidak dapat melihat rekap bulan mendatang.", 422);
     }
 
-    // Get all rooms active now (for recap)
     const rooms = await prisma.cleaningRoom.findMany({
         where: { isActive: true },
         orderBy: { name: "asc" },
         select: { id: true, name: true },
     });
 
-    // Get all daily checklists for the month
     const checklists = await prisma.cleaningDailyChecklist.findMany({
         where: {
             wibDate: { startsWith: month },
@@ -541,14 +840,12 @@ export async function getRecap(session: SessionPayload, month: string) {
         },
     });
 
-    // Build date range for the month
     const daysInMonth = getDaysInMonth(month);
     const dates = Array.from({ length: daysInMonth }, (_, i) => {
         const day = String(i + 1).padStart(2, "0");
         return `${month}-${day}`;
     });
 
-    // Build matrix: room -> date -> status
     const checklistMap = new Map<string, typeof checklists[number]>();
     for (const cl of checklists) {
         checklistMap.set(`${cl.roomId}_${cl.wibDate}`, cl);
@@ -580,7 +877,6 @@ export async function getChecklistDetail(session: SessionPayload, roomId: string
     });
     if (!room) throw new CleaningError("Ruangan tidak ditemukan.", 404);
 
-    // Existing checklist
     const checklist = await prisma.cleaningDailyChecklist.findUnique({
         where: { roomId_wibDate: { roomId, wibDate: date } },
         include: {
@@ -598,7 +894,6 @@ export async function getChecklistDetail(session: SessionPayload, roomId: string
         };
     }
 
-    // Future date or today without record: template preview
     if (date >= wibToday && room.template?.isActive && room.template.items.length > 0) {
         return {
             type: "preview" as const,
@@ -612,7 +907,6 @@ export async function getChecklistDetail(session: SessionPayload, roomId: string
         };
     }
 
-    // Past date with no record
     return {
         type: "no_record" as const,
         message: "Tidak ada catatan checklist digital untuk tanggal ini.",
@@ -626,8 +920,7 @@ async function verifyRoomAssignment(userId: string, roomId: string, wibToday: st
         where: {
             userId,
             roomId,
-            isActive: true,
-            effectiveWibDate: { lte: wibToday },
+            ...effectiveOnDateWhere(wibToday),
         },
     });
     if (!assignment) {
@@ -644,15 +937,4 @@ function deriveChecklistStatus(items: { isActive: boolean; isComplete: boolean }
 function getDaysInMonth(month: string): number {
     const [year, m] = month.split("-").map(Number);
     return new Date(year, m, 0).getDate();
-}
-
-// ─── Available users for assignment (WIG002) ──────────────────
-
-export async function getAvailableUsersForAssignment(session: SessionPayload) {
-    requireWig002(session);
-    return prisma.userAccount.findMany({
-        where: { isActive: true },
-        select: { id: true, username: true, displayName: true, employeeId: true },
-        orderBy: { displayName: "asc" },
-    });
 }

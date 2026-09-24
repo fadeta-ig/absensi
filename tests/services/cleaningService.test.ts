@@ -33,8 +33,11 @@ vi.mock("@/lib/prisma", () => ({
         cleaningWorkerAssignment: {
             findMany: vi.fn(),
             findFirst: vi.fn(),
+            findUnique: vi.fn(),
             count: vi.fn(),
-            upsert: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            updateMany: vi.fn(),
         },
         cleaningDailyChecklist: {
             findUnique: vi.fn(),
@@ -71,7 +74,8 @@ vi.mock("@/lib/logger", () => ({
 import { prisma } from "@/lib/prisma";
 import {
     CleaningError,
-    createOrUpdateAssignment,
+    createAssignment,
+    endAssignment,
     createRoom,
     createTemplate,
     createTemplateItem,
@@ -150,8 +154,11 @@ describe("cleaningService contract", () => {
         expect(db.cleaningWorkerAssignment.findMany).toHaveBeenCalledWith(expect.objectContaining({
             where: expect.objectContaining({
                 userId: CLEANING_IDS.workerUser,
-                isActive: true,
-                effectiveWibDate: { lte: "2026-09-21" },
+                startsOnWibDate: { lte: "2026-09-21" },
+                OR: [
+                    { endsOnWibDate: null },
+                    { endsOnWibDate: { gt: "2026-09-21" } },
+                ],
             }),
         }));
         expect(rooms).toHaveLength(1);
@@ -436,89 +443,116 @@ describe("cleaningService contract", () => {
         expect(db.cleaningTemplateItem.findUnique).not.toHaveBeenCalled();
     });
 
-    it("AC-6 applies an explicitly confirmed assignment on the current WIB date and adds the worker role", async () => {
+    it("AC-6 creates a new assignment on the current WIB date and adds the worker role", async () => {
         mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
-        mock(db.userAccount.findUnique).mockResolvedValue({ id: CLEANING_IDS.workerUser, isActive: true });
-        mock(db.cleaningWorkerAssignment.upsert).mockResolvedValue({
-            id: CLEANING_IDS.assignment,
-            effectiveWibDate: "2026-09-21",
+        mock(db.userAccount.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.workerUser,
+            isActive: true,
+            employeeId: "employee-1",
+            employee: { isActive: true },
+            roles: [],
         });
-        mock(db.cleaningWorkerAssignment.count).mockResolvedValue(1);
+        // hasOverlappingAssignment uses count (inside $transaction)
+        mock(db.cleaningWorkerAssignment.count).mockResolvedValueOnce(0).mockResolvedValue(1);
+        mock(db.cleaningWorkerAssignment.create).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            startsOnWibDate: "2026-09-21",
+            workerType: "INTERNAL",
+        });
         mock(db.role.findUnique).mockResolvedValue({ id: "role-cleaning" });
         mock(db.userRoleAssignment.findFirst).mockResolvedValue(null);
         mock(db.userRoleAssignment.create).mockResolvedValue({});
         mock(db.userAccount.update).mockResolvedValue({});
 
-        const result = await createOrUpdateAssignment(makeWig002Session(), {
+        const result = await createAssignment(makeWig002Session(), {
             roomId: CLEANING_IDS.room,
             userId: CLEANING_IDS.workerUser,
-            isActive: true,
+            workerType: "INTERNAL",
             applyToToday: true,
         });
 
-        expect(db.cleaningWorkerAssignment.upsert).toHaveBeenCalledWith(expect.objectContaining({
-            create: expect.objectContaining({ effectiveWibDate: "2026-09-21" }),
+        expect(db.cleaningWorkerAssignment.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                startsOnWibDate: "2026-09-21",
+                workerType: "INTERNAL",
+            }),
         }));
         expect(db.userRoleAssignment.create).toHaveBeenCalledWith({
             data: { userId: CLEANING_IDS.workerUser, roleId: "role-cleaning" },
         });
-        expect(result.effectiveWibDate).toBe("2026-09-21");
+        expect(result.startsOnWibDate).toBe("2026-09-21");
         expect(auditMocks.logAction).toHaveBeenCalledWith(
-            "UPSERT_CLEANING_ASSIGNMENT",
+            "CREATE_CLEANING_ASSIGNMENT",
             "CLEANING_WORKER_ASSIGNMENT",
-            expect.anything(),
+            expect.objectContaining({ identifier: "WIG002" }),
             CLEANING_IDS.assignment,
-            {
+            expect.objectContaining({
                 roomId: CLEANING_IDS.room,
                 userId: CLEANING_IDS.workerUser,
-                isActive: true,
-                applyToToday: true,
-                effectiveWibDate: "2026-09-21",
-            },
+                workerType: "INTERNAL",
+            }),
         );
     });
 
     it("AC-6 schedules an unconfirmed assignment for the next WIB date at the day boundary", async () => {
         vi.setSystemTime(new Date("2026-09-21T16:59:59.000Z"));
         mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
-        mock(db.userAccount.findUnique).mockResolvedValue({ id: CLEANING_IDS.workerUser, isActive: true });
-        mock(db.cleaningWorkerAssignment.upsert).mockResolvedValue({
-            id: CLEANING_IDS.assignment,
-            effectiveWibDate: "2026-09-22",
+        mock(db.userAccount.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.workerUser,
+            isActive: true,
+            employeeId: "employee-1",
+            employee: { isActive: true },
+            roles: [],
         });
-        mock(db.cleaningWorkerAssignment.count).mockResolvedValue(1);
+        mock(db.cleaningWorkerAssignment.count).mockResolvedValueOnce(0).mockResolvedValue(1);
+        mock(db.cleaningWorkerAssignment.create).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            startsOnWibDate: "2026-09-22",
+            workerType: "INTERNAL",
+        });
         mock(db.role.findUnique).mockResolvedValue({ id: "role-cleaning" });
         mock(db.userRoleAssignment.findFirst).mockResolvedValue({ userId: CLEANING_IDS.workerUser });
 
-        await createOrUpdateAssignment(makeWig002Session(), {
+        await createAssignment(makeWig002Session(), {
             roomId: CLEANING_IDS.room,
             userId: CLEANING_IDS.workerUser,
-            isActive: true,
+            workerType: "INTERNAL",
             applyToToday: false,
         });
 
-        expect(db.cleaningWorkerAssignment.upsert).toHaveBeenCalledWith(expect.objectContaining({
-            update: expect.objectContaining({ effectiveWibDate: "2026-09-22" }),
+        expect(db.cleaningWorkerAssignment.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ startsOnWibDate: "2026-09-22", workerType: "INTERNAL" }),
         }));
     });
 
-    it("AC-6 and AC-8 remove the worker role with the final active assignment", async () => {
-        mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
-        mock(db.userAccount.findUnique).mockResolvedValue({ id: CLEANING_IDS.workerUser, isActive: true });
-        mock(db.cleaningWorkerAssignment.upsert).mockResolvedValue({ id: CLEANING_IDS.assignment });
+    it("AC-6 ends an assignment and removes the worker role when no active assignments remain", async () => {
+        mock(db.cleaningWorkerAssignment.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            userId: CLEANING_IDS.workerUser,
+            roomId: CLEANING_IDS.room,
+            workerType: "INTERNAL",
+            startsOnWibDate: "2026-09-20",
+            endsOnWibDate: null,
+        });
+        mock(db.cleaningWorkerAssignment.update).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            endsOnWibDate: "2026-09-21",
+        });
         mock(db.cleaningWorkerAssignment.count).mockResolvedValue(0);
         mock(db.role.findUnique).mockResolvedValue({ id: "role-cleaning" });
         mock(db.userRoleAssignment.findFirst).mockResolvedValue({ userId: CLEANING_IDS.workerUser });
         mock(db.userRoleAssignment.delete).mockResolvedValue({});
         mock(db.userAccount.update).mockResolvedValue({});
 
-        await createOrUpdateAssignment(makeWig002Session(), {
-            roomId: CLEANING_IDS.room,
-            userId: CLEANING_IDS.workerUser,
-            isActive: false,
+        await endAssignment(makeWig002Session(), {
+            assignmentId: CLEANING_IDS.assignment,
             applyToToday: true,
+            reason: "Pindah tugas",
         });
 
+        expect(db.cleaningWorkerAssignment.update).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ endsOnWibDate: "2026-09-21" }),
+        }));
         expect(db.userRoleAssignment.delete).toHaveBeenCalledWith({
             where: { userId_roleId: { userId: CLEANING_IDS.workerUser, roleId: "role-cleaning" } },
         });
@@ -529,7 +563,13 @@ describe("cleaningService contract", () => {
 
     it("AC-6 rolls back the staged assignment when role synchronization fails", async () => {
         mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
-        mock(db.userAccount.findUnique).mockResolvedValue({ id: CLEANING_IDS.workerUser, isActive: true });
+        mock(db.userAccount.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.workerUser,
+            isActive: true,
+            employeeId: "employee-1",
+            employee: { isActive: true },
+            roles: [],
+        });
         let persistedAssignment: object | null = null;
 
         mock(db.$transaction).mockImplementation(async (callback: (tx: PrismaMock) => unknown) => {
@@ -538,13 +578,14 @@ describe("cleaningService contract", () => {
                 ...db,
                 cleaningWorkerAssignment: {
                     ...db.cleaningWorkerAssignment,
-                    upsert: vi.fn(async () => {
+                    findFirst: vi.fn(async () => null),
+                    count: vi.fn(async () => 0),   // overlap check passes
+                    create: vi.fn(async () => {
                         stagedAssignment = { id: CLEANING_IDS.assignment };
                         return stagedAssignment;
                     }),
-                    count: vi.fn(async () => 1),
                 },
-                role: { findUnique: vi.fn(async () => null) },
+                role: { findUnique: vi.fn(async () => null) },  // role not found → triggers 500
                 userRoleAssignment: {
                     ...db.userRoleAssignment,
                     findFirst: vi.fn(),
@@ -556,10 +597,10 @@ describe("cleaningService contract", () => {
             return result;
         });
 
-        await expect(createOrUpdateAssignment(makeWig002Session(), {
+        await expect(createAssignment(makeWig002Session(), {
             roomId: CLEANING_IDS.room,
             userId: CLEANING_IDS.workerUser,
-            isActive: true,
+            workerType: "INTERNAL",
             applyToToday: true,
         })).rejects.toEqual(expect.objectContaining({ statusCode: 500 }));
 

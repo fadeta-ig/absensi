@@ -31,8 +31,9 @@ interface Room {
 
 interface Assignment {
     id: string;
-    isActive: boolean;
-    effectiveWibDate: string;
+    workerType: "INTERNAL" | "OUTSOURCE";
+    startsOnWibDate: string;
+    endsOnWibDate: string | null;
     user: { id: string; username: string; displayName: string };
 }
 
@@ -77,10 +78,23 @@ export default function CleaningSettingsPage() {
     const [showAssignForm, setShowAssignForm] = useState(false);
     const [assignRoomId, setAssignRoomId] = useState("");
     const [assignUserId, setAssignUserId] = useState("");
+    const [assignWorkerType, setAssignWorkerType] = useState<"INTERNAL" | "OUTSOURCE">("OUTSOURCE");
     const [assignApplyToday, setAssignApplyToday] = useState(false);
     const [savingAssign, setSavingAssign] = useState(false);
 
     // ─── Data fetching ────────────────────────────────────
+
+    const fetchAvailableUsers = useCallback(async (workerType: "INTERNAL" | "OUTSOURCE") => {
+        try {
+            const res = await fetch(`/api/ga/cleaning/assignments/available-users?workerType=${workerType}`);
+            if (res.ok) {
+                const json = await res.json();
+                setAvailableUsers(json.data ?? []);
+            }
+        } catch {
+            // silently ignore — users list is non-critical
+        }
+    }, []);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -89,7 +103,7 @@ export default function CleaningSettingsPage() {
             const [tplRes, roomRes, usersRes] = await Promise.all([
                 fetch("/api/ga/cleaning/templates"),
                 fetch("/api/ga/cleaning/rooms"),
-                fetch("/api/ga/cleaning/assignments?type=available-users"),
+                fetch("/api/ga/cleaning/assignments/available-users?workerType=OUTSOURCE"),
             ]);
 
             if (!tplRes.ok) throw new Error(await getResponseErrorMessage(tplRes, "Gagal memuat template."));
@@ -248,7 +262,7 @@ export default function CleaningSettingsPage() {
                 body: JSON.stringify({
                     roomId: assignRoomId,
                     userId: assignUserId,
-                    isActive: true,
+                    workerType: assignWorkerType,
                     applyToToday: assignApplyToday,
                 }),
             });
@@ -266,20 +280,22 @@ export default function CleaningSettingsPage() {
         }
     }, [savingAssign, assignRoomId, assignUserId, assignApplyToday, toast, fetchAll]);
 
-    const removeAssignment = useCallback(async (assignment: Assignment, roomId: string) => {
+    const removeAssignment = useCallback(async (assignment: Assignment, _roomId: string) => {
+        const reason = prompt("Alasan mengakhiri penugasan:");
+        if (!reason) return;
         try {
             const res = await fetch("/api/ga/cleaning/assignments", {
-                method: "POST",
+                method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    roomId,
-                    userId: assignment.user.id,
-                    isActive: false,
+                    assignmentId: assignment.id,
+                    action: "END",
                     applyToToday: true,
+                    reason,
                 }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus penugasan."));
-            toast("Penugasan dihapus.", "success");
+            toast("Penugasan diakhiri.", "success");
             await fetchAll();
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal.", "error");
@@ -511,7 +527,7 @@ export default function CleaningSettingsPage() {
                                     <div>
                                         <p className="font-medium text-sm">{room.name}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            Template: {room.template.name} · {room.assignments.filter((a) => a.isActive).length} petugas aktif
+                                            Template: {room.template.name} · {room.assignments.filter((a) => a.endsOnWibDate === null).length} petugas aktif
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -532,9 +548,9 @@ export default function CleaningSettingsPage() {
                                         </button>
                                     </div>
                                 </div>
-                                {room.assignments.filter((a) => a.isActive).length > 0 && (
+                                {room.assignments.filter((a) => a.endsOnWibDate === null).length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1">
-                                        {room.assignments.filter((a) => a.isActive).map((a) => (
+                                        {room.assignments.filter((a) => a.endsOnWibDate === null).map((a) => (
                                             <span key={a.id} className="inline-flex items-center gap-1 text-xs bg-accent/50 px-2 py-0.5 rounded">
                                                 <Users className="h-3 w-3" />
                                                 {a.user.displayName}
@@ -564,7 +580,7 @@ export default function CleaningSettingsPage() {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-medium">Penugasan Petugas</h2>
                         <button
-                            onClick={() => { setShowAssignForm(true); setAssignRoomId(rooms[0]?.id ?? ""); setAssignUserId(""); setAssignApplyToday(false); }}
+                            onClick={() => { setShowAssignForm(true); setAssignRoomId(rooms[0]?.id ?? ""); setAssignUserId(""); setAssignWorkerType("INTERNAL"); setAssignApplyToday(false); }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
                         >
                             <Plus className="h-4 w-4" /> Tugaskan
@@ -585,6 +601,20 @@ export default function CleaningSettingsPage() {
                                     {rooms.filter((r) => r.isActive).map((r) => (
                                         <option key={r.id} value={r.id}>{r.name}</option>
                                     ))}
+                                </select>
+                                <select
+                                    aria-label="Tipe petugas"
+                                    value={assignWorkerType}
+                                    onChange={(e) => {
+                                        const wt = e.target.value as "INTERNAL" | "OUTSOURCE";
+                                        setAssignWorkerType(wt);
+                                        setAssignUserId("");
+                                        fetchAvailableUsers(wt);
+                                    }}
+                                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
+                                >
+                                    <option value="INTERNAL">Internal</option>
+                                    <option value="OUTSOURCE">Outsource</option>
                                 </select>
                                 <select
                                     aria-label="Pengguna"
@@ -623,22 +653,23 @@ export default function CleaningSettingsPage() {
                         {rooms.filter((r) => r.isActive).map((room) => (
                             <div key={room.id} className="bg-card border border-border rounded-lg p-3">
                                 <p className="font-medium text-sm mb-2">{room.name}</p>
-                                {room.assignments.filter((a) => a.isActive).length === 0 ? (
+                                {room.assignments.filter((a) => a.endsOnWibDate === null).length === 0 ? (
                                     <p className="text-xs text-muted-foreground">Belum ada petugas ditugaskan.</p>
                                 ) : (
                                     <div className="space-y-1">
-                                        {room.assignments.filter((a) => a.isActive).map((a) => (
+                                        {room.assignments.filter((a) => a.endsOnWibDate === null).map((a) => (
                                             <div key={a.id} className="flex items-center justify-between text-sm py-1">
                                                 <div>
                                                     <span className="font-medium">{a.user.displayName}</span>
                                                     <span className="text-muted-foreground ml-2 text-xs">({a.user.username})</span>
-                                                    <span className="text-xs text-muted-foreground ml-2">sejak {a.effectiveWibDate}</span>
+                                                    <span className="text-xs text-muted-foreground ml-2">{a.workerType}</span>
+                                                    <span className="text-xs text-muted-foreground ml-2">sejak {a.startsOnWibDate}</span>
                                                 </div>
                                                 <button
                                                     onClick={() => removeAssignment(a, room.id)}
                                                     className="text-xs text-destructive hover:text-destructive/80"
                                                 >
-                                                    Hapus
+                                                    Akhiri
                                                 </button>
                                             </div>
                                         ))}

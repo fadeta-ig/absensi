@@ -26,7 +26,9 @@ export default function AccessibleModal({
 }: AccessibleModalProps) {
     const dialogRef = useRef<HTMLDivElement>(null);
     const onCloseRef = useRef(onClose);
-    onCloseRef.current = onClose;
+    useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
 
     // Focus management on mount and unmount ONLY
     useEffect(() => {

@@ -21,42 +21,42 @@ model Employee {
   divisionId           String? @map("division_id")
   positionId           String  @map("position_id")
 
-  departmentRel         Department                 @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  divisionRel           Division?                  @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  positionRel           Position                   @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  gender                String                     @default("Laki-Laki")
-  employmentType        EmploymentType             @default(PERMANENT) @map("employment_type")
-  faceDescriptor        String?                    @map("face_descriptor") @db.LongText
-  joinDate              DateTime                   @map("join_date")
-  employmentStartDate   DateTime?                  @map("employment_start_date")
-  employmentEndDate     DateTime?                  @map("employment_end_date")
-  probationEndDate      DateTime?                  @map("probation_end_date")
-  totalLeave            Int                        @default(12) @map("total_leave")
-  usedLeave             Int                        @default(0) @map("used_leave")
-  avatarUrl             String?                    @map("avatar_url") @db.LongText
-  isActive              Boolean                    @default(true) @map("is_active")
-  statusChangedAt       DateTime?                  @map("status_changed_at")
-  shiftId               String?                    @map("shift_id")
-  bypassLocation        Boolean                    @default(false) @map("bypass_location")
-  basicSalary           Float                      @default(0) @map("basic_salary")
-  managerId             String?                    @map("manager_id")
+  departmentRel         Department                    @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel           Division?                     @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  positionRel           Position                      @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  gender                String                        @default("Laki-Laki")
+  employmentType        EmploymentType                @default(PERMANENT) @map("employment_type")
+  faceDescriptor        String?                       @map("face_descriptor") @db.LongText
+  joinDate              DateTime                      @map("join_date")
+  employmentStartDate   DateTime?                     @map("employment_start_date")
+  employmentEndDate     DateTime?                     @map("employment_end_date")
+  probationEndDate      DateTime?                     @map("probation_end_date")
+  totalLeave            Int                           @default(12) @map("total_leave")
+  usedLeave             Int                           @default(0) @map("used_leave")
+  avatarUrl             String?                       @map("avatar_url") @db.LongText
+  isActive              Boolean                       @default(true) @map("is_active")
+  statusChangedAt       DateTime?                     @map("status_changed_at")
+  shiftId               String?                       @map("shift_id")
+  bypassLocation        Boolean                       @default(false) @map("bypass_location")
+  basicSalary           Float                         @default(0) @map("basic_salary")
+  managerId             String?                       @map("manager_id")
   attendances           AttendanceRecord[]
   payrollComponents     EmployeePayrollComponent[]
-  manager               Employee?                  @relation("Hierarchy", fields: [managerId], references: [employeeId])
-  subordinates          Employee[]                 @relation("Hierarchy")
-  shift                 WorkShift?                 @relation(fields: [shiftId], references: [id])
+  manager               Employee?                     @relation("Hierarchy", fields: [managerId], references: [employeeId])
+  subordinates          Employee[]                    @relation("Hierarchy")
+  shift                 WorkShift?                    @relation(fields: [shiftId], references: [id])
   leaves                LeaveRequest[]
   overtimes             OvertimeRequest[]
   payslips              PayslipRecord[]
   todos                 TodoItem[]
   visits                VisitReport[]
-  locations             Location[]                 @relation("employeelocations")
+  locations             Location[]                    @relation("employeelocations")
   userAccount           UserAccount?
   assignedAssets        Asset[]
-  attendanceCorrections AttendanceCorrection[]     @relation("CorrectionRequester")
-  correctionApprovals   AttendanceCorrection[]     @relation("CorrectionApprover")
+  attendanceCorrections AttendanceCorrection[]        @relation("CorrectionRequester")
+  correctionApprovals   AttendanceCorrection[]        @relation("CorrectionApprover")
   letterRequests        LetterRequest[]
-  statusHistories       EmployeeStatusHistory[]    @relation("EmployeeStatusSubject")
+  statusHistories       EmployeeStatusHistory[]       @relation("EmployeeStatusSubject")
   assetTickets          AssetTicket[]
   simCards              SimCard[]
   documents             EmployeeDocument[]
@@ -69,6 +69,9 @@ model Employee {
   taxHistories          EmployeeTaxHistory[]
   birthdayPreparations  EmployeeBirthdayPreparation[]
   greenMeetingTargets   GreenMeetingNoteTarget[]
+  cleaningApprovalsInspected CleaningMonthlyApproval[]          @relation("CleaningApprovalInspectedBy")
+  cleaningApprovalsKnown     CleaningMonthlyApproval[]          @relation("CleaningApprovalKnownBy")
+  cleaningSignatures         CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureEmployee")
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -99,22 +102,23 @@ model UserAccount {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  employee            Employee?               @relation(fields: [employeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
-  creator             UserAccount?            @relation("UserCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdUsers        UserAccount[]           @relation("UserCreator")
-  roles               UserRoleAssignment[]    @relation("UserRoles")
-  roleAssignmentsMade UserRoleAssignment[]    @relation("RoleAssigner")
-  auditLogs           AuditLog[]              @relation("UserAuditLogs")
-  statusChanges       EmployeeStatusHistory[] @relation("EmployeeStatusActor")
+  employee            Employee?                    @relation(fields: [employeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
+  creator             UserAccount?                 @relation("UserCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdUsers        UserAccount[]                @relation("UserCreator")
+  roles               UserRoleAssignment[]         @relation("UserRoles")
+  roleAssignmentsMade UserRoleAssignment[]         @relation("RoleAssigner")
+  auditLogs           AuditLog[]                   @relation("UserAuditLogs")
+  statusChanges       EmployeeStatusHistory[]      @relation("EmployeeStatusActor")
   pushSubscriptions   PushSubscription[]
-  assetHistories      AssetHistory[]          @relation("AssetHistoryActor")
-  assetBastUploads    AssetBastDocument[]     @relation("AssetBastActor")
-  assetInspections    AssetInspection[]       @relation("AssetInspectionActor")
-  employeeDocuments   EmployeeDocument[]      @relation("EmployeeDocumentUploader")
-  taxChanges          EmployeeTaxHistory[]    @relation("EmployeeTaxHistoryActor")
-  employeeImportJobs  EmployeeImportJob[]     @relation("EmployeeImportActor")
-  cleaningAssignments      CleaningWorkerAssignment[]
-  cleaningItemChanges      CleaningDailyChecklistItem[] @relation("CleaningItemActor")
+  assetHistories      AssetHistory[]               @relation("AssetHistoryActor")
+  assetBastUploads    AssetBastDocument[]          @relation("AssetBastActor")
+  assetInspections    AssetInspection[]            @relation("AssetInspectionActor")
+  employeeDocuments   EmployeeDocument[]           @relation("EmployeeDocumentUploader")
+  taxChanges          EmployeeTaxHistory[]         @relation("EmployeeTaxHistoryActor")
+  employeeImportJobs  EmployeeImportJob[]          @relation("EmployeeImportActor")
+  cleaningAssignments CleaningWorkerAssignment[]
+  cleaningItemChanges CleaningDailyChecklistItem[] @relation("CleaningItemActor")
+  reopenedCleaningSignatures CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureReopener")
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -473,15 +477,15 @@ model OvertimeRequest {
 }
 
 model Department {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  code        String?    @unique
-  description String?    @db.Text
-  divisionId  String     @map("division_id")
-  isActive    Boolean    @default(true) @map("is_active")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  division    Division   @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  employees   Employee[] @relation("EmployeeDepartment")
+  id                  String                   @id @default(uuid())
+  name                String                   @unique
+  code                String?                  @unique
+  description         String?                  @db.Text
+  divisionId          String                   @map("division_id")
+  isActive            Boolean                  @default(true) @map("is_active")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  division            Division                 @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  employees           Employee[]               @relation("EmployeeDepartment")
   greenMeetingUnit    GreenMeetingUnit?
   greenMeetingTargets GreenMeetingNoteTarget[]
 
@@ -1101,7 +1105,7 @@ model GreenMeetingUnit {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  department  Department                 @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  department  Department               @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   attendances GreenMeetingAttendance[]
 
   @@map("green_meeting_units")
@@ -1118,17 +1122,17 @@ model GreenMeetingHoliday {
 }
 
 model GreenMeetingSession {
-  id           String    @id @default(uuid())
-  meetingDate  DateTime  @unique @map("meeting_date")
-  startTime    String    @default("08:30") @map("start_time")
-  endTime      String?   @map("end_time")
-  room         String    @default("Ruang Rapat Utama Lt. 2")
-  notaryName   String?   @map("notary_name")
-  generalNotes String?   @map("general_notes") @db.Text
-  isCancelled  Boolean   @default(false) @map("is_cancelled")
-  cancelReason String?   @map("cancel_reason") @db.Text
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  meetingDate  DateTime @unique @map("meeting_date")
+  startTime    String   @default("08:30") @map("start_time")
+  endTime      String?  @map("end_time")
+  room         String   @default("Ruang Rapat Utama Lt. 2")
+  notaryName   String?  @map("notary_name")
+  generalNotes String?  @map("general_notes") @db.Text
+  isCancelled  Boolean  @default(false) @map("is_cancelled")
+  cancelReason String?  @map("cancel_reason") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   attendances GreenMeetingAttendance[]
   notes       GreenMeetingNote[]
@@ -1156,14 +1160,14 @@ model GreenMeetingAttendance {
 }
 
 model GreenMeetingNote {
-  id          String                 @id @default(uuid())
-  sessionId   String                 @map("session_id")
-  type        GreenMeetingNoteType   @default(INFORMASI)
-  content     String                 @db.Text
-  originType  GreenMeetingOriginType @default(DIREKSI) @map("origin_type")
-  originName  String                 @default("Direksi") @map("origin_name")
-  isAllTarget Boolean                @default(true) @map("is_all_target")
-  taskStatus  GreenMeetingTaskStatus @default(BELUM_DIMULAI) @map("task_status")
+  id           String                 @id @default(uuid())
+  sessionId    String                 @map("session_id")
+  type         GreenMeetingNoteType   @default(INFORMASI)
+  content      String                 @db.Text
+  originType   GreenMeetingOriginType @default(DIREKSI) @map("origin_type")
+  originName   String                 @default("Direksi") @map("origin_name")
+  isAllTarget  Boolean                @default(true) @map("is_all_target")
+  taskStatus   GreenMeetingTaskStatus @default(BELUM_DIMULAI) @map("task_status")
   completedAt  DateTime?              @map("completed_at")
   lastEditedAt DateTime?              @map("last_edited_at")
   lastEditedBy String?                @map("last_edited_by")
@@ -1246,6 +1250,7 @@ model CleaningRoom {
   template    CleaningTemplate           @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   assignments CleaningWorkerAssignment[]
   checklists  CleaningDailyChecklist[]
+  approvals   CleaningMonthlyApproval[]
 
   @@index([templateId], map: "idx_cleaning_room_template")
   @@index([isActive], map: "idx_cleaning_room_active")
@@ -1284,21 +1289,27 @@ model CleaningTemplateItem {
   @@map("cleaning_template_items")
 }
 
+enum CleaningWorkerType {
+  INTERNAL
+  OUTSOURCE
+}
+
 model CleaningWorkerAssignment {
-  id               String   @id @default(uuid())
-  roomId           String   @map("room_id")
-  userId           String   @map("user_id")
-  isActive         Boolean  @default(true) @map("is_active")
-  effectiveWibDate String   @map("effective_wib_date") @db.VarChar(10)
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id              String             @id @default(uuid())
+  roomId          String             @map("room_id")
+  userId          String             @map("user_id")
+  workerType      CleaningWorkerType @map("worker_type")
+  startsOnWibDate String             @map("starts_on_wib_date") @db.VarChar(10)
+  endsOnWibDate   String?            @map("ends_on_wib_date") @db.VarChar(10)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
 
   room CleaningRoom @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   user UserAccount  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@unique([roomId, userId], map: "idx_cleaning_assignment_pair")
-  @@index([userId, isActive], map: "idx_cleaning_assignment_user")
-  @@index([roomId, isActive], map: "idx_cleaning_assignment_room")
+  @@index([userId, endsOnWibDate], map: "idx_cleaning_assignment_user")
+  @@index([roomId, endsOnWibDate], map: "idx_cleaning_assignment_room")
+  @@index([workerType, startsOnWibDate, endsOnWibDate], map: "idx_cleaning_assignment_type_period")
   @@map("cleaning_worker_assignments")
 }
 
@@ -1310,7 +1321,7 @@ model CleaningDailyChecklist {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  room  CleaningRoom                @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  room  CleaningRoom                 @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   items CleaningDailyChecklistItem[]
 
   @@unique([roomId, wibDate], map: "idx_cleaning_checklist_room_date")
@@ -1330,9 +1341,9 @@ model CleaningDailyChecklistItem {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  checklist      CleaningDailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  templateItem   CleaningTemplateItem?  @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  lastChangedBy  UserAccount?           @relation("CleaningItemActor", fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  checklist     CleaningDailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  templateItem  CleaningTemplateItem?  @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastChangedBy UserAccount?           @relation("CleaningItemActor", fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([checklistId, sortOrder], map: "idx_cleaning_daily_item_order")
   @@index([templateItemId], map: "idx_cleaning_daily_item_tpl")
@@ -1340,3 +1351,78 @@ model CleaningDailyChecklistItem {
   @@map("cleaning_daily_checklist_items")
 }
 
+enum CleaningApprovalRole {
+  INSPECTED_BY
+  KNOWN_BY
+}
+
+enum CleaningApprovalSignatureStatus {
+  SIGNED
+  REOPENED
+}
+
+model CleaningMonthlyApproval {
+  id                    String   @id @default(uuid())
+  roomId                String   @map("room_id")
+  roomNameSnapshot      String   @map("room_name_snapshot") @db.VarChar(200)
+  monthWib              String   @map("month_wib") @db.VarChar(7)
+  inspectedByEmployeeId String   @map("inspected_by_employee_id")
+  knownByEmployeeId     String   @map("known_by_employee_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  room                CleaningRoom                       @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  inspectedByEmployee Employee                           @relation("CleaningApprovalInspectedBy", fields: [inspectedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  knownByEmployee     Employee                           @relation("CleaningApprovalKnownBy", fields: [knownByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  signatures          CleaningMonthlyApprovalSignature[]
+
+  @@unique([roomId, monthWib], map: "idx_cleaning_approval_room_month")
+  @@index([monthWib], map: "idx_cleaning_approval_month")
+  @@index([inspectedByEmployeeId], map: "idx_cleaning_approval_inspected_by")
+  @@index([knownByEmployeeId], map: "idx_cleaning_approval_known_by")
+  @@map("cleaning_monthly_approvals")
+}
+
+model CleaningMonthlyApprovalSignature {
+  id                   String                          @id @default(uuid())
+  approvalId           String                          @map("approval_id")
+  role                 CleaningApprovalRole            @map("role")
+  version              Int                             @default(1) @map("version")
+  employeeId           String                          @map("employee_id")
+  employeeNameSnapshot String                          @map("employee_name_snapshot") @db.VarChar(200)
+  signaturePayload     String                          @map("signature_payload") @db.LongText
+  status               CleaningApprovalSignatureStatus @default(SIGNED) @map("status")
+  signedAt             DateTime                        @default(now()) @map("signed_at")
+  reopenedAt           DateTime?                       @map("reopened_at")
+  reopenedByUserId     String?                         @map("reopened_by_user_id")
+  reopenReason         String?                         @map("reopen_reason") @db.Text
+  supersededById       String?                         @map("superseded_by_id")
+  createdAt            DateTime                        @default(now()) @map("created_at")
+  updatedAt            DateTime                        @updatedAt @map("updated_at")
+
+  approval       CleaningMonthlyApproval            @relation(fields: [approvalId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee       Employee                           @relation("CleaningSignatureEmployee", fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  reopenedByUser UserAccount?                       @relation("CleaningSignatureReopener", fields: [reopenedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  supersededBy   CleaningMonthlyApprovalSignature?  @relation("CleaningSignatureSuperseded", fields: [supersededById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  supersedes     CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureSuperseded")
+
+  @@index([approvalId, role, status], map: "idx_cleaning_sig_approval_role_status")
+  @@index([employeeId], map: "idx_cleaning_sig_employee")
+  @@index([reopenedByUserId], map: "idx_cleaning_sig_reopener")
+  @@map("cleaning_monthly_approval_signatures")
+}
+
+model CleaningApprovalIdempotency {
+  id              String   @id @default(uuid())
+  actorId         String   @map("actor_id")
+  endpointScope   String   @map("endpoint_scope") @db.VarChar(100)
+  idempotencyKey  String   @map("idempotency_key") @db.VarChar(100)
+  requestHash     String   @map("request_hash") @db.VarChar(64)
+  responsePayload String   @map("response_payload") @db.LongText
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([actorId, endpointScope, idempotencyKey], map: "idx_cleaning_idem_actor_scope_key")
+  @@index([expiresAt], map: "idx_cleaning_idem_expires")
+  @@map("cleaning_approval_idempotency")
+}

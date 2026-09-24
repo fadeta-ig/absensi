@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SYSTEM_ROLES } from "@/lib/permissions";
+import { revokeCleaningAssignments } from "@/lib/services/cleaningService";
+import logger from "@/lib/logger";
 
 export const MANAGEABLE_ADMIN_ROLES = [SYSTEM_ROLES.HR_ADMIN, SYSTEM_ROLES.GA_ADMIN] as const;
 export type ManageableAdminRole = typeof MANAGEABLE_ADMIN_ROLES[number];
@@ -188,6 +190,22 @@ export async function updateAdminUser(input: UpdateAdminUserInput) {
                     assignedByUserId: input.actorUserId,
                 },
             });
+        }
+
+        // Revoke cleaning assignments when account is deactivated
+        if (input.isActive === false && target.isActive) {
+            const revokedCount = await revokeCleaningAssignments(
+                tx,
+                target.id,
+                "Account deactivated via user management",
+                { userId: input.actorUserId, identifier: "USER_MANAGEMENT", type: "SYSTEM" }
+            );
+            if (revokedCount > 0) {
+                logger.info("[UserService] Revoked cleaning assignments on account deactivation", {
+                    userId: target.id,
+                    revokedCount,
+                });
+            }
         }
 
         return tx.userAccount.update({

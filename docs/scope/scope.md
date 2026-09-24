@@ -16,9 +16,9 @@ _Ini rekomendasi untuk menjaga pembangunan tetap teratur. Anda dapat melewati la
 | C | Operasional portal GA | Existing | existing |
 | D | Portal layanan mandiri karyawan | Existing | existing |
 | 1 | Core cleaning loop | Slice 1 | done |
-| 2 | Master dinamis dan identitas petugas | Slice 2 | planned |
-| 3 | Tanda tangan bulanan | Slice 3 | planned |
-| 4 | PDF dan audit | Slice 4 | planned |
+| 2 | Master dinamis dan identitas petugas | Slice 2 | in-progress |
+| 3 | Tanda tangan bulanan | Slice 3 | in-progress |
+| 4 | PDF dan audit | Slice 4 | in-progress |
 
 ## Existing product
 
@@ -55,32 +55,52 @@ Bangun alur nyata paling tipis untuk ruang dan template yang dikelola WIG002. Pe
 
 ## Slice 2: Master dinamis dan identitas petugas
 
-### 2. Master dinamis dan identitas petugas · needs a decision
+### 2. Master dinamis dan identitas petugas
 WIG002 menjadi satu satunya administrator modul dengan syarat username `WIG002` dan permission `ga.manage`. Ia mengelola petugas internal dari Master HR, akun outsourcing pribadi tanpa data vendor, ruangan, dua template, override item per ruangan, jadwal mingguan global, pengecualian hari libur atau wajib, serta default `Diperiksa Oleh` dan `Mengetahui` per ruangan. (basis: model akun dan RBAC yang sudah ada)
 
 Template Sanitasi Grey Area dimulai dengan Pintu, Sudut Ruangan, Jendela, Langit langit, Lantai, Dinding, Stop Kontak, Saklar, Exhaust atau Kipas atau AC, Lampu, Meja, dan Kursi. Template Ruangan menambahkan Toilet, Teras, serta Dispenser atau Cool Box atau Kulkas, dan tidak memakai Saklar sebagai item awal.
 
-**Done when:** WIG002 dapat mengelola seluruh master, akun outsourcing dengan email opsional dan password yang ia tetapkan, akses internal dan outsourcing yang terbatas, serta perubahan item yang berlaku pada bulan berjalan dan periode berikutnya tanpa mengubah bulan lampau.
+**Spec:** [0002](../specs/0002-cleaning-master-worker-access/index.md)
+**Done when:** WIG002 dapat mengelola penugasan internal dan outsource dengan tipe, periode efektif WIB, pergantian yang aman, riwayat assignment, filter tipe, serta revokasi otomatis ketika akun atau employee tidak lagi memenuhi kelayakan. Pembuatan akun outsource tetap berada di modul manajemen pengguna. Perubahan tidak mengubah checklist snapshot dan riwayat bulan lampau.
 
-* [ ] Design it (spec): `/architect cleaning master and worker access`
+* [x] Design it (spec): `/architect cleaning master and worker access`
+* [x] Build it: `/develop cleaning master and worker access`
+  * [x] Data dan migrasi assignment historis, covers AC-2, AC-5, AC-8, AC-11
+  * [x] Service, role synchronization, revocation, and audit transactions, covers AC-3, AC-4, AC-6, AC-7, AC-9, AC-12
+  * [x] API assignment, eligibility, filters, and conflict handling, covers AC-1, AC-2, AC-4, AC-5, AC-10
+  * [x] WIG002 settings UI and regression tests, covers AC-1, AC-6, AC-10, AC-12
+* [x] Verify it: `/check verify cleaning master and worker access`
+* [x] Test it: `/test cleaning master and worker access`
 
 ## Slice 3: Tanda tangan bulanan
 
-### 3. Tanda tangan bulanan · needs a decision
-WIG002 membuka proses tanda tangan secara manual, termasuk saat periode belum lengkap. Dua karyawan internal yang menjadi default ruangan melihat tugas di portal employee dan dapat menandatangani dalam urutan apa pun memakai kotak `react-signature-canvas`. (basis: identitas employee dan pola konfirmasi GA yang sudah ada)
+### 3. Tanda tangan bulanan
+WIG002 membuka periode tanda tangan untuk satu ruangan dan bulan WIB, memilih dua employee internal aktif yang berbeda, lalu employee melihat tugasnya pada portal employee dan menandatangani dalam urutan apa pun memakai kotak `react-signature-canvas`. Tanda tangan tetap berlaku setelah perubahan checklist, sementara waktu perubahan terakhir tetap terlihat.
 
-**Done when:** `Diperiksa Oleh` dan `Mengetahui` dapat menyimpan tanda tangan khusus periode, tanda tangan tetap berlaku setelah perubahan berikutnya, serta waktu tanda tangan dan perubahan terakhir tetap dapat dilihat.
+**Spec:** [0003](../specs/0003-monthly-cleaning-approvals/index.md)
+**Code:** `prisma/schema.prisma`, `src/lib/services/cleaningApprovalService.ts`, `src/app/api/ga/cleaning/approvals/`, `src/app/api/employee/cleaning/approvals/`, `src/app/ga/cleaning/approvals/`, `src/app/employee/cleaning/approvals/`
 
-* [ ] Design it (spec): `/architect monthly cleaning approvals`
+**Done when:** `Diperiksa Oleh` dan `Mengetahui` dapat menyimpan tanda tangan khusus periode, status periode diturunkan dari dua slot, riwayat pembukaan kembali tetap tersimpan, tanda tangan tetap berlaku setelah perubahan berikutnya, dan waktu tanda tangan serta perubahan terakhir tetap dapat dilihat.
+
+* [x] Design it (spec): `/architect monthly cleaning approvals`
+* [x] Build it: `/develop monthly cleaning approvals`
+  * [x] Data model, atomic period opening, signature history, and idempotency, covers AC-2, AC-3, AC-4, AC-7, AC-9
+  * [x] Approval service, authorization, derived status, audit, and reopen flow, covers AC-1, AC-6, AC-8, AC-9, AC-10, AC-13
+  * [x] Protected GA and employee APIs with shared summary projection, covers AC-1, AC-2, AC-5, AC-6, AC-7, AC-11
+  * [x] GA and employee signing interfaces with retry behavior, covers AC-5, AC-8, AC-12, AC-14
+* [x] Verify it: `/check verify monthly cleaning approvals`
+* [ ] Test it: `/test monthly cleaning approvals`
 
 ## Slice 4: PDF dan audit
 
-### 4. PDF dan audit · needs a decision
+### 4. PDF dan audit
 WIG002 dapat mengubah data kapan saja tanpa membatalkan paraf atau tanda tangan. Setiap perubahan tetap mencatat actor dan waktu, lalu ekspor merangkum matriks, paraf, dua tanda tangan, kelengkapan, dan waktu pembaruan terakhir. (basis: `AuditLog` dan utilitas ekspor yang sudah ada)
+
+**Code:** `src/lib/exportCleaningPdf.ts`, `src/app/api/ga/cleaning/approvals/export-pdf/`, `src/app/ga/cleaning/approvals/`, `src/app/ga/cleaning/recap/`
 
 **Done when:** WIG002 dapat mengekspor setiap ruangan dan bulan sebagai satu matriks 31 tanggal pada satu halaman yang ukurannya menyesuaikan jumlah item, dengan bukti pelaksana, penanda tangan, dan perubahan yang dapat ditelusuri.
 
-* [ ] Design it (spec): `/architect cleaning PDF and audit`
+* [x] Build it: export PDF matriks bulanan landscape satu halaman dengan dua tanda tangan dan catatan pembaruan terakhir
 
 ## Deferred
 

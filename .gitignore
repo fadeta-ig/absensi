@@ -68,3 +68,6 @@ next-env.d.ts
 ~$*.docx
 /scripts/
 !/scripts/*.sh
+
+# temporary workspace
+/tmp/

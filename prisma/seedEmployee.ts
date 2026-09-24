@@ -28,7 +28,24 @@ async function main() {
     });
     await assignOnlyRole(prisma, demoUser.id, "EMPLOYEE_USER");
 
-    console.log(`[SEED] Demo Employee ID25999999 ready (Password: 123)`);
+    // 2. Karyawan Reviewer 2 (ID25999998 / 123)
+    const demoEmp2 = await prisma.employee.upsert({
+        where: { employeeId: "ID25999998" },
+        update: { name: "Karyawan Reviewer 2", email: "reviewer2@wig.co.id", isActive: true },
+        create: {
+            employeeId: "ID25999998", name: "Karyawan Reviewer 2", email: "reviewer2@wig.co.id", phone: "081200000001",
+            departmentId: department.id, divisionId: division.id, positionId: position.id,
+            joinDate: new Date(), totalLeave: 12, usedLeave: 0, isActive: true, bypassLocation: true,
+        },
+    });
+    const demoUser2 = await prisma.userAccount.upsert({
+        where: { username: "ID25999998" },
+        update: { employeeId: "ID25999998", displayName: demoEmp2.name, email: demoEmp2.email, passwordHash: await bcrypt.hash("123", 12), isActive: true },
+        create: { username: "ID25999998", employeeId: "ID25999998", displayName: demoEmp2.name, email: demoEmp2.email, passwordHash: await bcrypt.hash("123", 12) },
+    });
+    await assignOnlyRole(prisma, demoUser2.id, "EMPLOYEE_USER");
+
+    console.log(`[SEED] Demo Employees ID25999999 and ID25999998 ready (Password: 123)`);
 }
 
 main().catch((error) => {

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { toWIBDateString } from "@/lib/timezone";
 import { PERMISSIONS, SYSTEM_ROLES } from "@/lib/permissions";
 import type { AuditActor } from "@/lib/services/auditService";
+import { revokeCleaningAssignments } from "@/lib/services/cleaningService";
+import logger from "@/lib/logger";
 import type { Prisma } from "@prisma/client";
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -259,6 +261,21 @@ export async function changeEmployeeStatus(
         if (employee.userAccount) {
             if (!input.isActive) {
                 await tx.pushSubscription.deleteMany({ where: { userId: employee.userAccount.id } });
+
+                // Revoke all effective cleaning assignments when employee is deactivated
+                const revokedCount = await revokeCleaningAssignments(
+                    tx,
+                    employee.userAccount.id,
+                    `Employee deactivated: ${input.reason}`,
+                    { ...changedBy, type: "SYSTEM" }
+                );
+                if (revokedCount > 0) {
+                    logger.info("[EmployeeStatus] Revoked cleaning assignments", {
+                        employeeId: employee.employeeId,
+                        userId: employee.userAccount.id,
+                        revokedCount,
+                    });
+                }
             }
             await tx.userAccount.update({
                 where: { id: employee.userAccount.id },

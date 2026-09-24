@@ -1,14 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { getAssignments, createOrUpdateAssignment, getAvailableUsersForAssignment, isWig002, CleaningError } from "@/lib/services/cleaningService";
+import {
+    getAssignments,
+    createAssignment,
+    endAssignment,
+    replaceAssignment,
+    getAvailableUsersForAssignment,
+    isWig002,
+    CleaningError,
+} from "@/lib/services/cleaningService";
 import { z } from "zod";
 
-const upsertAssignmentSchema = z.object({
+const createAssignmentSchema = z.object({
     roomId: z.string().min(1, "Ruangan wajib dipilih"),
     userId: z.string().min(1, "Pengguna wajib dipilih"),
-    isActive: z.boolean(),
+    workerType: z.enum(["INTERNAL", "OUTSOURCE"]),
     applyToToday: z.boolean().optional().default(false),
 });
+
+const endAssignmentSchema = z.object({
+    assignmentId: z.string().min(1, "ID penugasan wajib diisi"),
+    action: z.literal("END"),
+    applyToToday: z.boolean().optional().default(false),
+    reason: z.string().min(1, "Alasan wajib diisi"),
+});
+
+const replaceAssignmentSchema = z.object({
+    assignmentId: z.string().min(1, "ID penugasan wajib diisi"),
+    action: z.literal("REPLACE"),
+    newUserId: z.string().min(1, "Pengguna pengganti wajib dipilih"),
+    newWorkerType: z.enum(["INTERNAL", "OUTSOURCE"]),
+    applyToToday: z.boolean().optional().default(false),
+    reason: z.string().min(1, "Alasan wajib diisi"),
+});
+
+const patchSchema = z.discriminatedUnion("action", [endAssignmentSchema, replaceAssignmentSchema]);
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
@@ -18,15 +44,10 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const roomId = searchParams.get("roomId") ?? undefined;
-        const type = searchParams.get("type");
+        const workerType = searchParams.get("workerType") as "INTERNAL" | "OUTSOURCE" | null;
+        const includeInactive = searchParams.get("includeInactive") === "true";
 
-        // Return available users for assignment UI
-        if (type === "available-users") {
-            const users = await getAvailableUsersForAssignment(session);
-            return NextResponse.json({ success: true, data: users });
-        }
-
-        const assignments = await getAssignments(session, roomId);
+        const assignments = await getAssignments(session, { roomId, workerType: workerType ?? undefined, includeInactive });
         return NextResponse.json({ success: true, data: assignments });
     } catch (err) {
         if (err instanceof CleaningError) {
@@ -42,10 +63,10 @@ export async function POST(request: NextRequest) {
     if (!isWig002(session)) return forbiddenResponse();
 
     try {
-        const result = await validateBody(request, upsertAssignmentSchema);
+        const result = await validateBody(request, createAssignmentSchema);
         if ("error" in result) return result.error;
 
-        const assignment = await createOrUpdateAssignment(session, result.data);
+        const assignment = await createAssignment(session, result.data);
         return NextResponse.json({ success: true, data: assignment }, { status: 201 });
     } catch (err) {
         if (err instanceof CleaningError) {
@@ -61,11 +82,26 @@ export async function PATCH(request: NextRequest) {
     if (!isWig002(session)) return forbiddenResponse();
 
     try {
-        const result = await validateBody(request, upsertAssignmentSchema);
+        const result = await validateBody(request, patchSchema);
         if ("error" in result) return result.error;
 
-        const assignment = await createOrUpdateAssignment(session, result.data);
-        return NextResponse.json({ success: true, data: assignment });
+        if (result.data.action === "END") {
+            const ended = await endAssignment(session, {
+                assignmentId: result.data.assignmentId,
+                applyToToday: result.data.applyToToday,
+                reason: result.data.reason,
+            });
+            return NextResponse.json({ success: true, data: ended });
+        }
+
+        const replaced = await replaceAssignment(session, {
+            assignmentId: result.data.assignmentId,
+            newUserId: result.data.newUserId,
+            newWorkerType: result.data.newWorkerType,
+            applyToToday: result.data.applyToToday,
+            reason: result.data.reason,
+        });
+        return NextResponse.json({ success: true, data: replaced });
     } catch (err) {
         if (err instanceof CleaningError) {
             return NextResponse.json({ error: err.message }, { status: err.statusCode });

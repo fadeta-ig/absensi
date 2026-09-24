@@ -42,7 +42,9 @@ vi.mock("@/lib/services/cleaningService", () => {
         createTemplateItem: vi.fn(),
         updateTemplateItem: vi.fn(),
         getAssignments: vi.fn(),
-        createOrUpdateAssignment: vi.fn(),
+        createAssignment: vi.fn(),
+        endAssignment: vi.fn(),
+        replaceAssignment: vi.fn(),
         getAvailableUsersForAssignment: vi.fn(),
         getRecap: vi.fn(),
         getChecklistDetail: vi.fn(),
@@ -52,7 +54,10 @@ vi.mock("@/lib/services/cleaningService", () => {
 import { requireAuth } from "@/lib/middleware/apiGuard";
 import {
     CleaningError,
-    createOrUpdateAssignment,
+    createAssignment,
+    endAssignment,
+    getAvailableUsersForAssignment,
+    replaceAssignment,
     getChecklist,
     getChecklistDetail,
     getOrCreateDailyChecklist,
@@ -65,6 +70,7 @@ import { GET as getWorkerRoomsRoute } from "@/app/api/cleaning/rooms/route";
 import { GET as getChecklistRoute, POST as createChecklistRoute } from "@/app/api/cleaning/checklists/route";
 import { PATCH as patchChecklistItemRoute } from "@/app/api/cleaning/checklist-items/[id]/route";
 import { GET as getGaRoomsRoute } from "@/app/api/ga/cleaning/rooms/route";
+import { GET as getAvailableUsersRoute } from "@/app/api/ga/cleaning/assignments/available-users/route";
 import { GET as getRecapRoute } from "@/app/api/ga/cleaning/recap/route";
 import { GET as getDetailRoute } from "@/app/api/ga/cleaning/checklists/route";
 import * as assignmentsRoute from "@/app/api/ga/cleaning/assignments/route";
@@ -191,6 +197,35 @@ describe("Cleaning API route contract", () => {
         expect(await response.json()).toEqual({ success: true, data: [{ id: "room-1" }] });
     });
 
+    it("AC-2 returns eligible users for a valid worker type", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session());
+        asMock(getAvailableUsersForAssignment).mockResolvedValue([{ id: "user-1", employeeId: "EMP001" }]);
+
+        const response = await getAvailableUsersRoute(request("/api/ga/cleaning/assignments/available-users?workerType=INTERNAL"));
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ success: true, data: [{ id: "user-1", employeeId: "EMP001" }] });
+        expect(getAvailableUsersForAssignment).toHaveBeenCalledWith(expect.anything(), "INTERNAL");
+    });
+
+    it("AC-2 rejects a missing or unknown worker type before reading eligible users", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session());
+
+        const response = await getAvailableUsersRoute(request("/api/ga/cleaning/assignments/available-users"));
+
+        expect(response.status).toBe(422);
+        expect(getAvailableUsersForAssignment).not.toHaveBeenCalled();
+    });
+
+    it("AC-1 denies eligible user lookup to a non administrator", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session({ username: "WIG003" }));
+
+        const response = await getAvailableUsersRoute(request("/api/ga/cleaning/assignments/available-users?workerType=OUTSOURCE"));
+
+        expect(response.status).toBe(403);
+        expect(getAvailableUsersForAssignment).not.toHaveBeenCalled();
+    });
+
     it("AC-7 returns 400 when recap month is missing", async () => {
         asMock(requireAuth).mockResolvedValue(makeWig002Session());
 
@@ -225,46 +260,124 @@ describe("Cleaning API route contract", () => {
         expect((assignmentsRoute as unknown as { PATCH?: unknown }).PATCH).toBeTypeOf("function");
     });
 
-    it("AC-6 patches an assignment with explicit applyToToday", async () => {
+    it("AC-6 creates a new assignment via POST", async () => {
         asMock(requireAuth).mockResolvedValue(makeWig002Session());
-        asMock(createOrUpdateAssignment).mockResolvedValue({ id: "assignment-1", isActive: false });
+        asMock(createAssignment).mockResolvedValue({ id: "assignment-1", workerType: "INTERNAL" });
+
+        const response = await assignmentsRoute.POST(request("/api/ga/cleaning/assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ roomId: "room-1", userId: "user-1", workerType: "INTERNAL" }),
+        }));
+
+        expect(response.status).toBe(201);
+        expect(await response.json()).toEqual({
+            success: true,
+            data: { id: "assignment-1", workerType: "INTERNAL" },
+        });
+        expect(createAssignment).toHaveBeenCalledWith(
+            expect.anything(),
+            { roomId: "room-1", userId: "user-1", workerType: "INTERNAL", applyToToday: false },
+        );
+    });
+
+    it("AC-6 ends an assignment via PATCH action=END", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session());
+        asMock(endAssignment).mockResolvedValue({ id: "assignment-1", endsOnWibDate: "2026-09-22" });
 
         const response = await assignmentsRoute.PATCH(request("/api/ga/cleaning/assignments", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-                roomId: "room-1",
-                userId: "user-1",
-                isActive: false,
-                applyToToday: true,
+                assignmentId: "assignment-1",
+                action: "END",
+                reason: "Pindah tugas",
             }),
         }));
 
         expect(response.status).toBe(200);
-        expect(await response.json()).toEqual({
-            success: true,
-            data: { id: "assignment-1", isActive: false },
-        });
-        expect(createOrUpdateAssignment).toHaveBeenCalledWith(
+        expect(endAssignment).toHaveBeenCalledWith(
             expect.anything(),
-            { roomId: "room-1", userId: "user-1", isActive: false, applyToToday: true },
+            { assignmentId: "assignment-1", applyToToday: false, reason: "Pindah tugas" },
         );
     });
 
-    it("AC-6 defaults applyToToday to false at the API boundary", async () => {
+    it("AC-6 replaces an assignment via PATCH action=REPLACE", async () => {
         asMock(requireAuth).mockResolvedValue(makeWig002Session());
-        asMock(createOrUpdateAssignment).mockResolvedValue({ id: "assignment-1" });
+        asMock(replaceAssignment).mockResolvedValue({
+            ended: { id: "assignment-1" },
+            created: { id: "assignment-2" },
+        });
+
+        const response = await assignmentsRoute.PATCH(request("/api/ga/cleaning/assignments", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                assignmentId: "assignment-1",
+                action: "REPLACE",
+                newUserId: "user-2",
+                newWorkerType: "OUTSOURCE",
+                reason: "Rotasi pekerja",
+            }),
+        }));
+
+        expect(response.status).toBe(200);
+        expect(replaceAssignment).toHaveBeenCalledWith(
+            expect.anything(),
+            {
+                assignmentId: "assignment-1",
+                newUserId: "user-2",
+                newWorkerType: "OUTSOURCE",
+                applyToToday: false,
+                reason: "Rotasi pekerja",
+            },
+        );
+    });
+
+    it("AC-2 passes INTERNAL worker type to the assignment service", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session());
+        asMock(createAssignment).mockResolvedValue({ id: "assignment-1", workerType: "INTERNAL" });
 
         const response = await assignmentsRoute.POST(request("/api/ga/cleaning/assignments", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ roomId: "room-1", userId: "user-1", isActive: true }),
+            body: JSON.stringify({ roomId: "room-1", userId: "user-1", workerType: "INTERNAL" }),
         }));
 
         expect(response.status).toBe(201);
-        expect(createOrUpdateAssignment).toHaveBeenCalledWith(
+        expect(createAssignment).toHaveBeenCalledWith(
             expect.anything(),
-            { roomId: "room-1", userId: "user-1", isActive: true, applyToToday: false },
+            { roomId: "room-1", userId: "user-1", workerType: "INTERNAL", applyToToday: false },
         );
+    });
+
+    it("AC-2 passes OUTSOURCE worker type to the assignment service", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session());
+        asMock(createAssignment).mockResolvedValue({ id: "assignment-1", workerType: "OUTSOURCE" });
+
+        const response = await assignmentsRoute.POST(request("/api/ga/cleaning/assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ roomId: "room-1", userId: "user-2", workerType: "OUTSOURCE" }),
+        }));
+
+        expect(response.status).toBe(201);
+        expect(createAssignment).toHaveBeenCalledWith(
+            expect.anything(),
+            { roomId: "room-1", userId: "user-2", workerType: "OUTSOURCE", applyToToday: false },
+        );
+    });
+
+    it("AC-10 rejects an unknown worker type at the API boundary", async () => {
+        asMock(requireAuth).mockResolvedValue(makeWig002Session());
+
+        const response = await assignmentsRoute.POST(request("/api/ga/cleaning/assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ roomId: "room-1", userId: "user-1", workerType: "VENDOR" }),
+        }));
+
+        expect(response.status).toBe(400);
+        expect(createAssignment).not.toHaveBeenCalled();
     });
 });

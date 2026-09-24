@@ -54,7 +54,7 @@ function installSettingsFetch() {
         }
         if (url === "/api/ga/cleaning/templates") return response({ data: [] });
         if (url === "/api/ga/cleaning/rooms") return response({ data: [room] });
-        if (url.includes("available-users")) {
+        if (url.includes("/assignments/available-users")) {
             return response({
                 data: [{
                     id: CLEANING_IDS.workerUser,
@@ -99,7 +99,9 @@ describe("CleaningSettingsPage", () => {
         await user.click(screen.getByRole("button", { name: /Tugaskan/i }));
         const selects = screen.getAllByRole("combobox");
         await user.selectOptions(selects[0], CLEANING_IDS.room);
-        await user.selectOptions(selects[1], CLEANING_IDS.workerUser);
+        // selects[1] is the "Tipe petugas" dropdown (INTERNAL/OUTSOURCE)
+        // selects[2] is the "Pengguna" dropdown
+        await user.selectOptions(screen.getByRole("combobox", { name: /pengguna/i }), CLEANING_IDS.workerUser);
         await user.click(screen.getByRole("checkbox", { name: /Berlaku mulai hari ini/i }));
         await user.click(screen.getAllByRole("button", { name: "Tugaskan" }).at(-1)!);
 
@@ -110,7 +112,7 @@ describe("CleaningSettingsPage", () => {
                 body: {
                     roomId: CLEANING_IDS.room,
                     userId: CLEANING_IDS.workerUser,
-                    isActive: true,
+                    workerType: "INTERNAL",
                     applyToToday: true,
                 },
             });

@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Circle, Clock } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Circle, Clock, FileCheck2, FileDown } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import { exportCleaningMatrixPdf } from "@/lib/exportCleaningPdf";
 
 interface RecapRoom {
     id: string;
@@ -89,6 +91,22 @@ export default function CleaningRecapPage() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailRoom, setDetailRoom] = useState<RecapRoom | null>(null);
     const [detailDate, setDetailDate] = useState<string | null>(null);
+    const [exportingPdfId, setExportingPdfId] = useState<string | null>(null);
+
+    const handleExportPdf = useCallback(async (roomId: string, targetMonth: string) => {
+        setExportingPdfId(roomId);
+        try {
+            const res = await fetch(`/api/ga/cleaning/approvals/export-pdf?roomId=${roomId}&monthWib=${targetMonth}`);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengunduh berkas PDF."));
+            const json = await res.json();
+            exportCleaningMatrixPdf(json.data);
+            toast("Formulir PDF kebersihan berhasil diunduh.", "success");
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal mengunduh PDF.", "error");
+        } finally {
+            setExportingPdfId(null);
+        }
+    }, [toast]);
 
     const fetchRecap = useCallback(async (m: string) => {
         setLoading(true);
@@ -131,8 +149,18 @@ export default function CleaningRecapPage() {
 
     return (
         <div className="max-w-full mx-auto px-4 py-6">
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Rekap Kebersihan</h1>
-            <p className="text-sm text-muted-foreground mb-4">Matriks bulanan per ruangan.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <div>
+                    <h1 className="text-2xl font-semibold text-foreground mb-1">Rekap Kebersihan</h1>
+                    <p className="text-sm text-muted-foreground">Matriks bulanan per ruangan.</p>
+                </div>
+                <Link
+                    href="/ga/cleaning/approvals"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm font-medium text-foreground transition-colors self-start sm:self-auto"
+                >
+                    <FileCheck2 className="h-4 w-4 text-red-600" /> Tanda Tangan Bulanan
+                </Link>
+            </div>
 
             {/* Month selector */}
             <div className="flex items-center gap-3 mb-6">
@@ -185,8 +213,26 @@ export default function CleaningRecapPage() {
                             <tbody>
                                 {recap.matrix.map((row) => (
                                     <tr key={row.room.id}>
-                                        <td className="sticky left-0 bg-card z-10 px-2 py-1.5 border border-border font-medium text-foreground text-sm whitespace-nowrap">
-                                            {row.room.name}
+                                        <td className="sticky left-0 bg-card z-10 px-2.5 py-1.5 border border-border font-medium text-foreground text-sm whitespace-nowrap">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span>{row.room.name}</span>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        void handleExportPdf(row.room.id, month);
+                                                    }}
+                                                    disabled={exportingPdfId === row.room.id}
+                                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                                    title={`Unduh PDF ${row.room.name}`}
+                                                    type="button"
+                                                >
+                                                    {exportingPdfId === row.room.id ? (
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" />
+                                                    ) : (
+                                                        <FileDown className="h-3.5 w-3.5 text-[var(--primary)]" />
+                                                    )}
+                                                </button>
+                                            </div>
                                         </td>
                                         {row.days.map((cell) => (
                                             <td

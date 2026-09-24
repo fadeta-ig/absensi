@@ -21,6 +21,7 @@ import {
     ChevronRight,
     LucideIcon,
     CalendarCheck,
+    FileCheck2,
 } from "lucide-react";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { useToast } from "@/components/Toast";
@@ -195,6 +196,14 @@ export default function AllMenusSheet({
                     icon: CalendarCheck,
                     bg: "bg-emerald-50 dark:bg-emerald-950/40",
                     color: "text-emerald-600 dark:text-emerald-400",
+                },
+                {
+                    href: "/employee/cleaning/approvals",
+                    label: "Tanda Tangan Kebersihan",
+                    description: "Persetujuan dan tanda tangan checklist bulanan",
+                    icon: FileCheck2,
+                    bg: "bg-teal-50 dark:bg-teal-950/40",
+                    color: "text-teal-600 dark:text-teal-400",
                 },
                 {
                     href: "/employee/todos",

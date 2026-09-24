@@ -107,3 +107,27 @@ export function makeChecklist(overrides: Record<string, unknown> = {}) {
     };
 }
 
+export const VALID_PNG_SIGNATURE =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAAAyCAIAAAAlV+npAAAAgUlEQVR4nO3QQQ0AIAzAwPk3DRbWFyG5U9B0DmvzOuAnZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFZgVmBWYFF2jSYM8m2Qt/AAAAAElFTkSuQmCC";
+
+export function makeEmployeeSession(overrides: Partial<SessionPayload> = {}): SessionPayload {
+    return {
+        userId: "test-user-emp1",
+        username: "EMP001",
+        name: "Test Employee 1",
+        email: "emp1@example.test",
+        employeeId: "EMP001",
+        employeeRecordId: "emp-rec-1",
+        departmentId: "dept-1",
+        divisionId: null,
+        roles: [SYSTEM_ROLES.EMPLOYEE_USER],
+        permissions: [PERMISSIONS.EMPLOYEE_SELF],
+        primaryRole: SYSTEM_ROLES.EMPLOYEE_USER,
+        role: "employee",
+        sessionVersion: 1,
+        hasSubordinates: false,
+        ...overrides,
+    };
+}
+
+

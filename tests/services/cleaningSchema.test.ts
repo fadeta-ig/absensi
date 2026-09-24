@@ -80,4 +80,19 @@ describe("Core cleaning schema and RBAC contract", () => {
             employeeId: null,
         })).toBe("/cleaning");
     });
+
+    it("Slice 3: AC-2, AC-3, AC-4 define monthly approvals, signatures, and idempotency models", () => {
+        for (const model of [
+            "CleaningMonthlyApproval",
+            "CleaningMonthlyApprovalSignature",
+            "CleaningApprovalIdempotency",
+        ]) {
+            expect(schema).toContain(`model ${model} {`);
+        }
+
+        expect(schema).toContain('@@unique([roomId, monthWib], map: "idx_cleaning_approval_room_month")');
+        expect(schema).toContain('@@unique([actorId, endpointScope, idempotencyKey], map: "idx_cleaning_idem_actor_scope_key")');
+        expect(schema).toContain("enum CleaningApprovalRole {");
+        expect(schema).toContain("enum CleaningApprovalSignatureStatus {");
+    });
 });

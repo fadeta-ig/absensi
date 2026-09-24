@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => {
             update: vi.fn(),
         },
         userAccount: { findUnique: vi.fn(), update: vi.fn() },
-        userRoleAssignment: { count: vi.fn() },
+        userRoleAssignment: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
         pushSubscription: { deleteMany: vi.fn() },
         employeeStatusHistory: { create: vi.fn() },
         auditLog: { create: vi.fn() },
+        cleaningWorkerAssignment: { findMany: vi.fn(), update: vi.fn(), count: vi.fn() },
+        role: { findUnique: vi.fn() },
     };
     return {
         tx,
@@ -61,6 +63,8 @@ describe("employeeStatusService.changeEmployeeStatus", () => {
         mocks.tx.employee.updateMany.mockResolvedValue({ count: 0 });
         mocks.tx.pushSubscription.deleteMany.mockResolvedValue({ count: 1 });
         mocks.tx.userAccount.update.mockResolvedValue({});
+        mocks.tx.cleaningWorkerAssignment.findMany.mockResolvedValue([]);
+        mocks.tx.cleaningWorkerAssignment.count.mockResolvedValue(0);
         mocks.tx.employee.update.mockResolvedValue({
             id: activeEmployee.id,
             employeeId: activeEmployee.employeeId,
