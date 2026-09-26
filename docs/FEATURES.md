@@ -2,7 +2,7 @@
 
 > **Purpose**: Pengetahuan kapabilitas, modul fitur, dan batasan fungsional sistem.  
 > **Source of Truth**: Implementasi fitur di layer UI (`src/app/`) dan service bisnis (`src/lib/services/`).  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-26
 
 Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **Presensi & HRIS WIG** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
 
@@ -83,14 +83,16 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Transparansi & Smart Filter**: HR memantau melalui `/dashboard/green-meeting`; karyawan tetap dapat membaca seluruh notulensi sesi melalui filter Semua. Portal `/employee/green-meeting` menyediakan filter relevansi Personal, Departemen, Divisi, dan Untuk Semua yang mencocokkan target secara eksklusif berdasarkan `targetType`, serta daftar tugas relevan lintas waktu. Antarmuka karyawan dirancang mobile-first (zero-leak) dengan navigasi grid tersegmentasi, routing strip anti-overflow, dan kartu presensi unit adaptif.
 - **Laporan**: GA dan pemantau terautentikasi dapat melihat rekap rentang tanggal; UI GA menyediakan ekspor Excel dan PDF.
 
-### D. Kebersihan Harian (Core Cleaning Loop)
-- **Portal Petugas Terbatas (`/cleaning`)**: Petugas kebersihan yang ditetapkan masuk ke portal khusus terpisah dari portal GA. Akses dikontrol oleh role `CLEANING_WORKER` dengan permission `cleaning.execute` yang dikelola otomatis berdasarkan penetapan ruangan aktif.
+### D. Inspeksi Harian (Core Cleaning Loop)
+- **Portal Petugas Terbatas (`/cleaning`)**: Petugas inspeksi yang ditetapkan masuk ke portal khusus terpisah dari portal GA. Akses dikontrol oleh role `CLEANING_WORKER` dengan permission `cleaning.execute`; ruangan yang terlihat tetap dibatasi oleh periode penugasan efektif pada tanggal WIB berjalan.
 - **Checklist Harian Bersama**: Satu checklist per ruangan per tanggal WIB. Beberapa petugas yang ditetapkan ke ruangan yang sama dapat mengubah item secara bersamaan pada tanggal hari ini. Item yang belum disentuh menampilkan status `Belum diubah` tanpa aktor atau waktu.
 - **Snapshot Immutable**: Checklist harian menyalin nama ruangan dan item template aktif saat pertama kali dibuat. Perubahan master (template, item) tidak pernah mengubah snapshot harian yang sudah ada.
 - **Status Turunan**: Status harian dihitung dari item aktif, bukan disimpan terpisah. `SELESAI` hanya jika semua item aktif sudah selesai; jika ada yang dibatalkan, kembali ke `BELUM`.
-- **Administrasi WIG002**: Hanya username `WIG002` dengan permission `ga.manage` yang dapat mengelola ruangan, template, item template, dan penetapan petugas melalui `/ga/cleaning/settings`. Penetapan petugas mendukung `applyToToday` yang berlaku pada hari yang sama atau menunggu tanggal WIB berikutnya.
-- **Sinkronisasi Role Atomik**: Penetapan aktif pertama menambahkan role `CLEANING_WORKER`; pencabutan penetapan aktif terakhir menghapus role dalam satu transaksi database yang sama.
+- **Administrasi WIG002**: Hanya username `WIG002` dengan permission `ga.manage` yang dapat mengelola ruangan, template, item template, akun petugas outsource, dan penetapan petugas melalui `/ga/cleaning/settings`. Akun outsource berdiri sendiri tanpa relasi employee, memakai password manual minimal delapan karakter, dan hanya dapat ditugaskan oleh akun GA yang membuatnya.
+- **Penjadwalan Penugasan**: Penetapan mendukung `applyToToday`; jika tidak dipilih, masa tugas mulai pada tanggal WIB berikutnya. Jadwal yang belum mulai dapat dibatalkan, sedangkan penetapan berjalan diakhiri dengan alasan.
+- **Sinkronisasi Role Atomik**: Penetapan yang belum berakhir menambahkan atau mempertahankan role `CLEANING_WORKER`; pengakhiran penetapan terakhir pada hari berjalan menghapus role dalam transaksi database yang sama. Tanggal efektif tetap menentukan ruangan yang boleh diakses.
 - **Rekap Bulanan (`/ga/cleaning/recap`)**: WIG002 melihat matriks per ruangan untuk bulan lampau atau berjalan. Tanggal tanpa record menampilkan `BELUM`. Tanggal mendatang menampilkan pratinjau template tanpa membuat record.
+- **Persetujuan Bulanan**: GA menetapkan dua reviewer internal (`INSPECTED_BY` dan `KNOWN_BY`). Reviewer menandatangani dari portal employee; tanda tangan berversi dapat dibuka kembali dengan alasan dan diekspor ke PDF.
 
 ---
 

@@ -52,6 +52,7 @@ function installSettingsFetch() {
         if (method === "POST" && url === "/api/ga/cleaning/assignments") {
             return response({ data: { id: CLEANING_IDS.assignment } });
         }
+        if (url === "/api/ga/cleaning/outsource-users") return response({ data: [] });
         if (url === "/api/ga/cleaning/templates") return response({ data: [] });
         if (url === "/api/ga/cleaning/rooms") return response({ data: [room] });
         if (url.includes("/assignments/available-users")) {
@@ -84,7 +85,7 @@ describe("CleaningSettingsPage", () => {
         installSettingsFetch();
         render(<CleaningSettingsPage />);
 
-        expect(await screen.findByRole("heading", { name: "Pengaturan Kebersihan" })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "Pengaturan Inspeksi" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Template" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Ruangan" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Penugasan" })).toBeInTheDocument();
@@ -129,5 +130,19 @@ describe("CleaningSettingsPage", () => {
 
         expect(screen.getByRole("combobox", { name: /ruangan/i })).toBeInTheDocument();
         expect(screen.getByRole("combobox", { name: /pengguna/i })).toBeInTheDocument();
+    });
+
+    it("requires a masked outsource password with a minimum of eight characters", async () => {
+        installSettingsFetch();
+        const user = userEvent.setup();
+        render(<CleaningSettingsPage />);
+
+        await user.click(await screen.findByRole("button", { name: "Penugasan" }));
+        await user.click(screen.getByRole("button", { name: /Petugas Outsource/i }));
+
+        const password = screen.getByLabelText("Password");
+        expect(password).toHaveAttribute("type", "password");
+        expect(password).toHaveAttribute("minlength", "8");
+        expect(password).toHaveAttribute("autocomplete", "new-password");
     });
 });

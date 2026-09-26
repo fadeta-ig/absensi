@@ -2,7 +2,7 @@
 
 > **Purpose**: Peta repository dan lokasi implementation penting.  
 > **Source of Truth**: Struktur file dan direktori aktual repository.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-26
 
 Dokumen ini menyediakan peta mental komprehensif mengenai struktur repository, batas-batas modul, tanggung jawab layer, dan lokasi file implementasi penting bagi AI agent dan pengembang.
 
@@ -19,7 +19,7 @@ hriswig/
 │   ├── app/                   # Next.js 16 App Router (halaman, layout, & API routes)
 │   │   ├── (auth)/            # Alur autentikasi dan login
 │   │   ├── api/               # Endpoint backend API RESTful
-│   │   ├── cleaning/          # Portal operasional petugas kebersihan
+│   │   ├── cleaning/          # Portal operasional petugas inspeksi
 │   │   ├── dashboard/         # Portal manajemen HR & Super Admin
 │   │   ├── employee/          # Portal mandiri karyawan (Employee Self-Service)
 │   │   ├── ga/                # Portal operasional General Affairs & Aset
@@ -93,8 +93,8 @@ hriswig/
   - `src/app/employee/green-meeting/page.tsx`: Pemantauan notulensi rapat, tindak lanjut tugas pribadi/departemen, dan transparansi presensi unit dengan antarmuka mobile-first responsif (zero-leak).
 
 ### C. Portal General Affairs (`src/app/ga/`)
-- **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat, Green Meeting, dan Kebersihan Harian.
-- **Responsibility**: Registrasi aset, mutasi/BAST, inspeksi, servis, tiket, pengelolaan penuh kalender, presensi, notulen, tindak lanjut, dan laporan Green Meeting, serta pengaturan ruangan, template, penetapan petugas, dan rekap bulanan Kebersihan Harian.
+- **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat, Green Meeting, dan Inspeksi Harian.
+- **Responsibility**: Registrasi aset, mutasi/BAST, inspeksi, servis, tiket, pengelolaan penuh kalender, presensi, notulen, tindak lanjut, dan laporan Green Meeting, serta pengaturan ruangan, template, akun outsource, penetapan petugas, rekap, dan persetujuan bulanan Inspeksi Harian.
 - **Important Files**:
   - `src/app/ga/assets/page.tsx`: Katalog seluruh aset korporat dengan filter kategori & status.
   - `src/app/ga/tickets/page.tsx`: Manajemen tiket keluhan kerusakan dari karyawan.
@@ -107,14 +107,15 @@ hriswig/
   - `src/app/ga/green-meeting/settings/page.tsx`: Kalender operasional, konfigurasi, dan partisipasi departemen.
   - `src/app/ga/green-meeting/recap/page.tsx`: Rekap rentang tanggal serta ekspor Excel/PDF.
   - `src/app/ga/green-meeting/components/`: Komponen native bersama untuk header, navigasi submodul, presensi, notulen, tugas, pengaturan, dan rekap.
-  - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, dan penetapan petugas kebersihan.
-  - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan kebersihan per ruangan.
+  - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, akun outsource, dan penetapan petugas inspeksi.
+  - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
+  - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
 
-### D. Portal Kebersihan Harian (`src/app/cleaning/`)
-- **Purpose**: Portal operasional terbatas untuk petugas kebersihan.
+### D. Portal Inspeksi Harian (`src/app/cleaning/`)
+- **Purpose**: Portal operasional terbatas untuk petugas inspeksi.
 - **Responsibility**: Menampilkan ruangan yang ditetapkan, membuat atau membaca checklist harian, dan mengubah status item aktif pada tanggal WIB hari ini.
 - **Important Files**:
-  - `src/app/cleaning/layout.tsx`: Layout portal kebersihan dengan AppShell dan auth check.
+  - `src/app/cleaning/layout.tsx`: Layout portal inspeksi dengan AppShell dan auth check.
   - `src/app/cleaning/page.tsx`: Halaman checklist harian petugas.
 
 ---
@@ -130,8 +131,9 @@ hriswig/
   - `src/app/api/payslips/route.ts`: Handler penerbitan slip gaji bulanan.
   - `src/app/api/cron/[...]/route.ts`: 5 endpoint terjadwal yang diamankan dengan header `Bearer CRON_SECRET`.
   - `src/app/api/green-meeting/`: Sembilan route handler untuk config, units, sessions, attendance, notes, deadlines, holidays, employee autocomplete, dan recap.
-  - `src/app/api/cleaning/`: Tiga route handler untuk petugas: rooms (GET), checklists (GET/POST), dan checklist-items/[id] (PATCH).
-  - `src/app/api/ga/cleaning/`: Lima route handler untuk WIG002: rooms (GET/POST/PATCH), templates (GET/POST/PATCH), template-items (GET/POST/PATCH), assignments (GET/POST/PATCH), recap (GET), dan checklists (GET).
+  - `src/app/api/cleaning/`: Tiga route handler untuk petugas inspeksi: rooms (GET), checklists (GET/POST), dan checklist-items/[id] (PATCH).
+  - `src/app/api/ga/cleaning/`: Dua belas route handler untuk WIG002: master ruangan/template, assignment dan kandidat user, akun outsource, checklist/recap, serta persetujuan bulanan, reopen, reviewer, dan ekspor PDF.
+  - `src/app/api/employee/cleaning/`: Dua route handler bagi reviewer employee untuk membaca dan menandatangani persetujuan bulanan.
 
 ---
 
@@ -149,7 +151,8 @@ hriswig/
   - `visitService.ts` & `visitPhotoService.ts`: Audit trail kunjungan dan watermarking citra via Sharp.
   - `emailService.ts`: Pengiriman email transaksional kredensial dan pengingat via SMTP Nodemailer.
   - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi departemen, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap Green Meeting.
-  - `cleaningService.ts`: Domain service kebersihan harian: CRUD ruangan, template, template item, penetapan petugas, sinkronisasi role CLEANING_WORKER, pembuatan checklist harian dengan snapshot, perubahan status item, dan rekap bulanan.
+  - `cleaningService.ts`: Domain service inspeksi harian: CRUD ruangan/template/item, akun outsource, penetapan petugas, sinkronisasi role CLEANING_WORKER, snapshot checklist harian, perubahan item, dan rekap bulanan.
+  - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
 
 ---
 

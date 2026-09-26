@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Pencil, ChevronDown, ChevronRight, Loader2, AlertTriangle, Users } from "lucide-react";
+import { Plus, Pencil, ChevronDown, ChevronRight, Loader2, AlertTriangle, Users, UserPlus, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import { toWIBDateString } from "@/lib/timezone";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Template {
     id: string;
@@ -44,6 +47,18 @@ interface AvailableUser {
     employeeId: string | null;
 }
 
+interface OutsourceUser {
+    id: string;
+    username: string;
+    displayName: string;
+    email: string;
+    isActive: boolean;
+    createdAt: string;
+    cleaningAssignments: Array<{
+        room: { id: string; name: string };
+    }>;
+}
+
 type Tab = "templates" | "rooms" | "assignments";
 
 export default function CleaningSettingsPage() {
@@ -81,6 +96,16 @@ export default function CleaningSettingsPage() {
     const [assignWorkerType, setAssignWorkerType] = useState<"INTERNAL" | "OUTSOURCE">("OUTSOURCE");
     const [assignApplyToday, setAssignApplyToday] = useState(false);
     const [savingAssign, setSavingAssign] = useState(false);
+
+    // ─── Outsource modal state ────────────────────────────
+    const [showOutsourceModal, setShowOutsourceModal] = useState(false);
+    const [outsourceUsers, setOutsourceUsers] = useState<OutsourceUser[]>([]);
+    const [loadingOutsource, setLoadingOutsource] = useState(false);
+    const [newOutsourceUsername, setNewOutsourceUsername] = useState("");
+    const [newOutsourceDisplayName, setNewOutsourceDisplayName] = useState("");
+    const [newOutsourceEmail, setNewOutsourceEmail] = useState("");
+    const [newOutsourcePassword, setNewOutsourcePassword] = useState("");
+    const [savingOutsource, setSavingOutsource] = useState(false);
 
     // ─── Data fetching ────────────────────────────────────
 
@@ -267,7 +292,12 @@ export default function CleaningSettingsPage() {
                 }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan penugasan."));
-            toast("Petugas ditugaskan.", "success");
+            toast(
+                assignApplyToday
+                    ? "Petugas berhasil ditugaskan mulai hari ini."
+                    : "Petugas berhasil dijadwalkan mulai besok.",
+                "success"
+            );
             setShowAssignForm(false);
             setAssignRoomId("");
             setAssignUserId("");
@@ -278,11 +308,24 @@ export default function CleaningSettingsPage() {
         } finally {
             setSavingAssign(false);
         }
-    }, [savingAssign, assignRoomId, assignUserId, assignApplyToday, toast, fetchAll]);
+    }, [savingAssign, assignRoomId, assignUserId, assignWorkerType, assignApplyToday, toast, fetchAll]);
 
-    const removeAssignment = useCallback(async (assignment: Assignment, _roomId: string) => {
-        const reason = prompt("Alasan mengakhiri penugasan:");
-        if (!reason) return;
+    const removeAssignment = useCallback(async (assignment: Assignment) => {
+        const todayStr = toWIBDateString();
+        const isPlanned = assignment.startsOnWibDate > todayStr;
+        const confirmMsg = isPlanned
+            ? `Batalkan jadwal penugasan untuk ${assignment.user.displayName}?`
+            : "Alasan mengakhiri penugasan:";
+
+        let reason = "Dibatalkan oleh GA";
+        if (isPlanned) {
+            if (!confirm(confirmMsg)) return;
+        } else {
+            const promptReason = prompt(confirmMsg);
+            if (!promptReason) return;
+            reason = promptReason;
+        }
+
         try {
             const res = await fetch("/api/ga/cleaning/assignments", {
                 method: "PATCH",
@@ -294,13 +337,87 @@ export default function CleaningSettingsPage() {
                     reason,
                 }),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus penugasan."));
-            toast("Penugasan diakhiri.", "success");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengakhiri penugasan."));
+            toast(isPlanned ? "Jadwal penugasan dibatalkan." : "Penugasan diakhiri.", "success");
             await fetchAll();
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal.", "error");
         }
     }, [toast, fetchAll]);
+
+    // ─── Outsource users management ───────────────────────
+
+    const fetchOutsourceUsers = useCallback(async () => {
+        setLoadingOutsource(true);
+        try {
+            const res = await fetch("/api/ga/cleaning/outsource-users");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat petugas outsource."));
+            const json = await res.json();
+            setOutsourceUsers(json.data ?? []);
+        } catch (err) {
+            reportClientError("CleaningSettingsOutsourceUsers", "Gagal memuat petugas outsource", err);
+            toast(err instanceof Error ? err.message : "Gagal memuat petugas outsource.", "error");
+        } finally {
+            setLoadingOutsource(false);
+        }
+    }, [toast]);
+
+    const handleCreateOutsourceUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const username = newOutsourceUsername.trim().toLowerCase();
+        const displayName = newOutsourceDisplayName.trim();
+        if (!username) {
+            toast("Username wajib diisi.", "error");
+            return;
+        }
+        if (!displayName) {
+            toast("Nama lengkap wajib diisi.", "error");
+            return;
+        }
+        if (newOutsourcePassword.length < 8) {
+            toast("Password minimal 8 karakter.", "error");
+            return;
+        }
+
+        setSavingOutsource(true);
+        try {
+            const res = await fetch("/api/ga/cleaning/outsource-users", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username,
+                    displayName,
+                    email: newOutsourceEmail.trim() || undefined,
+                    password: newOutsourcePassword,
+                }),
+            });
+
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal membuat akun outsource."));
+            }
+
+            const json = await res.json();
+            toast("Akun outsource berhasil dibuat!", "success");
+            setNewOutsourceUsername("");
+            setNewOutsourceDisplayName("");
+            setNewOutsourceEmail("");
+            setNewOutsourcePassword("");
+
+            await Promise.all([
+                fetchOutsourceUsers(),
+                fetchAvailableUsers("OUTSOURCE"),
+            ]);
+
+            if (json.data?.id && showAssignForm) {
+                setAssignWorkerType("OUTSOURCE");
+                setAssignUserId(json.data.id);
+            }
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal membuat akun outsource.", "error");
+        } finally {
+            setSavingOutsource(false);
+        }
+    };
 
     // ─── Render ───────────────────────────────────────────
 
@@ -328,9 +445,9 @@ export default function CleaningSettingsPage() {
 
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Pengaturan Kebersihan</h1>
+            <h1 className="text-2xl font-semibold text-foreground mb-1">Pengaturan Inspeksi</h1>
             <p className="text-sm text-muted-foreground mb-6">
-                Kelola template, ruangan, dan penugasan petugas.
+                Kelola template, ruangan, dan penugasan petugas inspeksi.
             </p>
 
             {/* Tabs */}
@@ -555,7 +672,7 @@ export default function CleaningSettingsPage() {
                                                 <Users className="h-3 w-3" />
                                                 {a.user.displayName}
                                                 <button
-                                                    onClick={() => removeAssignment(a, room.id)}
+                                                    onClick={() => removeAssignment(a)}
                                                     className="text-destructive hover:text-destructive/80 ml-0.5"
                                                     title="Hapus penugasan"
                                                 >
@@ -579,12 +696,24 @@ export default function CleaningSettingsPage() {
                 <div>
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-medium">Penugasan Petugas</h2>
-                        <button
-                            onClick={() => { setShowAssignForm(true); setAssignRoomId(rooms[0]?.id ?? ""); setAssignUserId(""); setAssignWorkerType("INTERNAL"); setAssignApplyToday(false); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
-                        >
-                            <Plus className="h-4 w-4" /> Tugaskan
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    setShowOutsourceModal(true);
+                                    void fetchOutsourceUsers();
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-border rounded-md hover:bg-muted text-foreground"
+                                type="button"
+                            >
+                                <UserPlus className="h-4 w-4 text-primary" /> Petugas Outsource
+                            </button>
+                            <button
+                                onClick={() => { setShowAssignForm(true); setAssignRoomId(rooms[0]?.id ?? ""); setAssignUserId(""); setAssignWorkerType("INTERNAL"); setAssignApplyToday(false); }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                            >
+                                <Plus className="h-4 w-4" /> Tugaskan
+                            </button>
+                        </div>
                     </div>
 
                     {showAssignForm && (
@@ -627,15 +756,37 @@ export default function CleaningSettingsPage() {
                                         <option key={u.id} value={u.id}>{u.displayName} ({u.username})</option>
                                     ))}
                                 </select>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={assignApplyToday}
-                                        onChange={(e) => setAssignApplyToday(e.target.checked)}
-                                        className="rounded border-border"
-                                    />
-                                    Berlaku mulai hari ini (bukan besok)
-                                </label>
+                                {assignWorkerType === "OUTSOURCE" && (
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground p-2 rounded border border-border bg-muted/30">
+                                        <span>Perlu mendaftarkan akun petugas outsource baru?</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowOutsourceModal(true);
+                                                void fetchOutsourceUsers();
+                                            }}
+                                            className="text-primary font-medium hover:underline flex items-center gap-1"
+                                        >
+                                            <UserPlus className="h-3.5 w-3.5" /> + Buat Akun Outsource
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-1">
+                                    <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={assignApplyToday}
+                                            onChange={(e) => setAssignApplyToday(e.target.checked)}
+                                            className="rounded border-border"
+                                        />
+                                        Berlaku mulai hari ini (bukan besok)
+                                    </label>
+                                    <p className="text-xs text-muted-foreground ml-6">
+                                        {assignApplyToday
+                                            ? "✓ Petugas aktif hari ini dan dapat langsung mengisi checklist inspeksi."
+                                            : "ℹ Jika tidak dicentang, penugasan baru akan aktif mulai besok pagi."}
+                                    </p>
+                                </div>
                             </div>
                             <div className="flex gap-2 mt-3">
                                 <button onClick={saveAssignment} disabled={savingAssign} className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50">
@@ -650,35 +801,207 @@ export default function CleaningSettingsPage() {
 
                     {/* Summary by room */}
                     <div className="space-y-3">
-                        {rooms.filter((r) => r.isActive).map((room) => (
-                            <div key={room.id} className="bg-card border border-border rounded-lg p-3">
-                                <p className="font-medium text-sm mb-2">{room.name}</p>
-                                {room.assignments.filter((a) => a.endsOnWibDate === null).length === 0 ? (
-                                    <p className="text-xs text-muted-foreground">Belum ada petugas ditugaskan.</p>
-                                ) : (
-                                    <div className="space-y-1">
-                                        {room.assignments.filter((a) => a.endsOnWibDate === null).map((a) => (
-                                            <div key={a.id} className="flex items-center justify-between text-sm py-1">
-                                                <div>
-                                                    <span className="font-medium">{a.user.displayName}</span>
-                                                    <span className="text-muted-foreground ml-2 text-xs">({a.user.username})</span>
-                                                    <span className="text-xs text-muted-foreground ml-2">{a.workerType}</span>
-                                                    <span className="text-xs text-muted-foreground ml-2">sejak {a.startsOnWibDate}</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => removeAssignment(a, room.id)}
-                                                    className="text-xs text-destructive hover:text-destructive/80"
-                                                >
-                                                    Akhiri
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                        {rooms.filter((r) => r.isActive).map((room) => {
+                            const todayStr = toWIBDateString();
+                            const activeAssignments = room.assignments.filter((a) => a.endsOnWibDate === null);
+                            return (
+                                <div key={room.id} className="bg-card border border-border rounded-lg p-3">
+                                    <p className="font-medium text-sm mb-2">{room.name}</p>
+                                    {activeAssignments.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">Belum ada petugas ditugaskan.</p>
+                                    ) : (
+                                        <div className="space-y-1.5">
+                                            {activeAssignments.map((a) => {
+                                                const isPlanned = a.startsOnWibDate > todayStr;
+                                                return (
+                                                    <div key={a.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40 last:border-b-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="font-medium">{a.user.displayName}</span>
+                                                            <span className="text-muted-foreground text-xs">({a.user.username})</span>
+                                                            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
+                                                                {a.workerType}
+                                                            </span>
+                                                            {isPlanned ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--warning-bg)] text-[var(--warning)] border border-[var(--warning-border)]">
+                                                                    Terjadwal mulai {a.startsOnWibDate}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    aktif sejak {a.startsOnWibDate}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => removeAssignment(a)}
+                                                            className={`text-xs px-2.5 py-1 rounded transition-colors ${
+                                                                isPlanned
+                                                                    ? "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-medium"
+                                                                    : "text-destructive hover:bg-destructive/10"
+                                                            }`}
+                                                            title={isPlanned ? "Batalkan jadwal penugasan ini" : "Akhiri masa tugas petugas ini"}
+                                                        >
+                                                            {isPlanned ? "Batalkan Jadwal" : "Akhiri"}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
+            )}
+
+            {/* Modal: Kelola Petugas Outsource */}
+            {showOutsourceModal && (
+                <AccessibleModal
+                    ariaLabel="Kelola Petugas Outsource"
+                    onClose={() => setShowOutsourceModal(false)}
+                    className="!max-w-2xl !p-6"
+                >
+                    <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
+                        <div>
+                            <h2 className="modal-title">Kelola Petugas Outsource</h2>
+                            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                                Daftarkan akun petugas inspeksi eksternal (outsource) tanpa data karyawan internal.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className="modal-close"
+                            onClick={() => setShowOutsourceModal(false)}
+                            aria-label="Tutup modal"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    {/* Form Tambah */}
+                    <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/20 mb-6">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] mb-3 flex items-center gap-1.5">
+                            <UserPlus className="h-4 w-4 text-[var(--primary)]" />
+                            Tambah Petugas Outsource Baru
+                        </h3>
+                        <form onSubmit={handleCreateOutsourceUser} className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label" htmlFor="outsource-username">Username</label>
+                                    <input
+                                        id="outsource-username"
+                                        type="text"
+                                        value={newOutsourceUsername}
+                                        onChange={(e) => setNewOutsourceUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))}
+                                        placeholder="cth: outsource_tono"
+                                        required
+                                        className="form-input"
+                                    />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label" htmlFor="outsource-display-name">Nama Lengkap</label>
+                                    <input
+                                        id="outsource-display-name"
+                                        type="text"
+                                        value={newOutsourceDisplayName}
+                                        onChange={(e) => setNewOutsourceDisplayName(e.target.value)}
+                                        placeholder="cth: Tono Santoso (Outsource)"
+                                        required
+                                        className="form-input"
+                                    />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label" htmlFor="outsource-email">Email (Opsional)</label>
+                                    <input
+                                        id="outsource-email"
+                                        type="email"
+                                        value={newOutsourceEmail}
+                                        onChange={(e) => setNewOutsourceEmail(e.target.value)}
+                                        placeholder="otomatis dibuat jika kosong"
+                                        className="form-input"
+                                    />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label" htmlFor="outsource-password">Password</label>
+                                    <input
+                                        id="outsource-password"
+                                        type="password"
+                                        value={newOutsourcePassword}
+                                        onChange={(e) => setNewOutsourcePassword(e.target.value)}
+                                        placeholder="Minimal 8 karakter"
+                                        minLength={8}
+                                        maxLength={128}
+                                        autoComplete="new-password"
+                                        required
+                                        className="form-input"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={savingOutsource || !newOutsourceUsername.trim() || !newOutsourceDisplayName.trim() || newOutsourcePassword.length < 8}
+                                    className="btn btn-primary btn-sm"
+                                >
+                                    {savingOutsource ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                    Simpan Akun Outsource
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Daftar Petugas Outsource Terdaftar */}
+                    <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)] mb-2">
+                            Daftar Akun Outsource Terdaftar ({outsourceUsers.length})
+                        </h3>
+
+                        {loadingOutsource ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" />
+                            </div>
+                        ) : outsourceUsers.length === 0 ? (
+                            <p className="text-xs text-[var(--text-muted)] p-4 text-center border border-dashed border-[var(--border)] rounded-lg">
+                                Belum ada akun petugas outsource yang terdaftar.
+                            </p>
+                        ) : (
+                            <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Nama & Username</TableHead>
+                                            <TableHead>Email</TableHead>
+                                            <TableHead>Penugasan Terbuka</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {outsourceUsers.map((u) => {
+                                            const assignedRooms = u.cleaningAssignments
+                                                .map((ca) => ca.room.name)
+                                                .join(", ");
+                                            return (
+                                                <TableRow key={u.id}>
+                                                    <TableCell>
+                                                        <div className="font-semibold text-[var(--text-primary)]">{u.displayName}</div>
+                                                        <div className="text-xs text-[var(--text-muted)] font-mono">{u.username}</div>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-[var(--text-secondary)]">{u.email}</TableCell>
+                                                    <TableCell className="text-xs">
+                                                        {assignedRooms ? (
+                                                            <span className="font-medium text-[var(--success)]">{assignedRooms}</span>
+                                                        ) : (
+                                                            <span className="text-[var(--text-muted)]">Belum ditugaskan</span>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </div>
+                </AccessibleModal>
             )}
         </div>
     );

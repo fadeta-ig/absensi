@@ -38,6 +38,7 @@ vi.mock("@/lib/prisma", () => ({
             create: vi.fn(),
             update: vi.fn(),
             updateMany: vi.fn(),
+            delete: vi.fn(),
         },
         cleaningDailyChecklist: {
             findUnique: vi.fn(),
@@ -52,6 +53,8 @@ vi.mock("@/lib/prisma", () => ({
         userAccount: {
             findUnique: vi.fn(),
             findMany: vi.fn(),
+            findFirst: vi.fn(),
+            create: vi.fn(),
             update: vi.fn(),
         },
         role: {
@@ -84,10 +87,13 @@ import {
     getOrCreateDailyChecklist,
     getRecap,
     getWorkerRooms,
+    getAvailableUsersForAssignment,
     isWig002,
     normalizeName,
     updateChecklistItem,
     updateTemplate,
+    createOutsourceUser,
+    listOutsourceUsers,
 } from "@/lib/services/cleaningService";
 
 type PrismaMock = {
@@ -480,6 +486,15 @@ describe("cleaningService contract", () => {
         expect(db.userRoleAssignment.create).toHaveBeenCalledWith({
             data: { userId: CLEANING_IDS.workerUser, roleId: "role-cleaning" },
         });
+        expect(db.cleaningWorkerAssignment.count).toHaveBeenLastCalledWith({
+            where: {
+                userId: CLEANING_IDS.workerUser,
+                OR: [
+                    { endsOnWibDate: null },
+                    { endsOnWibDate: { gt: "2026-09-21" } },
+                ],
+            },
+        });
         expect(result.startsOnWibDate).toBe("2026-09-21");
         expect(auditMocks.logAction).toHaveBeenCalledWith(
             "CREATE_CLEANING_ASSIGNMENT",
@@ -525,6 +540,27 @@ describe("cleaningService contract", () => {
         }));
     });
 
+    it("rejects assigning an outsource account created by a different GA account", async () => {
+        const wig002 = makeWig002Session();
+        mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
+        mock(db.userAccount.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.workerUser,
+            isActive: true,
+            employeeId: null,
+            employee: null,
+            createdByUserId: "different-ga-user",
+            roles: [],
+        });
+
+        await expect(createAssignment(wig002, {
+            roomId: CLEANING_IDS.room,
+            userId: CLEANING_IDS.workerUser,
+            workerType: "OUTSOURCE",
+            applyToToday: true,
+        })).rejects.toMatchObject({ statusCode: 422 });
+        expect(db.cleaningWorkerAssignment.create).not.toHaveBeenCalled();
+    });
+
     it("AC-6 ends an assignment and removes the worker role when no active assignments remain", async () => {
         mock(db.cleaningWorkerAssignment.findUnique).mockResolvedValue({
             id: CLEANING_IDS.assignment,
@@ -559,6 +595,127 @@ describe("cleaningService contract", () => {
         expect(db.userAccount.update).toHaveBeenCalledWith(expect.objectContaining({
             data: { sessionVersion: { increment: 1 } },
         }));
+    });
+
+    it("keeps the worker role until a scheduled end date becomes effective", async () => {
+        mock(db.cleaningWorkerAssignment.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            userId: CLEANING_IDS.workerUser,
+            roomId: CLEANING_IDS.room,
+            workerType: "INTERNAL",
+            startsOnWibDate: "2026-09-20",
+            endsOnWibDate: null,
+        });
+        mock(db.cleaningWorkerAssignment.update).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            userId: CLEANING_IDS.workerUser,
+            roomId: CLEANING_IDS.room,
+            startsOnWibDate: "2026-09-20",
+            endsOnWibDate: "2026-09-22",
+        });
+        mock(db.cleaningWorkerAssignment.count).mockResolvedValue(1);
+        mock(db.role.findUnique).mockResolvedValue({ id: "role-cleaning" });
+        mock(db.userRoleAssignment.findFirst).mockResolvedValue({ userId: CLEANING_IDS.workerUser });
+
+        await endAssignment(makeWig002Session(), {
+            assignmentId: CLEANING_IDS.assignment,
+            applyToToday: false,
+            reason: "Berakhir besok",
+        });
+
+        expect(db.cleaningWorkerAssignment.count).toHaveBeenCalledWith({
+            where: {
+                userId: CLEANING_IDS.workerUser,
+                OR: [
+                    { endsOnWibDate: null },
+                    { endsOnWibDate: { gt: "2026-09-21" } },
+                ],
+            },
+        });
+        expect(db.userRoleAssignment.delete).not.toHaveBeenCalled();
+    });
+
+    it("reschedules an unstarted planned assignment to start today when applyToToday=true without conflict", async () => {
+        vi.setSystemTime(new Date("2026-09-21T08:00:00.000Z"));
+        mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
+        mock(db.userAccount.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.workerUser,
+            isActive: true,
+            employeeId: "employee-1",
+            employee: { isActive: true },
+            roles: [],
+        });
+        mock(db.cleaningWorkerAssignment.findFirst).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            roomId: CLEANING_IDS.room,
+            userId: CLEANING_IDS.workerUser,
+            workerType: "INTERNAL",
+            startsOnWibDate: "2026-09-22",
+            endsOnWibDate: null,
+        });
+        mock(db.cleaningWorkerAssignment.update).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            startsOnWibDate: "2026-09-21",
+            workerType: "INTERNAL",
+        });
+        mock(db.role.findUnique).mockResolvedValue({ id: "role-cleaning" });
+        mock(db.cleaningWorkerAssignment.count).mockResolvedValue(1);
+        mock(db.userRoleAssignment.findFirst).mockResolvedValue(null);
+        mock(db.userRoleAssignment.create).mockResolvedValue({});
+
+        const result = await createAssignment(makeWig002Session(), {
+            roomId: CLEANING_IDS.room,
+            userId: CLEANING_IDS.workerUser,
+            workerType: "INTERNAL",
+            applyToToday: true,
+        });
+
+        expect(db.cleaningWorkerAssignment.update).toHaveBeenCalledWith({
+            where: { id: CLEANING_IDS.assignment },
+            data: {
+                startsOnWibDate: "2026-09-21",
+                workerType: "INTERNAL",
+            },
+        });
+        expect(result.startsOnWibDate).toBe("2026-09-21");
+    });
+
+    it("cancels and deletes an unstarted planned assignment before it starts", async () => {
+        vi.setSystemTime(new Date("2026-09-21T08:00:00.000Z"));
+        mock(db.cleaningWorkerAssignment.findUnique).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+            userId: CLEANING_IDS.workerUser,
+            roomId: CLEANING_IDS.room,
+            workerType: "INTERNAL",
+            startsOnWibDate: "2026-09-22", // starts tomorrow
+            endsOnWibDate: null,
+        });
+        mock(db.cleaningWorkerAssignment.delete).mockResolvedValue({
+            id: CLEANING_IDS.assignment,
+        });
+        mock(db.cleaningWorkerAssignment.count).mockResolvedValue(0);
+        mock(db.role.findUnique).mockResolvedValue({ id: "role-cleaning" });
+        mock(db.userRoleAssignment.findFirst).mockResolvedValue(null);
+
+        await endAssignment(makeWig002Session(), {
+            assignmentId: CLEANING_IDS.assignment,
+            applyToToday: true,
+            reason: "Dibatalkan oleh GA",
+        });
+
+        expect(db.cleaningWorkerAssignment.delete).toHaveBeenCalledWith({
+            where: { id: CLEANING_IDS.assignment },
+        });
+        expect(auditMocks.logAction).toHaveBeenCalledWith(
+            "CANCEL_CLEANING_ASSIGNMENT",
+            "CLEANING_WORKER_ASSIGNMENT",
+            expect.anything(),
+            CLEANING_IDS.assignment,
+            expect.objectContaining({
+                plannedStartsOnWibDate: "2026-09-22",
+                reason: "Dibatalkan oleh GA",
+            }),
+        );
     });
 
     it("AC-6 rolls back the staged assignment when role synchronization fails", async () => {
@@ -683,5 +840,119 @@ describe("cleaningService contract", () => {
         const details = auditMocks.logAction.mock.calls[0][4];
         expect(details).toEqual({ name: "Template Test Cleaning" });
         expect(JSON.stringify(details)).not.toMatch(/password|secret|token/i);
+    });
+
+    describe("outsource user management (WIG002)", () => {
+        it("rejects non-WIG002 session from creating outsource user", async () => {
+            const worker = makeWorkerSession();
+            await expect(
+                createOutsourceUser(worker, {
+                    username: "outsource_test",
+                    displayName: "Test Outsource",
+                    password: "Secure123!",
+                })
+            ).rejects.toBeInstanceOf(CleaningError);
+        });
+
+        it("creates an outsource user with a hashed password without granting a role before assignment", async () => {
+            const wig002 = makeWig002Session();
+            mock(db.userAccount.findFirst).mockResolvedValue(null);
+
+            const createdUser = {
+                id: "user-outsource-1",
+                username: "outsource_tono",
+                displayName: "Tono (Outsource)",
+                email: "outsource_tono@outsource.wig.co.id",
+                isActive: true,
+                createdAt: new Date(),
+            };
+            mock(db.userAccount.create).mockResolvedValue(createdUser);
+
+            const result = await createOutsourceUser(wig002, {
+                username: "OUTSOURCE_TONO",
+                displayName: "Tono (Outsource)",
+                password: "Secure123!",
+            });
+
+            expect(result.username).toBe("outsource_tono");
+            expect(result.email).toBe("outsource_tono@outsource.wig.co.id");
+            expect(db.userAccount.create).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({
+                    username: "outsource_tono",
+                    createdByUserId: wig002.userId,
+                    passwordHash: expect.not.stringMatching(/Secure123!/),
+                }),
+            }));
+            expect(db.userRoleAssignment.create).not.toHaveBeenCalled();
+            expect(auditMocks.logAction).toHaveBeenCalledWith(
+                "CREATE_OUTSOURCE_USER",
+                "USER_ACCOUNT",
+                expect.anything(),
+                "user-outsource-1",
+                expect.objectContaining({ username: "outsource_tono" })
+            );
+        });
+
+        it("rejects an outsource password shorter than eight characters", async () => {
+            await expect(
+                createOutsourceUser(makeWig002Session(), {
+                    username: "outsource_test",
+                    displayName: "Test Outsource",
+                    password: "123",
+                }),
+            ).rejects.toMatchObject({ statusCode: 422 });
+            expect(db.userAccount.create).not.toHaveBeenCalled();
+        });
+
+        it("maps a concurrent username or email collision to a domain conflict", async () => {
+            mock(db.userAccount.findFirst).mockResolvedValue(null);
+            mock(db.userAccount.create).mockRejectedValue({ code: "P2002" });
+
+            await expect(
+                createOutsourceUser(makeWig002Session(), {
+                    username: "outsource_test",
+                    displayName: "Test Outsource",
+                    password: "Secure123!",
+                }),
+            ).rejects.toMatchObject({ statusCode: 409 });
+        });
+
+        it("lists outsource users with their active room assignments", async () => {
+            const wig002 = makeWig002Session();
+            mock(db.userAccount.findMany).mockResolvedValue([
+                {
+                    id: "user-1",
+                    username: "outsource_budi",
+                    displayName: "Budi (Outsource)",
+                    email: "budi@outsource.wig.co.id",
+                    isActive: true,
+                    cleaningAssignments: [
+                        { room: { id: "room-1", name: "Ruangan CEO" } },
+                    ],
+                },
+            ]);
+
+            const list = await listOutsourceUsers(wig002);
+            expect(list).toHaveLength(1);
+            expect(list[0].username).toBe("outsource_budi");
+            expect(list[0].cleaningAssignments[0].room.name).toBe("Ruangan CEO");
+            expect(db.userAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({
+                where: expect.objectContaining({ createdByUserId: wig002.userId }),
+            }));
+        });
+
+        it("limits assignable outsource accounts to those created by the GA account", async () => {
+            const wig002 = makeWig002Session();
+            mock(db.userAccount.findMany).mockResolvedValue([]);
+
+            await getAvailableUsersForAssignment(wig002, "OUTSOURCE");
+
+            expect(db.userAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({
+                where: expect.objectContaining({
+                    employeeId: null,
+                    createdByUserId: wig002.userId,
+                }),
+            }));
+        });
     });
 });

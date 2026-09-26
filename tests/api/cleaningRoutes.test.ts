@@ -48,6 +48,8 @@ vi.mock("@/lib/services/cleaningService", () => {
         getAvailableUsersForAssignment: vi.fn(),
         getRecap: vi.fn(),
         getChecklistDetail: vi.fn(),
+        createOutsourceUser: vi.fn(),
+        listOutsourceUsers: vi.fn(),
     };
 });
 
@@ -65,6 +67,8 @@ import {
     getRooms,
     getWorkerRooms,
     updateChecklistItem,
+    createOutsourceUser,
+    listOutsourceUsers,
 } from "@/lib/services/cleaningService";
 import { GET as getWorkerRoomsRoute } from "@/app/api/cleaning/rooms/route";
 import { GET as getChecklistRoute, POST as createChecklistRoute } from "@/app/api/cleaning/checklists/route";
@@ -74,6 +78,7 @@ import { GET as getAvailableUsersRoute } from "@/app/api/ga/cleaning/assignments
 import { GET as getRecapRoute } from "@/app/api/ga/cleaning/recap/route";
 import { GET as getDetailRoute } from "@/app/api/ga/cleaning/checklists/route";
 import * as assignmentsRoute from "@/app/api/ga/cleaning/assignments/route";
+import { GET as getOutsourceUsersRoute, POST as createOutsourceUserRoute } from "@/app/api/ga/cleaning/outsource-users/route";
 
 function asMock(value: unknown): Mock {
     return value as Mock;
@@ -379,5 +384,67 @@ describe("Cleaning API route contract", () => {
 
         expect(response.status).toBe(400);
         expect(createAssignment).not.toHaveBeenCalled();
+    });
+
+    describe("GA Outsource Users Route (/api/ga/cleaning/outsource-users)", () => {
+        it("returns outsource users list for WIG002", async () => {
+            asMock(requireAuth).mockResolvedValue(makeWig002Session());
+            asMock(listOutsourceUsers).mockResolvedValue([
+                { id: "u-1", username: "outsource_budi", displayName: "Budi" },
+            ]);
+
+            const res = await getOutsourceUsersRoute();
+            expect(res.status).toBe(200);
+            const json = await res.json();
+            expect(json.success).toBe(true);
+            expect(json.data).toHaveLength(1);
+        });
+
+        it("creates an outsource user via POST", async () => {
+            asMock(requireAuth).mockResolvedValue(makeWig002Session());
+            asMock(createOutsourceUser).mockResolvedValue({
+                id: "u-2",
+                username: "outsource_slamet",
+                displayName: "Slamet (Outsource)",
+            });
+
+            const res = await createOutsourceUserRoute(request("/api/ga/cleaning/outsource-users", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    username: "outsource_slamet",
+                    displayName: "Slamet (Outsource)",
+                    password: "Secure123!",
+                }),
+            }));
+
+            expect(res.status).toBe(201);
+            const json = await res.json();
+            expect(json.success).toBe(true);
+            expect(json.data.username).toBe("outsource_slamet");
+        });
+
+        it("rejects a weak outsource password before calling the service", async () => {
+            asMock(requireAuth).mockResolvedValue(makeWig002Session());
+
+            const res = await createOutsourceUserRoute(request("/api/ga/cleaning/outsource-users", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    username: "outsource_slamet",
+                    displayName: "Slamet (Outsource)",
+                    password: "123",
+                }),
+            }));
+
+            expect(res.status).toBe(400);
+            expect(createOutsourceUser).not.toHaveBeenCalled();
+        });
+
+        it("rejects non-WIG002 session from accessing outsource users route", async () => {
+            asMock(requireAuth).mockResolvedValue(makeWorkerSession());
+            const res = await getOutsourceUsersRoute();
+            expect(res.status).toBe(403);
+        });
     });
 });

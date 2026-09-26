@@ -199,8 +199,8 @@ export default function AllMenusSheet({
                 },
                 {
                     href: "/employee/cleaning/approvals",
-                    label: "Tanda Tangan Kebersihan",
-                    description: "Persetujuan dan tanda tangan checklist bulanan",
+                    label: "Tanda Tangan Inspeksi",
+                    description: "Persetujuan dan tanda tangan checklist inspeksi bulanan",
                     icon: FileCheck2,
                     bg: "bg-teal-50 dark:bg-teal-950/40",
                     color: "text-teal-600 dark:text-teal-400",

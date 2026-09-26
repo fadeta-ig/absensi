@@ -90,15 +90,15 @@ export default function CleaningLayout({ children }: { children: React.ReactNode
         }
     }, [loggingOut, router, toast]);
 
-    if (loading || !user) return <AppShellLoading message="Memuat portal kebersihan..." />;
+    if (loading || !user) return <AppShellLoading message="Memuat portal inspeksi..." />;
 
     return (
         <AppShell
             user={user}
             navItems={CLEANING_NAV_ITEMS}
-            brandTitle="WIG Cleaning"
-            brandSubtitle="Checklist Kebersihan"
-            mobileTitle="Kebersihan"
+            brandTitle="WIG Inspeksi"
+            brandSubtitle="Checklist Inspeksi"
+            mobileTitle="Inspeksi"
             storageKey="cleaning-sidebar-collapsed"
             onLogout={handleLogout}
             logoutLoading={loggingOut}

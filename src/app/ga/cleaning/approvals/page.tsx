@@ -181,7 +181,7 @@ export default function GaCleaningApprovalsPage() {
             ]);
 
             if (!approvalsRes.ok) {
-                throw new Error(await getResponseErrorMessage(approvalsRes, "Gagal memuat persetujuan kebersihan."));
+                throw new Error(await getResponseErrorMessage(approvalsRes, "Gagal memuat persetujuan inspeksi."));
             }
             const approvalsJson = await approvalsRes.json();
             setApprovals(approvalsJson.data || []);
@@ -328,7 +328,7 @@ export default function GaCleaningApprovalsPage() {
             }
             const json = await res.json();
             exportCleaningMatrixPdf(json.data);
-            toast("Formulir PDF kebersihan berhasil diunduh.", "success");
+            toast("Formulir PDF inspeksi berhasil diunduh.", "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal mengunduh PDF.", "error");
         } finally {
@@ -373,7 +373,7 @@ export default function GaCleaningApprovalsPage() {
         <div className="max-w-7xl mx-auto px-4 py-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Bulanan Kebersihan</h1>
+                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Bulanan Inspeksi</h1>
                     <p className="text-sm text-[var(--text-muted)] mt-0.5">
                         Kelola periode persetujuan dan tanda tangan bulanan dua penanda tangan internal.
                     </p>
@@ -716,7 +716,7 @@ export default function GaCleaningApprovalsPage() {
                                 onChange={(e) => setReopenReason(e.target.value)}
                                 required
                                 rows={3}
-                                placeholder="Contoh: Perlu revisi catatan kebersihan pada checklist sebelum pengesahan."
+                                placeholder="Contoh: Perlu revisi catatan inspeksi pada checklist sebelum pengesahan."
                                 className="form-textarea"
                             />
                         </div>
@@ -763,7 +763,7 @@ export default function GaCleaningApprovalsPage() {
             {/* Modal: Detail Persetujuan */}
             {showDetailModal && (
                 <AccessibleModal
-                    ariaLabel="Detail Persetujuan Kebersihan"
+                    ariaLabel="Detail Persetujuan Inspeksi"
                     onClose={() => setShowDetailModal(false)}
                     className="!max-w-4xl !p-6"
                 >

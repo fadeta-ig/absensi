@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck, SprayCan } from "lucide-react";
+import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck, ClipboardCheck } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
@@ -42,8 +42,8 @@ const GA_NAV_ITEMS: NavItem[] = [
     { href: "/ga/tickets", icon: Ticket, label: "Ticketing Aset" },
     { href: "/ga/sim", icon: Phone, label: "Manajemen SIM" },
     {
-        icon: SprayCan,
-        label: "Kebersihan",
+        icon: ClipboardCheck,
+        label: "Inspeksi",
         subItems: [
             { href: "/ga/cleaning/settings", label: "Pengaturan" },
             { href: "/ga/cleaning/recap", label: "Rekap Bulanan" },

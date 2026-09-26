@@ -2,7 +2,7 @@
 
 > **Purpose**: Peta rute API, struktur endpoint, dan kontrak payload HTTP.  
 > **Source of Truth**: Route Handlers di `src/app/api/**/route.ts` dan middleware `src/lib/middleware/apiGuard.ts`.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-26
 
 Dokumen ini mendokumentasikan konvensi antarmuka API RESTful, pola guard otorisasi, struktur envelope data, dan direktori endpoint backend platform **Presensi & HRIS WIG**.
 
@@ -113,6 +113,28 @@ export const POST = apiGuard(
 | `/api/assets/qr` | `POST` | `assets:qr` | Membuat kode QR/Barcode aset yang dapat dicetak pada stiker label. |
 | `/api/ga/tickets` | `GET`, `POST`, `PUT` | `tickets:read`, `create` | Tiket keluhan kerusakan atau permintaan perangkat dari karyawan ke GA. |
 | `/api/sim-cards` | `GET`, `POST` | `simcards:manage` | Manajemen inventaris kartu SIM korporat dan status peminjam. |
+
+Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA memerlukan username `WIG002` sekaligus permission `ga.manage`; endpoint petugas memerlukan `cleaning.execute`; endpoint tanda tangan employee memvalidasi reviewer yang ditetapkan.
+
+| Rute | Metode | Permission / Akses | Deskripsi |
+|---|---|---|---|
+| `/api/ga/cleaning/templates` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Membaca dan mengelola template inspeksi. |
+| `/api/ga/cleaning/template-items` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Mengelola item pada template inspeksi. |
+| `/api/ga/cleaning/rooms` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Mengelola ruangan dan template yang dipakai. |
+| `/api/ga/cleaning/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Membaca, menjadwalkan, mengakhiri, membatalkan, atau mengganti penugasan petugas. |
+| `/api/ga/cleaning/assignments/available-users` | `GET` | WIG002 + `ga.manage` | Mencari akun internal/outsource yang memenuhi syarat penugasan. |
+| `/api/ga/cleaning/outsource-users` | `GET`, `POST` | WIG002 + `ga.manage` | Membaca akun outsource milik pengelola dan membuat akun tanpa relasi employee; password wajib 8–128 karakter. |
+| `/api/ga/cleaning/checklists` | `GET` | WIG002 + `ga.manage` | Membaca detail checklist inspeksi untuk pemantauan GA. |
+| `/api/ga/cleaning/recap` | `GET` | WIG002 + `ga.manage` | Membaca matriks rekap bulanan per ruangan. |
+| `/api/ga/cleaning/approvals` | `GET`, `POST` | WIG002 + `ga.manage` | Membaca atau menetapkan reviewer persetujuan bulanan. |
+| `/api/ga/cleaning/approvals/reviewers` | `GET` | WIG002 + `ga.manage` | Mencari employee internal yang dapat menjadi reviewer. |
+| `/api/ga/cleaning/approvals/reopen` | `POST` | WIG002 + `ga.manage` | Membuka kembali tanda tangan dengan alasan dan audit trail. |
+| `/api/ga/cleaning/approvals/export-pdf` | `GET` | WIG002 + `ga.manage` | Menyediakan data ekspor PDF persetujuan bulanan. |
+| `/api/cleaning/rooms` | `GET` | `cleaning.execute` | Daftar ruangan yang efektif untuk petugas pada tanggal WIB hari ini. |
+| `/api/cleaning/checklists` | `GET`, `POST` | `cleaning.execute` | Membaca atau membuat snapshot checklist harian ruangan yang ditugaskan. |
+| `/api/cleaning/checklist-items/[id]` | `PATCH` | `cleaning.execute` | Mengubah status item checklist pada tanggal WIB hari ini. |
+| `/api/employee/cleaning/approvals` | `GET` | Employee reviewer | Daftar dan detail persetujuan yang ditugaskan kepada employee aktif. |
+| `/api/employee/cleaning/approvals/sign` | `POST` | Employee reviewer | Menandatangani persetujuan untuk role reviewer yang ditetapkan. |
 
 ### E. Green Meeting (`/api/green-meeting`)
 

@@ -215,9 +215,9 @@ export default function EmployeeCleaningApprovalsPage() {
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Kebersihan</h1>
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Inspeksi</h1>
                 <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                    Periksa dan tanda tangani checklist kebersihan bulanan ruangan yang ditugaskan kepada Anda.
+                    Periksa dan tanda tangani checklist inspeksi bulanan ruangan yang ditugaskan kepada Anda.
                 </p>
             </div>
 
@@ -300,7 +300,7 @@ export default function EmployeeCleaningApprovalsPage() {
                     <FileCheck2 className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
                     <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">Tidak Ada Tugas Tanda Tangan</h3>
                     <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
-                        Tidak ada tugas penandatanganan kebersihan untuk Anda pada bulan {formatMonthLabel(month)}.
+                        Tidak ada tugas penandatanganan inspeksi untuk Anda pada bulan {formatMonthLabel(month)}.
                     </p>
                 </div>
             )}
@@ -350,7 +350,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                 <div className="p-2.5 mb-3 rounded-lg bg-[var(--warning-bg)] border border-[var(--warning-border)] text-xs text-[var(--warning)] font-medium flex items-start gap-2">
                                     <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-[var(--warning)]" />
                                     <span>
-                                        Perhatian: Terdapat perubahan data checklist kebersihan setelah Anda menandatangani dokumen ini.
+                                        Perhatian: Terdapat perubahan data checklist inspeksi setelah Anda menandatangani dokumen ini.
                                     </span>
                                 </div>
                             )}
@@ -382,7 +382,7 @@ export default function EmployeeCleaningApprovalsPage() {
             {/* Modal Tanda Tangan & Detail */}
             {activeApprovalId && (
                 <AccessibleModal
-                    ariaLabel="Persetujuan Kebersihan Ruangan"
+                    ariaLabel="Persetujuan Inspeksi Ruangan"
                     onClose={() => setActiveApprovalId(null)}
                     className="!max-w-2xl !p-6"
                 >
@@ -476,7 +476,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                                     <div>
                                                         <div className="font-bold">Perhatian: Checklist Berubah</div>
                                                         <div className="mt-0.5">
-                                                            Terdapat perubahan data checklist kebersihan setelah tanda tangan Anda disimpan pada {formatDateTime(currentRoleInfo.signature.signedAt)}.
+                                                            Terdapat perubahan data checklist inspeksi setelah tanda tangan Anda disimpan pada {formatDateTime(currentRoleInfo.signature.signedAt)}.
                                                         </div>
                                                     </div>
                                                 </div>

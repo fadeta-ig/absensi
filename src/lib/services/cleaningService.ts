@@ -6,6 +6,7 @@ import type { AuditActor } from "@/lib/services/auditService";
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
+import bcrypt from "bcryptjs";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -103,12 +104,15 @@ async function hasOverlappingAssignment(
 
 // ─── CLEANING_WORKER role sync ────────────────────────────────
 
-/** Add or remove the CLEANING_WORKER role based on effective assignments for a given WIB date. */
+/** Add or remove the CLEANING_WORKER role based on assignments that have not ended in WIB. */
 export async function syncCleaningWorkerRole(tx: TxClient, userId: string, wibToday: string) {
-    const effectiveCount = await tx.cleaningWorkerAssignment.count({
+    const eligibleAssignmentCount = await tx.cleaningWorkerAssignment.count({
         where: {
             userId,
-            ...effectiveOnDateWhere(wibToday),
+            OR: [
+                { endsOnWibDate: null },
+                { endsOnWibDate: { gt: wibToday } },
+            ],
         },
     });
     const cleaningRole = await tx.role.findUnique({ where: { code: SYSTEM_ROLES.CLEANING_WORKER } });
@@ -121,10 +125,10 @@ export async function syncCleaningWorkerRole(tx: TxClient, userId: string, wibTo
         where: { userId, roleId: cleaningRole.id },
     });
 
-    if (effectiveCount > 0 && !existingAssignment) {
+    if (eligibleAssignmentCount > 0 && !existingAssignment) {
         await tx.userRoleAssignment.create({ data: { userId, roleId: cleaningRole.id } });
         await tx.userAccount.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
-    } else if (effectiveCount === 0 && existingAssignment) {
+    } else if (eligibleAssignmentCount === 0 && existingAssignment) {
         await tx.userRoleAssignment.delete({
             where: { userId_roleId: { userId, roleId: cleaningRole.id } },
         });
@@ -162,6 +166,9 @@ async function validateEligibility(tx: TxClient, userId: string, workerType: "IN
     } else {
         if (user.employeeId) {
             throw new CleaningError("Petugas outsource tidak boleh terhubung ke employee.", 422);
+        }
+        if (user.createdByUserId !== currentSessionUserId) {
+            throw new CleaningError("Akun outsource tidak dikelola oleh akun GA ini.", 422);
         }
     }
 }
@@ -286,8 +293,14 @@ export async function getRooms(session: SessionPayload) {
         include: {
             template: { select: { id: true, name: true } },
             assignments: {
-                where: effectiveOnDateWhere(wibToday),
+                where: {
+                    OR: [
+                        { endsOnWibDate: null },
+                        { endsOnWibDate: { gt: wibToday } },
+                    ],
+                },
                 include: { user: { select: { id: true, username: true, displayName: true } } },
+                orderBy: { startsOnWibDate: "asc" },
             },
             _count: { select: { checklists: true } },
         },
@@ -390,6 +403,41 @@ export async function createAssignment(session: SessionPayload, data: CreateAssi
     await validateEligibility(prisma as unknown as TxClient, data.userId, data.workerType, session.userId);
 
     const result = await prisma.$transaction(async (tx) => {
+        // Check if an unstarted planned assignment already exists for this room + user
+        const plannedAssignment = await tx.cleaningWorkerAssignment.findFirst({
+            where: {
+                roomId: data.roomId,
+                userId: data.userId,
+                startsOnWibDate: { gt: wibToday },
+                endsOnWibDate: null,
+            },
+        });
+
+        if (plannedAssignment) {
+            if (data.applyToToday) {
+                // Reschedule to start today immediately instead of failing with 409
+                const updated = await tx.cleaningWorkerAssignment.update({
+                    where: { id: plannedAssignment.id },
+                    data: {
+                        startsOnWibDate: wibToday,
+                        workerType: data.workerType,
+                    },
+                });
+                await syncCleaningWorkerRole(tx, data.userId, wibToday);
+                return updated;
+            } else if (plannedAssignment.startsOnWibDate === startsOn) {
+                let currentAssignment = plannedAssignment;
+                if (plannedAssignment.workerType !== data.workerType) {
+                    currentAssignment = await tx.cleaningWorkerAssignment.update({
+                        where: { id: plannedAssignment.id },
+                        data: { workerType: data.workerType },
+                    });
+                }
+                await syncCleaningWorkerRole(tx, data.userId, wibToday);
+                return currentAssignment;
+            }
+        }
+
         // Check for overlapping assignment
         const overlaps = await hasOverlappingAssignment(tx, data.roomId, data.userId, startsOn, null);
         if (overlaps) {
@@ -435,7 +483,10 @@ export async function endAssignment(session: SessionPayload, data: EndAssignment
         if (!assignment) throw new CleaningError("Penugasan tidak ditemukan.", 404);
         if (assignment.endsOnWibDate !== null) throw new CleaningError("Penugasan sudah diakhiri.", 409);
         if (!isEffectiveOnDate(assignment, wibToday) && assignment.startsOnWibDate > wibToday) {
-            // Planned assignment: end before it starts
+            // Planned assignment: unstarted, safely remove it so it leaves no phantom lock
+            await tx.cleaningWorkerAssignment.delete({ where: { id: assignment.id } });
+            await syncCleaningWorkerRole(tx, assignment.userId, wibToday);
+            return { assignment, wasCancelled: true };
         }
 
         const ended = await tx.cleaningWorkerAssignment.update({
@@ -444,17 +495,25 @@ export async function endAssignment(session: SessionPayload, data: EndAssignment
         });
 
         await syncCleaningWorkerRole(tx, assignment.userId, wibToday);
-        return ended;
+        return { assignment: ended, wasCancelled: false };
     });
 
-    await logAction("END_CLEANING_ASSIGNMENT", "CLEANING_WORKER_ASSIGNMENT", actorFromSession(session), result.id, {
-        roomId: result.roomId,
-        userId: result.userId,
-        endsOnWibDate: endsOn,
-        applyToToday: data.applyToToday,
-        reason: data.reason,
-    });
-    return result;
+    await logAction(
+        result.wasCancelled ? "CANCEL_CLEANING_ASSIGNMENT" : "END_CLEANING_ASSIGNMENT",
+        "CLEANING_WORKER_ASSIGNMENT",
+        actorFromSession(session),
+        result.assignment.id,
+        {
+            roomId: result.assignment.roomId,
+            userId: result.assignment.userId,
+            ...(result.wasCancelled
+                ? { plannedStartsOnWibDate: result.assignment.startsOnWibDate }
+                : { endsOnWibDate: endsOn }),
+            applyToToday: data.applyToToday,
+            reason: data.reason,
+        },
+    );
+    return result.assignment;
 }
 
 export type ReplaceAssignmentInput = {
@@ -552,6 +611,7 @@ export async function getAvailableUsersForAssignment(session: SessionPayload, wo
         where: {
             isActive: true,
             employeeId: null,
+            createdByUserId: session.userId,
             id: { not: session.userId },
             roles: {
                 none: {
@@ -564,6 +624,133 @@ export async function getAvailableUsersForAssignment(session: SessionPayload, wo
             username: true,
             displayName: true,
             employeeId: true,
+        },
+        orderBy: { displayName: "asc" },
+    });
+}
+
+// ─── Outsource worker accounts management (WIG002) ───────────
+
+export type CreateOutsourceUserInput = {
+    username: string;
+    displayName: string;
+    password: string;
+    email?: string;
+};
+
+export async function createOutsourceUser(session: SessionPayload, data: CreateOutsourceUserInput) {
+    requireWig002(session);
+
+    const username = data.username.trim().toLowerCase();
+    if (!username || username.length < 3 || username.length > 100) {
+        throw new CleaningError("Username wajib diisi antara 3 sampai 100 karakter.", 422);
+    }
+    if (!/^[A-Za-z0-9._-]+$/.test(username)) {
+        throw new CleaningError("Username hanya boleh berisi huruf, angka, titik, strip, atau garis bawah.", 422);
+    }
+
+    const displayName = data.displayName.trim();
+    if (!displayName || displayName.length < 2 || displayName.length > 150) {
+        throw new CleaningError("Nama lengkap wajib diisi antara 2 sampai 150 karakter.", 422);
+    }
+
+    const rawPassword = data.password;
+    if (rawPassword.length < 8 || rawPassword.length > 128) {
+        throw new CleaningError("Password wajib diisi antara 8 sampai 128 karakter.", 422);
+    }
+
+    let finalEmail = (data.email || "").trim().toLowerCase();
+    if (!finalEmail) {
+        finalEmail = `${username.toLowerCase()}@outsource.wig.co.id`;
+    } else {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(finalEmail)) {
+            throw new CleaningError("Format email tidak valid.", 422);
+        }
+    }
+
+    // Check unique username and email
+    const existingUser = await prisma.userAccount.findFirst({
+        where: {
+            OR: [
+                { username },
+                { email: finalEmail },
+            ],
+        },
+        select: { username: true, email: true },
+    });
+
+    if (existingUser) {
+        if (existingUser.username.toLowerCase() === username.toLowerCase()) {
+            throw new CleaningError("Username sudah terdaftar.", 409);
+        }
+        if (existingUser.email.toLowerCase() === finalEmail.toLowerCase()) {
+            throw new CleaningError("Email sudah terdaftar.", 409);
+        }
+    }
+
+    const passwordHash = await bcrypt.hash(rawPassword, 12);
+
+    const user = await prisma.userAccount.create({
+        data: {
+            username,
+            displayName,
+            email: finalEmail,
+            passwordHash,
+            employeeId: null,
+            isActive: true,
+            createdByUserId: session.userId,
+        },
+        select: {
+            id: true,
+            username: true,
+            displayName: true,
+            email: true,
+            isActive: true,
+            createdAt: true,
+        },
+    }).catch((error: unknown) => {
+        if ((error as { code?: string })?.code === "P2002") {
+            throw new CleaningError("Username atau email sudah terdaftar.", 409);
+        }
+        throw error;
+    });
+
+    await logAction("CREATE_OUTSOURCE_USER", "USER_ACCOUNT", actorFromSession(session), user.id, {
+        username: user.username,
+        displayName: user.displayName,
+        email: user.email,
+    });
+
+    return user;
+}
+
+export async function listOutsourceUsers(session: SessionPayload) {
+    requireWig002(session);
+
+    return prisma.userAccount.findMany({
+        where: {
+            employeeId: null,
+            createdByUserId: session.userId,
+            id: { not: session.userId },
+            roles: {
+                none: {
+                    role: { code: { in: EXCLUDED_ASSIGNMENT_ROLES } },
+                },
+            },
+        },
+        select: {
+            id: true,
+            username: true,
+            displayName: true,
+            email: true,
+            isActive: true,
+            createdAt: true,
+            cleaningAssignments: {
+                where: { endsOnWibDate: null },
+                include: {
+                    room: { select: { id: true, name: true } },
+                },
+            },
         },
         orderBy: { displayName: "asc" },
     });

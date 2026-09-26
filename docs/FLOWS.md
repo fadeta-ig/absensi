@@ -2,7 +2,7 @@
 
 > **Purpose**: Alur sistem end-to-end utama (Data & Request Flows).  
 > **Source of Truth**: Alur navigasi UI, route handler API, dan service bisnis terpadu.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-26
 
 Dokumen ini memetakan alur kerja utama (*end-to-end user & data flows*) yang melintasi berbagai lapisan arsitektur platform dari interaksi pengguna, transport API, logika bisnis, hingga persistensi database.
 
@@ -191,3 +191,27 @@ Alur serah terima aset korporat dari GA ke karyawan:
 2. **Pengunggahan Dokumen Serah Terima**: Pindaian berkas Berita Acara Serah Terima (BAST) bertanda tangan diunggah ke sistem.
 3. **Persistensi Biner**: Dokumen BAST disimpan langsung ke dalam tabel `asset_bast_documents` sebagai data biner (`MediumBlob`) untuk kemudahan backup terpadu basis data.
 4. **Pembaruan Kepemilikan**: Status aset berubah menjadi `IN_USE` dengan `holderType: EMPLOYEE`, dan riwayat mutasi dicatat pada tabel audit `asset_histories`. Aset seketika muncul di daftar inventaris mandiri karyawan terkait.
+
+---
+
+## 7. Flow: Inspeksi Harian, Penugasan, dan Persetujuan Bulanan
+
+```text
+[ WIG002 + ga.manage ]             [ API /api/ga/cleaning/* ]          [ cleaningService ]
+          │                                      │                              │
+          │── Buat akun outsource ──────────────>│── validasi + hash password ─>│── UserAccount tanpa employee/role
+          │── Jadwalkan penugasan ruangan ─────>│─────────────────────────────>│── Assignment interval WIB + sync role
+          │<── Jadwal terbuka/aktif ────────────│<─────────────────────────────│
+
+[ Petugas CLEANING_WORKER ]        [ API /api/cleaning/* ]             [ Checklist snapshot ]
+          │── Buka ruangan hari ini ───────────>│── cek assignment efektif ───>│
+          │── Ubah item checklist ─────────────>│─────────────────────────────>│── satu record/ruangan/tanggal WIB
+
+[ GA ] ── tetapkan INSPECTED_BY + KNOWN_BY ──> persetujuan bulanan
+[ Employee reviewer ] ── tanda tangan ───────> signature berversi; reopen wajib alasan dan audit
+```
+
+1. **Akun Outsource**: WIG002 membuat akun tanpa relasi employee melalui `/api/ga/cleaning/outsource-users`. Password wajib 8–128 karakter dan role petugas belum diberikan saat akun dibuat.
+2. **Penugasan Berinterval**: Assignment dapat berlaku hari ini atau dijadwalkan mulai tanggal WIB berikutnya. Assignment yang belum berakhir menyinkronkan role `CLEANING_WORKER`, tetapi daftar ruangan petugas hanya membaca assignment yang sudah efektif. Jadwal yang belum mulai dapat dibatalkan; assignment berjalan diakhiri dengan alasan.
+3. **Checklist Harian**: Saat petugas membuka ruangan yang ditugaskan, sistem membuat maksimal satu snapshot checklist per ruangan/tanggal WIB. Perubahan template berikutnya tidak mengubah snapshot yang sudah dibuat.
+4. **Persetujuan Bulanan**: GA menetapkan dua reviewer employee. Masing-masing reviewer hanya dapat menandatangani role yang ditugaskan; reopen membuat versi baru, menyimpan alasan, dan mempertahankan histori tanda tangan.
