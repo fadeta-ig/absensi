@@ -2,7 +2,7 @@
 
 > **Purpose**: Pengetahuan kapabilitas, modul fitur, dan batasan fungsional sistem.  
 > **Source of Truth**: Implementasi fitur di layer UI (`src/app/`) dan service bisnis (`src/lib/services/`).  
-> **Last Verified**: 2026-09-26
+> **Last Verified**: 2026-09-29
 
 Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **Presensi & HRIS WIG** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
 
@@ -12,13 +12,13 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 
 ### A. Login & Manajemen Sesi
 - **Otentikasi Kredensial**: Login menggunakan username/email dan kata sandi dengan proteksi *timing-attack safe comparison* dan batas toleransi percobaan login gagal (*login attempt lockout*).
-- **Session Cookie Terisolasi**: Sesi disimpan dalam cookie JWT `session` bertanda tangan kriptografis dengan flag `httpOnly`, `secure`, dan `sameSite: lax`.
+- **Session Cookie Terisolasi**: Sesi disimpan dalam cookie JWT `session` bertanda tangan kriptografis dengan flag `httpOnly`, `secure`, dan `sameSite: strict`.
 - **Instant Session Revocation**: Setiap akun memiliki atribut integer `session_version`. Jika sesi pengguna dicabut atau kata sandi diubah, penambahan nilai versi sesi secara otomatis membatalkan seluruh token lama seketika.
 - **Edge Route Guard**: Filter di `src/proxy.ts` memastikan pengguna tanpa sesi dialihkan ke halaman login, dan pengguna tanpa izin portal dialihkan ke halaman akses terlarang.
 
 ### B. Granular Role-Based Access Control
 - **Struktur Multi-Role**: Sistem membedakan peran dasar (`SUPER_ADMIN`, `HR_ADMIN`, `GA_ADMIN`, `EMPLOYEE_USER`).
-- **Atomic Permissions**: Otorisasi internal didasarkan pada kumpulan izin atomik (`attendance:read`, `payroll:create`, `assets:update`, dll.) yang dapat diberikan secara fleksibel per peran.
+- **Atomic Permissions**: Otorisasi internal didasarkan pada kumpulan izin aktif (`hr.manage`, `ga.manage`, `employee.self`, `asset.read`, dll.); endpoint attendance menggabungkan permission HR dan relasi employee aktif.
 - **Manajemen Akun HR**: HR Admin dapat membuat akun pengguna baru, mengatur role, dan memicu pengiriman kredensial awal secara otomatis melalui email SMTP.
 
 ---
@@ -29,6 +29,8 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Faktor 1 — Jaringan Wi-Fi Kantor**: Memverifikasi IP pengirim terhadap subnet lokal router kantor (`192.168.20.0/24`) atau IP publik statis ISP Citranet (`202.152.141.27`).
 - **Faktor 2 — Geofencing GPS**: Memverifikasi koordinat perangkat terhadap radius geofence kantor (default 100 meter) menggunakan formula jarak Haversine.
 - **Faktor 3 — Foto Kehadiran & Lokasi Kerja**: Mengambil foto bukti fisik langsung dari kamera perangkat (downsampled di browser ke max 480px) untuk audit kehadiran. Mendukung kamera depan (selfie) maupun kamera belakang (meja/lokasi kerja) dengan pembalik kamera instan tanpa batasan overlay biometrik artifisial.
+- **Jam Server Otoritatif**: PWA mengambil konteks `GET /api/attendance/network` (`serverWibNow`, `shiftDate`, `activeMode`) sebelum tombol aktif; jam HP tidak menentukan logika bisnis. Mutasi membawa expected `action+shiftDate`; server menghitung ulang dalam transaksi atomik (konflik → `409`).
+- **Offline Jujur**: Saat offline/gagal sinkron, tombol absen dinonaktifkan dan hanya jam server terakhir yang ditampilkan (tidak memakai jam HP diam-diam). Request context attendance selalu `NetworkOnly`/`no-store` di service worker.
 - **Pengalaman Pengguna Instan (Single-Screen HUD)**: Kamera langsung aktif otomatis saat halaman dibuka tanpa tombol perantara, dilengkapi HUD mengambang terpadu untuk indikator status Wi-Fi dan GPS, serta tombol rana taktil di jangkauan jempol.
 - **Bypass Location**: Dukungan flag pengecualian lokasi (`bypass_location: true`) bagi karyawan tugas luar atau manajemen tingkat atas.
 
@@ -39,17 +41,26 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Penanda Verifikasi HR**: Tampilan log presensi HR menampilkan badge teks elegan `Hari Libur` (ungu pastel) dengan tooltip alasan dinas, opsi filter cepat (Semua / Normal / Hari Libur), dan pencatatan kolom tipe kehadiran pada ekspor spreadsheet Excel.
 
 ### C. Alur Penyesuaian & Monitoring
-- **Koreksi Presensi (Attendance Correction)**: Karyawan dapat mengajukan perbaikan jam clock-in/out jika terjadi kendala teknis, lengkap dengan alasan dan bukti, yang memerlukan persetujuan manajer/atasan.
+- **Koreksi Presensi (Attendance Correction)**: Karyawan mengajukan perbaikan jam clock-in/out untuk tanggal lampau (timestamp `+07:00`, dukung clock-out H+1 dan clock-in H+1 otomatis untuk shift malam), maksimal 1 PENDING per tanggal; tanggal bercuti/sakit (disetujui/menunggu) ditolak dengan pesan jelas; approval atomik hanya oleh `WIG001` + `hr.manage` sekaligus menghitung ulang status `present/late` dari jam usulan. Staf HR lapangan tetap employee biasa.
 - **Monitoring Tim Subordinat**: Atasan langsung dapat memantau log kehadiran, status keterlambatan, dan riwayat presensi bawahan langsungnya di `/employee/monitoring`.
-- **Rekapitulasi HR**: Dasbor monitoring harian bagi tim HR dengan rekap status kehadiran bulanan dan opsi ekspor data ke file spreadsheet Excel.
+- **Rekapitulasi HR**: Dasbor monitoring harian memakai tanggal server WIB; kartu ringkasan log memakai periode/filter yang sama dengan tabel; alasan cuti/libur selalu terlihat tanpa hover; badge `Lintas Hari H+1` memakai metadata shift efektif pada tanggal record sehingga record shift malam yang masih terbuka tetap dikenali; durasi tampil; approval koreksi dikunci per baris. Foto bukti dimuat lazy per klik (endpoint foto HR-only).
 - **Monitoring Karyawan Belum Hadir**: Tab khusus pada Monitoring Presensi HR (`/dashboard/attendance`) untuk melacak karyawan aktif yang belum hadir pada tanggal evaluasi. Dilengkapi:
-  - Klasifikasi status pintar: membedakan antara *Belum Hadir (Alpa)*, *Sedang Cuti / Sakit / Izin* (terintegrasi otomatis dengan pengajuan cuti yang disetujui HR), dan *Libur Shift*.
-  - Kartu ringkasan interaktif (*AttendanceSummary*) 4-kolom (`Hadir`, `Terlambat`, `Belum Hadir`, `Total Record`) dengan kemampuan klik untuk langsung beralih ke tab Belum Hadir.
+  - Klasifikasi status pintar: membedakan antara *Belum Hadir (Alpa)*, *Menunggu Persetujuan* (sudah mengajukan cuti/sakit, belum di-approve — tanpa tombol tagih WhatsApp), *Sedang Cuti / Sakit / Izin* (terintegrasi otomatis dengan pengajuan cuti yang disetujui HR), dan *Libur Shift*.
+  - Ringkasan log 3-kolom (`Hadir Tepat Waktu`, `Terlambat`, `Total Record`) memakai kategori eksklusif dan periode/filter yang sama; tab Belum Hadir memiliki statistik sendiri (`Total Tidak Presensi`, `Alpa`, `Menunggu Persetujuan`, `Cuti/Sakit`, `Libur Shift`).
   - Pencarian instan (NIP & Nama), filter cascading Divisi & Departemen, serta filter kategori ketidakhadiran.
   - Tindakan cepat HR berupa tombol kontak WhatsApp langsung (`wa.me`) dengan template pesan konfirmasi kehadiran.
   - Ekspor data mandiri ke format Excel dan PDF khusus daftar karyawan belum hadir.
 
 ### D. Manajemen Shift & Operasional 24 Jam (Format 07:00)
+- **Roster / Rotasi Mingguan**: HR memindahkan banyak karyawan sekaligus dengan rentang berlaku
+opsional (`/dashboard/shifts/roster`): pilih karyawan, shift tujuan (nama + jam), preview berdasarkan shift efektif,
+konfirmasi, dan audit. Penugasan diproses deterministik dan terkunci per karyawan; overlap ditolak 409. Assignment
+masa depan dapat dibatalkan dengan membuka kembali jadwal sebelumnya. Daftar dan filter karyawan menampilkan shift
+efektif hari ini beserta sumber roster/fallback.
+- **UX roster (2026-09-29)**: tanggal lihat vs tanggal berlaku dipisah; tanggal akhir inklusif ("Hari terakhir, ikut termasuk") dengan chip hitung `12 Okt – 19 Okt (8 hari) • N orang`; tombol menyebut dampak; konfirmasi `useConfirm` bahasa keadaan-akhir; potensi bentrok tampil sebelum simpan; hasil pasca-simpan persisten inline; badge sumber (Roster/Dasar/Default) + jam + nama hari di daftar.
+- **Jadwal Saya (2026-09-29)**: employee melihat jadwal 14 hari ke depan (`/employee/schedule`): tanggal + hari, nama shift + jam, badge Malam/Libur/Roster/Dasar, teks "tanggal X shift Y".
+- **Validasi Ketat**: Jadwal shift wajib tepat 7 hari unik (`0–6`), format `HH:mm`, toleransi integer non-negatif; create/update/default atomik dalam transaksi; shift default/terpakai tidak dapat dihapus.
+- **Clock-Out Selalu Diterima**: Absen pulang tidak pernah ditolak sistem (termasuk lewat 14:00 untuk shift malam) dan selalu menutup record H-1 yang tepat; setelah jendela shift berikutnya dimulai, request menjadi clock-in baru. Tanpa overtime otomatis.
 - **Template Cepat 3-Shift 24 Jam**: Tombol preset satu-klik pada formulir shift HR (`/dashboard/shifts`) untuk mengonfigurasi jadwal standar:
   - **Shift 1: Pagi** (`07:00 – 15:00`)
   - **Shift 2: Siang** (`15:00 – 23:00`)

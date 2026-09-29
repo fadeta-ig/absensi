@@ -16,6 +16,8 @@ vi.mock("@/lib/prisma", () => ({
 describe("Off-Day Attendance Validation & Schema", () => {
     it("should allow valid attendance payload with offDayReason", () => {
         const payload = {
+            action: "CLOCK_IN",
+            shiftDate: "2026-09-19",
             photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
             location: {
                 lat: -6.2,
@@ -34,6 +36,8 @@ describe("Off-Day Attendance Validation & Schema", () => {
 
     it("should allow normal attendance payload without offDayReason", () => {
         const payload = {
+            action: "CLOCK_IN",
+            shiftDate: "2026-09-19",
             photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
             location: {
                 lat: -6.2,
@@ -50,6 +54,8 @@ describe("Off-Day Attendance Validation & Schema", () => {
 
     it("should reject offDayReason exceeding 500 characters", () => {
         const payload = {
+            action: "CLOCK_IN",
+            shiftDate: "2026-09-19",
             photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
             offDayReason: "a".repeat(501),
         };
@@ -59,6 +65,17 @@ describe("Off-Day Attendance Validation & Schema", () => {
         if (!result.success) {
             expect(result.error.issues[0].message).toContain("maksimal 500 karakter");
         }
+    });
+
+    it("should reject an off-day reason shorter than three characters", () => {
+        const result = attendanceSchema.safeParse({
+            action: "CLOCK_IN",
+            shiftDate: "2026-09-19",
+            photo: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+            offDayReason: "x ",
+        });
+
+        expect(result.success).toBe(false);
     });
 });
 

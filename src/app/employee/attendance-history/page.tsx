@@ -4,12 +4,13 @@ import { useEffect, useState, useMemo } from "react";
 import {
     ClipboardList, CalendarDays, Clock, CheckCircle, AlertTriangle,
     XCircle, Filter, ChevronLeft, ChevronRight, Loader2, AlertCircle,
-    FileSpreadsheet, RotateCcw
+    FileSpreadsheet
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { exportToExcel } from "@/lib/export";
 import { useToast } from "@/components/Toast";
+import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
 interface AttendanceRecord {
     id: string;
@@ -18,6 +19,15 @@ interface AttendanceRecord {
     clockOut?: string | null;
     status: string;
     notes?: string | null;
+    isOffDay?: boolean;
+    offDayReason?: string | null;
+    shiftDate?: string;
+    shiftId?: string | null;
+    shiftName?: string | null;
+    shiftStartTime?: string | null;
+    shiftEndTime?: string | null;
+    shiftSource?: "assignment" | "fallback" | "default" | "none";
+    isOvernight?: boolean;
 }
 
 type FilterMode = "day" | "month" | "year";
@@ -39,31 +49,20 @@ function fmtTime(val?: string | null): string {
     if (!val) return "--:--";
 
     if (/^\d{2}:\d{2}(:\d{2})?$/.test(val)) {
-        return val.substring(0, 5);
+        return `${val.substring(0, 5)} WIB`;
     }
 
     const d = new Date(val);
     if (isNaN(d.getTime())) return "--:--";
-    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    return `${new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false }).format(d)} WIB`;
 }
 
 /** Calculate work duration in hours & minutes */
 function calcDuration(clockIn?: string | null, clockOut?: string | null): string {
     if (!clockIn || !clockOut) return "-";
 
-    let t1, t2;
-    if (/^\d{2}:\d{2}/.test(clockIn)) {
-        const [h, m] = clockIn.split(':').map(Number);
-        t1 = new Date().setHours(h, m, 0, 0);
-    } else {
-        t1 = new Date(clockIn).getTime();
-    }
-    if (/^\d{2}:\d{2}/.test(clockOut)) {
-        const [h, m] = clockOut.split(':').map(Number);
-        t2 = new Date().setHours(h, m, 0, 0);
-    } else {
-        t2 = new Date(clockOut).getTime();
-    }
+    const t1 = new Date(clockIn).getTime();
+    const t2 = new Date(clockOut).getTime();
 
     if (isNaN(t1) || isNaN(t2)) return "-";
 
@@ -77,25 +76,45 @@ function calcDuration(clockIn?: string | null, clockOut?: string | null): string
 
 /** Format date string → readable */
 function fmtDate(dateStr: string): string {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    const d = new Date(`${dateStr}T00:00:00+07:00`);
+    return new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(d);
+}
+
+function dateParts(dateStr: string): { year: number; month: number; day: number } {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return { year, month, day };
+}
+
+function shiftCalendarDate(dateStr: string, amount: number): string {
+    const { year, month, day } = dateParts(dateStr);
+    const date = new Date(Date.UTC(year, month - 1, day + amount, 12));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 export default function AttendanceHistoryPage() {
     const toast = useToast();
+    const serverContext = useAttendanceServerContext();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
-    const now = new Date();
     const [filterMode, setFilterMode] = useState<FilterMode>("month");
-    const [selectedDate, setSelectedDate] = useState(now.toISOString().split("T")[0]);
-    const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
-    const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+    const [selectedDate, setSelectedDate] = useState("");
+    const [selectedMonth, setSelectedMonth] = useState(0);
+    const [selectedYear, setSelectedYear] = useState(0);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
+
+    useEffect(() => {
+        const serverDate = serverContext.context?.serverWibDate;
+        if (!serverDate || selectedDate) return;
+        const { year, month } = dateParts(serverDate);
+        setSelectedDate(serverDate);
+        setSelectedMonth(month - 1);
+        setSelectedYear(year);
+    }, [selectedDate, serverContext.context?.serverWibDate]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -129,20 +148,20 @@ export default function AttendanceHistoryPage() {
     /** Filter records based on current mode & selection */
     const filteredRecords = useMemo(() => {
         return records.filter((r) => {
-            const d = new Date(r.date + "T00:00:00");
+            const { year, month } = dateParts(r.date);
             if (filterMode === "day") {
                 return r.date === selectedDate;
             }
             if (filterMode === "month") {
-                return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+                return month - 1 === selectedMonth && year === selectedYear;
             }
-            return d.getFullYear() === selectedYear;
+            return year === selectedYear;
         });
     }, [records, filterMode, selectedDate, selectedMonth, selectedYear]);
 
     /** Summary stats from filtered data */
     const stats = useMemo(() => {
-        const present = filteredRecords.filter((r) => r.status === "present" || r.status === "late").length;
+        const present = filteredRecords.filter((r) => r.status === "present").length;
         const late = filteredRecords.filter((r) => r.status === "late").length;
         const absent = filteredRecords.filter((r) => r.status === "absent").length;
         const leave = filteredRecords.filter((r) => r.status === "leave").length;
@@ -157,18 +176,15 @@ export default function AttendanceHistoryPage() {
 
     /** Available years from data, or default to current year */
     const availableYears = useMemo(() => {
-        const years = new Set(records.map((r) => new Date(r.date + "T00:00:00").getFullYear()));
-        years.add(now.getFullYear());
+        const years = new Set(records.map((r) => dateParts(r.date).year));
+        if (serverContext.context?.serverWibDate) years.add(dateParts(serverContext.context.serverWibDate).year);
         return Array.from(years).sort((a, b) => b - a);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [records]);
+    }, [records, serverContext.context?.serverWibDate]);
 
     /** Navigation: go prev / next based on mode */
     const goNav = (dir: -1 | 1) => {
         if (filterMode === "day") {
-            const d = new Date(selectedDate + "T00:00:00");
-            d.setDate(d.getDate() + dir);
-            setSelectedDate(d.toISOString().split("T")[0]);
+            setSelectedDate(shiftCalendarDate(selectedDate, dir));
         } else if (filterMode === "month") {
             let m = selectedMonth + dir;
             let y = selectedYear;
@@ -188,6 +204,17 @@ export default function AttendanceHistoryPage() {
         return `${selectedYear}`;
     }, [filterMode, selectedDate, selectedMonth, selectedYear]);
 
+    const serverDateParts = serverContext.context?.serverWibDate
+        ? dateParts(serverContext.context.serverWibDate)
+        : null;
+    const isNextNavigationDisabled = !serverDateParts || (
+        filterMode === "day"
+            ? selectedDate >= serverContext.context!.serverWibDate
+            : filterMode === "month"
+                ? selectedYear > serverDateParts.year || (selectedYear === serverDateParts.year && selectedMonth >= serverDateParts.month - 1)
+                : selectedYear >= serverDateParts.year
+    );
+
     const handleExportExcel = () => {
         if (filteredRecords.length === 0) return;
 
@@ -197,7 +224,7 @@ export default function AttendanceHistoryPage() {
             clockOut: fmtTime(r.clockOut),
             duration: calcDuration(r.clockIn, r.clockOut),
             status: STATUS_MAP[r.status]?.label || r.status,
-            notes: r.notes || "-"
+            notes: r.offDayReason || r.notes || "-"
         }));
 
         exportToExcel(
@@ -240,6 +267,12 @@ export default function AttendanceHistoryPage() {
                 </button>
             </div>
 
+            {!serverContext.context && (
+                <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-800 dark:text-amber-300" role="status">
+                    Navigasi tanggal menunggu tanggal WIB resmi dari server.
+                </div>
+            )}
+
             {/* Filter Controls */}
             <div className="card p-4 space-y-4">
                 <div className="flex items-center gap-2">
@@ -252,7 +285,9 @@ export default function AttendanceHistoryPage() {
                     {(["day", "month", "year"] as FilterMode[]).map((mode) => (
                         <button
                             key={mode}
+                            type="button"
                             onClick={() => setFilterMode(mode)}
+                            disabled={!serverContext.context}
                             className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${filterMode === mode
                                 ? "bg-[var(--card)] text-[var(--primary)] shadow-sm"
                                 : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -265,7 +300,7 @@ export default function AttendanceHistoryPage() {
 
                 {/* Period Navigation */}
                 <div className="flex items-center gap-3">
-                    <button onClick={() => goNav(-1)} className="btn btn-ghost btn-sm !p-1.5">
+                    <button type="button" onClick={() => goNav(-1)} disabled={!serverContext.context} className="btn btn-ghost btn-sm !p-1.5">
                         <ChevronLeft className="w-4 h-4" />
                     </button>
 
@@ -273,6 +308,7 @@ export default function AttendanceHistoryPage() {
                         <input
                             type="date"
                             value={selectedDate}
+                            max={serverContext.context?.serverWibDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                             className="form-input !py-1.5 !text-sm w-auto"
                         />
@@ -309,7 +345,12 @@ export default function AttendanceHistoryPage() {
                         </select>
                     )}
 
-                    <button onClick={() => goNav(1)} className="btn btn-ghost btn-sm !p-1.5">
+                    <button
+                        type="button"
+                        onClick={() => goNav(1)}
+                        disabled={isNextNavigationDisabled}
+                        className="btn btn-ghost btn-sm !p-1.5"
+                    >
                         <ChevronRight className="w-4 h-4" />
                     </button>
 
@@ -326,7 +367,7 @@ export default function AttendanceHistoryPage() {
                         <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
                     </div>
                     <p className="text-xl sm:text-2xl font-extrabold text-green-600">{stats.present}</p>
-                    <p className="text-[9px] sm:text-[10px] text-[var(--text-muted)] uppercase font-semibold mt-0.5 truncate">Hadir</p>
+                    <p className="text-[9px] sm:text-[10px] text-[var(--text-muted)] uppercase font-semibold mt-0.5 truncate" title="Hadir tepat waktu (tidak termasuk Terlambat)">Tepat Waktu</p>
                 </div>
                 <div className="card p-3 sm:p-4 text-center min-w-0">
                     <div className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-orange-50 mb-1.5 sm:mb-2">
@@ -377,7 +418,18 @@ export default function AttendanceHistoryPage() {
                             return (
                                 <div key={r.id} className="p-3.5 space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs font-semibold text-[var(--text-primary)]">{fmtDate(r.date)}</span>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-semibold text-[var(--text-primary)]">{fmtDate(r.shiftDate ?? r.date)}</span>
+                                            {r.isOffDay && <span className="badge badge-warning text-[9px]">Hari Libur</span>}
+                                            {r.isOvernight && (
+                                                <span
+                                                    className="badge badge-info text-[9px]"
+                                                    title={r.shiftName && r.shiftStartTime && r.shiftEndTime ? `${r.shiftName}: ${r.shiftStartTime}-${r.shiftEndTime}` : "Shift lintas hari"}
+                                                >
+                                                    Lintas Hari
+                                                </span>
+                                            )}
+                                        </div>
                                         <span className={`badge ${si.badge} flex items-center gap-1 text-[10px] px-2 py-0.5`}>
                                             <StatusIcon className="w-3 h-3" />
                                             {si.label}
@@ -403,8 +455,8 @@ export default function AttendanceHistoryPage() {
                                             <span className="text-xs font-medium text-[var(--text-secondary)] mt-0.5 block">{calcDuration(r.clockIn, r.clockOut)}</span>
                                         </div>
                                     </div>
-                                    {r.notes && (
-                                        <p className="text-[10px] text-[var(--text-muted)] italic truncate">{r.notes}</p>
+                                    {(r.offDayReason || r.notes) && (
+                                        <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">Alasan: {r.offDayReason || r.notes}</p>
                                     )}
                                 </div>
                             );

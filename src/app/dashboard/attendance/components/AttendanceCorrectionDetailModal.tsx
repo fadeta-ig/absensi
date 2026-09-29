@@ -18,7 +18,7 @@ import {
     Loader2,
     ExternalLink
 } from "lucide-react";
-import { AttendanceCorrection } from "../types";
+import { AttendanceCorrection, calculateAttendanceDuration, formatWibDateTime, formatWibTime } from "../types";
 import { formatIndonesianDate } from "@/lib/utils";
 
 interface Props {
@@ -26,7 +26,7 @@ interface Props {
     onClose: () => void;
     empInfo: { name: string; department: string; division: string };
     processingId: string | null;
-    onAction: (id: string, status: "APPROVED" | "REJECTED") => Promise<void> | void;
+    onAction: (id: string, status: "APPROVED" | "REJECTED") => Promise<boolean>;
 }
 
 export function AttendanceCorrectionDetailModal({
@@ -45,40 +45,10 @@ export function AttendanceCorrectionDetailModal({
     const isRejected = selectedCorrection.status === "REJECTED";
     const isProcessing = processingId === selectedCorrection.id;
 
-    // Format clock in / clock out times
-    const formatTime = (timeStr: string | null) => {
-        if (!timeStr) return "--:--";
-        try {
-            const d = new Date(timeStr);
-            return isNaN(d.getTime())
-                ? "--:--"
-                : d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB";
-        } catch {
-            return "--:--";
-        }
-    };
-
-    // Calculate duration between proposed in and proposed out
-    const calculateDuration = () => {
-        if (!selectedCorrection.proposedClockIn || !selectedCorrection.proposedClockOut) return null;
-        try {
-            const inTime = new Date(selectedCorrection.proposedClockIn).getTime();
-            const outTime = new Date(selectedCorrection.proposedClockOut).getTime();
-            if (isNaN(inTime) || isNaN(outTime) || outTime <= inTime) return null;
-            const diffMinutes = Math.round((outTime - inTime) / (1000 * 60));
-            const hours = Math.floor(diffMinutes / 60);
-            const minutes = diffMinutes % 60;
-            return `${hours} jam ${minutes > 0 ? `${minutes} menit` : ""}`;
-        } catch {
-            return null;
-        }
-    };
-
-    const duration = calculateDuration();
+    const duration = calculateAttendanceDuration(selectedCorrection.proposedClockIn, selectedCorrection.proposedClockOut);
 
     const handleActionClick = async (status: "APPROVED" | "REJECTED") => {
         await onAction(selectedCorrection.id, status);
-        onClose();
     };
 
     return (
@@ -169,7 +139,7 @@ export function AttendanceCorrectionDetailModal({
                                     {formatIndonesianDate(selectedCorrection.targetDate)}
                                 </p>
                                 <p className="text-[11px] font-mono text-[var(--text-muted)]">
-                                    Diajukan: {new Date(selectedCorrection.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                    Diajukan: {formatWibDateTime(selectedCorrection.createdAt)}
                                 </p>
                             </div>
 
@@ -202,7 +172,7 @@ export function AttendanceCorrectionDetailModal({
                                         <span>Usulan Jam Masuk</span>
                                     </div>
                                     <p className="text-base font-bold font-mono text-emerald-900 dark:text-emerald-200">
-                                        {formatTime(selectedCorrection.proposedClockIn)}
+                                        {formatWibTime(selectedCorrection.proposedClockIn)}
                                     </p>
                                 </div>
 
@@ -212,7 +182,7 @@ export function AttendanceCorrectionDetailModal({
                                         <span>Usulan Jam Pulang</span>
                                     </div>
                                     <p className="text-base font-bold font-mono text-blue-900 dark:text-blue-200">
-                                        {formatTime(selectedCorrection.proposedClockOut)}
+                                        {formatWibTime(selectedCorrection.proposedClockOut)}
                                     </p>
                                 </div>
                             </div>

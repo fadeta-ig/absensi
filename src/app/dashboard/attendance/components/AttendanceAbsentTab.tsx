@@ -16,19 +16,23 @@ import { useToast } from "@/components/Toast";
 interface Props {
     targetDate: string;
     onTargetDateChange: (newDate: string) => void;
+    maxDate: string;
     absentEmployees: AbsentEmployee[];
     departments: MasterData[];
     divisions: MasterData[];
     onRefresh?: () => void;
+    refreshing?: boolean;
 }
 
 export function AttendanceAbsentTab({
     targetDate,
     onTargetDateChange,
+    maxDate,
     absentEmployees,
     departments,
     divisions,
     onRefresh,
+    refreshing = false,
 }: Props) {
     const toast = useToast();
 
@@ -126,6 +130,7 @@ export function AttendanceAbsentTab({
         return {
             total: absentEmployees.length,
             unpresent: absentEmployees.filter((e) => e.statusType === "unpresent").length,
+            pending: absentEmployees.filter((e) => e.statusType === "pending_leave").length,
             onLeave: absentEmployees.filter((e) => e.statusType === "on_leave").length,
             offDay: absentEmployees.filter((e) => e.statusType === "off_day").length,
         };
@@ -220,6 +225,7 @@ export function AttendanceAbsentTab({
                         <input
                             type="date"
                             value={targetDate}
+                            max={maxDate || undefined}
                             onChange={(e) => {
                                 onTargetDateChange(e.target.value);
                                 setCurrentPage(1);
@@ -232,10 +238,11 @@ export function AttendanceAbsentTab({
                         <button
                             type="button"
                             onClick={onRefresh}
+                            disabled={refreshing}
                             className="btn btn-secondary btn-sm h-8 px-2 text-xs flex items-center gap-1"
                             title="Muat Ulang Data"
                         >
-                            <RefreshCw className="w-3.5 h-3.5" />
+                            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
                         </button>
                     )}
                 </div>
@@ -264,7 +271,7 @@ export function AttendanceAbsentTab({
             </div>
 
             {/* Quick Filter Chips / Stat Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 <button
                     type="button"
                     onClick={() => { setCategoryFilter("all"); setCurrentPage(1); }}
@@ -295,6 +302,22 @@ export function AttendanceAbsentTab({
                         <UserX className="w-4 h-4 text-red-600" />
                     </div>
                     <p className="text-xl font-extrabold text-red-600 mt-1">{stats.unpresent}</p>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => { setCategoryFilter("pending_leave"); setCurrentPage(1); }}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                        categoryFilter === "pending_leave"
+                            ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20 shadow-sm"
+                            : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--border-strong)]"
+                    }`}
+                >
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Menunggu Persetujuan</span>
+                        <CalendarClock className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <p className="text-xl font-extrabold text-amber-600 mt-1">{stats.pending}</p>
                 </button>
 
                 <button
@@ -395,6 +418,7 @@ export function AttendanceAbsentTab({
                         >
                             <option value="all">Semua Kategori</option>
                             <option value="unpresent">Belum Presensi (Alpa)</option>
+                            <option value="pending_leave">Pengajuan Menunggu Persetujuan</option>
                             <option value="on_leave">Sedang Cuti / Sakit / Izin</option>
                             <option value="off_day">Libur Shift</option>
                         </select>
@@ -496,6 +520,18 @@ export function AttendanceAbsentTab({
                                                     <UserX className="w-3 h-3 shrink-0" />
                                                     Belum Hadir
                                                 </span>
+                                            ) : emp.statusType === "pending_leave" ? (
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
+                                                        <CalendarClock className="w-3 h-3 shrink-0" />
+                                                        {emp.statusLabel}
+                                                    </span>
+                                                    {emp.notes && (
+                                                        <span className="text-[10px] text-[var(--text-muted)] italic max-w-[220px] whitespace-normal break-words text-center">
+                                                            {emp.notes}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : emp.statusType === "on_leave" ? (
                                                 <div className="flex flex-col items-center gap-0.5">
                                                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900">
@@ -503,7 +539,7 @@ export function AttendanceAbsentTab({
                                                         {emp.statusLabel}
                                                     </span>
                                                     {emp.notes && (
-                                                        <span className="text-[10px] text-[var(--text-muted)] italic max-w-[150px] truncate" title={emp.notes}>
+                                                        <span className="text-[10px] text-[var(--text-muted)] italic max-w-[220px] whitespace-normal break-words text-center">
                                                             {emp.notes}
                                                         </span>
                                                     )}
@@ -515,7 +551,7 @@ export function AttendanceAbsentTab({
                                                         {emp.statusLabel}
                                                     </span>
                                                     {emp.notes && (
-                                                        <span className="text-[10px] text-[var(--text-muted)] italic max-w-[150px] truncate" title={emp.notes}>
+                                                        <span className="text-[10px] text-[var(--text-muted)] italic max-w-[220px] whitespace-normal break-words text-center">
                                                             {emp.notes}
                                                         </span>
                                                     )}

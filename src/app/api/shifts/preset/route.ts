@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { seed3Shifts } from "@/../prisma/seed3Shifts";
-import { getShifts } from "@/lib/services/shiftService";
+import { initialize3ShiftPreset } from "@/lib/services/shiftService";
+import { PERMISSIONS } from "@/lib/permissions";
 import logger from "@/lib/logger";
 
 export async function POST() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
-        const results = await seed3Shifts();
-        const allShifts = await getShifts();
+        const { results, shifts } = await initialize3ShiftPreset();
 
         logger.info("3-Shift package initialized via API", {
             initiatedBy: session.username,
@@ -22,7 +21,7 @@ export async function POST() {
             success: true,
             message: "Paket 3-Shift 24 Jam berhasil diinisialisasi.",
             results,
-            shifts: allShifts,
+            shifts,
         });
     } catch (err) {
         return serverErrorResponse("ShiftsPresetPOST", err);

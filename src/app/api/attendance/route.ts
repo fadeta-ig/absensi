@@ -1,24 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import {
-    getAttendanceRecords,
-    getAttendanceByDate,
-    createAttendance,
-    updateAttendance,
-} from "@/lib/services/attendanceService";
+import { AttendanceMutationError, getAttendanceRecords, performAttendanceMutation } from "@/lib/services/attendanceService";
 import { prisma } from "@/lib/prisma";
 import { extractClientIp, isOfficeWifiNetwork } from "@/lib/networkValidator";
 import { calculateDistance } from "@/lib/utils";
-import { toWIBDateString, getWIBHoursMinutes, getWIBDayOfWeek } from "@/lib/timezone";
+import { toWIBDateString, toWIBISOString } from "@/lib/timezone";
 import { attendanceSchema } from "@/lib/validations/validationSchemas";
 import logger from "@/lib/logger";
-
-/** Format total minutes → "HH:mm" */
-function formatMinutes(totalMinutes: number): string {
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
+import { PERMISSIONS } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
@@ -28,14 +17,14 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const employeeId = searchParams.get("employeeId");
 
-        if (session.role === "hr") {
+        if (session.permissions.includes(PERMISSIONS.HR_MANAGE)) {
             const records = await getAttendanceRecords(employeeId || undefined);
-            return NextResponse.json(records);
+            return NextResponse.json(records, { headers: { "Cache-Control": "no-store" } });
         }
         if (!session.employeeId) return forbiddenResponse();
 
         const records = await getAttendanceRecords(session.employeeId);
-        return NextResponse.json(records);
+        return NextResponse.json(records, { headers: { "Cache-Control": "no-store" } });
     } catch (err) {
         return serverErrorResponse("AttendanceGET", err);
     }
@@ -51,8 +40,6 @@ export async function POST(request: NextRequest) {
         if ("error" in result) return result.error;
         const body = result.data;
         const clientIp = extractClientIp(request);
-
-        const today = toWIBDateString();
 
         // Fetch employee settings with proper typing
         const employee = await prisma.employee.findUnique({
@@ -111,133 +98,9 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // ── Resolve shift early (needed for both clock-in and clock-out) ──
+        // Waktu request dibekukan; shift di-resolve setelah employee lock di service
+        // agar perubahan roster konkuren tidak menghasilkan presensi dengan shift basi.
         const now = new Date();
-
-        let shift = null;
-        if (employee.shiftId) {
-            shift = await prisma.workShift.findUnique({
-                where: { id: employee.shiftId },
-                include: { days: true },
-            });
-        }
-        if (!shift) {
-            shift = await prisma.workShift.findFirst({
-                where: { isDefault: true },
-                include: { days: true },
-            });
-        }
-
-        const {
-            resolveAttendanceTargetForEmployee,
-            getNormalizedShiftWindows,
-            formatMinutes: formatShiftMinutes,
-        } = await import("@/lib/services/attendanceShiftHelper");
-
-        const target = await resolveAttendanceTargetForEmployee(
-            session.employeeId,
-            now,
-            shift?.days ?? []
-        );
-
-        if (target.mode === "ALREADY_COMPLETED") {
-            return NextResponse.json(
-                { error: "Anda sudah melakukan clock-in dan clock-out untuk shift hari ini." },
-                { status: 400 }
-            );
-        }
-
-        if (target.mode === "CLOCK_OUT") {
-            const existing = target.existingRecord;
-
-            // ── Clock-Out Hard-Block Enforcement (Hanya berlaku untuk hari kerja normal) ──
-            if (!existing.isOffDay && shift && target.scheduleDay && !target.scheduleDay.isOff) {
-                const windows = getNormalizedShiftWindows(target.scheduleDay, shift);
-                const clockOutMinutes = target.relativeClockMinutes;
-
-                if (clockOutMinutes < windows.earliestOutMinutes) {
-                    return NextResponse.json(
-                        { error: `Belum waktunya clock-out. Anda bisa pulang mulai pukul ${formatShiftMinutes(windows.earliestOutMinutes)}.` },
-                        { status: 400 }
-                    );
-                }
-
-                if (shift.lateCheckOut > 0 && clockOutMinutes > windows.latestOutMinutes) {
-                    return NextResponse.json(
-                        { error: `Waktu clock-out sudah melewati batas pukul ${formatShiftMinutes(windows.latestOutMinutes)}. Hubungi HR.` },
-                        { status: 400 }
-                    );
-                }
-            }
-
-            const locationWithNetwork = body.location ? {
-                lat: body.location.lat,
-                lng: body.location.lng,
-                accuracy: body.location.accuracyMeters ?? undefined,
-                clientIp,
-                isOfficeWifi,
-                networkName,
-            } : null;
-
-            const updated = await updateAttendance(existing.id, {
-                clockOut: now.toISOString(),
-                clockOutLocation: locationWithNetwork,
-                clockOutPhoto: body.photo,
-            });
-            if (!updated) {
-                return serverErrorResponse("AttendanceClockOutUpdate", new Error("Attendance update returned null"), {
-                    attendanceId: existing.id,
-                    employeeId: session.employeeId,
-                });
-            }
-
-            logger.info("Clock-out success", {
-                employeeId: session.employeeId,
-                isOffDay: existing.isOffDay,
-                shiftDate: target.shiftDate,
-                isOvernight: target.isOvernight,
-            });
-            return NextResponse.json(updated);
-        }
-
-        // ── target.mode === "CLOCK_IN" ──
-        const isOffDay = Boolean(shift && (!target.scheduleDay || target.scheduleDay.isOff));
-
-        // ── Validasi Kehadiran Hari Libur (Off-Day Attendance) ──
-        if (isOffDay) {
-            const reason = body.offDayReason?.trim();
-            if (!reason || reason.length < 3) {
-                return NextResponse.json(
-                    { error: "Keperluan/alasan presensi hari libur wajib diisi (minimal 3 karakter) untuk verifikasi HR." },
-                    { status: 400 }
-                );
-            }
-        }
-
-        let status: "present" | "late" = "present";
-
-        // ── Clock-In Early Block & Tolerance ──
-        if (!isOffDay && shift && target.scheduleDay && !target.scheduleDay.isOff) {
-            const windows = getNormalizedShiftWindows(target.scheduleDay, shift);
-            const clockInMinutes = target.relativeClockMinutes;
-
-            if (clockInMinutes < windows.earliestInMinutes) {
-                return NextResponse.json(
-                    { error: `Belum waktunya clock-in. Anda bisa melakukan presensi mulai pukul ${formatShiftMinutes(windows.earliestInMinutes)}.` },
-                    { status: 400 }
-                );
-            }
-
-            if (clockInMinutes > windows.lateDeadlineMinutes) {
-                status = "late";
-            }
-        } else if (!shift && !isOffDay) {
-            const { hours: nowH } = getWIBHoursMinutes(now);
-            if (nowH > 9) {
-                status = "late";
-            }
-        }
-
         const locationWithNetwork = body.location ? {
             lat: body.location.lat,
             lng: body.location.lng,
@@ -247,20 +110,44 @@ export async function POST(request: NextRequest) {
             networkName,
         } : null;
 
-        const record = await createAttendance({
+        const mutation = await performAttendanceMutation({
             employeeId: session.employeeId,
-            date: target.shiftDate,
-            clockIn: now.toISOString(),
-            clockInLocation: locationWithNetwork,
-            clockInPhoto: body.photo,
-            status,
-            isOffDay,
-            offDayReason: isOffDay ? body.offDayReason?.trim() ?? null : null,
+            expectedAction: body.action,
+            expectedShiftDate: body.shiftDate,
+            now,
+            photo: body.photo,
+            location: locationWithNetwork,
+            offDayReason: body.offDayReason,
         });
 
-        logger.info("Clock-in success", { employeeId: session.employeeId, status, isOffDay });
-        return NextResponse.json(record);
+        logger.info("Attendance mutation success", {
+            employeeId: session.employeeId,
+            action: body.action,
+            shiftDate: mutation.target.shiftDate,
+            isOvernight: mutation.target.isOvernight,
+            isOffDay: mutation.isOffDay,
+        });
+        return NextResponse.json({
+            ...mutation.record,
+            serverWibNow: toWIBISOString(now),
+            serverWibDate: toWIBDateString(now),
+            shiftDate: mutation.target.shiftDate,
+            action: body.action,
+            activeMode: mutation.record.clockOut ? "ALREADY_COMPLETED" : "CLOCK_OUT",
+            isOvernight: mutation.target.isOvernight,
+            isOffDay: mutation.isOffDay,
+        });
     } catch (err) {
+        if (err instanceof AttendanceMutationError) {
+            return NextResponse.json({
+                error: err.message,
+                code: err.code,
+                serverWibNow: toWIBISOString(),
+                shiftDate: err.target?.shiftDate,
+                activeMode: err.target?.mode,
+                record: err.target && "existingRecord" in err.target ? err.target.existingRecord : null,
+            }, { status: err.statusCode });
+        }
         return serverErrorResponse("AttendancePOST", err);
     }
 }

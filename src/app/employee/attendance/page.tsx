@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import {
     Camera, MapPin, Clock, CheckCircle2, AlertCircle, Loader2,
     Wifi, WifiOff, FlipHorizontal, RotateCcw, SwitchCamera,
@@ -10,6 +10,7 @@ import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
 import { useRouter } from "next/navigation";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
 const log = createClientLogger("AttendancePage");
 
@@ -31,12 +32,59 @@ interface NetworkInfo {
     todaySchedule?: { startTime: string; endTime: string; isOff: boolean } | null;
 }
 
+function formatWibTime(value?: string | null): string {
+    if (!value) return "--:--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--:--";
+    return new Intl.DateTimeFormat("id-ID", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(date);
+}
+
+/**
+ * Jam live HUD: komponen kecil terisolasi agar tick per detik
+ * tidak me-render ulang seluruh halaman (termasuk video kamera).
+ */
+const HudClock = memo(function HudClock({ serverWibNow }: { serverWibNow?: string | null }) {
+    const formatLiveTime = useCallback((milliseconds: number) => new Intl.DateTimeFormat("id-ID", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    }).format(new Date(milliseconds)), []);
+    const serverMs = serverWibNow ? new Date(serverWibNow).getTime() : Number.NaN;
+    const [time, setTime] = useState<string | null>(() => Number.isNaN(serverMs) ? null : formatLiveTime(serverMs));
+    useEffect(() => {
+        if (Number.isNaN(serverMs)) return;
+        const perfMs = performance.now();
+        const update = () => {
+            const elapsed = Math.max(0, performance.now() - perfMs);
+            setTime(formatLiveTime(serverMs + elapsed));
+        };
+        const timer = window.setInterval(update, 1000);
+        return () => window.clearInterval(timer);
+    }, [formatLiveTime, serverMs]);
+    if (!time) return null;
+    return (
+        <span className="text-[11px] font-medium text-white/90 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-white/60" />
+            {time} WIB
+        </span>
+    );
+});
+
 export default function AttendancePage() {
     const toast = useToast();
     const router = useRouter();
+    const serverContext = useAttendanceServerContext();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+    const facingModeRef = useRef<"user" | "environment">("user");
 
     // Camera & interaction state
     const [streaming, setStreaming] = useState(false);
@@ -59,36 +107,18 @@ export default function AttendancePage() {
     const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
     const [message, setMessage] = useState("");
     const [todayRecord, setTodayRecord] = useState<{ clockIn?: string; clockOut?: string } | null>(null);
-    const [currentTime, setCurrentTime] = useState<string>("");
+    const submitLockRef = useRef(false);
+    const redirectTimerRef = useRef<number | null>(null);
+    const shiftDate = serverContext.context?.shiftDate;
 
-    // Live WIB Clock
     useEffect(() => {
-        const updateClock = () => {
-            const now = new Date();
-            setCurrentTime(now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-        };
-        updateClock();
-        const interval = setInterval(updateClock, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    // ── 1. Fetch Network Status (Wi-Fi Kantor) ──
-    const checkNetworkStatus = useCallback(async () => {
-        setIsNetworkChecking(true);
-        try {
-            const res = await fetch("/api/attendance/network");
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memeriksa status jaringan"));
-            const data: NetworkInfo = await res.json();
-            setNetworkInfo(data);
-            if (!data.isOfficeWifi && !data.bypassLocation) {
-                log.warn("Karyawan tidak terhubung ke Wi-Fi kantor", { ip: data.clientIp });
-            }
-        } catch (err) {
-            reportClientError("AttendancePage", "Gagal memeriksa status jaringan", err);
-        } finally {
-            setIsNetworkChecking(false);
+        if (!serverContext.context) return;
+        setNetworkInfo(serverContext.context);
+        setIsNetworkChecking(false);
+        if (!serverContext.context.isOfficeWifi && !serverContext.context.bypassLocation) {
+            log.warn("Karyawan tidak terhubung ke Wi-Fi kantor", { ip: serverContext.context.clientIp });
         }
-    }, []);
+    }, [serverContext.context]);
 
     // ── 2. Fetch GPS with Validation ──
     const checkGpsStatus = useCallback(async () => {
@@ -110,6 +140,7 @@ export default function AttendancePage() {
             const errMsg = err instanceof Error ? err.message : String(err);
             reportClientError("AttendancePage", "Gagal mendapatkan lokasi GPS", err);
             setMessage(errMsg || "Gagal mendapatkan lokasi. Aktifkan GPS pada perangkat Anda.");
+            setStatus("error");
         } finally {
             setIsGpsChecking(false);
         }
@@ -139,7 +170,7 @@ export default function AttendancePage() {
             return;
         }
 
-        const mode = modeOverride || facingMode;
+        const mode = modeOverride || facingModeRef.current;
         setIsCameraLoading(true);
         setCameraError(null);
 
@@ -170,7 +201,10 @@ export default function AttendancePage() {
                             setIsCameraLoading(false);
                         })
                         .catch(() => {
-                            setStreaming(true);
+                            stream.getTracks().forEach((track) => track.stop());
+                            if (streamRef.current === stream) streamRef.current = null;
+                            setCameraError("Kamera ditemukan tetapi gagal menampilkan gambar. Tutup aplikasi lain yang memakai kamera lalu coba lagi.");
+                            setStreaming(false);
                             setIsCameraLoading(false);
                         });
                 };
@@ -188,35 +222,48 @@ export default function AttendancePage() {
             setStreaming(false);
             setIsCameraLoading(false);
         }
-    }, [facingMode]);
+    }, []);
 
     // ── 5. Switch Camera (Front/Back) ──
     const toggleFacingMode = useCallback(() => {
         const nextMode = facingMode === "user" ? "environment" : "user";
+        facingModeRef.current = nextMode;
         setFacingMode(nextMode);
         setIsMirrored(nextMode === "user");
         void startCamera(nextMode);
     }, [facingMode, startCamera]);
 
-    // ── 6. Initial Mount: Load Record, Network, GPS, & Auto-Start Camera ──
     useEffect(() => {
-        void checkNetworkStatus();
         void checkGpsStatus();
+    }, [checkGpsStatus]);
 
-        // Fetch today's attendance record
+    useEffect(() => {
+        if (shiftDate || serverContext.loading) return;
+        void startCamera();
+    }, [serverContext.loading, shiftDate, startCamera]);
+
+    // ── 6. Load the server-selected record & Auto-Start Camera ──
+    useEffect(() => {
+        if (!shiftDate) return;
+
+        // Fetch the record selected by the authoritative shift date.
         fetch("/api/attendance")
             .then(async (r) => {
                 if (!r.ok) throw new Error(await getResponseErrorMessage(r, "Gagal memuat data presensi hari ini."));
                 return r.json();
             })
             .then((data) => {
-                const today = new Date().toISOString().split("T")[0];
-                const found = data.find((a: { date: string }) => a.date === today);
+                if (serverContext.context?.activeMode === "ALREADY_COMPLETED") {
+                    const found = data.find((a: { date: string }) => a.date === shiftDate);
+                    setTodayRecord(found ?? null);
+                    stopCamera();
+                    return;
+                }
+                const found = shiftDate
+                    ? data.find((a: { date: string }) => a.date === shiftDate)
+                    : undefined;
                 if (found) {
                     setTodayRecord(found);
-                    if (found.clockIn && found.clockOut) {
-                        return; // Done for today
-                    }
                 }
                 void startCamera();
             })
@@ -224,17 +271,18 @@ export default function AttendancePage() {
                 const errMsg = err instanceof Error ? err.message : "Gagal memuat data presensi hari ini.";
                 reportClientError("AttendancePage", "Gagal memuat data presensi hari ini", err);
                 setMessage(errMsg);
-                void startCamera();
+                if (serverContext.context?.activeMode !== "ALREADY_COMPLETED") void startCamera();
             });
 
-        // Cleanup: stop tracks when leaving page
-        return () => {
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach((track) => track.stop());
-                streamRef.current = null;
-            }
-        };
-    }, [checkNetworkStatus, checkGpsStatus, startCamera]);
+    }, [serverContext.context?.activeMode, shiftDate, startCamera, stopCamera]);
+
+    useEffect(() => () => {
+        if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current);
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+        }
+    }, []);
 
     // ── 7. Capture Photo (Client-Side Downsampling to 480px) ──
     const capturePhoto = useCallback(() => {
@@ -281,6 +329,14 @@ export default function AttendancePage() {
 
     // ── 9. Submit Attendance ──
     const submitAttendance = useCallback(async () => {
+        if (submitLockRef.current) return;
+        if (!serverContext.context || !serverContext.isFresh || !serverContext.isOnline) {
+            const err = "Waktu server presensi belum segar. Pastikan Anda online lalu coba lagi.";
+            setMessage(err);
+            setStatus("error");
+            toast(err, "warning");
+            return;
+        }
         if (!photo) {
             setMessage("Silakan ambil foto bukti presensi terlebih dahulu.");
             return;
@@ -304,11 +360,15 @@ export default function AttendancePage() {
             return;
         }
 
-        setStatus("submitting");
-        setMessage("");
+        const isOffDay = networkInfo?.isOffDay ?? serverContext.context.isOffDay;
+        const isClockInAction = serverContext.context.activeMode === "CLOCK_IN";
 
-        const isOffDay = networkInfo?.isOffDay ?? false;
-        const isClockInAction = !todayRecord?.clockIn;
+        if (serverContext.context.activeMode === "ALREADY_COMPLETED") {
+            const err = "Presensi untuk shift ini sudah tercatat lengkap. Bila ada kesalahan jam, ajukan koreksi di menu Koreksi Presensi.";
+            setMessage(err);
+            toast(err, "info");
+            return;
+        }
 
         if (isClockInAction && isOffDay) {
             if (!offDayReason || offDayReason.trim().length < 3) {
@@ -320,11 +380,18 @@ export default function AttendancePage() {
             }
         }
 
+        submitLockRef.current = true;
+        setStatus("submitting");
+        setMessage("");
+        let keepLockedForNavigation = false;
+
         try {
             const res = await fetch("/api/attendance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    action: serverContext.context.activeMode,
+                    shiftDate: serverContext.context.shiftDate,
                     photo,
                     location: gpsInfo ? { lat: gpsInfo.lat, lng: gpsInfo.lng } : undefined,
                     offDayReason: isClockInAction && isOffDay ? offDayReason.trim() : undefined,
@@ -334,12 +401,20 @@ export default function AttendancePage() {
             if (!res.ok) {
                 const errorMessage = await getResponseErrorMessage(res, "Gagal melakukan presensi");
                 setStatus("error");
-                toast(errorMessage, "error");
-                setMessage(errorMessage);
+                if (res.status === 409) {
+                    await serverContext.refresh();
+                    const conflictMessage = `${errorMessage} Bila ada kesalahan jam, ajukan koreksi di menu Koreksi Presensi.`;
+                    toast(conflictMessage, "warning");
+                    setMessage(conflictMessage);
+                } else {
+                    toast(errorMessage, "error");
+                    setMessage(errorMessage);
+                }
                 return;
             }
 
             const data = await res.json();
+            keepLockedForNavigation = true;
             setStatus("success");
             setTodayRecord(data);
             if (data.clockOut) {
@@ -347,26 +422,39 @@ export default function AttendancePage() {
             } else {
                 toast("Clock In berhasil! Selamat bekerja.", "success");
             }
-            setTimeout(() => router.push("/employee"), 1500);
+            redirectTimerRef.current = window.setTimeout(() => {
+                try {
+                    router.push("/employee");
+                } catch (err) {
+                    // Navigasi gagal: buka kunci agar user bisa submit ulang/refresh manual.
+                    reportClientError("AttendancePage", "Navigasi pasca-presensi gagal", err);
+                    submitLockRef.current = false;
+                    setStatus("idle");
+                    setMessage("Presensi tersimpan, tetapi halaman gagal berpindah. Muat ulang halaman.");
+                }
+            }, 1500);
         } catch (err) {
             reportClientError("AttendancePage", "Koneksi error saat submit presensi", err);
             setStatus("error");
             const errText = "Presensi belum terkirim karena kendala koneksi. Coba lagi.";
             toast(errText, "error");
             setMessage(errText);
+        } finally {
+            if (!keepLockedForNavigation) submitLockRef.current = false;
         }
-    }, [photo, gpsInfo, networkInfo, offDayReason, todayRecord, router, toast]);
+    }, [photo, gpsInfo, networkInfo, offDayReason, router, serverContext, toast]);
 
-    const isClockIn = !todayRecord?.clockIn;
-    const isClockOut = Boolean(todayRecord?.clockIn && !todayRecord?.clockOut);
-    const isDone = Boolean(todayRecord?.clockIn && todayRecord?.clockOut);
+    const activeMode = serverContext.context?.activeMode;
+    const isClockIn = activeMode === "CLOCK_IN";
+    const isClockOut = activeMode === "CLOCK_OUT";
+    const isDone = activeMode === "ALREADY_COMPLETED";
 
     const isBypass = networkInfo?.bypassLocation ?? false;
     const isNetworkOk = isBypass || (networkInfo?.isOfficeWifi ?? false);
     const isGpsOk = isBypass || (gpsInfo?.isValid ?? false);
-    const isOffDay = networkInfo?.isOffDay ?? false;
+    const isOffDay = networkInfo?.isOffDay ?? serverContext.context?.isOffDay ?? false;
     const isReasonValid = !isClockIn || !isOffDay || offDayReason.trim().length >= 3;
-    const canSubmit = Boolean(photo && isNetworkOk && isGpsOk && isReasonValid && status !== "submitting");
+    const canSubmit = Boolean(photo && isNetworkOk && isGpsOk && isReasonValid && serverContext.context && serverContext.isFresh && serverContext.isOnline && activeMode !== "ALREADY_COMPLETED" && status !== "submitting" && status !== "success");
 
     // Has blocker warning?
     const hasNetworkBlocker = !isNetworkChecking && !isNetworkOk;
@@ -374,6 +462,20 @@ export default function AttendancePage() {
 
     return (
         <div className="w-full max-w-md mx-auto space-y-3 animate-[fadeIn_0.25s_ease]">
+            {(!serverContext.isFresh || !serverContext.isOnline) && (
+                <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 shadow-sm" role="status">
+                    <div className="flex items-start gap-2 min-w-0">
+                        <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>
+                            {serverContext.isOnline ? "Konteks server kedaluwarsa." : "Perangkat offline."} Jam server terakhir: {serverContext.displayWibTime ?? "belum tersedia"} WIB. Presensi dinonaktifkan.
+                        </span>
+                    </div>
+                    <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">
+                        Coba lagi
+                    </button>
+                </div>
+            )}
+
             {/* ── Tampilan Selesai Jika Kehadiran Sudah Lengkap ── */}
             {isDone ? (
                 <div className="card p-6 text-center space-y-5 rounded-3xl shadow-sm border border-[var(--border)] bg-[var(--card)]">
@@ -381,9 +483,10 @@ export default function AttendancePage() {
                         <CheckCircle2 className="w-8 h-8" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)]">Presensi Hari Ini Selesai</h2>
+                        <h2 className="text-lg font-bold text-[var(--text-primary)]">Presensi Shift Selesai</h2>
                         <p className="text-xs text-[var(--text-muted)] mt-1">
-                            Anda telah menyelesaikan Clock In dan Clock Out untuk hari ini.
+                            Tanggal shift {serverContext.context?.shiftDate ?? "-"} telah memiliki Clock In dan Clock Out.
+                            Bila ada kesalahan jam, ajukan koreksi di menu Koreksi Presensi.
                         </p>
                     </div>
 
@@ -391,17 +494,13 @@ export default function AttendancePage() {
                         <div className="space-y-0.5">
                             <span className="text-[10px] text-[var(--text-muted)] font-medium">Jam Masuk (In)</span>
                             <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                                {todayRecord?.clockIn
-                                    ? new Date(todayRecord.clockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-                                    : "-"} WIB
+                                {formatWibTime(todayRecord?.clockIn)} WIB
                             </p>
                         </div>
                         <div className="space-y-0.5">
                             <span className="text-[10px] text-[var(--text-muted)] font-medium">Jam Pulang (Out)</span>
                             <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                                {todayRecord?.clockOut
-                                    ? new Date(todayRecord.clockOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-                                    : "-"} WIB
+                                {formatWibTime(todayRecord?.clockOut)} WIB
                             </p>
                         </div>
                     </div>
@@ -426,6 +525,24 @@ export default function AttendancePage() {
             ) : (
                 /* ── Layar Utama Presensi (Kamera Bersih, Tanpa Biometrik Palsu, Satu Layar Penuh) ── */
                 <div className="space-y-2.5">
+                    <div className="card px-4 py-3 rounded-2xl flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)]">Tanggal Shift</p>
+                            <p className="text-sm font-bold text-[var(--text-primary)]">{serverContext.context?.shiftDate ?? "Menunggu server..."}</p>
+                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                {serverContext.context?.shiftName ?? "Jadwal kerja"}
+                                {serverContext.context?.todaySchedule
+                                    ? ` · ${serverContext.context.todaySchedule.startTime}-${serverContext.context.todaySchedule.endTime} WIB`
+                                    : " · Jadwal tidak tersedia"}
+                            </p>
+                        </div>
+                        {serverContext.context?.isOvernight && (
+                            <span className="shrink-0 rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                                Lintas Hari H+1
+                            </span>
+                        )}
+                    </div>
+
                     {/* Viewfinder Card */}
                     <div className="relative w-full aspect-[3/4] sm:aspect-[4/5] rounded-3xl overflow-hidden bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col justify-between select-none">
                         
@@ -498,13 +615,14 @@ export default function AttendancePage() {
                                 <span className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white shadow-sm tracking-wide ${
                                     isClockIn && isOffDay ? "bg-amber-600" : "bg-[var(--primary)]"
                                 }`}>
-                                    {isClockIn ? (isOffDay ? "CLOCK IN (HARI LIBUR)" : "CLOCK IN") : isOffDay ? "CLOCK OUT (HARI LIBUR)" : "CLOCK OUT"}
+                                    {serverContext.loading && !activeMode
+                                        ? "MEMUAT"
+                                        : isClockIn
+                                            ? (isOffDay ? "CLOCK IN (HARI LIBUR)" : "CLOCK IN")
+                                            : isOffDay ? "CLOCK OUT (HARI LIBUR)" : "CLOCK OUT"}
                                 </span>
-                                {currentTime && (
-                                    <span className="text-[11px] font-medium text-white/90 flex items-center gap-1">
-                                        <Clock className="w-3 h-3 text-white/60" />
-                                        {currentTime}
-                                    </span>
+                                {serverContext.context?.serverWibNow && (
+                                    <HudClock key={serverContext.context.serverWibNow} serverWibNow={serverContext.context.serverWibNow} />
                                 )}
                             </div>
 
@@ -579,7 +697,7 @@ export default function AttendancePage() {
                                             type="button"
                                             onClick={capturePhoto}
                                             disabled={!streaming}
-                                            className="w-18 h-18 rounded-full border-4 border-white/90 p-1 flex items-center justify-center transition-all duration-200 active:scale-90 shadow-2xl bg-black/40 backdrop-blur-sm cursor-pointer disabled:opacity-40 group"
+                                            className="w-[72px] h-[72px] rounded-full border-4 border-white/90 p-1 flex items-center justify-center transition-all duration-200 active:scale-90 shadow-2xl bg-black/40 backdrop-blur-sm cursor-pointer disabled:opacity-40 group"
                                             title="Jepret Foto"
                                         >
                                             <div className="w-full h-full rounded-full bg-[var(--primary)] group-hover:brightness-110 flex items-center justify-center text-white transition-all shadow-inner">
@@ -614,7 +732,7 @@ export default function AttendancePage() {
                                         <button
                                             type="button"
                                             onClick={retakePhoto}
-                                            disabled={status === "submitting"}
+                                            disabled={status === "submitting" || status === "success"}
                                             className="btn btn-secondary py-3 px-4 text-xs font-semibold rounded-2xl flex items-center justify-center gap-1.5 bg-white/20 hover:bg-white/30 text-white border border-white/25 backdrop-blur-md active:scale-95 transition-all"
                                         >
                                             <RotateCcw className="w-4 h-4" />
@@ -701,7 +819,7 @@ export default function AttendancePage() {
                             </div>
                             <button
                                 type="button"
-                                onClick={checkNetworkStatus}
+                                onClick={() => void serverContext.refresh()}
                                 className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
                             >
                                 <RefreshCw className="w-3 h-3" /> Cek

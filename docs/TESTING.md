@@ -2,7 +2,7 @@
 
 > **Purpose**: Testing strategy and procedures.  
 > **Source of Truth**: `vitest.config.ts` and test suites in `tests/`.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-29
 
 Dokumen ini memuat arsitektur pengujian, framework, struktur folder, perintah eksekusi, dan konvensi pengujian pada codebase ini.
 
@@ -31,8 +31,7 @@ Dokumen ini memuat arsitektur pengujian, framework, struktur folder, perintah ek
           },
       },
   });
-  ```
-
+```
 ---
 
 ## 2. Test Suite Structure
@@ -43,7 +42,9 @@ Pengujian dikelompokkan ke dalam direktori `tests/`:
 tests/
 ├── api/                      # Integration test endpoint HTTP (membutuhkan server berjalan di port 3000)
 │   ├── assets.test.ts        # Endpoint aset GA
-│   ├── attendance.test.ts    # Endpoint presensi
+│   ├── attendance.test.ts    # Endpoint presensi (+ kontrak serverWibNow/shiftDate/activeMode)
+│   ├── attendancePhotoRoute.test.ts # Route foto: auth, fase, binary no-store
+│   ├── attendanceShiftScheduleRoute.test.ts # Route jadwal shift per tanggal
 │   ├── auth.test.ts          # Endpoint login, logout, verifikasi sesi
 │   ├── birthdaysDirect.test.ts # Endpoint modul ulang tahun
 │   ├── master.test.ts        # Endpoint master data (divisi, departemen, jabatan)
@@ -59,7 +60,16 @@ tests/
 │   ├── employeeStatusService.test.ts
 │   ├── holidayService.test.ts
 │   ├── leaveService.test.ts
+│   ├── leaveValidation.test.ts # Batas rentang cuti inklusif 366 hari pada helper dan schema API
 │   ├── greenMeetingService.test.ts # Validasi presensi, multi-deadline, RBAC, serta DARI/KEPADA fleksibel
+│   ├── attendance.integration.test.ts # GATED `RUN_DB_INTEGRATION=1`: mutasi atomik, konkurensi clock-in/out, dan lock attendance-vs-roster pada clone `hris_attendance_test`
+│   ├── attendanceCorrectionService.test.ts # Dedup PENDING, approval WIG001, manager-NULL
+│   ├── attendanceCorrection.integration.test.ts # GATED: konkurensi koreksi + approval atomik pada clone
+│   ├── attendanceLegacySnapshot.integration.test.ts # GATED `RUN_ATTENDANCE_SNAPSHOT_CHECK=1`: SELECT-only, baseline 424/59/6/86/1/5
+│   ├── shiftService.test.ts # Transaksi + konflik hapus shift (termasuk roster)
+│   ├── shiftValidation.test.ts # Schema 7 hari unik + HH:mm + toleransi
+│   ├── shiftAssignmentService.test.ts # Resolver ber-tanggal, bulk chaining/overlap, dan batas hitung cuti 366 hari kalender
+│   ├── shiftAssignment.integration.test.ts # GATED: roster chaining + resolve per tanggal pada clone
 │   ├── pii.test.ts
 │   ├── userManagement.integration.test.ts
 │   └── visitPhotoService.test.ts
@@ -95,4 +105,4 @@ tests/
 ## 5. Known Coverage Gaps & Limitations
 
 - **Ketergantungan Port 3000**: Test suite di `tests/api/` tidak menggunakan mock HTTP handler internal (seperti Supertest atau Next.js test runner in-process), melainkan `fetch` nyata ke port 3000. Akibatnya, test ini tidak dapat berjalan di CI/CD yang terisolasi tanpa langkah `npm start &` terlebih dahulu.
-- **Frontend Component Tests**: Belum ada framework pengujian komponen React berbasis DOM (seperti React Testing Library / Playwright / Cypress) yang terpasang di repositori. Seluruh pengujian saat ini fokus pada backend (API, Services, dan Security Utils).
+- **Frontend Component Tests**: React Testing Library + jsdom tersedia dan dipakai oleh suite `tests/components/`; belum ada framework end-to-end browser seperti Playwright/Cypress.

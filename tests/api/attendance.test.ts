@@ -27,6 +27,13 @@ describe("Attendance API Endpoints", () => {
             expect(data).toHaveProperty("isOfficeWifi");
             expect(data).toHaveProperty("clientIp");
             expect(data).toHaveProperty("networkName");
+            expect(data).toHaveProperty("serverWibNow");
+            expect(data).toHaveProperty("serverWibDate");
+            expect(data).toHaveProperty("shiftDate");
+            expect(data).toHaveProperty("activeMode");
+            expect(data).toHaveProperty("isOvernight");
+            expect(data).toHaveProperty("todaySchedule");
+            expect(Number.isNaN(new Date(data.serverWibNow).getTime())).toBe(false);
         });
     });
 });

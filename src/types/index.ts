@@ -115,10 +115,19 @@ export type AttendanceRecord = {
     clockOutLocation?: AttendanceLocation | null;
     clockInPhoto?: string | null;
     clockOutPhoto?: string | null;
+    hasClockInPhoto?: boolean;
+    hasClockOutPhoto?: boolean;
     status: "present" | "late" | "absent" | "leave";
     notes?: string | null;
     isOffDay?: boolean;
     offDayReason?: string | null;
+    shiftDate?: string;
+    shiftId?: string | null;
+    shiftName?: string | null;
+    shiftStartTime?: string | null;
+    shiftEndTime?: string | null;
+    shiftSource?: "assignment" | "fallback" | "default" | "none";
+    isOvernight?: boolean;
 };
 
 export type PayslipItem = {

@@ -2,7 +2,7 @@
 
 > **Purpose**: Security architecture and rules.  
 > **Source of Truth**: Authentication, authorization, PII encryption, and security middleware in `src/lib/`.  
-> **Last Verified**: 2026-09-26
+> **Last Verified**: 2026-09-28
 
 Dokumen ini mendokumentasikan mekanisme keamanan, autentikasi, otorisasi, penanganan rahasia (*secrets handling*), dan praktik yang dilarang pada sistem **Presensi & HRIS WIG**.
 
@@ -43,6 +43,10 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
 - **Pemeriksaan Izin API**:
   - API handler memeriksa keberadaan kode izin spesifik: `session.permissions.includes("hr.manage")`.
   - Bidang `session.role` (string "hr" | "ga" | "employee") telah ditandai `@deprecated` dan hanya dipertahankan untuk kompatibilitas ke belakang (*backward compatibility*).
+- **Boundary Koreksi Presensi**:
+  - List semua dan approve/reject koreksi hanya untuk username `WIG001` + permission `hr.manage` (`canManageCorrections` di `src/app/api/attendance/correction/route.ts`).
+  - Karyawan hanya dapat melihat/mengajukan koreksi miliknya sendiri; row lama dengan `assignedManagerId = NULL` tetap kompatibel.
+  - Staf HR lapangan tetap `EMPLOYEE_USER` tanpa role HR tambahan; tidak ada elevasi berbasis nama/departemen/ID.
 - **Boundary Green Meeting**:
   - Kepemilikan operasional berada pada General Affairs; `picRole` dikunci ke `GA` dan tidak ada workflow transfer PIC.
   - Endpoint baca `/api/green-meeting/*` memerlukan autentikasi dan mendukung transparansi internal bagi GA, HR, dan karyawan.
@@ -86,7 +90,7 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
 
 File `next.config.ts` menerapkan header keamanan HTTP standar industri pada seluruh rute:
 - `X-Content-Type-Options: nosniff` (mencegah MIME-sniffing)
-- `X-Frame-Options: DENY` (mencegah serangan clickjacking)
+- `X-Frame-Options: SAMEORIGIN` (membatasi framing ke origin yang sama)
 - `X-XSS-Protection: 1; mode=block`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=*, geolocation=*, microphone=()` (mengizinkan kamera dan GPS untuk presensi, memblokir mikrofon)

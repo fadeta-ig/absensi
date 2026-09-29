@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
-import { toWIBDateString } from "@/lib/timezone";
+import { addCalendarDays, toUTCDateKey, toWIBDateString, toWIBISOString } from "@/lib/timezone";
 import { toDateString } from "@/lib/utils";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
-        const today = new Date();
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const todayEnd = new Date(todayStart.getTime() + 86400000); // +1 hari
+        const now = new Date();
+        const serverWibDate = toWIBDateString(now);
+        const todayStart = toUTCDateKey(serverWibDate);
+        const todayEnd = toUTCDateKey(addCalendarDays(serverWibDate, 1));
 
         // Get all data in parallel for performance
         const [employees, todayAttendance, allLeaves, allVisits, allOvertime, recentAttendance] = await Promise.all([
@@ -35,9 +37,7 @@ export async function GET() {
         // Weekly attendance (last 7 days)
         const weeklyAttendance: { date: string; present: number; late: number; absent: number }[] = [];
         for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            const dateStr = toWIBDateString(d);
+            const dateStr = addCalendarDays(serverWibDate, -i);
             const dayRecords = recentAttendance.filter((a) => toDateString(a.date) === dateStr);
             weeklyAttendance.push({
                 date: dateStr,
@@ -106,6 +106,8 @@ export async function GET() {
         activities.sort((a, b) => b.time.localeCompare(a.time));
 
         return NextResponse.json({
+            serverWibNow: toWIBISOString(now),
+            serverWibDate,
             summary: {
                 totalEmployees: employees.length,
                 activeToday: presentToday,
@@ -118,7 +120,7 @@ export async function GET() {
             departmentStats,
             monthlyOvertime,
             recentActivity: activities.slice(0, 10),
-        });
+        }, { headers: { "Cache-Control": "no-store" } });
     } catch (err) {
         return serverErrorResponse("AnalyticsGET", err);
     }

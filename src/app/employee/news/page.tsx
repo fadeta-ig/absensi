@@ -181,7 +181,7 @@ function NewsPageContent() {
                                         <div className="flex items-center gap-2 mt-2 text-[10px] text-[var(--text-muted)]">
                                             <span>Oleh {item.author}</span>
                                             <span>·</span>
-                                            <span>{new Date(item.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
+                                            <span>{new Date(item.createdAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" })}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -219,7 +219,7 @@ function NewsPageContent() {
                         <div className="flex items-center gap-3 mb-4 flex-wrap">
                             <span className="badge badge-primary">{getCategoryInfo(selected.category).label}</span>
                             <span className="text-xs text-[var(--text-muted)]">Oleh {selected.author}</span>
-                            <span className="text-xs text-[var(--text-muted)]">{new Date(selected.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
+                            <span className="text-xs text-[var(--text-muted)]">{new Date(selected.createdAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" })}</span>
                         </div>
                         <p className="text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">{selected.content}</p>
 

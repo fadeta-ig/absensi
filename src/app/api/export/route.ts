@@ -102,7 +102,11 @@ export async function GET(request: NextRequest) {
                             // Use time format (HH:MM) for clock-in/out display
                             const clockIn = record.clockIn ? toTimeString(record.clockIn) : "-";
                             const clockOut = record.clockOut ? toTimeString(record.clockOut) : "-";
-                            row[colKey] = `${clockIn}\n${clockOut}`;
+                            const details = [
+                                record.notes ? `Catatan: ${record.notes}` : null,
+                                record.isOffDay && record.offDayReason ? `Alasan libur: ${record.offDayReason}` : null,
+                            ].filter((value): value is string => Boolean(value));
+                            row[colKey] = [clockIn, clockOut, ...details].join("\n");
                         } else {
                             row[colKey] = "-\n-";
                         }
@@ -117,6 +121,7 @@ export async function GET(request: NextRequest) {
                 });
                 sheetName = `Rekap_Presensi_${startDateStr}_${endDateStr}`;
             } else if (isGrouped) {
+                finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tanggal", "Jam Masuk (WIB)", "Jam Pulang (WIB)", "Status", "Catatan"];
                 // Group by employee
                 const groupedMap = new Map<string, typeof records>();
                 records.forEach((r) => {
@@ -141,7 +146,7 @@ export async function GET(request: NextRequest) {
                     finalRows.push({
                         "Nama": emp?.name || "-",
                         "ID Karyawan": `KARYAWAN: ${empId}`,
-                        "Departemen": emp?.departmentRel?.name || "-", "Tanggal": "", "Jam Masuk": "", "Jam Pulang": "", "Status": "", "Catatan": ""
+                        "Departemen": emp?.departmentRel?.name || "-", "Tanggal": "", "Jam Masuk (WIB)": "", "Jam Pulang (WIB)": "", "Status": "", "Catatan": ""
                     });
 
                     let totalPresent = 0;
@@ -156,10 +161,10 @@ export async function GET(request: NextRequest) {
                             "ID Karyawan": r.employeeId,
                             "Departemen": emp?.departmentRel?.name || "-",
                             "Tanggal": toDateStr(r.date),
-                            "Jam Masuk": r.clockIn ? toTimeString(r.clockIn) : "-",
-                            "Jam Pulang": r.clockOut ? toTimeString(r.clockOut) : "-",
+                            "Jam Masuk (WIB)": r.clockIn ? toTimeString(r.clockIn) : "-",
+                            "Jam Pulang (WIB)": r.clockOut ? toTimeString(r.clockOut) : "-",
                             "Status": r.status === "present" ? "Hadir" : r.status === "late" ? "Terlambat" : r.status === "absent" ? "Alpa" : "Cuti/Sakit",
-                            "Catatan": r.notes || "-",
+                            "Catatan": [r.notes, r.isOffDay && r.offDayReason ? `Libur: ${r.offDayReason}` : null].filter(Boolean).join(" | ") || "-",
                         });
                     });
 
@@ -169,13 +174,13 @@ export async function GET(request: NextRequest) {
                         "Nama": `Total: ${empRecords.length} Hari`,
                         "Departemen": `Hadir: ${totalPresent}`,
                         "Tanggal": `Terlambat: ${totalLate}`,
-                        "Jam Masuk": "", "Jam Pulang": "", "Status": "", "Catatan": ""
+                        "Jam Masuk (WIB)": "", "Jam Pulang (WIB)": "", "Status": "", "Catatan": ""
                     });
                     finalRows.push({}); // Empty row separator
                 });
                 rows = finalRows;
             } else {
-                finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tanggal", "Jam Masuk", "Jam Pulang", "Status", "Catatan"];
+                finalHeaders = ["Nama", "ID Karyawan", "Departemen", "Tanggal", "Jam Masuk (WIB)", "Jam Pulang (WIB)", "Status", "Catatan"];
                 rows = records.map((r) => {
                     const emp = empMap.get(r.employeeId);
                     return {
@@ -183,10 +188,10 @@ export async function GET(request: NextRequest) {
                         "ID Karyawan": r.employeeId,
                         "Departemen": emp?.departmentRel?.name || "-",
                         "Tanggal": toDateStr(r.date),
-                        "Jam Masuk": r.clockIn ? toTimeString(r.clockIn) : "-",
-                        "Jam Pulang": r.clockOut ? toTimeString(r.clockOut) : "-",
+                        "Jam Masuk (WIB)": r.clockIn ? toTimeString(r.clockIn) : "-",
+                        "Jam Pulang (WIB)": r.clockOut ? toTimeString(r.clockOut) : "-",
                         "Status": r.status === "present" ? "Hadir" : r.status === "late" ? "Terlambat" : r.status === "absent" ? "Tidak Hadir" : "Cuti",
-                        "Catatan": r.notes || "-",
+                        "Catatan": [r.notes, r.isOffDay && r.offDayReason ? `Libur: ${r.offDayReason}` : null].filter(Boolean).join(" | ") || "-",
                     };
                 });
             }

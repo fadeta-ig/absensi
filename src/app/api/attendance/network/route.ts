@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { extractClientIp, isOfficeWifiNetwork } from "@/lib/networkValidator";
 import { prisma } from "@/lib/prisma";
-import { toWIBDateString, getWIBDayOfWeek } from "@/lib/timezone";
+import { toWIBDateString, getWIBDayOfWeek, toWIBISOString, addCalendarDays } from "@/lib/timezone";
 
 export async function GET(request: NextRequest) {
     try {
@@ -30,28 +30,36 @@ export async function GET(request: NextRequest) {
             });
             bypassLocation = emp?.bypassLocation ?? false;
 
-            let shift = null;
-            if (emp?.shiftId) {
-                shift = await prisma.workShift.findUnique({
-                    where: { id: emp.shiftId },
-                    include: { days: true },
-                });
-            }
-            if (!shift) {
-                shift = await prisma.workShift.findFirst({
-                    where: { isDefault: true },
-                    include: { days: true },
-                });
-            }
+            const { resolveShiftForDate } = await import("@/lib/services/shiftAssignmentService");
+            const serverDate = toWIBDateString(now);
+            const yesterdayDate = addCalendarDays(serverDate, -1);
+            const [todayShift, yesterdayShift] = await Promise.all([
+                resolveShiftForDate(prisma, session.employeeId, serverDate),
+                resolveShiftForDate(prisma, session.employeeId, yesterdayDate),
+            ]);
+            const shift = todayShift ? {
+                name: todayShift.shiftName ?? "",
+                days: todayShift.days,
+                earlyCheckIn: todayShift.tolerance.earlyCheckIn ?? 0,
+                lateCheckIn: todayShift.tolerance.lateCheckIn ?? 0,
+                earlyCheckOut: todayShift.tolerance.earlyCheckOut ?? 0,
+                lateCheckOut: todayShift.tolerance.lateCheckOut ?? 0,
+            } : null;
 
             if (shift) {
-                shiftName = shift.name;
                 const { resolveAttendanceTargetForEmployee, isOvernightSchedule } = await import("@/lib/services/attendanceShiftHelper");
-                const target = await resolveAttendanceTargetForEmployee(session.employeeId, now, shift.days);
+                const target = await resolveAttendanceTargetForEmployee(
+                    session.employeeId,
+                    now,
+                    shift.days,
+                    shift,
+                    yesterdayShift ? { days: yesterdayShift.days, tolerance: yesterdayShift.tolerance } : undefined,
+                );
 
                 activeMode = target.mode;
                 shiftDate = target.shiftDate;
                 isOvernight = target.isOvernight;
+                shiftName = (target.shiftDate === yesterdayDate ? yesterdayShift : todayShift)?.shiftName ?? null;
 
                 if (target.scheduleDay) {
                     todaySchedule = {
@@ -88,6 +96,9 @@ export async function GET(request: NextRequest) {
             isOvernight,
             activeMode,
             shiftDate,
+            serverWibNow: toWIBISOString(now),
+            serverWibDate: toWIBDateString(now),
+            timeZone: "Asia/Jakarta",
         });
     } catch (err) {
         return serverErrorResponse("AttendanceNetworkCheck", err);

@@ -434,12 +434,17 @@ export default function ReportsPage() {
                                             const isDateCol = /^\d{2}-\d{2}$/.test(h) || !isNaN(Number(h));
 
                                             if (isDateCol && typeof val === "string" && val.includes("\n")) {
-                                                const [clockIn, clockOut] = val.split("\n");
+                                                const [clockIn, clockOut, ...details] = val.split("\n");
                                                 return (
                                                     <TableCell key={h} className="p-1 border-r border-[var(--border)] text-center last:border-0">
                                                         <div className="flex flex-col gap-0.5">
                                                             <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockIn === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-blue-50 text-blue-700"}`}>{clockIn}</span>
                                                             <span className={`px-1 py-0.5 rounded-sm font-bold text-[9px] ${clockOut === "-" ? "bg-[var(--secondary)] text-[var(--text-muted)]" : "bg-orange-50 text-orange-700"}`}>{clockOut}</span>
+                                                            {details.map((detail, detailIndex) => (
+                                                                <span key={`${detail}-${detailIndex}`} className="px-1 pt-0.5 text-left text-[9px] leading-tight whitespace-normal text-[var(--text-secondary)]">
+                                                                    {detail}
+                                                                </span>
+                                                            ))}
                                                         </div>
                                                     </TableCell>
                                                 );

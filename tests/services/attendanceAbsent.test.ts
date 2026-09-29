@@ -83,24 +83,21 @@ describe("Attendance Absent Employee Resolution Logic", () => {
         expect(emp1?.statusLabel).toBe("Belum Hadir");
     });
 
-    it("should not consider pending or rejected leaves as on_leave", () => {
-        const mockLeaves: LeaveRecordLite[] = [
-            {
-                id: "leave-2",
+    it("should not consider rejected leaves as on_leave", () => {
+        const status = "rejected";
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-09-18",
+            employees: mockEmployees,
+            records: [],
+            leaves: [{
+                id: `leave-${status}`,
                 employeeId: "EMP003",
                 type: "sick",
                 startDate: "2026-09-18",
                 endDate: "2026-09-18",
                 reason: "Demam",
-                status: "pending",
-            },
-        ];
-
-        const result = resolveAbsentEmployees({
-            targetDate: "2026-09-18",
-            employees: mockEmployees,
-            records: [],
-            leaves: mockLeaves,
+                status,
+            }],
             shifts: [standardDefaultShift],
         });
         const emp3 = result.find((e) => e.employeeId === "EMP003");
@@ -140,6 +137,125 @@ describe("Attendance Absent Employee Resolution Logic", () => {
         expect(emp1?.statusLabel).toContain("Hari Kemerdekaan RI");
     });
 
+    it("should keep approved leave ahead of a national holiday", () => {
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-08-17",
+            employees: mockEmployees,
+            records: [],
+            leaves: [{
+                id: "leave-holiday",
+                employeeId: "EMP001",
+                type: "annual",
+                startDate: "2026-08-17",
+                endDate: "2026-08-17",
+                reason: "Cuti yang sudah disetujui",
+                status: "approved",
+            }],
+            holidays: [{ date: "2026-08-17", name: "Hari Kemerdekaan RI" }],
+        });
+
+        const emp1 = result.find((emp) => emp.employeeId === "EMP001");
+        expect(emp1?.statusType).toBe("on_leave");
+        expect(emp1?.statusLabel).toBe("Cuti Tahunan");
+    });
+
+    it("should not mark an employee absent while an overnight H-1 shift is active", () => {
+        const overnightShift: WorkShiftInfo = {
+            id: "shift-overnight",
+            name: "Shift Malam",
+            isDefault: true,
+            days: [
+                { dayOfWeek: 4, startTime: "23:00", endTime: "07:00", isOff: false }, // Thursday -> Friday
+                { dayOfWeek: 5, startTime: "23:00", endTime: "07:00", isOff: false },
+            ],
+        };
+
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-09-18", // Friday, 02:00 WIB
+            employees: [mockEmployees[0]],
+            records: [{
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z", // 23:00 WIB
+                clockOut: null,
+            }],
+            leaves: [],
+            shifts: [overnightShift],
+            now: new Date("2026-09-17T19:00:00.000Z"), // 02:00 WIB on H
+        });
+
+        expect(result).toHaveLength(0);
+    });
+
+    it("uses the H-1 roster at a rotation boundary for an active overnight shift", () => {
+        const dayShift: WorkShiftInfo = {
+            id: "shift-day",
+            name: "Shift Dini Hari",
+            isDefault: true,
+            days: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+                dayOfWeek,
+                startTime: "00:00",
+                endTime: "08:00",
+                isOff: false,
+            })),
+        };
+        const nightShift: WorkShiftInfo = {
+            id: "shift-night-before-rotation",
+            name: "Shift Malam Sebelum Rotasi",
+            isDefault: false,
+            days: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+                dayOfWeek,
+                startTime: "23:00",
+                endTime: "07:00",
+                isOff: false,
+            })),
+        };
+
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-09-18",
+            employees: [{ ...mockEmployees[0], shiftId: "shift-day" }],
+            records: [{
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z",
+                clockOut: null,
+            }],
+            leaves: [],
+            shifts: [dayShift, nightShift],
+            now: new Date("2026-09-17T19:00:00.000Z"), // 02:00 WIB on targetDate
+            targetDateShiftOverrides: { EMP001: "shift-day" },
+            previousDateShiftOverrides: { EMP001: "shift-night-before-rotation" },
+        });
+
+        expect(result).toEqual([]);
+    });
+
+    it("should not mark a night-shift employee absent before today's clock-in window", () => {
+        const overnightShift: WorkShiftInfo = {
+            id: "shift-night-today",
+            name: "Shift Malam",
+            isDefault: true,
+            earlyCheckIn: 30,
+            days: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+                dayOfWeek,
+                startTime: "23:00",
+                endTime: "07:00",
+                isOff: false,
+            })),
+        };
+
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-09-18",
+            employees: [mockEmployees[0]],
+            records: [],
+            leaves: [],
+            shifts: [overnightShift],
+            now: new Date("2026-09-18T03:00:00.000Z"), // 10:00 WIB
+        });
+
+        expect(result).toEqual([]);
+    });
+
     it("should respect custom shift assignments for specific employees", () => {
         const customShift: WorkShiftInfo = {
             id: "shift-weekend",
@@ -174,5 +290,73 @@ describe("Attendance Absent Employee Resolution Logic", () => {
         // Siti relies on default shift where Sunday is off -> should be off_day (Libur Shift)
         expect(siti?.statusType).toBe("off_day");
         expect(siti?.statusLabel).toBe("Libur Shift");
+    });
+
+    it("should return an empty list instead of throwing for an empty/invalid target date", () => {
+        for (const targetDate of ["", "not-a-date", "2026-13-40"]) {
+            expect(resolveAbsentEmployees({
+                targetDate,
+                employees: mockEmployees,
+                records: [],
+                leaves: [],
+                shifts: [standardDefaultShift],
+            })).toEqual([]);
+        }
+    });
+
+    it("should flag pending leave as waiting approval instead of alpa", () => {
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-09-18",
+            employees: mockEmployees,
+            records: [],
+            leaves: [{
+                id: "leave-pending",
+                employeeId: "EMP002",
+                type: "sick",
+                startDate: "2026-09-18",
+                endDate: "2026-09-18",
+                reason: "Demam",
+                status: "pending",
+            }],
+            shifts: [standardDefaultShift],
+        });
+
+        const emp2 = result.find((e) => e.employeeId === "EMP002");
+        expect(emp2?.statusType).toBe("pending_leave");
+        expect(emp2?.statusLabel).toBe("Menunggu Persetujuan");
+        expect(emp2?.notes).toContain("menunggu persetujuan HR");
+        expect(result.filter((e) => e.statusType === "unpresent").map((e) => e.employeeId))
+            .not.toContain("EMP002");
+    });
+
+    it("should prefer approved leave over a pending one on the same date", () => {
+        const result = resolveAbsentEmployees({
+            targetDate: "2026-09-18",
+            employees: mockEmployees,
+            records: [],
+            leaves: [
+                {
+                    id: "leave-pending",
+                    employeeId: "EMP002",
+                    type: "sick",
+                    startDate: "2026-09-18",
+                    endDate: "2026-09-18",
+                    reason: "Demam",
+                    status: "pending",
+                },
+                {
+                    id: "leave-approved",
+                    employeeId: "EMP002",
+                    type: "annual",
+                    startDate: "2026-09-18",
+                    endDate: "2026-09-18",
+                    reason: "Liburan",
+                    status: "approved",
+                },
+            ],
+            shifts: [standardDefaultShift],
+        });
+
+        expect(result.find((e) => e.employeeId === "EMP002")?.statusType).toBe("on_leave");
     });
 });

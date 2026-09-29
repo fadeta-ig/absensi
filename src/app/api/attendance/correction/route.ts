@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { submitCorrection, getCorrectionsByUser, getAllCorrections, resolveCorrection } from "@/lib/services/attendanceCorrectionService";
+import { AttendanceCorrectionError, submitCorrection, getCorrectionsByUser, getAllCorrections, resolveCorrection } from "@/lib/services/attendanceCorrectionService";
 import { attendanceCorrectionCreateSchema, attendanceCorrectionUpdateSchema } from "@/lib/validations/validationSchemas";
 import logger from "@/lib/logger";
+import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
+
+function canManageCorrections(session: Awaited<ReturnType<typeof requireAuth>>): boolean {
+    return Boolean(session && session.username === "WIG001" && session.permissions.includes("hr.manage"));
+}
 
 export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
 
     try {
-        if (session.role === "hr") {
+        if (canManageCorrections(session)) {
             const records = await getAllCorrections();
             return NextResponse.json(records);
         }
@@ -31,6 +36,18 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, attendanceCorrectionCreateSchema);
         if ("error" in result) return result.error;
         const body = result.data;
+        const serverWibDate = toWIBDateString();
+        if (body.targetDate >= serverWibDate) {
+            return NextResponse.json({ error: "Tanggal koreksi harus sebelum hari ini." }, { status: 400 });
+        }
+
+        const clockOutDate = body.proposedClockOut ? toWIBDateString(new Date(body.proposedClockOut)) : null;
+        const nextDate = addCalendarDays(body.targetDate, 1);
+        // Clock-in H+1 divalidasi penuh di service (butuh jadwal shift):
+        // diterima bila shift targetDate overnight + dalam jendela + tanpa record H+1.
+        if (clockOutDate && clockOutDate !== body.targetDate && clockOutDate !== nextDate) {
+            return NextResponse.json({ error: "Usulan jam pulang hanya boleh pada tanggal target atau H+1." }, { status: 400 });
+        }
 
         const correction = await submitCorrection({
             employeeId: session.employeeId,
@@ -40,6 +57,9 @@ export async function POST(request: NextRequest) {
         logger.info("Correction submitted", { id: correction.id, by: session.employeeId });
         return NextResponse.json(correction, { status: 201 });
     } catch (err) {
+        if (err instanceof AttendanceCorrectionError) {
+            return NextResponse.json({ error: err.message, code: err.code }, { status: err.statusCode });
+        }
         return serverErrorResponse("AttendanceCorrectionPOST", err);
     }
 }
@@ -47,7 +67,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageCorrections(session)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, attendanceCorrectionUpdateSchema);
@@ -59,11 +79,8 @@ export async function PATCH(request: NextRequest) {
         
         return NextResponse.json(updated);
     } catch (err) {
-        if (err instanceof Error && err.message === "Correction request not found") {
-            return NextResponse.json({ error: "Pengajuan koreksi tidak ditemukan." }, { status: 404 });
-        }
-        if (err instanceof Error && err.message === "Request has already been processed") {
-            return NextResponse.json({ error: "Pengajuan koreksi sudah diproses." }, { status: 409 });
+        if (err instanceof AttendanceCorrectionError) {
+            return NextResponse.json({ error: err.message, code: err.code }, { status: err.statusCode });
         }
         return serverErrorResponse("AttendanceCorrectionPATCH", err);
     }

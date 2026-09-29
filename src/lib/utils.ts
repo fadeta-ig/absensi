@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { formatWIBDateTime, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,8 +15,7 @@ export function toDateString(d: Date | string | null | undefined): string {
     if (!d) return "";
     const date = d instanceof Date ? d : new Date(d);
     if (isNaN(date.getTime())) return "";
-    // Use WIB (Asia/Jakarta) to avoid UTC date-shift between 00:00-06:59 WIB
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
+    return toWIBDateString(date);
 }
 
 /** Convert Date/string → full ISO string. Returns null for null/undefined. */
@@ -32,7 +32,8 @@ export function toTimeString(d: Date | string | null | undefined): string {
     if (!d) return "-";
     const date = d instanceof Date ? d : new Date(d);
     if (isNaN(date.getTime())) return "-";
-    return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const { hours, minutes } = getWIBHoursMinutes(date);
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 /** Convert Date/string → "YYYY-MM-DD" for display (WIB), returns "-" for null. */
@@ -40,7 +41,7 @@ export function toDateDisplay(d: Date | string | null | undefined): string {
     if (!d) return "-";
     const date = d instanceof Date ? d : new Date(d);
     if (isNaN(date.getTime())) return "-";
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
+    return toWIBDateString(date);
 }
 
 /** 
@@ -52,13 +53,12 @@ export function formatIndonesianDate(d: Date | string | null | undefined): strin
     const date = d instanceof Date ? d : new Date(d);
     if (isNaN(date.getTime())) return "-";
     
-    return new Intl.DateTimeFormat("id-ID", {
+    return formatWIBDateTime(date, {
         weekday: "long",
         day: "numeric",
         month: "long",
         year: "numeric",
-        timeZone: "Asia/Jakarta"
-    }).format(date);
+    });
 }
 
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

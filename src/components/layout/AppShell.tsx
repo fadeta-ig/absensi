@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { LucideIcon, LogOut, Loader2, Menu, X, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LucideIcon, LogOut, Loader2, Menu, X, ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { consumeAuthRedirectMessage } from "@/lib/authRedirectMessage";
@@ -199,7 +199,7 @@ export default function AppShell({
         <div className="flex min-h-screen bg-[var(--background)]">
 
             {/* ── Mobile Header ─────────────────────────────────── */}
-            <header className="fixed top-0 left-0 right-0 h-14 bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
+            <header className="fixed top-0 left-0 right-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
                 {hideMobileHamburger ? (
                     <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 relative shrink-0">
@@ -383,7 +383,7 @@ export default function AppShell({
             )}
 
             {/* ── Main Content ──────────────────────────────────── */}
-            <main className={`flex-1 min-w-0 w-full pt-14 lg:pt-0 min-h-screen transition-all duration-300 overflow-x-hidden ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"} ${mobileBottomNav ? "pb-28 lg:pb-8" : "pb-8"}`}>
+            <main className={`flex-1 min-w-0 w-full pt-[calc(3.5rem+env(safe-area-inset-top))] lg:pt-0 min-h-screen transition-all duration-300 overflow-x-hidden ${sidebarCollapsed ? "lg:ml-[72px]" : "lg:ml-64"} ${mobileBottomNav ? "pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8" : "pb-8"}`}>
                 <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto w-full min-w-0">
                     {children}
                 </div>

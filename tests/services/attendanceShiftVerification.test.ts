@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
     getNormalizedShiftWindows,
-    formatMinutes,
     resolveAttendanceTargetForEmployee,
     ScheduleDay,
     ShiftTolerance,
@@ -16,8 +15,8 @@ import type { AttendanceRecord } from "@/types";
  * - Scenario 1: Clock-In jam 22:45 (Senin) -> Sukses tercatat di tanggal Senin
  * - Scenario 2: Clock-Out jam 07:05 (Selasa) -> Sukses menutup record Senin (H-1)
  * - Scenario 3: Keterlambatan Shift Malam: Masuk jam 23:30 -> Status 'late'
- * - Scenario 4: Pulang Terlalu Cepat: Pulang jam 05:00 -> Ditolak (Early Out Block)
- * - Scenario 5: Pulang Terlalu Lambat: Pulang jam 08:30 -> Ditolak (Late Out Block)
+ * - Scenario 4: Pulang jam 05:00 -> Resolver tetap menerima CLOCK_OUT
+ * - Scenario 5: Pulang jam 08:30 -> Resolver tetap menerima CLOCK_OUT
  * - Scenario 6: Transisi Rotasi Shift: Karyawan Pagi berpindah ke Malam
  * ═══════════════════════════════════════════════════════════════════════════
  */
@@ -141,9 +140,9 @@ describe("Fase 3: Verification Plan — Skenario Menyeluruh 3-Shift 24 Jam", () 
     });
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SCENARIO 4: Pulang Terlalu Cepat (Jam 05:00) -> Ditolak (Early Out Block)
+    // SCENARIO 4: Pulang Terlalu Cepat (Jam 05:00) -> Resolver tetap CLOCK_OUT
     // ──────────────────────────────────────────────────────────────────────────
-    it("Scenario 4: Upaya Clock-Out jam 05:00 WIB (sebelum 07:00) harus ditolak oleh Early Out Check", async () => {
+    it("Scenario 4: Clock-Out jam 05:00 WIB tetap diarahkan ke rekor Senin", async () => {
         const mockMondayRecord: AttendanceRecord = {
             id: "att-rec-monday-001",
             employeeId: "EMP_NOC_01",
@@ -166,6 +165,10 @@ describe("Fase 3: Verification Plan — Skenario Menyeluruh 3-Shift 24 Jam", () 
         const target = await resolveAttendanceTargetForEmployee("EMP_NOC_01", earlyTuesdayMorning, shift3NightDays);
 
         expect(target.mode).toBe("CLOCK_OUT");
+        expect(target.shiftDate).toBe("2026-09-14");
+        if (target.mode === "CLOCK_OUT") {
+            expect(target.existingRecord.id).toBe("att-rec-monday-001");
+        }
         const windows = getNormalizedShiftWindows(target.scheduleDay!, shift3Tolerance);
 
         // Relatif menit 05:00 H+1: (5 + 24) * 60 = 1740 menit
@@ -173,18 +176,14 @@ describe("Fase 3: Verification Plan — Skenario Menyeluruh 3-Shift 24 Jam", () 
         // Earliest Out: 07:00 H+1 = 1860 menit
         expect(windows.earliestOutMinutes).toBe(1860);
 
-        // 1740 < 1860 -> Harus terblokir (tidak boleh pulang duluan)
-        const isAllowedToClockOut = target.relativeClockMinutes >= windows.earliestOutMinutes;
-        expect(isAllowedToClockOut).toBe(false);
-
-        const errorMessage = `Belum waktunya clock-out. Anda bisa pulang mulai pukul ${formatMinutes(windows.earliestOutMinutes)}.`;
-        expect(errorMessage).toBe("Belum waktunya clock-out. Anda bisa pulang mulai pukul 07:00.");
+        // The window remains display metadata only; the resolver does not reject clock-out.
+        expect(target.relativeClockMinutes < windows.earliestOutMinutes).toBe(true);
     });
 
     // ──────────────────────────────────────────────────────────────────────────
-    // SCENARIO 5: Pulang Terlalu Lambat (Jam 08:30) -> Ditolak (Late Out Block)
+    // SCENARIO 5: Pulang Terlalu Lambat (Jam 08:30) -> Resolver tetap CLOCK_OUT
     // ──────────────────────────────────────────────────────────────────────────
-    it("Scenario 5: Upaya Clock-Out jam 08:30 WIB (melewati lateCheckOut 08:00) harus ditolak oleh Late Out Check", async () => {
+    it("Scenario 5: Clock-Out jam 08:30 WIB tetap diarahkan ke rekor Senin", async () => {
         const mockMondayRecord: AttendanceRecord = {
             id: "att-rec-monday-001",
             employeeId: "EMP_NOC_01",
@@ -207,6 +206,10 @@ describe("Fase 3: Verification Plan — Skenario Menyeluruh 3-Shift 24 Jam", () 
         const target = await resolveAttendanceTargetForEmployee("EMP_NOC_01", tooLateTuesdayMorning, shift3NightDays);
 
         expect(target.mode).toBe("CLOCK_OUT");
+        expect(target.shiftDate).toBe("2026-09-14");
+        if (target.mode === "CLOCK_OUT") {
+            expect(target.existingRecord.id).toBe("att-rec-monday-001");
+        }
         const windows = getNormalizedShiftWindows(target.scheduleDay!, shift3Tolerance);
 
         // Relatif menit 08:30 H+1: (8 + 24) * 60 + 30 = 1950 menit
@@ -214,12 +217,8 @@ describe("Fase 3: Verification Plan — Skenario Menyeluruh 3-Shift 24 Jam", () 
         // Latest Out: 08:00 H+1 = 1920 menit
         expect(windows.latestOutMinutes).toBe(1920);
 
-        // 1950 > 1920 -> Melewati batas toleransi kepulangan
-        const isWithinLateCheckOut = target.relativeClockMinutes <= windows.latestOutMinutes;
-        expect(isWithinLateCheckOut).toBe(false);
-
-        const errorMessage = `Waktu clock-out sudah melewati batas pukul ${formatMinutes(windows.latestOutMinutes)}. Hubungi HR.`;
-        expect(errorMessage).toBe("Waktu clock-out sudah melewati batas pukul 08:00. Hubungi HR.");
+        // The window remains display metadata only; the resolver does not reject clock-out.
+        expect(target.relativeClockMinutes > windows.latestOutMinutes).toBe(true);
     });
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 > **Purpose**: Peta rute API, struktur endpoint, dan kontrak payload HTTP.  
 > **Source of Truth**: Route Handlers di `src/app/api/**/route.ts` dan middleware `src/lib/middleware/apiGuard.ts`.  
-> **Last Verified**: 2026-09-26
+> **Last Verified**: 2026-09-29
 
 Dokumen ini mendokumentasikan konvensi antarmuka API RESTful, pola guard otorisasi, struktur envelope data, dan direktori endpoint backend platform **Presensi & HRIS WIG**.
 
@@ -84,10 +84,18 @@ export const POST = apiGuard(
 ### B. Kehadiran & Presensi (`/api/attendance`)
 | Rute | Metode | Permission / Akses | Deskripsi |
 |---|---|---|---|
-| `/api/attendance` | `GET` | `attendance:read` | Mengambil riwayat log kehadiran pegawai atau seluruh kantor. |
-| `/api/attendance` | `POST` | `attendance:create` | Melakukan clock-in atau clock-out dengan validasi Wi-Fi, GPS, & Foto. Mendukung presensi hari libur (`offDayReason` wajib jika `isOffDay`). |
-| `/api/attendance/correction` | `GET`, `POST`, `PUT` | `attendance:correct` | Pengajuan dan persetujuan koreksi jam kehadiran oleh atasan. |
-| `/api/attendance/network` | `GET` | Autentikasi | Memeriksa status kesesuaian IP terhadap jaringan kantor, status bypass, serta status shift & jadwal lintas hari (`isOffDay`, `shiftName`, `todaySchedule`, `isOvernight`, `activeMode`, `shiftDate`). |
+| `/api/attendance` | `GET` | Employee terkait / `hr.manage` | Mengambil riwayat log kehadiran pegawai atau seluruh kantor. Setiap record membawa metadata shift efektif pada tanggal record (`shiftDate`, `shiftId`, `shiftName`, jam shift, sumber, `isOvernight`) dari roster ber-tanggal/fallback/default. Tanpa foto base64 massal (hanya flag `hasClockInPhoto/hasClockOutPhoto`); `Cache-Control: no-store`. |
+| `/api/attendance` | `POST` | Employee terkait | Clock-in/out dengan body `{action: CLOCK_IN\|CLOCK_OUT, shiftDate: YYYY-MM-DD, photo, location?, offDayReason?}`. Server menghitung ulang target dari jam WIB; konflik stale/ganda → `409` (`ALREADY_COMPLETED`/`STATE_CHANGED` + konteks server). Clock-out selalu diterima; tanpa overtime otomatis. |
+| `/api/attendance/correction` | `GET`, `POST`, `PATCH` | Employee sendiri / `WIG001` + `hr.manage` | Pengajuan koreksi (maks 1 PENDING per karyawan+tanggal; timestamp eksplisit `+07:00`, dukung clock-out H+1). Tanggal yang memiliki leave pending/approved ditolak (`409 LEAVE_CONFLICT`). List/approve semua hanya WIG001; karyawan hanya milik sendiri. Duplikat → `409 PENDING_EXISTS`. |
+| `/api/attendance/network` | `GET` | Autentikasi | Konteks server WIB: `serverWibNow`, `serverWibDate`, `timeZone`, `shiftDate`, `activeMode`, `isOvernight`, `todaySchedule`, status Wi-Fi/bypass/shift. Selalu fresh (`NetworkOnly`, `no-store`). |
+| `/api/attendance/photos/[id]?phase=clockIn\|clockOut` | `GET` | `hr.manage` | Mengambil satu foto presensi sebagai binary (`image/jpeg|png|webp`, `private, no-store`). ID tidak valid/fase salah → `404`/`400`. |
+| `/api/attendance/shift-schedule?date=YYYY-MM-DD` | `GET` | Employee terkait | Jadwal shift milik sendiri pada tanggal tertentu (nama, jam, libur, overnight). Dipakai form koreksi untuk H+1 otomatis. |
+| `/api/shifts/assignments?date=YYYY-MM-DD` | `GET` | `hr.manage` | Roster shift efektif per karyawan pada tanggal tertentu. |
+| `/api/shifts/assignments` | `POST` | `hr.manage` | Bulk roster (maks 200): `{assignments: [{employeeId, shiftId, effectiveFrom, effectiveTo?}]}`. Auto-chaining + tolak overlap (`409 OVERLAP`). |
+| `/api/shifts/assignments` | `DELETE` | `hr.manage` | Batalkan satu assignment masa depan:
+`{employeeId, effectiveFrom}`. Assignment sebelumnya yang terpotong oleh chaining dibuka kembali; assignment hari
+ini/masa lalu tidak dapat dihapus. |
+| `/api/employee/shift-schedule?days=14` | `GET` | `employee.self` | Jadwal shift N hari ke depan (1-31, default 14) untuk employee yang login: tanggal, hari, nama/jam shift, libur, lintas-hari, sumber. |
 
 ### C. Manajemen Karyawan (`/api/employees`)
 | Rute | Metode | Permission / Akses | Deskripsi |
@@ -186,7 +194,7 @@ Kontrak notulen penting:
 ### H. Layanan Mandiri Karyawan (`/api/leave`, `/api/letter-requests`, `/api/todos`)
 | Rute | Metode | Permission / Akses | Deskripsi |
 |---|---|---|---|
-| `/api/leave` | `GET`, `POST`, `PUT` | `leave:read`, `create` | Pengajuan cuti tahunan/sakit dan persetujuan atasan. |
+| `/api/leave` | `GET`, `POST`, `PUT` | `leave:read`, `create` | Pengajuan cuti tahunan/sakit dan persetujuan atasan. Tanggal wajib `YYYY-MM-DD` valid dan satu rentang dibatasi maksimal 366 hari kalender inklusif; create serta update yang melampaui batas ditolak `400`. |
 | `/api/letter-requests` | `GET`, `POST`, `PUT` | `letters:read`, `create`| Permohonan surat keterangan resmi perusahaan (SK Kerja, Penghasilan). |
 | `/api/todos` | `GET`, `POST`, `PUT` | Autentikasi | Manajemen papan tugas personal karyawan (*personal todo list*). |
 
@@ -214,5 +222,5 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 ### K. Ekspor & Penarikan Laporan (`/api/export`)
 | Rute | Metode | Permission / Akses | Deskripsi |
 |---|---|---|---|
-| `/api/export` | `GET` | Role `hr` | Penarikan data dan ekspor file laporan (Excel `.xlsx` atau JSON preview). Parameter wajib: `type` (`attendance`, `visits`, `overtime`, `leave`), `startDate` (`YYYY-MM-DD`), `endDate` (`YYYY-MM-DD`). Opsional: `mode=matrix`, `grouped=true`, `format=excel\|preview`, `divisionId`, `departmentId`, `employeeId`. Rentang waktu dihitung presisi menggunakan WIB offset (`+07:00`). |
+| `/api/export` | `GET` | Role `hr` | Penarikan data dan ekspor file laporan (Excel `.xlsx` atau JSON preview). Parameter wajib: `type` (`attendance`, `visits`, `overtime`, `leave`), `startDate` (`YYYY-MM-DD`), `endDate` (`YYYY-MM-DD`). Opsional: `mode=matrix`, `grouped=true`, `format=excel\|preview`, `divisionId`, `departmentId`, `employeeId`. Rentang waktu dihitung presisi menggunakan WIB offset (`+07:00`); sel tanggal matrix attendance mempertahankan jam masuk/pulang dan menambahkan catatan/alasan hari libur bila ada. |
 

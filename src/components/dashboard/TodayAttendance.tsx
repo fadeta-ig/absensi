@@ -1,11 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-    ClipboardList, UserCheck, UserX, ArrowRight,
-    Users, Megaphone,
-} from "lucide-react";
+import { ClipboardList, ArrowRight, Users, Megaphone } from "lucide-react";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
+import { toTimeString } from "@/lib/utils";
 
 interface Employee {
     id: string;
@@ -33,21 +31,17 @@ interface NewsItem {
 
 interface TodayAttendanceProps {
     todayAttendance: AttendanceRecord[];
-    activeEmployees: Employee[];
     employees: Employee[];
     news: NewsItem[];
     getEmployeeName: (empId: string) => string;
 }
 
-export default function TodayAttendance({ todayAttendance, activeEmployees, employees, news, getEmployeeName }: TodayAttendanceProps) {
+export default function TodayAttendance({ todayAttendance, employees, news, getEmployeeName }: TodayAttendanceProps) {
     const router = useRouter();
-    const presentIds = new Set(todayAttendance.map((a) => a.employeeId));
-    const absent = activeEmployees.filter((e) => !presentIds.has(e.employeeId));
 
     return (
         <>
-            {/* Today's Attendance + Not Yet Present */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            <div className="grid grid-cols-1 gap-6 items-stretch">
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                         <h2 className="text-[12px] font-bold text-[#800020] uppercase tracking-wider flex items-center gap-2">
@@ -74,8 +68,8 @@ export default function TodayAttendance({ todayAttendance, activeEmployees, empl
                                             <div>
                                                 <p className="text-sm font-medium text-[var(--text-primary)]">{getEmployeeName(a.employeeId)}</p>
                                                 <p className="text-[10px] text-[var(--text-muted)]">
-                                                    Masuk: {a.clockIn ? new Date(a.clockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
-                                                    {a.clockOut && ` • Pulang: ${new Date(a.clockOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`}
+                                                    Masuk: {a.clockIn ? `${toTimeString(a.clockIn)} WIB` : "-"}
+                                                    {a.clockOut && ` • Pulang: ${toTimeString(a.clockOut)} WIB`}
                                                 </p>
                                             </div>
                                         </div>
@@ -89,35 +83,6 @@ export default function TodayAttendance({ todayAttendance, activeEmployees, empl
                     </div>
                 </div>
 
-                {/* Not Yet Present */}
-                <div className="flex flex-col gap-3">
-                    <h2 className="text-[12px] font-bold text-[#800020] uppercase tracking-wider flex items-center gap-2">
-                        <UserX className="w-4 h-4 text-[#ef4444]" /> Belum Hadir Hari Ini
-                    </h2>
-                    <div className="card flex-1 flex flex-col">
-                        {absent.length === 0 ? (
-                            <div className="p-8 text-center flex-1 flex flex-col justify-center">
-                                <UserCheck className="w-8 h-8 text-[#16a34a] opacity-30 mx-auto mb-2" />
-                                <p className="text-xs text-[var(--text-muted)]">Semua karyawan sudah hadir 🎉</p>
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-[var(--border)] flex-1 overflow-y-auto min-h-[150px]">
-                                {absent.slice(0, 5).map((e) => (
-                                    <div key={e.id} className="p-3 flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xs font-bold">
-                                            {e.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-[var(--text-primary)]">{e.name}</p>
-                                            <p className="text-[10px] text-[var(--text-muted)]">{e.department} • {e.position}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                                {absent.length > 5 && <p className="text-xs text-center py-2 text-[var(--text-muted)]">+{absent.length - 5} lainnya</p>}
-                            </div>
-                        )}
-                    </div>
-                </div>
             </div>
 
             {/* News + Employee Table */}
@@ -137,7 +102,7 @@ export default function TodayAttendance({ todayAttendance, activeEmployees, empl
                                 {news.slice(0, 3).map((n) => (
                                     <div key={n.id} className="p-3">
                                         <p className="text-sm font-medium text-[var(--text-primary)]">{n.title}</p>
-                                        <p className="text-[10px] text-[var(--text-muted)] mt-1">{n.category} • {new Date(n.createdAt).toLocaleDateString("id-ID")}</p>
+                                        <p className="text-[10px] text-[var(--text-muted)] mt-1">{n.category} • {new Date(n.createdAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}</p>
                                     </div>
                                 ))}
                             </div>

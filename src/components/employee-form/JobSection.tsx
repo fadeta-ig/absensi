@@ -75,11 +75,12 @@ export function JobSection({
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="form-group !mb-0">
-                    <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3 text-[var(--text-muted)]" /> Shift Kerja</span></label>
+                    <label className="form-label"><span className="flex items-center gap-1"><Clock className="w-3 h-3 text-[var(--text-muted)]" /> Shift Kerja (dasar)</span></label>
                     <select className="form-select" value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })} required>
                         <option value="">Pilih Shift</option>
                         {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Shift dasar bila tanpa jadwal roster. Perubahan bertanggal (rotasi/cuti panjang) diatur di <a className="underline" href="/dashboard/shifts/roster">Roster Shift</a>.</p>
                 </div>
                 <div className="form-group !mb-0">
                     <label className="form-label"><span className="flex items-center gap-1"><Calendar className="w-3 h-3 text-[var(--text-muted)]" /> Tanggal Bergabung</span></label>

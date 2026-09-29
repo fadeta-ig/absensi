@@ -1,8 +1,9 @@
 import { prisma } from "../prisma";
 import { Employee, AttendanceRecord, VisitReport, LeaveRequest, PayslipRecord } from "@/types";
 import { AssetWithHistory } from "../types/asset";
-import { calculateWorkingDays } from "./leaveService";
 import { toDateString, toISOOrNull } from "@/lib/utils";
+import { toWIBDateString } from "@/lib/timezone";
+import { countWorkingDaysForEmployee, resolveShiftForDate } from "@/lib/services/shiftAssignmentService";
 import logger from "@/lib/logger";
 import type {
     AttendanceRecord as DbAttendanceRecord,
@@ -129,6 +130,7 @@ export type Employee360Data = {
         leaveUsed: number;
         leaveRemaining: number;
     };
+    effectiveShift: { name: string | null; source: "assignment" | "fallback" | "default" | "none" };
     recentAttendance: AttendanceRecord[];
     recentVisits: VisitReport[];
     recentLeaves: LeaveRequest[];
@@ -218,24 +220,18 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
 
     const attendanceRate = totalDays > 0 ? ((presentDays + lateDays) / totalDays) * 100 : 0;
 
-    // Hitung usedLeave dari data aktual — TIDAK mengupdate DB
-    // Resolve shift offDays for accurate calculation
-    const offDays = new Set<number>([0]); // default: Minggu
-    if (employee.shiftId) {
-        const shift = await prisma.workShift.findUnique({
-            where: { id: employee.shiftId },
-            include: { days: true },
-        });
-        if (shift) {
-            offDays.clear();
-            for (const d of shift.days) {
-                if (d.isOff) offDays.add(d.dayOfWeek);
-            }
-        }
-    }
-    const realUsedLeave = approvedLeaves.reduce(
-        (sum, l) => sum + calculateWorkingDays(l.startDate, l.endDate, offDays), 0
-    );
+    // Hitung approved leave dari roster yang berlaku pada setiap tanggal cuti.
+    // Shift efektif hari ini hanya untuk label profil, bukan untuk menafsir ulang histori.
+    const [effectiveShift, approvedLeaveDays] = await Promise.all([
+        resolveShiftForDate(prisma, employee.employeeId, toWIBDateString(new Date())),
+        Promise.all(approvedLeaves.map((leave) => countWorkingDaysForEmployee(
+            prisma,
+            employee.employeeId,
+            toDateString(leave.startDate),
+            toDateString(leave.endDate),
+        ))),
+    ]);
+    const realUsedLeave = approvedLeaveDays.reduce((sum, days) => sum + days, 0);
 
     return {
         employee: mapEmployee(employee),
@@ -246,6 +242,7 @@ export async function getEmployee360Data(id: string): Promise<Employee360Data | 
             leaveUsed: realUsedLeave,
             leaveRemaining: Math.max(0, employee.totalLeave - realUsedLeave),
         },
+        effectiveShift: { name: effectiveShift?.shiftName ?? null, source: effectiveShift?.source ?? "none" },
         recentAttendance: attendance.map(mapAttendance),
         recentVisits: visits.map(mapVisit),
         recentLeaves: leaves.map(mapLeave),

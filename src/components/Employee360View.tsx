@@ -35,6 +35,7 @@ interface Employee360ViewProps {
         leaveUsed: number;
         leaveRemaining: number;
     };
+    effectiveShift?: { name: string | null; source: "assignment" | "fallback" | "default" | "none" };
     recentAttendance: AttendanceRecord[];
     recentVisits: VisitReport[];
     recentLeaves: LeaveRequest[];
@@ -48,6 +49,7 @@ interface Employee360ViewProps {
 export function Employee360View({
     employee,
     stats,
+    effectiveShift,
     recentAttendance,
     recentVisits,
     recentLeaves,
@@ -58,6 +60,11 @@ export function Employee360View({
     compact = false
 }: Employee360ViewProps) {
     const [activeTab, setActiveTab] = useState("attendance");
+    const effectiveShiftTitle = effectiveShift?.source === "assignment"
+        ? "Roster yang berlaku hari ini"
+        : effectiveShift?.source === "fallback"
+            ? "Shift dasar karyawan yang berlaku hari ini"
+            : "Shift default sistem yang berlaku hari ini";
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -77,7 +84,13 @@ export function Employee360View({
                             <span className={`badge ${employee.isActive ? "badge-success" : "badge-error"}`}>
                                 {employee.isActive ? "Active" : "Inactive"}
                             </span>
+                            {effectiveShift?.name && (
+                                <span className="badge badge-info" title={effectiveShiftTitle}>
+                                    Shift hari ini: {effectiveShift.name}{effectiveShift.source === "assignment" ? " (roster)" : ""}
+                                </span>
+                            )}
                         </div>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Cuti disetujui dihitung per hari sesuai roster yang berlaku pada tanggal cuti.</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -96,7 +109,7 @@ export function Employee360View({
                 <StatCard label="Kehadiran" value={`${stats.attendanceRate.toFixed(1)}%`} sub="Rata-rata" icon={Activity} color="text-blue-600" bg="bg-blue-500/10" />
                 <StatCard label="Terlambat" value={stats.lateCount.toString()} sub="Kejadian" icon={Clock} color="text-orange-600" bg="bg-orange-500/10" />
                 <StatCard label="Kunjungan" value={stats.visitCount.toString()} sub="Laporan" icon={MapPin} color="text-green-600" bg="bg-green-500/10" />
-                <StatCard label="Sisa Cuti" value={`${stats.leaveRemaining} Hari`} sub={`${stats.leaveUsed} hari terpakai`} icon={CalendarDays} color="text-[var(--primary)]" bg="bg-[var(--primary)]/10" />
+                <StatCard label="Sisa Cuti" value={`${stats.leaveRemaining} Hari`} sub={`${stats.leaveUsed} hari cuti disetujui`} icon={CalendarDays} color="text-[var(--primary)]" bg="bg-[var(--primary)]/10" />
                 <StatCard label="Aset Dipegang" value={assignedAssets.length.toString()} sub="Aset aktif" icon={Package} color="text-purple-600" bg="bg-purple-500/10" />
             </div>
 

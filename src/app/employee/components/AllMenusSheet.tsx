@@ -116,6 +116,14 @@ export default function AllMenusSheet({
                     color: "text-blue-600 dark:text-blue-400",
                 },
                 {
+                    href: "/employee/schedule",
+                    label: "Jadwal Saya",
+                    description: "Jadwal shift kerja 14 hari ke depan",
+                    icon: CalendarCheck,
+                    bg: "bg-indigo-50 dark:bg-indigo-950/40",
+                    color: "text-indigo-600 dark:text-indigo-400",
+                },
+                {
                     href: "/employee/attendance/correction",
                     label: "Koreksi Presensi",
                     description: "Pengajuan perbaikan jam hadir yang terlewat",

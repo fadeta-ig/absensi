@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer, Copy } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, CalendarClock, Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer, Copy } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -54,6 +55,7 @@ export default function ShiftsPage() {
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
+    const [actionError, setActionError] = useState("");
     const [actionId, setActionId] = useState<string | null>(null);
     const [initializingPackage, setInitializingPackage] = useState(false);
 
@@ -81,7 +83,9 @@ export default function ShiftsPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const doSave = async () => {
         setLoading(true);
+        setActionError("");
         const method = editId ? "PUT" : "POST";
         const body = editId ? { ...form, id: editId } : form;
         try {
@@ -100,10 +104,24 @@ export default function ShiftsPage() {
             toast(editId ? "Shift berhasil diperbarui." : "Shift berhasil ditambahkan.", "success");
         } catch (error) {
             reportClientError("ShiftsPage", editId ? "Gagal menyimpan perubahan shift" : "Gagal menambahkan shift", error, { shiftId: editId });
-            toast(error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift.", "error");
+            const message = error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift.";
+            setActionError(message);
+            toast(message, "error");
         } finally {
             setLoading(false);
         }
+        };
+        if (editId) {
+            confirm({
+                title: "Ubah Definisi Shift",
+                message: "Mengubah jam/hari shift akan mempengaruhi cara roster yang memakai shift ini dibaca, termasuk jadwal yang sudah berjalan. Lanjutkan?",
+                variant: "warning",
+                confirmLabel: "Ya, Simpan",
+                onConfirm: () => { void doSave(); },
+            });
+            return;
+        }
+        await doSave();
     };
 
     const handleDelete = async (id: string) => {
@@ -113,6 +131,7 @@ export default function ShiftsPage() {
             variant: "danger",
             confirmLabel: "Ya, Hapus",
             onConfirm: async () => {
+                setActionError("");
                 try {
                     const res = await fetch(`/api/shifts?id=${id}`, { method: "DELETE" });
                     if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus shift."));
@@ -120,7 +139,9 @@ export default function ShiftsPage() {
                     toast("Shift berhasil dihapus.", "success");
                 } catch (error) {
                     reportClientError("ShiftsPage", "Gagal menghapus shift", error, { shiftId: id });
-                    toast(error instanceof Error ? error.message : "Gagal menghapus shift.", "error");
+                    const message = error instanceof Error ? error.message : "Gagal menghapus shift.";
+                    setActionError(message);
+                    toast(message, "error");
                 }
             },
         });
@@ -128,6 +149,7 @@ export default function ShiftsPage() {
 
     const handleSetDefault = async (shift: WorkShift) => {
         setActionId(shift.id);
+        setActionError("");
         try {
             const res = await fetch("/api/shifts", {
                 method: "PUT",
@@ -143,7 +165,9 @@ export default function ShiftsPage() {
             toast("Shift default berhasil diperbarui.", "success");
         } catch (error) {
             reportClientError("ShiftsPage", "Gagal menjadikan shift default", error, { shiftId: shift.id });
-            toast(error instanceof Error ? error.message : "Gagal menjadikan shift sebagai default.", "error");
+            const message = error instanceof Error ? error.message : "Gagal menjadikan shift sebagai default.";
+            setActionError(message);
+            toast(message, "error");
         } finally {
             setActionId(null);
         }
@@ -157,6 +181,7 @@ export default function ShiftsPage() {
             confirmLabel: "Ya, Inisialisasi",
             onConfirm: async () => {
                 setInitializingPackage(true);
+                setActionError("");
                 try {
                     const res = await fetch("/api/shifts/preset", { method: "POST" });
                     if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menginisialisasi paket 3-shift."));
@@ -170,7 +195,9 @@ export default function ShiftsPage() {
                     toast("Paket 3-Shift 24 Jam berhasil diinisialisasi!", "success");
                 } catch (err) {
                     reportClientError("ShiftsPage", "Gagal inisialisasi paket 3 shift", err);
-                    toast(err instanceof Error ? err.message : "Gagal menginisialisasi paket shift.", "error");
+                    const message = err instanceof Error ? err.message : "Gagal menginisialisasi paket shift.";
+                    setActionError(message);
+                    toast(message, "error");
                 } finally {
                     setInitializingPackage(false);
                 }
@@ -179,6 +206,7 @@ export default function ShiftsPage() {
     };
 
     const openEdit = (shift: WorkShift) => {
+        setActionError("");
         setEditId(shift.id);
         const sortedDays = [...shift.days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
         // Fill missing days
@@ -202,6 +230,7 @@ export default function ShiftsPage() {
         setShowForm(false);
         setEditId(null);
         setForm(INIT_FORM);
+        setActionError("");
     };
 
     const updateDay = (dayOfWeek: number, field: keyof ShiftDay, value: string | boolean) => {
@@ -321,9 +350,16 @@ export default function ShiftsPage() {
                         {initializingPackage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
                         Paket 3-Shift 24 Jam
                     </button>
-                    <button className="btn btn-primary" onClick={() => { setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
+                    <button className="btn btn-primary" onClick={() => { setActionError(""); setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
                         <Plus className="w-4 h-4" /> Tambah Shift
                     </button>
+                    <Link
+                        href="/dashboard/shifts/roster"
+                        className="btn btn-secondary text-xs flex items-center gap-1.5"
+                        title="Atur rotasi shift karyawan per tanggal berlaku"
+                    >
+                        <CalendarClock className="w-4 h-4" /> Roster Shift
+                    </Link>
                 </div>
             </div>
 
@@ -331,6 +367,13 @@ export default function ShiftsPage() {
                 <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{loadError}</span>
+                </div>
+            )}
+
+            {actionError && (
+                <div role="alert" className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{actionError}</span>
                 </div>
             )}
 
@@ -446,6 +489,13 @@ export default function ShiftsPage() {
                             <button className="modal-close" onClick={closeForm}><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            {actionError && (
+                                <div role="alert" className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <span>{actionError}</span>
+                                </div>
+                            )}
+
                             {/* Quick 3-Shift Presets */}
                             <div className="rounded-lg border border-[var(--border)] p-3 bg-[var(--bg-secondary)] space-y-2">
                                 <div className="flex items-center justify-between">
@@ -497,6 +547,9 @@ export default function ShiftsPage() {
                                         <Copy className="w-3 h-3" /> Salin Senin → Sel-Jum
                                     </button>
                                 </div>
+                                <p className="px-4 py-2 text-[11px] text-[var(--text-muted)] border-b border-[var(--border)]">
+                                    Lengkapi tepat 7 hari. Waktu harus dalam format HH:mm (00:00–23:59); toleransi di bawah menggunakan bilangan bulat menit minimal 0.
+                                </p>
                                 <div className="divide-y divide-[var(--border)]">
                                     {form.days
                                         .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
@@ -553,28 +606,28 @@ export default function ShiftsPage() {
                                             <ShieldAlert className="w-3 h-3 inline mr-1 text-amber-500" />
                                             Toleransi Terlambat Masuk
                                         </label>
-                                        <input type="number" min={0} className="form-input" placeholder="0" value={form.lateCheckIn} onChange={(e) => setForm({ ...form, lateCheckIn: parseInt(e.target.value) || 0 })} />
+                                        <input type="number" min={0} step={1} className="form-input" placeholder="0" value={form.lateCheckIn} onChange={(e) => setForm({ ...form, lateCheckIn: parseInt(e.target.value) || 0 })} />
                                     </div>
                                     <div className="form-group !mb-0">
                                         <label className="form-label text-[11px]">
                                             <Clock className="w-3 h-3 inline mr-1 text-blue-500" />
                                             Boleh Masuk Lebih Awal
                                         </label>
-                                        <input type="number" min={0} className="form-input" placeholder="0" value={form.earlyCheckIn} onChange={(e) => setForm({ ...form, earlyCheckIn: parseInt(e.target.value) || 0 })} />
+                                        <input type="number" min={0} step={1} className="form-input" placeholder="0" value={form.earlyCheckIn} onChange={(e) => setForm({ ...form, earlyCheckIn: parseInt(e.target.value) || 0 })} />
                                     </div>
                                     <div className="form-group !mb-0">
                                         <label className="form-label text-[11px]">
                                             <ShieldAlert className="w-3 h-3 inline mr-1 text-violet-500" />
                                             Boleh Pulang Lebih Awal
                                         </label>
-                                        <input type="number" min={0} className="form-input" placeholder="0" value={form.earlyCheckOut} onChange={(e) => setForm({ ...form, earlyCheckOut: parseInt(e.target.value) || 0 })} />
+                                        <input type="number" min={0} step={1} className="form-input" placeholder="0" value={form.earlyCheckOut} onChange={(e) => setForm({ ...form, earlyCheckOut: parseInt(e.target.value) || 0 })} />
                                     </div>
                                     <div className="form-group !mb-0">
                                         <label className="form-label text-[11px]">
                                             <Timer className="w-3 h-3 inline mr-1 text-emerald-500" />
                                             Boleh Pulang Lebih Lambat
                                         </label>
-                                        <input type="number" min={0} className="form-input" placeholder="0" value={form.lateCheckOut} onChange={(e) => setForm({ ...form, lateCheckOut: parseInt(e.target.value) || 0 })} />
+                                        <input type="number" min={0} step={1} className="form-input" placeholder="0" value={form.lateCheckOut} onChange={(e) => setForm({ ...form, lateCheckOut: parseInt(e.target.value) || 0 })} />
                                     </div>
                                 </div>
                             </div>

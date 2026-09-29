@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Camera, CheckSquare, Square, FileSpreadsheet, Wifi, ShieldCheck, MapPin, CalendarClock } from "lucide-react";
-import { AttendanceRecord } from "../types";
+import { AttendanceRecord, calculateAttendanceDuration } from "../types";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
@@ -95,8 +95,8 @@ export function AttendanceLogTab({
                 { key: "department", label: "Departemen" },
                 { key: "division", label: "Divisi" },
                 { key: "date", label: "Tanggal" },
-                { key: "clockIn", label: "Jam Masuk" },
-                { key: "clockOut", label: "Jam Pulang" },
+                { key: "clockIn", label: "Jam Masuk (WIB)" },
+                { key: "clockOut", label: "Jam Pulang (WIB)" },
                 { key: "attendanceType", label: "Tipe Kehadiran" },
                 { key: "verification", label: "Verifikasi Jaringan" },
                 { key: "status", label: "Status" },
@@ -129,9 +129,9 @@ export function AttendanceLogTab({
                         <TableHead className="w-32">ID Karyawan</TableHead>
                         <TableHead>Nama</TableHead>
                         <TableHead className="hidden lg:table-cell">Departemen</TableHead>
-                        <TableHead className="w-32">Tanggal</TableHead>
-                        <TableHead className="w-24">Clock In</TableHead>
-                        <TableHead className="w-24">Clock Out</TableHead>
+                        <TableHead className="w-32">Tanggal Shift</TableHead>
+                        <TableHead className="w-24">Clock In (WIB)</TableHead>
+                        <TableHead className="w-24">Clock Out (WIB)</TableHead>
                         <TableHead className="w-28 text-center">Verifikasi</TableHead>
                         <TableHead className="w-20 text-center hidden md:table-cell">Foto</TableHead>
                         <TableHead className="w-32 text-center">Status</TableHead>
@@ -150,6 +150,8 @@ export function AttendanceLogTab({
                                 const isSelected = selectedIds.has(r.id);
                                 const loc = (typeof r.clockInLocation === "object" ? r.clockInLocation : null) ||
                                             (typeof r.clockOutLocation === "object" ? r.clockOutLocation : null);
+                                const duration = calculateAttendanceDuration(r.clockIn, r.clockOut);
+                                const isCrossDay = Boolean(r.isOvernight);
                                 return (
                                     <TableRow key={r.id} className={isSelected ? "bg-[var(--primary)]/5" : ""}>
                                         <TableCell className="text-center">
@@ -176,7 +178,7 @@ export function AttendanceLogTab({
                                         </td>
                                         <td className="text-sm text-[var(--text-secondary)]">
                                             <div className="flex flex-col gap-1 items-start">
-                                                <span>{r.date}</span>
+                                                <span>{r.shiftDate ?? r.date}</span>
                                                 {r.isOffDay && (
                                                     <span
                                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
@@ -186,6 +188,19 @@ export function AttendanceLogTab({
                                                         Hari Libur
                                                     </span>
                                                 )}
+                                                {r.isOffDay && r.offDayReason && (
+                                                    <span className="max-w-[180px] whitespace-normal break-words text-[10px] italic text-[var(--text-muted)]">
+                                                        {r.offDayReason}
+                                                    </span>
+                                                )}
+                                                {isCrossDay && (
+                                                    <span
+                                                        className="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+                                                        title={r.shiftName && r.shiftStartTime && r.shiftEndTime ? `${r.shiftName}: ${r.shiftStartTime}-${r.shiftEndTime}` : "Shift lintas hari"}
+                                                    >
+                                                        Lintas Hari H+1
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="text-sm font-medium text-blue-600">
@@ -193,6 +208,7 @@ export function AttendanceLogTab({
                                         </td>
                                         <td className="text-sm font-medium text-orange-600">
                                             {formatTime(r.clockOut)}
+                                            {duration && <span className="block text-[10px] font-normal text-[var(--text-muted)]">Durasi {duration}</span>}
                                         </td>
                                         <td className="text-center">
                                             {loc?.isOfficeWifi ? (
@@ -225,26 +241,26 @@ export function AttendanceLogTab({
                                         </td>
                                         <td className="hidden md:table-cell">
                                             <div className="flex items-center justify-center gap-1">
-                                                {r.clockInPhoto ? (
+                                                {r.hasClockInPhoto || r.clockInPhoto ? (
                                                     <button
-                                                        onClick={() => setPhotoPreview({ url: r.clockInPhoto!, label: `Clock In — ${info.name} (${r.date})` })}
+                                                        onClick={() => setPhotoPreview({ url: r.clockInPhoto || `/api/attendance/photos/${r.id}?phase=clockIn`, label: `Clock In — ${info.name} (${r.date})` })}
                                                         className="w-8 h-8 rounded-md overflow-hidden border border-blue-200 hover:border-blue-400 transition-colors cursor-pointer"
                                                         title="Lihat foto masuk"
                                                     >
-                                                        <img src={r.clockInPhoto} alt="In" className="w-full h-full object-cover" />
+                                                        <img src={r.clockInPhoto || `/api/attendance/photos/${r.id}?phase=clockIn`} alt="In" className="w-full h-full object-cover" />
                                                     </button>
                                                 ) : (
                                                     <div className="w-8 h-8 rounded-md bg-[var(--secondary)] flex items-center justify-center">
                                                         <Camera className="w-3 h-3 text-gray-300" />
                                                     </div>
                                                 )}
-                                                {r.clockOutPhoto ? (
+                                                {r.hasClockOutPhoto || r.clockOutPhoto ? (
                                                     <button
-                                                        onClick={() => setPhotoPreview({ url: r.clockOutPhoto!, label: `Clock Out — ${info.name} (${r.date})` })}
+                                                        onClick={() => setPhotoPreview({ url: r.clockOutPhoto || `/api/attendance/photos/${r.id}?phase=clockOut`, label: `Clock Out — ${info.name} (${r.date})` })}
                                                         className="w-8 h-8 rounded-md overflow-hidden border border-orange-200 hover:border-orange-400 transition-colors cursor-pointer"
                                                         title="Lihat foto pulang"
                                                     >
-                                                        <img src={r.clockOutPhoto} alt="Out" className="w-full h-full object-cover" />
+                                                        <img src={r.clockOutPhoto || `/api/attendance/photos/${r.id}?phase=clockOut`} alt="Out" className="w-full h-full object-cover" />
                                                     </button>
                                                 ) : (
                                                     <div className="w-8 h-8 rounded-md bg-[var(--secondary)] flex items-center justify-center">

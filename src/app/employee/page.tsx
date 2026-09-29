@@ -11,12 +11,14 @@ import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AllMenusSheet from "./components/AllMenusSheet";
+import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
 interface NewsItem { id: string; title: string; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
 
 export default function EmployeeHomePage() {
     const toast = useToast();
+    const serverContext = useAttendanceServerContext();
     const [user, setUser] = useState<{ 
         name: string; 
         employeeId: string; 
@@ -27,7 +29,6 @@ export default function EmployeeHomePage() {
         hasSubordinates?: boolean;
         subordinates?: unknown[];
     } | null>(null);
-    const [currentTime, setCurrentTime] = useState(new Date());
     const [news, setNews] = useState<NewsItem[]>([]);
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
@@ -74,21 +75,22 @@ export default function EmployeeHomePage() {
 
         void loadHomeData();
 
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-        return () => clearInterval(timer);
     }, [toast]);
 
-    const today = new Date().toISOString().split("T")[0];
-    const todayRecord = attendance.find((a) => a.date === today);
+    const attendanceDate = serverContext.context?.shiftDate;
+    const todayRecord = attendanceDate ? attendance.find((record) => record.date === attendanceDate) : undefined;
 
     const getStatusLabel = (s: string) => {
         switch (s) { case "present": return "Hadir Tepat Waktu"; case "late": return "Terlambat"; default: return s; }
     };
 
-    const hour = currentTime.getHours();
+    const hour = serverContext.displayWibHour;
     let greeting = "Selamat Malam!";
     let subGreeting = "Waktunya istirahat dan persiapkan diri untuk hari esok yang lebih baik.";
-    if (hour >= 5 && hour < 11) {
+    if (hour === null) {
+        greeting = "Waktu server belum tersedia";
+        subGreeting = "Sambungkan perangkat ke internet untuk memuat tanggal dan waktu presensi resmi.";
+    } else if (hour >= 5 && hour < 11) {
         greeting = "Selamat Pagi!";
         subGreeting = "Awali hari dengan semangat dan senyuman. Siap untuk mencapai target hari ini!";
     } else if (hour >= 11 && hour < 15) {
@@ -117,7 +119,9 @@ export default function EmployeeHomePage() {
                     )}
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-0.5">
-                            {currentTime.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}
+                            {serverContext.displayWibDate
+                                ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long" }).format(new Date(`${serverContext.displayWibDate}T00:00:00+07:00`))
+                                : "Menunggu waktu server"}
                         </p>
                         <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] leading-none">
                             {user?.name?.split(" ")[0] ?? "Sobat"}
@@ -128,7 +132,7 @@ export default function EmployeeHomePage() {
                     </div>
                 </div>
                 <span className="text-lg font-bold font-mono tracking-tighter text-[var(--text-primary)] pt-0.5">
-                    {currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    {serverContext.displayWibTime?.slice(0, 5) ?? "--:--"} WIB
                 </span>
             </div>
 
@@ -148,6 +152,15 @@ export default function EmployeeHomePage() {
                 </div>
             )}
 
+            {(!serverContext.isFresh || !serverContext.isOnline) && (
+                <div className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-start justify-between gap-3 text-xs text-amber-800 dark:text-amber-300" role="status">
+                    <span>
+                        {serverContext.isOnline ? "Konteks waktu server belum segar." : "Perangkat offline."} Waktu yang terlihat adalah snapshot server terakhir dan tidak digunakan untuk mengirim presensi.
+                    </span>
+                    <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">Coba lagi</button>
+                </div>
+            )}
+
             {/* ─── Greeting ────────────────────────────────────── */}
             <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-5 py-4">
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">
@@ -155,6 +168,11 @@ export default function EmployeeHomePage() {
                     <span className="text-[var(--text-muted)] font-medium italic text-[11px] ml-1">Happy Shine On You</span>
                 </h2>
                 <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed mt-1.5">{subGreeting}</p>
+                {attendanceDate && (
+                    <p className="text-[10px] text-[var(--text-muted)] mt-2">
+                        Presensi shift {attendanceDate}: {todayRecord ? getStatusLabel(todayRecord.status) : "Belum tercatat"}
+                    </p>
+                )}
             </div>
 
             {/* ─── Quick Actions ───────────────────────────────── */}

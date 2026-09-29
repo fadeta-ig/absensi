@@ -15,10 +15,12 @@ import TodayAttendance from "@/components/dashboard/TodayAttendance";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
-import { toWIBDateString } from "@/lib/timezone";
+import { formatWIBDateTime, getWIBHoursMinutes } from "@/lib/timezone";
 
 // ─── Types ────────────────────────────────────────────────────
 interface AnalyticsData {
+    serverWibNow: string;
+    serverWibDate: string;
     summary: {
         totalEmployees: number;
         activeToday: number;
@@ -48,7 +50,7 @@ export default function DashboardPage() {
     const [initialLoading, setInitialLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+    const [lastUpdated, setLastUpdated] = useState<string | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const fetchAllData = useCallback(async (showToast = false) => {
@@ -81,7 +83,7 @@ export default function DashboardPage() {
             if (Array.isArray(newsData)) setNews(newsData);
             if (analyticsData?.summary) setAnalytics(analyticsData);
             setLoadError(null);
-            setLastUpdated(new Date());
+            setLastUpdated(analyticsData.serverWibNow ?? null);
             if (showToast) toast("Dashboard berhasil diperbarui.", "success");
         } catch (error) {
             reportClientError("DashboardPage", "Gagal memuat data dashboard", error, { showToast });
@@ -111,7 +113,7 @@ export default function DashboardPage() {
     }, [fetchAllData]);
 
     // ─── Derived State ────────────────────────────────────────
-    const today = toWIBDateString();
+    const today = analytics?.serverWibDate ?? "";
     const todayAttendance = attendance.filter((a) => a.date === today);
     const activeEmps = employees.filter((e) => e.isActive);
     const pendingLeaves = leaves.filter((l) => l.status === "pending");
@@ -122,8 +124,9 @@ export default function DashboardPage() {
         l.status === "approved" && today >= l.startDate && today <= l.endDate
     ).length;
 
-    const now = new Date();
-    const greeting = now.getHours() < 12 ? "Selamat Pagi" : now.getHours() < 17 ? "Selamat Siang" : "Selamat Malam";
+    const serverNow = analytics?.serverWibNow ? new Date(analytics.serverWibNow) : null;
+    const serverHour = serverNow ? getWIBHoursMinutes(serverNow).hours : null;
+    const greeting = serverHour === null ? "Selamat Datang" : serverHour < 12 ? "Selamat Pagi" : serverHour < 17 ? "Selamat Siang" : "Selamat Malam";
 
     const getEmployeeName = (empId: string) => {
         const emp = employees.find((e) => e.employeeId === empId);
@@ -138,7 +141,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-[var(--text-muted)]">{greeting} 👋</p>
                     <h1 className="text-2xl font-bold text-[var(--text-primary)] mt-1">HR Dashboard</h1>
                     <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                        {now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                        {serverNow ? formatWIBDateTime(serverNow, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : "Tanggal server belum tersedia"}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -154,7 +157,7 @@ export default function DashboardPage() {
                     >
                         <RefreshCw className={`w-3 h-3 text-[var(--text-muted)] ${refreshing ? "animate-spin" : ""}`} />
                         <span className="text-[10px] font-medium text-[var(--text-muted)]">
-                            {lastUpdated.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                            {lastUpdated ? `${formatWIBDateTime(new Date(lastUpdated), { hour: "2-digit", minute: "2-digit", hour12: false })} WIB` : "--:-- WIB"}
                         </span>
                     </button>
                 </div>
@@ -224,7 +227,6 @@ export default function DashboardPage() {
                     {/* Bottom sections */}
                     <TodayAttendance
                         todayAttendance={todayAttendance}
-                        activeEmployees={activeEmps}
                         employees={employees}
                         news={news}
                         getEmployeeName={getEmployeeName}

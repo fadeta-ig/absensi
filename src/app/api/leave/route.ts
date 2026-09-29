@@ -5,6 +5,8 @@ import { leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validat
 import { prisma } from "@/lib/prisma";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
+import { ShiftAssignmentError } from "@/lib/services/shiftAssignmentService";
+import { LeaveDateRangeError } from "@/lib/services/leaveDateRange";
 
 export async function GET() {
     const session = await requireAuth();
@@ -69,32 +71,10 @@ export async function POST(request: NextRequest) {
             if (days > 3) {
                 return NextResponse.json({ error: "Cuti mendampingi istri melahirkan (paternity) maksimal 3 hari." }, { status: 400 });
             }
-        } else if (body.type === "annual") {
-            // General Leave Balance Validation
-            const { calculateWorkingDays } = await import("@/lib/services/leaveService");
-            
-            const employeeData = await prisma.employee.findUnique({
-                where: { employeeId: session.employeeId },
-                select: { totalLeave: true, usedLeave: true, shiftId: true },
-            });
-
-            if (employeeData) {
-                let offDays = new Set<number>([0]);
-                if (employeeData.shiftId) {
-                    const shift = await prisma.workShift.findUnique({ where: { id: employeeData.shiftId }, include: { days: true } });
-                    if (shift) offDays = new Set(shift.days.filter(d => d.isOff).map(d => d.dayOfWeek));
-                }
-
-                const remainingLeave = employeeData.totalLeave - employeeData.usedLeave;
-                // Asumsi pengajuan cuti akan dicancel sebelum hari berakhir, tapi strict block:
-                const requestedDays = calculateWorkingDays(body.startDate, body.endDate, offDays);
-
-                if (requestedDays > remainingLeave) {
-                    return NextResponse.json({ error: `Sisa cuti Anda tidak mencukupi. Sisa: ${remainingLeave} hari, Diajukan: ${requestedDays} hari.` }, { status: 400 });
-                }
-            }
         }
 
+        // Saldo annual divalidasi satu kali di service memakai roster efektif
+        // per tanggal. Jangan hitung ulang memakai employee.shiftId saat ini.
         const leave = await createLeaveRequest({
             ...body,
             employeeId: session.employeeId,
@@ -115,6 +95,9 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(leave, { status: 201 });
     } catch (err) {
+        if (err instanceof LeaveDateRangeError || err instanceof ShiftAssignmentError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("LeavePOST", err);
     }
 }
@@ -148,6 +131,9 @@ export async function PUT(request: NextRequest) {
 
         return NextResponse.json(updated);
     } catch (err: unknown) {
+        if (err instanceof LeaveDateRangeError || err instanceof ShiftAssignmentError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         if (err instanceof Error && err.message.includes("Sisa cuti karyawan tidak mencukupi")) {
             return NextResponse.json({ error: err.message }, { status: 400 });
         }

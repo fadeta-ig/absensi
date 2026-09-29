@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
         subItems: [
             { href: "/dashboard/employees", label: "Karyawan" },
             { href: "/dashboard/shifts", label: "Jam Kerja" },
+            { href: "/dashboard/shifts/roster", label: "Roster Shift" },
             { href: "/dashboard/master-data", label: "Pengaturan Data" },
         ],
     },

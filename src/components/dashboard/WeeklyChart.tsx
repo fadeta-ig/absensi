@@ -26,7 +26,8 @@ export default function WeeklyChart({ weeklyData }: WeeklyChartProps) {
                             {weeklyData.map((d, i) => {
                                 const pctPresent = (d.present / maxChartVal) * 100;
                                 const pctLate = (d.late / maxChartVal) * 100;
-                                const dayLabel = new Date(d.date).toLocaleDateString("id-ID", { weekday: "short" });
+                                const dayLabel = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "short" })
+                                    .format(new Date(`${d.date}T12:00:00+07:00`));
                                 return (
                                     <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
                                         <div className="relative w-full flex flex-col justify-end" style={{ height: "130px" }}>

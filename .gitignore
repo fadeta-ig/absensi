@@ -36,6 +36,9 @@ yarn-error.log*
 /backups/
 *.log
 
+# local production database snapshots (contain private employee data)
+/backup_hris_db_*.sql
+
 # runtime uploads (file user/upload production tidak masuk repository)
 /public/uploads/
 
@@ -71,3 +74,8 @@ next-env.d.ts
 
 # temporary workspace
 /tmp/
+
+# agent workspace notes (local only, never commit)
+/task_plan.md
+/findings.md
+/progress.md

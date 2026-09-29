@@ -7,6 +7,17 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   disable: process.env.NODE_ENV === "development",
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/api/attendance"),
+        handler: "NetworkOnly",
+        method: "GET",
+        options: { cacheName: "attendance-live-context" },
+      },
+    ],
+  },
 });
 
 const nextConfig: NextConfig = {

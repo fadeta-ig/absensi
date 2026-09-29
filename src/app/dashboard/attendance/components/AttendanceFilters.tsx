@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Search, Calendar, Building2, Layers, Filter, RotateCcw, CalendarClock } from "lucide-react";
 import { MasterData } from "../types";
-import { getToday, getYesterday, getThisWeekRange, getThisMonthRange } from "@/lib/datePresets";
+import { getWibDatePresets } from "../types";
 
 interface Props {
     search: string;
@@ -20,6 +20,7 @@ interface Props {
     setTypeFilter: (val: string) => void;
     departments: MasterData[];
     divisions: MasterData[];
+    authoritativeDate: string;
 }
 
 export function AttendanceFilters({
@@ -30,12 +31,9 @@ export function AttendanceFilters({
     divFilter, setDivFilter,
     statusFilter, setStatusFilter,
     typeFilter, setTypeFilter,
-    departments, divisions
+    departments, divisions, authoritativeDate
 }: Props) {
-    const today = getToday();
-    const yesterday = getYesterday();
-    const thisWeek = getThisWeekRange();
-    const thisMonth = getThisMonthRange();
+    const { today, yesterday, thisWeek, thisMonth } = getWibDatePresets(authoritativeDate);
 
     // Cascading: departments filtered by selected division
     const availableDepartments = useMemo(() => {
@@ -109,7 +107,8 @@ export function AttendanceFilters({
                 {/* Search */}
                 <div className="relative flex-1 min-w-[280px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                    <input
+                         <input
+                             aria-label="Cari NIP atau nama karyawan"
                         className="form-input pl-10 h-11 w-full"
                         placeholder="Cari NIP atau nama karyawan..."
                         value={search}
@@ -121,7 +120,8 @@ export function AttendanceFilters({
                 <div className="flex items-center gap-2 flex-1 min-w-[280px]">
                     <div className="relative flex-1">
                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                        <input
+                         <input
+                             aria-label="Tanggal Mulai"
                             type="date"
                             className="form-input pl-10 h-11 w-full text-xs"
                             value={startDate}
@@ -132,7 +132,8 @@ export function AttendanceFilters({
                     <span className="text-[var(--text-muted)] font-medium text-xs">s/d</span>
                     <div className="relative flex-1">
                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                        <input
+                         <input
+                             aria-label="Tanggal Selesai"
                             type="date"
                             className="form-input pl-10 h-11 w-full text-xs"
                             value={endDate}

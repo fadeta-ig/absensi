@@ -2,7 +2,7 @@
 
 > **Purpose**: Persistent data and schema knowledge.  
 > **Source of Truth**: `prisma/schema.prisma` and live database tables.  
-> **Last Verified**: 2026-09-26
+> **Last Verified**: 2026-09-29
 
 Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, model entitas, relasi antar tabel, dan strategi migrasi. Skema aktual memuat **67 model Prisma** dan **19 enum**; setiap model dipetakan ke tabel fisik.
 
@@ -30,7 +30,7 @@ Basis data terdiri dari **66 model Prisma** yang dipetakan ke tabel fisik melalu
 4. `UserRoleAssignment` (`user_role_assignments`): Pemetaan akun ke peran dengan audit pembuat (`assigned_by_user_id`).
 5. `RolePermission` (`role_permissions`): Pemetaan peran ke izin.
 
-### B. Kepegawaian & Master Data (10 Model)
+### B. Kepegawaian & Master Data (11 Model)
 6. `Employee` (`employees`): Entitas induk karyawan. Kolom penting: `employee_id`, `name`, `email`, `department_id`, `division_id`, `position_id`, `employment_type`, `manager_id`, `total_leave`, `used_leave`, `bypass_location`, `is_active`.
 7. `Division` (`divisions`): Divisi perusahaan. Kolom penting: `name`, `is_active`.
 8. `Department` (`departments`): Departemen kerja di bawah divisi.
@@ -38,6 +38,7 @@ Basis data terdiri dari **66 model Prisma** yang dipetakan ke tabel fisik melalu
 10. `Location` (`locations`): Titik koordinat kantor untuk geofencing (`latitude`, `longitude`, `radius`).
 11. `WorkShift` (`work_shifts`): Master shift kerja dengan ambang toleransi waktu.
 12. `WorkShiftDay` (`work_shift_days`): Jadwal shift per hari dalam sepekan (`day_of_week`, `start_time`, `end_time`, `is_off`).
+12b. `ShiftAssignment` (`shift_assignments`): Roster ber-tanggal (`employee_id`, `shift_id`, `effective_from` inklusif, `effective_to` eksklusif/null). Unik `[employee_id, effective_from]`. `employees.shiftId` tetap sebagai fallback.
 13. `EmployeeStatusHistory` (`employee_status_histories`): Riwayat perubahan status aktif/non-aktif pegawai.
 14. `EmployeeImportJob` (`employee_import_jobs`): Log dan status proses batch import data karyawan via Excel.
 15. `EmployeeDocument` (`employee_documents`): Berkas arsip karyawan (KTP, NPWP, BPJS, Ijazah, Kontrak) dengan tanggal kedaluwarsa.

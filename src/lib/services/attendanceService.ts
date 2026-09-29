@@ -2,6 +2,15 @@ import { prisma } from "../prisma";
 import { AttendanceRecord } from "@/types";
 import logger from "@/lib/logger";
 import { toDateString, toISOOrNull } from "@/lib/utils";
+import { addCalendarDays, toUTCDateKey, toWIBDateString } from "@/lib/timezone";
+import {
+    getNormalizedShiftWindows,
+    isOvernightSchedule,
+    resolveAttendanceTargetFromRecords,
+    type AttendanceActionTarget,
+} from "@/lib/services/attendanceShiftHelper";
+import { Prisma } from "@prisma/client";
+import { resolveShiftForDate } from "@/lib/services/shiftAssignmentService";
 
 // ─── Date helpers imported from @/lib/utils ────────────────────
 
@@ -24,47 +33,130 @@ function parseLocation(val: any): AttendanceRecord["clockInLocation"] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toAttendanceRecord(row: any): AttendanceRecord {
+export function toAttendanceRecord(row: any): AttendanceRecord {
+    const date = toDateString(row.date);
     return {
         id: row.id,
         employeeId: row.employeeId,
-        date: toDateString(row.date),
+        date,
         clockIn: toISOOrNull(row.clockIn),
         clockOut: toISOOrNull(row.clockOut),
         clockInLocation: parseLocation(row.clockInLocation),
         clockOutLocation: parseLocation(row.clockOutLocation),
         clockInPhoto: row.clockInPhoto ?? null,
         clockOutPhoto: row.clockOutPhoto ?? null,
+        hasClockInPhoto: Boolean(row.hasClockInPhoto ?? row.clockInPhoto),
+        hasClockOutPhoto: Boolean(row.hasClockOutPhoto ?? row.clockOutPhoto),
         status: row.status as AttendanceRecord["status"],
         notes: row.notes ?? null,
         isOffDay: Boolean(row.isOffDay),
         offDayReason: row.offDayReason ?? null,
+        shiftDate: row.shiftDate ?? date,
+        shiftId: row.shiftId ?? null,
+        shiftName: row.shiftName ?? null,
+        shiftStartTime: row.shiftStartTime ?? null,
+        shiftEndTime: row.shiftEndTime ?? null,
+        shiftSource: row.shiftSource ?? "none",
+        isOvernight: Boolean(row.isOvernight),
     };
-}
-
-/** Buat Date range untuk query 1 hari penuh berdasarkan string YYYY-MM-DD secara spesifik tanpa UTC offset */
-function dayRange(dateString: string) {
-    const [year, month, day] = dateString.split("-").map(Number);
-    // Month is 0-indexed in JS Date
-    const start = new Date(year, month - 1, day);
-    const end = new Date(start.getTime() + 86400000);
-    return { gte: start, lt: end };
 }
 
 // ─── Service Functions ────────────────────────────────────────
 
 export async function getAttendanceRecords(employeeId?: string): Promise<AttendanceRecord[]> {
-    const rows = await prisma.attendanceRecord.findMany({
-        where: employeeId ? { employeeId } : undefined,
-        orderBy: { date: "desc" },
+    const where = employeeId ? { employeeId } : undefined;
+    const [rows, clockInPhotoRows, clockOutPhotoRows] = await Promise.all([
+        prisma.attendanceRecord.findMany({
+            where,
+            orderBy: { date: "desc" },
+            omit: { clockInPhoto: true, clockOutPhoto: true },
+        }),
+        prisma.attendanceRecord.findMany({
+            where: { ...where, clockInPhoto: { not: null } },
+            select: { id: true },
+        }),
+        prisma.attendanceRecord.findMany({
+            where: { ...where, clockOutPhoto: { not: null } },
+            select: { id: true },
+        }),
+    ]);
+    const clockInPhotoIds = new Set(clockInPhotoRows.map((row) => row.id));
+    const clockOutPhotoIds = new Set(clockOutPhotoRows.map((row) => row.id));
+    if (rows.length === 0) return [];
+
+    const employeeIds = [...new Set(rows.map((row) => row.employeeId))];
+    const recordDates = rows.map((row) => toDateString(row.date)).sort();
+    const minDate = toUTCDateKey(recordDates[0]);
+    const maxDate = toUTCDateKey(recordDates[recordDates.length - 1]);
+    const [assignments, employees, shifts] = await Promise.all([
+        prisma.shiftAssignment.findMany({
+            where: {
+                employeeId: { in: employeeIds },
+                effectiveFrom: { lte: maxDate },
+                OR: [{ effectiveTo: null }, { effectiveTo: { gt: minDate } }],
+            },
+            orderBy: [{ employeeId: "asc" }, { effectiveFrom: "desc" }],
+            select: { employeeId: true, shiftId: true, effectiveFrom: true, effectiveTo: true },
+        }),
+        prisma.employee.findMany({
+            where: { employeeId: { in: employeeIds } },
+            select: { employeeId: true, shiftId: true },
+        }),
+        prisma.workShift.findMany({
+            include: { days: true },
+        }),
+    ]);
+    const assignmentsByEmployee = new Map<string, typeof assignments>();
+    for (const assignment of assignments) {
+        const list = assignmentsByEmployee.get(assignment.employeeId) ?? [];
+        list.push(assignment);
+        assignmentsByEmployee.set(assignment.employeeId, list);
+    }
+    const fallbackByEmployee = new Map(employees.map((employee) => [employee.employeeId, employee.shiftId]));
+    const shiftById = new Map(shifts.map((shift) => [shift.id, shift]));
+    const defaultShift = shifts.find((shift) => shift.isDefault) ?? null;
+
+    return rows.map((row) => {
+        const shiftDate = toDateString(row.date);
+        const dateKey = toUTCDateKey(shiftDate);
+        const assignment = assignmentsByEmployee.get(row.employeeId)?.find((candidate) =>
+            candidate.effectiveFrom <= dateKey && (!candidate.effectiveTo || dateKey < candidate.effectiveTo)
+        );
+        const fallbackShiftId = fallbackByEmployee.get(row.employeeId);
+        const assignedShift = assignment ? shiftById.get(assignment.shiftId) : null;
+        const fallbackShift = fallbackShiftId ? shiftById.get(fallbackShiftId) : null;
+        const shift = assignedShift ?? fallbackShift ?? defaultShift;
+        const shiftSource = assignedShift
+            ? "assignment"
+            : fallbackShift
+                ? "fallback"
+                : defaultShift
+                    ? "default"
+                    : "none";
+        const scheduleDay = shift?.days.find((day) => day.dayOfWeek === dateKey.getUTCDay()) ?? null;
+
+        return toAttendanceRecord({
+            ...row,
+            hasClockInPhoto: clockInPhotoIds.has(row.id),
+            hasClockOutPhoto: clockOutPhotoIds.has(row.id),
+            shiftDate,
+            shiftId: shift?.id ?? null,
+            shiftName: shift?.name ?? null,
+            shiftStartTime: scheduleDay?.startTime ?? null,
+            shiftEndTime: scheduleDay?.endTime ?? null,
+            shiftSource,
+            isOvernight: Boolean(
+                scheduleDay &&
+                !scheduleDay.isOff &&
+                isOvernightSchedule(scheduleDay.startTime, scheduleDay.endTime)
+            ),
+        });
     });
-    return rows.map(toAttendanceRecord);
 }
 
 export async function getAttendanceByDate(employeeId: string, date: string): Promise<AttendanceRecord | undefined> {
-    // Cari berdasarkan range hari (karena date sekarang DateTime, bukan string exact match)
-    const row = await prisma.attendanceRecord.findFirst({
-        where: { employeeId, date: dayRange(date) },
+    const row = await prisma.attendanceRecord.findUnique({
+        where: { employeeId_date: { employeeId, date: toUTCDateKey(date) } },
     });
     if (!row) return undefined;
     return toAttendanceRecord(row);
@@ -74,7 +166,7 @@ export async function createAttendance(data: Omit<AttendanceRecord, "id">): Prom
     logger.info("Clock-in recorded", { employeeId: data.employeeId, date: data.date, status: data.status, isOffDay: data.isOffDay });
 
     // Parse date string → DateTime untuk Prisma
-    const dateObj = new Date(data.date);
+    const dateObj = toUTCDateKey(data.date);
     const clockInObj = data.clockIn ? new Date(data.clockIn) : undefined;
     const clockOutObj = data.clockOut ? new Date(data.clockOut) : undefined;
 
@@ -95,6 +187,175 @@ export async function createAttendance(data: Omit<AttendanceRecord, "id">): Prom
         },
     });
     return toAttendanceRecord(row);
+}
+
+export type AttendanceExpectedAction = "CLOCK_IN" | "CLOCK_OUT";
+
+export class AttendanceMutationError extends Error {
+    constructor(
+        message: string,
+        public readonly code: "STATE_CHANGED" | "ALREADY_COMPLETED" | "TOO_EARLY" | "OFF_DAY_REASON_REQUIRED" | "EMPLOYEE_NOT_FOUND",
+        public readonly statusCode: number,
+        public readonly target?: AttendanceActionTarget,
+    ) {
+        super(message);
+        this.name = "AttendanceMutationError";
+    }
+}
+
+interface AttendanceMutationInput {
+    employeeId: string;
+    expectedAction: AttendanceExpectedAction;
+    expectedShiftDate: string;
+    now: Date;
+    photo: string;
+    location: AttendanceRecord["clockInLocation"];
+    offDayReason?: string | null;
+}
+
+export interface AttendanceMutationResult {
+    record: AttendanceRecord;
+    target: AttendanceActionTarget;
+    isOffDay: boolean;
+}
+
+export async function performAttendanceMutation(input: AttendanceMutationInput): Promise<AttendanceMutationResult> {
+    try {
+        return await prisma.$transaction(async (tx) => {
+            const employees = await tx.$queryRaw<Array<{ employee_id: string }>>`
+                SELECT employee_id FROM employees WHERE employee_id = ${input.employeeId} FOR UPDATE
+            `;
+            if (employees.length === 0) {
+                throw new AttendanceMutationError("Data karyawan tidak ditemukan.", "EMPLOYEE_NOT_FOUND", 404);
+            }
+
+            const today = toWIBDateString(input.now);
+            const yesterday = addCalendarDays(today, -1);
+            const [todayShift, yesterdayShift] = await Promise.all([
+                resolveShiftForDate(tx, input.employeeId, today),
+                resolveShiftForDate(tx, input.employeeId, yesterday),
+            ]);
+            const shiftDays = todayShift?.days ?? [];
+            const tolerance = todayShift?.tolerance;
+            const yesterdayShiftDays = yesterdayShift?.days ?? shiftDays;
+            const yesterdayTolerance = yesterdayShift?.tolerance ?? tolerance;
+            const [yesterdayRow, todayRow] = await Promise.all([
+                tx.attendanceRecord.findUnique({
+                    where: { employeeId_date: { employeeId: input.employeeId, date: toUTCDateKey(yesterday) } },
+                }),
+                tx.attendanceRecord.findUnique({
+                    where: { employeeId_date: { employeeId: input.employeeId, date: toUTCDateKey(today) } },
+                }),
+            ]);
+            const target = resolveAttendanceTargetFromRecords(input.now, shiftDays, tolerance, {
+                yesterday: yesterdayRow ? toAttendanceRecord(yesterdayRow) : undefined,
+                today: todayRow ? toAttendanceRecord(todayRow) : undefined,
+            }, { days: yesterdayShiftDays, tolerance: yesterdayTolerance });
+
+            if (target.mode === "ALREADY_COMPLETED") {
+                throw new AttendanceMutationError(
+                    "Presensi untuk shift ini sudah tercatat lengkap.",
+                    "ALREADY_COMPLETED",
+                    409,
+                    target,
+                );
+            }
+            if (target.mode !== input.expectedAction || target.shiftDate !== input.expectedShiftDate) {
+                throw new AttendanceMutationError(
+                    "Status presensi telah berubah. Muat ulang data terbaru.",
+                    "STATE_CHANGED",
+                    409,
+                    target,
+                );
+            }
+
+            if (target.mode === "CLOCK_OUT") {
+                const changed = await tx.attendanceRecord.updateMany({
+                    where: { id: target.existingRecord.id, clockOut: null },
+                    data: {
+                        clockOut: input.now,
+                        clockOutLocation: input.location ? JSON.stringify(input.location) : null,
+                        clockOutPhoto: input.photo,
+                    },
+                });
+                if (changed.count !== 1) {
+                    throw new AttendanceMutationError(
+                        "Presensi pulang sudah tercatat.",
+                        "STATE_CHANGED",
+                        409,
+                        target,
+                    );
+                }
+                const row = await tx.attendanceRecord.findUniqueOrThrow({ where: { id: target.existingRecord.id } });
+                return { record: toAttendanceRecord(row), target, isOffDay: Boolean(row.isOffDay) };
+            }
+
+            const dayList = target.shiftDate === yesterday ? yesterdayShiftDays : shiftDays;
+            const isOffDay = dayList.length > 0 && (!target.scheduleDay || target.scheduleDay.isOff);
+            const reason = input.offDayReason?.trim();
+            if (isOffDay && (!reason || reason.length < 3)) {
+                throw new AttendanceMutationError(
+                    "Keperluan/alasan presensi hari libur wajib diisi (minimal 3 karakter).",
+                    "OFF_DAY_REASON_REQUIRED",
+                    400,
+                    target,
+                );
+            }
+
+            let status: "present" | "late" = "present";
+            if (!isOffDay && target.scheduleDay) {
+                const shiftTolerance = target.shiftDate === yesterday
+                    ? yesterdayTolerance
+                    : tolerance;
+                const windows = getNormalizedShiftWindows(target.scheduleDay, shiftTolerance);
+                if (target.relativeClockMinutes < windows.earliestInMinutes) {
+                    throw new AttendanceMutationError(
+                        `Belum waktunya clock-in. Presensi dapat dilakukan mulai pukul ${formatClockMinutes(windows.earliestInMinutes)}.`,
+                        "TOO_EARLY",
+                        400,
+                        target,
+                    );
+                }
+                if (target.relativeClockMinutes > windows.lateDeadlineMinutes) status = "late";
+            }
+
+            const row = await tx.attendanceRecord.create({
+                data: {
+                    employeeId: input.employeeId,
+                    date: toUTCDateKey(target.shiftDate),
+                    clockIn: input.now,
+                    clockInLocation: input.location ? JSON.stringify(input.location) : null,
+                    clockInPhoto: input.photo,
+                    status,
+                    isOffDay,
+                    offDayReason: isOffDay ? reason ?? null : null,
+                },
+            });
+            return { record: toAttendanceRecord(row), target, isOffDay };
+        });
+    } catch (error) {
+        if (error instanceof AttendanceMutationError) throw error;
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            const conflict = await prisma.attendanceRecord.findUnique({
+                where: { employeeId_date: { employeeId: input.employeeId, date: toUTCDateKey(input.expectedShiftDate) } },
+                select: { clockOut: true },
+            }).catch(() => null);
+            if (conflict?.clockOut) {
+                throw new AttendanceMutationError(
+                    "Shift ini sudah lengkap (masuk + pulang tercatat). Ajukan koreksi bila datanya salah.",
+                    "ALREADY_COMPLETED",
+                    409,
+                );
+            }
+            throw new AttendanceMutationError("Presensi sudah tercatat.", "STATE_CHANGED", 409);
+        }
+        throw error;
+    }
+}
+
+function formatClockMinutes(totalMinutes: number): string {
+    const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+    return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 }
 
 export async function updateAttendance(id: string, data: Partial<AttendanceRecord>): Promise<AttendanceRecord | null> {

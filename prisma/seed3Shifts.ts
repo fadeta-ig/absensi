@@ -1,6 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+type ShiftSeedClient = PrismaClient | Prisma.TransactionClient;
 
 export const STANDARD_3_SHIFTS = [
     {
@@ -35,7 +35,7 @@ export const STANDARD_3_SHIFTS = [
     },
 ];
 
-export async function seed3Shifts(client: PrismaClient = prisma) {
+export async function seed3Shifts(client: ShiftSeedClient) {
     console.log("🌱 Menjalankan Seeding Paket 3-Shift 24 Jam (Format 07:00)...");
     const results: string[] = [];
 
@@ -76,15 +76,16 @@ export async function seed3Shifts(client: PrismaClient = prisma) {
     return results;
 }
 
-if (require.main === module) {
-    seed3Shifts()
+if (typeof require !== "undefined" && require.main === module) {
+    const prisma = new PrismaClient();
+
+    prisma.$transaction((tx) => seed3Shifts(tx))
         .then(() => {
             console.log("✨ Seeding Paket 3-Shift 24 Jam selesai dengan sukses.");
-            process.exit(0);
         })
         .catch((err) => {
             console.error("❌ Gagal seeding 3-shift:", err);
-            process.exit(1);
+            process.exitCode = 1;
         })
         .finally(async () => {
             await prisma.$disconnect();

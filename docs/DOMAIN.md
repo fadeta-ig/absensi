@@ -2,7 +2,7 @@
 
 > **Purpose**: Business/domain knowledge.  
 > **Source of Truth**: Business services logic, calculations, and domain workflows.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-29
 
 Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan relasi utama dalam ekosistem **Presensi & HRIS WIG**.
 
@@ -20,8 +20,8 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
   - **Shift 1 (Pagi)**: `07:00 – 15:00` WIB (8 jam kerja).
   - **Shift 2 (Siang)**: `15:00 – 23:00` WIB (8 jam kerja).
   - **Shift 3 (Malam / Lintas Hari)**: `23:00 – 07:00` WIB (8 jam kerja, melintasi tengah malam ke H+1).
-  - **Shift Lintas Hari (Overnight / Cross-Day)**: Jika `endTime < startTime`, shift diidentifikasi sebagai lintas hari. Rekor presensi diatribusikan ke tanggal mulai shift (`shiftDate = H-1`). Saat Clock-Out di pagi hari H+1 (s.d. 14:00 WIB), sistem secara otomatis mencocokkannya ke record `H-1` yang belum memiliki `clockOut`. Perhitungan toleransi dinormalisasi dengan offset +1440 menit (24 jam).
-  - **Model Rotasi Karyawan**: Karyawan berotasi antar shift dengan memperbarui relasi `shiftId` pada master `Employee`.
+  - **Shift Lintas Hari (Overnight / Cross-Day)**: Jika `endTime < startTime`, shift diidentifikasi sebagai lintas hari. Rekor presensi diatribusikan ke tanggal mulai shift (`shiftDate = H-1`). Record terbuka H-1 dapat ditutup kapan pun sampai jendela clock-in shift berikutnya dimulai; clock-out selalu diterima dan tidak membuat lembur otomatis. Setelah jendela shift berikutnya dimulai, request menjadi clock-in tanggal shift baru dan record lama diselesaikan via koreksi HR. Perhitungan toleransi dinormalisasi dengan offset +1440 menit (24 jam).
+  - **Model Rotasi Karyawan**: Rotasi antar shift dicatat ber-tanggal pada `ShiftAssignment` (`employeeId`, `shiftId`, `effectiveFrom` inklusif, `effectiveTo` eksklusif/null). Kolom `shiftId` pada master `Employee` dipertahankan sebagai fallback bila tidak ada assignment mencakup tanggal. Semua penilaian (presensi, belum-hadir, koreksi, cuti) memakai shift yang berlaku pada tanggal kejadian, bukan shift saat ini.
 - **Employee (`employees`)**: Data induk karyawan yang memuat biodata, tipe ikatan kerja, kuota cuti tahunan, gaji pokok, serta relasi hierarki atasan-bawahan (`managerId` merujuk ke `employeeId` atasan).
 - **EmploymentType**: Status kepegawaian: `PERMANENT`, `CONTRACT`, `PROBATION`, atau `INTERN`.
 - **Status Kepegawaian & Riwayat**: Transisi status aktif/non-aktif dicatat ke `employee_status_histories` lengkap dengan tanggal efektif, alasan, dan identitas admin yang mengubah status.
@@ -32,7 +32,7 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **Aturan Geofencing**: Menghitung jarak Haversine antara koordinat perangkat saat presensi dengan titik lokasi kantor di tabel `Location` (`radius` default 100 meter).
 - **Bypass Location**: Atribut khusus pada pegawai (`bypass_location: true`) yang membebaskan validasi jaringan Wi-Fi dan geofencing (diperuntukkan bagi staf lapangan, kurir, atau level manajemen tertentu).
 - **Presensi Hari Libur (`isOffDay = true`)**: Karyawan yang masuk pada hari libur shift diizinkan melakukan presensi masuk dan pulang asalkan tetap memenuhi validasi jaringan Wi-Fi kantor dan GPS (radius ≤ 100m). Karyawan wajib mencantumkan alasan kehadiran (`offDayReason` minimal 3 karakter). Aturan toleransi keterlambatan dan pembatasan jam pulang dilewati, dan status kehadiran tercatat `present`. Kehadiran hari libur tidak secara otomatis mencairkan upah lembur (lembur tetap memerlukan tiket persetujuan resmi `OvertimeRequest` sesuai PP 35/2021).
-- **AttendanceCorrection (`attendance_corrections`)**: Permohonan perbaikan jam masuk/keluar oleh karyawan yang membutuhkan persetujuan (`AssessmentStatus`: `PENDING`, `APPROVED`, `REJECTED`) dari atasan/manajer.
+- **AttendanceCorrection (`attendance_corrections`)**: Permohonan perbaikan jam masuk/keluar oleh karyawan (`PENDING`, `APPROVED`, `REJECTED`); administrasi list/approval hanya oleh `WIG001` + `hr.manage`. Approval menghitung ulang `present/late`; tanggal dengan cuti/sakit pending/approved tidak dapat dikoreksi.
 
 ### C. General Affairs (GA) & Asset Management
 - **AssetCategory (`asset_categories`)**: Kategori aset dengan prefix kode inventaris (misal: Laptop `LPT-`, Kendaraan `KND-`).
@@ -82,7 +82,7 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
   - `stampedPath`: File gambar yang telah dicetak stempel resmi anti-manipulasi via engine `sharp`.
 
 ### G. Layanan Mandiri Karyawan (Self-Service)
-- **LeaveRequest (`leave_requests`)**: Pengajuan cuti (Cuti Tahunan, Sakit, dsb.). Saldo cuti tahunan default 12 hari per tahun. Cuti disetujui mengurangi saldo `usedLeave`.
+- **LeaveRequest (`leave_requests`)**: Pengajuan cuti (Cuti Tahunan, Sakit, dsb.). Saldo cuti tahunan default 12 hari per tahun. Cuti disetujui mengurangi saldo `usedLeave`. Satu rentang pengajuan dibatasi maksimal 366 hari kalender inklusif; rentang lebih panjang ditolak eksplisit agar perhitungan hari kerja roster tidak terpotong diam-diam.
 - **LetterRequest (`letter_requests`)**: Permohonan surat keterangan resmi: `SK_KERJA`, `KET_PENGHASILAN`, `KET_MASIH_BEKERJA`, `BPJS`.
 - **TodoItem (`todo_items`)**: Catatan tugas personal karyawan.
 

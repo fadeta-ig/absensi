@@ -2,7 +2,7 @@
 
 > **Purpose**: Alur sistem end-to-end utama (Data & Request Flows).  
 > **Source of Truth**: Alur navigasi UI, route handler API, dan service bisnis terpadu.  
-> **Last Verified**: 2026-09-26
+> **Last Verified**: 2026-09-29
 
 Dokumen ini memetakan alur kerja utama (*end-to-end user & data flows*) yang melintasi berbagai lapisan arsitektur platform dari interaksi pengguna, transport API, logika bisnis, hingga persistensi database.
 
@@ -41,38 +41,46 @@ Alur otentikasi memastikan integritas akses ke masing-masing portal aplikasi:
 
 ## 2. Flow: Presensi Harian 3-Faktor (Clock-In / Clock-Out)
 
-Alur validasi kehadiran memastikan karyawan benar-benar berada di lingkungan fisik kantor:
+Alur validasi kehadiran memastikan karyawan benar-benar berada di lingkungan fisik kantor.
+Jam server WIB adalah satu-satunya acuan bisnis; jam HP hanya untuk tampilan.
 
 ```text
 [ Karyawan (PWA) ]                           [ API: /api/attendance ]                    [ attendanceService.ts ]
-       │                                                │                                            │
-       │── 1. Ambil koordinat GPS perangkat             │                                            │
-       │── 2. Ambil foto selfie kamera (downsampled)    │                                            │
-       │── 3. Kirim payload presensi (GPS + Selfie) ───>│                                            │
-       │                                                │── 4. Ekstrak IP klien pengirim             │
-       │                                                │── 5. Delegasikan validasi ────────────────>│
-       │                                                │                                            │── 6. Cek employee.bypassLocation
-       │                                                │                                            │── 7. Verifikasi IP (Wi-Fi/Citranet)
-       │                                                │                                            │── 8. Hitung deviasi jarak GPS
-       │                                                │                                            │── 9. Evaluasi shift kerja & jam
-       │                                                │                                            │── 10. Simpan foto & persistensi DB
-       │<── 11. Response: Status Kehadiran (Sukses) ────│<── Hasil catatan presensi ──────────────────│
+        │                                                │                                            │
+        │── 0. GET /api/attendance/network ─────────────>│── hitung konteks server ─────────────────>│
+        │<── serverWibNow/shiftDate/activeMode ──────────│<── shiftDate + mode + jadwal ─────────────│
+        │── 1. Ambil koordinat GPS perangkat             │                                            │
+        │── 2. Ambil foto selfie kamera (downsampled)    │                                            │
+        │── 3. Kirim action+shiftDate yang diharapkan ──>│                                            │
+        │                                                │── 4. Ekstrak IP klien pengirim             │
+        │                                                │── 5. Delegasikan validasi ────────────────>│
+        │                                                │                                            │── 6. Cek employee.bypassLocation
+        │                                                │                                            │── 7. Verifikasi IP (Wi-Fi/Citranet)
+        │                                                │                                            │── 8. Hitung deviasi jarak GPS
+        │                                                │                                            │── 9. Hitung ulang target dari jam server
+        │                                                │                                            │── 10. Transaksi atomik + lock per karyawan
+        │<── 11a. Sukses: record + konteks server ───────│<── Hasil catatan presensi ─────────────────│
+        │<── 11b. Konflik 409: refresh konteks ──────────│<── action/tanggal sudah berubah ──────────│
 ```
 
-1. **Pengambilan Bukti Instan di Klien**: Saat karyawan membuka halaman presensi, aplikasi PWA langsung menyalakan kamera (kamera depan atau belakang) dan menginisialisasi verifikasi Wi-Fi serta GPS di latar belakang dalam satu layar (*single-screen HUD*). Karyawan dapat langsung menjepret foto kehadiran (selfie atau foto lokasi meja kerja), yang dikompresi ringan di peramban ke dimensi maksimal 480px untuk menghemat bandwidth.
-2. **Validasi Jaringan (Faktor 1)**: Kecuali karyawan memiliki bendera `bypass_location: true`, IP publik pengirim dicocokkan dengan IP statis ISP Citranet (`202.152.141.27`) atau subnet lokal router kantor WIG (`192.168.20.0/24`).
-3. **Validasi Geofence (Faktor 2)**: Koordinat GPS pengguna dihitung deviasinya terhadap koordinat titik kantor menggunakan rumus Haversine. Jarak harus berada di dalam batas toleransi radius lokasi kantor (default 100 meter).
-4. **Evaluasi Shift & Presensi Hari Libur**: Waktu server dicocokkan dengan jadwal kerja aktif karyawan (`WorkShiftDay`). Jika hari ini adalah jadwal libur (`isOff = true`):
-   - Karyawan wajib menyertakan alasan penugasan/dinas (`offDayReason` minimal 3 karakter).
+1. **Konteks Server Dulu**: Sebelum tombol aktif, PWA mengambil `GET /api/attendance/network` (`cache: no-store`, NetworkOnly di service worker) berisi `serverWibNow`, `serverWibDate`, `shiftDate`, `activeMode`, `isOvernight`, dan jadwal. Saat offline/gagal sinkron, tombol dinonaktifkan dan hanya jam server terakhir yang ditampilkan jujur (tidak memakai jam HP diam-diam).
+2. **Pengambilan Bukti Instan di Klien**: Saat karyawan membuka halaman presensi, aplikasi PWA langsung menyalakan kamera (kamera depan atau belakang) dan menginisialisasi verifikasi Wi-Fi serta GPS di latar belakang dalam satu layar (*single-screen HUD*). Karyawan dapat langsung menjepret foto kehadiran (selfie atau foto lokasi meja kerja), yang dikompresi ringan di peramban ke dimensi maksimal 480px untuk menghemat bandwidth. Double-tap dikunci via `ref` agar maksimal satu POST.
+3. **Validasi Jaringan (Faktor 1)**: Kecuali karyawan memiliki bendera `bypass_location: true`, IP publik pengirim dicocokkan dengan IP statis ISP Citranet (`202.152.141.27`) atau subnet lokal router kantor WIG (`192.168.20.0/24`).
+4. **Validasi Geofence (Faktor 2)**: Koordinat GPS pengguna dihitung deviasinya terhadap koordinat titik kantor menggunakan rumus Haversine. Jarak harus berada di dalam batas toleransi radius lokasi kantor (default 100 meter).
+5. **Mutasi Atomik Anti-Ganda**: Server mengunci baris karyawan (`SELECT ... FOR UPDATE`), baru me-resolve roster ber-tanggal H-1/hari ini di dalam transaksi yang sama, membaca tepat kunci attendance H-1 dan hari ini, menghitung ulang target dari jam server, lalu create/update kondisional. Mutasi roster memakai lock karyawan yang sama, sehingga presensi menunggu commit roster konkuren dan tidak memakai shift basi. Request basi/ganda mendapat `409` ("sudah tercatat"), bukan `500`. Kunci tanggal `date` tetap UTC-midnight agar cocok dengan data historis.
+6. **Evaluasi Shift & Presensi Hari Libur**: Waktu server dicocokkan dengan jadwal kerja aktif karyawan (`WorkShiftDay`). Jika hari ini adalah jadwal libur (`isOff = true`):
+   - Karyawan wajib menyertakan alasan penugasan/dinas (`offDayReason` minimal 3 karakter, ditegakkan di schema Zod).
    - Validasi toleransi jam masuk (`earlyCheckIn`) dan jam pulang (`earlyCheckOut`, `lateCheckOut`) dilewati.
    - Status kehadiran otomatis diset `present` (tanpa vonis terlambat).
    - Catatan disimpan dengan flag `is_off_day = true` untuk verifikasi audit HR.
-   Pada hari kerja reguler, sistem mengevaluasi apakah jam clock-in memenuhi toleransi keterlambatan (`lateCheckIn`) serta memblokir kepulangan sebelum jam shift berakhir. Entri disimpan secara permanen pada tabel `attendance_records`.
-5. **Resolusi Presensi Shift Lintas Hari (Overnight / Cross-Day)**:
+   Pada hari kerja reguler, sistem mengevaluasi apakah jam clock-in memenuhi toleransi keterlambatan (`lateCheckIn`). Clock-out **selalu diterima** setelah record terbuka yang tepat ditemukan — tidak ada penolakan terlalu awal/terlambat dan tidak ada pembuatan lembur otomatis (lembur lewat pengajuan terpisah). Entri disimpan secara permanen pada tabel `attendance_records`.
+7. **Resolusi Presensi Shift Lintas Hari (Overnight / Cross-Day)**:
    - Pada shift malam (`23:00 – 07:00`), karyawan melakukan Clock-In pada malam hari tanggal $D$ dan Clock-Out pada pagi hari $D+1$.
-   - Saat karyawan menekan Clock-Out di pagi hari (hingga pukul 14:00 WIB), `resolveAttendanceTargetForEmployee` memeriksa apakah terdapat catatan kehadiran terbuka dari hari kemarin ($D$).
-   - Jika ditemukan dan terverifikasi sebagai shift lintas hari, sistem menetapkan mode `CLOCK_OUT` terhadap record hari kemarin ($D$) dengan tanggal shift tetap diatribusikan ke $D$, bukan membuka entri baru hari $D+1$.
-   - Waktu jam kepulangan dinormalisasi dengan offset $+1440$ menit (misal: 07:00 WIB dinormalisasi menjadi menit ke-$1860$) sehingga toleransi `earlyCheckOut` dan `lateCheckOut` dievaluasi secara akurat tanpa kesalahan perhitungan selisih negatif.
+   - Record terbuka H-1 dapat ditutup kapan pun **sampai jendela clock-in shift berikutnya dimulai** (`startTime - earlyCheckIn`); tidak ada batas 14:00.
+   - Setelah jendela shift berikutnya dimulai, tombol dianggap Clock-In shift baru dan record H-1 tetap terbuka untuk koreksi HR. Sistem tidak pernah mencari/menutup H-2 atau record historis.
+   - Waktu jam kepulangan dinormalisasi dengan offset $+1440$ menit (misal: 07:00 WIB dinormalisasi menjadi menit ke-$1860$) sehingga toleransi dievaluasi secara akurat tanpa kesalahan perhitungan selisih negatif.
+8. **Koreksi Presensi**: Karyawan mengajukan koreksi tanggal lampau dengan timestamp eksplisit `+07:00` dan opsi clock-out H+1; jam masuk H+1 diterima otomatis bila jadwal tanggal target adalah shift lintas hari yang aktif dan jam masih dalam jendela (`00:00` s/d `endTime + lateCheckOut`). Maksimal satu PENDING per karyawan+tanggal; tanggal yang sudah ada cuti/sakit disetujui atau menunggu persetujuan ditolak dengan pesan jelas (`409 LEAVE_CONFLICT`). Approval atomik **hanya oleh `WIG001` + `hr.manage`**; staf HR lapangan tetap employee biasa. Row lama dengan `assigned_manager_id = NULL` tetap kompatibel. Saat APPROVED, sistem menulis jam usulan sekaligus menghitung ulang status `present/late` dari jam masuk usulan + jadwal/toleransi shift aktif (aturan batas identik dengan clock-in normal); koreksi jam-pulang saja dan record off-day/cuti tidak mengubah status.
+9. **Foto Lazy-Load HR**: Daftar `GET /api/attendance` tidak lagi membawa base64 foto massal (hanya flag `hasClockInPhoto/hasClockOutPhoto`); HR memuat satu foto via `GET /api/attendance/photos/[id]?phase=clockIn|clockOut`.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Purpose**: Things that are easy to get wrong or surprising.  
 > **Source of Truth**: Verified technical gotchas, Edge runtime peculiarities, and historical migration artifacts.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-09-28
 
 Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragile areas*), dan hal-hal yang wajib dihindari oleh developer maupun AI agent saat memodifikasi codebase ini.
 
@@ -28,10 +28,12 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 
 ## 3. Database Push vs Migrations (`_prisma_migrations`)
 
-- **Gotcha**: Codebase menggunakan workflow `prisma db push` (`npm run db:push`). Tabel internal `_prisma_migrations` tidak ada pada database lokal saat ini (`ERROR 1146`).
+- **Gotcha**: Workflow historis memakai `prisma db push`, tetapi database lokal hasil restore telah dibaseline ke 11 migration. Production snapshot memiliki `_prisma_migrations` 10 baris sementara struktur off-day sudah ada fisik.
 - **Pitfall**:
   - Menjalankan `prisma migrate deploy` di environment yang menggunakan `db:push` dapat memicu konflik atau kegagalan migrasi karena Prisma mengira database masih kosong dari migrasi.
   - Jangan menghapus folder `prisma/migrations/` karena folder tersebut memuat rekam jejak evolusi skema sebelumnya.
+- **Production drift (terverifikasi 2026-09-28)**: database production justru MEMILIKI `_prisma_migrations` (10 baris) sementara kolom `is_off_day`/`off_day_reason` sudah ada fisik tanpa row migration `20260917090000_add_off_day_attendance`. Jangan `migrate deploy` langsung; baseline dulu via `prisma migrate resolve --applied <name>` setelah `migrate diff` kosong, dengan backup + dry-run.
+- **Kontrak date-key**: `attendance_records.date` adalah kunci kalender UTC-midnight (`YYYY-MM-DDT00:00:00.000Z`), sedangkan `clockIn/clockOut` adalah instant kejadian. Jangan konversi massal tanggal lama; helper `toUTCDateKey()` di `src/lib/timezone.ts` adalah satu-satunya konversi yang diizinkan.
 
 ---
 
@@ -54,7 +56,7 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 
 - **Gotcha**: Pada versi awal sistem, kolom tanggal (`date`, `clockIn`, `clockOut`) disimpan sebagai string. Setelah migrasi, kolom tersebut diubah menjadi `DateTime` di Prisma.
 - **Pitfall**: Query pencarian kehadiran satu hari harus menggunakan range jam (`dayRange(dateString)` di `attendanceService.ts`), bukan perbandingan string langsung `where: { date: "2026-09-10" }` karena pergeseran zona waktu UTC/WIB.
-- Selalu gunakan helper dari `@/lib/timezone` (`toWIBDateString`, `getWIBHoursMinutes`) atau `@/lib/utils` (`toDateDisplay`, `toTimeString`) untuk memanipulasi tanggal presensi.
+- Selalu gunakan helper dari `@/lib/timezone` (`toUTCDateKey`, `toWIBDateString`, `getWIBHoursMinutes`) atau `@/lib/utils` (`toDateDisplay`, `toTimeString`) untuk memanipulasi tanggal presensi. Lookup satu hari memakai compound key exact `(employeeId,date)`, bukan range lokal.
 - Saat membuat boundary query Prisma dari string input tanggal, selalu sertakan offset WIB eksplisit: `${startDateStr}T00:00:00+07:00` dan `${endDateStr}T23:59:59.999+07:00` agar rentang waktu query konsisten di server mana pun (lokal maupun cloud UTC).
 
 ---

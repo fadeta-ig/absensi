@@ -49,7 +49,7 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
     ];
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden safe-area-bottom pointer-events-none px-4 pb-6">
+        <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pointer-events-none px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
             <nav className="pointer-events-auto bg-white/60 dark:bg-[#121212]/60 backdrop-blur-2xl backdrop-saturate-[1.8] border border-white/40 dark:border-white/10 rounded-[2rem] flex items-center justify-around pb-2 pt-2 px-2 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.6)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.05)] relative">
                 
                 {/* Ambient liquid glow behind the nav */}

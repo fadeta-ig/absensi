@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { isValidCalendarDate } from "@/lib/timezone";
+import { validateLeaveDateRange } from "@/lib/services/leaveDateRange";
 
 /* ───────────────────── Auth ───────────────────── */
 
@@ -35,12 +37,14 @@ const locationSchema = z.object({
 const MAX_PHOTO_LENGTH = 2_800_000; // ~2MB file → ~2.7MB base64
 
 export const attendanceSchema = z.object({
+    action: z.enum(["CLOCK_IN", "CLOCK_OUT"]),
+    shiftDate: z.string().refine(isValidCalendarDate, "Tanggal shift harus berformat YYYY-MM-DD yang valid"),
     /** Optional karena employees dengan bypassLocation=true tidak kirim lokasi. Validasi conditional di route handler. */
     location: locationSchema.optional(),
     photo: z.string()
         .min(1, "Foto presensi wajib disertakan sebagai bukti kehadiran")
         .max(MAX_PHOTO_LENGTH, "Ukuran foto terlalu besar (maks 2MB)"),
-    offDayReason: z.string().trim().max(500, "Alasan presensi hari libur maksimal 500 karakter").optional(),
+    offDayReason: z.string().trim().min(3, "Alasan presensi hari libur minimal 3 karakter").max(500, "Alasan presensi hari libur maksimal 500 karakter").optional(),
 });
 
 /* ───────────────────── Employee ───────────────────── */
@@ -171,32 +175,49 @@ export const employeeStatusChangeSchema = z.object({
 
 /* ───────────────────── Leave ───────────────────── */
 
+const leaveStartDateSchema = z.string()
+    .min(1, "Tanggal mulai harus diisi")
+    .refine(
+        isValidCalendarDate,
+        "Tanggal mulai harus berformat YYYY-MM-DD yang valid",
+    );
+const leaveEndDateSchema = z.string()
+    .min(1, "Tanggal selesai harus diisi")
+    .refine(
+        isValidCalendarDate,
+        "Tanggal selesai harus berformat YYYY-MM-DD yang valid",
+    );
+
 export const leaveRequestSchema = z.object({
     type: z.enum(["annual", "sick", "personal", "maternity", "paternity"], {
         message: "Tipe cuti tidak valid",
     }),
-    startDate: z.string().min(1, "Tanggal mulai harus diisi"),
-    endDate: z.string().min(1, "Tanggal selesai harus diisi"),
+    startDate: leaveStartDateSchema,
+    endDate: leaveEndDateSchema,
     reason: z.string().min(1, "Alasan harus diisi"),
     attachment: z.string().nullable().optional(),
+}).superRefine((data, context) => {
+    if (!isValidCalendarDate(data.startDate) || !isValidCalendarDate(data.endDate)) return;
+    const range = validateLeaveDateRange(data.startDate, data.endDate);
+    if (!range.success) {
+        context.addIssue({ code: "custom", path: [range.field], message: range.message });
+    }
 });
 
 export const leaveUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
     status: z.enum(["pending", "approved", "rejected"]).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: leaveStartDateSchema.optional(),
+    endDate: leaveEndDateSchema.optional(),
     reason: z.string().optional(),
     attachment: z.string().nullable().optional(),
     // ⛔ employeeId tidak bisa diubah via update
-}).refine(data => {
-    if (data.startDate && data.endDate) {
-        return new Date(data.endDate) >= new Date(data.startDate);
+}).superRefine((data, context) => {
+    if (!data.startDate || !data.endDate) return;
+    const range = validateLeaveDateRange(data.startDate, data.endDate);
+    if (!range.success) {
+        context.addIssue({ code: "custom", path: [range.field], message: range.message });
     }
-    return true;
-}, {
-    message: "Tanggal selesai tidak boleh sebelum tanggal mulai",
-    path: ["endDate"]
 });
 
 /* ───────────────────── Overtime ───────────────────── */
@@ -310,32 +331,51 @@ export const newsUpdateSchema = z.object({
 
 /* ───────────────────── Shift ───────────────────── */
 
+const strictShiftTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Waktu harus dalam format HH:mm (00:00-23:59)");
+const nonNegativeInteger = z.number().int("Nilai harus berupa bilangan bulat").min(0, "Nilai tidak boleh negatif");
+
 const shiftDaySchema = z.object({
-    dayOfWeek: z.number().min(0).max(6),
-    startTime: z.string(),
-    endTime: z.string(),
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: strictShiftTime,
+    endTime: strictShiftTime,
     isOff: z.boolean(),
+}).superRefine((day, ctx) => {
+    if (!day.isOff && day.startTime === day.endTime) {
+        ctx.addIssue({ code: "custom", path: ["endTime"], message: "Jam masuk dan pulang hari kerja tidak boleh sama" });
+    }
 });
 
+const shiftDaysSchema = z.array(shiftDaySchema)
+    .length(7, "Jadwal shift harus mencakup tepat 7 hari")
+    .superRefine((days, ctx) => {
+        const seen = new Set<number>();
+        days.forEach((day, index) => {
+            if (seen.has(day.dayOfWeek)) {
+                ctx.addIssue({ code: "custom", path: [index, "dayOfWeek"], message: "Hari dalam jadwal shift harus unik" });
+            }
+            seen.add(day.dayOfWeek);
+        });
+    });
+
 export const shiftCreateSchema = z.object({
-    name: z.string().min(1, "Nama shift harus diisi"),
+    name: z.string().trim().min(1, "Nama shift harus diisi"),
     isDefault: z.boolean().optional().default(false),
-    lateCheckIn: z.number().optional().default(0),
-    earlyCheckIn: z.number().optional().default(0),
-    lateCheckOut: z.number().optional().default(0),
-    earlyCheckOut: z.number().optional().default(0),
-    days: z.array(shiftDaySchema).optional(),
+    lateCheckIn: nonNegativeInteger.optional().default(0),
+    earlyCheckIn: nonNegativeInteger.optional().default(0),
+    lateCheckOut: nonNegativeInteger.optional().default(0),
+    earlyCheckOut: nonNegativeInteger.optional().default(0),
+    days: shiftDaysSchema,
 });
 
 export const shiftUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-    name: z.string().min(1).optional(),
+    name: z.string().trim().min(1).optional(),
     isDefault: z.boolean().optional(),
-    lateCheckIn: z.number().min(0).optional(),
-    earlyCheckIn: z.number().min(0).optional(),
-    lateCheckOut: z.number().min(0).optional(),
-    earlyCheckOut: z.number().min(0).optional(),
-    days: z.array(shiftDaySchema).optional(),
+    lateCheckIn: nonNegativeInteger.optional(),
+    earlyCheckIn: nonNegativeInteger.optional(),
+    lateCheckOut: nonNegativeInteger.optional(),
+    earlyCheckOut: nonNegativeInteger.optional(),
+    days: shiftDaysSchema.optional(),
 });
 
 /* ───────────────────── Todo ───────────────────── */
@@ -384,11 +424,14 @@ export const payslipCreateSchema = z.object({
 /* ───────────────────── Attendance Correction ───────────────────── */
 
 export const attendanceCorrectionCreateSchema = z.object({
-    targetDate: z.string().min(1, "Tanggal target harus diisi"),
-    proposedClockIn: z.string().nullable().optional(),
-    proposedClockOut: z.string().nullable().optional(),
-    reason: z.string().min(1, "Alasan harus diisi"),
+    targetDate: z.string().refine(isValidCalendarDate, "Tanggal target harus berformat YYYY-MM-DD yang valid"),
+    proposedClockIn: z.string().datetime({ offset: true }).nullable().optional(),
+    proposedClockOut: z.string().datetime({ offset: true }).nullable().optional(),
+    reason: z.string().trim().min(1, "Alasan harus diisi").max(2000, "Alasan maksimal 2000 karakter"),
     attachmentUrl: z.string().max(1000, "URL lampiran terlalu panjang").nullable().optional()
+}).refine((value) => Boolean(value.proposedClockIn || value.proposedClockOut), {
+    message: "Minimal salah satu usulan jam masuk atau jam pulang harus diisi",
+    path: ["proposedClockIn"],
 });
 
 export const attendanceCorrectionUpdateSchema = z.object({

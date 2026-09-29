@@ -8,6 +8,7 @@ import {
     ShiftTolerance,
 } from "@/lib/services/attendanceShiftHelper";
 import * as attendanceService from "@/lib/services/attendanceService";
+import type { AttendanceRecord } from "@/types";
 
 describe("24-Hour 3-Shift Logic & Overnight Calculations", () => {
     describe("isOvernightSchedule", () => {
@@ -115,7 +116,7 @@ describe("24-Hour 3-Shift Logic & Overnight Calculations", () => {
             };
 
             vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (empId, date) => {
-                if (date === "2026-09-17") return mockYesterdayRecord as any;
+                if (date === "2026-09-17") return mockYesterdayRecord as AttendanceRecord;
                 return undefined;
             });
 
@@ -132,6 +133,160 @@ describe("24-Hour 3-Shift Logic & Overnight Calculations", () => {
                 // Relative minutes on day H+1 at 07:05: (7 + 24) * 60 + 5 = 1865
                 expect(result.relativeClockMinutes).toBe(1865);
             }
+        });
+
+        it("should resolve H-1 as CLOCK_OUT at exactly 00:00 WIB", async () => {
+            const mockYesterdayRecord = {
+                id: "rec-yesterday-midnight",
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z",
+                clockOut: null,
+                status: "present" as const,
+                notes: null,
+                isOffDay: false,
+            };
+
+            vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (_empId, date) => {
+                if (date === "2026-09-17") return mockYesterdayRecord as AttendanceRecord;
+                return undefined;
+            });
+
+            const result = await resolveAttendanceTargetForEmployee(
+                "EMP001",
+                new Date("2026-09-17T17:00:00.000Z"),
+                nightShiftDays
+            );
+
+            expect(result.mode).toBe("CLOCK_OUT");
+            expect(result.shiftDate).toBe("2026-09-17");
+            expect(result.relativeClockMinutes).toBe(1440);
+        });
+
+        it("should keep resolving H-1 as CLOCK_OUT after 14:00 until the next shift window", async () => {
+            const mockYesterdayRecord = {
+                id: "rec-yesterday-late",
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z",
+                clockOut: null,
+                status: "present" as const,
+                notes: null,
+                isOffDay: false,
+            };
+
+            vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (_empId, date) => {
+                if (date === "2026-09-17") return mockYesterdayRecord as AttendanceRecord;
+                return undefined;
+            });
+
+            const result = await resolveAttendanceTargetForEmployee(
+                "EMP001",
+                new Date("2026-09-18T08:00:00.000Z"), // 15:00 WIB
+                nightShiftDays
+            );
+
+            expect(result.mode).toBe("CLOCK_OUT");
+            expect(result.shiftDate).toBe("2026-09-17");
+            expect(result.relativeClockMinutes).toBe(2340);
+        });
+
+        it("should prioritize today's CLOCK_IN at the next shift's early window and leave H-1 open", async () => {
+            const mockYesterdayRecord = {
+                id: "rec-yesterday-cutoff",
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z",
+                clockOut: null,
+                status: "present" as const,
+                notes: null,
+                isOffDay: false,
+            };
+            const getAttendanceByDate = vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (_empId, date) => {
+                if (date === "2026-09-17") return mockYesterdayRecord as AttendanceRecord;
+                return undefined;
+            });
+
+            const result = await resolveAttendanceTargetForEmployee(
+                "EMP001",
+                new Date("2026-09-18T15:30:00.000Z"), // 22:30 WIB
+                nightShiftDays,
+                { earlyCheckIn: 30 }
+            );
+
+            expect(result.mode).toBe("CLOCK_IN");
+            expect(result.shiftDate).toBe("2026-09-18");
+            expect(result.existingRecord).toBeNull();
+            expect(getAttendanceByDate).toHaveBeenCalledWith("EMP001", "2026-09-17");
+            expect(getAttendanceByDate).toHaveBeenCalledWith("EMP001", "2026-09-18");
+        });
+
+        it("should keep H-1 as CLOCK_OUT immediately before the next shift window", async () => {
+            const mockYesterdayRecord = {
+                id: "rec-yesterday-before-cutoff",
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z",
+                clockOut: null,
+                status: "present" as const,
+                notes: null,
+                isOffDay: false,
+            };
+            vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (_empId, date) => {
+                if (date === "2026-09-17") return mockYesterdayRecord as AttendanceRecord;
+                return undefined;
+            });
+
+            const result = await resolveAttendanceTargetForEmployee(
+                "EMP001",
+                new Date("2026-09-18T15:29:00.000Z"), // 22:29 WIB
+                nightShiftDays,
+                { earlyCheckIn: 30 }
+            );
+
+            expect(result.mode).toBe("CLOCK_OUT");
+            expect(result.shiftDate).toBe("2026-09-17");
+        });
+
+        it("should detect fallback overnight clock-in using WIB rather than the host timezone", async () => {
+            const mockYesterdayRecord = {
+                id: "rec-yesterday-fallback",
+                employeeId: "EMP001",
+                date: "2026-09-17",
+                clockIn: "2026-09-17T16:00:00.000Z", // 23:00 WIB
+                clockOut: null,
+                status: "present" as const,
+                notes: null,
+                isOffDay: false,
+            };
+            vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (_empId, date) => {
+                if (date === "2026-09-17") return mockYesterdayRecord as AttendanceRecord;
+                return undefined;
+            });
+
+            const result = await resolveAttendanceTargetForEmployee(
+                "EMP001",
+                new Date("2026-09-18T00:05:00.000Z"),
+                []
+            );
+
+            expect(result.mode).toBe("CLOCK_OUT");
+            expect(result.shiftDate).toBe("2026-09-17");
+        });
+
+        it("should not search H-2 when no exact H-1 record exists", async () => {
+            const getAttendanceByDate = vi.spyOn(attendanceService, "getAttendanceByDate").mockResolvedValue(undefined);
+
+            const result = await resolveAttendanceTargetForEmployee(
+                "EMP001",
+                new Date("2026-09-18T00:05:00.000Z"),
+                nightShiftDays
+            );
+
+            expect(result.mode).toBe("CLOCK_IN");
+            expect(getAttendanceByDate).toHaveBeenCalledTimes(2);
+            expect(getAttendanceByDate).toHaveBeenNthCalledWith(1, "EMP001", "2026-09-17");
+            expect(getAttendanceByDate).toHaveBeenNthCalledWith(2, "EMP001", "2026-09-18");
         });
 
         it("should resolve as CLOCK_IN when starting shift 3 at night", async () => {
@@ -162,7 +317,7 @@ describe("24-Hour 3-Shift Logic & Overnight Calculations", () => {
             };
 
             vi.spyOn(attendanceService, "getAttendanceByDate").mockImplementation(async (empId, date) => {
-                if (date === "2026-09-18") return mockTodayRecord as any;
+                if (date === "2026-09-18") return mockTodayRecord as AttendanceRecord;
                 return undefined;
             });
 

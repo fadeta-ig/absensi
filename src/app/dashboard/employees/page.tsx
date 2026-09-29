@@ -36,6 +36,8 @@ function EmployeesPageContent() {
     const [shifts, setShifts] = useState<WorkShift[]>([]);
     const [divisions, setDivisions] = useState<MasterOption[]>([]);
     const [departments, setDepartments] = useState<MasterOption[]>([]);
+    // Shift efektif hari ini (WIB) dari roster; fallback ke shiftId karyawan bila kosong.
+    const [rosterMap, setRosterMap] = useState<Record<string, { shiftId: string | null; source: string }>>({});
     
     // Filters
     const [search, setSearch] = useState("");
@@ -87,6 +89,23 @@ function EmployeesPageContent() {
         }).catch(err => {
             reportClientError("EmployeesPage", "Gagal memuat master referensi karyawan", err);
         });
+        // Roster efektif hari ini untuk filter/tampilan shift; gagal = fallback shiftId.
+        try {
+            const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+            fetch(`/api/shifts/assignments?date=${today}`, { cache: "no-store" }).then(async (r) => {
+                if (!r.ok) return;
+                const data = await r.json();
+                if (Array.isArray(data.roster)) {
+                    const map: Record<string, { shiftId: string | null; source: string }> = {};
+                    for (const row of data.roster) {
+                        if (row.employeeId) map[row.employeeId] = { shiftId: row.shiftId ?? null, source: row.source ?? "none" };
+                    }
+                    setRosterMap(map);
+                }
+            }).catch(() => { /* fallback shiftId karyawan */ });
+        } catch {
+            /* fallback shiftId karyawan */
+        }
     }, [fetchEmployees]);
 
     const counts = useMemo(() => ({
@@ -107,7 +126,7 @@ function EmployeesPageContent() {
             const matchesType = typeFilter === "all"
                 || employee.employmentType === typeFilter;
             const matchesShift = shiftFilter === "all"
-                || employee.shiftId === shiftFilter;
+                || (rosterMap[employee.employeeId]?.shiftId ?? employee.shiftId) === shiftFilter;
             const matchesSearch = !query
                 || employee.name.toLowerCase().includes(query)
                 || employee.employeeId.toLowerCase().includes(query)
@@ -115,7 +134,7 @@ function EmployeesPageContent() {
                 || Boolean(employee.division?.toLowerCase().includes(query));
             return matchesStatus && matchesDivision && matchesDepartment && matchesType && matchesShift && matchesSearch;
         });
-    }, [employees, search, statusFilter, divisionFilter, departmentFilter, typeFilter, shiftFilter]);
+    }, [employees, search, statusFilter, divisionFilter, departmentFilter, typeFilter, shiftFilter, rosterMap]);
 
     // Pagination with URL sync, localStorage pageSize, and smart clamping
     const {
@@ -457,7 +476,7 @@ function EmployeesPageContent() {
                             value={shiftFilter}
                             onChange={(e) => setShiftFilter(e.target.value)}
                         >
-                            <option value="all">Semua Shift</option>
+                            <option value="all">Semua Shift (efektif hari ini)</option>
                             {shifts.map(s => (
                                 <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
@@ -604,8 +623,19 @@ function EmployeesPageContent() {
                                                 )}
                                             </td>
                                             <td className="hidden lg:table-cell text-xs">
-                                                <div>{getShiftName(e.shiftId)}</div>
-                                                <div className="text-[10px] text-[var(--text-muted)]">{getShiftDaysSummary(e.shiftId)}</div>
+                                                {(() => {
+                                                    const effective = rosterMap[e.employeeId]?.shiftId ?? e.shiftId;
+                                                    const fromRoster = rosterMap[e.employeeId]?.source === "assignment";
+                                                    return (
+                                                        <>
+                                                            <div>{getShiftName(effective)}</div>
+                                                            <div className="text-[10px] text-[var(--text-muted)]">{getShiftDaysSummary(effective)}</div>
+                                                            {fromRoster && (
+                                                                <div className="text-[10px] text-blue-600 font-medium">jadwal roster hari ini</div>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
                                             </td>
                                             <td>
                                                 <div className="flex flex-col items-start gap-1">

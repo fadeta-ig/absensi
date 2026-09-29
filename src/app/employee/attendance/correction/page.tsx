@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
     FileEdit, Send, Clock, CheckCircle, XCircle, Loader2,
     Calendar, AlertCircle, ClipboardCheck, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,28 +42,38 @@ const STATUS_CONFIG: Record<CorrectionRequest["status"], { label: string; badge:
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(dateStr: string): string {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+    const d = new Date(`${dateStr}T00:00:00+07:00`);
+    return new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "short", day: "numeric", month: "long", year: "numeric" }).format(d);
 }
 
 function fmtDateTime(isoStr: string): string {
-    return new Date(isoStr).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return `${new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(isoStr))} WIB`;
 }
 
-/** Pastikan tanggal target tidak hari ini atau masa depan */
-function isValidTargetDate(dateStr: string): boolean {
+function fmtWibTime(isoStr: string | null): string {
+    if (!isoStr) return "—";
+    return `${new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(isoStr))} WIB`;
+}
+
+function shiftCalendarDate(dateStr: string, amount: number): string {
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day + amount, 12));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** Pastikan tanggal target tidak hari ini atau masa depan menurut WIB server. */
+function isValidTargetDate(dateStr: string, serverDate?: string): boolean {
     if (!dateStr) return false;
-    const target = new Date(dateStr + "T00:00:00");
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return target < today;
+    return Boolean(serverDate && dateStr < serverDate);
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function AttendanceCorrectionPage() {
     const toast = useToast();
+    const serverContext = useAttendanceServerContext();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const submitLockRef = useRef(false);
 
     const [requests, setRequests] = useState<CorrectionRequest[]>([]);
     const [loadingList, setLoadingList] = useState(true);
@@ -70,9 +81,8 @@ export default function AttendanceCorrectionPage() {
     const [submitting, setSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const serverDate = serverContext.context?.serverWibDate ?? "";
+    const yesterdayStr = serverDate ? shiftCalendarDate(serverDate, -1) : "";
 
     const [form, setForm] = useState<FormState>({
         targetDate:       yesterdayStr,
@@ -83,6 +93,43 @@ export default function AttendanceCorrectionPage() {
 
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
     const [attachmentName, setAttachmentName] = useState<string | null>(null);
+    const [clockOutIsNextDay, setClockOutIsNextDay] = useState(false);
+    const [shiftSchedule, setShiftSchedule] = useState<{
+        startTime: string; endTime: string; isOff: boolean; isOvernight: boolean; shiftName: string;
+    } | null>(null);
+
+    // Jadwal shift tanggal target: menentukan otomatis apakah jam masuk H+1.
+    useEffect(() => {
+        if (!form.targetDate || !isValidTargetDate(form.targetDate, serverDate)) {
+            setShiftSchedule(null);
+            return;
+        }
+        let cancelled = false;
+        fetch(`/api/attendance/shift-schedule?date=${form.targetDate}`, { cache: "no-store" })
+            .then(async (res) => {
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!cancelled) setShiftSchedule(data.schedule ?? null);
+            })
+            .catch(() => { if (!cancelled) setShiftSchedule(null); });
+        return () => { cancelled = true; };
+    }, [form.targetDate, serverDate]);
+
+    // Jam 00:xx-07:xx pada shift malam otomatis milik H+1 dari tanggal target.
+    const clockInDate = useMemo(() => {
+        if (
+            shiftSchedule && !shiftSchedule.isOff && shiftSchedule.isOvernight &&
+            form.proposedClockIn && form.proposedClockIn <= shiftSchedule.endTime
+        ) {
+            return shiftCalendarDate(form.targetDate, 1);
+        }
+        return form.targetDate;
+    }, [shiftSchedule, form.proposedClockIn, form.targetDate]);
+
+    useEffect(() => {
+        if (!yesterdayStr || form.targetDate) return;
+        setForm((current) => ({ ...current, targetDate: yesterdayStr }));
+    }, [form.targetDate, yesterdayStr]);
 
     // ── Fetch List ─────────────────────────────────────────────────────────────
     const fetchList = useCallback(async () => {
@@ -133,7 +180,13 @@ export default function AttendanceCorrectionPage() {
         e.preventDefault();
 
         // Client-side validasi tanggal
-        if (!isValidTargetDate(form.targetDate)) {
+        if (submitLockRef.current) return;
+        if (!serverContext.isOnline || !serverContext.isFresh || !serverDate) {
+            toast("Konteks waktu server belum segar. Sambungkan perangkat ke internet lalu coba lagi.", "warning");
+            return;
+        }
+
+        if (!isValidTargetDate(form.targetDate, serverDate)) {
             toast("Tanggal koreksi tidak boleh hari ini atau masa depan", "warning");
             return;
         }
@@ -144,6 +197,7 @@ export default function AttendanceCorrectionPage() {
             return;
         }
 
+        submitLockRef.current = true;
         setSubmitting(true);
 
         try {
@@ -164,8 +218,10 @@ export default function AttendanceCorrectionPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     targetDate:       form.targetDate,
-                    proposedClockIn:  form.proposedClockIn  ? `${form.targetDate}T${form.proposedClockIn}:00` : null,
-                    proposedClockOut: form.proposedClockOut ? `${form.targetDate}T${form.proposedClockOut}:00` : null,
+                    proposedClockIn:  form.proposedClockIn  ? `${clockInDate}T${form.proposedClockIn}:00+07:00` : null,
+                    proposedClockOut: form.proposedClockOut
+                        ? `${clockOutIsNextDay ? shiftCalendarDate(form.targetDate, 1) : form.targetDate}T${form.proposedClockOut}:00+07:00`
+                        : null,
                     reason:           form.reason,
                     attachmentUrl,
                 }),
@@ -182,12 +238,14 @@ export default function AttendanceCorrectionPage() {
             setForm({ targetDate: yesterdayStr, proposedClockIn: "", proposedClockOut: "", reason: "" });
             setAttachmentFile(null);
             setAttachmentName(null);
+            setClockOutIsNextDay(false);
             toast("Pengajuan koreksi berhasil dikirim!", "success");
         } catch (error) {
             reportClientError("AttendanceCorrectionPage", "Gagal mengirim koreksi presensi", error, { targetDate: form.targetDate });
             toast("Pengajuan koreksi belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setSubmitting(false);
+            submitLockRef.current = false;
         }
     };
 
@@ -212,11 +270,21 @@ export default function AttendanceCorrectionPage() {
                 <button
                     className="btn btn-primary"
                     onClick={() => setShowForm((prev) => !prev)}
+                    disabled={!serverContext.isOnline || !serverContext.isFresh}
                 >
                     <Send className="w-4 h-4" />
                     Ajukan Koreksi
                 </button>
             </div>
+
+            {(!serverContext.isFresh || !serverContext.isOnline) && (
+                <div className="flex items-start justify-between gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300" role="status">
+                    <span>
+                        {serverContext.isOnline ? "Konteks waktu server belum segar." : "Perangkat offline."} Pengajuan koreksi dinonaktifkan sampai waktu server dapat diverifikasi.
+                    </span>
+                    <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">Coba lagi</button>
+                </div>
+            )}
 
             {/* ── Info Box ───────────────────────────────────────────────────── */}
             <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
@@ -226,7 +294,7 @@ export default function AttendanceCorrectionPage() {
                     <ul className="mt-1 space-y-0.5 text-xs list-disc list-inside text-amber-700">
                         <li>Hanya untuk tanggal <strong>sebelum hari ini</strong></li>
                         <li>Sertakan alasan yang jelas dan bukti jika tersedia</li>
-                        <li>Pengajuan akan diverifikasi oleh atasan atau HR</li>
+                        <li>Pengajuan akan diverifikasi oleh HR</li>
                     </ul>
                 </div>
             </div>
@@ -242,18 +310,19 @@ export default function AttendanceCorrectionPage() {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Tanggal Target */}
                         <div className="form-group !mb-0">
-                            <label className="form-label flex items-center gap-1">
+                            <label htmlFor="correction-target-date" className="form-label flex items-center gap-1">
                                 <Calendar className="w-3 h-3" /> Tanggal yang Dikoreksi
                             </label>
                             <input
                                 type="date"
+                                id="correction-target-date"
                                 className="form-input"
                                 value={form.targetDate}
-                                max={yesterdayStr}
+                                max={yesterdayStr || undefined}
                                 onChange={(e) => setForm((f) => ({ ...f, targetDate: e.target.value }))}
                                 required
                             />
-                            {form.targetDate && !isValidTargetDate(form.targetDate) && (
+                            {form.targetDate && !isValidTargetDate(form.targetDate, serverDate) && (
                                 <p className="text-[10px] text-red-500 mt-1 font-medium flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3 shrink-0" /> Tanggal tidak boleh hari ini atau masa depan
                                 </p>
@@ -263,23 +332,30 @@ export default function AttendanceCorrectionPage() {
                         {/* Jam yang diajukan */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="form-group !mb-0">
-                                <label className="form-label flex items-center gap-1">
+                                <label htmlFor="correction-clock-in" className="form-label flex items-center gap-1">
                                     <Clock className="w-3 h-3" /> Jam Masuk (Diajukan)
                                 </label>
                                 <input
                                     type="time"
+                                    id="correction-clock-in"
                                     className="form-input"
                                     value={form.proposedClockIn}
                                     onChange={(e) => setForm((f) => ({ ...f, proposedClockIn: e.target.value }))}
                                 />
                                 <p className="text-[10px] text-[var(--text-muted)] mt-1">Kosongkan jika sudah benar</p>
+                                {clockInDate !== form.targetDate && form.proposedClockIn && (
+                                    <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                                        Otomatis H+1 shift malam: {shiftCalendarDate(form.targetDate, 1)}T{form.proposedClockIn}:00+07:00.
+                                    </p>
+                                )}
                             </div>
                             <div className="form-group !mb-0">
-                                <label className="form-label flex items-center gap-1">
+                                <label htmlFor="correction-clock-out" className="form-label flex items-center gap-1">
                                     <Clock className="w-3 h-3" /> Jam Keluar (Diajukan)
                                 </label>
                                 <input
                                     type="time"
+                                    id="correction-clock-out"
                                     className="form-input"
                                     value={form.proposedClockOut}
                                     onChange={(e) => setForm((f) => ({ ...f, proposedClockOut: e.target.value }))}
@@ -288,11 +364,27 @@ export default function AttendanceCorrectionPage() {
                             </div>
                         </div>
 
+                        <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                            <input
+                                type="checkbox"
+                                checked={clockOutIsNextDay}
+                                onChange={(event) => setClockOutIsNextDay(event.target.checked)}
+                                disabled={!form.proposedClockOut || submitting}
+                            />
+                            Jam keluar terjadi H+1 dari tanggal koreksi
+                        </label>
+                        {clockOutIsNextDay && form.proposedClockOut && (
+                            <p className="text-[10px] text-[var(--text-muted)] -mt-2">
+                                Timestamp dikirim sebagai {shiftCalendarDate(form.targetDate, 1)}T{form.proposedClockOut}:00+07:00.
+                            </p>
+                        )}
+
                         {/* Alasan */}
                         <div className="form-group !mb-0">
-                            <label className="form-label">Alasan / Keterangan</label>
+                            <label htmlFor="correction-reason" className="form-label">Alasan / Keterangan</label>
                             <textarea
                                 className="form-textarea"
+                                id="correction-reason"
                                 rows={3}
                                 value={form.reason}
                                 onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
@@ -314,6 +406,7 @@ export default function AttendanceCorrectionPage() {
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
+                                disabled={submitting || !serverContext.isOnline || !serverContext.isFresh}
                                 className="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-[var(--border)] rounded-lg hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all text-sm text-[var(--text-muted)] hover:text-[var(--primary)]"
                             >
                                 {attachmentName
@@ -325,7 +418,7 @@ export default function AttendanceCorrectionPage() {
 
                         <button
                             type="submit"
-                            disabled={submitting}
+                            disabled={submitting || !serverContext.isOnline || !serverContext.isFresh}
                             className="btn btn-primary w-full"
                         >
                             {submitting
@@ -381,18 +474,12 @@ export default function AttendanceCorrectionPage() {
                                                 <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] font-mono">
                                                     <span>
                                                         Masuk: <strong className="text-[var(--text-secondary)]">
-                                                            {req.proposedClockIn
-                                                                ? new Date(req.proposedClockIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-                                                                : "—"
-                                                            }
+                                                            {fmtWibTime(req.proposedClockIn)}
                                                         </strong>
                                                     </span>
                                                     <span>
                                                         Keluar: <strong className="text-[var(--text-secondary)]">
-                                                            {req.proposedClockOut
-                                                                ? new Date(req.proposedClockOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-                                                                : "—"
-                                                            }
+                                                            {fmtWibTime(req.proposedClockOut)}
                                                         </strong>
                                                     </span>
                                                 </div>

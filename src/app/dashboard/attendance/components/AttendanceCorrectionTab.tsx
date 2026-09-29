@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { AlertCircle, Loader2, CheckSquare, Square, Check, X, Eye } from "lucide-react";
-import { AttendanceCorrection } from "../types";
+import { AttendanceCorrection, formatWibDateTime, formatWibTime } from "../types";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
@@ -15,13 +15,13 @@ interface Props {
     corrections: AttendanceCorrection[];
     loading: boolean;
     error: string;
-    processingId: string | null;
+    processingIds: Set<string>;
     getEmpInfo: (id: string) => { name: string; department: string; division: string };
     handleCorrectionAction: (id: string, s: "APPROVED" | "REJECTED", options?: { silent?: boolean }) => Promise<boolean>;
 }
 
 export function AttendanceCorrectionTab({
-    corrections, loading, error, processingId, getEmpInfo, handleCorrectionAction
+    corrections, loading, error, processingIds, getEmpInfo, handleCorrectionAction
 }: Props) {
     const toast = useToast();
     const confirm = useConfirm();
@@ -160,7 +160,8 @@ export function AttendanceCorrectionTab({
                         </TableHead>
                         <TableHead>Karyawan</TableHead>
                         <TableHead>Target Tanggal</TableHead>
-                        <TableHead>Waktu Pengajuan</TableHead>
+                        <TableHead>Jam Usulan</TableHead>
+                        <TableHead>Diajukan</TableHead>
                         <TableHead>Alasan</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Aksi</TableHead>
@@ -169,14 +170,14 @@ export function AttendanceCorrectionTab({
                 <TableBody>
                         {loading ? (
                             <tr>
-                                <td colSpan={7} className="text-center py-10 text-[var(--text-muted)]">
+                                <td colSpan={8} className="text-center py-10 text-[var(--text-muted)]">
                                     <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
                                     Memuat pengajuan koreksi...
                                 </td>
                             </tr>
                         ) : error ? (
                             <tr>
-                                <td colSpan={7} className="py-10 text-center text-[var(--destructive)]">
+                                <td colSpan={8} className="py-10 text-center text-[var(--destructive)]">
                                     <div className="flex items-center justify-center gap-2">
                                         <AlertCircle className="w-4 h-4" />
                                         <span>{error}</span>
@@ -184,7 +185,7 @@ export function AttendanceCorrectionTab({
                                 </td>
                             </tr>
                         ) : corrections.length === 0 ? (
-                            <tr><td colSpan={7} className="text-center py-10 text-[var(--text-muted)] italic">Tidak ada pengajuan koreksi masuk.</td></tr>
+                            <tr><td colSpan={8} className="text-center py-10 text-[var(--text-muted)] italic">Tidak ada pengajuan koreksi masuk.</td></tr>
                         ) : (
                             paginatedCorrections.map(c => {
                                 const ei = getEmpInfo(c.employeeId);
@@ -210,10 +211,11 @@ export function AttendanceCorrectionTab({
                                         </td>
                                         <td className="font-medium text-xs text-[var(--text-secondary)]">{c.targetDate}</td>
                                         <td className="font-mono text-xs text-blue-600">
-                                            {(c.proposedClockIn ? new Date(c.proposedClockIn).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                            {formatWibTime(c.proposedClockIn)}
                                             {" - "}
-                                            {(c.proposedClockOut ? new Date(c.proposedClockOut).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '--:--')}
+                                            {formatWibTime(c.proposedClockOut)}
                                         </td>
+                                        <td className="text-[11px] text-[var(--text-muted)] whitespace-nowrap">{formatWibDateTime(c.createdAt)}</td>
                                         <td className="text-xs max-w-[200px] truncate text-[var(--text-secondary)]" title={c.reason}>{c.reason}</td>
                                         <td>
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${c.status === "PENDING" ? "bg-orange-100 text-orange-700" : c.status === "APPROVED" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
@@ -236,20 +238,20 @@ export function AttendanceCorrectionTab({
                                                     <>
                                                         <button
                                                             onClick={() => handleCorrectionAction(c.id, "APPROVED")}
-                                                            disabled={processingId === c.id}
+                                                            disabled={processingIds.has(c.id)}
                                                             className="btn btn-success btn-sm !py-1 !px-2 flex items-center gap-1 text-xs"
                                                             title="Terima Langsung"
                                                         >
-                                                            {processingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                                            {processingIds.has(c.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                                                             <span>Terima</span>
                                                         </button>
                                                         <button
                                                             onClick={() => handleCorrectionAction(c.id, "REJECTED")}
-                                                            disabled={processingId === c.id}
+                                                            disabled={processingIds.has(c.id)}
                                                             className="btn btn-danger btn-sm !py-1 !px-2 flex items-center gap-1 text-xs"
                                                             title="Tolak Langsung"
                                                         >
-                                                            {processingId === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                                            {processingIds.has(c.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
                                                             <span>Tolak</span>
                                                         </button>
                                                     </>
@@ -318,11 +320,8 @@ export function AttendanceCorrectionTab({
                     selectedCorrection={selectedCorrection}
                     onClose={() => setSelectedCorrection(null)}
                     empInfo={getEmpInfo(selectedCorrection.employeeId)}
-                    processingId={processingId}
-                    onAction={async (id, status) => {
-                        await handleCorrectionAction(id, status);
-                        setSelectedCorrection(null);
-                    }}
+                    processingId={processingIds.has(selectedCorrection.id) ? selectedCorrection.id : null}
+                    onAction={handleCorrectionAction}
                 />
             )}
         </div>

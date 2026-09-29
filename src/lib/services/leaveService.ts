@@ -1,6 +1,9 @@
 import { prisma } from "../prisma";
 import { LeaveRequest } from "@/types";
 import { Prisma } from "@prisma/client";
+import { LeaveDateRangeError, validateLeaveDateRange } from "@/lib/services/leaveDateRange";
+import { toDateString } from "@/lib/utils";
+import { toUTCDateKey } from "@/lib/timezone";
 
 /** Tipe inferensi Prisma untuk LeaveRequest beserta relasi employee-nya */
 export type LeaveRequestWithEmployee = Prisma.LeaveRequestGetPayload<{
@@ -45,33 +48,29 @@ export async function getLeaveRequests(employeeId?: string): Promise<LeaveReques
 }
 
 export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promise<LeaveRequest> {
+    const startDate = toDateString(data.startDate);
+    const endDate = toDateString(data.endDate);
+    assertSupportedLeaveRange(startDate, endDate);
+
     // Pre-check: validasi saldo cuti untuk tipe annual
     if (data.type === "annual") {
         const employee = await prisma.employee.findUnique({
             where: { employeeId: data.employeeId },
-            select: { totalLeave: true, usedLeave: true, shiftId: true },
+            select: { totalLeave: true, usedLeave: true },
         });
 
         if (!employee) {
             throw new Error("Data karyawan tidak ditemukan.");
         }
 
-        // Resolve offDays dari shift karyawan
-        const offDays = new Set<number>([0]); // default: Minggu
-        if (employee.shiftId) {
-            const shift = await prisma.workShift.findUnique({
-                where: { id: employee.shiftId },
-                include: { days: true },
-            });
-            if (shift) {
-                offDays.clear();
-                for (const d of shift.days) {
-                    if (d.isOff) offDays.add(d.dayOfWeek);
-                }
-            }
-        }
-
-        const requestedDays = calculateWorkingDays(data.startDate, data.endDate, offDays);
+        // Hitung hari kerja per tanggal dengan shift efektif masing-masing hari (mendukung rotasi).
+        const { countWorkingDaysForEmployee } = await import("@/lib/services/shiftAssignmentService");
+        const requestedDays = await countWorkingDaysForEmployee(
+            prisma,
+            data.employeeId,
+            startDate,
+            endDate,
+        );
         const remainingLeave = employee.totalLeave - employee.usedLeave;
 
         if (requestedDays > remainingLeave) {
@@ -85,8 +84,8 @@ export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promis
         data: {
             employeeId: data.employeeId,
             type: data.type,
-            startDate: new Date(data.startDate),
-            endDate: new Date(data.endDate),
+            startDate: toUTCDateKey(startDate),
+            endDate: toUTCDateKey(endDate),
             reason: data.reason,
             status: data.status,
             attachment: data.attachment,
@@ -130,29 +129,27 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
 
     if (!existing) return null;
 
+    const startDate = toDateString(data.startDate || existing.startDate);
+    const endDate = toDateString(data.endDate || existing.endDate);
+    assertSupportedLeaveRange(startDate, endDate);
+
     // Balance Recalculation Logic
-    // Resolve employee's shift offDays for accurate working-day calculation
-    const offDays = new Set<number>([0]); // default: Minggu
-    if (existing.employee.shiftId) {
-        const shift = await prisma.workShift.findUnique({
-            where: { id: existing.employee.shiftId },
-            include: { days: true },
-        });
-        if (shift) {
-            offDays.clear();
-            for (const d of shift.days) {
-                if (d.isOff) offDays.add(d.dayOfWeek);
-            }
-        }
-    }
+    // Hitung hari kerja per tanggal dengan shift efektif masing-masing hari (mendukung rotasi).
+    const { countWorkingDaysForEmployee } = await import("@/lib/services/shiftAssignmentService");
 
     if (existing.type === "annual") {
         if (data.status === "approved" || (existing.status === "approved" && (data.startDate || data.endDate))) {
-            const oldDays = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
-            const newDays = calculateWorkingDays(
-                data.startDate || existing.startDate,
-                data.endDate || existing.endDate,
-                offDays
+            const oldDays = await countWorkingDaysForEmployee(
+                prisma,
+                existing.employeeId,
+                toDateString(existing.startDate),
+                toDateString(existing.endDate),
+            );
+            const newDays = await countWorkingDaysForEmployee(
+                prisma,
+                existing.employeeId,
+                toDateString(data.startDate || existing.startDate),
+                toDateString(data.endDate || existing.endDate),
             );
 
             let diff = 0;
@@ -175,7 +172,12 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
             }
         } else if (existing.status === "approved" && data.status === "rejected") {
             // Reversing an approval
-            const days = calculateWorkingDays(existing.startDate, existing.endDate, offDays);
+            const days = await countWorkingDaysForEmployee(
+                prisma,
+                existing.employeeId,
+                toDateString(existing.startDate),
+                toDateString(existing.endDate),
+            );
             await prisma.employee.update({
                 where: { employeeId: existing.employeeId },
                 data: { usedLeave: { decrement: days } }
@@ -187,10 +189,17 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
         where: { id },
         data: {
             ...(data.status !== undefined && { status: data.status }),
-            ...(data.startDate !== undefined && { startDate: new Date(data.startDate) }),
-            ...(data.endDate !== undefined && { endDate: new Date(data.endDate) }),
+            ...(data.startDate !== undefined && { startDate: toUTCDateKey(startDate) }),
+            ...(data.endDate !== undefined && { endDate: toUTCDateKey(endDate) }),
             ...(data.reason !== undefined && { reason: data.reason }),
         },
     });
     return toLeaveRequest(row);
+}
+
+function assertSupportedLeaveRange(startDate: string, endDate: string): void {
+    const range = validateLeaveDateRange(startDate, endDate);
+    if (!range.success) {
+        throw new LeaveDateRangeError(range.message);
+    }
 }

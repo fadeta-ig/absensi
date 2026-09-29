@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { getShifts, createShift, updateShift, deleteShift } from "@/lib/services/shiftService";
+import { getShifts, createShift, updateShift, deleteShift, ShiftConflictError, ShiftValidationError } from "@/lib/services/shiftService";
 import { shiftCreateSchema, shiftUpdateSchema } from "@/lib/validations/validationSchemas";
+import { PERMISSIONS } from "@/lib/permissions";
 import logger from "@/lib/logger";
 
 export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
         const shifts = await getShifts();
@@ -19,7 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, shiftCreateSchema);
@@ -31,6 +33,12 @@ export async function POST(request: NextRequest) {
         logger.info("Work shift created", { shiftId: shift.id, name: shift.name, createdBy: session.username });
         return NextResponse.json(shift, { status: 201 });
     } catch (err) {
+        if (err instanceof ShiftValidationError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
+        if (err instanceof ShiftConflictError) {
+            return NextResponse.json({ error: err.message, assignmentCount: err.assignmentCount, rosterCount: err.rosterCount }, { status: err.statusCode });
+        }
         return serverErrorResponse("ShiftsPOST", err);
     }
 }
@@ -38,7 +46,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, shiftUpdateSchema);
@@ -54,6 +62,12 @@ export async function PUT(request: NextRequest) {
         logger.info("Work shift updated", { shiftId: id, updatedBy: session.username });
         return NextResponse.json(shift);
     } catch (err) {
+        if (err instanceof ShiftValidationError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
+        if (err instanceof ShiftConflictError) {
+            return NextResponse.json({ error: err.message, assignmentCount: err.assignmentCount, rosterCount: err.rosterCount }, { status: err.statusCode });
+        }
         return serverErrorResponse("ShiftsPUT", err);
     }
 }
@@ -61,7 +75,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);
@@ -78,6 +92,9 @@ export async function DELETE(request: NextRequest) {
         logger.info("Work shift deleted", { shiftId: id, deletedBy: session.username });
         return NextResponse.json({ success: true, message: "Data shift berhasil dihapus." });
     } catch (err) {
+        if (err instanceof ShiftConflictError) {
+            return NextResponse.json({ error: err.message, assignmentCount: err.assignmentCount, rosterCount: err.rosterCount }, { status: err.statusCode });
+        }
         return serverErrorResponse("ShiftsDELETE", err);
     }
 }
