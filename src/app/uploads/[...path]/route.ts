@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import path from "path";
+import { requireAuth, unauthorizedResponse } from "@/lib/middleware/apiGuard";
 
 const MIME_TYPES: Record<string, string> = {
     ".pdf": "application/pdf",
@@ -28,6 +29,14 @@ export async function GET(
         const { path: segments } = await params;
         if (!segments || segments.length === 0) {
             return NextResponse.json({ error: "Path berkas tidak valid." }, { status: 400 });
+        }
+
+        // Lampiran koreksi presensi dan media berita hanya untuk sesi login.
+        // Semua render /uploads/news ada di balik login (/dashboard, /employee),
+        // sehingga prefix news ikut dikunci tanpa permukaan publik yang terdampak.
+        if (segments[0] === "attendance-corrections" || segments[0] === "news") {
+            const session = await requireAuth();
+            if (!session) return unauthorizedResponse();
         }
 
         const uploadsRoot = path.resolve(process.cwd(), "public", "uploads");

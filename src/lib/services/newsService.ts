@@ -8,6 +8,22 @@ import { Prisma } from "@prisma/client";
 
 const getUploadDir = () => path.join(process.cwd(), "public");
 
+const getPublicUploadsDir = () => path.resolve(getUploadDir(), "uploads");
+
+/**
+ * Guard path traversal untuk file media berita (keputusan D4).
+ * Mengembalikan absolute path hanya bila `mediaUrl` tetap berada di dalam `public/uploads`.
+ * Menolak `../` dan absolute path di luar uploads dengan Error berbahasa Indonesia.
+ */
+export function assertInsidePublicUploads(mediaUrl: string): string {
+    const publicUploads = getPublicUploadsDir();
+    const resolved = path.resolve(getUploadDir(), mediaUrl.replace(/^\/+/, ""));
+    if (!resolved.startsWith(`${publicUploads}${path.sep}`)) {
+        throw new Error("Lokasi media berita tidak valid.");
+    }
+    return resolved;
+}
+
 const NEWS_CATEGORIES: NewsItem["category"][] = ["announcement", "event", "policy", "general"];
 
 function toNewsCategory(value: string): NewsItem["category"] {
@@ -53,7 +69,7 @@ export async function updateNews(id: string, data: Partial<NewsItem>): Promise<N
 
     if (data.mediaUrl !== undefined) {
         if (existing.mediaUrl && existing.mediaUrl !== data.mediaUrl) {
-            const oldFilePath = path.join(getUploadDir(), existing.mediaUrl);
+            const oldFilePath = assertInsidePublicUploads(existing.mediaUrl);
             try {
                 await unlink(oldFilePath);
             } catch (error) {
@@ -81,7 +97,7 @@ export async function deleteNews(id: string): Promise<boolean> {
     if (!existing) return false;
 
     if (existing.mediaUrl) {
-        const oldFilePath = path.join(getUploadDir(), existing.mediaUrl);
+        const oldFilePath = assertInsidePublicUploads(existing.mediaUrl);
         try {
             await unlink(oldFilePath);
         } catch (error) {

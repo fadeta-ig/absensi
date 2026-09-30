@@ -1,7 +1,12 @@
 import { prisma } from "../prisma";
 import { LeaveRequest } from "@/types";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
 import { LeaveDateRangeError, validateLeaveDateRange } from "@/lib/services/leaveDateRange";
+import { assertAllowedFile } from "@/lib/fileMagic";
+import { getUploadLimit } from "@/lib/services/appSettingsService";
 import { toDateString } from "@/lib/utils";
 import { toUTCDateKey } from "@/lib/timezone";
 
@@ -14,8 +19,147 @@ export type LeaveRequestWithEmployee = Prisma.LeaveRequestGetPayload<{
     };
 }>;
 
+// ─── Lampiran cuti: transport JSON-base64 dipertahankan, server pindah ke disk ───
+
+/** Root privat lampiran cuti (di luar public/ agar wajib lewat route ber-auth). */
+export const LEAVE_ATTACHMENT_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "leave-attachments");
+
+/** Fallback bila setting upload.leaveAttachment.maxMb belum ada / DB gagal dibaca. */
+export const DEFAULT_LEAVE_ATTACHMENT_MAX_BYTES = 2 * 1024 * 1024;
+
+const LEAVE_ATTACHMENT_PREFIXES: Record<string, { mime: string; ext: string }> = {
+    "data:image/jpeg;base64,": { mime: "image/jpeg", ext: ".jpg" },
+    "data:image/png;base64,": { mime: "image/png", ext: ".png" },
+    "data:image/webp;base64,": { mime: "image/webp", ext: ".webp" },
+    "data:application/pdf;base64,": { mime: "application/pdf", ext: ".pdf" },
+};
+
+const LEAVE_ATTACHMENT_FILENAME_PATTERN = /^[A-Za-z0-9-]+\.(jpg|jpeg|png|webp|pdf)$/i;
+
+export const LEAVE_ATTACHMENT_MIME_BY_EXT: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+};
+
+export class LeaveAttachmentError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "LeaveAttachmentError";
+    }
+}
+
+/**
+ * LeaveRequest untuk pembaca (page/modal): `attachment` adalah base64 lama
+ * (baris lawas), `attachmentUrl` menunjuk serve privat bila ada path baru.
+ * Dual: path → serve, kosong → base64 lama.
+ */
+export interface LeaveRequestWithAttachment extends LeaveRequest {
+    attachmentUrl?: string | null;
+    attachmentMime?: string | null;
+    attachmentSize?: number | null;
+}
+
+export function leaveAttachmentUrl(filename: string): string {
+    return `/api/leave/attachments/${encodeURIComponent(filename)}`;
+}
+
+/** Kembalikan absolute path bila nama file valid dan di dalam root, selain itu null. */
+export function resolveLeaveAttachmentPath(filename: string): string | null {
+    if (!LEAVE_ATTACHMENT_FILENAME_PATTERN.test(filename)) return null;
+    const resolved = path.resolve(LEAVE_ATTACHMENT_STORAGE_ROOT, filename);
+    if (!resolved.startsWith(`${LEAVE_ATTACHMENT_STORAGE_ROOT}${path.sep}`)) return null;
+    return resolved;
+}
+
+/** Batas lampiran efektif: eksplisit > setting app > fallback bawaan 2MB. */
+export async function resolveLeaveAttachmentLimitBytes(explicitMaxBytes?: number): Promise<number> {
+    if (typeof explicitMaxBytes === "number" && Number.isFinite(explicitMaxBytes) && explicitMaxBytes > 0) {
+        return Math.floor(explicitMaxBytes);
+    }
+    try {
+        const limitMb = await getUploadLimit("upload.leaveAttachment.maxMb");
+        if (Number.isFinite(limitMb) && limitMb > 0) {
+            return Math.floor(limitMb * 1024 * 1024);
+        }
+    } catch {
+        // Fallback ke konstanta bawaan di bawah.
+    }
+    return DEFAULT_LEAVE_ATTACHMENT_MAX_BYTES;
+}
+
+/**
+ * Parse dataURL lampiran dari klien (kontrak lama dipertahankan) menjadi
+ * buffer terverifikasi: prefix diizinkan, base64 kanonis, magic-byte cocok.
+ */
+export function parseLeaveAttachmentDataUrl(dataUrl: string, maxBytes: number): { buffer: Buffer; mime: string; ext: string } {
+    const prefix = Object.keys(LEAVE_ATTACHMENT_PREFIXES).find((candidate) => dataUrl.startsWith(candidate));
+    if (prefix === undefined) {
+        throw new LeaveAttachmentError("Format lampiran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.");
+    }
+    const { mime, ext } = LEAVE_ATTACHMENT_PREFIXES[prefix];
+    const encoded = dataUrl.slice(prefix.length);
+    if (encoded.length === 0 || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+        throw new LeaveAttachmentError("Data lampiran tidak valid.");
+    }
+    const buffer = Buffer.from(encoded, "base64");
+    const canonicalInput = encoded.replace(/=+$/, "");
+    const canonicalDecoded = buffer.toString("base64").replace(/=+$/, "");
+    if (canonicalInput !== canonicalDecoded) {
+        throw new LeaveAttachmentError("Data Base64 lampiran tidak valid.");
+    }
+    if (buffer.length === 0 || buffer.length > maxBytes) {
+        const mb = maxBytes / (1024 * 1024);
+        throw new LeaveAttachmentError(`Ukuran lampiran maksimal ${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB.`);
+    }
+    try {
+        assertAllowedFile(buffer, mime);
+    } catch {
+        throw new LeaveAttachmentError("Isi lampiran tidak sesuai dengan format yang dinyatakan.");
+    }
+    return { buffer, mime, ext };
+}
+
+/** Simpan buffer terverifikasi ke disk privat; kembalikan nama file + meta. */
+export async function saveLeaveAttachment(
+    buffer: Buffer,
+    mime: string,
+    maxBytes: number,
+): Promise<{ filename: string; mime: string; size: number }> {
+    const ext = mime === "image/jpeg" ? ".jpg"
+        : mime === "image/png" ? ".png"
+            : mime === "image/webp" ? ".webp"
+                : mime === "application/pdf" ? ".pdf"
+                    : null;
+    if (!ext) {
+        throw new LeaveAttachmentError("Format lampiran tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.");
+    }
+    if (buffer.length === 0 || buffer.length > maxBytes) {
+        const mb = maxBytes / (1024 * 1024);
+        throw new LeaveAttachmentError(`Ukuran lampiran maksimal ${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB.`);
+    }
+    try {
+        assertAllowedFile(buffer, mime);
+    } catch {
+        throw new LeaveAttachmentError("Isi lampiran tidak sesuai dengan format yang dinyatakan.");
+    }
+    const filename = `${randomUUID()}${ext}`;
+    const target = resolveLeaveAttachmentPath(filename);
+    if (!target) {
+        throw new LeaveAttachmentError("Nama berkas lampiran tidak valid.");
+    }
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, buffer, { flag: "wx" });
+    return { filename, mime, size: buffer.length };
+}
+
 /** Mapper aman: mengkonversi Date fields Prisma menjadi string ISO untuk LeaveRequest */
-function toLeaveRequest(row: Prisma.LeaveRequestGetPayload<Record<string, never>>): LeaveRequest {
+function toLeaveRequest(row: Prisma.LeaveRequestGetPayload<Record<string, never>>): LeaveRequestWithAttachment {
+    const attachmentPath = (row as { attachmentPath?: string | null }).attachmentPath ?? null;
+    const attachmentMime = (row as { attachmentMime?: string | null }).attachmentMime ?? null;
+    const attachmentSize = (row as { attachmentSize?: number | null }).attachmentSize ?? null;
     return {
         id: row.id,
         employeeId: row.employeeId,
@@ -26,6 +170,10 @@ function toLeaveRequest(row: Prisma.LeaveRequestGetPayload<Record<string, never>
         status: row.status as LeaveRequest["status"],
         attachment: row.attachment ?? null,
         createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+        // Dual reader: path baru → URL serve privat; kosong → base64 lama di `attachment`.
+        attachmentUrl: attachmentPath ? leaveAttachmentUrl(path.basename(attachmentPath)) : null,
+        attachmentMime,
+        attachmentSize,
     };
 }
 
@@ -47,7 +195,7 @@ export async function getLeaveRequests(employeeId?: string): Promise<LeaveReques
     return rows;
 }
 
-export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promise<LeaveRequest> {
+export async function createLeaveRequest(data: Omit<LeaveRequest, "id">, opts?: { attachmentMaxBytes?: number }): Promise<LeaveRequest> {
     const startDate = toDateString(data.startDate);
     const endDate = toDateString(data.endDate);
     assertSupportedLeaveRange(startDate, endDate);
@@ -88,7 +236,10 @@ export async function createLeaveRequest(data: Omit<LeaveRequest, "id">): Promis
             endDate: toUTCDateKey(endDate),
             reason: data.reason,
             status: data.status,
-            attachment: data.attachment,
+            // Lampiran baru TIDAK disimpan sebagai base64: server memindahkan
+            // dataURL klien ke disk privat + mengisi path/mime/size. Baris
+            // lawas dengan base64 tetap dibaca apa adanya (dual reader).
+            ...(await resolveLeaveAttachmentColumns(data.attachment, opts?.attachmentMaxBytes)),
             // createdAt: @default(now()) — tidak perlu diisi
         },
     });
@@ -202,4 +353,26 @@ function assertSupportedLeaveRange(startDate: string, endDate: string): void {
     if (!range.success) {
         throw new LeaveDateRangeError(range.message);
     }
+}
+
+/**
+ * Ubah kolom attachment lama (dataURL/base64) menjadi kolom disk baru.
+ * Kosong/null → semua kolom null (dual reader jatuh ke base64 lama bila ada).
+ */
+async function resolveLeaveAttachmentColumns(
+    attachment: string | null | undefined,
+    explicitMaxBytes?: number,
+): Promise<{ attachment: string | null; attachmentPath: string | null; attachmentMime: string | null; attachmentSize: number | null }> {
+    if (!attachment) {
+        return { attachment: null, attachmentPath: null, attachmentMime: null, attachmentSize: null };
+    }
+    const maxBytes = await resolveLeaveAttachmentLimitBytes(explicitMaxBytes);
+    const parsed = parseLeaveAttachmentDataUrl(attachment, maxBytes);
+    const saved = await saveLeaveAttachment(parsed.buffer, parsed.mime, maxBytes);
+    return {
+        attachment: null,
+        attachmentPath: saved.filename,
+        attachmentMime: saved.mime,
+        attachmentSize: saved.size,
+    };
 }

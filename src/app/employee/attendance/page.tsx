@@ -93,6 +93,8 @@ export default function AttendancePage() {
     const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
     const [isMirrored, setIsMirrored] = useState(true);
     const [photo, setPhoto] = useState<string | null>(null);
+    // Blob mentah untuk upload multipart 1-step (preview di atas boleh dataURL).
+    const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
     // Verification state (Wi-Fi & GPS)
     const [gpsInfo, setGpsInfo] = useState<GpsInfo | null>(null);
@@ -285,6 +287,7 @@ export default function AttendancePage() {
     }, []);
 
     // ── 7. Capture Photo (Client-Side Downsampling to 480px) ──
+    // Kirim via Blob multipart (toBlob); dataURL hanya untuk preview <img>.
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current) return;
         const vid = videoRef.current;
@@ -316,14 +319,22 @@ export default function AttendancePage() {
         }
 
         ctx.drawImage(vid, 0, 0, targetWidth, targetHeight);
-        const photoData = canvas.toDataURL("image/jpeg", 0.72);
-        setPhoto(photoData);
-        stopCamera();
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                toast("Gagal mengambil foto dari kamera.", "error");
+                return;
+            }
+            setPhotoBlob(blob);
+            // Preview boleh dataURL; yang dikirim ke server adalah Blob di atas.
+            setPhoto(canvas.toDataURL("image/jpeg", 0.72));
+            stopCamera();
+        }, "image/jpeg", 0.72);
     }, [stopCamera, toast]);
 
     // ── 8. Retake Photo ──
     const retakePhoto = useCallback(() => {
         setPhoto(null);
+        setPhotoBlob(null);
         void startCamera();
     }, [startCamera]);
 
@@ -337,7 +348,7 @@ export default function AttendancePage() {
             toast(err, "warning");
             return;
         }
-        if (!photo) {
+        if (!photoBlob) {
             setMessage("Silakan ambil foto bukti presensi terlebih dahulu.");
             return;
         }
@@ -386,16 +397,18 @@ export default function AttendancePage() {
         let keepLockedForNavigation = false;
 
         try {
+            // Kontrak Gel.2a: multipart FormData 1-step, photo = Blob dari canvas.
+            const form = new FormData();
+            form.append("action", serverContext.context.activeMode);
+            form.append("shiftDate", serverContext.context.shiftDate);
+            form.append("photo", photoBlob, "selfie.jpg");
+            if (gpsInfo) {
+                form.append("location", JSON.stringify({ lat: gpsInfo.lat, lng: gpsInfo.lng, accuracyMeters: gpsInfo.accuracy }));
+            }
+            if (isClockInAction && isOffDay) form.append("offDayReason", offDayReason.trim());
             const res = await fetch("/api/attendance", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: serverContext.context.activeMode,
-                    shiftDate: serverContext.context.shiftDate,
-                    photo,
-                    location: gpsInfo ? { lat: gpsInfo.lat, lng: gpsInfo.lng } : undefined,
-                    offDayReason: isClockInAction && isOffDay ? offDayReason.trim() : undefined,
-                }),
+                body: form,
             });
 
             if (!res.ok) {
@@ -442,7 +455,7 @@ export default function AttendancePage() {
         } finally {
             if (!keepLockedForNavigation) submitLockRef.current = false;
         }
-    }, [photo, gpsInfo, networkInfo, offDayReason, router, serverContext, toast]);
+    }, [photoBlob, gpsInfo, networkInfo, offDayReason, router, serverContext, toast]);
 
     const activeMode = serverContext.context?.activeMode;
     const isClockIn = activeMode === "CLOCK_IN";
@@ -454,7 +467,7 @@ export default function AttendancePage() {
     const isGpsOk = isBypass || (gpsInfo?.isValid ?? false);
     const isOffDay = networkInfo?.isOffDay ?? serverContext.context?.isOffDay ?? false;
     const isReasonValid = !isClockIn || !isOffDay || offDayReason.trim().length >= 3;
-    const canSubmit = Boolean(photo && isNetworkOk && isGpsOk && isReasonValid && serverContext.context && serverContext.isFresh && serverContext.isOnline && activeMode !== "ALREADY_COMPLETED" && status !== "submitting" && status !== "success");
+    const canSubmit = Boolean(photoBlob && isNetworkOk && isGpsOk && isReasonValid && serverContext.context && serverContext.isFresh && serverContext.isOnline && activeMode !== "ALREADY_COMPLETED" && status !== "submitting" && status !== "success");
 
     // Has blocker warning?
     const hasNetworkBlocker = !isNetworkChecking && !isNetworkOk;

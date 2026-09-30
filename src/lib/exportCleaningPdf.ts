@@ -1,6 +1,15 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+export interface CleaningPdfSignatureEntry {
+    employeeName: string;
+    employeeId: string;
+    position?: string | null;
+    signedAt: string | null;
+    signaturePayload?: string | null;
+    signaturePath?: string | null;
+}
+
 export interface CleaningPdfExportData {
     roomName: string;
     monthWib: string; // "YYYY-MM"
@@ -10,24 +19,29 @@ export interface CleaningPdfExportData {
         itemName: string;
         days: Array<{ day: number; isComplete: boolean; isFuture: boolean }>;
     }>;
-    inspectedBy: {
-        employeeName: string;
-        employeeId: string;
-        position?: string | null;
-        signedAt: string | null;
-        signaturePayload?: string | null;
-    };
-    knownBy: {
-        employeeName: string;
-        employeeId: string;
-        position?: string | null;
-        signedAt: string | null;
-        signaturePayload?: string | null;
-    };
+    inspectedBy: CleaningPdfSignatureEntry;
+    knownBy: CleaningPdfSignatureEntry;
     latestChange?: {
         timestamp: string;
         actorName?: string | null;
     } | null;
+}
+
+/**
+ * Dual-read untuk embed TTD (Gel.2c):
+ * server sudah menyelesaikan signaturePath disk menjadi data URL pada signaturePayload,
+ * sehingga klien hanya perlu memakai payload valid; path mentah tidak diunduh langsung.
+ * Kembalikan data URL PNG bila valid, selain itu null (area TTD dibiarkan kosong).
+ */
+export function selectSignatureImageForPdf(
+    entry: Pick<CleaningPdfSignatureEntry, "signaturePayload" | "signaturePath"> | null | undefined
+): string | null {
+    if (!entry) return null;
+    const payload = entry.signaturePayload;
+    if (typeof payload === "string" && payload.startsWith("data:image/png;base64,")) {
+        return payload;
+    }
+    return null;
 }
 
 const MONTH_NAMES = [
@@ -158,10 +172,11 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
 
     // Signature canvas area
     doc.rect(sigTableX, sigTableY + headerHeight, colWidth, sigAreaHeight);
-    if (data.inspectedBy.signaturePayload && data.inspectedBy.signaturePayload.startsWith("data:image/png;base64,")) {
+    const inspectedImage = selectSignatureImageForPdf(data.inspectedBy);
+    if (inspectedImage) {
         try {
             doc.addImage(
-                data.inspectedBy.signaturePayload,
+                inspectedImage,
                 "PNG",
                 sigTableX + 5,
                 sigTableY + headerHeight + 1.5,
@@ -194,10 +209,11 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
 
     // Signature canvas area
     doc.rect(sigTableX2, sigTableY + headerHeight, colWidth, sigAreaHeight);
-    if (data.knownBy.signaturePayload && data.knownBy.signaturePayload.startsWith("data:image/png;base64,")) {
+    const knownImage = selectSignatureImageForPdf(data.knownBy);
+    if (knownImage) {
         try {
             doc.addImage(
-                data.knownBy.signaturePayload,
+                knownImage,
                 "PNG",
                 sigTableX2 + 5,
                 sigTableY + headerHeight + 1.5,

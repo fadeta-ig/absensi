@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readFile, unlink } from "fs/promises";
+import path from "path";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import { canManageGa, canManageHr, canReadAssets } from "@/lib/permissions";
+
+const BAST_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "bast-documents");
+
+function safeResolvedBastPath(relativePath: string): string {
+    const normalized = relativePath.replace(/\\/g, "/");
+    const resolved = path.resolve(BAST_STORAGE_ROOT, normalized);
+    if (!resolved.startsWith(`${BAST_STORAGE_ROOT}${path.sep}`)) {
+        throw new Error("Lokasi penyimpanan BAST tidak valid.");
+    }
+    return resolved;
+}
+
+function bastServeHeaders(doc: { mimeType: string | null; fileName: string | null }) {
+    return {
+        "Content-Type": doc.mimeType || "application/octet-stream",
+        "Content-Disposition": `inline; filename="${(doc.fileName ?? "bast").replace(/[\r\n"]/g, "_")}"`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+    };
+}
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
@@ -23,7 +45,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         }
 
         // Hapus record dari DB
-        // fileData otomatis terhapus karena merupakan field di record ini
         await prisma.assetBastDocument.delete({
             where: { id }
         });
@@ -34,6 +55,17 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         await logAction("DELETE_BAST", "ASSET_BAST", actorFromSession(session), id, {
             fileName: bastDoc.fileName,
         });
+
+        // Hapus berkas fisik SETELAH db delete sukses (abaikan bila sudah tidak ada).
+        if (bastDoc.filePath) {
+            try {
+                await unlink(safeResolvedBastPath(bastDoc.filePath));
+            } catch (err) {
+                if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+                    logger.warn("BAST file cleanup failed", { bastId: id, filePath: bastDoc.filePath, error: err });
+                }
+            }
+        }
 
         return NextResponse.json({ success: true });
     } catch (err) {
@@ -52,15 +84,34 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             where: { id }
         });
 
-        if (!doc || !doc.fileData) {
+        if (!doc) {
+            return new NextResponse("File tidak ditemukan", { status: 404 });
+        }
+
+        // Dual-read: file baru di disk (filePath) diutamakan; blob lama (fileData) sebagai fallback.
+        if (doc.filePath) {
+            try {
+                const fileBuffer = await readFile(safeResolvedBastPath(doc.filePath));
+                return new NextResponse(fileBuffer, {
+                    headers: bastServeHeaders(doc),
+                });
+            } catch (err) {
+                if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+                    const message = err instanceof Error ? err.message : "";
+                    if (!message.includes("Lokasi penyimpanan BAST tidak valid")) {
+                        throw err;
+                    }
+                }
+                // ENOENT / path tidak valid → lanjut ke fallback blob lama bila ada.
+            }
+        }
+
+        if (!doc.fileData || doc.fileData.length === 0) {
             return new NextResponse("File tidak ditemukan", { status: 404 });
         }
 
         return new NextResponse(doc.fileData, {
-            headers: {
-                "Content-Type": doc.mimeType || "application/octet-stream",
-                "Content-Disposition": `inline; filename="${doc.fileName.replace(/[\r\n"]/g, "_")}"`
-            }
+            headers: bastServeHeaders(doc),
         });
     } catch (err) {
         return serverErrorResponse("BASTGet", err);

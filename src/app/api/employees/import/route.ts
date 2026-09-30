@@ -4,6 +4,7 @@ import { validateImport, executeImport, DuplicateImportError, type ImportMode } 
 import logger from "@/lib/logger";
 import { actorFromSession } from "@/lib/services/auditService";
 import { canManageHr } from "@/lib/permissions";
+import { hasExpectedSignature } from "@/lib/fileMagic";
 
 export async function POST(request: NextRequest) {
     const session = await requireAuth();
@@ -34,6 +35,9 @@ export async function POST(request: NextRequest) {
         }
 
         const buffer = await file.arrayBuffer();
+        if (!hasExpectedSignature("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Buffer.from(buffer))) {
+            return NextResponse.json({ error: "Isi file tidak sesuai dengan format .xlsx." }, { status: 400 });
+        }
         const options = { mode: importMode, allowCreateMaster };
 
         if (operation === "validate") {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { getLeaveRequests, createLeaveRequest, updateLeaveRequest } from "@/lib/services/leaveService";
+import { getLeaveRequests, createLeaveRequest, updateLeaveRequest, LeaveAttachmentError } from "@/lib/services/leaveService";
 import { leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validationSchemas";
 import { prisma } from "@/lib/prisma";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
@@ -95,6 +95,9 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(leave, { status: 201 });
     } catch (err) {
+        if (err instanceof LeaveAttachmentError) {
+            return NextResponse.json({ error: err.message }, { status: 400 });
+        }
         if (err instanceof LeaveDateRangeError || err instanceof ShiftAssignmentError) {
             return NextResponse.json({ error: err.message }, { status: err.statusCode });
         }

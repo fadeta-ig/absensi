@@ -4,6 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import logger from "@/lib/logger";
+import { ALLOWED_UPLOAD_MIME, assertAllowedFile, extensionForMime } from "@/lib/fileMagic";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "news");
 
@@ -23,17 +24,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Validate file type (images and documents for news)
-        const allowedTypes = [
-            "image/jpeg", "image/png", "image/webp", "image/gif",
-            "application/pdf",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.ms-excel",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.ms-powerpoint",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        ];
-        if (!allowedTypes.includes(file.type)) {
+        if (!ALLOWED_UPLOAD_MIME.includes(file.type)) {
             return NextResponse.json({ error: "Format file tidak didukung. Gunakan Gambar atau Dokumen (PDF, Word, Excel, PPT)." }, { status: 400 });
         }
 
@@ -46,13 +37,21 @@ export async function POST(request: NextRequest) {
         // Ensure upload directory exists
         await mkdir(UPLOAD_DIR, { recursive: true });
 
-        // Generate unique filename
-        const ext = path.extname(file.name) || ".jpg";
+        // Generate unique filename (extension derived from server-side MIME map, never from file.name)
+        const ext = extensionForMime(file.type);
+        if (!ext) {
+            return NextResponse.json({ error: "Format file tidak didukung. Gunakan Gambar atau Dokumen (PDF, Word, Excel, PPT)." }, { status: 400 });
+        }
         const uniqueName = `${randomUUID()}${ext}`;
         const filePath = path.join(UPLOAD_DIR, uniqueName);
 
         // Write file to disk
         const buffer = Buffer.from(await file.arrayBuffer());
+        try {
+            assertAllowedFile(buffer, file.type);
+        } catch (err) {
+            return NextResponse.json({ error: err instanceof Error ? err.message : "Isi file tidak valid." }, { status: 400 });
+        }
         await writeFile(filePath, buffer);
 
         logger.info("News image uploaded", { filename: uniqueName, uploadedBy: session.username });

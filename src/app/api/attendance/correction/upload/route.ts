@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, parseFormData, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import logger from "@/lib/logger";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "attendance-corrections");
+const UPLOAD_DIR = path.resolve(process.cwd(), "storage", "attendance-corrections");
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const EXTENSIONS: Record<string, string> = {
@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
 
         await mkdir(UPLOAD_DIR, { recursive: true });
         const filename = `${randomUUID()}${EXTENSIONS[file.type]}`;
-        await writeFile(path.join(UPLOAD_DIR, filename), Buffer.from(await file.arrayBuffer()));
+        await writeFile(path.join(UPLOAD_DIR, filename), Buffer.from(await file.arrayBuffer()), { flag: "wx" });
 
-        const url = `/uploads/attendance-corrections/${filename}`;
+        const url = `/api/attendance/correction/attachments/${filename}`;
         logger.info("Attendance correction attachment uploaded", { filename, uploadedBy: session.employeeId });
         return NextResponse.json({ url, name: file.name });
     } catch (error) {

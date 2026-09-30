@@ -84,6 +84,9 @@ describe("AttendancePage", () => {
         vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
         vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
         vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,test-photo");
+        vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(((callback: BlobCallback) => {
+            callback(new Blob(["test-photo-bytes"], { type: "image/jpeg" }));
+        }) as unknown as typeof HTMLCanvasElement.prototype.toBlob);
     });
 
     afterEach(() => {
@@ -93,10 +96,10 @@ describe("AttendancePage", () => {
     });
 
     it("shows the authoritative overnight shift context and sends expected action plus shift date once", async () => {
-        const calls: Array<{ method: string; body?: Record<string, unknown> }> = [];
+        const calls: Array<{ method: string; body?: BodyInit | null }> = [];
         const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
             const method = init?.method ?? "GET";
-            calls.push({ method, body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
+            calls.push({ method, body: init?.body });
             if (method === "POST") return response({ clockIn: "2026-09-28T16:00:00.000Z", clockOut: "2026-09-28T23:30:00.000Z" });
             return response([{ date: "2026-09-28", clockIn: "2026-09-28T16:00:00.000Z", clockOut: null }]);
         });
@@ -117,10 +120,12 @@ describe("AttendancePage", () => {
         await userEvent.dblClick(submit);
 
         await waitFor(() => expect(calls.filter((call) => call.method === "POST")).toHaveLength(1));
-        expect(calls.find((call) => call.method === "POST")?.body).toEqual(expect.objectContaining({
-            action: "CLOCK_OUT",
-            shiftDate: "2026-09-28",
-        }));
+        const posted = calls.find((call) => call.method === "POST")?.body;
+        expect(posted).toBeInstanceOf(FormData);
+        const form = posted as FormData;
+        expect(form.get("action")).toBe("CLOCK_OUT");
+        expect(form.get("shiftDate")).toBe("2026-09-28");
+        expect(form.get("photo")).toBeInstanceOf(Blob);
     });
 
     it("disables submission when the last server context is stale or offline", async () => {

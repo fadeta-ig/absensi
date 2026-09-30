@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 export const ASSIGNED_TO_INCLUDE = {
     assignedTo: {
         select: {
+            id: true,
             employeeId: true,
             name: true,
             departmentRel: { select: { name: true } },

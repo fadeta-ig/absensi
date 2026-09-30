@@ -379,7 +379,7 @@ function HrAssetsPageInner() {
                                                 </div>
                                                 <div>
                                                     {a.assignedEmployee ? (
-                                                        <a href={`/dashboard/employees/${a.assignedEmployee.employeeId}/360-view`} style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }} className="hover:underline">
+                                                        <a href={`/dashboard/employees/${a.assignedEmployee.id}/360-view`} style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }} className="hover:underline">
                                                             {a.assignedEmployee.name}
                                                         </a>
                                                     ) : (

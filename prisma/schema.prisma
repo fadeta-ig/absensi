@@ -34,6 +34,7 @@ model Employee {
   totalLeave            Int                           @default(12) @map("total_leave")
   usedLeave             Int                           @default(0) @map("used_leave")
   avatarUrl             String?                       @map("avatar_url") @db.LongText
+  avatarPath            String?                       @map("avatar_path") @db.VarChar(500)
   isActive              Boolean                       @default(true) @map("is_active")
   statusChangedAt       DateTime?                     @map("status_changed_at")
   shiftId               String?                       @map("shift_id")
@@ -312,6 +313,8 @@ model AttendanceRecord {
   clockOutLocation String?   @map("clock_out_location") @db.LongText
   clockInPhoto     String?   @map("clock_in_photo") @db.LongText
   clockOutPhoto    String?   @map("clock_out_photo") @db.LongText
+  clockInPhotoPath String?   @map("clock_in_photo_path") @db.VarChar(500)
+  clockOutPhotoPath String?  @map("clock_out_photo_path") @db.VarChar(500)
   status           String    @default("present")
   notes            String?   @db.Text
   isOffDay         Boolean   @default(false) @map("is_off_day")
@@ -446,6 +449,9 @@ model LeaveRequest {
   status     String   @default("pending")
   createdAt  DateTime @default(now()) @map("created_at")
   attachment String?  @db.LongText
+  attachmentPath String? @map("attachment_path") @db.VarChar(500)
+  attachmentMime String? @map("attachment_mime") @db.VarChar(150)
+  attachmentSize Int?    @map("attachment_size")
   employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "leave_requests_employee_id_fkey")
@@ -684,6 +690,7 @@ model AssetBastDocument {
   fileData         Bytes    @map("file_data") @db.MediumBlob
   mimeType         String   @map("mime_type")
   fileName         String   @map("file_name")
+  filePath         String?  @map("file_path") @db.VarChar(500)
   uploadedBy       String   @map("uploaded_by")
   uploadedByUserId String?  @map("uploaded_by_user_id")
   createdAt        DateTime @default(now()) @map("created_at")
@@ -1412,6 +1419,7 @@ model CleaningMonthlyApprovalSignature {
   employeeId           String                          @map("employee_id")
   employeeNameSnapshot String                          @map("employee_name_snapshot") @db.VarChar(200)
   signaturePayload     String                          @map("signature_payload") @db.LongText
+  signaturePath        String?                         @map("signature_path") @db.VarChar(500)
   status               CleaningApprovalSignatureStatus @default(SIGNED) @map("status")
   signedAt             DateTime                        @default(now()) @map("signed_at")
   reopenedAt           DateTime?                       @map("reopened_at")
@@ -1446,4 +1454,17 @@ model CleaningApprovalIdempotency {
   @@unique([actorId, endpointScope, idempotencyKey], map: "idx_cleaning_idem_actor_scope_key")
   @@index([expiresAt], map: "idx_cleaning_idem_expires")
   @@map("cleaning_approval_idempotency")
+}
+
+// ─── App Settings (Batas Upload & Konfigurasi Operasional) ───────
+// Singleton per kunci (`key`): nilai batas upload disimpan sebagai string
+// angka dalam MB agar dapat diubah via dashboard tanpa deploy ulang.
+// Konsumen gelombang 2 membaca via getUploadLimit() dengan fallback DEFAULTS.
+model AppSetting {
+  key             String   @id
+  value           String
+  updatedByUserId String?  @map("updated_by_user_id")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
 }

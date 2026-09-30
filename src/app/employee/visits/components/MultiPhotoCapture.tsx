@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- data URL preview kamera tidak melewati image optimizer */
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { AlertCircle, Camera, VideoOff, X, Loader2, SwitchCamera, Check } from "lucide-react";
+import { AlertCircle, Camera, VideoOff, X, Loader2, SwitchCamera, Check, ImagePlus } from "lucide-react";
 import type { VisitPhotoCategory, VisitPhotoDraft } from "@/types";
 import { MIN_PHOTOS_REQUIRED, VISIT_PHOTO_CATEGORY_OPTIONS } from "../visitTypes";
 
@@ -14,6 +14,78 @@ interface MultiPhotoCaptureProps {
     minPhotos?: number;
     disabled?: boolean;
     defaultCategory?: VisitPhotoCategory;
+}
+
+/**
+ * Draft foto hasil jepretan/kompresi klien: mewarisi VisitPhotoDraft (kontrak
+ * lama: dataUrl tetap diisi dari blob terkompresi agar submit JSON lama dan
+ * modal lain tetap jalan) plus File terkompresi untuk submit multipart hemat
+ * dan previewUrl objectURL agar preview tidak menahan string base64 ganda.
+ */
+export interface CapturedVisitPhoto extends VisitPhotoDraft {
+    file?: File | null;
+    previewUrl?: string | null;
+}
+
+/** Sisi terpanjang foto hasil kompresi klien (hemat upload & storage). */
+export const PHOTO_MAX_DIMENSION = 1280;
+/** Kualitas JPEG klien — selaras dengan pipeline server (q84 + watermark). */
+export const PHOTO_JPEG_QUALITY = 0.75;
+/** Batas file galeri sebelum kompresi (10MB, masih dikompresi ke ~200KB). */
+export const GALLERY_SOURCE_MAX_BYTES = 10 * 1024 * 1024;
+
+const HEIC_EXTENSION_PATTERN = /\.(heic|heif)$/i;
+const HEIC_MIME_PATTERN = /heic|heif/i;
+
+/** Deteksi dini HEIC/HEIF dari nama atau MIME (browser tidak bisa merendernya). */
+export function isHeicFile(fileName: string | null | undefined, mimeType: string | null | undefined): boolean {
+    return HEIC_EXTENSION_PATTERN.test(fileName ?? "") || HEIC_MIME_PATTERN.test(mimeType ?? "");
+}
+
+/** Hitung dimensi downscale dengan maxDim sisi terpanjang (tanpa upscale). */
+export function computeDownscaleSize(
+    sourceWidth: number,
+    sourceHeight: number,
+    maxDim: number = PHOTO_MAX_DIMENSION,
+): { width: number; height: number } {
+    if (!Number.isFinite(sourceWidth) || !Number.isFinite(sourceHeight) || sourceWidth <= 0 || sourceHeight <= 0) {
+        return { width: 640, height: 480 };
+    }
+    const longest = Math.max(sourceWidth, sourceHeight);
+    const scale = longest > maxDim ? maxDim / longest : 1;
+    return {
+        width: Math.max(1, Math.round(sourceWidth * scale)),
+        height: Math.max(1, Math.round(sourceHeight * scale)),
+    };
+}
+
+function canvasToJpegBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+    return new Promise((resolve) => {
+        try {
+            canvas.toBlob((blob) => resolve(blob), "image/jpeg", PHOTO_JPEG_QUALITY);
+        } catch {
+            resolve(null);
+        }
+    });
+}
+
+function loadSourceBitmap(file: File): Promise<{ bitmap: ImageBitmap | HTMLImageElement; objectUrl: string } | null> {
+    const objectUrl = URL.createObjectURL(file);
+    if (typeof createImageBitmap === "function") {
+        return createImageBitmap(file)
+            .then((bitmap) => ({ bitmap, objectUrl }))
+            .catch(() => loadViaImageElement(objectUrl));
+    }
+    return loadViaImageElement(objectUrl);
+}
+
+function loadViaImageElement(objectUrl: string): Promise<{ bitmap: ImageBitmap | HTMLImageElement; objectUrl: string } | null> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ bitmap: img, objectUrl });
+        img.onerror = () => resolve(null);
+        img.src = objectUrl;
+    });
 }
 
 type CameraFacingMode = "environment" | "user";
@@ -77,6 +149,29 @@ export function MultiPhotoCapture({
     const [cameraLoading, setCameraLoading] = useState(false);
     const [cameraError, setCameraError] = useState<string | null>(null);
     const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>("environment");
+    const [processing, setProcessing] = useState(false);
+    const [toast, setToast] = useState<string | null>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+    const previewUrlsRef = useRef<Set<string>>(new Set());
+    const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showToast = useCallback((message: string) => {
+        setToast(message);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+    }, []);
+
+    const trackPreviewUrl = useCallback((url: string) => {
+        previewUrlsRef.current.add(url);
+    }, []);
+
+    const revokePreviewUrl = useCallback((url: string | null | undefined) => {
+        if (!url) return;
+        if (previewUrlsRef.current.has(url)) {
+            previewUrlsRef.current.delete(url);
+        }
+        URL.revokeObjectURL(url);
+    }, []);
 
     const stopCameraStream = useCallback(() => {
         if (streamRef.current) {
@@ -171,52 +266,186 @@ export function MultiPhotoCapture({
 
     useEffect(() => {
         mountedRef.current = true;
+        const previewUrls = previewUrlsRef.current;
 
         return () => {
             mountedRef.current = false;
             stopCameraStream();
+            previewUrls.forEach((url) => URL.revokeObjectURL(url));
+            previewUrls.clear();
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         };
     }, [stopCameraStream]);
 
+    const pushCompressedPhoto = useCallback((args: {
+        blob: Blob;
+        photos: VisitPhotoDraft[];
+        maxPhotos: number;
+        onPhotosChange: (photos: VisitPhotoDraft[]) => void;
+        defaultCategory: VisitPhotoCategory;
+        stopCamera: () => void;
+    }) => {
+        const { blob, photos, maxPhotos, onPhotosChange, defaultCategory, stopCamera } = args;
+        const file = new File([blob], `visit-${Date.now()}.jpg`, { type: "image/jpeg" });
+        const previewUrl = URL.createObjectURL(blob);
+        trackPreviewUrl(previewUrl);
+
+        // Kontrak lama dipertahankan: dataUrl diisi dari blob TERKOMPRESI
+        // (bukan canvas penuh) agar submit JSON lama tetap jalan; klien baru
+        // memakai `file` lewat multipart. JANGAN canvas.toDataURL untuk simpan.
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            if (!mountedRef.current) {
+                revokePreviewUrl(previewUrl);
+                return;
+            }
+            const dataUrl = typeof reader.result === "string" ? reader.result : "";
+            if (!dataUrl) {
+                revokePreviewUrl(previewUrl);
+                setCameraError("Gagal memproses foto. Coba ambil ulang.");
+                return;
+            }
+            const draft: CapturedVisitPhoto = {
+                dataUrl,
+                file,
+                previewUrl,
+                capturedAtDevice: new Date().toISOString(),
+                category: defaultCategory,
+                caption: "",
+            };
+            onPhotosChange([...photos, draft]);
+            setCameraError(null);
+            setProcessing(false);
+
+            // Auto-stop camera if max photos reached
+            if (photos.length + 1 >= maxPhotos) {
+                stopCamera();
+            }
+        };
+        reader.onerror = () => {
+            revokePreviewUrl(previewUrl);
+            setCameraError("Gagal memproses foto. Coba ambil ulang.");
+            setProcessing(false);
+        };
+        reader.readAsDataURL(blob);
+    }, [revokePreviewUrl, trackPreviewUrl]);
+
     const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current) return;
+        if (!videoRef.current || !canvasRef.current || processing) return;
         if (photos.length >= maxPhotos) return;
 
         const vid = videoRef.current;
         const canvas = canvasRef.current;
-        canvas.width = vid.videoWidth || 640;
-        canvas.height = vid.videoHeight || 480;
+        const { width, height } = computeDownscaleSize(vid.videoWidth || 0, vid.videoHeight || 0);
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
             setCameraError("Gagal mengambil foto dari kamera. Coba aktifkan kamera ulang.");
             return;
         }
 
-        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-        const photoData = canvas.toDataURL("image/jpeg", 0.7);
-        onPhotosChange([
-            ...photos,
-            {
-                dataUrl: photoData,
-                capturedAtDevice: new Date().toISOString(),
-                category: defaultCategory,
-                caption: "",
-            },
-        ]);
-        setCameraError(null);
+        ctx.drawImage(vid, 0, 0, width, height);
+        setProcessing(true);
+        void canvasToJpegBlob(canvas).then((blob) => {
+            if (!mountedRef.current) {
+                setProcessing(false);
+                return;
+            }
+            if (!blob) {
+                setCameraError("Gagal mengompresi foto. Coba ambil ulang.");
+                setProcessing(false);
+                return;
+            }
+            pushCompressedPhoto({
+                blob,
+                photos,
+                maxPhotos,
+                onPhotosChange,
+                defaultCategory,
+                stopCamera,
+            });
+        });
+    }, [photos, maxPhotos, onPhotosChange, stopCamera, defaultCategory, processing, pushCompressedPhoto]);
 
-        // Auto-stop camera if max photos reached
-        if (photos.length + 1 >= maxPhotos) {
-            stopCamera();
+    const handleGalleryFile = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+        if (!file || disabled || processing) return;
+        if (photos.length >= maxPhotos) {
+            showToast(`Maksimal ${maxPhotos} foto.`);
+            return;
         }
-    }, [photos, maxPhotos, onPhotosChange, stopCamera, defaultCategory]);
+
+        // Tolak HEIC/HEIF dini: browser tidak bisa merender/merasternya.
+        if (isHeicFile(file.name, file.type)) {
+            showToast("Format HEIC/HEIF tidak didukung. Ubah ke JPG di galeri lalu pilih ulang.");
+            return;
+        }
+        if (file.size > GALLERY_SOURCE_MAX_BYTES) {
+            showToast("File terlalu besar (maksimal 10MB).");
+            return;
+        }
+
+        setProcessing(true);
+        void (async () => {
+            const source = await loadSourceBitmap(file);
+            if (!source) {
+                if (mountedRef.current) {
+                    showToast("File gambar tidak dapat dibaca.");
+                    setProcessing(false);
+                }
+                return;
+            }
+            try {
+                const naturalWidth = source.bitmap.width || 0;
+                const naturalHeight = source.bitmap.height || 0;
+                const { width, height } = computeDownscaleSize(naturalWidth, naturalHeight);
+                const canvas = document.createElement("canvas");
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) throw new Error("canvas 2d tidak tersedia");
+                if (source.bitmap instanceof ImageBitmap) {
+                    ctx.drawImage(source.bitmap, 0, 0, width, height);
+                    source.bitmap.close();
+                } else {
+                    ctx.drawImage(source.bitmap, 0, 0, width, height);
+                }
+                const blob = await canvasToJpegBlob(canvas);
+                if (!mountedRef.current) return;
+                if (!blob) {
+                    showToast("Gagal mengompresi foto.");
+                    setProcessing(false);
+                    return;
+                }
+                pushCompressedPhoto({
+                    blob,
+                    photos,
+                    maxPhotos,
+                    onPhotosChange,
+                    defaultCategory,
+                    stopCamera,
+                });
+            } finally {
+                URL.revokeObjectURL(source.objectUrl);
+            }
+        })().catch(() => {
+            if (mountedRef.current) {
+                showToast("File gambar tidak dapat dibaca.");
+                setProcessing(false);
+            }
+        });
+    }, [disabled, processing, photos, maxPhotos, onPhotosChange, defaultCategory, stopCamera, pushCompressedPhoto, showToast]);
 
     const removePhoto = useCallback(
         (index: number) => {
+            const target = photos[index] as CapturedVisitPhoto | undefined;
+            revokePreviewUrl(target?.previewUrl);
             const updated = photos.filter((_, i) => i !== index);
             onPhotosChange(updated);
         },
-        [photos, onPhotosChange]
+        [photos, onPhotosChange, revokePreviewUrl]
     );
 
     const updatePhoto = useCallback(
@@ -260,7 +489,7 @@ export function MultiPhotoCapture({
                     {photos.map((p, i) => (
                         <div key={`${p.capturedAtDevice}-${i}`} className="rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--background)]">
                             <div className="relative aspect-[4/3] group">
-                                <img src={p.dataUrl} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                                <img src={(p as CapturedVisitPhoto).previewUrl ?? p.dataUrl} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                                 {!disabled && (
                                     <button
                                         type="button"
@@ -335,9 +564,33 @@ export function MultiPhotoCapture({
                                 )}
                                 Aktifkan Kamera
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => galleryInputRef.current?.click()}
+                                className="btn btn-secondary btn-sm"
+                                disabled={processing}
+                            >
+                                <ImagePlus className="w-3.5 h-3.5" />
+                                Pilih dari Galeri
+                            </button>
                         </div>
                     )}
                     <canvas ref={canvasRef} className="hidden" />
+                    <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleGalleryFile}
+                        aria-label="Pilih foto dari galeri"
+                    />
+                </div>
+            )}
+
+            {toast && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-700" role="status">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>{toast}</span>
                 </div>
             )}
 
@@ -355,9 +608,14 @@ export function MultiPhotoCapture({
                         type="button"
                         onClick={capturePhoto}
                         className="btn btn-primary btn-sm flex-1"
+                        disabled={processing}
                     >
-                        <Camera className="w-3.5 h-3.5" />
-                        Ambil Foto ({photos.length + 1}/{maxPhotos})
+                        {processing ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                            <Camera className="w-3.5 h-3.5" />
+                        )}
+                        {processing ? "Memproses..." : `Ambil Foto (${photos.length + 1}/${maxPhotos})`}
                     </button>
                     <button
                         type="button"

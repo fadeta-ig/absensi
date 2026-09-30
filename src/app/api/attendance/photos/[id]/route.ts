@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
+import { readAttendancePhotoFile } from "@/lib/services/attendanceService";
 import { PERMISSIONS } from "@/lib/permissions";
 
 function decodeDataUrl(value: string): { bytes: Buffer; mimeType: string } | null {
@@ -22,8 +23,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         }
         const row = await prisma.attendanceRecord.findUnique({
             where: { id },
-            select: { clockInPhoto: true, clockOutPhoto: true },
+            select: { clockInPhoto: true, clockOutPhoto: true, clockInPhotoPath: true, clockOutPhotoPath: true },
         });
+        // Dual-read Gel.2a: path disk (data baru) diutamakan; base64 lama jadi fallback.
+        const photoPath = phase === "clockIn" ? row?.clockInPhotoPath : row?.clockOutPhotoPath;
+        if (photoPath) {
+            try {
+                const bytes = await readAttendancePhotoFile(photoPath);
+                const body = new Uint8Array(bytes);
+                return new NextResponse(new Blob([body], { type: "image/jpeg" }), {
+                    headers: {
+                        "Content-Type": "image/jpeg",
+                        "Cache-Control": "private, no-store",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                });
+            } catch {
+                return NextResponse.json({ error: "Foto presensi tidak ditemukan." }, { status: 404 });
+            }
+        }
         const encoded = phase === "clockIn" ? row?.clockInPhoto : row?.clockOutPhoto;
         const decoded = encoded ? decodeDataUrl(encoded) : null;
         if (!decoded) return NextResponse.json({ error: "Foto presensi tidak ditemukan." }, { status: 404 });

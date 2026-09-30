@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "rea
 import { useRouter } from "next/navigation";
 import {
     Users, Plus, Search, Pencil, X, Loader2, Key, Layers, Upload, UserCheck, UserX,
-    RotateCcw, FileSpreadsheet, CheckSquare, Square
+    RotateCcw, FileSpreadsheet, CheckSquare, Square, Hash
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import BulkImportModal from "@/components/BulkImportModal";
 import EmployeeStatusModal from "@/components/EmployeeStatusModal";
+import EmployeeNipFixModal from "@/components/EmployeeNipFixModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import BulkActionBar from "@/components/ui/BulkActionBar";
 import { Table, TableHeader, TableBody, TableRow, TableHead } from "@/components/ui/table";
@@ -55,7 +56,9 @@ function EmployeesPageContent() {
     const [bulkSendingPassword, setBulkSendingPassword] = useState(false);
     const [passwordMsg, setPasswordMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [showImportModal, setShowImportModal] = useState(false);
-    const [statusEmployee, setStatusEmployee] = useState<Employee | null>(null);
+    const [statusEmployee, setStatusEmployee] = useState<Employee |
+null>(null);
+    const [nipFixEmployee, setNipFixEmployee] = useState<Employee | null>(null);
 
     const DAY_LABELS_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -667,6 +670,14 @@ function EmployeesPageContent() {
                                                     </button>
                                                     <button
                                                         type="button"
+                                                        onClick={() => setNipFixEmployee(e)}
+                                                        className="btn btn-ghost btn-sm !p-1.5 text-amber-600 hover:!bg-amber-50"
+                                                        title="Perbaiki NIP (khusus WIG001)"
+                                                    >
+                                                        <Hash className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
                                                         onClick={() => setStatusEmployee(e)}
                                                         className={`btn btn-ghost btn-sm !p-1.5 ${e.isActive ? "text-red-600 hover:!bg-red-50" : "text-emerald-600 hover:!bg-emerald-50"}`}
                                                         title={e.isActive ? "Nonaktifkan karyawan" : "Aktifkan kembali"}
@@ -742,6 +753,17 @@ function EmployeesPageContent() {
                     onClose={() => setStatusEmployee(null)}
                     onSuccess={async (message) => {
                         setStatusEmployee(null);
+                        setPasswordMsg({ type: "success", text: message });
+                        await fetchEmployees();
+                    }}
+                />
+            )}
+            {nipFixEmployee && (
+                <EmployeeNipFixModal
+                    employee={nipFixEmployee}
+                    onClose={() => setNipFixEmployee(null)}
+                    onSuccess={async (message) => {
+                        setNipFixEmployee(null);
                         setPasswordMsg({ type: "success", text: message });
                         await fetchEmployees();
                     }}

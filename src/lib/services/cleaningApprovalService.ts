@@ -5,6 +5,11 @@ import { isWig002, CleaningError } from "@/lib/services/cleaningService";
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import crypto from "node:crypto";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { getUploadLimit } from "@/lib/services/appSettingsService";
+import logger from "@/lib/logger";
 
 export type ApprovalDerivedStatus = "WAITING_FOR_SIGNATURES" | "PARTIALLY_SIGNED" | "COMPLETE";
 
@@ -41,7 +46,67 @@ export function deriveApprovalStatus(
     return "WAITING_FOR_SIGNATURES";
 }
 
-export function validateSignaturePayload(payload: string): Buffer {
+// ─── Tanda tangan disk storage (Gel.2c: baru ke disk+path, base64 lama hanya dibaca) ─__
+
+export const CLEANING_SIGNATURE_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "signatures");
+
+const CLEANING_SIGNATURE_RELATIVE_PATTERN = /^[A-Za-z0-9_-]+\/(INSPECTED_BY|KNOWN_BY)_[A-Za-z0-9-]+\.png$/;
+
+function formatSignatureLimit(maxBytes: number): string {
+    if (maxBytes === 256 * 1024) return "256 KB";
+    if (maxBytes >= 1024 * 1024) {
+        const mb = maxBytes / (1024 * 1024);
+        return `${Number.isInteger(mb) ? String(mb) : mb.toFixed(2)} MB`;
+    }
+    return `${Math.round(maxBytes / 1024)} KB`;
+}
+
+/** Kembalikan absolute path bila relative path valid dan di dalam root; selain itu null. */
+export function resolveCleaningSignaturePath(relativePath: string): string | null {
+    if (typeof relativePath !== "string" || !CLEANING_SIGNATURE_RELATIVE_PATTERN.test(relativePath)) return null;
+    const resolved = path.resolve(CLEANING_SIGNATURE_STORAGE_ROOT, relativePath);
+    if (!resolved.startsWith(`${CLEANING_SIGNATURE_STORAGE_ROOT}${path.sep}`)) return null;
+    return resolved;
+}
+
+/** Baca berkas PNG tanda tangan dari relative path yang tervalidasi. */
+export async function readCleaningSignatureFile(relativePath: string): Promise<Buffer> {
+    const absolutePath = resolveCleaningSignaturePath(relativePath);
+    if (!absolutePath) {
+        throw new CleaningError("Lokasi penyimpanan tanda tangan tidak valid.", 400);
+    }
+    return readFile(absolutePath);
+}
+
+/**
+ * Dual-read payload tanda tangan untuk respons/API/PDF:
+ * path ada → baca file disk dan kembalikan sebagai data URL;
+ * kosong/gagal → fallback ke payload base64 lama bila valid; selain itu null.
+ */
+export async function resolveSignatureDataUrl(
+    sig: { signaturePayload?: string | null; signaturePath?: string | null } | null | undefined
+): Promise<string | null> {
+    if (!sig) return null;
+    if (sig.signaturePath) {
+        try {
+            const absolutePath = resolveCleaningSignaturePath(sig.signaturePath);
+            if (absolutePath) {
+                const fileBuffer = await readFile(absolutePath);
+                if (fileBuffer.length > 0) {
+                    return `data:image/png;base64,${fileBuffer.toString("base64")}`;
+                }
+            }
+        } catch {
+            // Abaikan dan lanjut ke fallback blob lama.
+        }
+    }
+    if (typeof sig.signaturePayload === "string" && sig.signaturePayload.startsWith("data:image/png;base64,")) {
+        return sig.signaturePayload;
+    }
+    return null;
+}
+
+export function validateSignaturePayload(payload: string, maxBytes = 256 * 1024): Buffer {
     if (typeof payload !== "string" || !payload.startsWith("data:image/png;base64,")) {
         throw new CleaningError("Format tanda tangan tidak valid. Harus berupa PNG data URL.", 400);
     }
@@ -50,8 +115,8 @@ export function validateSignaturePayload(payload: string): Buffer {
         throw new CleaningError("Karakter base64 pada tanda tangan tidak valid.", 400);
     }
     const buffer = Buffer.from(base64Data, "base64");
-    if (buffer.length > 256 * 1024) {
-        throw new CleaningError("Ukuran tanda tangan melebihi batas 256 KB.", 413);
+    if (buffer.length > maxBytes) {
+        throw new CleaningError(`Ukuran tanda tangan melebihi batas ${formatSignatureLimit(maxBytes)}.`, 413);
     }
     if (buffer.length < 100) {
         throw new CleaningError("Tanda tangan kosong atau tidak valid.", 400);
@@ -482,7 +547,10 @@ export async function signApprovalPeriod(
         throw new CleaningError("Role tanda tangan harus INSPECTED_BY atau KNOWN_BY.", 400);
     }
 
-    validateSignaturePayload(data.signaturePayload);
+    // Batas ukuran via app settings (fallback bawaan 0,25 MB bila DB belum ada/gagal).
+    const signatureMaxMb = await getUploadLimit("upload.signature.maxMb");
+    const signatureMaxBytes = Math.floor(signatureMaxMb * 1024 * 1024);
+    const signatureBuffer = validateSignaturePayload(data.signaturePayload, signatureMaxBytes);
 
     const requestHash = crypto
         .createHash("sha256")
@@ -513,7 +581,25 @@ export async function signApprovalPeriod(
 
     const wibToday = toWIBDateString(new Date());
 
-    const result = await prisma.$transaction(async (tx) => {
+    // Simpan PNG baru ke disk privat (bukan base64 ke DB).
+    const signatureRelativePath = path
+        .join(data.approvalId, `${data.role}_${randomUUID()}.png`)
+        .replace(/\\/g, "/");
+    const signatureAbsolutePath = resolveCleaningSignaturePath(signatureRelativePath);
+    if (!signatureAbsolutePath) {
+        throw new CleaningError("Lokasi penyimpanan tanda tangan tidak valid.", 400);
+    }
+    await mkdir(path.dirname(signatureAbsolutePath), { recursive: true });
+    try {
+        await writeFile(signatureAbsolutePath, signatureBuffer, { flag: "wx" });
+    } catch (err) {
+        await unlink(signatureAbsolutePath).catch(() => undefined);
+        throw err;
+    }
+
+    let result;
+    try {
+        result = await prisma.$transaction(async (tx) => {
         const employee = await getValidatedInternalEmployee(tx, session.employeeId!, wibToday);
 
         const approval = await tx.cleaningMonthlyApproval.findUnique({
@@ -553,7 +639,8 @@ export async function signApprovalPeriod(
                 version: nextVersion,
                 employeeId: employee.employeeId,
                 employeeNameSnapshot: employee.name,
-                signaturePayload: data.signaturePayload,
+                signaturePayload: "",
+                signaturePath: signatureRelativePath,
                 status: "SIGNED",
                 signedAt: new Date(),
             },
@@ -615,7 +702,23 @@ export async function signApprovalPeriod(
         }
 
         return responseData;
-    });
+        });
+    } catch (err) {
+        // Bersihkan berkas yatim bila transaksi DB gagal (abaikan bila sudah tidak ada).
+        try {
+            await unlink(signatureAbsolutePath);
+        } catch (unlinkErr) {
+            if ((unlinkErr as NodeJS.ErrnoException)?.code !== "ENOENT") {
+                logger.warn("Cleaning signature cleanup failed", {
+                    approvalId: data.approvalId,
+                    role: data.role,
+                    signaturePath: signatureRelativePath,
+                    error: unlinkErr,
+                });
+            }
+        }
+        throw err;
+    }
 
     return result;
 }
@@ -723,6 +826,26 @@ export async function getGaApprovalDetail(
         };
     });
 
+    const [inspectedPayload, knownPayload] = await Promise.all([
+        activeInspectedSig ? resolveSignatureDataUrl(activeInspectedSig) : Promise.resolve(null),
+        activeKnownSig ? resolveSignatureDataUrl(activeKnownSig) : Promise.resolve(null),
+    ]);
+    const history = await Promise.all(
+        approval.signatures.map(async (s) => ({
+            id: s.id,
+            role: s.role,
+            version: s.version,
+            employeeId: s.employeeId,
+            employeeName: s.employeeNameSnapshot,
+            status: s.status,
+            signedAt: s.signedAt,
+            reopenedAt: s.reopenedAt,
+            reopenReason: s.reopenReason,
+            reopenedByName: s.reopenedByUser?.displayName ?? null,
+            signaturePayload: await resolveSignatureDataUrl(s),
+        }))
+    );
+
     return {
         id: approval.id,
         status: derivedStatus,
@@ -740,7 +863,7 @@ export async function getGaApprovalDetail(
                       id: activeInspectedSig.id,
                       version: activeInspectedSig.version,
                       signedAt: activeInspectedSig.signedAt,
-                      signaturePayload: activeInspectedSig.signaturePayload,
+                      signaturePayload: inspectedPayload,
                       hasChangedAfter: latestChange ? activeInspectedSig.signedAt < latestChange.timestamp : false,
                   }
                 : null,
@@ -754,25 +877,13 @@ export async function getGaApprovalDetail(
                       id: activeKnownSig.id,
                       version: activeKnownSig.version,
                       signedAt: activeKnownSig.signedAt,
-                      signaturePayload: activeKnownSig.signaturePayload,
+                      signaturePayload: knownPayload,
                       hasChangedAfter: latestChange ? activeKnownSig.signedAt < latestChange.timestamp : false,
                   }
                 : null,
         },
         latestChange,
-        history: approval.signatures.map((s) => ({
-            id: s.id,
-            role: s.role,
-            version: s.version,
-            employeeId: s.employeeId,
-            employeeName: s.employeeNameSnapshot,
-            status: s.status,
-            signedAt: s.signedAt,
-            reopenedAt: s.reopenedAt,
-            reopenReason: s.reopenReason,
-            reopenedByName: s.reopenedByUser?.displayName ?? null,
-            signaturePayload: s.signaturePayload,
-        })),
+        history,
         createdAt: approval.createdAt,
         updatedAt: approval.updatedAt,
     };
@@ -1085,25 +1196,27 @@ export async function getEmployeeApprovalDetail(
     const kno = allSigned.find((s) => s.role === "KNOWN_BY");
     const derivedStatus = deriveApprovalStatus(insp, kno);
 
-    const rolesDetail = userRoles.map((role) => {
-        const activeSig = approval.signatures.find(
-            (s) => s.role === role && s.status === "SIGNED"
-        );
-        return {
-            role,
-            roleLabel: role === "INSPECTED_BY" ? "Diperiksa Oleh" : "Mengetahui",
-            isSigned: Boolean(activeSig),
-            signature: activeSig
-                ? {
-                      id: activeSig.id,
-                      version: activeSig.version,
-                      signedAt: activeSig.signedAt,
-                      signaturePayload: activeSig.signaturePayload,
-                      hasChangedAfter: latestChange ? activeSig.signedAt < latestChange.timestamp : false,
-                  }
-                : null,
-        };
-    });
+    const rolesDetail = await Promise.all(
+        userRoles.map(async (role) => {
+            const activeSig = approval.signatures.find(
+                (s) => s.role === role && s.status === "SIGNED"
+            );
+            return {
+                role,
+                roleLabel: role === "INSPECTED_BY" ? "Diperiksa Oleh" : "Mengetahui",
+                isSigned: Boolean(activeSig),
+                signature: activeSig
+                    ? {
+                          id: activeSig.id,
+                          version: activeSig.version,
+                          signedAt: activeSig.signedAt,
+                          signaturePayload: await resolveSignatureDataUrl(activeSig),
+                          hasChangedAfter: latestChange ? activeSig.signedAt < latestChange.timestamp : false,
+                      }
+                    : null,
+            };
+        })
+    );
 
     return {
         id: approval.id,
@@ -1222,6 +1335,12 @@ export async function getCleaningPdfExportData(
 
     const latestChange = await getLatestChecklistChange(prisma, roomId, monthWib);
 
+    // Dual-read untuk PDF: path disk baru diutamakan, payload base64 lama sebagai fallback.
+    const [inspectedPayload, knownPayload] = await Promise.all([
+        activeInspectedSig ? resolveSignatureDataUrl(activeInspectedSig) : Promise.resolve(null),
+        activeKnownSig ? resolveSignatureDataUrl(activeKnownSig) : Promise.resolve(null),
+    ]);
+
     return {
         roomId: room.id,
         roomName: room.name,
@@ -1234,14 +1353,16 @@ export async function getCleaningPdfExportData(
             employeeId: approval?.inspectedByEmployeeId ?? "-",
             position: approval?.inspectedByEmployee.positionRel?.name ?? "Manager",
             signedAt: activeInspectedSig?.signedAt ? activeInspectedSig.signedAt.toISOString() : null,
-            signaturePayload: activeInspectedSig?.signaturePayload ?? null,
+            signaturePayload: inspectedPayload,
+            signaturePath: activeInspectedSig?.signaturePath ?? null,
         },
         knownBy: {
             employeeName: approval?.knownByEmployee.name ?? "-",
             employeeId: approval?.knownByEmployeeId ?? "-",
             position: approval?.knownByEmployee.positionRel?.name ?? "Direksi",
             signedAt: activeKnownSig?.signedAt ? activeKnownSig.signedAt.toISOString() : null,
-            signaturePayload: activeKnownSig?.signaturePayload ?? null,
+            signaturePayload: knownPayload,
+            signaturePath: activeKnownSig?.signaturePath ?? null,
         },
         latestChange: latestChange
             ? {

@@ -1,3 +1,6 @@
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
+import path from "path";
+import { randomUUID } from "crypto";
 import { prisma } from "../prisma";
 import { AttendanceRecord } from "@/types";
 import logger from "@/lib/logger";
@@ -45,8 +48,8 @@ export function toAttendanceRecord(row: any): AttendanceRecord {
         clockOutLocation: parseLocation(row.clockOutLocation),
         clockInPhoto: row.clockInPhoto ?? null,
         clockOutPhoto: row.clockOutPhoto ?? null,
-        hasClockInPhoto: Boolean(row.hasClockInPhoto ?? row.clockInPhoto),
-        hasClockOutPhoto: Boolean(row.hasClockOutPhoto ?? row.clockOutPhoto),
+        hasClockInPhoto: Boolean(row.hasClockInPhoto ?? row.clockInPhoto ?? row.clockInPhotoPath),
+        hasClockOutPhoto: Boolean(row.hasClockOutPhoto ?? row.clockOutPhoto ?? row.clockOutPhotoPath),
         status: row.status as AttendanceRecord["status"],
         notes: row.notes ?? null,
         isOffDay: Boolean(row.isOffDay),
@@ -61,6 +64,92 @@ export function toAttendanceRecord(row: any): AttendanceRecord {
     };
 }
 
+// ─── Selfie disk storage (Gel.2a: file baru ke disk+path, base64 lama hanya dibaca) ───
+
+/** Root privat foto selfie presensi (di luar public/ agar wajib lewat route ber-auth). */
+export const ATTENDANCE_PHOTO_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "attendance-photos");
+
+const ATTENDANCE_PHOTO_RELATIVE_PATTERN = /^[A-Za-z0-9_-]+\/[A-Za-z0-9-]+\.jpg$/;
+const ATTENDANCE_EMPLOYEE_DIR_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+export class AttendancePhotoValidationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "AttendancePhotoValidationError";
+    }
+}
+
+/** Cek magic bytes JPEG (FF D8 FF) — otoritatif, bukan dari klaim MIME klien. */
+export function isJpegBytes(bytes: Uint8Array): boolean {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+/**
+ * Kembalikan absolute path bila relative path valid (`{employeeId}/{uuid}.jpg`)
+ * dan tetap di dalam root storage; selain itu null (anti traversal).
+ */
+export function resolveAttendancePhotoPath(relativePath: string): string | null {
+    if (!ATTENDANCE_PHOTO_RELATIVE_PATTERN.test(relativePath)) return null;
+    const resolved = path.resolve(ATTENDANCE_PHOTO_STORAGE_ROOT, relativePath);
+    if (!resolved.startsWith(`${ATTENDANCE_PHOTO_STORAGE_ROOT}${path.sep}`)) return null;
+    return resolved;
+}
+
+/**
+ * Simpan selfie JPEG ke `storage/attendance-photos/{employeeId}/{uuid}.jpg`
+ * via `mkdir recursive + writeFile wx` (meniru visitPhotoService).
+ * Kembalikan relative path untuk kolom `clockInPhotoPath/clockOutPhotoPath`.
+ */
+export async function saveAttendancePhoto(
+    employeeId: string,
+    bytes: Buffer,
+    maxBytes: number,
+): Promise<string> {
+    if (!ATTENDANCE_EMPLOYEE_DIR_PATTERN.test(employeeId)) {
+        throw new AttendancePhotoValidationError("Identitas karyawan tidak valid untuk penyimpanan foto.");
+    }
+    if (bytes.length === 0) {
+        throw new AttendancePhotoValidationError("Foto selfie wajib disertakan sebagai bukti kehadiran.");
+    }
+    if (bytes.length > maxBytes) {
+        throw new AttendancePhotoValidationError(
+            `Ukuran foto terlalu besar. Maksimal ${(maxBytes / (1024 * 1024)).toFixed(1)} MB. Silakan ambil ulang foto.`,
+        );
+    }
+    if (!isJpegBytes(bytes)) {
+        throw new AttendancePhotoValidationError("Foto harus berformat JPEG dari kamera aplikasi.");
+    }
+    const relativePath = `${employeeId}/${randomUUID()}.jpg`;
+    const absolutePath = resolveAttendancePhotoPath(relativePath);
+    if (!absolutePath) {
+        throw new AttendancePhotoValidationError("Lokasi penyimpanan foto presensi tidak valid.");
+    }
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    try {
+        await writeFile(absolutePath, bytes, { flag: "wx" });
+    } catch (error) {
+        await unlink(absolutePath).catch(() => undefined);
+        throw error;
+    }
+    return relativePath;
+}
+
+/** Baca berkas selfie dari relative path yang tervalidasi. */
+export async function readAttendancePhotoFile(relativePath: string): Promise<Buffer> {
+    const absolutePath = resolveAttendancePhotoPath(relativePath);
+    if (!absolutePath) {
+        throw new AttendancePhotoValidationError("Lokasi penyimpanan foto presensi tidak valid.");
+    }
+    return readFile(absolutePath);
+}
+
+/** Hapus berkas selfie (cleanup bila mutasi DB gagal; abaikan bila sudah tidak ada). */
+export async function deleteAttendancePhotoFile(relativePath: string): Promise<void> {
+    const absolutePath = resolveAttendancePhotoPath(relativePath);
+    if (!absolutePath) return;
+    await unlink(absolutePath).catch(() => undefined);
+}
+
 // ─── Service Functions ────────────────────────────────────────
 
 export async function getAttendanceRecords(employeeId?: string): Promise<AttendanceRecord[]> {
@@ -72,11 +161,11 @@ export async function getAttendanceRecords(employeeId?: string): Promise<Attenda
             omit: { clockInPhoto: true, clockOutPhoto: true },
         }),
         prisma.attendanceRecord.findMany({
-            where: { ...where, clockInPhoto: { not: null } },
+            where: { ...where, OR: [{ clockInPhoto: { not: null } }, { clockInPhotoPath: { not: null } }] },
             select: { id: true },
         }),
         prisma.attendanceRecord.findMany({
-            where: { ...where, clockOutPhoto: { not: null } },
+            where: { ...where, OR: [{ clockOutPhoto: { not: null } }, { clockOutPhotoPath: { not: null } }] },
             select: { id: true },
         }),
     ]);
@@ -203,15 +292,32 @@ export class AttendanceMutationError extends Error {
     }
 }
 
-interface AttendanceMutationInput {
+interface AttendanceMutationBaseInput {
     employeeId: string;
     expectedAction: AttendanceExpectedAction;
     expectedShiftDate: string;
     now: Date;
-    photo: string;
     location: AttendanceRecord["clockInLocation"];
     offDayReason?: string | null;
 }
+
+type AttendanceMutationInput = AttendanceMutationBaseInput &
+    (
+        | {
+            /** Selfie baru: relative path hasil saveAttendancePhoto (kolom clockInPhotoPath/clockOutPhotoPath). */
+            photoPath: string;
+            photo?: never;
+        }
+        | {
+            /**
+             * @deprecated Kontrak base64 lama — hanya agar suite integrasi pengunci
+             * roster lama tetap terkompilasi. Route produksi Gel.2a tidak pernah
+             * mengisi ini (selalu photoPath; JSON lama ditolak 400 di boundary).
+             */
+            photo: string;
+            photoPath?: never;
+        }
+    );
 
 export interface AttendanceMutationResult {
     record: AttendanceRecord;
@@ -275,7 +381,9 @@ export async function performAttendanceMutation(input: AttendanceMutationInput):
                     data: {
                         clockOut: input.now,
                         clockOutLocation: input.location ? JSON.stringify(input.location) : null,
-                        clockOutPhoto: input.photo,
+                        // Data baru (photoPath) → kolom path saja; varian legacy → kolom base64.
+                        ...(input.photoPath ? { clockOutPhotoPath: input.photoPath } : {}),
+                        ...(input.photo ? { clockOutPhoto: input.photo } : {}),
                     },
                 });
                 if (changed.count !== 1) {
@@ -325,7 +433,9 @@ export async function performAttendanceMutation(input: AttendanceMutationInput):
                     date: toUTCDateKey(target.shiftDate),
                     clockIn: input.now,
                     clockInLocation: input.location ? JSON.stringify(input.location) : null,
-                    clockInPhoto: input.photo,
+                    // Data baru (photoPath) → kolom path saja, JANGAN isi kolom base64.
+                    ...(input.photoPath ? { clockInPhotoPath: input.photoPath } : {}),
+                    ...(input.photo ? { clockInPhoto: input.photo } : {}),
                     status,
                     isOffDay,
                     offDayReason: isOffDay ? reason ?? null : null,

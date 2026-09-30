@@ -24,6 +24,33 @@ export const sendPasswordSchema = z.object({
     employeeId: z.string().min(1, "Employee ID harus diisi"),
 });
 
+const AVATAR_HTTPS_MAX_LENGTH = 1000;
+const AVATAR_DATA_URL_MAX_LENGTH = 2_800_000;
+const AVATAR_DATA_PREFIXES = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"] as const;
+const AVATAR_HTTPS_PATTERN = /^https:\/\/[^\s"'<>\\]+$/u;
+const AVATAR_BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * Avatar hanya boleh URL https:// (maks 1000 karakter) atau gambar base64
+ * jpeg/png/webp (maks ~2,8 juta karakter ≈ 2MB). Menolak javascript:,
+ * data:text/html, dan svg agar tidak bisa disuntik via <img src>.
+ */
+function isAllowedAvatarUrl(value: string): boolean {
+    if (value.startsWith("https://")) {
+        return value.length <= AVATAR_HTTPS_MAX_LENGTH && AVATAR_HTTPS_PATTERN.test(value);
+    }
+    const prefix = AVATAR_DATA_PREFIXES.find((candidate) => value.startsWith(candidate));
+    if (prefix === undefined) return false;
+    const payload = value.slice(prefix.length);
+    if (payload.length === 0 || payload.length % 4 !== 0) return false;
+    return AVATAR_BASE64_PATTERN.test(payload);
+}
+
+export const avatarUrlSchema = z
+    .string()
+    .max(AVATAR_DATA_URL_MAX_LENGTH, "URL avatar terlalu panjang.")
+    .refine(isAllowedAvatarUrl, "URL avatar tidak valid. Gunakan URL https:// atau gambar jpeg/png/webp.");
+
 /* ───────────────────── Attendance ───────────────────── */
 
 const locationSchema = z.object({

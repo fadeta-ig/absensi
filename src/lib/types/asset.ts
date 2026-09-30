@@ -11,6 +11,7 @@ export type AssetStatus = "AVAILABLE" | "IN_USE" | "MAINTENANCE" | "RETIRED" | "
 export type HolderType = "EMPLOYEE" | "FORMER_EMPLOYEE" | "TEAM" | "GA_POOL" | "COMPANY_OWNED";
 
 export type AssignedEmployeeInfo = {
+    id: string;
     employeeId: string;
     name: string;
     department: string;

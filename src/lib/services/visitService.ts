@@ -10,6 +10,7 @@ import {
 import { calculateDistance, toDateString } from "@/lib/utils";
 import logger from "@/lib/logger";
 import {
+    deleteVisitPhotoFiles,
     prepareVisitPhotos,
     VisitPhotoLocationEvidence,
     VisitPhotoValidationError,
@@ -374,6 +375,12 @@ export async function deleteVisitReport(id: string): Promise<boolean> {
         return false;
     }
 
+    const photos = await prisma.visitPhoto.findMany({
+        where: { visitId: id },
+        select: { originalPath: true, stampedPath: true },
+    });
     await prisma.visitReport.delete({ where: { id } });
+    // DB sukses dulu, berkas menyusul (best-effort; yatim lama dibiarkan).
+    await deleteVisitPhotoFiles(photos.flatMap((photo) => [photo.originalPath, photo.stampedPath]));
     return true;
 }

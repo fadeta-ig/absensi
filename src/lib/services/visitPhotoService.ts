@@ -4,6 +4,7 @@ import path from "path";
 import type { Prisma } from "@prisma/client";
 import sharp from "sharp";
 import logger from "@/lib/logger";
+import { getUploadLimit } from "@/lib/services/appSettingsService";
 import type {
     VisitPhotoCategory,
     VisitPhotoDraft,
@@ -41,14 +42,31 @@ export interface VisitPhotoLocationEvidence {
     acquiredAt?: string | null;
 }
 
+/**
+ * Draft foto dari jalur buffer (multipart): klien modern mengirim File hasil
+ * kompresi (jpeg q0.75, maxDim 1280) lewat FormData, route mengubahnya menjadi
+ * Buffer. Jalur dataUrl lama (JSON-base64) tetap didukung — JANGAN hapus.
+ */
+export interface VisitPhotoBufferDraft {
+    buffer: Buffer;
+    capturedAtDevice: string;
+    category: VisitPhotoCategory;
+    caption?: string | null;
+}
+
+/** Input foto yang diterima service: dataUrl lama ATAU buffer baru. */
+export type VisitPhotoInput = VisitPhotoDraft | VisitPhotoBufferDraft;
+
 export interface PrepareVisitPhotosInput {
     visitId: string;
     clientName: string;
     phase: VisitPhotoPhase;
     officialTimestamp: Date;
-    photos: VisitPhotoDraft[];
+    photos: VisitPhotoInput[];
     location: VisitPhotoLocationEvidence;
     distanceToTargetMeters?: number | null;
+    /** Batas per foto (bytes). Default: setting upload.visitPhoto.maxMb, fallback 2MB. */
+    maxPhotoBytes?: number;
 }
 
 export interface PreparedVisitPhotos {
@@ -73,7 +91,7 @@ async function cleanupFile(operation: Promise<unknown>, context: Record<string, 
     }
 }
 
-function parseJpegDataUrl(dataUrl: string): Buffer {
+function parseJpegDataUrl(dataUrl: string, maxBytes: number = MAX_VISIT_PHOTO_BYTES): Buffer {
     if (!dataUrl.startsWith(JPEG_DATA_URL_PREFIX)) {
         throw new VisitPhotoValidationError("Foto harus berformat JPEG dari kamera aplikasi.");
     }
@@ -93,14 +111,54 @@ function parseJpegDataUrl(dataUrl: string): Buffer {
     if (canonicalInput !== canonicalDecoded) {
         throw new VisitPhotoValidationError("Data Base64 foto tidak valid.");
     }
-    if (buffer.length === 0 || buffer.length > MAX_VISIT_PHOTO_BYTES) {
-        throw new VisitPhotoValidationError("Ukuran setiap foto harus lebih dari 0 dan maksimal 2 MB.");
+    if (buffer.length === 0 || buffer.length > maxBytes) {
+        throw new VisitPhotoValidationError(`Ukuran setiap foto harus lebih dari 0 dan maksimal ${formatMb(maxBytes)}.`);
     }
     if (buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) {
         throw new VisitPhotoValidationError("Isi foto tidak sesuai dengan format JPEG.");
     }
 
     return buffer;
+}
+
+function formatMb(bytes: number): string {
+    const mb = bytes / (1024 * 1024);
+    return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;
+}
+
+function isBufferDraft(photo: VisitPhotoInput): photo is VisitPhotoBufferDraft {
+    return Buffer.isBuffer((photo as VisitPhotoBufferDraft).buffer);
+}
+
+/** Batas per foto efektif: eksplisit > setting app > fallback bawaan 2MB. */
+export async function resolveVisitPhotoLimitBytes(explicitMaxBytes?: number): Promise<number> {
+    if (typeof explicitMaxBytes === "number" && Number.isFinite(explicitMaxBytes) && explicitMaxBytes > 0) {
+        return Math.floor(explicitMaxBytes);
+    }
+    try {
+        const limitMb = await getUploadLimit("upload.visitPhoto.maxMb");
+        if (Number.isFinite(limitMb) && limitMb > 0) {
+            return Math.floor(limitMb * 1024 * 1024);
+        }
+    } catch {
+        // Fallback ke konstanta bawaan di bawah.
+    }
+    return MAX_VISIT_PHOTO_BYTES;
+}
+
+/** Ambil bytes JPEG terverifikasi dari draft dataUrl lama ATAU buffer baru. */
+function resolvePhotoBuffer(photo: VisitPhotoInput, maxBytes: number): Buffer {
+    if (isBufferDraft(photo)) {
+        const buffer = photo.buffer;
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > maxBytes) {
+            throw new VisitPhotoValidationError(`Ukuran setiap foto harus lebih dari 0 dan maksimal ${formatMb(maxBytes)}.`);
+        }
+        if (buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) {
+            throw new VisitPhotoValidationError("Isi foto tidak sesuai dengan format JPEG.");
+        }
+        return buffer;
+    }
+    return parseJpegDataUrl(photo.dataUrl, maxBytes);
 }
 
 function parseDeviceTimestamp(value: string | null | undefined): Date | null {
@@ -193,8 +251,8 @@ function createWatermarkSvg(input: {
     `);
 }
 
-async function prepareSinglePhoto(input: PrepareVisitPhotosInput, photo: VisitPhotoDraft, index: number) {
-    const originalBuffer = parseJpegDataUrl(photo.dataUrl);
+async function prepareSinglePhoto(input: PrepareVisitPhotosInput & { maxPhotoBytesResolved: number }, photo: VisitPhotoInput, index: number) {
+    const originalBuffer = resolvePhotoBuffer(photo, input.maxPhotoBytesResolved);
     const metadata = await sharp(originalBuffer, {
         failOn: "error",
         limitInputPixels: MAX_VISIT_PHOTO_PIXELS,
@@ -212,6 +270,7 @@ async function prepareSinglePhoto(input: PrepareVisitPhotosInput, photo: VisitPh
         limitInputPixels: MAX_VISIT_PHOTO_PIXELS,
     })
         .rotate()
+        .resize({ width: 1920, withoutEnlargement: true })
         .raw()
         .toBuffer({ resolveWithObject: true });
     const width = normalized.info.width;
@@ -312,8 +371,9 @@ export async function prepareVisitPhotos(input: PrepareVisitPhotosInput): Promis
     };
 
     try {
+        const maxPhotoBytesResolved = await resolveVisitPhotoLimitBytes(input.maxPhotoBytes);
         for (let index = 0; index < input.photos.length; index += 1) {
-            records.push(await prepareSinglePhoto(input, input.photos[index], index));
+            records.push(await prepareSinglePhoto({ ...input, maxPhotoBytesResolved }, input.photos[index], index));
         }
         return { records, cleanup };
     } catch (error) {
@@ -325,4 +385,25 @@ export async function prepareVisitPhotos(input: PrepareVisitPhotosInput): Promis
 
 export async function readVisitPhotoFile(relativePath: string): Promise<Buffer> {
     return readFile(safeResolvedPath(relativePath));
+}
+
+/**
+ * Hapus berkas foto (original + stamped) berdasarkan path relatif tersimpan.
+ * Best-effort pasca-commit: path di luar root dilewati, ENOENT diabaikan.
+ * Dipakai saat draft kunjungan dihapus agar tidak ada file yatim.
+ */
+export async function deleteVisitPhotoFiles(relativePaths: Array<string | null>): Promise<void> {
+    const unique = Array.from(new Set(relativePaths.filter((p): p is string => typeof p === "string" && p.length > 0)));
+    await Promise.all(
+        unique.map((relativePath) => {
+            let absolute: string;
+            try {
+                absolute = safeResolvedPath(relativePath);
+            } catch (error) {
+                logger.warn("Visit photo path outside storage, skipped", { relativePath, error });
+                return Promise.resolve();
+            }
+            return cleanupFile(unlink(absolute), { path: relativePath });
+        }),
+    );
 }

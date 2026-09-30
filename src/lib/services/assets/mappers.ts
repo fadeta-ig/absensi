@@ -8,6 +8,7 @@ import { AssetWithHistory, AssetCondition, AssetStatus, HolderType } from "@/lib
 export type AssetRowRaw = Asset & {
     categoryRel?: PrismaAssetCategory | null;
     assignedTo?: {
+        id: string;
         employeeId: string;
         name: string;
         departmentRel: { name: string } | null;
@@ -40,6 +41,7 @@ export function toAsset(row: AssetRowRaw): AssetWithHistory {
         assignedToId: row.assignedToId ?? null,
         assignedAt: row.assignedAt ? new Date(row.assignedAt).toISOString() : null,
         assignedEmployee: emp ? {
+            id: emp.id,
             employeeId: emp.employeeId,
             name: emp.name,
             department: emp.departmentRel?.name ?? "-",
