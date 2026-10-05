@@ -11,7 +11,7 @@ const signSchema = z.object({
         message: "Role harus INSPECTED_BY atau KNOWN_BY.",
     }),
     signaturePayload: z.string().min(1, "Payload tanda tangan wajib diisi."),
-    idempotencyKey: z.string().optional(),
+    idempotencyKey: z.string().trim().min(1).max(100).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     try {
         const idempotencyKey =
             validation.data.idempotencyKey ||
-            request.headers.get("x-idempotency-key") ||
+            request.headers.get("x-idempotency-key")?.trim() ||
             undefined;
 
         const result = await signApprovalPeriod(session, {

@@ -44,12 +44,17 @@ interface AllMenusSheetProps {
     isOpen: boolean;
     onClose: () => void;
     hasSubordinates?: boolean;
+    /** null = belum dimuat → sembunyikan dulu agar tak flash lalu hilang. */
+    canReviewCleaning?: boolean | null;
+    canTopViewCleaning?: boolean | null;
 }
 
 export default function AllMenusSheet({
     isOpen,
     onClose,
     hasSubordinates = false,
+    canReviewCleaning = true,
+    canTopViewCleaning = true,
 }: AllMenusSheetProps) {
     const router = useRouter();
     const toast = useToast();
@@ -205,14 +210,26 @@ export default function AllMenusSheet({
                     bg: "bg-emerald-50 dark:bg-emerald-950/40",
                     color: "text-emerald-600 dark:text-emerald-400",
                 },
-                {
-                    href: "/employee/cleaning/approvals",
-                    label: "Tanda Tangan Inspeksi",
-                    description: "Persetujuan dan tanda tangan checklist inspeksi bulanan",
-                    icon: FileCheck2,
-                    bg: "bg-teal-50 dark:bg-teal-950/40",
-                    color: "text-teal-600 dark:text-teal-400",
-                },
+                ...(canReviewCleaning === false || canReviewCleaning === null ? [] : [
+                    {
+                        href: "/employee/cleaning/approvals",
+                        label: "Tanda Tangan Inspeksi",
+                        description: "Persetujuan dan tanda tangan checklist inspeksi bulanan",
+                        icon: FileCheck2,
+                        bg: "bg-teal-50 dark:bg-teal-950/40",
+                        color: "text-teal-600 dark:text-teal-400",
+                    },
+                ]),
+                ...(canTopViewCleaning === false || canTopViewCleaning === null ? [] : [
+                    {
+                        href: "/employee/cleaning/overview",
+                        label: "Pantau Inspeksi",
+                        description: "Pantau checklist, paraf, dan rekap inspeksi (khusus atasan tertinggi)",
+                        icon: FileCheck2,
+                        bg: "bg-cyan-50 dark:bg-cyan-950/40",
+                        color: "text-cyan-600 dark:text-cyan-400",
+                    },
+                ]),
                 {
                     href: "/employee/todos",
                     label: "To-Do List",

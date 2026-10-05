@@ -19,7 +19,12 @@ import {
 import { useToast } from "@/components/Toast";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
-import { exportCleaningMatrixPdf } from "@/lib/exportCleaningPdf";
+// exportCleaningPdf (jspdf) dimuat dinamis saat tombol diklik agar tidak
+// membebani bundle halaman.
+async function renderCleaningMatrixPdf(data: Parameters<typeof import("@/lib/exportCleaningPdf").exportCleaningMatrixPdf>[0]) {
+    const { exportCleaningMatrixPdf } = await import("@/lib/exportCleaningPdf");
+    exportCleaningMatrixPdf(data);
+}
 
 interface ReviewerInfo {
     employeeId: string;
@@ -47,6 +52,8 @@ interface ApprovalSummaryItem {
     latestChange: { timestamp: string; actorName: string | null } | null;
     createdAt: string;
     updatedAt: string;
+    isSignable?: boolean;
+    opensOnWibDate?: string;
 }
 
 interface EligibleReviewer {
@@ -76,7 +83,7 @@ interface DetailSignatureHistory {
     reopenedAt: string | null;
     reopenReason: string | null;
     reopenedByName: string | null;
-    signaturePayload: string;
+    signaturePayload: string | null;
 }
 
 interface ApprovalDetailData {
@@ -88,7 +95,7 @@ interface ApprovalDetailData {
     dates?: string[];
     days?: Array<{
         date: string;
-        status: "SELESAI" | "BELUM" | "FUTURE";
+        status: "SELESAI" | "BELUM" | "FUTURE" | "LIBUR";
         activeCount: number;
         completedCount: number;
     }>;
@@ -96,6 +103,15 @@ interface ApprovalDetailData {
     knownBy?: ReviewerInfo;
     latestChange: { timestamp: string; actorName: string | null } | null;
     history?: DetailSignatureHistory[];
+    signable?: { isSignable: boolean; opensOnWibDate: string; wibToday: string };
+}
+
+function formatOpensOnShort(wibDate: string | undefined): string {
+    if (!wibDate) return "";
+    const [y, m, d] = wibDate.split("-").map(Number);
+    const short = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    if (!y || !m || !d || m < 1 || m > 12) return wibDate ?? "";
+    return `${d} ${short[m - 1]} ${y}`;
 }
 
 function getCurrentMonth(): string {
@@ -155,6 +171,11 @@ export default function GaCleaningApprovalsPage() {
     const [selectedInspectedId, setSelectedInspectedId] = useState("");
     const [selectedKnownId, setSelectedKnownId] = useState("");
     const [savingOpen, setSavingOpen] = useState(false);
+    const [defaultReviewers, setDefaultReviewers] = useState<{
+        inspectedByEmployeeId: string | null;
+        knownByEmployeeId: string | null;
+    } | null>(null);
+    const [openingAll, setOpeningAll] = useState(false);
 
     // Modal Detail
     const [detailData, setDetailData] = useState<ApprovalDetailData | null>(null);
@@ -174,10 +195,11 @@ export default function GaCleaningApprovalsPage() {
         setLoading(true);
         setError(null);
         try {
-            const [approvalsRes, roomsRes, reviewersRes] = await Promise.all([
+            const [approvalsRes, roomsRes, reviewersRes, defaultsRes] = await Promise.all([
                 fetch(`/api/ga/cleaning/approvals?monthWib=${targetMonth}`),
                 fetch("/api/ga/cleaning/rooms"),
                 fetch("/api/ga/cleaning/approvals/reviewers"),
+                fetch("/api/ga/cleaning/settings/default-reviewers").catch(() => null),
             ]);
 
             if (!approvalsRes.ok) {
@@ -195,6 +217,19 @@ export default function GaCleaningApprovalsPage() {
                 const reviewersJson = await reviewersRes.json();
                 setReviewers(reviewersJson.data || []);
             }
+
+            if (defaultsRes && defaultsRes.ok) {
+                const defaultsJson = await defaultsRes.json();
+                const defaults = defaultsJson.data?.defaults ?? defaultsJson.data ?? null;
+                if (defaults && (defaults.inspectedByEmployeeId || defaults.knownByEmployeeId)) {
+                    setDefaultReviewers({
+                        inspectedByEmployeeId: defaults.inspectedByEmployeeId ?? null,
+                        knownByEmployeeId: defaults.knownByEmployeeId ?? null,
+                    });
+                } else {
+                    setDefaultReviewers(null);
+                }
+            }
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Gagal memuat data.";
             setError(msg);
@@ -203,6 +238,57 @@ export default function GaCleaningApprovalsPage() {
             setLoading(false);
         }
     }, []);
+
+    const openOpenModal = useCallback(() => {
+        // Refresh default reviewer + daftar eligible agar tidak basi bila HR
+        // mengubah data setelah halaman dibuka.
+        fetch("/api/ga/cleaning/settings/default-reviewers")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json) => {
+                const defaults = json?.data?.defaults ?? json?.data ?? null;
+                if (defaults && (defaults.inspectedByEmployeeId || defaults.knownByEmployeeId)) {
+                    setDefaultReviewers({
+                        inspectedByEmployeeId: defaults.inspectedByEmployeeId ?? null,
+                        knownByEmployeeId: defaults.knownByEmployeeId ?? null,
+                    });
+                    setSelectedInspectedId((prev) => prev || defaults.inspectedByEmployeeId || "");
+                    setSelectedKnownId((prev) => prev || defaults.knownByEmployeeId || "");
+                }
+            })
+            .catch(() => undefined);
+        fetch("/api/ga/cleaning/approvals/reviewers")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json) => {
+                if (Array.isArray(json?.data)) setReviewers(json.data);
+            })
+            .catch(() => undefined);
+        if (!selectedInspectedId && defaultReviewers?.inspectedByEmployeeId) {
+            setSelectedInspectedId(defaultReviewers.inspectedByEmployeeId);
+        }
+        if (!selectedKnownId && defaultReviewers?.knownByEmployeeId) {
+            setSelectedKnownId(defaultReviewers.knownByEmployeeId);
+        }
+        setShowOpenModal(true);
+    }, [selectedInspectedId, selectedKnownId, defaultReviewers]);
+
+    const handleOpenAll = useCallback(async () => {
+        setOpeningAll(true);
+        try {
+            const res = await fetch("/api/ga/cleaning/approvals/open-all", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ monthWib: month }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membuka semua periode."));
+            const json = await res.json();
+            toast(`Periode dibuka: ${json.data.created} baru, ${json.data.skipped} sudah ada.`, "success");
+            await fetchData(month);
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal membuka semua periode.", "error");
+        } finally {
+            setOpeningAll(false);
+        }
+    }, [month, fetchData, toast]);
 
     useEffect(() => {
         void fetchData(month);
@@ -327,7 +413,7 @@ export default function GaCleaningApprovalsPage() {
                 throw new Error(await getResponseErrorMessage(res, "Gagal mengunduh berkas PDF."));
             }
             const json = await res.json();
-            exportCleaningMatrixPdf(json.data);
+            await renderCleaningMatrixPdf(json.data);
             toast("Formulir PDF inspeksi berhasil diunduh.", "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal mengunduh PDF.", "error");
@@ -363,7 +449,7 @@ export default function GaCleaningApprovalsPage() {
             default:
                 return (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[var(--secondary)] text-[var(--text-muted)] border border-[var(--border)]">
-                        Belum Dibuka
+                        Belum dibuka GA
                     </span>
                 );
         }
@@ -375,15 +461,29 @@ export default function GaCleaningApprovalsPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Bulanan Inspeksi</h1>
                     <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                        Kelola periode persetujuan dan tanda tangan bulanan dua penanda tangan internal.
+                        Kelola periode persetujuan dan tanda tangan bulanan dua penanda tangan internal. Tanda tangan
+                        Diperiksa Oleh dan Mengetahui baru dapat dilakukan mulai tanggal terakhir bulan itu pukul 00.00
+                        WIB (akhir bulan), meskipun periode sudah dibuka lebih awal.
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowOpenModal(true)}
-                    className="btn btn-primary"
-                >
-                    <Plus className="h-4 w-4" /> Buka Periode Baru
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => void handleOpenAll()}
+                        className="btn btn-secondary"
+                        disabled={openingAll}
+                        title="Buka periode bulan ini untuk semua ruangan aktif sekaligus"
+                        type="button"
+                    >
+                        {openingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                        Buka Semua Ruangan
+                    </button>
+                    <button
+                        onClick={() => openOpenModal()}
+                        className="btn btn-primary"
+                    >
+                        <Plus className="h-4 w-4" /> Buka Periode Baru
+                    </button>
+                </div>
             </div>
 
             {/* Controls: Month selector and Status Filter */}
@@ -446,7 +546,7 @@ export default function GaCleaningApprovalsPage() {
                         Belum ada periode yang dibuka untuk bulan {formatMonthLabel(month)}. Klik tombol di bawah untuk membuka periode baru.
                     </p>
                     <button
-                        onClick={() => setShowOpenModal(true)}
+                        onClick={() => openOpenModal()}
                         className="btn btn-primary btn-sm"
                         type="button"
                     >
@@ -477,6 +577,11 @@ export default function GaCleaningApprovalsPage() {
                                         </td>
                                         <td>
                                             {getStatusBadge(app.derivedStatus)}
+                                            {app.isSignable === false && app.derivedStatus !== "COMPLETE" && (
+                                                <div className="text-[11px] text-[var(--text-muted)] mt-1">
+                                                    TTD dibuka {formatOpensOnShort(app.opensOnWibDate)} (akhir bulan)
+                                                </div>
+                                            )}
                                         </td>
                                         <td>
                                             <div className="font-medium text-[var(--text-primary)]">{app.inspectedBy.employeeName}</div>
@@ -576,6 +681,11 @@ export default function GaCleaningApprovalsPage() {
                             <p className="text-xs text-[var(--text-muted)] mt-0.5">
                                 Pilih ruangan dan tentukan dua penanda tangan internal untuk bulan {formatMonthLabel(month)}.
                             </p>
+                            {defaultReviewers?.inspectedByEmployeeId && defaultReviewers?.knownByEmployeeId && (
+                                <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full bg-[var(--secondary)] text-[var(--text-secondary)] border border-[var(--border)]">
+                                    Terisi otomatis dari default (Pengaturan &gt; Reviewer &amp; Atasan) — boleh diubah di sini.
+                                </p>
+                            )}
                         </div>
                         <button
                             type="button"
@@ -681,7 +791,7 @@ export default function GaCleaningApprovalsPage() {
                         <div>
                             <h2 className="modal-title">Buka Kembali Slot Tanda Tangan</h2>
                             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                Membuka kembali slot tanda tangan akan mengarsipkan tanda tangan lama dan meminta tanda tangan ulang.
+                                Membuka kembali slot tanda tangan akan mengarsipkan tanda tangan lama dan meminta tanda tangan ulang. Tanda tangan ulang tetap mengikuti aturan akhir bulan.
                             </p>
                         </div>
                         <button
@@ -778,6 +888,11 @@ export default function GaCleaningApprovalsPage() {
                                     <p className="text-xs text-[var(--text-muted)] mt-1">
                                         Periode: {formatMonthLabel(detailData.monthWib)}
                                     </p>
+                                    {detailData.signable && !detailData.signable.isSignable && (
+                                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                            Tanda tangan baru dapat dilakukan mulai {formatOpensOnShort(detailData.signable.opensOnWibDate)} pukul 00.00 WIB (akhir bulan). Status Menunggu saat ini adalah normal.
+                                        </p>
+                                    )}
                                     {detailData.latestChange && (
                                         <p className="text-xs text-[var(--text-muted)] mt-0.5">
                                             Perubahan checklist terakhir: {formatDateTime(detailData.latestChange.timestamp)}
@@ -839,17 +954,33 @@ export default function GaCleaningApprovalsPage() {
                                                             ? "bg-[var(--success-bg)] text-[var(--success)] border-[var(--success-border)]"
                                                             : d.status === "FUTURE"
                                                                 ? "bg-[var(--secondary)] text-[var(--text-muted)] border-[var(--border)]"
-                                                                : "bg-[var(--warning-bg)] text-[var(--warning)] border-[var(--warning-border)]"
+                                                                : d.status === "LIBUR"
+                                                                    ? "bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400 border-[var(--border)]"
+                                                                    : "bg-[var(--warning-bg)] text-[var(--warning)] border-[var(--warning-border)]"
                                                     }`}
-                                                    title={`${d.date}: ${d.status} (${d.completedCount}/${d.activeCount} selesai)`}
+                                                    title={`${d.date}: ${d.status === "SELESAI" ? "Selesai" : d.status === "FUTURE" ? "Hari depan" : d.status === "LIBUR" ? "Libur (bebas paraf)" : "Belum"} (${d.completedCount}/${d.activeCount} selesai)`}
                                                 >
                                                     <span className="font-semibold">{parseInt(d.date.split("-")[2], 10)}</span>
                                                     <span className="text-[8px] font-bold">
-                                                        {d.status === "SELESAI" ? "OK" : d.status === "FUTURE" ? "-" : "BLM"}
+                                                        {d.status === "SELESAI" ? "Selesai" : d.status === "FUTURE" ? "-" : d.status === "LIBUR" ? "Libur" : "Belum"}
                                                     </span>
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-[var(--text-muted)]">
+                                        <span className="inline-flex items-center gap-1">
+                                            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--success)]" /> Selesai
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--warning)]" /> Belum
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--border)]" /> - : hari depan (belum bisa diisi)
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-gray-300 dark:bg-gray-700" /> Libur (bebas paraf)
+                                        </span>
                                     </div>
                                 </div>
                             )}
@@ -876,7 +1007,7 @@ export default function GaCleaningApprovalsPage() {
                                         {detailData.inspectedBy?.employeeName}
                                     </p>
                                     <p className="text-xs text-[var(--text-muted)] mb-3">
-                                        NIP: {detailData.inspectedBy?.employeeId}
+                                        {detailData.inspectedBy?.employeeName} — NIP: {detailData.inspectedBy?.employeeId}
                                     </p>
 
                                     {detailData.inspectedBy?.signature ? (
@@ -924,7 +1055,7 @@ export default function GaCleaningApprovalsPage() {
                                         {detailData.knownBy?.employeeName}
                                     </p>
                                     <p className="text-xs text-[var(--text-muted)] mb-3">
-                                        NIP: {detailData.knownBy?.employeeId}
+                                        {detailData.knownBy?.employeeName} — NIP: {detailData.knownBy?.employeeId}
                                     </p>
 
                                     {detailData.knownBy?.signature ? (
@@ -982,7 +1113,7 @@ export default function GaCleaningApprovalsPage() {
                                                         ? "bg-[var(--success-bg)] text-[var(--success)]"
                                                         : "bg-[var(--warning-bg)] text-[var(--warning)]"
                                                 }`}>
-                                                    {hist.status}
+                                                    {hist.status === "SIGNED" ? "Sudah ditandatangani" : "Dibuka kembali"}
                                                 </span>
                                             </div>
                                         ))}

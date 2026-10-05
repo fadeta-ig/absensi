@@ -5,6 +5,8 @@ import { assignOnlyRole, ensureRbac } from "./seedRbac";
 const prisma = new PrismaClient();
 
 async function main() {
+    const { assertNotProduction } = await import("./seedSafety");
+    assertNotProduction("prisma/seedDev.ts");
     await ensureRbac(prisma);
     const passwordHash = await bcrypt.hash("123", 12);
     const superUser = await prisma.userAccount.upsert({

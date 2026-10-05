@@ -16,6 +16,7 @@ vi.mock("@/lib/prisma", () => ({
             findUnique: vi.fn(),
             create: vi.fn(),
             update: vi.fn(),
+            delete: vi.fn(),
         },
         cleaningTemplateItem: {
             findMany: vi.fn(),
@@ -23,12 +24,25 @@ vi.mock("@/lib/prisma", () => ({
             count: vi.fn(),
             create: vi.fn(),
             update: vi.fn(),
+            delete: vi.fn(),
+            deleteMany: vi.fn(),
         },
         cleaningRoom: {
             findMany: vi.fn(),
             findUnique: vi.fn(),
             create: vi.fn(),
             update: vi.fn(),
+            delete: vi.fn(),
+        },
+        cleaningHoliday: {
+            findMany: vi.fn(),
+        },
+        cleaningDailyParaf: {
+            findMany: vi.fn(),
+            findFirst: vi.fn(),
+        },
+        cleaningEvidencePhoto: {
+            count: vi.fn(),
         },
         cleaningWorkerAssignment: {
             findMany: vi.fn(),
@@ -44,11 +58,16 @@ vi.mock("@/lib/prisma", () => ({
             findUnique: vi.fn(),
             findMany: vi.fn(),
             create: vi.fn(),
+            count: vi.fn(),
         },
         cleaningDailyChecklistItem: {
             findUnique: vi.fn(),
             findMany: vi.fn(),
             update: vi.fn(),
+        },
+        cleaningMonthlyApproval: {
+            findFirst: vi.fn(),
+            count: vi.fn(),
         },
         userAccount: {
             findUnique: vi.fn(),
@@ -308,6 +327,7 @@ describe("cleaningService contract", () => {
             checklist: { roomId: CLEANING_IDS.room, wibDate: "2026-09-21" },
         }));
         allowAssignedWorker();
+        mock(db.cleaningRoom.findUnique).mockResolvedValue({ isActive: true });
         mock(db.cleaningDailyChecklistItem.update).mockResolvedValue(makeChecklistItem({
             isComplete: true,
             lastChangedByUserId: CLEANING_IDS.workerUser,
@@ -345,6 +365,7 @@ describe("cleaningService contract", () => {
             checklist: { roomId: CLEANING_IDS.room, wibDate: "2026-09-21" },
         }));
         allowAssignedWorker();
+        mock(db.cleaningRoom.findUnique).mockResolvedValue({ isActive: true });
         mock(db.cleaningDailyChecklistItem.update).mockImplementation(async ({ data }: { data: { isComplete: boolean } }) => (
             makeChecklistItem({
                 isComplete: data.isComplete,
@@ -437,6 +458,27 @@ describe("cleaningService contract", () => {
         });
     });
 
+    it("reviewer bulanan boleh baca detail checklist, non-reviewer ditolak 403", async () => {
+        const { PERMISSIONS } = await import("@/lib/permissions");
+        const reviewer = makeWorkerSession({
+            employeeId: "EMP001",
+            permissions: [PERMISSIONS.EMPLOYEE_SELF],
+            roles: [],
+        });
+        mock(db.cleaningRoom.findUnique).mockResolvedValue(makeRoom());
+        mock(db.cleaningMonthlyApproval.findFirst).mockResolvedValue({ id: "appr-1" });
+        mock(db.cleaningDailyChecklist.findUnique).mockResolvedValue(makeChecklist());
+
+        const result = await getChecklistDetail(reviewer, CLEANING_IDS.room, "2026-09-20");
+        expect(result).toMatchObject({ type: "record" });
+
+        mock(db.cleaningMonthlyApproval.findFirst).mockResolvedValue(null);
+        await expect(
+            getChecklistDetail({ ...reviewer, employeeId: "EMP999" }, CLEANING_IDS.room, "2026-09-20")
+        ).rejects.toMatchObject({ statusCode: 403 });
+        expect(db.cleaningDailyChecklist.findUnique).toHaveBeenCalledTimes(1);
+    });
+
     it("AC-6 keeps an existing daily snapshot unchanged after master item edits", async () => {
         allowAssignedWorker();
         mock(db.cleaningDailyChecklist.findUnique).mockResolvedValue(makeChecklist({
@@ -489,6 +531,7 @@ describe("cleaningService contract", () => {
         expect(db.cleaningWorkerAssignment.count).toHaveBeenLastCalledWith({
             where: {
                 userId: CLEANING_IDS.workerUser,
+                startsOnWibDate: { lte: "2026-09-21" },
                 OR: [
                     { endsOnWibDate: null },
                     { endsOnWibDate: { gt: "2026-09-21" } },
@@ -626,6 +669,7 @@ describe("cleaningService contract", () => {
         expect(db.cleaningWorkerAssignment.count).toHaveBeenCalledWith({
             where: {
                 userId: CLEANING_IDS.workerUser,
+                startsOnWibDate: { lte: "2026-09-21" },
                 OR: [
                     { endsOnWibDate: null },
                     { endsOnWibDate: { gt: "2026-09-21" } },
@@ -776,11 +820,13 @@ describe("cleaningService contract", () => {
                 items: [makeChecklistItem({ isComplete: true })],
             },
         ]);
+        mock(db.cleaningHoliday.findMany).mockResolvedValue([]);
 
         const result = await getRecap(makeWig002Session(), "2026-09");
         const days = result.matrix[0].days;
 
-        expect(days.find((day) => day.date === "2026-09-20")?.status).toBe("BELUM");
+        // 2026-09-20 adalah Minggu (weeklyOff default) sehingga LIBUR, bukan BELUM.
+        expect(days.find((day) => day.date === "2026-09-20")?.status).toBe("LIBUR");
         expect(days.find((day) => day.date === "2026-09-21")?.status).toBe("SELESAI");
         expect(days.find((day) => day.date === "2026-09-22")?.status).toBe("FUTURE");
     });

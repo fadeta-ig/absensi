@@ -32,6 +32,7 @@ export default function EmployeeHomePage() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
+    const [cleaningCaps, setCleaningCaps] = useState<{ isReviewer: boolean; isTopViewer: boolean } | null>(null);
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
@@ -41,10 +42,11 @@ export default function EmployeeHomePage() {
             setLoadingData(true);
             setLoadError("");
             try {
-                const [userRes, newsRes, attendanceRes] = await Promise.all([
+                const [userRes, newsRes, attendanceRes, capsRes] = await Promise.all([
                     fetch("/api/auth/me"),
                     fetch("/api/news"),
-                    fetch("/api/attendance")
+                    fetch("/api/attendance"),
+                    fetch("/api/employee/cleaning/capabilities").catch(() => null),
                 ]);
 
                 if (!userRes.ok) throw new Error(await getResponseErrorMessage(userRes, "Gagal memuat data profil."));
@@ -58,6 +60,17 @@ export default function EmployeeHomePage() {
                 ]);
 
                 setUser(userData);
+                try {
+                    const capsJson = capsRes && capsRes.ok ? await capsRes.json() : null;
+                    const caps = capsJson?.data;
+                    setCleaningCaps(
+                        caps && typeof caps.isReviewer === "boolean"
+                            ? { isReviewer: caps.isReviewer, isTopViewer: Boolean(caps.isTopViewer) }
+                            : { isReviewer: true, isTopViewer: true }
+                    );
+                } catch {
+                    setCleaningCaps({ isReviewer: true, isTopViewer: true });
+                }
                 if (userData?.totalLeave !== undefined && userData?.usedLeave !== undefined) {
                     setLeaveBalance({ total: userData.totalLeave, used: userData.usedLeave });
                 }
@@ -298,6 +311,8 @@ export default function EmployeeHomePage() {
                 isOpen={isAllMenusOpen}
                 onClose={() => setIsAllMenusOpen(false)}
                 hasSubordinates={Boolean(user?.hasSubordinates || (Array.isArray(user?.subordinates) && user.subordinates.length > 0))}
+                canReviewCleaning={cleaningCaps ? cleaningCaps.isReviewer : null}
+                canTopViewCleaning={cleaningCaps ? cleaningCaps.isTopViewer : null}
             />
 
         </div>

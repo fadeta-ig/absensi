@@ -29,6 +29,11 @@ vi.mock("@/lib/services/cleaningService", () => {
         isWig002: (session: { username: string; permissions: string[] }) => (
             session.username === "WIG002" && session.permissions.includes("ga.manage")
         ),
+        requireWig002OrTopViewer: vi.fn(async (session: { username: string; permissions: string[] }) => {
+            if (!(session.username === "WIG002" && session.permissions.includes("ga.manage"))) {
+                throw new CleaningError("Hanya WIG002 dengan ga.manage yang dapat mengelola kebersihan.", 403);
+            }
+        }),
     };
 });
 

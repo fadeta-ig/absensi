@@ -49,8 +49,20 @@ function installSettingsFetch() {
             method,
             body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
         });
-        if (method === "POST" && url === "/api/ga/cleaning/assignments") {
-            return response({ data: { id: CLEANING_IDS.assignment } });
+        if (method === "POST" && url === "/api/ga/cleaning/assignments/bulk") {
+            return response({
+                data: {
+                    created: [{
+                        roomId: CLEANING_IDS.room,
+                        roomName: "Ruang Test Cleaning",
+                        userId: CLEANING_IDS.workerUser,
+                        displayName: "Cleaning Test Worker",
+                        assignmentId: CLEANING_IDS.assignment,
+                    }],
+                    skipped: [],
+                    failed: [],
+                },
+            });
         }
         if (url === "/api/ga/cleaning/outsource-users") return response({ data: [] });
         if (url === "/api/ga/cleaning/templates") return response({ data: [] });
@@ -91,28 +103,27 @@ describe("CleaningSettingsPage", () => {
         expect(screen.getByRole("button", { name: "Penugasan" })).toBeInTheDocument();
     });
 
-    it("AC-6 sends explicit applyToToday confirmation for a new assignment", async () => {
+    it("AC-6 sends explicit applyToToday confirmation for a bulk assignment", async () => {
         const { calls } = installSettingsFetch();
         const user = userEvent.setup();
         render(<CleaningSettingsPage />);
 
         await user.click(await screen.findByRole("button", { name: "Penugasan" }));
         await user.click(screen.getByRole("button", { name: /Tugaskan/i }));
-        const selects = screen.getAllByRole("combobox");
-        await user.selectOptions(selects[0], CLEANING_IDS.room);
-        // selects[1] is the "Tipe petugas" dropdown (INTERNAL/OUTSOURCE)
-        // selects[2] is the "Pengguna" dropdown
-        await user.selectOptions(screen.getByRole("combobox", { name: /pengguna/i }), CLEANING_IDS.workerUser);
-        await user.click(screen.getByRole("checkbox", { name: /Berlaku mulai hari ini/i }));
-        await user.click(screen.getAllByRole("button", { name: "Tugaskan" }).at(-1)!);
+        await user.click(screen.getByRole("checkbox", { name: "Ruang Test Cleaning" }));
+        // "Tipe petugas" select (INTERNAL/OUTSOURCE)
+        await user.selectOptions(screen.getByRole("combobox", { name: "Tipe petugas" }), "INTERNAL");
+        await user.click(screen.getByRole("checkbox", { name: "Cleaning Test Worker" }));
+        await user.click(screen.getByRole("checkbox", { name: /Mulai hari ini/i }));
+        await user.click(screen.getByRole("button", { name: /Tugaskan 1 penugasan/i }));
 
         await waitFor(() => {
             expect(calls).toContainEqual({
-                url: "/api/ga/cleaning/assignments",
+                url: "/api/ga/cleaning/assignments/bulk",
                 method: "POST",
                 body: {
-                    roomId: CLEANING_IDS.room,
-                    userId: CLEANING_IDS.workerUser,
+                    roomIds: [CLEANING_IDS.room],
+                    userIds: [CLEANING_IDS.workerUser],
                     workerType: "INTERNAL",
                     applyToToday: true,
                 },
@@ -120,7 +131,7 @@ describe("CleaningSettingsPage", () => {
         });
     });
 
-    it("provides accessible names for both assignment selectors", async () => {
+    it("provides accessible multi-select groups for rooms and workers", async () => {
         installSettingsFetch();
         const user = userEvent.setup();
         render(<CleaningSettingsPage />);
@@ -128,8 +139,9 @@ describe("CleaningSettingsPage", () => {
         await user.click(await screen.findByRole("button", { name: "Penugasan" }));
         await user.click(screen.getByRole("button", { name: /Tugaskan/i }));
 
-        expect(screen.getByRole("combobox", { name: /ruangan/i })).toBeInTheDocument();
-        expect(screen.getByRole("combobox", { name: /pengguna/i })).toBeInTheDocument();
+        expect(screen.getByText(/Ruangan \(0 dipilih\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Petugas \(0 dipilih\)/)).toBeInTheDocument();
+        expect(screen.getByRole("checkbox", { name: "Ruang Test Cleaning" })).toBeInTheDocument();
     });
 
     it("requires a masked outsource password with a minimum of eight characters", async () => {

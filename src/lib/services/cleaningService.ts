@@ -25,6 +25,15 @@ export function normalizeName(raw: string): string {
     return raw.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function isPrismaUniqueViolation(err: unknown): boolean {
+    return (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code: string }).code === "P2002"
+    );
+}
+
 // ─── WIG002 authorization ─────────────────────────────────────
 
 export function isWig002(session: SessionPayload): boolean {
@@ -35,6 +44,18 @@ function requireWig002(session: SessionPayload): void {
     if (!isWig002(session)) {
         throw new CleaningError("Hanya WIG002 dengan ga.manage yang dapat mengelola kebersihan.", 403);
     }
+}
+
+/**
+ * Guard baca untuk atasan tertinggi viewer: WIG002 lolos langsung, selain itu
+ * dicek penunjukan dinamis `cleaning.topViewer.employeeId`. Khusus BACA saja —
+ * semua mutasi tetap memakai `requireWig002` tanpa kecuali.
+ */
+export async function requireWig002OrTopViewer(session: SessionPayload): Promise<void> {
+    if (isWig002(session)) return;
+    const { isCleaningTopViewer } = await import("@/lib/services/appSettingsService");
+    if (await isCleaningTopViewer(session).catch(() => false)) return;
+    throw new CleaningError("Hanya WIG002 dengan ga.manage yang dapat mengelola kebersihan.", 403);
 }
 
 // ─── Worker authorization ─────────────────────────────────────
@@ -52,6 +73,16 @@ function requireCleaningWorker(session: SessionPayload): void {
 
 function captureWibDate(): string {
     return toWIBDateString(new Date());
+}
+
+/**
+ * Rentang tanggal YYYY-MM-DD untuk satu bulan WIB: [month-01, nextMonth-01).
+ * Sargable untuk index wibDate (gantikan `startsWith: monthWib`).
+ */
+export function monthWibDateRange(monthWib: string): { gte: string; lt: string } {
+    const [year, mon] = monthWib.split("-").map(Number);
+    const next = mon === 12 ? `${year + 1}-01` : `${year}-${String(mon + 1).padStart(2, "0")}`;
+    return { gte: `${monthWib}-01`, lt: `${next}-01` };
 }
 
 function nextWibDate(today: string): string {
@@ -104,15 +135,17 @@ async function hasOverlappingAssignment(
 
 // ─── CLEANING_WORKER role sync ────────────────────────────────
 
-/** Add or remove the CLEANING_WORKER role based on assignments that have not ended in WIB. */
+/** Add or remove the CLEANING_WORKER role based on assignments effective today in WIB. */
 export async function syncCleaningWorkerRole(tx: TxClient, userId: string, wibToday: string) {
     const eligibleAssignmentCount = await tx.cleaningWorkerAssignment.count({
         where: {
             userId,
+            startsOnWibDate: { lte: wibToday },
             OR: [
                 { endsOnWibDate: null },
                 { endsOnWibDate: { gt: wibToday } },
             ],
+            room: { isActive: true },
         },
     });
     const cleaningRole = await tx.role.findUnique({ where: { code: SYSTEM_ROLES.CLEANING_WORKER } });
@@ -190,12 +223,19 @@ export async function createTemplate(session: SessionPayload, data: { name: stri
     const existing = await prisma.cleaningTemplate.findUnique({ where: { nameNormalized } });
     if (existing) throw new CleaningError("Template dengan nama tersebut sudah ada.", 409);
 
-    const template = await prisma.cleaningTemplate.create({
-        data: { name: data.name.trim(), nameNormalized },
-    });
+    try {
+        const template = await prisma.cleaningTemplate.create({
+            data: { name: data.name.trim(), nameNormalized },
+        });
 
-    await logAction("CREATE_CLEANING_TEMPLATE", "CLEANING_TEMPLATE", actorFromSession(session), template.id, { name: template.name });
-    return template;
+        await logAction("CREATE_CLEANING_TEMPLATE", "CLEANING_TEMPLATE", actorFromSession(session), template.id, { name: template.name });
+        return template;
+    } catch (err: unknown) {
+        if (isPrismaUniqueViolation(err)) {
+            throw new CleaningError("Template dengan nama tersebut sudah ada.", 409);
+        }
+        throw err;
+    }
 }
 
 export async function updateTemplate(session: SessionPayload, id: string, data: { name?: string; isActive?: boolean }) {
@@ -223,6 +263,28 @@ export async function updateTemplate(session: SessionPayload, id: string, data: 
     return updated;
 }
 
+export async function deleteTemplate(session: SessionPayload, id: string) {
+    requireWig002(session);
+    const template = await prisma.cleaningTemplate.findUnique({
+        where: { id },
+        include: { _count: { select: { rooms: true } } },
+    });
+    if (!template) throw new CleaningError("Template tidak ditemukan.", 404);
+    if (template._count.rooms > 0) {
+        throw new CleaningError(
+            `Template masih dipakai ${template._count.rooms} ruangan. Pindahkan atau hapus ruangan tersebut dulu.`,
+            422
+        );
+    }
+
+    await prisma.$transaction(async (tx) => {
+        await tx.cleaningTemplateItem.deleteMany({ where: { templateId: id } });
+        await tx.cleaningTemplate.delete({ where: { id } });
+    });
+    await logAction("DELETE_CLEANING_TEMPLATE", "CLEANING_TEMPLATE", actorFromSession(session), id, { name: template.name });
+    return { success: true, id };
+}
+
 // ─── Template item management (WIG002) ────────────────────────
 
 export async function getTemplateItems(templateId: string) {
@@ -236,28 +298,41 @@ export async function createTemplateItem(session: SessionPayload, data: { templa
     requireWig002(session);
     const template = await prisma.cleaningTemplate.findUnique({ where: { id: data.templateId } });
     if (!template) throw new CleaningError("Template tidak ditemukan.", 404);
+    if (!template.isActive) {
+        throw new CleaningError("Template sudah tidak aktif. Aktifkan dulu sebelum menambah item.", 422);
+    }
 
     const nameNormalized = normalizeName(data.name);
     if (!nameNormalized) throw new CleaningError("Nama item tidak boleh kosong.");
 
-    const existing = await prisma.cleaningTemplateItem.findUnique({
-        where: { templateId_nameNormalized: { templateId: data.templateId, nameNormalized } },
-    });
-    if (existing) throw new CleaningError("Item dengan nama tersebut sudah ada dalam template ini.", 409);
+    try {
+        const item = await prisma.$transaction(async (tx) => {
+            const existing = await tx.cleaningTemplateItem.findUnique({
+                where: { templateId_nameNormalized: { templateId: data.templateId, nameNormalized } },
+            });
+            if (existing) throw new CleaningError("Item dengan nama tersebut sudah ada dalam template ini.", 409);
 
-    const sortOrder = data.sortOrder ?? ((await prisma.cleaningTemplateItem.count({ where: { templateId: data.templateId } })) + 1);
+            const sortOrder = data.sortOrder ?? ((await tx.cleaningTemplateItem.count({ where: { templateId: data.templateId } })) + 1);
 
-    const item = await prisma.cleaningTemplateItem.create({
-        data: {
-            templateId: data.templateId,
-            name: data.name.trim(),
-            nameNormalized,
-            sortOrder,
-        },
-    });
+            return tx.cleaningTemplateItem.create({
+                data: {
+                    templateId: data.templateId,
+                    name: data.name.trim(),
+                    nameNormalized,
+                    sortOrder,
+                },
+            });
+        });
 
-    await logAction("CREATE_CLEANING_TEMPLATE_ITEM", "CLEANING_TEMPLATE_ITEM", actorFromSession(session), item.id, { templateId: data.templateId, name: item.name });
-    return item;
+        await logAction("CREATE_CLEANING_TEMPLATE_ITEM", "CLEANING_TEMPLATE_ITEM", actorFromSession(session), item.id, { templateId: data.templateId, name: item.name });
+        return item;
+    } catch (err: unknown) {
+        if (err instanceof CleaningError) throw err;
+        if (isPrismaUniqueViolation(err)) {
+            throw new CleaningError("Item dengan nama tersebut sudah ada dalam template ini.", 409);
+        }
+        throw err;
+    }
 }
 
 export async function updateTemplateItem(session: SessionPayload, id: string, data: { name?: string; sortOrder?: number; isActive?: boolean }) {
@@ -279,9 +354,44 @@ export async function updateTemplateItem(session: SessionPayload, id: string, da
     if (data.sortOrder !== undefined) updateData.sortOrder = data.sortOrder;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
+    if (data.isActive === false && item.isActive) {
+        // Jangan kunci paraf selamanya: tolak bila ini item aktif terakhir
+        // pada template yang masih dipakai ruangan aktif.
+        const [otherActiveCount, roomCount] = await Promise.all([
+            prisma.cleaningTemplateItem.count({
+                where: { templateId: item.templateId, isActive: true, id: { not: id } },
+            }),
+            prisma.cleaningRoom.count({ where: { templateId: item.templateId, isActive: true } }),
+        ]);
+        if (otherActiveCount === 0 && roomCount > 0) {
+            throw new CleaningError(
+                "Ini item aktif terakhir pada template yang masih dipakai ruangan aktif. Tambahkan item pengganti dulu sebelum menonaktifkan.",
+                422
+            );
+        }
+    }
+
     const updated = await prisma.cleaningTemplateItem.update({ where: { id }, data: updateData });
     await logAction("UPDATE_CLEANING_TEMPLATE_ITEM", "CLEANING_TEMPLATE_ITEM", actorFromSession(session), id, { changes: data });
     return updated;
+}
+
+export async function deleteTemplateItem(session: SessionPayload, id: string) {
+    requireWig002(session);
+    const item = await prisma.cleaningTemplateItem.findUnique({ where: { id } });
+    if (!item) throw new CleaningError("Item template tidak ditemukan.", 404);
+
+    const usedCount = await prisma.cleaningDailyChecklistItem.count({ where: { templateItemId: id } });
+    if (usedCount > 0) {
+        throw new CleaningError(
+            `Item sudah dipakai ${usedCount} catatan checklist. Nonaktifkan saja bila tidak dipakai lagi.`,
+            422
+        );
+    }
+
+    await prisma.cleaningTemplateItem.delete({ where: { id } });
+    await logAction("DELETE_CLEANING_TEMPLATE_ITEM", "CLEANING_TEMPLATE_ITEM", actorFromSession(session), id, { name: item.name });
+    return { success: true, id };
 }
 
 // ─── Room management (WIG002) ─────────────────────────────────
@@ -319,12 +429,19 @@ export async function createRoom(session: SessionPayload, data: { name: string; 
     const template = await prisma.cleaningTemplate.findUnique({ where: { id: data.templateId } });
     if (!template || !template.isActive) throw new CleaningError("Template tidak valid atau sudah tidak aktif.", 422);
 
-    const room = await prisma.cleaningRoom.create({
-        data: { name: data.name.trim(), nameNormalized, templateId: data.templateId },
-    });
+    try {
+        const room = await prisma.cleaningRoom.create({
+            data: { name: data.name.trim(), nameNormalized, templateId: data.templateId },
+        });
 
-    await logAction("CREATE_CLEANING_ROOM", "CLEANING_ROOM", actorFromSession(session), room.id, { name: room.name, templateId: data.templateId });
-    return room;
+        await logAction("CREATE_CLEANING_ROOM", "CLEANING_ROOM", actorFromSession(session), room.id, { name: room.name, templateId: data.templateId });
+        return room;
+    } catch (err: unknown) {
+        if (isPrismaUniqueViolation(err)) {
+            throw new CleaningError("Ruangan dengan nama tersebut sudah ada.", 409);
+        }
+        throw err;
+    }
 }
 
 export async function updateRoom(session: SessionPayload, id: string, data: { name?: string; templateId?: string; isActive?: boolean }) {
@@ -347,10 +464,57 @@ export async function updateRoom(session: SessionPayload, id: string, data: { na
         updateData.templateId = data.templateId;
     }
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.isActive === false && room.isActive) {
+        // Jangan yatimkan penugasan: tolak bila masih ada petugas yang menjaga ruangan ini.
+        const wibToday = captureWibDate();
+        const activeCount = await prisma.cleaningWorkerAssignment.count({
+            where: {
+                roomId: id,
+                startsOnWibDate: { lte: wibToday },
+                OR: [{ endsOnWibDate: null }, { endsOnWibDate: { gt: wibToday } }],
+            },
+        });
+        if (activeCount > 0) {
+            throw new CleaningError(
+                `Ruangan masih dijaga ${activeCount} petugas. Akhiri penugasannya dulu sebelum menonaktifkan ruangan.`,
+                422
+            );
+        }
+    }
 
     const updated = await prisma.cleaningRoom.update({ where: { id }, data: updateData });
     await logAction("UPDATE_CLEANING_ROOM", "CLEANING_ROOM", actorFromSession(session), id, { changes: data });
     return updated;
+}
+
+export async function deleteRoom(session: SessionPayload, id: string) {
+    requireWig002(session);
+    const room = await prisma.cleaningRoom.findUnique({ where: { id } });
+    if (!room) throw new CleaningError("Ruangan tidak ditemukan.", 404);
+
+    const [assignmentCount, checklistCount, approvalCount, parafCount, evidenceCount] = await Promise.all([
+        prisma.cleaningWorkerAssignment.count({ where: { roomId: id } }),
+        prisma.cleaningDailyChecklist.count({ where: { roomId: id } }),
+        prisma.cleaningMonthlyApproval.count({ where: { roomId: id } }),
+        prisma.cleaningDailyParaf.count({ where: { roomId: id } }),
+        prisma.cleaningEvidencePhoto.count({ where: { roomId: id } }),
+    ]);
+    const usedParts: string[] = [];
+    if (assignmentCount > 0) usedParts.push(`${assignmentCount} penugasan`);
+    if (checklistCount > 0) usedParts.push(`${checklistCount} checklist`);
+    if (approvalCount > 0) usedParts.push(`${approvalCount} persetujuan`);
+    if (parafCount > 0) usedParts.push(`${parafCount} paraf`);
+    if (evidenceCount > 0) usedParts.push(`${evidenceCount} foto`);
+    if (usedParts.length > 0) {
+        throw new CleaningError(
+            `Ruangan sudah memiliki data (${usedParts.join(", ")}). Nonaktifkan saja bila tidak dipakai lagi.`,
+            422
+        );
+    }
+
+    await prisma.cleaningRoom.delete({ where: { id } });
+    await logAction("DELETE_CLEANING_ROOM", "CLEANING_ROOM", actorFromSession(session), id, { name: room.name });
+    return { success: true, id };
 }
 
 // ─── Assignment management (WIG002) ───────────────────────────
@@ -467,6 +631,100 @@ export async function createAssignment(session: SessionPayload, data: CreateAssi
     return result;
 }
 
+export type BulkAssignmentInput = {
+    roomIds: string[];
+    userIds: string[];
+    workerType: "INTERNAL" | "OUTSOURCE";
+    applyToToday?: boolean;
+};
+
+export interface BulkAssignmentPairResult {
+    roomId: string;
+    roomName: string;
+    userId: string;
+    displayName: string;
+}
+
+export interface BulkAssignmentResult {
+    created: Array<BulkAssignmentPairResult & { assignmentId: string }>;
+    skipped: Array<BulkAssignmentPairResult & { message: string }>;
+    failed: Array<BulkAssignmentPairResult & { message: string }>;
+}
+
+/**
+ * Tugaskan banyak petugas ke banyak ruangan sekaligus (kombinasi semua pasangan).
+ * Setiap pasangan diproses lewat createAssignment agar validasi + idempotensi
+ * seragam; hasil per pasangan dilaporkan agar WIG002 tahu mana yang perlu
+ * diulang. Batas 100 pasangan per panggilan.
+ */
+export async function createAssignmentsBulk(session: SessionPayload, data: BulkAssignmentInput): Promise<BulkAssignmentResult> {
+    requireWig002(session);
+    const roomIds = [...new Set(data.roomIds.map((id) => id.trim()).filter(Boolean))];
+    const userIds = [...new Set(data.userIds.map((id) => id.trim()).filter(Boolean))];
+    if (roomIds.length === 0) throw new CleaningError("Pilih minimal 1 ruangan.", 400);
+    if (userIds.length === 0) throw new CleaningError("Pilih minimal 1 petugas.", 400);
+    if (roomIds.length * userIds.length > 100) {
+        throw new CleaningError("Maksimal 100 penugasan sekaligus. Bagi menjadi beberapa tahap.", 422);
+    }
+
+    const rooms = await prisma.cleaningRoom.findMany({
+        where: { id: { in: roomIds } },
+        select: { id: true, name: true, isActive: true },
+    });
+    const roomById = new Map(rooms.map((room) => [room.id, room]));
+
+    const users = await prisma.userAccount.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, displayName: true },
+    });
+    const userById = new Map(users.map((user) => [user.id, user]));
+
+    // Validasi kelayakan tiap akun sekali di depan agar gagal cepat.
+    for (const userId of userIds) {
+        await validateEligibility(prisma as unknown as TxClient, userId, data.workerType, session.userId);
+    }
+
+    const result: BulkAssignmentResult = { created: [], skipped: [], failed: [] };
+    for (const roomId of roomIds) {
+        const room = roomById.get(roomId);
+        for (const userId of userIds) {
+            const user = userById.get(userId);
+            const base = {
+                roomId,
+                roomName: room?.name ?? roomId,
+                userId,
+                displayName: user?.displayName ?? userId,
+            };
+            if (!room || !room.isActive) {
+                result.failed.push({ ...base, message: "Ruangan tidak valid atau sudah tidak aktif." });
+                continue;
+            }
+            if (!user) {
+                result.failed.push({ ...base, message: "Akun petugas tidak ditemukan." });
+                continue;
+            }
+            try {
+                const assignment = await createAssignment(session, {
+                    roomId,
+                    userId,
+                    workerType: data.workerType,
+                    applyToToday: data.applyToToday,
+                });
+                result.created.push({ ...base, assignmentId: assignment.id });
+            } catch (err: unknown) {
+                if (err instanceof CleaningError && err.statusCode === 409) {
+                    result.skipped.push({ ...base, message: err.message });
+                } else if (err instanceof CleaningError) {
+                    result.failed.push({ ...base, message: err.message });
+                } else {
+                    throw err;
+                }
+            }
+        }
+    }
+    return result;
+}
+
 export type EndAssignmentInput = {
     assignmentId: string;
     applyToToday?: boolean;
@@ -536,11 +794,16 @@ export async function replaceAssignment(session: SessionPayload, data: ReplaceAs
         if (!oldAssignment) throw new CleaningError("Penugasan tidak ditemukan.", 404);
         if (oldAssignment.endsOnWibDate !== null) throw new CleaningError("Penugasan sudah diakhiri.", 409);
 
-        // End the old assignment
-        const ended = await tx.cleaningWorkerAssignment.update({
-            where: { id: oldAssignment.id },
-            data: { endsOnWibDate: effectiveDate },
-        });
+        // Jadwal yang belum mulai dibatalkan saja (tidak disisakan interval rusak).
+        if (oldAssignment.startsOnWibDate > wibToday) {
+            await tx.cleaningWorkerAssignment.delete({ where: { id: oldAssignment.id } });
+        } else {
+            // End the old assignment
+            await tx.cleaningWorkerAssignment.update({
+                where: { id: oldAssignment.id },
+                data: { endsOnWibDate: effectiveDate },
+            });
+        }
 
         // Check for overlaps on the new assignment
         const overlaps = await hasOverlappingAssignment(tx, oldAssignment.roomId, data.newUserId, effectiveDate, null);
@@ -562,7 +825,7 @@ export async function replaceAssignment(session: SessionPayload, data: ReplaceAs
         await syncCleaningWorkerRole(tx, oldAssignment.userId, wibToday);
         await syncCleaningWorkerRole(tx, data.newUserId, wibToday);
 
-        return { ended, newAssignment };
+        return { ended: oldAssignment, wasCancelled: oldAssignment.startsOnWibDate > wibToday, newAssignment };
     });
 
     await logAction("REPLACE_CLEANING_ASSIGNMENT", "CLEANING_WORKER_ASSIGNMENT", actorFromSession(session), result.newAssignment.id, {
@@ -572,6 +835,7 @@ export async function replaceAssignment(session: SessionPayload, data: ReplaceAs
         applyToToday: data.applyToToday,
         effectiveDate,
         reason: data.reason,
+        ...(result.wasCancelled ? { cancelledPlannedStartsOn: result.ended.startsOnWibDate } : {}),
     });
     return result;
 }
@@ -832,11 +1096,25 @@ export async function getWorkerRooms(session: SessionPayload) {
                     id: true,
                     name: true,
                     isActive: true,
-                    template: { select: { id: true, name: true, isActive: true } },
+                    template: {
+                        select: {
+                            id: true,
+                            name: true,
+                            isActive: true,
+                            items: { where: { isActive: true }, select: { id: true } },
+                        },
+                    },
                 },
             },
         },
     });
+
+    return assignments
+        .filter((a) => a.room.isActive)
+        .map((a) => ({
+            ...a.room,
+            isReady: Boolean(a.room.template?.isActive) && ((a.room.template?.items?.length ?? 0) > 0),
+        }));
 
     return assignments
         .filter((a) => a.room.isActive)
@@ -933,7 +1211,12 @@ export async function getChecklist(session: SessionPayload, roomId: string, date
     requireCleaningWorker(session);
     const wibToday = captureWibDate();
 
-    await verifyRoomAssignment(session.userId, roomId, wibToday);
+    if (date > wibToday) {
+        throw new CleaningError("Belum ada data untuk tanggal mendatang.", 422);
+    }
+    // Verifikasi penugasan pada tanggal yang diminta (bukan hari ini) agar
+    // histori sah tetap bisa dibaca dan periode luar tugas tidak bocor.
+    await verifyRoomAssignment(session.userId, roomId, date);
 
     const checklist = await prisma.cleaningDailyChecklist.findUnique({
         where: { roomId_wibDate: { roomId, wibDate: date } },
@@ -961,7 +1244,10 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
 
     const item = await prisma.cleaningDailyChecklistItem.findUnique({
         where: { id: itemId },
-        include: { checklist: { select: { roomId: true, wibDate: true } } },
+        include: {
+            checklist: { select: { roomId: true, wibDate: true } },
+            lastChangedBy: { select: { id: true, displayName: true } },
+        },
     });
 
     if (!item) throw new CleaningError("Item checklist tidak ditemukan.", 404);
@@ -972,23 +1258,45 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
 
     await verifyRoomAssignment(session.userId, item.checklist.roomId, wibToday);
 
-    const updated = await prisma.cleaningDailyChecklistItem.update({
-        where: { id: itemId },
-        data: {
-            isComplete,
-            lastChangedByUserId: session.userId,
-            lastChangedAt: new Date(),
-        },
-        include: { lastChangedBy: { select: { id: true, displayName: true } } },
+    const room = await prisma.cleaningRoom.findUnique({
+        where: { id: item.checklist.roomId },
+        select: { isActive: true },
+    });
+    if (!room || !room.isActive) {
+        throw new CleaningError("Ruangan sudah tidak aktif sehingga tidak dapat diubah.", 422);
+    }
+
+    // Idempoten: nilai sama tidak menyentuh atribusi/audit.
+    if (item.isComplete === isComplete) {
+        const allItems = await prisma.cleaningDailyChecklistItem.findMany({
+            where: { checklistId: item.checklistId },
+        });
+        return {
+            item,
+            derivedStatus: deriveChecklistStatus(allItems),
+        };
+    }
+
+    const { updated, allItems } = await prisma.$transaction(async (tx) => {
+        const updated = await tx.cleaningDailyChecklistItem.update({
+            where: { id: itemId },
+            data: {
+                isComplete,
+                lastChangedByUserId: session.userId,
+                lastChangedAt: new Date(),
+            },
+            include: { lastChangedBy: { select: { id: true, displayName: true } } },
+        });
+
+        const allItems = await tx.cleaningDailyChecklistItem.findMany({
+            where: { checklistId: item.checklistId },
+        });
+        return { updated, allItems };
     });
 
     await logAction("UPDATE_CLEANING_ITEM", "CLEANING_DAILY_CHECKLIST_ITEM", actorFromSession(session), itemId, {
         checklistId: item.checklistId,
         isComplete,
-    });
-
-    const allItems = await prisma.cleaningDailyChecklistItem.findMany({
-        where: { checklistId: item.checklistId },
     });
 
     return {
@@ -1000,7 +1308,7 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
 // ─── WIG002: recap (monthly matrix) ──────────────────────────
 
 export async function getRecap(session: SessionPayload, month: string) {
-    requireWig002(session);
+    await requireWig002OrTopViewer(session);
     const wibToday = captureWibDate();
 
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
@@ -1018,9 +1326,20 @@ export async function getRecap(session: SessionPayload, month: string) {
         select: { id: true, name: true },
     });
 
+    const monthRange = monthWibDateRange(month);
+    const { getCleaningWeeklyOffDays } = await import("@/lib/services/appSettingsService");
+    const { isWibDateInWeeklyOffDays } = await import("@/lib/services/cleaningParafService");
+    const [holidays, weeklyOffDays] = await Promise.all([
+        prisma.cleaningHoliday.findMany({
+            where: { wibDate: { gte: monthRange.gte, lt: monthRange.lt } },
+            select: { wibDate: true },
+        }),
+        getCleaningWeeklyOffDays().catch(() => [0, 6]),
+    ]);
+    const holidaySet = new Set(holidays.map((h) => h.wibDate));
     const checklists = await prisma.cleaningDailyChecklist.findMany({
         where: {
-            wibDate: { startsWith: month },
+            wibDate: { gte: monthRange.gte, lt: monthRange.lt },
         },
         include: {
             items: { select: { isActive: true, isComplete: true } },
@@ -1038,12 +1357,16 @@ export async function getRecap(session: SessionPayload, month: string) {
         checklistMap.set(`${cl.roomId}_${cl.wibDate}`, cl);
     }
 
+    const isFreeDate = (date: string) =>
+        holidaySet.has(date) || isWibDateInWeeklyOffDays(date, weeklyOffDays);
+
     const matrix = rooms.map((room) => ({
         room,
         days: dates.map((date) => {
             const cl = checklistMap.get(`${room.id}_${date}`);
             const isFuture = date > wibToday;
             if (isFuture) return { date, status: "FUTURE" as const };
+            if (isFreeDate(date)) return { date, status: "LIBUR" as const };
             if (!cl) return { date, status: "BELUM" as const };
             return { date, status: deriveChecklistStatus(cl.items) };
         }),
@@ -1055,7 +1378,33 @@ export async function getRecap(session: SessionPayload, month: string) {
 // ─── WIG002: read checklist detail for any room/date ──────────
 
 export async function getChecklistDetail(session: SessionPayload, roomId: string, date: string) {
-    requireWig002(session);
+    // WIG002 boleh semua; reviewer bulanan (INSPECTED_BY/KNOWN_BY) boleh baca
+    // detail ruangan-tanggal yang ditugaskan kepadanya; atasan tertinggi
+    // viewer boleh baca semua ruangan. Tanpa ini dashboard paraf atasan
+    // selalu 403 saat membuka detail checklist.
+    if (!isWig002(session)) {
+        const { isCleaningTopViewer } = await import("@/lib/services/appSettingsService");
+        if (await isCleaningTopViewer(session).catch(() => false)) {
+            // lolos sebagai viewer global
+        } else if (!session.employeeId) {
+            throw new CleaningError("Anda tidak memiliki akses ke detail checklist ini.", 403);
+        } else {
+        const review = await prisma.cleaningMonthlyApproval.findFirst({
+            where: {
+                roomId,
+                monthWib: date.slice(0, 7),
+                OR: [
+                    { inspectedByEmployeeId: session.employeeId },
+                    { knownByEmployeeId: session.employeeId },
+                ],
+            },
+            select: { id: true },
+        });
+        if (!review) {
+            throw new CleaningError("Anda tidak memiliki akses ke detail checklist ini.", 403);
+        }
+        }
+    }
     const wibToday = captureWibDate();
 
     const room = await prisma.cleaningRoom.findUnique({
@@ -1081,7 +1430,9 @@ export async function getChecklistDetail(session: SessionPayload, roomId: string
         };
     }
 
-    if (date >= wibToday && room.template?.isActive && room.template.items.length > 0) {
+    // Pratinjau dibatasi bulan berjalan: template bulan depan tidak bocor.
+    const currentMonth = wibToday.slice(0, 7);
+    if (date >= wibToday && date.slice(0, 7) <= currentMonth && room.template?.isActive && room.template.items.length > 0) {
         return {
             type: "preview" as const,
             preview: {
@@ -1123,5 +1474,7 @@ function deriveChecklistStatus(items: { isActive: boolean; isComplete: boolean }
 
 function getDaysInMonth(month: string): number {
     const [year, m] = month.split("-").map(Number);
-    return new Date(year, m, 0).getDate();
+    const isLeapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+    const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return daysInMonth[m - 1];
 }

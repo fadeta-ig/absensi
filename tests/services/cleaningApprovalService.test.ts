@@ -251,8 +251,10 @@ describe("Monthly Cleaning Approvals Service", () => {
             const empSession = makeEmployeeSession({ employeeId: "EMP999" });
 
             vi.mocked(prisma.cleaningApprovalIdempotency.findUnique).mockResolvedValue(null);
+            vi.mocked(prisma.cleaningMonthlyApproval.findUnique).mockResolvedValue({ monthWib: "2026-09" } as never);
             vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => {
                 return callback({
+                    $queryRaw: vi.fn().mockResolvedValue([{ id: "approval-1" }]),
                     employee: {
                         findFirst: vi.fn().mockResolvedValue({
                             employeeId: "EMP999",
@@ -287,8 +289,10 @@ describe("Monthly Cleaning Approvals Service", () => {
             const empSession = makeEmployeeSession({ employeeId: "EMP001" });
 
             vi.mocked(prisma.cleaningApprovalIdempotency.findUnique).mockResolvedValue(null);
+            vi.mocked(prisma.cleaningMonthlyApproval.findUnique).mockResolvedValue({ monthWib: "2026-09" } as never);
             vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => {
                 return callback({
+                    $queryRaw: vi.fn().mockResolvedValue([{ id: "approval-1" }]),
                     employee: {
                         findFirst: vi.fn().mockResolvedValue({
                             employeeId: "EMP001",
@@ -342,8 +346,10 @@ describe("Monthly Cleaning Approvals Service", () => {
             };
 
             vi.mocked(prisma.cleaningApprovalIdempotency.findUnique).mockResolvedValue(null);
+            vi.mocked(prisma.cleaningMonthlyApproval.findUnique).mockResolvedValue({ monthWib: "2026-09" } as never);
             vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: typeof prisma) => Promise<unknown>) => {
                 return callback({
+                    $queryRaw: vi.fn().mockResolvedValue([{ id: "approval-1" }]),
                     employee: {
                         findFirst: vi.fn().mockResolvedValue({
                             employeeId: "EMP001",

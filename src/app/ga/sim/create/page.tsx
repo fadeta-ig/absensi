@@ -13,11 +13,18 @@ export default function SimCardCreatePage() {
 
     const handleSubmit = async (data: SimCardFormData) => {
         setSaving(true);
+        const payload = {
+            provider: data.provider,
+            phoneNumber: data.phoneNumber,
+            expiredDate: data.expiredDate || null,
+            assignedToId: data.assignedToId || null,
+            notes: data.notes || null,
+        };
         try {
-            const res = await fetch("/api/assets", {
+            const res = await fetch("/api/sim-cards", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
 
             if (!res.ok) {

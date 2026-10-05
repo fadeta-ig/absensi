@@ -74,6 +74,7 @@ model Employee {
   cleaningApprovalsInspected CleaningMonthlyApproval[]          @relation("CleaningApprovalInspectedBy")
   cleaningApprovalsKnown     CleaningMonthlyApproval[]          @relation("CleaningApprovalKnownBy")
   cleaningSignatures         CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureEmployee")
+  cleaningParafs             CleaningDailyParaf[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -121,6 +122,8 @@ model UserAccount {
   cleaningAssignments CleaningWorkerAssignment[]
   cleaningItemChanges CleaningDailyChecklistItem[] @relation("CleaningItemActor")
   reopenedCleaningSignatures CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureReopener")
+  cleaningEvidenceUploads CleaningEvidencePhoto[]
+  cleaningHolidaysCreated CleaningHoliday[]
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -220,6 +223,8 @@ model AuditLog {
 
   @@index([actorUserId], map: "idx_audit_logs_actor_user")
   @@index([actorIdentifier], map: "idx_audit_logs_actor_identifier")
+  @@index([action, createdAt], map: "idx_audit_logs_action_created")
+  @@index([entity, createdAt], map: "idx_audit_logs_entity_created")
   @@map("audit_logs")
 }
 
@@ -1279,6 +1284,8 @@ model CleaningRoom {
   assignments CleaningWorkerAssignment[]
   checklists  CleaningDailyChecklist[]
   approvals   CleaningMonthlyApproval[]
+  parafs      CleaningDailyParaf[]
+  evidencePhotos CleaningEvidencePhoto[]
 
   @@index([templateId], map: "idx_cleaning_room_template")
   @@index([isActive], map: "idx_cleaning_room_active")
@@ -1338,6 +1345,8 @@ model CleaningWorkerAssignment {
   @@index([userId, endsOnWibDate], map: "idx_cleaning_assignment_user")
   @@index([roomId, endsOnWibDate], map: "idx_cleaning_assignment_room")
   @@index([workerType, startsOnWibDate, endsOnWibDate], map: "idx_cleaning_assignment_type_period")
+  @@index([userId, startsOnWibDate, endsOnWibDate], map: "idx_cleaning_assignment_user_period")
+  @@index([roomId, startsOnWibDate, endsOnWibDate], map: "idx_cleaning_assignment_room_period")
   @@map("cleaning_worker_assignments")
 }
 
@@ -1353,6 +1362,7 @@ model CleaningDailyChecklist {
   items CleaningDailyChecklistItem[]
 
   @@unique([roomId, wibDate], map: "idx_cleaning_checklist_room_date")
+  @@index([wibDate], map: "idx_cleaning_checklist_wib_date")
   @@map("cleaning_daily_checklists")
 }
 
@@ -1372,6 +1382,7 @@ model CleaningDailyChecklistItem {
   checklist     CleaningDailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   templateItem  CleaningTemplateItem?  @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   lastChangedBy UserAccount?           @relation("CleaningItemActor", fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  evidencePhotos CleaningEvidencePhoto[]
 
   @@index([checklistId, sortOrder], map: "idx_cleaning_daily_item_order")
   @@index([templateItemId], map: "idx_cleaning_daily_item_tpl")
@@ -1408,6 +1419,8 @@ model CleaningMonthlyApproval {
   @@index([monthWib], map: "idx_cleaning_approval_month")
   @@index([inspectedByEmployeeId], map: "idx_cleaning_approval_inspected_by")
   @@index([knownByEmployeeId], map: "idx_cleaning_approval_known_by")
+  @@index([inspectedByEmployeeId, monthWib], map: "idx_cleaning_approval_inspected_month")
+  @@index([knownByEmployeeId, monthWib], map: "idx_cleaning_approval_known_month")
   @@map("cleaning_monthly_approvals")
 }
 
@@ -1467,4 +1480,73 @@ model AppSetting {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
+}
+
+// ─── Cleaning Paraf Harian (Tahap 1) ────────────────────────────
+// Satu paraf per atasan per ruangan per tanggal WIB.
+// Sab–Min + libur WIG002 bebas paraf; paraf HANYA bila 100% done;
+// lewat tengah malam WIB = TERLAMBAT.
+enum CleaningDailyParafStatus {
+  TEPAT
+  TERLAMBAT
+}
+
+model CleaningDailyParaf {
+  id                 String                   @id @default(uuid())
+  roomId             String                   @map("room_id")
+  wibDate            String                   @map("wib_date") @db.VarChar(10)
+  signerRole         CleaningApprovalRole     @map("signer_role")
+  signerEmployeeId   String                   @map("signer_employee_id")
+  signerNameSnapshot String                   @map("signer_name_snapshot") @db.VarChar(200)
+  signedAt           DateTime                 @default(now()) @map("signed_at")
+  status             CleaningDailyParafStatus @map("status")
+  createdAt          DateTime                 @default(now()) @map("created_at")
+
+  room           CleaningRoom @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  signerEmployee Employee     @relation(fields: [signerEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([roomId, wibDate, signerRole], map: "idx_cleaning_paraf_room_date_role")
+  @@index([wibDate], map: "idx_cleaning_paraf_wib_date")
+  @@index([signerEmployeeId, wibDate], map: "idx_cleaning_paraf_signer_date")
+  @@index([signerEmployeeId], map: "idx_cleaning_paraf_signer")
+  @@map("cleaning_daily_parafs")
+}
+
+// ─── Cleaning Evidence Foto per Item (Tahap 1, opsional, batas global) ──
+// Disk + path on-premise; data lama utuh.
+model CleaningEvidencePhoto {
+  id               String    @id @default(uuid())
+  checklistItemId  String    @map("checklist_item_id")
+  roomId           String    @map("room_id")
+  wibDate          String    @map("wib_date") @db.VarChar(10)
+  filePath         String    @unique(map: "idx_cleaning_evidence_path_unique") @map("file_path") @db.VarChar(500)
+  mimeType         String    @map("mime_type") @db.VarChar(100)
+  size             Int       @map("size")
+  sha256           String    @map("sha256") @db.Char(64)
+  capturedAt       DateTime  @map("captured_at")
+  uploadedByUserId String?   @map("uploaded_by_user_id")
+  note             String?   @db.Text @map("note")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  checklistItem CleaningDailyChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  room          CleaningRoom               @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  uploadedBy    UserAccount?               @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([checklistItemId], map: "idx_cleaning_evidence_item")
+  @@index([roomId, wibDate], map: "idx_cleaning_evidence_room_date")
+  @@index([sha256], map: "idx_cleaning_evidence_sha256")
+  @@map("cleaning_evidence_photos")
+}
+
+// ─── Cleaning Holiday / Libur WIG002 (Tahap 1) ────────────────
+model CleaningHoliday {
+  id              String   @id @default(uuid())
+  wibDate         String   @unique(map: "idx_cleaning_holiday_date_unique") @map("wib_date") @db.VarChar(10)
+  description     String   @db.Text @map("description")
+  createdByUserId String?  @map("created_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  createdBy UserAccount? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@map("cleaning_holidays")
 }

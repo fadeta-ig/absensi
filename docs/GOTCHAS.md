@@ -49,6 +49,8 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 
 - **Gotcha**: Script `prisma/seed.ts` menghasilkan kata sandi acak `randomBytes(12).toString("base64url")` untuk akun `WIG001` dan `WIG002`.
 - **Pitfall**: File pengujian `tests/utils/apiTestHelper.ts` mengasumsikan kata sandi pengujian dev tetap. Jika database di-reset dengan `npm run db:reset`, test API akan gagal login (401) kecuali akun diisi menggunakan `npm run db:seed:dev` yang menyediakan kredensial pengujian deterministik.
+- **Gotcha**: `prisma/seed.ts` dan `prisma/seedCompanyStructure.ts` adalah seed destruktif (wipe): menghapus karyawan, akun, presensi, dan seluruh modul cleaning sebelum membuat ulang. Terbukti pada simulasi 2026-10-05 (61 karyawan + 710 presensi habis dalam hitungan detik, lalu crash P2003).
+- **Aturan**: kedua file dijaga `prisma/seedSafety.ts` — ditolak bila `NODE_ENV=production`, ditolak bila DB berisi data kecuali env `ALLOW_DESTRUCTIVE_SEED=1`. Alur setup awal (`db push` → DB kosong → `db seed`) tetap jalan. Di VPS production HANYA `prisma db push` (aditif, tanpa seed).
 
 ---
 

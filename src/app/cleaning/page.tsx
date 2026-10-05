@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Circle, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Circle, Loader2, AlertTriangle, RefreshCw, Camera } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface Room {
     id: string;
     name: string;
     template: { id: string; name: string };
+    isReady?: boolean;
 }
 
 interface ChecklistItem {
@@ -39,6 +41,17 @@ export default function CleaningPage() {
     const [checklistLoading, setChecklistLoading] = useState(false);
     const [updatingItem, setUpdatingItem] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // Tahap 3: panel foto bukti per item (lazy-mount agar list dibaca saat dibuka).
+    const [evidenceOpen, setEvidenceOpen] = useState<Record<string, boolean>>({});
+    const openChecklistAbort = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        return () => openChecklistAbort.current?.abort();
+    }, []);
+
+    const toggleEvidence = useCallback((itemId: string) => {
+        setEvidenceOpen((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+    }, []);
 
     // Fetch assigned rooms
     const fetchRooms = useCallback(async () => {
@@ -62,6 +75,10 @@ export default function CleaningPage() {
 
     // Open or create today's checklist for a room
     const openChecklist = useCallback(async (room: Room) => {
+        // Batalkan pemuatan sebelumnya agar respons lambat tidak tertukar ruangan.
+        openChecklistAbort.current?.abort();
+        const controller = new AbortController();
+        openChecklistAbort.current = controller;
         setSelectedRoom(room);
         setChecklistLoading(true);
         setChecklist(null);
@@ -71,23 +88,31 @@ export default function CleaningPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ roomId: room.id }),
+                signal: controller.signal,
             });
+            if (controller.signal.aborted) return;
             if (!res.ok) {
                 const json = await res.json();
                 if (json.error === "ROOM_NOT_READY") {
-                    setError("Ruangan ini belum memiliki template atau item aktif. Hubungi WIG002.");
+                    setError("Ruangan ini belum memiliki template atau item aktif. Hubungi admin GA / atasan Anda untuk penugasan.");
                     return;
                 }
                 throw new Error(json.error || "Gagal membuka checklist.");
             }
             const json = await res.json();
-            setChecklist(json.data);
+            if (controller.signal.aborted) return;
+            // Abaikan bila pengguna sudah pindah ruangan lain selama menunggu.
+            setSelectedRoom((prev) => {
+                if (prev && prev.id === room.id) setChecklist(json.data);
+                return prev;
+            });
         } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") return;
             const msg = err instanceof Error ? err.message : "Gagal membuka checklist.";
             setError(msg);
             reportClientError("CleaningPage", msg, err);
         } finally {
-            setChecklistLoading(false);
+            if (!controller.signal.aborted) setChecklistLoading(false);
         }
     }, []);
 
@@ -150,6 +175,7 @@ export default function CleaningPage() {
 
     // Back to room list
     const backToRooms = useCallback(() => {
+        openChecklistAbort.current?.abort();
         setSelectedRoom(null);
         setChecklist(null);
         setError(null);
@@ -177,7 +203,7 @@ export default function CleaningPage() {
                 <div className="bg-card border border-border rounded-lg p-4 mb-4">
                     <h1 className="text-xl font-semibold text-foreground">{selectedRoom.name}</h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Template: {selectedRoom.template.name}
+                        Daftar pekerjaan: {selectedRoom.template.name}
                     </p>
                     {checklist && (
                         <div className="mt-2 flex items-center gap-2">
@@ -191,9 +217,9 @@ export default function CleaningPage() {
                                 ) : (
                                     <Circle className="h-3.5 w-3.5" />
                                 )}
-                                {checklist.derivedStatus}
+                                {checklist.derivedStatus === "SELESAI" ? "Sudah selesai" : "Belum selesai"}
                             </span>
-                            <span className="text-xs text-muted-foreground">{checklist.wibDate}</span>
+                            <span className="text-xs text-muted-foreground">{formatWibDate(checklist.wibDate)}</span>
                         </div>
                     )}
                 </div>
@@ -220,38 +246,59 @@ export default function CleaningPage() {
                 {checklist && !checklistLoading && (
                     <div className="space-y-2">
                         {checklist.items.filter((i) => i.isActive).map((item) => (
-                            <button
-                                key={item.id}
-                                onClick={() => toggleItem(item)}
-                                disabled={updatingItem === item.id}
-                                className={`w-full flex items-start gap-3 p-3 rounded-lg border transition-colors text-left ${
-                                    item.isComplete
-                                        ? "bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800"
-                                        : "bg-card border-border hover:bg-accent/50"
-                                } ${updatingItem === item.id ? "opacity-50" : ""}`}
-                            >
-                                <div className="mt-0.5 flex-shrink-0">
-                                    {updatingItem === item.id ? (
-                                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                    ) : item.isComplete ? (
-                                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                    ) : (
-                                        <Circle className="h-5 w-5 text-muted-foreground" />
-                                    )}
+                            <div key={item.id}>
+                                <div
+                                    className={`w-full flex items-start gap-2 p-3 rounded-lg border transition-colors ${
+                                        item.isComplete
+                                            ? "bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800"
+                                            : "bg-card border-border"
+                                    } ${updatingItem === item.id ? "opacity-50" : ""}`}
+                                >
+                                    <button
+                                        onClick={() => toggleItem(item)}
+                                        disabled={updatingItem === item.id}
+                                        className="flex flex-1 min-w-0 items-start gap-3 text-left hover:bg-accent/50 rounded-md"
+                                        aria-label={item.itemNameSnapshot}
+                                    >
+                                        <div className="mt-0.5 flex-shrink-0">
+                                            {updatingItem === item.id ? (
+                                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                            ) : item.isComplete ? (
+                                                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                            ) : (
+                                                <Circle className="h-5 w-5 text-muted-foreground" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm font-medium ${
+                                                item.isComplete ? "text-green-800 dark:text-green-300 line-through" : "text-foreground"
+                                            }`}>
+                                                {item.itemNameSnapshot}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {item.lastChangedBy
+                                                    ? `${item.lastChangedBy.displayName} · ${formatTime(item.lastChangedAt)}`
+                                                    : "Belum dikerjakan"}
+                                            </p>
+                                        </div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleEvidence(item.id)}
+                                        aria-label="Foto bukti"
+                                        aria-expanded={!!evidenceOpen[item.id]}
+                                        title={`Foto bukti ${item.itemNameSnapshot} (opsional)`}
+                                        className="mt-0.5 flex-shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
+                                    >
+                                        <Camera className="h-4 w-4" />
+                                    </button>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className={`text-sm font-medium ${
-                                        item.isComplete ? "text-green-800 dark:text-green-300 line-through" : "text-foreground"
-                                    }`}>
-                                        {item.itemNameSnapshot}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {item.lastChangedBy
-                                            ? `${item.lastChangedBy.displayName} · ${formatTime(item.lastChangedAt)}`
-                                            : "Belum diubah"}
-                                    </p>
-                                </div>
-                            </button>
+                                {evidenceOpen[item.id] && (
+                                    <div className="mt-1.5">
+                                        <CleaningEvidencePanel checklistItemId={item.id} canUpload />
+                                    </div>
+                                )}
+                            </div>
                         ))}
                     </div>
                 )}
@@ -262,7 +309,7 @@ export default function CleaningPage() {
     // Room list view
     return (
         <div className="max-w-2xl mx-auto px-4 py-6">
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Checklist Inspeksi</h1>
+            <h1 className="text-2xl font-semibold text-foreground mb-1">Checklist Kebersihan Harian</h1>
             <p className="text-sm text-muted-foreground mb-6">
                 Pilih ruangan untuk membuka checklist hari ini.
             </p>
@@ -277,7 +324,8 @@ export default function CleaningPage() {
             {rooms.length === 0 && !error && (
                 <div className="text-center py-12">
                     <p className="text-muted-foreground">Anda belum ditugaskan ke ruangan manapun.</p>
-                    <p className="text-sm text-muted-foreground mt-1">Hubungi WIG002 untuk penugasan.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Hubungi admin GA / atasan Anda untuk penugasan.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Datangi atasan/GA untuk minta ruangan.</p>
                 </div>
             )}
 
@@ -291,6 +339,11 @@ export default function CleaningPage() {
                         <div>
                             <p className="font-medium text-foreground">{room.name}</p>
                             <p className="text-sm text-muted-foreground">{room.template.name}</p>
+                            {room.isReady === false && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                                    Belum siap — template/item belum aktif. Hubungi admin GA.
+                                </p>
+                            )}
                         </div>
                         <span className="text-muted-foreground">→</span>
                     </button>
@@ -298,6 +351,21 @@ export default function CleaningPage() {
             </div>
         </div>
     );
+}
+
+function formatWibDate(wibDate: string): string {
+    try {
+        const d = new Date(`${wibDate}T00:00:00+07:00`);
+        if (Number.isNaN(d.getTime())) return wibDate;
+        return d.toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            timeZone: "Asia/Jakarta",
+        });
+    } catch {
+        return wibDate;
+    }
 }
 
 function formatTime(iso: string | null): string {

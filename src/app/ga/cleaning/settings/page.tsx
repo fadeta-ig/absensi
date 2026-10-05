@@ -6,6 +6,8 @@ import { useToast } from "@/components/Toast";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { toWIBDateString } from "@/lib/timezone";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import TopViewerCard from "./TopViewerCard";
+import DefaultReviewerCard from "./DefaultReviewerCard";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface Template {
@@ -59,7 +61,18 @@ interface OutsourceUser {
     }>;
 }
 
-type Tab = "templates" | "rooms" | "assignments";
+type Tab = "templates" | "rooms" | "assignments" | "atasan";
+
+interface TopViewerOption {
+    employeeId: string;
+    name: string;
+}
+
+interface TopViewerInfo {
+    employeeId: string | null;
+    name: string | null;
+    isActive: boolean | null;
+}
 
 export default function CleaningSettingsPage() {
     const toast = useToast();
@@ -89,13 +102,22 @@ export default function CleaningSettingsPage() {
     const [roomTemplateId, setRoomTemplateId] = useState("");
     const [savingRoom, setSavingRoom] = useState(false);
 
-    // ─── Assignment form state ────────────────────────────
+    // ─── Assignment form state (bulk: banyak petugas × banyak ruangan) ──
     const [showAssignForm, setShowAssignForm] = useState(false);
-    const [assignRoomId, setAssignRoomId] = useState("");
-    const [assignUserId, setAssignUserId] = useState("");
+    const [bulkAssignRoomIds, setBulkAssignRoomIds] = useState<string[]>([]);
+    const [bulkAssignUserIds, setBulkAssignUserIds] = useState<string[]>([]);
     const [assignWorkerType, setAssignWorkerType] = useState<"INTERNAL" | "OUTSOURCE">("OUTSOURCE");
     const [assignApplyToday, setAssignApplyToday] = useState(false);
     const [savingAssign, setSavingAssign] = useState(false);
+    const [bulkResult, setBulkResult] = useState<{
+        created: Array<{ roomName: string; displayName: string }>;
+        skipped: Array<{ roomName: string; displayName: string; message: string }>;
+        failed: Array<{ roomName: string; displayName: string; message: string }>;
+    } | null>(null);
+
+    const toggleBulkId = (list: string[], setList: (next: string[]) => void, id: string) => {
+        setList(list.includes(id) ? list.filter((v) => v !== id) : [...list, id]);
+    };
 
     // ─── Outsource modal state ────────────────────────────
     const [showOutsourceModal, setShowOutsourceModal] = useState(false);
@@ -275,32 +297,57 @@ export default function CleaningSettingsPage() {
         }
     }, [toast, fetchAll]);
 
+    // ─── Hapus master yang belum dipakai ────────────────────
+
+    const deleteMaster = useCallback(async (kind: "template" | "item" | "room", id: string, label: string) => {
+        if (!confirm(`Hapus ${label}? Hanya data yang belum pernah dipakai yang bisa dihapus.`)) return;
+        const endpoint =
+            kind === "template"
+                ? "/api/ga/cleaning/templates"
+                : kind === "item"
+                    ? "/api/ga/cleaning/template-items"
+                    : "/api/ga/cleaning/rooms";
+        try {
+            const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, `Gagal menghapus ${label}.`));
+            toast(`${label} dihapus.`, "success");
+            await fetchAll();
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal menghapus.", "error");
+            reportClientError("CleaningSettings", `Delete ${kind} failed`, err);
+        }
+    }, [toast, fetchAll]);
+
     // ─── Assignment CRUD ──────────────────────────────────
 
-    const saveAssignment = useCallback(async () => {
-        if (savingAssign || !assignRoomId || !assignUserId) return;
+    const saveBulkAssignment = useCallback(async () => {
+        if (savingAssign || bulkAssignRoomIds.length === 0 || bulkAssignUserIds.length === 0) return;
         setSavingAssign(true);
+        setBulkResult(null);
         try {
-            const res = await fetch("/api/ga/cleaning/assignments", {
+            const res = await fetch("/api/ga/cleaning/assignments/bulk", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    roomId: assignRoomId,
-                    userId: assignUserId,
+                    roomIds: bulkAssignRoomIds,
+                    userIds: bulkAssignUserIds,
                     workerType: assignWorkerType,
                     applyToToday: assignApplyToday,
                 }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan penugasan."));
+            const json = await res.json();
+            const data = json.data ?? { created: [], skipped: [], failed: [] };
+            setBulkResult(data);
+            const total = data.created.length + data.skipped.length + data.failed.length;
             toast(
-                assignApplyToday
-                    ? "Petugas berhasil ditugaskan mulai hari ini."
-                    : "Petugas berhasil dijadwalkan mulai besok.",
-                "success"
+                `Selesai: ${data.created.length} ditugaskan, ${data.skipped.length} sudah ada, ${data.failed.length} gagal (dari ${total}).`,
+                data.failed.length > 0 ? "error" : "success"
             );
-            setShowAssignForm(false);
-            setAssignRoomId("");
-            setAssignUserId("");
+            if (data.failed.length === 0) {
+                setBulkAssignRoomIds([]);
+                setBulkAssignUserIds([]);
+            }
             setAssignApplyToday(false);
             await fetchAll();
         } catch (err) {
@@ -308,7 +355,7 @@ export default function CleaningSettingsPage() {
         } finally {
             setSavingAssign(false);
         }
-    }, [savingAssign, assignRoomId, assignUserId, assignWorkerType, assignApplyToday, toast, fetchAll]);
+    }, [savingAssign, bulkAssignRoomIds, bulkAssignUserIds, assignWorkerType, assignApplyToday, toast, fetchAll]);
 
     const removeAssignment = useCallback(async (assignment: Assignment) => {
         const todayStr = toWIBDateString();
@@ -410,7 +457,7 @@ export default function CleaningSettingsPage() {
 
             if (json.data?.id && showAssignForm) {
                 setAssignWorkerType("OUTSOURCE");
-                setAssignUserId(json.data.id);
+                setBulkAssignUserIds([json.data.id]);
             }
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal membuat akun outsource.", "error");
@@ -442,6 +489,19 @@ export default function CleaningSettingsPage() {
     }
 
     const activeTemplates = templates.filter((t) => t.isActive);
+    // B7: template yang sedang dipakai ruangan tetap bisa dipilih saat edit
+    // (tampil dengan penanda nonaktif) agar simpan tanpa ganti tidak dipaksa.
+    const roomTemplateOptions =
+        editingRoom && !activeTemplates.some((t) => t.id === editingRoom.template.id)
+            ? [...activeTemplates, { ...editingRoom.template, isActive: false, items: [], _count: { rooms: 0 } } as Template]
+            : activeTemplates;
+
+    // B2: tampilkan penugasan yang masih berlaku hari ini (termasuk yang berakhir besok),
+    // bukan hanya yang endsOn null — agar tidak dikira sudah lepas.
+    const visibleAssignments = (list: Assignment[]) => {
+        const todayStr = toWIBDateString();
+        return list.filter((a) => a.endsOnWibDate === null || a.endsOnWibDate > todayStr);
+    };
 
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
@@ -452,7 +512,7 @@ export default function CleaningSettingsPage() {
 
             {/* Tabs */}
             <div className="flex gap-1 mb-6 border-b border-border">
-                {([["templates", "Template"], ["rooms", "Ruangan"], ["assignments", "Penugasan"]] as [Tab, string][]).map(([key, label]) => (
+                {([["templates", "Template"], ["rooms", "Ruangan"], ["assignments", "Penugasan"], ["atasan", "Reviewer & Atasan"]] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         onClick={() => setActiveTab(key)}
@@ -514,7 +574,7 @@ export default function CleaningSettingsPage() {
                                         <span className={`text-xs px-1.5 py-0.5 rounded ${tpl.isActive ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}>
                                             {tpl.isActive ? "Aktif" : "Nonaktif"}
                                         </span>
-                                        <span className="text-xs text-muted-foreground">{tpl._count.rooms} ruangan · {tpl.items.length} item</span>
+                                        <span className="text-xs text-muted-foreground">{tpl._count.rooms} ruangan, {tpl.items.length} pekerjaan</span>
                                     </button>
                                     <div className="flex items-center gap-1">
                                         <button
@@ -529,6 +589,13 @@ export default function CleaningSettingsPage() {
                                             className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground"
                                         >
                                             {tpl.isActive ? "Nonaktifkan" : "Aktifkan"}
+                                        </button>
+                                        <button
+                                            onClick={() => void deleteMaster("template", tpl.id, `Template "${tpl.name}"`)}
+                                            className="text-xs px-2 py-1 text-destructive hover:text-destructive/80"
+                                            title="Hapus template yang belum dipakai"
+                                        >
+                                            Hapus
                                         </button>
                                     </div>
                                 </div>
@@ -570,12 +637,21 @@ export default function CleaningSettingsPage() {
                                                         <span className={item.isActive ? "text-foreground" : "text-muted-foreground line-through"}>
                                                             {idx + 1}. {item.name}
                                                         </span>
-                                                        <button
-                                                            onClick={() => toggleItemActive(item)}
-                                                            className="text-xs text-muted-foreground hover:text-foreground"
-                                                        >
-                                                            {item.isActive ? "Nonaktifkan" : "Aktifkan"}
-                                                        </button>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => toggleItemActive(item)}
+                                                                className="text-xs text-muted-foreground hover:text-foreground"
+                                                            >
+                                                                {item.isActive ? "Nonaktifkan" : "Aktifkan"}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => void deleteMaster("item", item.id, `Item "${item.name}"`)}
+                                                                className="text-xs text-destructive hover:text-destructive/80"
+                                                                title="Hapus item yang belum dipakai"
+                                                            >
+                                                                Hapus
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -621,8 +697,8 @@ export default function CleaningSettingsPage() {
                                     className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
                                 >
                                     <option value="">Pilih template</option>
-                                    {activeTemplates.map((t) => (
-                                        <option key={t.id} value={t.id}>{t.name}</option>
+                                    {roomTemplateOptions.map((t) => (
+                                        <option key={t.id} value={t.id}>{t.name}{t.isActive ? "" : " (nonaktif)"}</option>
                                     ))}
                                 </select>
                             </div>
@@ -644,7 +720,7 @@ export default function CleaningSettingsPage() {
                                     <div>
                                         <p className="font-medium text-sm">{room.name}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            Template: {room.template.name} · {room.assignments.filter((a) => a.endsOnWibDate === null).length} petugas aktif
+                                            Template: {room.template.name} · {visibleAssignments(room.assignments).length} petugas aktif
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -663,14 +739,26 @@ export default function CleaningSettingsPage() {
                                         >
                                             {room.isActive ? "Nonaktifkan" : "Aktifkan"}
                                         </button>
+                                        <button
+                                            onClick={() => void deleteMaster("room", room.id, `Ruangan "${room.name}"`)}
+                                            className="text-xs text-destructive hover:text-destructive/80"
+                                            title="Hapus ruangan yang belum punya data"
+                                        >
+                                            Hapus
+                                        </button>
                                     </div>
                                 </div>
-                                {room.assignments.filter((a) => a.endsOnWibDate === null).length > 0 && (
+                                {visibleAssignments(room.assignments).length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1">
-                                        {room.assignments.filter((a) => a.endsOnWibDate === null).map((a) => (
+                                        {visibleAssignments(room.assignments).map((a) => (
                                             <span key={a.id} className="inline-flex items-center gap-1 text-xs bg-accent/50 px-2 py-0.5 rounded">
                                                 <Users className="h-3 w-3" />
                                                 {a.user.displayName}
+                                                {a.endsOnWibDate && (
+                                                    <span className="text-amber-700 dark:text-amber-400 font-medium">
+                                                        · berakhir {a.endsOnWibDate}
+                                                    </span>
+                                                )}
                                                 <button
                                                     onClick={() => removeAssignment(a)}
                                                     className="text-destructive hover:text-destructive/80 ml-0.5"
@@ -708,7 +796,7 @@ export default function CleaningSettingsPage() {
                                 <UserPlus className="h-4 w-4 text-primary" /> Petugas Outsource
                             </button>
                             <button
-                                onClick={() => { setShowAssignForm(true); setAssignRoomId(rooms[0]?.id ?? ""); setAssignUserId(""); setAssignWorkerType("INTERNAL"); setAssignApplyToday(false); }}
+                                onClick={() => { setShowAssignForm(true); setBulkAssignRoomIds([]); setBulkAssignUserIds([]); setAssignWorkerType("INTERNAL"); setAssignApplyToday(false); setBulkResult(null); fetchAvailableUsers("INTERNAL"); }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
                             >
                                 <Plus className="h-4 w-4" /> Tugaskan
@@ -718,44 +806,94 @@ export default function CleaningSettingsPage() {
 
                     {showAssignForm && (
                         <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                            <h3 className="text-sm font-medium mb-2">Penugasan Baru</h3>
-                            <div className="space-y-3">
-                                <select
-                                    aria-label="Ruangan"
-                                    value={assignRoomId}
-                                    onChange={(e) => setAssignRoomId(e.target.value)}
-                                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
-                                >
-                                    <option value="">Pilih ruangan</option>
-                                    {rooms.filter((r) => r.isActive).map((r) => (
-                                        <option key={r.id} value={r.id}>{r.name}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    aria-label="Tipe petugas"
-                                    value={assignWorkerType}
-                                    onChange={(e) => {
-                                        const wt = e.target.value as "INTERNAL" | "OUTSOURCE";
-                                        setAssignWorkerType(wt);
-                                        setAssignUserId("");
-                                        fetchAvailableUsers(wt);
-                                    }}
-                                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
-                                >
-                                    <option value="INTERNAL">Internal</option>
-                                    <option value="OUTSOURCE">Outsource</option>
-                                </select>
-                                <select
-                                    aria-label="Pengguna"
-                                    value={assignUserId}
-                                    onChange={(e) => setAssignUserId(e.target.value)}
-                                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
-                                >
-                                    <option value="">Pilih pengguna</option>
-                                    {availableUsers.map((u) => (
-                                        <option key={u.id} value={u.id}>{u.displayName} ({u.username})</option>
-                                    ))}
-                                </select>
+                            <h3 className="text-sm font-medium mb-1">Penugasan Baru (bisa banyak sekaligus)</h3>
+                            <p className="text-xs text-muted-foreground mb-3">
+                                Centang petugas dan ruangan, lalu tugaskan sekaligus. 1 petugas bisa ke semua ruangan, atau selang-seling.
+                            </p>
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-xs font-semibold text-foreground">
+                                            Ruangan ({bulkAssignRoomIds.length} dipilih)
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const active = rooms.filter((r) => r.isActive);
+                                                setBulkAssignRoomIds(
+                                                    bulkAssignRoomIds.length === active.length ? [] : active.map((r) => r.id)
+                                                );
+                                            }}
+                                            className="text-xs text-primary hover:underline"
+                                        >
+                                            {bulkAssignRoomIds.length > 0 ? "Hapus semua" : "Pilih semua ruangan"}
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto border border-border rounded-md p-2">
+                                        {rooms.filter((r) => r.isActive).map((r) => (
+                                            <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer px-1.5 py-1 rounded hover:bg-accent/50">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={bulkAssignRoomIds.includes(r.id)}
+                                                    onChange={() => toggleBulkId(bulkAssignRoomIds, setBulkAssignRoomIds, r.id)}
+                                                    className="rounded border-border"
+                                                />
+                                                <span className="text-foreground">{r.name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-semibold text-foreground">Tipe petugas</span>
+                                    <select
+                                        aria-label="Tipe petugas"
+                                        value={assignWorkerType}
+                                        onChange={(e) => {
+                                            const wt = e.target.value as "INTERNAL" | "OUTSOURCE";
+                                            setAssignWorkerType(wt);
+                                            setBulkAssignUserIds([]);
+                                            fetchAvailableUsers(wt);
+                                        }}
+                                        className="mt-1.5 w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
+                                    >
+                                        <option value="INTERNAL">Karyawan WIG</option>
+                                        <option value="OUTSOURCE">Petugas luar (outsource)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-xs font-semibold text-foreground">
+                                            Petugas ({bulkAssignUserIds.length} dipilih)
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBulkAssignUserIds(
+                                                    bulkAssignUserIds.length === availableUsers.length ? [] : availableUsers.map((u) => u.id)
+                                                );
+                                            }}
+                                            className="text-xs text-primary hover:underline"
+                                        >
+                                            {bulkAssignUserIds.length > 0 ? "Hapus semua" : "Pilih semua"}
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto border border-border rounded-md p-2">
+                                        {availableUsers.length === 0 && (
+                                            <p className="text-xs text-muted-foreground px-1.5 py-1">Belum ada petugas tipe ini.</p>
+                                        )}
+                                        {availableUsers.map((u) => (
+                                            <label key={u.id} className="flex items-center gap-2 text-sm cursor-pointer px-1.5 py-1 rounded hover:bg-accent/50">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={bulkAssignUserIds.includes(u.id)}
+                                                    onChange={() => toggleBulkId(bulkAssignUserIds, setBulkAssignUserIds, u.id)}
+                                                    className="rounded border-border"
+                                                />
+                                                <span className="text-foreground">{u.displayName}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
                                 {assignWorkerType === "OUTSOURCE" && (
                                     <div className="flex items-center justify-between text-xs text-muted-foreground p-2 rounded border border-border bg-muted/30">
                                         <span>Perlu mendaftarkan akun petugas outsource baru?</span>
@@ -779,21 +917,53 @@ export default function CleaningSettingsPage() {
                                             onChange={(e) => setAssignApplyToday(e.target.checked)}
                                             className="rounded border-border"
                                         />
-                                        Berlaku mulai hari ini (bukan besok)
+                                        Mulai hari ini (langsung bisa isi).
                                     </label>
                                     <p className="text-xs text-muted-foreground ml-6">
                                         {assignApplyToday
-                                            ? "✓ Petugas aktif hari ini dan dapat langsung mengisi checklist inspeksi."
-                                            : "ℹ Jika tidak dicentang, penugasan baru akan aktif mulai besok pagi."}
+                                            ? "Petugas aktif hari ini dan dapat langsung mengisi checklist."
+                                            : "Jika kosong, mulai besok pagi."}
                                     </p>
                                 </div>
+                                <p className="text-xs font-semibold text-foreground" aria-live="polite">
+                                    {bulkAssignUserIds.length > 0 && bulkAssignRoomIds.length > 0
+                                        ? `${bulkAssignUserIds.length} petugas × ${bulkAssignRoomIds.length} ruangan = ${bulkAssignUserIds.length * bulkAssignRoomIds.length} penugasan`
+                                        : "Pilih minimal 1 ruangan dan 1 petugas."}
+                                </p>
+                                {bulkResult && (
+                                    <div className="rounded-lg border border-border p-3 space-y-1.5 text-xs">
+                                        {bulkResult.created.length > 0 && (
+                                            <p className="text-green-700 dark:text-green-400 font-medium">
+                                                Berhasil {bulkResult.created.length}: {bulkResult.created.slice(0, 5).map((c) => `${c.displayName} → ${c.roomName}`).join("; ")}{bulkResult.created.length > 5 ? ` (+${bulkResult.created.length - 5} lainnya)` : ""}
+                                            </p>
+                                        )}
+                                        {bulkResult.skipped.length > 0 && (
+                                            <p className="text-amber-700 dark:text-amber-400 font-medium">
+                                                Sudah ada {bulkResult.skipped.length}: {bulkResult.skipped.slice(0, 5).map((c) => `${c.displayName} → ${c.roomName}`).join("; ")}{bulkResult.skipped.length > 5 ? ` (+${bulkResult.skipped.length - 5} lainnya)` : ""}
+                                            </p>
+                                        )}
+                                        {bulkResult.failed.map((f, idx) => (
+                                            <p key={idx} className="text-destructive">
+                                                Gagal: {f.displayName} → {f.roomName} ({f.message})
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex gap-2 mt-3">
-                                <button onClick={saveAssignment} disabled={savingAssign} className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50">
-                                    {savingAssign ? "Menyimpan..." : "Tugaskan"}
+                                <button
+                                    onClick={saveBulkAssignment}
+                                    disabled={savingAssign || bulkAssignRoomIds.length === 0 || bulkAssignUserIds.length === 0}
+                                    className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50"
+                                >
+                                    {savingAssign
+                                        ? "Menyimpan..."
+                                        : bulkAssignRoomIds.length > 0 && bulkAssignUserIds.length > 0
+                                            ? `Tugaskan ${bulkAssignRoomIds.length * bulkAssignUserIds.length} penugasan`
+                                            : "Tugaskan"}
                                 </button>
-                                <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-                                    Batal
+                                <button onClick={() => { setShowAssignForm(false); setBulkResult(null); }} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
+                                    Tutup
                                 </button>
                             </div>
                         </div>
@@ -803,7 +973,7 @@ export default function CleaningSettingsPage() {
                     <div className="space-y-3">
                         {rooms.filter((r) => r.isActive).map((room) => {
                             const todayStr = toWIBDateString();
-                            const activeAssignments = room.assignments.filter((a) => a.endsOnWibDate === null);
+                            const activeAssignments = visibleAssignments(room.assignments);
                             return (
                                 <div key={room.id} className="bg-card border border-border rounded-lg p-3">
                                     <p className="font-medium text-sm mb-2">{room.name}</p>
@@ -819,11 +989,15 @@ export default function CleaningSettingsPage() {
                                                             <span className="font-medium">{a.user.displayName}</span>
                                                             <span className="text-muted-foreground text-xs">({a.user.username})</span>
                                                             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                                                                {a.workerType}
+                                                                {a.workerType === "INTERNAL" ? "Karyawan WIG" : "Petugas luar (outsource)"}
                                                             </span>
                                                             {isPlanned ? (
                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--warning-bg)] text-[var(--warning)] border border-[var(--warning-border)]">
                                                                     Terjadwal mulai {a.startsOnWibDate}
+                                                                </span>
+                                                            ) : a.endsOnWibDate ? (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-[var(--warning-border)]">
+                                                                    Berakhir {a.endsOnWibDate} (masih berlaku hari ini)
                                                                 </span>
                                                             ) : (
                                                                 <span className="text-xs text-muted-foreground">
@@ -1002,6 +1176,34 @@ export default function CleaningSettingsPage() {
                         )}
                     </div>
                 </AccessibleModal>
+            )}
+
+            {activeTab === "atasan" && (
+                <div>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-medium">Reviewer & Atasan Tertinggi</h2>
+                    </div>
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)] mb-2">
+                                Pasangan default reviewer
+                            </h3>
+                            <p className="text-xs text-[var(--text-muted)] mb-3">
+                                Satu pasang untuk semua ruangan. Dipakai mengisi otomatis periode baru dan paraf/TTD pertama.
+                            </p>
+                            <DefaultReviewerCard />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)] mb-2">
+                                Atasan tertinggi (pemantau)
+                            </h3>
+                            <p className="text-xs text-[var(--text-muted)] mb-3">
+                                Tunjuk karyawan yang boleh memantau seluruh inspeksi (read-only, tanpa paraf/TTD).
+                            </p>
+                            <TopViewerCard />
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -186,6 +186,10 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
         } catch {
             // If image fails, leave clean area
         }
+    } else if (data.inspectedBy.signedAt) {
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "italic");
+        doc.text("gambar tidak tersedia", sigTableX + colWidth / 2, sigTableY + headerHeight + sigAreaHeight / 2, { align: "center" });
     }
 
     // Info area (Name, NIP, Tanggal)
@@ -223,6 +227,10 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
         } catch {
             // If image fails, leave clean area
         }
+    } else if (data.knownBy.signedAt) {
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "italic");
+        doc.text("gambar tidak tersedia", sigTableX2 + colWidth / 2, sigTableY + headerHeight + sigAreaHeight / 2, { align: "center" });
     }
 
     // Info area (Name, NIP, Tanggal)
@@ -244,10 +252,11 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
     let noteY = sigTableY + 4;
     doc.text("Keterangan:", 10, noteY);
     doc.text("• v = Selesai dibersihkan & disanitasi", 10, noteY + 3.5);
-    doc.text("• - = Belum jadwal / tanggal mendatang", 10, noteY + 7);
+    doc.text("• (kosong) = Belum dikerjakan", 10, noteY + 7);
+    doc.text("• - = Belum jadwal / tanggal mendatang", 10, noteY + 10.5);
 
     if (data.latestChange) {
-        noteY += 12;
+        noteY += 15;
         doc.text(
             `* Pembaruan data checklist terakhir: ${formatDateTimeDisplay(data.latestChange.timestamp)}${
                 data.latestChange.actorName ? ` oleh ${data.latestChange.actorName}` : ""

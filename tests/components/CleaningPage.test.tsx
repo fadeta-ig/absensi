@@ -78,9 +78,9 @@ describe("CleaningPage", () => {
         vi.stubGlobal("fetch", fetchMock);
         await openChecklist(fetchMock);
 
-        expect(screen.getByText("Template: Template Test Cleaning")).toBeInTheDocument();
-        expect(screen.getByText("BELUM")).toBeInTheDocument();
-        expect(screen.getByText("Belum diubah")).toBeInTheDocument();
+        expect(screen.getByText("Daftar pekerjaan: Template Test Cleaning")).toBeInTheDocument();
+        expect(screen.getByText("Belum selesai")).toBeInTheDocument();
+        expect(screen.getByText("Belum dikerjakan")).toBeInTheDocument();
     });
 
     it("AC-1 gives a clear recoverable ROOM_NOT_READY state", async () => {
@@ -114,7 +114,7 @@ describe("CleaningPage", () => {
 
         await userEvent.click(screen.getByRole("button", { name: /Lantai/i }));
 
-        expect(await screen.findByText("SELESAI")).toBeInTheDocument();
+        expect(await screen.findByText("Sudah selesai")).toBeInTheDocument();
         expect(screen.getByText(/Cleaning Test Worker/)).toBeInTheDocument();
     });
 
@@ -127,7 +127,7 @@ describe("CleaningPage", () => {
         await userEvent.click(screen.getByRole("button", { name: /Lantai/i }));
         await waitFor(() => expect(clientMocks.toast).toHaveBeenCalledWith("Gagal menyimpan.", "error"));
 
-        expect(screen.getByText("BELUM")).toBeInTheDocument();
+        expect(screen.getByText("Belum selesai")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /Lantai/i })).not.toHaveClass("bg-green-50");
     });
 
@@ -140,7 +140,7 @@ describe("CleaningPage", () => {
         await userEvent.click(screen.getByRole("button", { name: /Lantai/i }));
         await waitFor(() => expect(clientMocks.toast).toHaveBeenCalledWith("Network unavailable", "error"));
 
-        expect(screen.getByText("BELUM")).toBeInTheDocument();
+        expect(screen.getByText("Belum selesai")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /Lantai/i })).not.toHaveClass("bg-green-50");
     });
 });

@@ -523,6 +523,9 @@ export async function seedCompanyStructure() {
 
 async function main() {
     try {
+        console.log("⚠️  SEED INI MENGHAPUS DATA (wipe). Hanya untuk database kosong/lokal.");
+        const { assertSafeToWipe } = await import("./seedSafety");
+        await assertSafeToWipe(prisma, "prisma/seedCompanyStructure.ts");
         await seedCompanyStructure();
     } catch (e) {
         console.error("❌ Seeding failed:", e);

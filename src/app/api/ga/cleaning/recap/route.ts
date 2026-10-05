@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { getRecap, isWig002, CleaningError } from "@/lib/services/cleaningService";
+import { getRecap, requireWig002OrTopViewer, CleaningError } from "@/lib/services/cleaningService";
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    try {
+        await requireWig002OrTopViewer(session);
+    } catch {
+        return forbiddenResponse();
+    }
 
     try {
         const { searchParams } = new URL(request.url);

@@ -41,30 +41,36 @@ describe("CleaningRecapPage", () => {
     });
 
     it("AC-7 opens stored detail with status, actor, and WIB time", async () => {
+        // Bulan berjalan dinamis: halaman default ke bulan kini (drift Sep→Okt 2026 pernah merah).
+        const now = new Date();
+        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const dayDone = `${month}-20`;
+        const dayFuture = `${month}-22`;
+        const monthLabel = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date(`${month}-15T00:00:00`));
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
-            if (url.includes("recap?month=2026-09")) {
+            if (url.includes(`recap?month=${month}`)) {
                 return response({
                     data: {
-                        month: "2026-09",
-                        dates: ["2026-09-20", "2026-09-22"],
+                        month,
+                        dates: [dayDone, dayFuture],
                         matrix: [{
                             room: { id: CLEANING_IDS.room, name: "Ruang Test Cleaning" },
                             days: [
-                                { date: "2026-09-20", status: "SELESAI" },
-                                { date: "2026-09-22", status: "FUTURE" },
+                                { date: dayDone, status: "SELESAI" },
+                                { date: dayFuture, status: "FUTURE" },
                             ],
                         }],
                     },
                 });
             }
-            if (url.includes("date=2026-09-20")) {
+            if (url.includes(`date=${dayDone}`)) {
                 return response({
                     data: {
                         type: "record",
                         checklist: {
                             id: CLEANING_IDS.checklist,
-                            wibDate: "2026-09-20",
+                            wibDate: dayDone,
                             roomNameSnapshot: "Ruang Test Cleaning",
                             derivedStatus: "SELESAI",
                             items: [{
@@ -72,7 +78,7 @@ describe("CleaningRecapPage", () => {
                                 itemNameSnapshot: "Lantai",
                                 isActive: true,
                                 isComplete: true,
-                                lastChangedAt: "2026-09-20T03:15:00.000Z",
+                                lastChangedAt: `${dayDone}T03:15:00.000Z`,
                                 lastChangedBy: { id: CLEANING_IDS.workerUser, displayName: "Cleaning Test Worker" },
                             }],
                         },
@@ -85,13 +91,13 @@ describe("CleaningRecapPage", () => {
         const user = userEvent.setup();
 
         render(<CleaningRecapPage />);
-        expect(await screen.findByText("September 2026")).toBeInTheDocument();
-        await user.click(await screen.findByTitle("Ruang Test Cleaning - 2026-09-20: SELESAI"));
+        expect(await screen.findByText(monthLabel)).toBeInTheDocument();
+        await user.click(await screen.findByTitle(`Ruang Test Cleaning - ${dayDone}: SELESAI`));
 
         expect(await screen.findByText("Lantai")).toBeInTheDocument();
         expect(screen.getByText(/Cleaning Test Worker/)).toBeInTheDocument();
         expect(fetchMock).toHaveBeenCalledWith(
-            `/api/ga/cleaning/checklists?roomId=${CLEANING_IDS.room}&date=2026-09-20`,
+            `/api/ga/cleaning/checklists?roomId=${CLEANING_IDS.room}&date=${dayDone}`,
         );
     });
 

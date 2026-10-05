@@ -1,15 +1,40 @@
 import { prisma } from "@/lib/prisma";
 import { toWIBDateString } from "@/lib/timezone";
 import { PERMISSIONS } from "@/lib/permissions";
-import { isWig002, CleaningError } from "@/lib/services/cleaningService";
+import { isWig002, requireWig002OrTopViewer, monthWibDateRange, CleaningError } from "@/lib/services/cleaningService";
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import crypto from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { getUploadLimit } from "@/lib/services/appSettingsService";
+import { getUploadLimit, isCleaningTopViewer } from "@/lib/services/appSettingsService";
 import logger from "@/lib/logger";
+
+/**
+ * Kapabilitas cleaning per employee untuk gating menu (ringan: 2 query hitung).
+ * isReviewer = ditugaskan sebagai INSPECTED_BY/KNOWN_BY pada bulan berjalan
+ * atau bulan mendatang; isTopViewer = employeeId == setting atasan tertinggi.
+ */
+export async function getEmployeeCleaningCapabilities(
+    session: SessionPayload
+): Promise<{ isReviewer: boolean; isTopViewer: boolean }> {
+    if (!session.employeeId) return { isReviewer: false, isTopViewer: false };
+    const currentMonth = toWIBDateString(new Date()).slice(0, 7);
+    const [reviewerCount, topViewer] = await Promise.all([
+        prisma.cleaningMonthlyApproval.count({
+            where: {
+                monthWib: { gte: currentMonth },
+                OR: [
+                    { inspectedByEmployeeId: session.employeeId },
+                    { knownByEmployeeId: session.employeeId },
+                ],
+            },
+        }),
+        isCleaningTopViewer(session).catch(() => false),
+    ]);
+    return { isReviewer: reviewerCount > 0, isTopViewer: topViewer };
+}
 
 export type ApprovalDerivedStatus = "WAITING_FOR_SIGNATURES" | "PARTIALLY_SIGNED" | "COMPLETE";
 
@@ -27,7 +52,75 @@ export function validateMonthWib(month: string): void {
 
 export function getDaysInMonth(month: string): number {
     const [year, m] = month.split("-").map(Number);
-    return new Date(year, m, 0).getDate();
+    const isLeapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+    const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return daysInMonth[m - 1];
+}
+
+const ID_MONTH_LONG = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+];
+
+const ID_MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+export function formatMonthWibId(monthWib: string): string {
+    const [y, m] = monthWib.split("-").map(Number);
+    if (!y || !m || m < 1 || m > 12) return monthWib;
+    return `${ID_MONTH_LONG[m - 1]} ${y}`;
+}
+
+export function formatWibDateShortId(wibDate: string): string {
+    const [y, m, d] = wibDate.split("-").map(Number);
+    if (!y || !m || !d || m < 1 || m > 12) return wibDate;
+    return `${d} ${ID_MONTH_SHORT[m - 1]} ${y}`;
+}
+
+/** Tanggal terakhir kalender bulan itu (pure calendar, tanpa host timezone). */
+export function getLastDateOfMonth(monthWib: string): string {
+    validateMonthWib(monthWib);
+    const [year, m] = monthWib.split("-").map(Number);
+    const isLeapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
+    const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return `${monthWib}-${String(daysInMonth[m - 1]).padStart(2, "0")}`;
+}
+
+export function getMonthSignInfo(monthWib: string, wibToday: string = toWIBDateString(new Date())): {
+    lastDate: string;
+    opensOnWibDate: string;
+    wibToday: string;
+    isSignable: boolean;
+} {
+    const lastDate = getLastDateOfMonth(monthWib);
+    return { lastDate, opensOnWibDate: lastDate, wibToday, isSignable: wibToday >= lastDate };
+}
+
+/**
+ * Kunci TTD akhir bulan — satu logika untuk INSPECTED_BY + KNOWN_BY.
+ * Boleh mulai tanggal terakhir bulan itu jam 00.00 WIB; susulan bulan lalu tetap boleh.
+ */
+export function assertMonthSignable(
+    monthWib: string,
+    role: "INSPECTED_BY" | "KNOWN_BY",
+    wibToday: string = toWIBDateString(new Date())
+): void {
+    const info = getMonthSignInfo(monthWib, wibToday);
+    if (info.isSignable) return;
+    const roleLabel = role === "INSPECTED_BY" ? "Diperiksa Oleh" : "Mengetahui";
+    throw new CleaningError(
+        `Tanda tangan ${roleLabel} untuk periode ${formatMonthWibId(monthWib)} baru dapat dilakukan mulai ${formatWibDateShortId(info.opensOnWibDate)} pukul 00.00 WIB (akhir bulan). Silakan kembali setelah tanggal tersebut.`,
+        422
+    );
 }
 
 export function deriveApprovalStatus(
@@ -182,6 +275,60 @@ export async function getLatestChecklistChange(
     }
 
     return maxTimestamp ? { timestamp: maxTimestamp, actorName } : null;
+}
+
+/**
+ * Batch 1 query untuk banyak ruangan: perubahan checklist terakhir per room
+ * dalam satu bulan. Hindari N+1 `getLatestChecklistChange` per approval.
+ */
+export async function getLatestChecklistChangeMap(
+    db: Prisma.TransactionClient | typeof prisma,
+    roomIds: string[],
+    monthWib: string
+): Promise<Map<string, { timestamp: Date; actorName: string | null }>> {
+    const result = new Map<string, { timestamp: Date; actorName: string | null }>();
+    if (roomIds.length === 0) return result;
+    const mapRange = monthWibDateRange(monthWib);
+    const checklists = await db.cleaningDailyChecklist.findMany({
+        where: {
+            roomId: { in: roomIds },
+            wibDate: { gte: mapRange.gte, lt: mapRange.lt },
+        },
+        select: {
+            roomId: true,
+            updatedAt: true,
+            items: {
+                select: {
+                    updatedAt: true,
+                    lastChangedAt: true,
+                    lastChangedBy: {
+                        select: {
+                            displayName: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+
+    for (const cl of checklists) {
+        let maxTimestamp: Date = cl.updatedAt;
+        let actorName: string | null = null;
+        for (const item of cl.items) {
+            const itemTime = item.lastChangedAt || item.updatedAt;
+            if (itemTime > maxTimestamp) {
+                maxTimestamp = itemTime;
+                actorName = item.lastChangedBy?.displayName ?? null;
+            }
+        }
+        if (maxTimestamp) {
+            const current = result.get(cl.roomId);
+            if (!current || maxTimestamp > current.timestamp) {
+                result.set(cl.roomId, { timestamp: maxTimestamp, actorName });
+            }
+        }
+    }
+    return result;
 }
 
 export async function getValidatedInternalEmployee(
@@ -396,6 +543,165 @@ export async function openApprovalPeriod(
     }
 }
 
+/**
+ * Pastikan baris approval ruangan-bulan ada, memakai pasangan default global.
+ * Tanpa fallback-baca: pembaca tetap strict (tanpa baris = terkunci), baris
+ * dibuat otomatis di sini (paraf/TTD pertama) atau via open-all / modal.
+ * Idempoten (unique room+month + P2002 → reload).
+ */
+export async function ensureMonthlyApproval(
+    db: Prisma.TransactionClient | typeof prisma,
+    roomId: string,
+    monthWib: string,
+    actor?: { userId?: string | null; identifier: string; name?: string | null; role?: string | null }
+) {
+    validateMonthWib(monthWib);
+    const existing = await db.cleaningMonthlyApproval.findUnique({
+        where: { roomId_monthWib: { roomId, monthWib } },
+    });
+    if (existing) return { approval: existing, isNew: false };
+
+    const room = await db.cleaningRoom.findUnique({
+        where: { id: roomId },
+        select: { id: true, name: true, isActive: true },
+    });
+    if (!room || !room.isActive) {
+        throw new CleaningError("Ruangan tidak ditemukan atau tidak aktif.", 404);
+    }
+
+    const { getCleaningDefaultReviewers } = await import("@/lib/services/appSettingsService");
+    const defaults = await getCleaningDefaultReviewers();
+    if (!defaults.inspectedByEmployeeId || !defaults.knownByEmployeeId) {
+        throw new CleaningError(
+            "Pasangan default reviewer belum ditetapkan. Minta WIG002 mengaturnya di Pengaturan > Atasan.",
+            422
+        );
+    }
+
+    const wibToday = toWIBDateString(new Date());
+    const inspectedEmp = await getValidatedInternalEmployee(db, defaults.inspectedByEmployeeId, wibToday);
+    const knownEmp = await getValidatedInternalEmployee(db, defaults.knownByEmployeeId, wibToday);
+    if (inspectedEmp.employeeId === knownEmp.employeeId) {
+        throw new CleaningError("Diperiksa Oleh dan Mengetahui harus orang yang berbeda.", 422);
+    }
+
+    try {
+        const created = await db.cleaningMonthlyApproval.create({
+            data: {
+                roomId: room.id,
+                roomNameSnapshot: room.name,
+                monthWib,
+                inspectedByEmployeeId: inspectedEmp.employeeId,
+                knownByEmployeeId: knownEmp.employeeId,
+            },
+        });
+        await db.auditLog.create({
+            data: {
+                action: "OPEN_CLEANING_APPROVAL",
+                entity: "CLEANING_APPROVAL",
+                entityId: created.id,
+                actorType: "USER",
+                actorUserId: actor?.userId ?? null,
+                actorIdentifier: actor?.identifier ?? "SYSTEM",
+                actorName: actor?.name ?? null,
+                actorRole: actor?.role ?? null,
+                details: JSON.stringify({
+                    roomId: room.id,
+                    roomName: room.name,
+                    monthWib,
+                    inspectedByEmployeeId: inspectedEmp.employeeId,
+                    knownByEmployeeId: knownEmp.employeeId,
+                    source: "default",
+                }),
+            },
+        });
+        return { approval: created, isNew: true };
+    } catch (err: unknown) {
+        if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
+            const reloaded = await db.cleaningMonthlyApproval.findUniqueOrThrow({
+                where: { roomId_monthWib: { roomId, monthWib } },
+            });
+            return { approval: reloaded, isNew: false };
+        }
+        throw err;
+    }
+}
+
+/**
+ * Buka periode untuk SEMUA ruangan aktif sekaligus (bulk idempoten).
+ * Hanya WIG002 (ditegakkan di route).
+ */
+export async function openAllMonthlyApprovals(
+    session: SessionPayload,
+    monthWib: string
+): Promise<{ created: number; skipped: number; monthWib: string }> {
+    requireWig002(session);
+    validateMonthWib(monthWib);
+
+    const { getCleaningDefaultReviewers } = await import("@/lib/services/appSettingsService");
+    const defaults = await getCleaningDefaultReviewers();
+    if (!defaults.inspectedByEmployeeId || !defaults.knownByEmployeeId) {
+        throw new CleaningError(
+            "Pasangan default reviewer belum ditetapkan. Atur dulu di Pengaturan > Atasan.",
+            422
+        );
+    }
+
+    const wibToday = toWIBDateString(new Date());
+    const inspectedEmp = await getValidatedInternalEmployee(prisma, defaults.inspectedByEmployeeId, wibToday);
+    const knownEmp = await getValidatedInternalEmployee(prisma, defaults.knownByEmployeeId, wibToday);
+    if (inspectedEmp.employeeId === knownEmp.employeeId) {
+        throw new CleaningError("Diperiksa Oleh dan Mengetahui harus orang yang berbeda.", 422);
+    }
+
+    const rooms = await prisma.cleaningRoom.findMany({
+        where: { isActive: true },
+        select: { id: true, name: true },
+    });
+    const existing = await prisma.cleaningMonthlyApproval.findMany({
+        where: { monthWib, roomId: { in: rooms.map((room) => room.id) } },
+        select: { roomId: true },
+    });
+    const existingSet = new Set(existing.map((row) => row.roomId));
+    const missing = rooms.filter((room) => !existingSet.has(room.id));
+    if (missing.length === 0) {
+        return { created: 0, skipped: rooms.length, monthWib };
+    }
+
+    const result = await prisma.cleaningMonthlyApproval.createMany({
+        data: missing.map((room) => ({
+            roomId: room.id,
+            roomNameSnapshot: room.name,
+            monthWib,
+            inspectedByEmployeeId: inspectedEmp.employeeId,
+            knownByEmployeeId: knownEmp.employeeId,
+        })),
+        skipDuplicates: true,
+    });
+
+    await prisma.auditLog.create({
+        data: {
+            action: "OPEN_ALL_CLEANING_APPROVAL",
+            entity: "CLEANING_APPROVAL",
+            entityId: null,
+            actorType: "USER",
+            actorUserId: session.userId,
+            actorIdentifier: session.username,
+            actorName: session.name,
+            actorRole: session.primaryRole,
+            details: JSON.stringify({
+                monthWib,
+                inspectedByEmployeeId: inspectedEmp.employeeId,
+                knownByEmployeeId: knownEmp.employeeId,
+                requested: missing.length,
+                created: result.count,
+            }),
+        },
+    });
+
+    return { created: result.count, skipped: rooms.length - result.count, monthWib };
+}
+
 export async function reopenApprovalSlot(
     session: SessionPayload,
     data: {
@@ -450,14 +756,12 @@ export async function reopenApprovalSlot(
             );
             newEmployeeId = replacementEmp.employeeId;
         } else {
-            const currentEmployee = await tx.employee.findFirst({
-                where: {
-                    employeeId: newEmployeeId,
-                    isActive: true,
-                    userAccount: { isActive: true },
-                },
-            });
-            if (!currentEmployee) {
+            // Tanpa pengganti: karyawan saat ini wajib lolos validasi kontrak
+            // yang sama (aktif + masa kerja mencakup hari ini).
+            try {
+                const currentEmp = await getValidatedInternalEmployee(tx, newEmployeeId, wibToday);
+                newEmployeeId = currentEmp.employeeId;
+            } catch {
                 throw new CleaningError(
                     "Karyawan saat ini tidak aktif. Wajib menyertakan karyawan pengganti yang aktif.",
                     422
@@ -466,17 +770,18 @@ export async function reopenApprovalSlot(
         }
 
         const activeSig = approval.signatures[0];
-        if (activeSig) {
-            await tx.cleaningMonthlyApprovalSignature.update({
-                where: { id: activeSig.id },
-                data: {
-                    status: "REOPENED",
-                    reopenedAt: new Date(),
-                    reopenedByUserId: session.userId,
-                    reopenReason: trimmedReason,
-                },
-            });
+        if (!activeSig) {
+            throw new CleaningError("Belum ada tanda tangan pada peran ini sehingga tidak ada yang dibuka kembali.", 404);
         }
+        await tx.cleaningMonthlyApprovalSignature.update({
+            where: { id: activeSig.id },
+            data: {
+                status: "REOPENED",
+                reopenedAt: new Date(),
+                reopenedByUserId: session.userId,
+                reopenReason: trimmedReason,
+            },
+        });
 
         const updateData: { inspectedByEmployeeId?: string; knownByEmployeeId?: string } = {};
         if (data.role === "INSPECTED_BY" && newEmployeeId !== approval.inspectedByEmployeeId) {
@@ -581,6 +886,16 @@ export async function signApprovalPeriod(
 
     const wibToday = toWIBDateString(new Date());
 
+    // Kunci akhir bulan sebelum tulis file agar request yang ditolak tidak meninggalkan berkas yatim.
+    const approvalMeta = await prisma.cleaningMonthlyApproval.findUnique({
+        where: { id: data.approvalId },
+        select: { monthWib: true },
+    });
+    if (!approvalMeta) {
+        throw new CleaningError("Periode persetujuan tidak ditemukan.", 404);
+    }
+    assertMonthSignable(approvalMeta.monthWib, data.role, wibToday);
+
     // Simpan PNG baru ke disk privat (bukan base64 ke DB).
     const signatureRelativePath = path
         .join(data.approvalId, `${data.role}_${randomUUID()}.png`)
@@ -600,6 +915,9 @@ export async function signApprovalPeriod(
     let result;
     try {
         result = await prisma.$transaction(async (tx) => {
+        // Kunci baris approval selama transaksi agar dua TTD konkuren untuk
+        // peran yang sama tidak sama-sama lolos cek duplikat (tanpa migrasi schema).
+        await tx.$queryRaw`SELECT id FROM cleaning_monthly_approvals WHERE id = ${data.approvalId} FOR UPDATE`;
         const employee = await getValidatedInternalEmployee(tx, session.employeeId!, wibToday);
 
         const approval = await tx.cleaningMonthlyApproval.findUnique({
@@ -611,6 +929,9 @@ export async function signApprovalPeriod(
         if (!approval) {
             throw new CleaningError("Periode persetujuan tidak ditemukan.", 404);
         }
+
+        // Tegakkan lagi di dalam transaksi (antisipasi lewat tengah malam WIB).
+        assertMonthSignable(approval.monthWib, data.role, toWIBDateString(new Date()));
 
         const assignedEmployeeId =
             data.role === "INSPECTED_BY"
@@ -728,7 +1049,7 @@ export async function getGaApprovalDetail(
     roomId: string,
     monthWib: string
 ) {
-    requireWig002(session);
+    await requireWig002OrTopViewer(session);
     validateMonthWib(monthWib);
 
     const room = await prisma.cleaningRoom.findUnique({
@@ -774,6 +1095,7 @@ export async function getGaApprovalDetail(
             monthWib,
             latestChange,
             approval: null,
+            signable: getMonthSignInfo(monthWib, toWIBDateString(new Date())),
         };
     }
 
@@ -791,10 +1113,11 @@ export async function getGaApprovalDetail(
         return `${monthWib}-${day}`;
     });
 
+    const detailRange = monthWibDateRange(monthWib);
     const checklists = await prisma.cleaningDailyChecklist.findMany({
         where: {
             roomId,
-            wibDate: { startsWith: monthWib },
+            wibDate: { gte: detailRange.gte, lt: detailRange.lt },
         },
         include: {
             items: {
@@ -805,12 +1128,25 @@ export async function getGaApprovalDetail(
 
     const clMap = new Map(checklists.map((c) => [c.wibDate, c]));
     const wibToday = toWIBDateString(new Date());
+    const { getCleaningWeeklyOffDays } = await import("@/lib/services/appSettingsService");
+    const { isWibDateInWeeklyOffDays } = await import("@/lib/services/cleaningParafService");
+    const [gaHolidays, gaWeeklyOff] = await Promise.all([
+        prisma.cleaningHoliday.findMany({
+            where: { wibDate: { gte: detailRange.gte, lt: detailRange.lt } },
+            select: { wibDate: true },
+        }),
+        getCleaningWeeklyOffDays().catch(() => [0, 6]),
+    ]);
+    const gaHolidaySet = new Set(gaHolidays.map((h) => h.wibDate));
 
     const days = dates.map((date) => {
         const cl = clMap.get(date);
         const isFuture = date > wibToday;
         if (isFuture) {
             return { date, status: "FUTURE" as const, activeCount: 0, completedCount: 0 };
+        }
+        if (gaHolidaySet.has(date) || isWibDateInWeeklyOffDays(date, gaWeeklyOff)) {
+            return { date, status: "LIBUR" as const, activeCount: 0, completedCount: 0 };
         }
         if (!cl) {
             return { date, status: "BELUM" as const, activeCount: 0, completedCount: 0 };
@@ -830,21 +1166,21 @@ export async function getGaApprovalDetail(
         activeInspectedSig ? resolveSignatureDataUrl(activeInspectedSig) : Promise.resolve(null),
         activeKnownSig ? resolveSignatureDataUrl(activeKnownSig) : Promise.resolve(null),
     ]);
-    const history = await Promise.all(
-        approval.signatures.map(async (s) => ({
-            id: s.id,
-            role: s.role,
-            version: s.version,
-            employeeId: s.employeeId,
-            employeeName: s.employeeNameSnapshot,
-            status: s.status,
-            signedAt: s.signedAt,
-            reopenedAt: s.reopenedAt,
-            reopenReason: s.reopenReason,
-            reopenedByName: s.reopenedByUser?.displayName ?? null,
-            signaturePayload: await resolveSignatureDataUrl(s),
-        }))
-    );
+    // Riwayat tanpa payload gambar (UI hanya tampilkan teks versi/status) —
+    // payload aktif tersedia di slot inspectedBy/knownBy di atas.
+    const history = approval.signatures.map((s) => ({
+        id: s.id,
+        role: s.role,
+        version: s.version,
+        employeeId: s.employeeId,
+        employeeName: s.employeeNameSnapshot,
+        status: s.status,
+        signedAt: s.signedAt,
+        reopenedAt: s.reopenedAt,
+        reopenReason: s.reopenReason,
+        reopenedByName: s.reopenedByUser?.displayName ?? null,
+        signaturePayload: null as string | null,
+    }));
 
     return {
         id: approval.id,
@@ -886,6 +1222,7 @@ export async function getGaApprovalDetail(
         history,
         createdAt: approval.createdAt,
         updatedAt: approval.updatedAt,
+        signable: getMonthSignInfo(approval.monthWib, toWIBDateString(new Date())),
     };
 }
 
@@ -899,7 +1236,7 @@ export async function listGaApprovals(
         limit?: number;
     }
 ) {
-    requireWig002(session);
+    await requireWig002OrTopViewer(session);
     const monthWib = query.monthWib || toWIBDateString(new Date()).substring(0, 7);
     validateMonthWib(monthWib);
 
@@ -912,67 +1249,75 @@ export async function listGaApprovals(
         ...(query.roomId ? { roomId: query.roomId } : {}),
     };
 
-    const [total, rawApprovals] = await Promise.all([
-        prisma.cleaningMonthlyApproval.count({ where }),
-        prisma.cleaningMonthlyApproval.findMany({
-            where,
-            include: {
-                inspectedByEmployee: {
-                    select: { employeeId: true, name: true, isActive: true },
-                },
-                knownByEmployee: {
-                    select: { employeeId: true, name: true, isActive: true },
-                },
-                signatures: {
-                    where: { status: "SIGNED" },
-                },
+    // Ambil semua kandidat dulu (tanpa skip/take): status turunan dihitung
+    // dari signatures di memori, sehingga filter status wajib sebelum paging
+    // agar total/halaman konsisten. latestChange di-batch 1 query per bulan.
+    const rawApprovals = await prisma.cleaningMonthlyApproval.findMany({
+        where,
+        include: {
+            inspectedByEmployee: {
+                select: { employeeId: true, name: true, isActive: true },
             },
-            orderBy: [{ monthWib: "desc" }, { roomNameSnapshot: "asc" }, { id: "asc" }],
-            skip,
-            take: limit,
-        }),
-    ]);
+            knownByEmployee: {
+                select: { employeeId: true, name: true, isActive: true },
+            },
+            signatures: {
+                where: { status: "SIGNED" },
+            },
+        },
+        orderBy: [{ monthWib: "desc" }, { roomNameSnapshot: "asc" }, { id: "asc" }],
+    });
 
-    const mapped = await Promise.all(
-        rawApprovals.map(async (approval) => {
-            const inspectedSig = approval.signatures.find((s) => s.role === "INSPECTED_BY");
-            const knownSig = approval.signatures.find((s) => s.role === "KNOWN_BY");
-            const derivedStatus = deriveApprovalStatus(inspectedSig, knownSig);
-            const latestChange = await getLatestChecklistChange(prisma, approval.roomId, approval.monthWib);
-
-            return {
-                id: approval.id,
-                roomId: approval.roomId,
-                roomName: approval.roomNameSnapshot,
-                monthWib: approval.monthWib,
-                derivedStatus,
-                inspectedBy: {
-                    employeeId: approval.inspectedByEmployeeId,
-                    employeeName: approval.inspectedByEmployee.name,
-                    isActive: approval.inspectedByEmployee.isActive,
-                    signedAt: inspectedSig?.signedAt ?? null,
-                    hasChangedAfter: inspectedSig && latestChange ? inspectedSig.signedAt < latestChange.timestamp : false,
-                },
-                knownBy: {
-                    employeeId: approval.knownByEmployeeId,
-                    employeeName: approval.knownByEmployee.name,
-                    isActive: approval.knownByEmployee.isActive,
-                    signedAt: knownSig?.signedAt ?? null,
-                    hasChangedAfter: knownSig && latestChange ? knownSig.signedAt < latestChange.timestamp : false,
-                },
-                latestChange,
-                createdAt: approval.createdAt,
-                updatedAt: approval.updatedAt,
-            };
-        })
+    const latestChangeByRoom = await getLatestChecklistChangeMap(
+        prisma,
+        [...new Set(rawApprovals.map((approval) => approval.roomId))],
+        monthWib
     );
+
+    const listSignInfo = getMonthSignInfo(monthWib, toWIBDateString(new Date()));
+
+    const mapped = rawApprovals.map((approval) => {
+        const inspectedSig = approval.signatures.find((s) => s.role === "INSPECTED_BY");
+        const knownSig = approval.signatures.find((s) => s.role === "KNOWN_BY");
+        const derivedStatus = deriveApprovalStatus(inspectedSig, knownSig);
+        const latestChange = latestChangeByRoom.get(approval.roomId) ?? null;
+
+        return {
+            id: approval.id,
+            roomId: approval.roomId,
+            roomName: approval.roomNameSnapshot,
+            monthWib: approval.monthWib,
+            derivedStatus,
+            inspectedBy: {
+                employeeId: approval.inspectedByEmployeeId,
+                employeeName: approval.inspectedByEmployee.name,
+                isActive: approval.inspectedByEmployee.isActive,
+                signedAt: inspectedSig?.signedAt ?? null,
+                hasChangedAfter: inspectedSig && latestChange ? inspectedSig.signedAt < latestChange.timestamp : false,
+            },
+            knownBy: {
+                employeeId: approval.knownByEmployeeId,
+                employeeName: approval.knownByEmployee.name,
+                isActive: approval.knownByEmployee.isActive,
+                signedAt: knownSig?.signedAt ?? null,
+                hasChangedAfter: knownSig && latestChange ? knownSig.signedAt < latestChange.timestamp : false,
+            },
+            latestChange,
+            createdAt: approval.createdAt,
+            updatedAt: approval.updatedAt,
+            isSignable: listSignInfo.isSignable,
+            opensOnWibDate: listSignInfo.opensOnWibDate,
+        };
+    });
 
     const filtered = query.status && query.status !== "ALL"
         ? mapped.filter((a) => a.derivedStatus === query.status)
         : mapped;
+    const total = filtered.length;
+    const data = filtered.slice(skip, skip + limit);
 
     return {
-        data: filtered,
+        data,
         pagination: {
             page,
             limit,
@@ -1014,21 +1359,38 @@ export async function listEmployeeApprovalTasks(
         ],
     };
 
-    const [total, approvals] = await Promise.all([
-        prisma.cleaningMonthlyApproval.count({ where }),
-        prisma.cleaningMonthlyApproval.findMany({
-            where,
-            include: {
-                signatures: {
-                    where: { employeeId: session.employeeId },
-                    orderBy: { createdAt: "desc" },
-                },
+    // Ambil semua kandidat dulu: filter status + paging di level task agar
+    // total konsisten (1 approval = 1-2 task). latestChange di-batch per bulan.
+    const approvals = await prisma.cleaningMonthlyApproval.findMany({
+        where,
+        include: {
+            signatures: {
+                where: { status: "SIGNED" },
+                orderBy: { createdAt: "desc" },
             },
-            orderBy: [{ monthWib: "desc" }, { roomNameSnapshot: "asc" }, { id: "asc" }],
-            skip,
-            take: limit,
-        }),
-    ]);
+        },
+        orderBy: [{ monthWib: "desc" }, { roomNameSnapshot: "asc" }, { id: "asc" }],
+    });
+
+    const roomIdsByMonth = new Map<string, string[]>();
+    for (const app of approvals) {
+        const list = roomIdsByMonth.get(app.monthWib) ?? [];
+        list.push(app.roomId);
+        roomIdsByMonth.set(app.monthWib, list);
+    }
+    const latestChangeByKey = new Map<string, { timestamp: Date; actorName: string | null }>();
+    await Promise.all(
+        [...roomIdsByMonth.entries()].map(async ([monthWib, roomIds]) => {
+            const monthMap = await getLatestChecklistChangeMap(
+                prisma,
+                [...new Set(roomIds)],
+                monthWib
+            );
+            for (const [roomId, change] of monthMap) {
+                latestChangeByKey.set(`${roomId}|${monthWib}`, change);
+            }
+        })
+    );
 
     const tasks: Array<{
         approvalId: string;
@@ -1042,32 +1404,30 @@ export async function listEmployeeApprovalTasks(
         derivedStatus: ApprovalDerivedStatus;
         hasChangedAfterSigning: boolean;
         latestChange: { timestamp: Date; actorName: string | null } | null;
+        isSignable: boolean;
+        opensOnWibDate: string;
     }> = [];
+
+    const tasksWibToday = toWIBDateString(new Date());
 
     for (const app of approvals) {
         const rolesToProcess: Array<"INSPECTED_BY" | "KNOWN_BY"> = [];
         if (app.inspectedByEmployeeId === session.employeeId) rolesToProcess.push("INSPECTED_BY");
         if (app.knownByEmployeeId === session.employeeId) rolesToProcess.push("KNOWN_BY");
 
-        const latestChange = await getLatestChecklistChange(prisma, app.roomId, app.monthWib);
+        const latestChange = latestChangeByKey.get(`${app.roomId}|${app.monthWib}`) ?? null;
+        const insp = app.signatures.find((s) => s.role === "INSPECTED_BY");
+        const kno = app.signatures.find((s) => s.role === "KNOWN_BY");
+        const derivedStatus = deriveApprovalStatus(insp, kno);
+        const signInfo = getMonthSignInfo(app.monthWib, tasksWibToday);
 
         for (const role of rolesToProcess) {
-            const activeSig = app.signatures.find(
-                (s) => s.role === role && s.status === "SIGNED"
-            );
+            const activeSig = role === "INSPECTED_BY" ? insp : kno;
             const isSigned = Boolean(activeSig);
             const signedAt = activeSig?.signedAt ?? null;
             const hasChangedAfterSigning = Boolean(
                 activeSig && latestChange && activeSig.signedAt < latestChange.timestamp
             );
-
-            // Fetch overall derived status
-            const allSignedSigs = await prisma.cleaningMonthlyApprovalSignature.findMany({
-                where: { approvalId: app.id, status: "SIGNED" },
-            });
-            const insp = allSignedSigs.find((s) => s.role === "INSPECTED_BY");
-            const kno = allSignedSigs.find((s) => s.role === "KNOWN_BY");
-            const derivedStatus = deriveApprovalStatus(insp, kno);
 
             tasks.push({
                 approvalId: app.id,
@@ -1081,6 +1441,8 @@ export async function listEmployeeApprovalTasks(
                 derivedStatus,
                 hasChangedAfterSigning,
                 latestChange,
+                isSignable: signInfo.isSignable,
+                opensOnWibDate: signInfo.opensOnWibDate,
             });
         }
     }
@@ -1090,9 +1452,10 @@ export async function listEmployeeApprovalTasks(
         : query.status === "SIGNED"
             ? tasks.filter((t) => t.isSigned)
             : tasks;
+    const total = filteredTasks.length;
 
     return {
-        data: filteredTasks,
+        data: filteredTasks.slice(skip, skip + limit),
         pagination: {
             page,
             limit,
@@ -1123,7 +1486,6 @@ export async function getEmployeeApprovalDetail(
                 select: { employeeId: true, name: true },
             },
             signatures: {
-                where: { employeeId: session.employeeId },
                 orderBy: { createdAt: "desc" },
             },
         },
@@ -1141,9 +1503,9 @@ export async function getEmployeeApprovalDetail(
         throw new CleaningError("Anda tidak memiliki akses ke periode persetujuan ini.", 403);
     }
 
-    const userRoles: Array<"INSPECTED_BY" | "KNOWN_BY"> = [];
-    if (approval.inspectedByEmployeeId === session.employeeId) userRoles.push("INSPECTED_BY");
-    if (approval.knownByEmployeeId === session.employeeId) userRoles.push("KNOWN_BY");
+    // Kedua peran ditampilkan ke reviewer yang ditugaskan — INSPECTED_BY dan
+    // KNOWN_BY wajib bisa saling melihat TTD, status, dan riwayat satu sama lain.
+    const userRoles: Array<"INSPECTED_BY" | "KNOWN_BY"> = ["INSPECTED_BY", "KNOWN_BY"];
 
     const latestChange = await getLatestChecklistChange(prisma, approval.roomId, approval.monthWib);
 
@@ -1154,10 +1516,11 @@ export async function getEmployeeApprovalDetail(
         return `${approval.monthWib}-${day}`;
     });
 
+    const empDetailRange = monthWibDateRange(approval.monthWib);
     const checklists = await prisma.cleaningDailyChecklist.findMany({
         where: {
             roomId: approval.roomId,
-            wibDate: { startsWith: approval.monthWib },
+            wibDate: { gte: empDetailRange.gte, lt: empDetailRange.lt },
         },
         include: {
             items: {
@@ -1168,12 +1531,25 @@ export async function getEmployeeApprovalDetail(
 
     const clMap = new Map(checklists.map((c) => [c.wibDate, c]));
     const wibToday = toWIBDateString(new Date());
+    const { getCleaningWeeklyOffDays } = await import("@/lib/services/appSettingsService");
+    const { isWibDateInWeeklyOffDays } = await import("@/lib/services/cleaningParafService");
+    const [empHolidays, empWeeklyOff] = await Promise.all([
+        prisma.cleaningHoliday.findMany({
+            where: { wibDate: { gte: empDetailRange.gte, lt: empDetailRange.lt } },
+            select: { wibDate: true },
+        }),
+        getCleaningWeeklyOffDays().catch(() => [0, 6]),
+    ]);
+    const empHolidaySet = new Set(empHolidays.map((h) => h.wibDate));
 
     const days = dates.map((date) => {
         const cl = clMap.get(date);
         const isFuture = date > wibToday;
         if (isFuture) {
             return { date, status: "FUTURE" as const, activeCount: 0, completedCount: 0 };
+        }
+        if (empHolidaySet.has(date) || isWibDateInWeeklyOffDays(date, empWeeklyOff)) {
+            return { date, status: "LIBUR" as const, activeCount: 0, completedCount: 0 };
         }
         if (!cl) {
             return { date, status: "BELUM" as const, activeCount: 0, completedCount: 0 };
@@ -1189,11 +1565,8 @@ export async function getEmployeeApprovalDetail(
         };
     });
 
-    const allSigned = await prisma.cleaningMonthlyApprovalSignature.findMany({
-        where: { approvalId: approval.id, status: "SIGNED" },
-    });
-    const insp = allSigned.find((s) => s.role === "INSPECTED_BY");
-    const kno = allSigned.find((s) => s.role === "KNOWN_BY");
+    const insp = approval.signatures.find((s) => s.role === "INSPECTED_BY" && s.status === "SIGNED");
+    const kno = approval.signatures.find((s) => s.role === "KNOWN_BY" && s.status === "SIGNED");
     const derivedStatus = deriveApprovalStatus(insp, kno);
 
     const rolesDetail = await Promise.all(
@@ -1230,6 +1603,7 @@ export async function getEmployeeApprovalDetail(
         userRoles: rolesDetail,
         derivedStatus,
         latestChange,
+        signable: getMonthSignInfo(approval.monthWib, wibToday),
     };
 }
 
@@ -1238,8 +1612,28 @@ export async function getCleaningPdfExportData(
     roomId: string,
     monthWib: string
 ) {
-    if (!isWig002(session) && !session.permissions.includes(PERMISSIONS.EMPLOYEE_SELF)) {
-        throw new CleaningError("Anda tidak memiliki akses untuk mengekspor PDF persetujuan.", 403);
+    if (isWig002(session)) {
+        // WIG002 boleh mengekspor semua ruangan.
+    } else if (await isCleaningTopViewer(session).catch(() => false)) {
+        // Atasan tertinggi viewer boleh mengekspor semua ruangan (baca).
+    } else {
+        if (!session.employeeId || !session.permissions.includes(PERMISSIONS.EMPLOYEE_SELF)) {
+            throw new CleaningError("Anda tidak memiliki akses untuk mengekspor PDF persetujuan.", 403);
+        }
+        const review = await prisma.cleaningMonthlyApproval.findFirst({
+            where: {
+                roomId,
+                monthWib: monthWib.slice(0, 7),
+                OR: [
+                    { inspectedByEmployeeId: session.employeeId },
+                    { knownByEmployeeId: session.employeeId },
+                ],
+            },
+            select: { id: true },
+        });
+        if (!review) {
+            throw new CleaningError("Anda tidak memiliki akses untuk mengekspor PDF persetujuan.", 403);
+        }
     }
     validateMonthWib(monthWib);
 
@@ -1262,6 +1656,9 @@ export async function getCleaningPdfExportData(
 
     const daysInMonth = getDaysInMonth(monthWib);
     const wibToday = toWIBDateString(new Date());
+    if (monthWib > wibToday.slice(0, 7)) {
+        throw new CleaningError("Tidak dapat mengekspor PDF untuk bulan mendatang.", 422);
+    }
 
     const approval = await prisma.cleaningMonthlyApproval.findUnique({
         where: {
@@ -1286,13 +1683,21 @@ export async function getCleaningPdfExportData(
     const activeInspectedSig = approval?.signatures.find((s) => s.role === "INSPECTED_BY");
     const activeKnownSig = approval?.signatures.find((s) => s.role === "KNOWN_BY");
 
+    const monthRange = monthWibDateRange(monthWib);
     const checklists = await prisma.cleaningDailyChecklist.findMany({
         where: {
             roomId,
-            wibDate: { startsWith: monthWib },
+            wibDate: { gte: monthRange.gte, lt: monthRange.lt },
         },
         include: {
-            items: true,
+            items: {
+                select: {
+                    templateItemId: true,
+                    itemNameSnapshot: true,
+                    isActive: true,
+                    isComplete: true,
+                },
+            },
         },
     });
 
@@ -1319,7 +1724,7 @@ export async function getCleaningPdfExportData(
                 return { day: idx + 1, isComplete: false, isFuture: false };
             }
             const snapshotItem = cl.items.find(
-                (ci) => ci.templateItemId === item.id || ci.itemNameSnapshot.trim().toLowerCase() === item.nameNormalized
+                (ci) => ci.templateItemId === item.id
             );
             const isComplete = Boolean(snapshotItem && snapshotItem.isActive && snapshotItem.isComplete);
             return { day: idx + 1, isComplete, isFuture: false };
@@ -1351,7 +1756,7 @@ export async function getCleaningPdfExportData(
         inspectedBy: {
             employeeName: approval?.inspectedByEmployee.name ?? "-",
             employeeId: approval?.inspectedByEmployeeId ?? "-",
-            position: approval?.inspectedByEmployee.positionRel?.name ?? "Manager",
+            position: approval?.inspectedByEmployee.positionRel?.name ?? null,
             signedAt: activeInspectedSig?.signedAt ? activeInspectedSig.signedAt.toISOString() : null,
             signaturePayload: inspectedPayload,
             signaturePath: activeInspectedSig?.signaturePath ?? null,
@@ -1359,7 +1764,7 @@ export async function getCleaningPdfExportData(
         knownBy: {
             employeeName: approval?.knownByEmployee.name ?? "-",
             employeeId: approval?.knownByEmployeeId ?? "-",
-            position: approval?.knownByEmployee.positionRel?.name ?? "Direksi",
+            position: approval?.knownByEmployee.positionRel?.name ?? null,
             signedAt: activeKnownSig?.signedAt ? activeKnownSig.signedAt.toISOString() : null,
             signaturePayload: knownPayload,
             signaturePath: activeKnownSig?.signaturePath ?? null,
