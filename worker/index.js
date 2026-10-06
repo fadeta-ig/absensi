@@ -6,11 +6,11 @@ self.addEventListener("push", function (event) {
 
     try {
         const data = event.data.json();
-        const title = data.title || "WIG Absensi";
+        const title = data.title || "WIG HRIS";
         const options = {
             body: data.body || "",
-            icon: data.icon || "/icons/icon-192x192.svg",
-            badge: data.badge || "/icons/icon-192x192.svg",
+            icon: data.icon || "/icons/android-chrome-192x192.png",
+            badge: data.badge || "/icons/android-chrome-192x192.png",
             tag: data.tag || "default",
             vibrate: [200, 100, 200],
             data: {

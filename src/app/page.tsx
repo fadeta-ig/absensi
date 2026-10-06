@@ -114,9 +114,10 @@ export default function LoginPage() {
         <div className="flex flex-col items-center gap-4">
           <div className="w-16 h-16 relative">
             <Image
-              src="/assets/Logo WIG.png"
-              alt="WIG Logo"
+              src="/assets/logo.png"
+              alt="WIG HRIS"
               fill
+              sizes="64px"
               className="object-contain"
               priority
             />
@@ -143,9 +144,10 @@ export default function LoginPage() {
           <div className="flex flex-col items-center mb-8">
             <div className="w-16 h-16 relative mb-4">
               <Image
-                src="/assets/Logo WIG.png"
-                alt="WIG Logo"
+                src="/assets/logo.png"
+                alt="WIG HRIS"
                 fill
+                sizes="64px"
                 className="object-contain"
                 priority
               />

@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
             const payload = JSON.stringify({
                 title,
                 body,
-                icon: "/icons/icon-192x192.svg",
-                badge: "/icons/icon-192x192.svg",
+                icon: "/icons/android-chrome-192x192.png",
+                badge: "/icons/android-chrome-192x192.png",
                 tag: `daily-greeting-${now.toISOString().split("T")[0]}`,
             });
 

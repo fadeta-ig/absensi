@@ -202,8 +202,8 @@ export default function AppShell({
             <header className="fixed top-0 left-0 right-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
                 {hideMobileHamburger ? (
                     <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 relative shrink-0">
-                            <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" priority />
+                        <div className="w-7 h-7 relative shrink-0 bg-white rounded-md p-0.5">
+                            <Image src="/assets/logo.png" alt="WIG HRIS" fill sizes="28px" className="object-contain" priority />
                         </div>
                         <span className="text-sm font-bold tracking-tight text-[var(--primary)]">{mobileTitle}</span>
                     </div>
@@ -216,8 +216,8 @@ export default function AppShell({
                             <Menu className="w-5 h-5 text-[var(--text-primary)]" />
                         </button>
                         <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 relative">
-                                <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
+                            <div className="w-6 h-6 relative bg-white rounded-md p-0.5">
+                                <Image src="/assets/logo.png" alt="WIG HRIS" fill sizes="24px" className="object-contain" />
                             </div>
                             <span className="text-sm font-bold text-[var(--primary)]">{mobileTitle}</span>
                         </div>
@@ -234,8 +234,8 @@ export default function AppShell({
                 {/* Brand */}
                 <div className={`p-4 flex items-center border-b border-[var(--border)] min-h-[64px] relative transition-all ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
                     <div className={`flex items-center gap-3 w-full ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                        <div className="w-8 h-8 relative shrink-0">
-                            <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
+                        <div className="w-8 h-8 relative shrink-0 bg-white rounded-md p-0.5">
+                            <Image src="/assets/logo.png" alt="WIG HRIS" fill sizes="32px" className="object-contain" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <h2 className="text-sm font-bold text-[var(--text-primary)] truncate">{brandTitle}</h2>
@@ -244,8 +244,8 @@ export default function AppShell({
                     </div>
 
                     {/* Icon-only logo saat collapsed */}
-                    <div className={`w-8 h-8 relative shrink-0 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
-                        <Image src="/assets/Logo WIG.png" alt="WIG" fill className="object-contain" />
+                    <div className={`w-8 h-8 relative shrink-0 bg-white rounded-md p-0.5 ${sidebarCollapsed ? "hidden lg:block" : "hidden"}`}>
+                        <Image src="/assets/logo.png" alt="WIG HRIS" fill sizes="32px" className="object-contain" />
                     </div>
 
                     {/* Toggle collapse (desktop) - Floating Button */}

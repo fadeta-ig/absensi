@@ -285,8 +285,8 @@ function QrLabel({ asset }: { asset: AssetWithHistory }) {
             }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                    src="/assets/Logo WIG.png"
-                    alt="WIG Logo"
+                    src="/assets/logo.png"
+                    alt="WIG HRIS"
                     style={{ height: "22px", width: "auto", objectFit: "contain" }}
                 />
                 <span style={{

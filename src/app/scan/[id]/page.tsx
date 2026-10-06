@@ -440,7 +440,7 @@ function ScanPageInner({ id }: { id: string }) {
             {/* ── Compact Header ── */}
             <div className="bg-[var(--card)] border-b px-5 py-4 flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/assets/Logo WIG.png" alt="WIG" className="h-6 w-auto object-contain" />
+                <img src="/assets/logo.png" alt="WIG HRIS" className="h-6 w-auto object-contain" />
                 <div className="h-4 w-px bg-slate-200" />
                 <span className="text-xs font-semibold text-[var(--text-secondary)]">Asset Management</span>
             </div>
