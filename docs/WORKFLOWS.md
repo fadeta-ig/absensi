@@ -103,42 +103,89 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
 
 ---
 
-## 4. Production Build & Deployment Workflow
+## 4. Production Build & Deployment Workflow (VPS)
 
-1. **Pemeriksaan Linting & Type-Check**:
+> **Peta port VPS (audit `ss` + `nginx -T`, 2026-10-06):** hris → **3002**
+> (nginx `hris.wijayainovasi.co.id` proxy ke `127.0.0.1:3002`), dashboard-infra
+> → **3000** (pemilik sah, jangan direbut/dimatikan). Start hris SELALU
+> dengan port eksplisit `-p 3002` seperti di bawah. Prinsip: **audit dulu
+> (`ss`, nginx, `pm2 show`), eksekusi kemudian** — jangan `kill`, `reset`,
+> `seed`, atau `reload` tanpa bukti.
+
+1. **Audit pra-deploy (read-only, di VPS):**
    ```bash
+   cd /var/www/hris
+   git status --short
+   git log -1 --oneline
+   pm2 list
+   ss -ltnp | grep -E "next-server|node"
+   grep -rn "proxy_pass" /etc/nginx/sites-enabled/ | head -n 20
+   sudo nginx -t
+   ```
+   Pastikan tree bersih, tahu app apa di port berapa, dan vhost nginx
+   mengarah ke mana. Port 3002 harus kosong (atau ditempati hris sendiri
+   yang memang mau di-restart).
+
+2. **Backup (wajib):**
+   ```bash
+   mysqldump -u root -p hris_db > ~/backups/hris/hris_db-$(date +%F_%H%M).sql
+   cp .env .env.bak-$(date +%F)
+   ```
+
+3. **Tarik kode + dependensi + cek:**
+   ```bash
+   git pull
+   npm ci
    npm run lint
    npx tsc --noEmit
    ```
-2. **Build Bundle Produksi**:
+
+4. **Skema database (preview dulu, tanpa `--force-reset` selamanya):**
+   ```bash
+   npx prisma validate
+   export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | sed -e 's/^"//' -e 's/"$//' -e 's/\r$//')"
+   npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script > /tmp/db-diff.sql
+   cat /tmp/db-diff.sql
+   ```
+   Catatan `.env` berquote: nilai terbungkus `"..."`, jadi export mentah
+   menghasilkan URL invalid (P1013). Selalu strip kutip seperti di atas.
+   Lanjut `db:push` HANYA bila diff aditif (`ADD COLUMN NULL`,
+   `CREATE TABLE/INDEX`, `ALTER ... DEFAULT`). Bila ada `DROP`, hentikan.
+   ```bash
+   npm run db:push
+   npx prisma generate
+   ```
+   Bila `db:push` memberi peringatan data-loss, jawab `N` dulu lalu
+   verifikasi read-only (contoh: `SELECT DISTINCT` kolom yang di-cast; cek
+   duplikat via `GROUP BY ... HAVING COUNT(*)>1`). Baru ulangi dan jawab `y`.
+
+5. **Build + start + verifikasi:**
    ```bash
    npm run build
-   ```
-   Proses ini akan mengompilasi rute Next.js, mengoptimasi aset, dan men-generate berkas PWA (`public/sw.js`).
-
-3. **Menjalankan Layanan Produksi dengan PM2**:
-   ```bash
-   pm2 start ecosystem.config.js
+   pm2 delete hris
+   pm2 start ./node_modules/next/dist/bin/next --name hris --max-memory-restart 1G -- start -H 127.0.0.1 -p 3002
    pm2 save
+   sleep 8
+   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3002
+   pm2 logs hris --lines 10 --nostream
    ```
+   Pakai `restart`/`delete+start` (bukan `reload`: mode fork + wrapper `npm`
+   rawan race EADDRINUSE). Bila `EADDRINUSE`: JANGAN kill membabi buta —
+   identifikasi penghuni (`ss -ltnp`, `ps -o pid,ppid,cmd -p <pid>`,
+   `readlink /proc/<pid>/cwd`, cocokkan `proxy_pass` nginx). Hanya sentuh
+   proses yang terbukti sisa hris sendiri.
+   Smoke test: login + 1 presensi + buka halaman fitur yang di-deploy.
 
-4. **Konfigurasi Auto-Start saat VPS Reboot**:
-   Agar aplikasi dan PM2 otomatis hidup kembali saat server VPS melakukan reboot:
+6. **Konfigurasi Auto-Start saat VPS Reboot:**
    ```bash
    pm2 startup
    # Jalankan perintah 'sudo env PATH=...' yang direkomendasikan di terminal
    pm2 save
    ```
 
-5. **Pemulihan Cepat Pasca-Reboot VPS**:
-   Gunakan script otomatis:
-   ```bash
-   chmod +x scripts/vps-service-manager.sh
-   ./scripts/vps-service-manager.sh
-   ```
-   Atau pemulihan manual:
-   ```bash
-   sudo systemctl start mariadb nginx
-   pm2 resurrect || pm2 start ecosystem.config.js
-   ```
+7. **Larangan production:**
+   `db:seed*`, `db:reset*`, `migrate reset/dev`, `db push --force-reset` /
+   `--accept-data-loss`, `ALLOW_DESTRUCTIVE_SEED=1`, update mayor
+   Prisma/Next tanpa panduan resmi, `kill [-9]` tanpa audit, `pm2 reload`
+   untuk app ini, commit `.env`/`*.sql`/`storage`/`logs`.
 
