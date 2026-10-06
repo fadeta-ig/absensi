@@ -219,7 +219,6 @@ Kontrak notulen penting:
 Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization: Bearer <CRON_SECRET>`.
 | Rute | Jadwal Rekomendasi | Deskripsi Tugas |
 |---|---|---|
-| `/api/cron/birthday-reminder` | Harian (Pagi) | Mengirimkan email notifikasi pengingat ulang tahun H-30, H-14, H-7 ke HR. |
 | `/api/cron/daily-greeting` | Harian (Pagi) | Mengirimkan ucapan selamat ulang tahun otomatis kepada staf yang berulang tahun. |
 | `/api/cron/cleanup-photos` | Mingguan | Pembersihan cache foto selfie sementara yang sudah diverifikasi dan kadaluarsa. |
 | `/api/cron/generate-payroll` | Bulanan | Otomasi kalkulasi draf rekapitulasi penggajian bulanan periode berjalan. |

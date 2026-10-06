@@ -50,12 +50,11 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
 - Seluruh komunikasi data antar UI dan backend menggunakan format JSON murni (`application/json`) atau `multipart/form-data` untuk unggahan berkas.
 
 ### B. Cron & Background Schedulers (`/api/cron/*`)
-- Menyediakan 5 endpoint tugas berkala:
-  1. `/api/cron/birthday-reminder` (cek ulang tahun pegawai harian pukul 08:00 WIB).
-  2. `/api/cron/cleanup-photos` (pembersihan berkas sementara/usang).
-  3. `/api/cron/daily-greeting` (broadcast pengingat harian).
-  4. `/api/cron/generate-payroll` (agregasi otomatis gaji bulanan).
-  5. `/api/cron/reset-leave` (pembaharuan kuota cuti tahunan).
+- Menyediakan 4 endpoint tugas berkala (cron `birthday-reminder` dihapus 2026-10-06; modul/fungsi birthday tetap ada, hanya pemicu otomatisnya yang dimatikan):
+  1. `/api/cron/cleanup-photos` (pembersihan berkas sementara/usang).
+  2. `/api/cron/daily-greeting` (broadcast pengingat harian).
+  3. `/api/cron/generate-payroll` (agregasi otomatis gaji bulanan).
+  4. `/api/cron/reset-leave` (pembaharuan kuota cuti tahunan).
 - **Otentikasi Cron**:
   - Dilindungi menggunakan header `Authorization: Bearer <CRON_SECRET>` untuk pemanggil sistem eksternal (seperti crontab / systemd timer), atau sesi HR Admin yang sah (`canManageHr`).
 
