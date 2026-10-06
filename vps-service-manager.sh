@@ -73,12 +73,8 @@ else
         pm2 delete absensi-wig || true
         pm2 start ecosystem.config.js
     else
-        echo -e "  🚀 Memulai proses $APP_NAME via ecosystem.config.js..."
-        if [ -f "ecosystem.config.js" ]; then
-            pm2 start ecosystem.config.js
-        else
-            pm2 start npm --name "$APP_NAME" -- run start:host
-        fi
+        echo -e "  🚀 Memulai proses $APP_NAME langsung via biner next (port 3002, lihat docs/WORKFLOWS.md)..."
+        pm2 start ./node_modules/next/dist/bin/next --name "$APP_NAME" --max-memory-restart 1G -- start -H 127.0.0.1 -p 3002
     fi
     pm2 save
 fi
