@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Settings,
     Calendar,
@@ -20,6 +20,7 @@ import {
     TableCell,
 } from "@/components/ui/table";
 import type { GreenMeetingConfig, GreenMeetingHoliday, GreenMeetingUnit } from "../types";
+import { toWIBDateString } from "@/lib/timezone";
 
 interface SettingsTabProps {
     config: GreenMeetingConfig | null;
@@ -38,6 +39,7 @@ interface SettingsTabProps {
     onAddHoliday: (data: { date: string; description: string; isRecurring?: boolean }) => Promise<void>;
     onDeleteHoliday: (id: string) => Promise<void>;
     loading?: boolean;
+    pendingUnitId?: string | null;
 }
 
 const DAYS_MAP = [
@@ -50,6 +52,15 @@ const DAYS_MAP = [
     { value: 6, label: "Sabtu" },
 ];
 
+function parseOffDays(raw: string | undefined): number[] {
+    if (!raw) return [0, 6];
+    const days = raw
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+    return [...new Set(days)].sort((a, b) => a - b);
+}
+
 export default function SettingsTab({
     config,
     holidays,
@@ -58,16 +69,30 @@ export default function SettingsTab({
     onUpdateUnit,
     onAddHoliday,
     onDeleteHoliday,
+    pendingUnitId = null,
 }: SettingsTabProps) {
-    // Config Form
-    const [defaultRoom, setDefaultRoom] = useState(config?.defaultRoom || "Ruang Rapat Utama Lt. 2");
-    const [defaultTime, setDefaultTime] = useState(config?.defaultTime || "08:30");
-    const [maxExtensions, setMaxExtensions] = useState(config?.maxDeadlineExtensions || 3);
-    const [offDays, setOffDays] = useState<number[]>(
-        (config?.offDaysWeekly || "0,6").split(",").map(Number)
-    );
+    // Config Form (sinkron saat config dari server tiba; jangan tampilkan default palsu)
+    const [defaultRoom, setDefaultRoom] = useState(config?.defaultRoom ?? "");
+    const [defaultTime, setDefaultTime] = useState(config?.defaultTime ?? "");
+    const [maxExtensions, setMaxExtensions] = useState(config?.maxDeadlineExtensions ?? 3);
+    const [offDays, setOffDays] = useState<number[]>(() => parseOffDays(config?.offDaysWeekly));
     const [savingConfig, setSavingConfig] = useState(false);
     const [configSavedToast, setConfigSavedToast] = useState(false);
+    const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (!config) return;
+        setDefaultRoom(config.defaultRoom);
+        setDefaultTime(config.defaultTime);
+        setMaxExtensions(config.maxDeadlineExtensions);
+        setOffDays(parseOffDays(config.offDaysWeekly));
+    }, [config]);
+
+    useEffect(() => {
+        return () => {
+            if (toastTimer.current) clearTimeout(toastTimer.current);
+        };
+    }, []);
 
     // Holiday Form
     const [holidayDate, setHolidayDate] = useState("");
@@ -88,11 +113,12 @@ export default function SettingsTab({
             await onUpdateConfig({
                 defaultRoom: defaultRoom.trim(),
                 defaultTime: defaultTime.trim(),
-                maxDeadlineExtensions: Number(maxExtensions),
-                offDaysWeekly: offDays.join(","),
+                maxDeadlineExtensions: maxExtensions,
+                offDaysWeekly: [...offDays].sort((a, b) => a - b).join(","),
             });
             setConfigSavedToast(true);
-            setTimeout(() => setConfigSavedToast(false), 3000);
+            if (toastTimer.current) clearTimeout(toastTimer.current);
+            toastTimer.current = setTimeout(() => setConfigSavedToast(false), 3000);
         } finally {
             setSavingConfig(false);
         }
@@ -138,6 +164,11 @@ export default function SettingsTab({
                 )}
 
                 <form onSubmit={handleSaveConfig} className="space-y-4">
+                    {!config && (
+                        <p className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+                            Memuat konfigurasi tersimpan…
+                        </p>
+                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-xs font-semibold text-foreground mb-1.5">
@@ -244,6 +275,7 @@ export default function SettingsTab({
                             type="date"
                             value={holidayDate}
                             onChange={(e) => setHolidayDate(e.target.value)}
+                            min={toWIBDateString()}
                             className="w-full px-3 py-2 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                             required
                         />
@@ -357,6 +389,7 @@ export default function SettingsTab({
                                             <input
                                                 type="checkbox"
                                                 checked={u.isActiveInMeeting}
+                                                disabled={pendingUnitId === u.id}
                                                 onChange={(e) =>
                                                     onUpdateUnit(u.id, { isActiveInMeeting: e.target.checked })
                                                 }
@@ -370,6 +403,7 @@ export default function SettingsTab({
                                             <input
                                                 type="checkbox"
                                                 checked={u.isDefaultRequired}
+                                                disabled={pendingUnitId === u.id}
                                                 onChange={(e) =>
                                                     onUpdateUnit(u.id, { isDefaultRequired: e.target.checked })
                                                 }

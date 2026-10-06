@@ -47,10 +47,10 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **SimCard (`sim_cards`)**: Inventaris kartu SIM korporat yang dipinjamkan ke staf tertentu.
 
 ### D. Green Meeting
-- **Pemilik Operasional**: General Affairs bertanggung jawab permanen atas konfigurasi, sesi, presensi departemen, notulen, tindak lanjut, dan laporan. HR dan karyawan berperan sebagai pembaca/pemantau; Super Admin memiliki override sistem.
-- **Peserta Rapat**: Partisipasi dikelola per `Department` melalui `GreenMeetingUnit`. Menonaktifkan departemen mengeluarkannya dari daftar presensi rapat.
-- **Status Presensi**: `HADIR`, `IZIN`, dan `ALPA`. Semua peserta sesi baru dimulai sebagai `ALPA`; alasan wajib untuk `IZIN`.
-- **Jenis Notulen**: `INFORMASI` hanya menyampaikan informasi; `TUGAS` membutuhkan tindak lanjut dan Deadline 1.
+- **Pemilik Operasional**: General Affairs bertanggung jawab permanen atas konfigurasi, sesi, presensi per-orang, notulen, tindak lanjut, dan laporan. HR dan karyawan berperan sebagai pembaca/pemantau; Super Admin memiliki override sistem.
+- **Peserta Rapat**: Partisipasi dikelola per `Department` melalui `GreenMeetingUnit` (soft-exclude: nonaktif hentikan baris baru, riwayat tetap). Baris presensi dibuat per karyawan aktif.
+- **Status Presensi**: per-orang `HADIR` atau `ALPA` (semua baris baru dimulai sebagai `ALPA`); izin dicatat di level dept, bukan per orang. Keterwakilan dept: `HADIR` bila ≥1 anggotanya hadir, `IZIN` bila ada catatan izin, `ALPA` bila tidak ada keduanya.
+- **Jenis Notulen**: `TUGAS` membutuhkan tindak lanjut dan Deadline 1 (writer baru khusus Tugas). `INFORMASI` = arsip read-only peninggalan lama: tetap dibaca/difilter dengan badge, tidak bisa dibuat baru atau dikonversi menjadi Informasi.
 - **Rute DARI**: Sumber pembahasan dapat berupa direksi/pimpinan, departemen, divisi, seorang karyawan, atau pihak kustom/eksternal.
 - **Rute KEPADA**: Sasaran dapat berupa semua karyawan, satu atau beberapa departemen, satu atau beberapa divisi, atau beberapa karyawan lintas struktur organisasi. Scope bersifat eksklusif sesuai `targetType`: target karyawan hanya cocok ke `employeeId`, target departemen hanya ke `departmentId`, dan target divisi hanya ke `divisionId`; metadata organisasi target personal tidak boleh memperluas relevansi.
 - **Multi-Deadline**: Deadline awal dan setiap perpanjangan disimpan kronologis. Perpanjangan membutuhkan alasan dan tidak boleh melebihi `maxDeadlineExtensions`.

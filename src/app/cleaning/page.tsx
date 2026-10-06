@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Circle, Loader2, AlertTriangle, RefreshCw, Camera } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 
@@ -34,6 +35,7 @@ interface Checklist {
 
 export default function CleaningPage() {
     const toast = useToast();
+    const confirm = useConfirm();
     const [rooms, setRooms] = useState<Room[]>([]);
     const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
     const [checklist, setChecklist] = useState<Checklist | null>(null);
@@ -116,8 +118,8 @@ export default function CleaningPage() {
         }
     }, []);
 
-    // Toggle item completion
-    const toggleItem = useCallback(async (item: ChecklistItem) => {
+    // Toggle item completion (inti PATCH + optimistic + rollback).
+    const doToggleItem = useCallback(async (item: ChecklistItem) => {
         if (updatingItem) return;
         setUpdatingItem(item.id);
         const previousComplete = item.isComplete;
@@ -172,6 +174,25 @@ export default function CleaningPage() {
             setUpdatingItem(null);
         }
     }, [updatingItem, toast]);
+
+    // Wrapper: check langsung, uncheck konfirmasi anti salah-klik (client-only).
+    const toggleItem = useCallback(async (item: ChecklistItem) => {
+        if (updatingItem) return;
+        if (item.isComplete) {
+            confirm({
+                title: "Batalkan pekerjaan ini?",
+                message: `"${item.itemNameSnapshot}" sudah ditandai selesai. Batalkan centangnya?`,
+                confirmLabel: "Ya, batalkan",
+                cancelLabel: "Tidak",
+                variant: "warning",
+                onConfirm: () => {
+                    void doToggleItem(item);
+                },
+            });
+            return;
+        }
+        await doToggleItem(item);
+    }, [updatingItem, confirm, doToggleItem]);
 
     // Back to room list
     const backToRooms = useCallback(() => {

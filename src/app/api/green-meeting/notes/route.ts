@@ -8,6 +8,7 @@ import {
     canManageGreenMeeting,
     GreenMeetingError,
 } from "@/lib/services/greenMeetingService";
+import { requireGreenMeetingManager } from "../_guard";
 import {
     greenMeetingNoteCreateSchema,
     greenMeetingTaskStatusUpdateSchema,
@@ -15,11 +16,11 @@ import {
 import { z } from "zod";
 
 const createNoteBodySchema = greenMeetingNoteCreateSchema.extend({
-    sessionId: z.string().min(1, "Session ID wajib diisi"),
+    sessionId: z.string().trim().min(1, "Session ID wajib diisi"),
 });
 
 const patchNoteStatusSchema = greenMeetingTaskStatusUpdateSchema.extend({
-    noteId: z.string().min(1, "Note ID wajib diisi"),
+    noteId: z.string().trim().min(1, "Note ID wajib diisi"),
 });
 
 export async function GET(request: NextRequest) {
@@ -32,9 +33,12 @@ export async function GET(request: NextRequest) {
         const divisionId = searchParams.get("divisionId");
         const employeeId = searchParams.get("employeeId");
         const activeTasksOnly = searchParams.get("activeTasks") === "true";
+        const includeCompleted = searchParams.get("includeCompleted") === "true";
 
         if (activeTasksOnly) {
-            const tasks = await getAllActiveTasks();
+            const isManager = await canManageGreenMeeting(session);
+            if (!isManager) return forbiddenResponse();
+            const tasks = await getAllActiveTasks(includeCompleted);
             return NextResponse.json(tasks);
         }
 
@@ -56,7 +60,18 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(tasks);
         }
 
-        const tasks = await getAllActiveTasks();
+        // Tanpa filter: manager boleh lihat semua, non-manager hanya scope sendiri.
+        const isManager = await canManageGreenMeeting(session);
+        if (!isManager) {
+            const tasks = await getDepartmentTasks(
+                session.departmentId,
+                session.employeeId,
+                session.divisionId
+            );
+            return NextResponse.json(tasks);
+        }
+
+        const tasks = await getAllActiveTasks(includeCompleted);
         return NextResponse.json(tasks);
     } catch (err) {
         return serverErrorResponse("GreenMeetingNotesGET", err);
@@ -64,11 +79,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-
-    const isManager = await canManageGreenMeeting(session);
-    if (!isManager) return forbiddenResponse();
+    const { session, errorResponse } = await requireGreenMeetingManager();
+    if (errorResponse) return errorResponse;
 
     try {
         const result = await validateBody(request, createNoteBodySchema);
@@ -86,18 +98,15 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-
-    const isManager = await canManageGreenMeeting(session);
-    if (!isManager) return forbiddenResponse();
+    const { session, errorResponse } = await requireGreenMeetingManager();
+    if (errorResponse) return errorResponse;
 
     try {
         const result = await validateBody(request, patchNoteStatusSchema);
         if ("error" in result) return result.error;
 
         const { noteId, taskStatus } = result.data;
-        const updated = await updateNoteTaskStatus(noteId, taskStatus);
+        const updated = await updateNoteTaskStatus(noteId, taskStatus, session.username);
         return NextResponse.json(updated);
     } catch (err) {
         if (err instanceof GreenMeetingError) {

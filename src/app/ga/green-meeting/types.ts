@@ -1,6 +1,9 @@
 export type GreenMeetingOriginType = "DIREKSI" | "DEPARTMENT" | "DIVISION" | "EMPLOYEE" | "LAINNYA";
+/** Writer baru hanya TUGAS; reader arsip tetap INFORMASI|TUGAS. */
 export type GreenMeetingNoteType = "INFORMASI" | "TUGAS";
+export type GreenMeetingNoteCreateType = "TUGAS";
 export type GreenMeetingTaskStatus = "BELUM_DIMULAI" | "SEDANG_BERJALAN" | "SELESAI" | "DIBATALKAN";
+/** Status arsip legacy (termasuk IZIN lama). Data lama tetap dibaca, tidak dihapus. */
 export type GreenMeetingAttendanceStatus = "HADIR" | "IZIN" | "ALPA";
 
 export interface DepartmentInfo {
@@ -21,16 +24,40 @@ export interface GreenMeetingUnit {
     department: DepartmentInfo;
 }
 
+/** Status baris per-orang: hanya HADIR/ALPA. IZIN dicatat per dept (DeptIzin). */
+export type GreenMeetingPersonStatus = "HADIR" | "ALPA";
+
 export interface GreenMeetingAttendance {
     id: string;
     sessionId: string;
-    unitId: string;
+    unitId: string | null;
+    employeeId: string | null;
+    employeeName: string | null;
+    departmentId: string | null;
+    departmentName: string | null;
+    /** LEGACY read-only: tidak ada kolom division di DB/schema untuk presensi. */
+    divisionId?: string | null;
+    divisionName?: string | null;
     status: GreenMeetingAttendanceStatus;
-    representativeName: string | null;
-    permitReason: string | null;
+    /** LEGACY arsip: tidak lagi ditulis, hanya fallback baca. */
+    representativeName?: string | null;
+    permitReason?: string | null;
     confirmedAt: string | null;
     confirmedBy: string | null;
-    unit: GreenMeetingUnit;
+    unit?: GreenMeetingUnit | null;
+}
+
+export interface GreenMeetingDeptIzin {
+    id: string;
+    sessionId: string;
+    departmentId: string | null;
+    /** LEGACY read-only: izin sesi dept-only, tanpa kolom division di DB/schema. */
+    divisionId?: string | null;
+    reason: string;
+    createdBy: string | null;
+    createdAt: string;
+    department?: { id: string; name: string } | null;
+    division?: { id: string; name: string } | null;
 }
 
 export interface GreenMeetingDeadline {
@@ -110,6 +137,7 @@ export interface GreenMeetingSession {
     isCancelled: boolean;
     cancelReason: string | null;
     attendances: GreenMeetingAttendance[];
+    deptIzins: GreenMeetingDeptIzin[];
     notes: GreenMeetingNote[];
 }
 

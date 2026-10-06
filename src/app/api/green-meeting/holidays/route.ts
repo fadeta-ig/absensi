@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import {
     getGreenMeetingHolidays,
     addGreenMeetingHoliday,
     deleteGreenMeetingHoliday,
-    canManageGreenMeeting,
+    GreenMeetingError,
 } from "@/lib/services/greenMeetingService";
+import { requireGreenMeetingManager } from "../_guard";
 import { greenMeetingHolidaySchema } from "@/lib/validations/validationSchemas";
+import { z } from "zod";
 
 export async function GET() {
     const session = await requireAuth();
@@ -21,11 +23,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-
-    const isManager = await canManageGreenMeeting(session);
-    if (!isManager) return forbiddenResponse();
+    const { errorResponse } = await requireGreenMeetingManager();
+    if (errorResponse) return errorResponse;
 
     try {
         const result = await validateBody(request, greenMeetingHolidaySchema);
@@ -34,27 +33,31 @@ export async function POST(request: NextRequest) {
         const holiday = await addGreenMeetingHoliday(result.data);
         return NextResponse.json(holiday, { status: 201 });
     } catch (err) {
+        if (err instanceof GreenMeetingError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("GreenMeetingHolidaysPOST", err);
     }
 }
 
 export async function DELETE(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-
-    const isManager = await canManageGreenMeeting(session);
-    if (!isManager) return forbiddenResponse();
+    const { errorResponse } = await requireGreenMeetingManager();
+    if (errorResponse) return errorResponse;
 
     try {
         const { searchParams } = new URL(request.url);
-        const id = searchParams.get("id");
-        if (!id) {
+        const parsed = z.string().trim().min(1, "ID hari libur wajib disertakan.").safeParse(searchParams.get("id") ?? "");
+        if (!parsed.success) {
             return NextResponse.json({ error: "ID hari libur wajib disertakan." }, { status: 400 });
         }
 
-        await deleteGreenMeetingHoliday(id);
-        return NextResponse.json({ success: true, message: "Hari libur berhasil dihapus." });
+        await deleteGreenMeetingHoliday(parsed.data);
+        const { ok } = await import("../_guard");
+        return ok({ id: parsed.data }, "Hari libur berhasil dihapus.");
     } catch (err) {
+        if (err instanceof GreenMeetingError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("GreenMeetingHolidaysDELETE", err);
     }
 }

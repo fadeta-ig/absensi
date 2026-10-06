@@ -1,23 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import {
     extendTaskDeadline,
-    canManageGreenMeeting,
     GreenMeetingError,
 } from "@/lib/services/greenMeetingService";
+import { requireGreenMeetingManager } from "../_guard";
 import { greenMeetingExtendDeadlineSchema } from "@/lib/validations/validationSchemas";
 import { z } from "zod";
 
 const extendDeadlineBodySchema = greenMeetingExtendDeadlineSchema.extend({
-    noteId: z.string().min(1, "Note ID wajib diisi"),
+    noteId: z.string().trim().min(1, "Note ID wajib diisi"),
 });
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-
-    const isManager = await canManageGreenMeeting(session);
-    if (!isManager) return forbiddenResponse();
+    const { session, errorResponse } = await requireGreenMeetingManager();
+    if (errorResponse) return errorResponse;
 
     try {
         const result = await validateBody(request, extendDeadlineBodySchema);

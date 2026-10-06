@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import {
     PlusCircle,
     Info,
@@ -30,6 +30,9 @@ import type {
 } from "../types";
 import type { NoteTargetItem } from "@/lib/services/greenMeetingService";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { fetchGreenMeetingEmployees } from "../apiClient";
+import { toWIBDateString } from "@/lib/timezone";
 
 type OriginScope = "DIREKSI" | "DEPARTMENT" | "DIVISION" | "EMPLOYEE" | "LAINNYA";
 type TargetScope = "ALL" | "DEPARTMENT" | "DIVISION" | "EMPLOYEE";
@@ -58,6 +61,7 @@ interface NotesTabProps {
         changeReason: string;
     }) => Promise<void>;
     onUpdateTaskStatus: (noteId: string, status: GreenMeetingTaskStatus) => Promise<void>;
+    loading?: boolean;
 }
 
 export default function NotesTab({
@@ -67,12 +71,14 @@ export default function NotesTab({
     onCreateNote,
     onUpdateNote,
     onUpdateTaskStatus,
+    loading = false,
 }: NotesTabProps) {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingNote, setEditingNote] = useState<GreenMeetingNote | null>(null);
     const [changeReason, setChangeReason] = useState("");
     const [historyNote, setHistoryNote] = useState<GreenMeetingNote | null>(null);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState("");
     const [revisions, setRevisions] = useState<Array<{
         id: string;
         revisionNumber: number;
@@ -83,7 +89,7 @@ export default function NotesTab({
     }>>([]);
 
     // Form Basic States
-    const [noteType, setNoteType] = useState<GreenMeetingNoteType>("INFORMASI");
+    const [noteType, setNoteType] = useState<GreenMeetingNoteType>("TUGAS");
     
     // DARI (Origin) States
     const [originScope, setOriginScope] = useState<OriginScope>("DIREKSI");
@@ -95,9 +101,16 @@ export default function NotesTab({
 
     // DARI Employee Search States
     const [originEmpSearchQuery, setOriginEmpSearchQuery] = useState("");
-    const [originEmpSearchResults, setOriginEmpSearchResults] = useState<EmployeeSearchResult[]>([]);
-    const [searchingOriginEmp, setSearchingOriginEmp] = useState(false);
-    const originSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const fetchOriginEmployees = useCallback(async (q: string, signal: AbortSignal): Promise<EmployeeSearchResult[]> => {
+        const list = await fetchGreenMeetingEmployees(q, signal);
+        return list.slice(0, 8);
+    }, []);
+    const { results: originEmpSearchResults, searching: searchingOriginEmp } = useDebouncedSearch(
+        originEmpSearchQuery,
+        fetchOriginEmployees,
+        200
+    );
 
     // KEPADA (Target) States
     const [targetScope, setTargetScope] = useState<TargetScope>("ALL");
@@ -113,75 +126,23 @@ export default function NotesTab({
 
     // Employee Search States
     const [empSearchQuery, setEmpSearchQuery] = useState("");
-    const [empSearchResults, setEmpSearchResults] = useState<EmployeeSearchResult[]>([]);
-    const [searchingEmp, setSearchingEmp] = useState(false);
-    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Search Employees for DARI
-    const searchOriginEmployees = useCallback(async (query: string) => {
-        if (!query.trim()) {
-            setOriginEmpSearchResults([]);
-            return;
-        }
-        setSearchingOriginEmp(true);
-        try {
-            const res = await fetch(`/api/green-meeting/employees?q=${encodeURIComponent(query)}`);
-            if (res.ok) {
-                const data: EmployeeSearchResult[] = await res.json();
-                setOriginEmpSearchResults(data);
-            }
-        } finally {
-            setSearchingOriginEmp(false);
-        }
+    const fetchTargetEmployees = useCallback(async (q: string, signal: AbortSignal): Promise<EmployeeSearchResult[]> => {
+        const list = await fetchGreenMeetingEmployees(q, signal);
+        return list.slice(0, 8);
     }, []);
+    const { results: empSearchResults, searching: searchingEmp } = useDebouncedSearch(
+        empSearchQuery,
+        fetchTargetEmployees,
+        200
+    );
 
-    useEffect(() => {
-        if (originScope !== "EMPLOYEE") return;
-
-        if (originSearchTimeoutRef.current) clearTimeout(originSearchTimeoutRef.current);
-        originSearchTimeoutRef.current = setTimeout(() => {
-            void searchOriginEmployees(originEmpSearchQuery);
-        }, 200);
-
-        return () => {
-            if (originSearchTimeoutRef.current) clearTimeout(originSearchTimeoutRef.current);
-        };
-    }, [originEmpSearchQuery, originScope, searchOriginEmployees]);
-
-    // Search Employees for KEPADA
-    const searchEmployees = useCallback(async (query: string) => {
-        if (!query.trim()) {
-            setEmpSearchResults([]);
-            return;
-        }
-        setSearchingEmp(true);
-        try {
-            const res = await fetch(`/api/green-meeting/employees?q=${encodeURIComponent(query)}`);
-            if (res.ok) {
-                const data: EmployeeSearchResult[] = await res.json();
-                setEmpSearchResults(data);
-            }
-        } finally {
-            setSearchingEmp(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (targetScope !== "EMPLOYEE") return;
-
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = setTimeout(() => {
-            void searchEmployees(empSearchQuery);
-        }, 200);
-
-        return () => {
-            if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        };
-    }, [empSearchQuery, targetScope, searchEmployees]);
+    // Hasil pencarian disediakan hook useDebouncedSearch di atas.
 
     // Helpers
     const resetForm = () => {
         setContent("");
+        setNoteType("TUGAS");
         setInitialDeadlineDate("");
         setOriginScope("DIREKSI");
         setOriginDireksiRole("Direksi");
@@ -204,7 +165,7 @@ export default function NotesTab({
         setEditingNote(note);
         setNoteType(note.type);
         setContent(note.content);
-        setOriginScope(note.originType === "EMPLOYEE" ? "LAINNYA" : note.originType);
+        setOriginScope(note.originType);
         setInitialDeadlineDate(
             note.type === "TUGAS" && note.deadlines[0]
                 ? note.deadlines[0].deadlineDate.slice(0, 10)
@@ -223,26 +184,39 @@ export default function NotesTab({
         if (note.originType === "LAINNYA") setCustomOriginText(note.originName);
         if (note.originType === "EMPLOYEE") setCustomOriginText(note.originName);
 
+        const editDeptIds = note.targets.flatMap((target) => target.departmentId && target.targetType === "DEPARTMENT" ? [target.departmentId] : []);
+        const editDivIds = note.targets.flatMap((target) => target.divisionId && target.targetType === "DIVISION" ? [target.divisionId] : []);
+        const editEmps = note.targets.flatMap((target) => target.employee ? [{
+            id: target.employee.id,
+            employeeId: target.employee.employeeId,
+            name: target.employee.name,
+            department: target.department?.name ?? target.label ?? "Karyawan",
+            departmentId: target.departmentId ?? null,
+            division: target.division?.name ?? "",
+            divisionId: target.divisionId ?? null,
+            position: "Karyawan",
+        }] : []);
+        setSelectedDeptIds(editDeptIds);
+        setSelectedDivIds(editDivIds);
+        setSelectedEmployees(editEmps);
+
         if (note.isAllTarget) {
             setTargetScope("ALL");
-        } else if (note.targets.every((target) => target.targetType === "DEPARTMENT")) {
-            setTargetScope("DEPARTMENT");
-            setSelectedDeptIds(note.targets.flatMap((target) => target.departmentId ? [target.departmentId] : []));
-        } else if (note.targets.every((target) => target.targetType === "DIVISION")) {
-            setTargetScope("DIVISION");
-            setSelectedDivIds(note.targets.flatMap((target) => target.divisionId ? [target.divisionId] : []));
         } else {
-            setTargetScope("EMPLOYEE");
-            setSelectedEmployees(note.targets.flatMap((target) => target.employee ? [{
-                id: target.employee.id,
-                employeeId: target.employee.employeeId,
-                name: target.employee.name,
-                department: target.department?.name ?? target.label ?? "Karyawan",
-                departmentId: target.departmentId ?? null,
-                division: target.division?.name ?? "",
-                divisionId: target.divisionId ?? null,
-                position: "Karyawan",
-            }] : []));
+            const distinctTypes = new Set(note.targets.map((target) => target.targetType));
+            if (distinctTypes.size === 1) {
+                const only = note.targets[0]?.targetType;
+                setTargetScope(only === "DIVISION" ? "DIVISION" : only === "EMPLOYEE" ? "EMPLOYEE" : "DEPARTMENT");
+            } else {
+                // Sasaran campur: pilih cakupan dengan anggota terbanyak; sisa tipe
+                // dipertahankan saat simpan (lihat handleSubmitNote) agar tidak hilang diam-diam.
+                const ranked = [
+                    { scope: "EMPLOYEE" as const, n: editEmps.length },
+                    { scope: "DIVISION" as const, n: editDivIds.length },
+                    { scope: "DEPARTMENT" as const, n: editDeptIds.length },
+                ].sort((a, b) => b.n - a.n);
+                setTargetScope(ranked[0]?.scope ?? "DEPARTMENT");
+            }
         }
 
         setIsFormOpen(true);
@@ -252,12 +226,14 @@ export default function NotesTab({
     const loadHistory = async (note: GreenMeetingNote) => {
         setHistoryNote(note);
         setHistoryLoading(true);
+        setHistoryError("");
         try {
             const response = await fetch(`/api/green-meeting/notes/${note.id}/revisions`);
             if (!response.ok) throw new Error("Gagal memuat riwayat revisi.");
             setRevisions(await response.json());
-        } catch {
+        } catch (err) {
             setRevisions([]);
+            setHistoryError(err instanceof Error ? err.message : "Gagal memuat riwayat revisi.");
         } finally {
             setHistoryLoading(false);
         }
@@ -322,7 +298,7 @@ export default function NotesTab({
             resolvedOriginType = "DIREKSI";
             resolvedOriginName = originDireksiRole || "Direksi";
         } else if (originScope === "DEPARTMENT") {
-            const dept = departments.find((d) => d.id === selectedOriginDeptId) || departments[0];
+            const dept = departments.find((d) => d.id === selectedOriginDeptId);
             if (!dept) {
                 setErrorMsg("Pilih departemen pengarah / pemberi bahasan.");
                 return;
@@ -330,7 +306,7 @@ export default function NotesTab({
             resolvedOriginType = "DEPARTMENT";
             resolvedOriginName = `Departemen ${dept.name}`;
         } else if (originScope === "DIVISION") {
-            const div = divisions.find((d) => d.id === selectedOriginDivId) || divisions[0];
+            const div = divisions.find((d) => d.id === selectedOriginDivId);
             if (!div) {
                 setErrorMsg("Pilih divisi pengarah / pemberi bahasan.");
                 return;
@@ -338,12 +314,17 @@ export default function NotesTab({
             resolvedOriginType = "DIVISION";
             resolvedOriginName = `Divisi ${div.name}`;
         } else if (originScope === "EMPLOYEE") {
-            if (!selectedOriginEmployee) {
+            if (selectedOriginEmployee) {
+                resolvedOriginType = "EMPLOYEE";
+                resolvedOriginName = `${selectedOriginEmployee.name} (${selectedOriginEmployee.position || selectedOriginEmployee.department})`;
+            } else if (editingNote?.originType === "EMPLOYEE" && editingNote.originName) {
+                // Pertahankan asal karyawan bila pengguna tidak memilih ulang.
+                resolvedOriginType = "EMPLOYEE";
+                resolvedOriginName = editingNote.originName;
+            } else {
                 setErrorMsg("Cari dan pilih satu karyawan pengarah / pemapar.");
                 return;
             }
-            resolvedOriginType = "EMPLOYEE";
-            resolvedOriginName = `${selectedOriginEmployee.name} (${selectedOriginEmployee.position || selectedOriginEmployee.department})`;
         } else if (originScope === "LAINNYA") {
             if (!customOriginText.trim()) {
                 setErrorMsg("Tuliskan nama pengarah / pembahas kustom.");
@@ -410,6 +391,46 @@ export default function NotesTab({
                 });
             }
 
+            // Catatan campur (multi-tipe) yang sedang diedit: gabungkan sisa tipe dari
+            // state agar sasaran lain tidak hilang diam-diam saat simpan.
+            const wasMixedTarget = !!editingNote && !editingNote.isAllTarget
+                && new Set(editingNote.targets.map((t) => t.targetType)).size > 1;
+            if (wasMixedTarget && !isAll) {
+                const keyOf = (t: NoteTargetItem) =>
+                    `${t.targetType}:${t.departmentId ?? t.divisionId ?? t.employeeId ?? t.label ?? ""}`;
+                const seen = new Set(rawTargets.map(keyOf));
+                const pushUnique = (t: NoteTargetItem) => {
+                    const key = keyOf(t);
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        rawTargets.push(t);
+                    }
+                };
+                if (targetScope !== "DEPARTMENT") {
+                    selectedDeptIds.forEach((id) => {
+                        const dept = departments.find((d) => d.id === id);
+                        pushUnique({ targetType: "DEPARTMENT", departmentId: id, label: dept?.name || "Departemen" });
+                    });
+                }
+                if (targetScope !== "DIVISION") {
+                    selectedDivIds.forEach((id) => {
+                        const div = divisions.find((d) => d.id === id);
+                        pushUnique({ targetType: "DIVISION", divisionId: id, label: div?.name ? `Divisi ${div.name}` : "Divisi" });
+                    });
+                }
+                if (targetScope !== "EMPLOYEE") {
+                    selectedEmployees.forEach((emp) => {
+                        pushUnique({
+                            targetType: "EMPLOYEE",
+                            employeeId: emp.employeeId,
+                            departmentId: emp.departmentId,
+                            divisionId: emp.divisionId,
+                            label: `${emp.name} (${emp.department})`,
+                        });
+                    });
+                }
+            }
+
             const noteData = {
                 type: noteType,
                 content: content.trim(),
@@ -445,7 +466,7 @@ export default function NotesTab({
                 <div>
                     <h3 className="text-base font-bold text-foreground">Agenda & Notulensi Rapat</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Catat arahan manajemen (Informasi) dan instruksi tindak lanjut dengan rute tujuan fleksibel.
+                        Catat instruksi tindak lanjut bertipe Tugas dengan rute tujuan fleksibel. Arsip Informasi lama tetap tampil di bawah (read-only).
                     </p>
                 </div>
                 <button
@@ -454,7 +475,7 @@ export default function NotesTab({
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-colors"
                 >
                     <PlusCircle size={16} />
-                    <span>{isFormOpen ? "Tutup Form" : "Tambah Catatan Notulen"}</span>
+                    <span>{isFormOpen ? "Tutup Form" : "Tambah Tugas / Tindak Lanjut"}</span>
                 </button>
             </div>
 
@@ -476,34 +497,22 @@ export default function NotesTab({
                     )}
 
                     <form onSubmit={handleSubmitNote} className="space-y-4">
-                        {/* 1. Tipe Catatan */}
+                        {/* 1. Tipe Catatan: writer baru TUGAS-only; arsip INFORMASI read-only */}
                         <div>
                             <label className="block text-xs font-semibold text-foreground mb-1.5">
                                 Jenis Catatan Notulen
                             </label>
-                            <div className="grid grid-cols-2 gap-3 max-w-md">
-                                <button
-                                    type="button"
-                                    onClick={() => setNoteType("INFORMASI")}
-                                    className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg border transition-colors ${noteType === "INFORMASI"
-                                        ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                                        : "border-border hover:bg-muted text-foreground"
-                                        }`}
-                                >
-                                    <Info size={14} />
-                                    <span>Informasi / Pengumuman</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setNoteType("TUGAS")}
-                                    className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg border transition-colors ${noteType === "TUGAS"
-                                        ? "bg-purple-600 text-white border-purple-600 shadow-sm"
-                                        : "border-border hover:bg-muted text-foreground"
-                                        }`}
+                            <div className="grid grid-cols-1 gap-3 max-w-md">
+                                <div
+                                    aria-label="Tugas / Tindak Lanjut (satu-satunya jenis baru)"
+                                    className="flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg border bg-purple-600 text-white border-purple-600 shadow-sm"
                                 >
                                     <ListTodo size={14} />
-                                    <span>Tugas / Tindak Lanjut</span>
-                                </button>
+                                    <span>Tugas / Tindak Lanjut (wajib deadline)</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Informasi / Pengumuman tidak lagi dibuat — arsip lama tetap tampil di daftar bawah.
+                                </p>
                             </div>
                         </div>
 
@@ -533,12 +542,7 @@ export default function NotesTab({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setOriginScope("DEPARTMENT");
-                                        if (!selectedOriginDeptId && departments.length > 0) {
-                                            setSelectedOriginDeptId(departments[0].id);
-                                        }
-                                    }}
+                                    onClick={() => setOriginScope("DEPARTMENT")}
                                     className={`py-2 px-3 text-xs font-semibold rounded-lg border transition-colors ${
                                         originScope === "DEPARTMENT"
                                             ? "bg-primary text-white border-primary shadow-sm"
@@ -549,12 +553,7 @@ export default function NotesTab({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setOriginScope("DIVISION");
-                                        if (!selectedOriginDivId && divisions.length > 0) {
-                                            setSelectedOriginDivId(divisions[0].id);
-                                        }
-                                    }}
+                                    onClick={() => setOriginScope("DIVISION")}
                                     className={`py-2 px-3 text-xs font-semibold rounded-lg border transition-colors ${
                                         originScope === "DIVISION"
                                             ? "bg-primary text-white border-primary shadow-sm"
@@ -613,10 +612,11 @@ export default function NotesTab({
                                         Pilih Departemen Pengarah:
                                     </label>
                                     <select
-                                        value={selectedOriginDeptId || (departments[0]?.id ?? "")}
+                                        value={selectedOriginDeptId}
                                         onChange={(e) => setSelectedOriginDeptId(e.target.value)}
                                         className="w-full sm:max-w-md px-3 py-2 text-xs sm:text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
+                                        <option value="">— Pilih departemen pengarah —</option>
                                         {departments.map((d) => (
                                             <option key={d.id} value={d.id}>
                                                 Departemen {d.name} {d.division?.name ? `(${d.division.name})` : ""}
@@ -633,10 +633,11 @@ export default function NotesTab({
                                         Pilih Divisi Pengarah:
                                     </label>
                                     <select
-                                        value={selectedOriginDivId || (divisions[0]?.id ?? "")}
+                                        value={selectedOriginDivId}
                                         onChange={(e) => setSelectedOriginDivId(e.target.value)}
                                         className="w-full sm:max-w-md px-3 py-2 text-xs sm:text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
+                                        <option value="">— Pilih divisi pengarah —</option>
                                         {divisions.map((div) => (
                                             <option key={div.id} value={div.id}>
                                                 Divisi {div.name}
@@ -716,7 +717,6 @@ export default function NotesTab({
                                                             onClick={() => {
                                                                 setSelectedOriginEmployee(emp);
                                                                 setOriginEmpSearchQuery("");
-                                                                setOriginEmpSearchResults([]);
                                                             }}
                                                             className="w-full text-left p-2.5 hover:bg-muted transition-colors flex items-center justify-between gap-2"
                                                         >
@@ -996,9 +996,14 @@ export default function NotesTab({
 
                         {/* 4. Uraian Isi Notulen */}
                         <div>
-                            <label className="block text-xs font-semibold text-foreground mb-1.5">
-                                Uraian Pembahasan / Instruksi Tugas
-                            </label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs font-semibold text-foreground">
+                                    Uraian Pembahasan / Instruksi Tugas
+                                </label>
+                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                    {content.length}/5000
+                                </span>
+                            </div>
                             <textarea
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
@@ -1020,6 +1025,7 @@ export default function NotesTab({
                                     type="date"
                                     value={initialDeadlineDate}
                                     onChange={(e) => setInitialDeadlineDate(e.target.value)}
+                                    min={toWIBDateString()}
                                     className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                     required
                                 />
@@ -1028,9 +1034,14 @@ export default function NotesTab({
 
                         {editingNote && (
                             <div>
-                                <label className="block text-xs font-semibold text-foreground mb-1.5">
-                                    Alasan Perubahan <span className="text-rose-500">*Wajib</span>
-                                </label>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-xs font-semibold text-foreground">
+                                        Alasan Perubahan <span className="text-rose-500">*Wajib</span>
+                                    </label>
+                                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                                        {changeReason.trim().length}/1000
+                                    </span>
+                                </div>
                                 <textarea
                                     value={changeReason}
                                     onChange={(event) => setChangeReason(event.target.value)}
@@ -1075,7 +1086,17 @@ export default function NotesTab({
 
             {/* List Kartu Notulen Hari Ini */}
             <div className="space-y-3">
-                {notes.length === 0 ? (
+                {loading && notes.length === 0 ? (
+                    <div className="space-y-3" aria-label="Memuat notulen">
+                        {[0, 1].map((i) => (
+                            <div key={i} className="bg-card border border-border rounded-xl p-4 sm:p-5 space-y-3 animate-pulse">
+                                <div className="h-4 w-1/3 rounded bg-muted" />
+                                <div className="h-3 w-full rounded bg-muted" />
+                                <div className="h-3 w-2/3 rounded bg-muted" />
+                            </div>
+                        ))}
+                    </div>
+                ) : notes.length === 0 ? (
                     <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
                         <Info size={32} className="mx-auto mb-2 opacity-40" />
                         <p className="text-sm font-medium">Belum ada catatan notulen untuk sesi rapat ini.</p>
@@ -1245,6 +1266,17 @@ export default function NotesTab({
                     <div className="mt-4 space-y-3">
                         {historyLoading ? (
                             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Memuat riwayat...</div>
+                        ) : historyError ? (
+                            <div className="py-6 text-center space-y-3">
+                                <p className="text-sm text-rose-600 dark:text-rose-400 font-medium">{historyError}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => historyNote && void loadHistory(historyNote)}
+                                    className="px-4 py-1.5 text-xs font-semibold rounded-lg border border-border hover:bg-muted text-foreground transition-colors"
+                                >
+                                    Coba lagi
+                                </button>
+                            </div>
                         ) : revisions.length === 0 ? (
                             <p className="py-8 text-center text-sm text-muted-foreground">Belum ada riwayat revisi.</p>
                         ) : revisions.map((revision) => (

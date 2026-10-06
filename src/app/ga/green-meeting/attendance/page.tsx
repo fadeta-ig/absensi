@@ -10,11 +10,14 @@ import GreenMeetingHeader from "../components/GreenMeetingHeader";
 import GreenMeetingNavTabs from "../components/GreenMeetingNavTabs";
 import GreenMeetingHudCards from "../components/GreenMeetingHudCards";
 import AttendanceTab from "../components/AttendanceTab";
+import { apiSend } from "../apiClient";
 
 import type {
     GreenMeetingSession,
     GreenMeetingNote,
-    GreenMeetingAttendanceStatus,
+    GreenMeetingAttendance,
+    GreenMeetingPersonStatus,
+    GreenMeetingConfig,
 } from "../types";
 
 export default function GreenMeetingAttendancePage() {
@@ -28,6 +31,7 @@ export default function GreenMeetingAttendancePage() {
     const [session, setSession] = useState<GreenMeetingSession | null>(null);
     const [offDayInfo, setOffDayInfo] = useState<{ isOffDay: boolean; reason?: string }>({ isOffDay: false });
     const [activeTasks, setActiveTasks] = useState<GreenMeetingNote[]>([]);
+    const [config, setConfig] = useState<GreenMeetingConfig | null>(null);
 
     const fetchedDateRef = useRef<string | null>(null);
 
@@ -36,20 +40,37 @@ export default function GreenMeetingAttendancePage() {
         setLoadError("");
 
         try {
-            const [sessionRes, tasksRes] = await Promise.all([
+            const [sessionRes, tasksRes, configRes] = await Promise.all([
                 fetch(`/api/green-meeting/sessions?date=${targetDate}`),
                 fetch("/api/green-meeting/notes?activeTasks=true"),
+                fetch("/api/green-meeting/config"),
             ]);
 
-            if (!sessionRes.ok) throw new Error("Gagal memuat sesi rapat.");
-
-            const sessionData = await sessionRes.json();
+            let sessionData;
+            if (sessionRes.status === 404) {
+                // GA: buatkan sesi bila tanggal ini belum ada.
+                const createRes = await fetch("/api/green-meeting/sessions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ date: targetDate }),
+                });
+                if (!createRes.ok) throw new Error("Gagal memuat sesi rapat.");
+                const created = await createRes.json();
+                sessionData = { session: created, offDayInfo: { isOffDay: false } };
+            } else {
+                if (!sessionRes.ok) throw new Error("Gagal memuat sesi rapat.");
+                sessionData = await sessionRes.json();
+            }
             setSession(sessionData.session);
             setOffDayInfo(sessionData.offDayInfo || { isOffDay: false });
 
             if (tasksRes.ok) {
                 const tasksData: GreenMeetingNote[] = await tasksRes.json();
                 setActiveTasks(tasksData);
+            }
+
+            if (configRes.ok) {
+                setConfig(await configRes.json());
             }
         } catch (err) {
             reportClientError("GreenMeetingAttendancePage", "Gagal memuat data presensi", err);
@@ -72,12 +93,7 @@ export default function GreenMeetingAttendancePage() {
     const handleUpdateRoom = async (newRoom: string) => {
         if (!session) return;
         try {
-            const res = await fetch("/api/green-meeting/sessions", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId: session.id, room: newRoom }),
-            });
-            if (!res.ok) throw new Error("Gagal memperbarui ruangan.");
+            await apiSend("/api/green-meeting/sessions", "PATCH", { sessionId: session.id, room: newRoom });
             toast("Ruangan rapat berhasil diperbarui.", "success");
             setSession((prev) => (prev ? { ...prev, room: newRoom } : null));
         } catch (err) {
@@ -89,12 +105,7 @@ export default function GreenMeetingAttendancePage() {
     const handleUpdateTime = async (newTime: string) => {
         if (!session) return;
         try {
-            const res = await fetch("/api/green-meeting/sessions", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId: session.id, startTime: newTime }),
-            });
-            if (!res.ok) throw new Error("Gagal memperbarui jam mulai rapat.");
+            await apiSend("/api/green-meeting/sessions", "PATCH", { sessionId: session.id, startTime: newTime });
             toast(`Jam mulai rapat diubah menjadi ${newTime} WIB.`, "success");
             setSession((prev) => (prev ? { ...prev, startTime: newTime } : null));
         } catch (err) {
@@ -106,15 +117,14 @@ export default function GreenMeetingAttendancePage() {
     const handleBulkMarkAllPresent = async () => {
         if (!session) return;
         try {
-            const res = await fetch("/api/green-meeting/attendance", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId: session.id, action: "MARK_ALL_PRESENT" }),
-            });
-            if (!res.ok) throw new Error("Gagal menandai seluruh unit hadir.");
-            const data = await res.json();
-            setSession((prev) => (prev ? { ...prev, attendances: data.attendances } : null));
-            toast("Seluruh perwakilan departemen berhasil ditandai Hadir.", "success");
+            const json = await apiSend<{ data?: { attendances: GreenMeetingAttendance[] }; attendances?: GreenMeetingAttendance[] }>(
+                "/api/green-meeting/attendance",
+                "POST",
+                { sessionId: session.id, action: "MARK_ALL_PRESENT" }
+            );
+            const attendances = json.data?.attendances ?? json.attendances ?? [];
+            setSession((prev) => (prev ? { ...prev, attendances } : null));
+            toast("Seluruh karyawan berhasil ditandai Hadir.", "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal memproses presensi massal.", "error");
             throw err;
@@ -127,19 +137,18 @@ export default function GreenMeetingAttendancePage() {
     ) => {
         if (!session) return;
         try {
-            const res = await fetch("/api/green-meeting/attendance", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+            const json = await apiSend<{ data?: { attendances: GreenMeetingAttendance[] }; attendances?: GreenMeetingAttendance[] }>(
+                "/api/green-meeting/attendance",
+                "POST",
+                {
                     sessionId: session.id,
                     action,
                     attendanceIds,
-                }),
-            });
-            if (!res.ok) throw new Error("Gagal memproses aksi massal.");
-            const data = await res.json();
-            setSession((prev) => (prev ? { ...prev, attendances: data.attendances } : null));
-            toast(`Berhasil memperbarui ${attendanceIds.length} departemen terpilih.`, "success");
+                }
+            );
+            const attendances = json.data?.attendances ?? json.attendances ?? [];
+            setSession((prev) => (prev ? { ...prev, attendances } : null));
+            toast(`Berhasil memperbarui ${attendanceIds.length} karyawan terpilih.`, "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal memperbarui status presensi massal.", "error");
             throw err;
@@ -149,27 +158,19 @@ export default function GreenMeetingAttendancePage() {
     const handleUpdateAttendance = async (
         attendanceId: string,
         data: {
-            status: GreenMeetingAttendanceStatus;
-            representativeName?: string | null;
-            permitReason?: string | null;
+            status: GreenMeetingPersonStatus;
         }
     ) => {
         try {
-            const res = await fetch("/api/green-meeting/attendance", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+            const json = await apiSend<{ data?: GreenMeetingAttendance } & Partial<GreenMeetingAttendance>>(
+                "/api/green-meeting/attendance",
+                "PATCH",
+                {
                     attendanceId,
                     status: data.status,
-                    permitReason: data.status === "IZIN" ? data.permitReason : undefined,
-                    representativeName: data.representativeName,
-                }),
-            });
-            if (!res.ok) {
-                const errJson = await res.json().catch(() => ({}));
-                throw new Error(errJson.error || "Gagal memperbarui status presensi.");
-            }
-            const updated = await res.json();
+                }
+            );
+            const updated = (json.data ?? json) as GreenMeetingAttendance;
             setSession((prev) => {
                 if (!prev) return null;
                 return {
@@ -184,7 +185,50 @@ export default function GreenMeetingAttendancePage() {
         }
     };
 
+    const refreshSession = useCallback(async () => {
+        if (!session) return;
+        try {
+            const res = await fetch(`/api/green-meeting/sessions?date=${currentDateStr}`);
+            if (!res.ok) return;
+            const sessionData = await res.json();
+            setSession(sessionData.session);
+        } catch {
+            // abaikan, data lama tetap tampil
+        }
+    }, [session, currentDateStr]);
+
+    const handleCreateDeptIzin = async (data: { departmentId: string; reason: string }) => {
+        if (!session) return;
+        await apiSend("/api/green-meeting/excuses", "POST", { sessionId: session.id, ...data });
+        toast("Izin dept berhasil dicatat.", "success");
+        await refreshSession();
+    };
+
+    const handleDeleteDeptIzin = async (id: string) => {
+        try {
+            await apiSend(`/api/green-meeting/excuses?id=${encodeURIComponent(id)}`, "DELETE");
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal menghapus izin.", "error");
+            return;
+        }
+        toast("Catatan izin dihapus.", "success");
+        await refreshSession();
+    };
+
+    const handleQuickMark = async (employeeId: string) => {
+        if (!session) return;
+        try {
+            await apiSend("/api/green-meeting/attendance/quick", "POST", { sessionId: session.id, employeeId });
+            toast("Karyawan ditandai Hadir.", "success");
+            await refreshSession();
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal menandai hadir.", "error");
+            throw err;
+        }
+    };
+
     const attendances = session?.attendances || [];
+    const deptIzins = session?.deptIzins || [];
     const notesCount = session?.notes?.length || 0;
 
     return (
@@ -199,6 +243,7 @@ export default function GreenMeetingAttendancePage() {
                 onRefresh={handleRefresh}
                 loading={loading}
                 offDayInfo={offDayInfo}
+                configDefaults={config}
             />
 
             {/* Sub-Navigasi Dropdown Green Meeting Tabs */}
@@ -219,17 +264,22 @@ export default function GreenMeetingAttendancePage() {
             {/* HUD Cards Ringkasan Presensi */}
             <GreenMeetingHudCards
                 attendances={attendances}
+                deptIzins={deptIzins}
                 activeTasks={activeTasks}
                 currentDateStr={currentDateStr}
             />
 
-            {/* Tabel Presensi Departemen */}
+            {/* Tabel Presensi Karyawan */}
             <div className="mt-6">
                 <AttendanceTab
                     attendances={attendances}
+                    deptIzins={deptIzins}
                     onUpdateAttendance={handleUpdateAttendance}
                     onBulkMarkAllPresent={handleBulkMarkAllPresent}
                     onBulkUpdateSelected={handleBulkUpdateStatus}
+                    onQuickMark={handleQuickMark}
+                    onCreateDeptIzin={handleCreateDeptIzin}
+                    onDeleteDeptIzin={handleDeleteDeptIzin}
                     loading={loading}
                 />
             </div>

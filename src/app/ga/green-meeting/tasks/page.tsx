@@ -28,7 +28,7 @@ export default function GreenMeetingTasksPage() {
 
         try {
             const [tasksRes, configRes] = await Promise.all([
-                fetch("/api/green-meeting/notes?activeTasks=true"),
+                fetch("/api/green-meeting/notes?activeTasks=true&includeCompleted=true"),
                 fetch("/api/green-meeting/config"),
             ]);
 
@@ -40,6 +40,8 @@ export default function GreenMeetingTasksPage() {
             if (configRes.ok) {
                 const configData = await configRes.json();
                 setConfig(configData);
+            } else {
+                toast("Gagal memuat konfigurasi batas perpanjangan. Batas default 3x dipakai.", "error");
             }
         } catch (err) {
             reportClientError("GreenMeetingTasksPage", "Gagal memuat data tindak lanjut", err);
@@ -73,7 +75,6 @@ export default function GreenMeetingTasksPage() {
             toast(`Status tugas berhasil diubah menjadi ${status}.`, "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal memperbarui status tugas.", "error");
-            throw err;
         }
     };
 
@@ -103,7 +104,6 @@ export default function GreenMeetingTasksPage() {
             toast("Batas waktu tugas berhasil diperpanjang.", "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal memperpanjang deadline.", "error");
-            throw err;
         }
     };
 
@@ -133,9 +133,18 @@ export default function GreenMeetingTasksPage() {
 
             {/* Error Banner */}
             {loadError && (
-                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 text-sm">
-                    <AlertCircle size={18} />
-                    <span>{loadError}</span>
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-between gap-2 text-sm">
+                    <span className="flex items-center gap-2">
+                        <AlertCircle size={18} />
+                        <span>{loadError}</span>
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => void loadTasksData()}
+                        className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-500/30 hover:bg-rose-500/10 transition-colors"
+                    >
+                        Coba lagi
+                    </button>
                 </div>
             )}
 

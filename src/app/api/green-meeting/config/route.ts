@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { getGreenMeetingConfig, updateGreenMeetingConfig, canManageGreenMeeting } from "@/lib/services/greenMeetingService";
-import { greenMeetingConfigSchema } from "@/lib/validations/validationSchemas";
+import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { getGreenMeetingConfig, updateGreenMeetingConfig, canManageGreenMeeting, GreenMeetingError } from "@/lib/services/greenMeetingService";
+import { requireGreenMeetingManager } from "../_guard";
+import { greenMeetingConfigUpdateSchema } from "@/lib/validations/validationSchemas";
 import logger from "@/lib/logger";
 
 export async function GET() {
@@ -18,14 +19,11 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-
-    const isManager = await canManageGreenMeeting(session);
-    if (!isManager) return forbiddenResponse();
+    const { session, errorResponse } = await requireGreenMeetingManager();
+    if (errorResponse) return errorResponse;
 
     try {
-        const result = await validateBody(request, greenMeetingConfigSchema);
+        const result = await validateBody(request, greenMeetingConfigUpdateSchema);
         if ("error" in result) return result.error;
 
         const updated = await updateGreenMeetingConfig(result.data, session.username);
@@ -36,6 +34,9 @@ export async function PATCH(request: NextRequest) {
 
         return NextResponse.json(updated);
     } catch (err) {
+        if (err instanceof GreenMeetingError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("GreenMeetingConfigPATCH", err);
     }
 }

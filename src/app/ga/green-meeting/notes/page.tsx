@@ -18,6 +18,7 @@ import type {
     GreenMeetingNoteType,
     GreenMeetingOriginType,
     GreenMeetingTaskStatus,
+    GreenMeetingConfig,
 } from "../types";
 import type { NoteTargetItem } from "@/lib/services/greenMeetingService";
 
@@ -34,6 +35,7 @@ export default function GreenMeetingNotesPage() {
     const [departments, setDepartments] = useState<DepartmentInfo[]>([]);
     const [divisions, setDivisions] = useState<{ id: string; name: string }[]>([]);
     const [activeTasksCount, setActiveTasksCount] = useState<number>(0);
+    const [config, setConfig] = useState<GreenMeetingConfig | null>(null);
 
     const fetchedDateRef = useRef<string | null>(null);
 
@@ -42,15 +44,29 @@ export default function GreenMeetingNotesPage() {
         setLoadError("");
 
         try {
-            const [sessionRes, tasksRes, unitsRes] = await Promise.all([
+            const [sessionRes, tasksRes, unitsRes, configRes] = await Promise.all([
                 fetch(`/api/green-meeting/sessions?date=${targetDate}`),
                 fetch("/api/green-meeting/notes?activeTasks=true"),
                 fetch("/api/green-meeting/units"),
+                fetch("/api/green-meeting/config"),
             ]);
 
-            if (!sessionRes.ok) throw new Error("Gagal memuat sesi rapat.");
+            if (!sessionRes.ok && sessionRes.status !== 404) throw new Error("Gagal memuat sesi rapat.");
 
-            const sessionData = await sessionRes.json();
+            let sessionData;
+            if (sessionRes.status === 404) {
+                // GA: buatkan sesi bila tanggal ini belum ada.
+                const createRes = await fetch("/api/green-meeting/sessions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ date: targetDate }),
+                });
+                if (!createRes.ok) throw new Error("Gagal memuat sesi rapat.");
+                const created = await createRes.json();
+                sessionData = { session: created, offDayInfo: { isOffDay: false } };
+            } else {
+                sessionData = await sessionRes.json();
+            }
             setSession(sessionData.session);
             setOffDayInfo(sessionData.offDayInfo || { isOffDay: false });
 
@@ -73,6 +89,10 @@ export default function GreenMeetingNotesPage() {
                     }
                 }
                 setDivisions(Array.from(divMap.values()));
+            }
+
+            if (configRes.ok) {
+                setConfig(await configRes.json());
             }
         } catch (err) {
             reportClientError("GreenMeetingNotesPage", "Gagal memuat data notulensi", err);
@@ -136,6 +156,15 @@ export default function GreenMeetingNotesPage() {
         initialDeadlineDate?: string;
     }) => {
         if (!session) return;
+        // Writer baru TUGAS-only; arsip INFORMASI read-only.
+        if (data.type !== "TUGAS") {
+            toast("Catatan baru hanya bertipe Tugas. Arsip Informasi bersifat read-only.", "error");
+            throw new Error("Catatan baru hanya bertipe Tugas.");
+        }
+        if (!data.initialDeadlineDate) {
+            toast("Tenggat waktu awal (Deadline 1) wajib diisi.", "error");
+            throw new Error("Deadline wajib diisi.");
+        }
         try {
             const res = await fetch("/api/green-meeting/notes", {
                 method: "POST",
@@ -246,6 +275,7 @@ export default function GreenMeetingNotesPage() {
                 onRefresh={handleRefresh}
                 loading={loading}
                 offDayInfo={offDayInfo}
+                configDefaults={config}
             />
 
             {/* Sub-Navigasi Dropdown Green Meeting Tabs */}
@@ -271,6 +301,7 @@ export default function GreenMeetingNotesPage() {
                 onCreateNote={handleCreateNote}
                 onUpdateNote={handleUpdateNote}
                 onUpdateTaskStatus={handleUpdateTaskStatus}
+                loading={loading}
             />
         </div>
     );

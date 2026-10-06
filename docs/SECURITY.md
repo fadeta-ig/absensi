@@ -49,13 +49,14 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
   - Staf HR lapangan tetap `EMPLOYEE_USER` tanpa role HR tambahan; tidak ada elevasi berbasis nama/departemen/ID.
 - **Boundary Green Meeting**:
   - Kepemilikan operasional berada pada General Affairs; `picRole` dikunci ke `GA` dan tidak ada workflow transfer PIC.
-  - Endpoint baca `/api/green-meeting/*` memerlukan autentikasi dan mendukung transparansi internal bagi GA, HR, dan karyawan.
-  - Endpoint mutasi memanggil `canManageGreenMeeting()` dan hanya menerima permission `ga.manage`, role `GA_ADMIN`, atau override role `SUPER_ADMIN`.
+  - Endpoint baca `/api/green-meeting/*` memerlukan autentikasi dan mendukung transparansi internal bagi GA, HR, dan karyawan (arsip `INFORMASI` tetap terbaca).
+  - Endpoint mutasi memanggil `canManageGreenMeeting()` dan hanya menerima permission `ga.manage`, role `GA_ADMIN`, atau override role `SUPER_ADMIN`. Writer notulen baru khusus `TUGAS` ber-deadline; `INFORMASI` ditolak (arsip read-only).
   - Portal `/dashboard/green-meeting` dan `/employee/green-meeting` tidak menyediakan kontrol mutasi; seluruh pengelolaan operasional ada pada portal GA multi-page.
 - **Boundary Inspeksi Harian (Core Cleaning Loop)**:
   - Portal `/cleaning` memerlukan permission `cleaning.execute` melalui route guard di `proxy.ts` dan pemeriksaan `requireAuth()` di setiap API route.
   - Petugas hanya dapat melihat ruangan dengan penetapan aktif dan mengubah item hanya pada tanggal WIB hari ini. Pencabutan penetapan segera menghilangkan akses termasuk riwayat.
   - Administrasi di `/ga/cleaning/*` memerlukan username `WIG002` DAN permission `ga.manage`. Tidak ada fallback role atau akun lain.
+  - Atasan tertinggi (pemantau, max 5, karyawan internal aktif): read-only lintas ruangan tanpa paraf/TTD; kelola daftar hanya via WIG002 (`GET/POST/DELETE settings/top-viewers`); key tunggal lama sebagai fallback baca.
   - Akun outsource dibuat tanpa relasi employee, wajib menggunakan password 8–128 karakter, tidak memperoleh role saat pembuatan, dan hanya dapat didaftarkan atau ditugaskan oleh akun WIG002 yang membuatnya (`createdByUserId`).
   - Penetapan petugas (`CleaningWorkerAssignment`) menjadi satu-satunya sumber role `CLEANING_WORKER`; penambahan/penghapusan role terjadi secara transaksional bersama mutasi assignment. Assignment terjadwal dapat memberikan role lebih awal, tetapi service petugas tetap menolak ruangan sebelum `startsOnWibDate` efektif.
   - `proxy.ts` menduplikasi string literal `"cleaning.execute"` karena berjalan di Edge Runtime dan tidak dapat mengimpor dari modul server.

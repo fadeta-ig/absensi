@@ -48,8 +48,8 @@ export default function GreenMeetingNavTabs({
         {
             href: "/ga/green-meeting/settings",
             icon: Settings,
-            shortLabel: "Kalender",
-            label: "Kalender & Departemen",
+            shortLabel: "Pengaturan",
+            label: "Pengaturan",
         },
         {
             href: "/ga/green-meeting/recap",
@@ -80,11 +80,10 @@ export default function GreenMeetingNavTabs({
                         <span className="hidden sm:inline">{tab.label}</span>
                         {typeof tab.count === "number" && (
                             <span
-                                className={`px-1.5 py-0.2 rounded-full text-[10px] sm:text-xs font-bold ${
-                                    isActive
+                                className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold tabular-nums ${isActive
                                         ? "bg-primary/10 text-primary"
                                         : "bg-muted text-muted-foreground"
-                                }`}
+                                    }`}
                             >
                                 {tab.count}
                             </span>

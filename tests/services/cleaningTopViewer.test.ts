@@ -20,6 +20,7 @@ import {
     getCleaningTopViewerEmployeeId,
     getCleaningTopViewerInfo,
     invalidateCleaningTopViewerCache,
+    invalidateCleaningTopViewersCache,
     isCleaningTopViewer,
     updateCleaningTopViewer,
 } from "@/lib/services/appSettingsService";
@@ -34,6 +35,7 @@ function gmSession() {
 beforeEach(() => {
     vi.clearAllMocks();
     invalidateCleaningTopViewerCache();
+    invalidateCleaningTopViewersCache();
 });
 
 describe("cleaning.topViewer.employeeId (mock murni)", () => {
@@ -100,5 +102,38 @@ describe("cleaning.topViewer.employeeId (mock murni)", () => {
                 update: expect.objectContaining({ value: "ID-24050016", updatedByUserId: "wig002-id" }),
             })
         );
+    });
+});
+
+describe("cleaning.topViewers max 5 (mock murni)", () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        const mod = await import("@/lib/services/appSettingsService");
+        mod.invalidateCleaningTopViewerCache();
+        mod.invalidateCleaningTopViewersCache();
+    });
+
+    it("set: tolak lebih dari 5 (409) tanpa tulis DB", async () => {
+        const { setCleaningTopViewers } = await import("@/lib/services/appSettingsService");
+        const { prisma: p } = await import("@/lib/prisma");
+        await expect(
+            setCleaningTopViewers(["A", "B", "C", "D", "E", "F"], "wig002-id")
+        ).rejects.toMatchObject({ statusCode: 409 });
+        expect(vi.mocked(p.appSetting).upsert).not.toHaveBeenCalled();
+    });
+
+    it("set: dedup + trim; tolak nonaktif (422)", async () => {
+        const { setCleaningTopViewers } = await import("@/lib/services/appSettingsService");
+        const { prisma: p } = await import("@/lib/prisma");
+        vi.mocked(p.appSetting).upsert.mockResolvedValue({} as never);
+        vi.mocked(p.employee).findUnique.mockImplementation((async ({ where }: { where: { employeeId: string } }) => {
+            if (where.employeeId === "ID-OFF") {
+                return { employeeId: "ID-OFF", isActive: false, userAccount: { id: "u-9" } } as never;
+            }
+            return { employeeId: where.employeeId, isActive: true, userAccount: { id: "u-1" } } as never;
+        }) as never);
+        const ok = await setCleaningTopViewers(["  ID-1 ", "ID-1", "ID-2"], "wig002-id");
+        expect(ok.employeeIds).toEqual(["ID-1", "ID-2"]);
+        await expect(setCleaningTopViewers(["ID-OFF"], "wig002-id")).rejects.toMatchObject({ statusCode: 422 });
     });
 });

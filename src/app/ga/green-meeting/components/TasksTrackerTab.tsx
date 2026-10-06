@@ -19,6 +19,7 @@ import {
     TableCell,
 } from "@/components/ui/table";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import { toWIBDateString } from "@/lib/timezone";
 import type { GreenMeetingNote, GreenMeetingTaskStatus, GreenMeetingConfig } from "../types";
 
 interface TasksTrackerTabProps {
@@ -34,6 +35,7 @@ export default function TasksTrackerTab({
     config,
     onUpdateTaskStatus,
     onExtendDeadline,
+    loading = false,
 }: TasksTrackerTabProps) {
     const [filterStatus, setFilterStatus] = useState<string>("ACTIVE");
 
@@ -43,6 +45,7 @@ export default function TasksTrackerTab({
     const [extendReason, setExtendReason] = useState<string>("");
     const [extending, setExtending] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string>("");
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     const maxExtensions = config?.maxDeadlineExtensions ?? 3;
 
@@ -76,6 +79,15 @@ export default function TasksTrackerTab({
         }
     };
 
+    const handleChangeStatus = async (taskId: string, status: GreenMeetingTaskStatus) => {
+        if (updatingId) return;
+        setUpdatingId(taskId);
+        try {
+            await onUpdateTaskStatus(taskId, status);
+        } finally {
+            setUpdatingId(null);
+        }
+    };
     const filteredTasks = tasks.filter((t) => {
         if (filterStatus === "ACTIVE") return t.taskStatus === "BELUM_DIMULAI" || t.taskStatus === "SEDANG_BERJALAN";
         if (filterStatus === "COMPLETED") return t.taskStatus === "SELESAI";
@@ -99,6 +111,7 @@ export default function TasksTrackerTab({
                     <button
                         type="button"
                         onClick={() => setFilterStatus("ACTIVE")}
+                        aria-pressed={filterStatus === "ACTIVE"}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${filterStatus === "ACTIVE"
                             ? "bg-primary text-white shadow-xs"
                             : "bg-muted text-muted-foreground hover:text-foreground"
@@ -109,6 +122,7 @@ export default function TasksTrackerTab({
                     <button
                         type="button"
                         onClick={() => setFilterStatus("EXTENDED")}
+                        aria-pressed={filterStatus === "EXTENDED"}
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filterStatus === "EXTENDED"
                             ? "bg-amber-600 text-white"
                             : "bg-muted text-muted-foreground hover:text-foreground"
@@ -119,6 +133,7 @@ export default function TasksTrackerTab({
                     <button
                         type="button"
                         onClick={() => setFilterStatus("COMPLETED")}
+                        aria-pressed={filterStatus === "COMPLETED"}
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filterStatus === "COMPLETED"
                             ? "bg-emerald-600 text-white"
                             : "bg-muted text-muted-foreground hover:text-foreground"
@@ -129,6 +144,7 @@ export default function TasksTrackerTab({
                     <button
                         type="button"
                         onClick={() => setFilterStatus("ALL")}
+                        aria-pressed={filterStatus === "ALL"}
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${filterStatus === "ALL"
                             ? "bg-foreground text-background"
                             : "bg-muted text-muted-foreground hover:text-foreground"
@@ -154,7 +170,17 @@ export default function TasksTrackerTab({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredTasks.length === 0 ? (
+                        {loading && tasks.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={7} className="py-4">
+                                    <div className="space-y-2 animate-pulse" aria-label="Memuat tugas">
+                                        {[0, 1, 2].map((i) => (
+                                            <div key={i} className="h-8 rounded-lg bg-muted" />
+                                        ))}
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : filteredTasks.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                                     Tidak ada tugas tindak lanjut pada filter ini.
@@ -167,6 +193,11 @@ export default function TasksTrackerTab({
                                     : null;
                                 const extensionsCount = Math.max(0, (task.deadlines?.length || 1) - 1);
                                 const isMaxReached = extensionsCount >= maxExtensions;
+                                const isDone = task.taskStatus === "SELESAI" || task.taskStatus === "DIBATALKAN";
+                                const currentDeadlineDateStr = currentDeadline
+                                    ? new Date(currentDeadline.deadlineDate).toISOString().slice(0, 10)
+                                    : null;
+                                const isOverdue = !isDone && !!currentDeadlineDateStr && currentDeadlineDateStr < toWIBDateString();
 
                                 return (
                                     <TableRow key={task.id}>
@@ -211,9 +242,11 @@ export default function TasksTrackerTab({
                                             <select
                                                 value={task.taskStatus}
                                                 onChange={(e) =>
-                                                    onUpdateTaskStatus(task.id, e.target.value as GreenMeetingTaskStatus)
+                                                    void handleChangeStatus(task.id, e.target.value as GreenMeetingTaskStatus)
                                                 }
-                                                className={`text-xs font-bold px-2 py-1 rounded-lg border focus:outline-none ${task.taskStatus === "SELESAI"
+                                                disabled={updatingId === task.id}
+                                                aria-label={`Ubah status tugas: ${task.content.slice(0, 40)}`}
+                                                className={`text-xs font-bold px-2 py-1 rounded-lg border focus:outline-none disabled:opacity-50 ${task.taskStatus === "SELESAI"
                                                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
                                                     : task.taskStatus === "SEDANG_BERJALAN"
                                                         ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
@@ -249,7 +282,12 @@ export default function TasksTrackerTab({
 
                                         {/* Riwayat Molor */}
                                         <TableCell className="text-xs">
-                                            {extensionsCount > 0 ? (
+                                            {isOverdue ? (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30">
+                                                    <AlertTriangle size={11} />
+                                                    Terlambat{extensionsCount > 0 ? ` (${extensionsCount} / ${maxExtensions}x)` : ""}
+                                                </span>
+                                            ) : extensionsCount > 0 ? (
                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${isMaxReached
                                                     ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
                                                     : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
@@ -366,6 +404,7 @@ export default function TasksTrackerTab({
                                 type="date"
                                 value={newDeadline}
                                 onChange={(e) => setNewDeadline(e.target.value)}
+                                min={toWIBDateString()}
                                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                 required
                             />

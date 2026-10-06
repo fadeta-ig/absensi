@@ -400,11 +400,111 @@ export function invalidateCleaningWeeklyOffDaysCache(): void {
 // HR menonaktifkan employee tersebut — WIG002 tinggal menunjuk pengganti).
 
 export const CLEANING_TOP_VIEWER_KEY = "cleaning.topViewer.employeeId" as const;
+/** LEGACY single key dipertahankan sebagai fallback baca; tulis baru ke list max 5. */
+export const CLEANING_TOP_VIEWERS_KEY = "cleaning.topViewers" as const;
+export const MAX_CLEANING_TOP_VIEWERS = 5 as const;
 
 let cleaningTopViewerCache: { value: string | null; expiresAt: number } | null = null;
+let cleaningTopViewersCache: { value: string[]; expiresAt: number } | null = null;
 
 export function invalidateCleaningTopViewerCache(): void {
     cleaningTopViewerCache = null;
+}
+
+export function invalidateCleaningTopViewersCache(): void {
+    cleaningTopViewersCache = null;
+}
+
+function parseTopViewerIds(raw: string | null | undefined): string[] {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((v): v is string => typeof v === "string")
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .slice(0, MAX_CLEANING_TOP_VIEWERS);
+    } catch {
+        return [];
+    }
+}
+
+/** Daftar atasan tertinggi (max 5). Fallback ke key tunggal legacy bila list belum ada. */
+export async function getCleaningTopViewerEmployeeIds(): Promise<string[]> {
+    const cached = cleaningTopViewersCache;
+    if (cached && Date.now() <= cached.expiresAt) return [...cached.value];
+    try {
+        const row = await prisma.appSetting.findUnique({ where: { key: CLEANING_TOP_VIEWERS_KEY } });
+        let ids = parseTopViewerIds(row?.value);
+        if (ids.length === 0) {
+            const legacy = await getCleaningTopViewerEmployeeId().catch(() => null);
+            if (legacy) ids = [legacy];
+        }
+        cleaningTopViewersCache = { value: ids, expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [...ids];
+    } catch {
+        cleaningTopViewersCache = { value: [], expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [];
+    }
+}
+
+/** Info list untuk UI settings (nama + status aktif). */
+export async function getCleaningTopViewerInfos(): Promise<CleaningTopViewerInfo[]> {
+    const ids = await getCleaningTopViewerEmployeeIds();
+    if (ids.length === 0) return [];
+    const employees = await prisma.employee.findMany({
+        where: { employeeId: { in: ids } },
+        select: { employeeId: true, name: true, isActive: true },
+    });
+    const byId = new Map(employees.map((e) => [e.employeeId, e]));
+    return ids.map((id) => {
+        const e = byId.get(id);
+        if (!e) return { employeeId: id, name: null, isActive: false };
+        return { employeeId: e.employeeId, name: e.name, isActive: e.isActive };
+    });
+}
+
+/** Set penuh daftar atasan tertinggi (max 5, dedup, validasi aktif+internal tiap ID). */
+export async function setCleaningTopViewers(
+    rawIds: string[],
+    actorUserId?: string | null
+): Promise<{ key: typeof CLEANING_TOP_VIEWERS_KEY; employeeIds: string[] }> {
+    const ids = [...new Set(rawIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length > MAX_CLEANING_TOP_VIEWERS) {
+        throw new AppSettingsError(`Maksimal ${MAX_CLEANING_TOP_VIEWERS} atasan tertinggi.`, 409);
+    }
+    for (const id of ids) {
+        if (id.length > 100) throw new AppSettingsError("ID karyawan atasan tertinggi terlalu panjang.", 400);
+    }
+    const validated: string[] = [];
+    for (const id of ids) {
+        validated.push(await assertActiveInternalEmployee(id, "Atasan tertinggi"));
+    }
+    await prisma.appSetting.upsert({
+        where: { key: CLEANING_TOP_VIEWERS_KEY },
+        update: { value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+        create: { key: CLEANING_TOP_VIEWERS_KEY, value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateCleaningTopViewersCache();
+    return { key: CLEANING_TOP_VIEWERS_KEY, employeeIds: validated };
+}
+
+/** Hapus satu atasan dari daftar. */
+export async function removeCleaningTopViewer(
+    rawId: string,
+    actorUserId?: string | null
+): Promise<{ key: typeof CLEANING_TOP_VIEWERS_KEY; employeeIds: string[] }> {
+    const id = rawId.trim();
+    const current = await getCleaningTopViewerEmployeeIds();
+    const next = current.filter((v) => v !== id);
+    await prisma.appSetting.upsert({
+        where: { key: CLEANING_TOP_VIEWERS_KEY },
+        update: { value: JSON.stringify(next), updatedByUserId: actorUserId ?? null },
+        create: { key: CLEANING_TOP_VIEWERS_KEY, value: JSON.stringify(next), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateCleaningTopViewersCache();
+    return { key: CLEANING_TOP_VIEWERS_KEY, employeeIds: next };
 }
 
 // ─── Default reviewer global (Diperiksa Oleh + Mengetahui) ───
@@ -528,19 +628,18 @@ export async function getCleaningTopViewerEmployeeId(): Promise<string | null> {
 }
 
 /**
- * True bila sesi adalah atasan tertinggi yang ditunjuk (read-only viewer)
- * DAN employee-nya masih aktif. Cek aktif di sini (bukan hanya warisan auth)
- * agar penunjukan basi setelah resign langsung mati.
+ * True bila sesi adalah salah satu atasan tertinggi (max 5, fallback legacy single)
+ * DAN employee-nya masih aktif. Cek aktif di sini agar penunjukan basi langsung mati.
  */
 export async function isCleaningTopViewer(
     session: Pick<SessionPayload, "employeeId"> | null
 ): Promise<boolean> {
     if (!session?.employeeId) return false;
-    const topViewerId = await getCleaningTopViewerEmployeeId().catch(() => null);
-    if (topViewerId === null || session.employeeId !== topViewerId) return false;
+    const ids = await getCleaningTopViewerEmployeeIds().catch(() => [] as string[]);
+    if (!ids.includes(session.employeeId)) return false;
     try {
         const employee = await prisma.employee.findUnique({
-            where: { employeeId: topViewerId },
+            where: { employeeId: session.employeeId },
             select: { isActive: true },
         });
         return employee?.isActive === true;

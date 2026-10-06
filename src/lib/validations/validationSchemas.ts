@@ -514,13 +514,22 @@ export const greenMeetingConfigSchema = z.object({
     offDaysWeekly: z.string().max(50).default("0,6"),
 });
 
+/** PATCH parsial: semua field opsional, minimal 1 field. */
+export const greenMeetingConfigUpdateSchema = greenMeetingConfigSchema.partial().refine(
+    (data) => Object.keys(data).length > 0,
+    { message: "Tidak ada field yang diubah.", path: [] }
+);
+
 export const greenMeetingUnitUpdateSchema = z.object({
     isActiveInMeeting: z.boolean().optional(),
     isDefaultRequired: z.boolean().optional(),
 });
 
 export const greenMeetingHolidaySchema = z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}/, "Format tanggal harus YYYY-MM-DD"),
+    date: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD")
+        .refine((value) => isValidCalendarDate(value), "Tanggal tidak valid."),
     description: z.string().trim().min(2, "Keterangan libur minimal 2 karakter").max(200),
     isRecurring: z.boolean().optional(),
 });
@@ -536,18 +545,21 @@ export const greenMeetingSessionUpdateSchema = z.object({
 });
 
 export const greenMeetingAttendanceUpdateSchema = z.object({
-    status: z.enum(["HADIR", "IZIN", "ALPA"]),
-    representativeName: z.string().trim().max(100).nullable().optional(),
-    permitReason: z.string().trim().max(1000).nullable().optional(),
-}).refine(
-    (data) => {
-        if (data.status === "IZIN" && (!data.permitReason || data.permitReason.trim().length === 0)) {
-            return false;
-        }
-        return true;
-    },
-    { message: "Alasan izin wajib diisi jika status perwakilan adalah Izin", path: ["permitReason"] }
-);
+    status: z.enum(["HADIR", "ALPA"]),
+});
+
+/** Izin dept-only. Divisi didukung untuk notulen (NoteTarget), bukan untuk izin sesi. */
+export const greenMeetingDeptIzinSchema = z
+    .object({
+        sessionId: z.string().trim().min(1, "Session ID wajib diisi"),
+        departmentId: z.string().trim().min(1, "Departemen wajib dipilih"),
+        reason: z.string().trim().min(3, "Alasan izin wajib diisi minimal 3 karakter.").max(1000),
+    })
+    .strict();
+
+export const greenMeetingDeptIzinDeleteSchema = z.object({
+    id: z.string().trim().min(1, "Parameter id wajib diisi"),
+});
 
 export const greenMeetingTargetItemSchema = z.object({
     targetType: z.enum(["DEPARTMENT", "DIVISION", "EMPLOYEE"]),
@@ -557,7 +569,7 @@ export const greenMeetingTargetItemSchema = z.object({
     label: z.string().nullable().optional(),
 });
 
-export const greenMeetingNoteCreateSchema = z.object({
+const greenMeetingNoteBaseSchema = z.object({
     type: z.enum(["INFORMASI", "TUGAS"]),
     content: z.string().trim().min(3, "Catatan minimal 3 karakter").max(5000),
     originType: z.enum(["DIREKSI", "DEPARTMENT", "DIVISION", "EMPLOYEE", "LAINNYA"]).default("DIREKSI"),
@@ -565,18 +577,20 @@ export const greenMeetingNoteCreateSchema = z.object({
     isAllTarget: z.boolean().default(true),
     targets: z.array(greenMeetingTargetItemSchema).optional(),
     targetDepartmentIds: z.array(z.string()).optional(),
-    initialDeadlineDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/, "Format tanggal harus YYYY-MM-DD").optional(),
-}).refine(
-    (data) => {
-        if (data.type === "TUGAS" && !data.initialDeadlineDate) {
-            return false;
-        }
-        return true;
-    },
-    { message: "Tenggat waktu awal (Deadline 1) wajib diisi untuk catatan bertipe Tugas", path: ["initialDeadlineDate"] }
+    initialDeadlineDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD")
+        .refine((value) => isValidCalendarDate(value), "Tanggal tidak valid.")
+        .optional(),
+});
+
+export const greenMeetingNoteCreateSchema = greenMeetingNoteBaseSchema.refine(
+    (data) => data.type === "TUGAS" && !!data.initialDeadlineDate,
+    { message: "Catatan baru hanya bertipe Tugas dengan Tenggat waktu awal (Deadline 1). Arsip Informasi bersifat read-only.", path: ["initialDeadlineDate"] }
 );
 
-export const greenMeetingNoteUpdateSchema = greenMeetingNoteCreateSchema.extend({
+/** PATCH parsial: semua field opsional kecuali changeReason (Zod v4: partial dari base tanpa refine). */
+export const greenMeetingNoteUpdateSchema = greenMeetingNoteBaseSchema.partial().extend({
     changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter").max(1000),
 });
 
@@ -585,7 +599,10 @@ export const greenMeetingTaskStatusUpdateSchema = z.object({
 });
 
 export const greenMeetingExtendDeadlineSchema = z.object({
-    newDeadlineDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/, "Format tanggal harus YYYY-MM-DD"),
+    newDeadlineDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD")
+        .refine((value) => isValidCalendarDate(value), "Tanggal tidak valid."),
     reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter").max(1000),
 });
 

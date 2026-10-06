@@ -138,6 +138,9 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/cleaning/approvals/reviewers` | `GET` | WIG002 + `ga.manage` | Mencari employee internal yang dapat menjadi reviewer. |
 | `/api/ga/cleaning/approvals/reopen` | `POST` | WIG002 + `ga.manage` | Membuka kembali tanda tangan dengan alasan dan audit trail. |
 | `/api/ga/cleaning/approvals/export-pdf` | `GET` | WIG002 + `ga.manage` | Menyediakan data ekspor PDF persetujuan bulanan. |
+| `/api/ga/cleaning/settings/top-viewer` | `GET`, `PUT` | WIG002 + `ga.manage` | Penunjukan tunggal LEGACY (fallback baca). |
+| `/api/ga/cleaning/settings/top-viewers` | `GET`, `POST`, `DELETE` | WIG002 + `ga.manage` | Daftar atasan tertinggi max 5 (POST set penuh, duplikat/ke-6 ditolak, nonaktif/outsource 422; DELETE `?id=`). |
+| `/api/ga/cleaning/overview` | `GET` | WIG002 / reviewer / topViewer | Baca agregat pantauan semua ruangan (read-only). |
 | `/api/cleaning/rooms` | `GET` | `cleaning.execute` | Daftar ruangan yang efektif untuk petugas pada tanggal WIB hari ini. |
 | `/api/cleaning/checklists` | `GET`, `POST` | `cleaning.execute` | Membaca atau membuat snapshot checklist harian ruangan yang ditugaskan. |
 | `/api/cleaning/checklist-items/[id]` | `PATCH` | `cleaning.execute` | Mengubah status item checklist pada tanggal WIB hari ini. |
@@ -153,28 +156,31 @@ Semua endpoint memerlukan sesi aktif. Endpoint baca tersedia bagi pengguna terau
 | `/api/green-meeting/config` | `GET` | Autentikasi | Membaca konfigurasi dan flag `canManage`. |
 | `/api/green-meeting/config` | `PATCH` | GA / Super Admin | Mengubah ruangan/jam default, hari libur mingguan, dan kuota perpanjangan. |
 | `/api/green-meeting/units` | `GET` | Autentikasi | Membaca departemen peserta beserta divisinya. |
-| `/api/green-meeting/units` | `PATCH` | GA / Super Admin | Mengaktifkan/menonaktifkan partisipasi departemen dan menyinkronkan presensi sesi. |
-| `/api/green-meeting/sessions?date=YYYY-MM-DD` | `GET` | Autentikasi | Mengambil atau membuat sesi tanggal tertentu beserta presensi, notulen, dan info off-day. |
-| `/api/green-meeting/sessions` | `POST` | Autentikasi | Mengambil/membuat sesi berdasarkan tanggal payload. |
+| `/api/green-meeting/units` | `PATCH` | GA / Super Admin | Mengaktifkan/menonaktifkan partisipasi departemen (soft-exclude, riwayat presensi utuh); body kosong ditolak 400. |
+| `/api/green-meeting/sessions?date=YYYY-MM-DD` | `GET` | Autentikasi | Read-only: mengambil sesi tanggal tertentu beserta info off-day; 404 bila belum ada, tanggal kalender divalidasi. |
+| `/api/green-meeting/sessions` | `POST` | GA / Super Admin | Mengambil/membuat sesi berdasarkan tanggal payload yang divalidasi. |
 | `/api/green-meeting/sessions` | `PATCH` | GA / Super Admin | Mengubah ruangan, jam mulai, atau atribut sesi yang divalidasi. |
-| `/api/green-meeting/attendance` | `PATCH` | GA / Super Admin | Mengubah satu presensi (`HADIR`, `IZIN`, `ALPA`); alasan wajib untuk `IZIN`. |
-| `/api/green-meeting/attendance` | `POST` | GA / Super Admin | Aksi massal `MARK_ALL_PRESENT`, `MARK_SELECTED_PRESENT`, atau `MARK_SELECTED_ALPA`. |
-| `/api/green-meeting/notes` | `GET` | Autentikasi | Mengambil tugas aktif atau tugas relevan berdasarkan `departmentId`, `divisionId`, dan `employeeId`. |
-| `/api/green-meeting/notes` | `POST` | GA / Super Admin | Membuat informasi/tugas dengan sumber DARI dan target KEPADA fleksibel; tugas wajib Deadline 1. |
-| `/api/green-meeting/notes` | `PATCH` | GA / Super Admin | Mengubah status tugas. |
-| `/api/green-meeting/notes/[id]` | `PATCH` | GA / Super Admin | Mengoreksi isi/jenis/DARI/KEPADA/deadline notulensi dengan alasan wajib; update atomik menyimpan snapshot revisi dan audit log. |
-| `/api/green-meeting/notes/[id]/revisions` | `GET` | Autentikasi | Membaca riwayat revisi append-only suatu notulensi. |
-| `/api/green-meeting/deadlines` | `POST` | GA / Super Admin | Menambah perpanjangan deadline beserta alasan dengan batas kuota konfigurasi. |
+| `/api/green-meeting/attendance` | `PATCH` | GA / Super Admin | Mengubah satu presensi per-orang (`HADIR`, `ALPA`); izin dicatat di level dept/divisi. |
+| `/api/green-meeting/attendance` | `POST` | GA / Super Admin | Aksi massal `MARK_ALL_PRESENT`, `MARK_SELECTED_PRESENT`, atau `MARK_SELECTED_ALPA`; aksi per-orang wajib `attendanceIds` minimal 1. |
+| `/api/green-meeting/notes` | `GET` | Autentikasi | Mengambil tugas aktif (`?activeTasks=true`, opsional `&includeCompleted=true` untuk Selesai/Dibatalkan) atau tugas relevan berdasarkan `departmentId`, `divisionId`, dan `employeeId`; non-manager selalu di-scope ke datanya sendiri. |
+| `/api/green-meeting/notes` | `POST` | GA / Super Admin | Membuat butir tugas (`type` wajib `TUGAS`; `INFORMASI` ditolak 400, arsip read-only); tugas wajib Deadline 1 (tanggal kalender valid). |
+| `/api/green-meeting/notes` | `PATCH` | GA / Super Admin | Mengubah status tugas bertipe Tugas (arsip `INFORMASI` ditolak); 404 bila catatan tidak ada. |
+| `/api/green-meeting/notes/[id]` | `PATCH` | GA / Super Admin | Mengoreksi isi/DARI/KEPADA/deadline notulensi dengan alasan wajib; tolak konversi menjadi `INFORMASI`; update atomik menyimpan snapshot revisi dan audit log. |
+| `/api/green-meeting/notes/[id]/revisions` | `GET` | GA / Super Admin | Membaca riwayat revisi append-only suatu notulensi; ID divalidasi. |
+| `/api/green-meeting/deadlines` | `POST` | GA / Super Admin | Menambah perpanjangan deadline beserta alasan dengan batas kuota konfigurasi; tolak status SELESAI/DIBATALKAN dan tanggal tak monotonik; tanggal kalender divalidasi. |
 | `/api/green-meeting/holidays` | `GET` | Autentikasi | Membaca tanggal libur khusus. |
-| `/api/green-meeting/holidays` | `POST`, `DELETE` | GA / Super Admin | Menambah atau menghapus tanggal libur khusus. |
-| `/api/green-meeting/employees?q=...` | `GET` | Autentikasi | Autocomplete maksimal 20 karyawan aktif berdasarkan nama/ID, termasuk jabatan, departemen, dan divisi. |
-| `/api/green-meeting/recap?startDate=...&endDate=...` | `GET` | Autentikasi | Rekap sesi dan agregasi kehadiran untuk rentang tanggal; default 30 hari terakhir. |
+| `/api/green-meeting/holidays` | `POST`, `DELETE` | GA / Super Admin | Menambah (tanggal valid, bukan lampau; duplikat 409) atau menghapus (404 bila tidak ada) tanggal libur khusus. |
+| `/api/green-meeting/employees?q=...` | `GET` | GA / HR | Autocomplete karyawan aktif berdasarkan nama/ID (`q` maks 50 karakter, `limit` 1–50 default 20, case-insensitive), termasuk jabatan, departemen, dan divisi. |
+| `/api/green-meeting/recap?startDate=...&endDate=...` | `GET` | GA / HR | Rekap sesi dan agregasi kehadiran untuk rentang tanggal kalender valid (`startDate <= endDate`, maks 366 hari kalender inklusif; default 30 hari terakhir; `includeSessions=true` untuk detail sesi penuh, default ringan tanpa sessions). |
+| `/api/green-meeting/attendance/quick` | `POST` | GA / Super Admin | Tandai Hadir cepat per karyawan (`sessionId`, `employeeId` trim; upsert idempoten; tolak sesi batal). Envelope `ok()`. |
+| `/api/green-meeting/excuses` | `POST`, `DELETE` | GA / Super Admin | Mencatat/menghapus izin level dept per sesi (dept-only; `POST` strict, `DELETE?id=` Zod). Envelope `ok()`. |
 
 Kontrak notulen penting:
 - `originType`: `DIREKSI | DEPARTMENT | DIVISION | EMPLOYEE | LAINNYA`.
 - `targets[].targetType`: `DEPARTMENT | DIVISION | EMPLOYEE`.
 - `isAllTarget = true` menyatakan sasaran seluruh perusahaan dan tidak memerlukan baris target.
-- Respons Green Meeting saat ini dikembalikan langsung sebagai JSON domain atau `{ session, offDayInfo }`; endpoint ini belum memakai envelope generik `success/data`.
+- Writer baru khusus `TUGAS` (create `INFORMASI` → 400); reader = `TUGAS` + arsip `INFORMASI`.
+- Envelope campur (bekukan, jangan ubah diam-diam): `attendance PATCH/POST`, `attendance/quick`, `excuses` memakai `ok() → {success:true,data,message?}`; `sessions`, `notes`, `deadlines`, `recap`, `config`, `units`, `holidays`, `employees`, `revisions` mengembalikan JSON domain mentah (`{session,offDayInfo}` / array / objek). Error selalu `{error:string}` (400/401/403/404/409) atau 500 generik.
 
 ### F. Penggajian & Pajak (`/api/payslips`, `/api/overtime`, `/api/bpjs`, `/api/pph21`)
 | Rute | Metode | Permission / Akses | Deskripsi |

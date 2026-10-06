@@ -71,6 +71,7 @@ model Employee {
   taxHistories          EmployeeTaxHistory[]
   birthdayPreparations  EmployeeBirthdayPreparation[]
   greenMeetingTargets   GreenMeetingNoteTarget[]
+  greenMeetingAttendances GreenMeetingAttendance[]
   cleaningApprovalsInspected CleaningMonthlyApproval[]          @relation("CleaningApprovalInspectedBy")
   cleaningApprovalsKnown     CleaningMonthlyApproval[]          @relation("CleaningApprovalKnownBy")
   cleaningSignatures         CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureEmployee")
@@ -520,6 +521,7 @@ model Department {
   employees           Employee[]               @relation("EmployeeDepartment")
   greenMeetingUnit    GreenMeetingUnit?
   greenMeetingTargets GreenMeetingNoteTarget[]
+  greenMeetingDeptIzins GreenMeetingDeptIzin[]
 
   @@index([divisionId], map: "departments_division_id_fkey")
   @@map("departments")
@@ -1105,7 +1107,7 @@ enum GreenMeetingTaskStatus {
 
 enum GreenMeetingAttendanceStatus {
   HADIR
-  IZIN
+  IZIN // LEGACY: baris arsip lama; presensi per-orang kini hanya HADIR/ALPA
   ALPA
 }
 
@@ -1115,6 +1117,12 @@ enum GreenMeetingOriginType {
   DIVISION
   EMPLOYEE
   LAINNYA
+}
+
+enum GreenMeetingTargetType {
+  DEPARTMENT
+  DIVISION
+  EMPLOYEE
 }
 
 model GreenMeetingConfig {
@@ -1168,6 +1176,7 @@ model GreenMeetingSession {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   attendances GreenMeetingAttendance[]
+  deptIzins   GreenMeetingDeptIzin[]
   notes       GreenMeetingNote[]
 
   @@map("green_meeting_sessions")
@@ -1176,26 +1185,49 @@ model GreenMeetingSession {
 model GreenMeetingAttendance {
   id                 String                       @id @default(uuid())
   sessionId          String                       @map("session_id")
-  unitId             String                       @map("unit_id")
+  unitId             String?                      @map("unit_id")
+  employeeId         String?                      @map("employee_id")
+  employeeName       String?                      @map("employee_name")
+  departmentId       String?                      @map("department_id")
+  departmentName     String?                      @map("department_name")
   status             GreenMeetingAttendanceStatus @default(ALPA)
-  representativeName String?                      @map("representative_name")
-  permitReason       String?                      @map("permit_reason") @db.Text
+  representativeName String?                      @map("representative_name") // LEGACY: fallback nama arsip lama
+  permitReason       String?                      @map("permit_reason") @db.Text // LEGACY: tidak lagi ditulis; izin kini level dept/divisi
   confirmedAt        DateTime?                    @map("confirmed_at")
   confirmedBy        String?                      @map("confirmed_by")
 
-  session GreenMeetingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  unit    GreenMeetingUnit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  session  GreenMeetingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  unit     GreenMeetingUnit?   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  employee Employee?           @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@unique([sessionId, unitId], map: "idx_gm_attendance_session_unit")
+  @@unique([sessionId, employeeId], map: "idx_gm_attendance_session_emp")
   @@index([sessionId], map: "idx_gm_attendance_session")
   @@index([unitId], map: "idx_gm_attendance_unit")
+  @@index([employeeId], map: "idx_gm_attendance_employee")
   @@map("green_meeting_attendances")
+}
+
+model GreenMeetingDeptIzin {
+  id           String   @id @default(uuid())
+  sessionId    String   @map("session_id")
+  departmentId String?  @map("department_id")
+  reason       String   @db.Text
+  createdBy    String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  session    GreenMeetingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  department Department?         @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, departmentId], map: "idx_gm_izin_session_dept")
+  @@map("green_meeting_dept_izin")
 }
 
 model GreenMeetingNote {
   id           String                 @id @default(uuid())
   sessionId    String                 @map("session_id")
-  type         GreenMeetingNoteType   @default(INFORMASI)
+  // Writer baru hanya TUGAS; INFORMASI = arsip read-only (enum dipertahankan, data lama utuh).
+  type         GreenMeetingNoteType   @default(TUGAS)
   content      String                 @db.Text
   originType   GreenMeetingOriginType @default(DIREKSI) @map("origin_type")
   originName   String                 @default("Direksi") @map("origin_name")
@@ -1214,6 +1246,7 @@ model GreenMeetingNote {
 
   @@index([sessionId], map: "idx_gm_note_session")
   @@index([taskStatus], map: "idx_gm_note_task_status")
+  @@index([type, createdAt], map: "idx_gm_note_type_created")
   @@map("green_meeting_notes")
 }
 
@@ -1236,7 +1269,7 @@ model GreenMeetingNoteRevision {
 model GreenMeetingNoteTarget {
   id           String  @id @default(uuid())
   noteId       String  @map("note_id")
-  targetType   String  @default("DEPARTMENT") @map("target_type") // "DEPARTMENT" | "DIVISION" | "EMPLOYEE"
+  targetType   GreenMeetingTargetType @default(DEPARTMENT) @map("target_type")
   departmentId String? @map("department_id")
   divisionId   String? @map("division_id")
   employeeId   String? @map("employee_id")
@@ -1265,6 +1298,7 @@ model GreenMeetingDeadlineHistory {
 
   note GreenMeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
+  @@unique([noteId, sequence], map: "idx_gm_deadline_note_seq")
   @@index([noteId], map: "idx_gm_deadline_note")
   @@map("green_meeting_deadline_histories")
 }

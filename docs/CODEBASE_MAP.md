@@ -101,13 +101,13 @@ hriswig/
   - `src/app/ga/scan/page.tsx`: Scanner kamera web untuk membaca barcode/QR inventaris.
   - `src/app/ga/layout.tsx`: Sidebar GA; menu Green Meeting memakai sub-dropdown lima halaman.
   - `src/app/ga/green-meeting/page.tsx`: Entry route yang mengarahkan ke halaman presensi.
-  - `src/app/ga/green-meeting/attendance/page.tsx`: Presensi departemen, ringkasan, aksi cepat, dan pemilihan tanggal/jam.
-  - `src/app/ga/green-meeting/notes/page.tsx`: Pencatatan dan daftar notulen DARI → KEPADA.
+  - `src/app/ga/green-meeting/attendance/page.tsx`: Presensi per-orang, ringkasan, aksi cepat/quick-mark, izin dept, dan pemilihan tanggal/jam.
+  - `src/app/ga/green-meeting/notes/page.tsx`: Pencatatan Tugas (writer TUGAS-only) dan daftar notulen + arsip Informasi read-only.
   - `src/app/ga/green-meeting/tasks/page.tsx`: Pelacak tindak lanjut dan riwayat multi-deadline.
   - `src/app/ga/green-meeting/settings/page.tsx`: Kalender operasional, konfigurasi, dan partisipasi departemen.
   - `src/app/ga/green-meeting/recap/page.tsx`: Rekap rentang tanggal serta ekspor Excel/PDF.
   - `src/app/ga/green-meeting/components/`: Komponen native bersama untuk header, navigasi submodul, presensi, notulen, tugas, pengaturan, dan rekap.
-  - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, akun outsource, dan penetapan petugas inspeksi.
+  - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, akun outsource, penetapan petugas inspeksi, dan daftar atasan tertinggi max 5 (`TopViewerCard` + `GET/POST/DELETE settings/top-viewers`).
   - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
   - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
 
@@ -130,7 +130,7 @@ hriswig/
   - `src/app/api/visits/route.ts`: Pelaporan dan verifikasi foto kunjungan lapangan.
   - `src/app/api/payslips/route.ts`: Handler penerbitan slip gaji bulanan.
   - `src/app/api/cron/[...]/route.ts`: 5 endpoint terjadwal yang diamankan dengan header `Bearer CRON_SECRET`.
-  - `src/app/api/green-meeting/`: Sembilan route handler untuk config, units, sessions, attendance, notes, deadlines, holidays, employee autocomplete, dan recap.
+  - `src/app/api/green-meeting/`: 12 route handler untuk _guard, config, units, sessions, attendance (+quick), excuses, notes (+revisions), deadlines, holidays, employees, dan recap.
   - `src/app/api/cleaning/`: Tiga route handler untuk petugas inspeksi: rooms (GET), checklists (GET/POST), dan checklist-items/[id] (PATCH).
   - `src/app/api/ga/cleaning/`: Dua belas route handler untuk WIG002: master ruangan/template, assignment dan kandidat user, akun outsource, checklist/recap, serta persetujuan bulanan, reopen, reviewer, dan ekspor PDF.
   - `src/app/api/employee/cleaning/`: Dua route handler bagi reviewer employee untuk membaca dan menandatangani persetujuan bulanan.
@@ -150,7 +150,7 @@ hriswig/
   - `assetService.ts`: Siklus hidup aset, mutasi, inspeksi, dan dokumen BAST.
   - `visitService.ts` & `visitPhotoService.ts`: Audit trail kunjungan dan watermarking citra via Sharp.
   - `emailService.ts`: Pengiriman email transaksional kredensial dan pengingat via SMTP Nodemailer.
-  - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi departemen, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap Green Meeting.
+  - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi per-orang + izin dept + arsip legacy, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap ringan Green Meeting.
   - `cleaningService.ts`: Domain service inspeksi harian: CRUD ruangan/template/item, akun outsource, penetapan petugas, sinkronisasi role CLEANING_WORKER, snapshot checklist harian, perubahan item, dan rekap bulanan.
   - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
 

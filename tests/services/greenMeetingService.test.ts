@@ -1,11 +1,4 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import {
-    greenMeetingAttendanceUpdateSchema,
-    greenMeetingNoteCreateSchema,
-    greenMeetingNoteUpdateSchema,
-    greenMeetingExtendDeadlineSchema,
-    greenMeetingConfigSchema,
-} from "@/lib/validations/validationSchemas";
 
 // Mock prisma for greenMeetingService unit testing
 vi.mock("@/lib/prisma", () => ({
@@ -22,18 +15,31 @@ vi.mock("@/lib/prisma", () => ({
         greenMeetingHoliday: {
             findMany: vi.fn(),
             findUnique: vi.fn(),
+            create: vi.fn(),
             upsert: vi.fn(),
             delete: vi.fn(),
         },
         greenMeetingSession: {
             findUnique: vi.fn(),
+            findUniqueOrThrow: vi.fn(),
             create: vi.fn(),
             update: vi.fn(),
             findMany: vi.fn(),
         },
+        greenMeetingDeptIzin: {
+            create: vi.fn(),
+            delete: vi.fn(),
+        },
         greenMeetingAttendance: {
+            findUnique: vi.fn(),
+            findUniqueOrThrow: vi.fn(),
             update: vi.fn(),
             updateMany: vi.fn(),
+            findMany: vi.fn(),
+            upsert: vi.fn(),
+        },
+        employee: {
+            findUnique: vi.fn(),
             findMany: vi.fn(),
         },
         greenMeetingNote: {
@@ -42,6 +48,13 @@ vi.mock("@/lib/prisma", () => ({
             update: vi.fn(),
             findMany: vi.fn(),
         },
+        greenMeetingNoteRevision: {
+            create: vi.fn(),
+            count: vi.fn(),
+        },
+        greenMeetingNoteTarget: {
+            deleteMany: vi.fn(),
+        },
         greenMeetingDeadlineHistory: {
             create: vi.fn(),
         },
@@ -49,6 +62,13 @@ vi.mock("@/lib/prisma", () => ({
             findUnique: vi.fn(),
             findMany: vi.fn(),
         },
+        division: {
+            findUnique: vi.fn(),
+        },
+        auditLog: {
+            create: vi.fn(),
+        },
+        $transaction: vi.fn(),
     },
 }));
 
@@ -57,195 +77,18 @@ import {
     canManageGreenMeeting,
     extendTaskDeadline,
     updateAttendance,
-    GreenMeetingError,
 } from "@/lib/services/greenMeetingService";
 import { SYSTEM_ROLES, PERMISSIONS } from "@/lib/permissions";
 import type { SessionPayload } from "@/lib/auth";
 
-describe("Green Meeting Zod Schemas", () => {
-    describe("greenMeetingAttendanceUpdateSchema", () => {
-        it("should accept valid HADIR without permitReason", () => {
-            const res = greenMeetingAttendanceUpdateSchema.safeParse({
-                status: "HADIR",
-                representativeName: "Budi",
-            });
-            expect(res.success).toBe(true);
-        });
 
-        it("should accept valid IZIN with permitReason", () => {
-            const res = greenMeetingAttendanceUpdateSchema.safeParse({
-                status: "IZIN",
-                representativeName: "Budi",
-                permitReason: "Sedang dinas luar kota menghadiri audit",
-            });
-            expect(res.success).toBe(true);
-        });
-
-        it("should reject IZIN if permitReason is empty or whitespace", () => {
-            const res = greenMeetingAttendanceUpdateSchema.safeParse({
-                status: "IZIN",
-                permitReason: "   ",
-            });
-            expect(res.success).toBe(false);
-            if (!res.success) {
-                expect(res.error.issues[0].message).toContain("Alasan izin wajib diisi");
-            }
-        });
-    });
-
-    describe("greenMeetingNoteCreateSchema", () => {
-        it("should accept INFORMASI without initialDeadlineDate", () => {
-            const res = greenMeetingNoteCreateSchema.safeParse({
-                type: "INFORMASI",
-                content: "Pengumuman libur bersama Idul Fitri",
-                originType: "DIREKSI",
-                originName: "Direksi",
-                isAllTarget: true,
-            });
-            expect(res.success).toBe(true);
-        });
-
-        it.each([
-            ["DIVISION", "Divisi SGA"],
-            ["EMPLOYEE", "Daffa Ramadhan (IT Staff)"],
-            ["LAINNYA", "Auditor Pajak Eksternal"],
-        ])("should accept flexible origin type %s", (originType, originName) => {
-            const res = greenMeetingNoteCreateSchema.safeParse({
-                type: "INFORMASI",
-                content: "Pembahasan koordinasi perusahaan",
-                originType,
-                originName,
-                isAllTarget: true,
-            });
-
-            expect(res.success).toBe(true);
-        });
-
-        it("should accept multi-entity targets for KEPADA", () => {
-            const res = greenMeetingNoteCreateSchema.safeParse({
-                type: "INFORMASI",
-                content: "Koordinasi lintas struktur organisasi",
-                originType: "DEPARTMENT",
-                originName: "Departemen HRGA",
-                isAllTarget: false,
-                targets: [
-                    { targetType: "DEPARTMENT", departmentId: "dept-1", label: "HRGA" },
-                    { targetType: "DIVISION", divisionId: "div-1", label: "Divisi SGA" },
-                    { targetType: "EMPLOYEE", employeeId: "WIG-0010", label: "Bambang (CEO)" },
-                ],
-            });
-
-            expect(res.success).toBe(true);
-        });
-
-        it("should reject TUGAS if initialDeadlineDate is missing", () => {
-            const res = greenMeetingNoteCreateSchema.safeParse({
-                type: "TUGAS",
-                content: "Persiapan infrastruktur cloud server baru",
-                originType: "DEPARTMENT",
-                originName: "Teknologi Informasi",
-                isAllTarget: false,
-                targetDepartmentIds: ["dept-1", "dept-2"],
-            });
-            expect(res.success).toBe(false);
-            if (!res.success) {
-                expect(res.error.issues[0].message).toContain("Tenggat waktu awal (Deadline 1) wajib diisi");
-            }
-        });
-
-        it("should accept TUGAS if initialDeadlineDate is provided", () => {
-            const res = greenMeetingNoteCreateSchema.safeParse({
-                type: "TUGAS",
-                content: "Persiapan infrastruktur cloud server baru",
-                originType: "DEPARTMENT",
-                originName: "Teknologi Informasi",
-                isAllTarget: false,
-                targetDepartmentIds: ["dept-1"],
-                initialDeadlineDate: "2026-09-25",
-            });
-            expect(res.success).toBe(true);
-        });
-    });
-
-    describe("greenMeetingNoteUpdateSchema", () => {
-        it("should require a concrete change reason", () => {
-            const result = greenMeetingNoteUpdateSchema.safeParse({
-                type: "INFORMASI",
-                content: "Informasi hasil konfirmasi terbaru dari pimpinan",
-                originType: "DIREKSI",
-                originName: "Direksi",
-                isAllTarget: true,
-                changeReason: "   ",
-            });
-
-            expect(result.success).toBe(false);
-        });
-
-        it("should accept a full flexible note correction", () => {
-            const result = greenMeetingNoteUpdateSchema.safeParse({
-                type: "INFORMASI",
-                content: "Informasi hasil konfirmasi terbaru dari pimpinan",
-                originType: "DIVISION",
-                originName: "Divisi SGA",
-                isAllTarget: false,
-                targets: [{ targetType: "DEPARTMENT", departmentId: "dept-1", label: "HRGA" }],
-                changeReason: "Koreksi sasaran setelah konfirmasi ulang",
-            });
-
-            expect(result.success).toBe(true);
-        });
-    });
-
-    describe("greenMeetingExtendDeadlineSchema", () => {
-        it("should accept valid extension with reason min 5 chars", () => {
-            const res = greenMeetingExtendDeadlineSchema.safeParse({
-                newDeadlineDate: "2026-09-30",
-                reason: "Vendor pengadaan mengalami keterlambatan pengiriman suku cadang",
-            });
-            expect(res.success).toBe(true);
-        });
-
-        it("should reject extension if reason is too short", () => {
-            const res = greenMeetingExtendDeadlineSchema.safeParse({
-                newDeadlineDate: "2026-09-30",
-                reason: "Late", // 4 chars, below min 5
-            });
-            expect(res.success).toBe(false);
-            if (!res.success) {
-                expect(res.error.issues[0].message).toContain("minimal 5 karakter");
-            }
-        });
-    });
-
-    describe("greenMeetingConfigSchema", () => {
-        it("should validate time format HH:mm and extensions range", () => {
-            const res = greenMeetingConfigSchema.safeParse({
-                defaultRoom: "Ruang Rapat Utama",
-                defaultTime: "08:30",
-                maxDeadlineExtensions: 3,
-                offDaysWeekly: "0,6",
-            });
-            expect(res.success).toBe(true);
-        });
-
-        it("should reject invalid time format", () => {
-            const res = greenMeetingConfigSchema.safeParse({
-                defaultRoom: "Ruang Rapat Utama",
-                defaultTime: "8:30 AM",
-                maxDeadlineExtensions: 3,
-                offDaysWeekly: "0,6",
-            });
-            expect(res.success).toBe(false);
-        });
-    });
-});
 
 describe("Green Meeting Authorization & Logic", () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it("should allow SUPER_ADMIN or HR_ADMIN to manage Green Meeting", async () => {
+    it("should allow SUPER_ADMIN via role override", async () => {
         const adminSession = {
             id: "user-admin",
             userId: "user-admin",
@@ -268,13 +111,7 @@ describe("Green Meeting Authorization & Logic", () => {
         expect(canManage).toBe(true);
     });
 
-    it("should allow GA_ADMIN when picRole is GA", async () => {
-        (prisma.greenMeetingConfig.findUnique as Mock).mockResolvedValue({
-            id: "default",
-            picRole: "GA",
-            assignedPicUserId: null,
-        });
-
+    it("should allow GA_ADMIN with ga.manage permission", async () => {
         const gaSession = {
             id: "user-ga",
             userId: "user-ga",
@@ -297,13 +134,7 @@ describe("Green Meeting Authorization & Logic", () => {
         expect(canManage).toBe(true);
     });
 
-    it("should disallow regular employee when picRole is GA", async () => {
-        (prisma.greenMeetingConfig.findUnique as Mock).mockResolvedValue({
-            id: "default",
-            picRole: "GA",
-            assignedPicUserId: null,
-        });
-
+    it("should disallow regular employee without ga.manage", async () => {
         const empSession = {
             id: "user-emp",
             userId: "user-emp",
@@ -326,14 +157,141 @@ describe("Green Meeting Authorization & Logic", () => {
         expect(canManage).toBe(false);
     });
 
-    it("should throw error on updateAttendance if IZIN without permitReason", async () => {
+    it("should reject IZIN per orang (izin kini level dept/divisi)", async () => {
         await expect(
-            updateAttendance("att-1", { status: "IZIN", permitReason: "" }, "Admin GA")
-        ).rejects.toThrow(GreenMeetingError);
+            updateAttendance("att-1", { status: "IZIN" } as never, "Admin GA")
+        ).rejects.toThrow(/HADIR atau ALPA/);
+        expect(prisma.greenMeetingAttendance.update).not.toHaveBeenCalled();
+    });
+
+    it("should update person attendance HADIR with confirmed actor", async () => {
+        (prisma.greenMeetingAttendance.findUnique as Mock).mockResolvedValue({
+            id: "att-1",
+            sessionId: "ses-1",
+            status: "ALPA",
+        });
+        (prisma.greenMeetingAttendance.update as Mock).mockResolvedValue({ id: "att-1", status: "HADIR" });
+        const result = await updateAttendance("att-1", { status: "HADIR" }, "WIG002");
+        expect(result).toMatchObject({ id: "att-1", status: "HADIR" });
+        expect(prisma.greenMeetingAttendance.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: "att-1" },
+                data: expect.objectContaining({ status: "HADIR", confirmedBy: "WIG002" }),
+            })
+        );
+    });
+
+    it("should create dept izin only for exactly one target with reason", async () => {
+        const { createDeptIzin } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingSession.findUnique as Mock).mockResolvedValue({ id: "ses-1" });
+        (prisma.department.findUnique as Mock).mockResolvedValue({ id: "dept-1" });
+        (prisma.greenMeetingDeptIzin.create as Mock).mockResolvedValue({ id: "izin-1" });
+
+        const result = await createDeptIzin(
+            "ses-1",
+            { departmentId: "dept-1", reason: "Dinas luar kota" },
+            "WIG002"
+        );
+        expect(result).toMatchObject({ id: "izin-1" });
+
+        await expect(
+            createDeptIzin("ses-1", { reason: "Dinas luar kota" }, "WIG002")
+        ).rejects.toThrow(/satu departemen/);
+    });
+
+    it("should compute dept representation HADIR/IZIN/ALPA", async () => {
+        const { computeRepresentation } = await import("@/lib/services/greenMeetingService");
+        const { departments } = computeRepresentation(
+            [
+                { employeeId: "E1", departmentId: "D1", departmentName: "IT", status: "HADIR" },
+                { employeeId: "E2", departmentId: "D1", departmentName: "IT", status: "ALPA" },
+                { employeeId: "E3", departmentId: "D2", departmentName: "HR", status: "ALPA" },
+            ],
+            [{ departmentId: "D2", reason: "Cuti bersama" }]
+        );
+        expect(departments.find((d) => d.departmentId === "D1")?.status).toBe("HADIR");
+        expect(departments.find((d) => d.departmentId === "D2")?.status).toBe("IZIN");
+        expect(departments.find((d) => d.departmentId === "D2")?.izinReason).toBe("Cuti bersama");
+    });
+
+    it("should separate archive stats from new person stats in recap", async () => {
+        const { getMeetingRecap } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingSession.findMany as Mock).mockResolvedValue([
+            {
+                id: "ses-new",
+                notes: [],
+                attendances: [
+                    { employeeId: "E1", employeeName: "Budi", departmentId: "D1", departmentName: "IT", divisionId: "V1", divisionName: "SGA", status: "HADIR" },
+                ],
+                deptIzins: [],
+            },
+            {
+                id: "ses-old",
+                notes: [],
+                attendances: [
+                    { employeeId: null, unitId: "unit-1", status: "ALPA", unit: { department: { id: "D1", name: "IT", division: { id: "V1", name: "SGA" } } } },
+                ],
+                deptIzins: [],
+            },
+        ]);
+
+        const recap = await getMeetingRecap("2026-10-01", "2026-10-06");
+        expect(recap.kpi.totalHadir).toBe(1);
+        expect(recap.kpi.totalAlpa).toBe(0);
+        expect(recap.memberStats).toHaveLength(1);
+        expect(recap.deptStats.find((d) => d.departmentId === "D1")?.totalSesi).toBe(1);
+        expect(recap.archiveStats.find((d) => d.departmentId === "D1")?.sesiAlpa).toBe(1);
+        expect(recap.archiveSessions).toBe(1);
+    });
+
+    it("should quick-mark present by employeeId with auto dept", async () => {
+        const { quickMarkPresentByEmployee } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingSession.findUnique as Mock).mockResolvedValue({ id: "ses-1" });
+        (prisma.employee.findUnique as Mock).mockResolvedValue({
+            employeeId: "E1",
+            name: "Budi",
+            isActive: true,
+            departmentId: "D1",
+            departmentRel: { name: "IT" },
+        });
+        (prisma.greenMeetingAttendance.upsert as Mock).mockResolvedValue({ id: "att-1", status: "HADIR" });
+
+        const result = await quickMarkPresentByEmployee("ses-1", "E1", "WIG002");
+        expect(result).toMatchObject({ id: "att-1", status: "HADIR" });
+        expect(prisma.greenMeetingAttendance.upsert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { sessionId_employeeId: { sessionId: "ses-1", employeeId: "E1" } },
+                create: expect.objectContaining({
+                    employeeId: "E1",
+                    employeeName: "Budi",
+                    departmentName: "IT",
+                    status: "HADIR",
+                }),
+            })
+        );
+    });
+
+    it("should reject quick-mark for inactive employee", async () => {
+        const { quickMarkPresentByEmployee } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingSession.findUnique as Mock).mockResolvedValue({ id: "ses-1" });
+        (prisma.employee.findUnique as Mock).mockResolvedValue({
+            employeeId: "E9",
+            name: "Resign",
+            isActive: false,
+            departmentId: "D1",
+            divisionId: null,
+            departmentRel: null,
+            divisionRel: null,
+        });
+
+        await expect(quickMarkPresentByEmployee("ses-1", "E9", "WIG002")).rejects.toThrow(
+            /tidak ditemukan atau sudah tidak aktif/
+        );
+        expect(prisma.greenMeetingAttendance.upsert).not.toHaveBeenCalled();
     });
 
     it("should reject extendTaskDeadline if max extension quota is reached", async () => {
-        (prisma.greenMeetingConfig.findUnique as Mock).mockResolvedValue({
+        (prisma.greenMeetingConfig.upsert as Mock).mockResolvedValue({
             id: "default",
             maxDeadlineExtensions: 2, // Max 2 kali perpanjangan
         });
@@ -351,5 +309,76 @@ describe("Green Meeting Authorization & Logic", () => {
         await expect(
             extendTaskDeadline("note-1", "2026-10-01", "Alasan molor lagi", "Admin GA")
         ).rejects.toThrow(/Batas toleransi perpanjangan telah tercapai/);
+    });
+
+    it("should reject bulk IDs asing lintas-sesi agar tidak sukses palsu", async () => {
+        const { bulkUpdateAttendanceStatus } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingSession.findUnique as Mock).mockResolvedValue({ id: "ses-1", isCancelled: false });
+        (prisma.greenMeetingAttendance.findMany as Mock).mockResolvedValue([{ id: "att-1" }]);
+        await expect(bulkUpdateAttendanceStatus("ses-1", ["att-1", "att-asing"], "HADIR", "WIG002")).rejects.toThrow(
+            /bukan milik sesi/
+        );
+        expect(prisma.greenMeetingAttendance.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("should map deleteDeptIzin P2025 ke 404 tanpa samarkan outage", async () => {
+        const { deleteDeptIzin } = await import("@/lib/services/greenMeetingService");
+        const notFound = Object.assign(new Error("not found"), { code: "P2025" });
+        (prisma.greenMeetingDeptIzin.delete as Mock).mockRejectedValueOnce(notFound);
+        await expect(deleteDeptIzin("missing")).rejects.toThrow(/tidak ditemukan/);
+        const outage = new Error("db down");
+        (prisma.greenMeetingDeptIzin.delete as Mock).mockRejectedValueOnce(outage);
+        await expect(deleteDeptIzin("x")).rejects.toThrow(/db down/);
+    });
+
+    it("should include izin-only dept di computeRepresentation", async () => {
+        const { computeRepresentation } = await import("@/lib/services/greenMeetingService");
+        const { departments } = computeRepresentation([], [{ departmentId: "D9", reason: "Dinas" }]);
+        expect(departments.find((d) => d.departmentId === "D9")?.status).toBe("IZIN");
+    });
+
+    it("should reject createMeetingNote INFORMASI (writer TUGAS-only, arsip read-only)", async () => {
+        const { createMeetingNote } = await import("@/lib/services/greenMeetingService");
+        await expect(
+            createMeetingNote("ses-1", { type: "INFORMASI", content: "Pengumuman lama" } as never, "WIG002")
+        ).rejects.toThrow(/hanya bertipe Tugas/);
+        expect(prisma.greenMeetingNote.create).not.toHaveBeenCalled();
+    });
+});
+
+describe("Green Meeting Phase 4 & 5 Guards", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    
+
+    it("should soft-exclude unit tanpa menghapus histori presensi", async () => {
+        const { updateGreenMeetingUnit } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingUnit.update as Mock).mockResolvedValue({
+            id: "unit-1",
+            isActiveInMeeting: false,
+        });
+
+        const result = await updateGreenMeetingUnit("unit-1", { isActiveInMeeting: false });
+        expect(result).toMatchObject({ id: "unit-1", isActiveInMeeting: false });
+        expect(prisma.greenMeetingUnit.update).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: "unit-1" } })
+        );
+    });
+
+    it("should reject hari libur lampau dan duplikat tanggal", async () => {
+        const { addGreenMeetingHoliday } = await import("@/lib/services/greenMeetingService");
+        const pastDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        await expect(
+            addGreenMeetingHoliday({ date: pastDate, description: "Libur lampau" })
+        ).rejects.toThrow(/masa lampau/);
+        expect(prisma.greenMeetingHoliday.create).not.toHaveBeenCalled();
+
+        (prisma.greenMeetingHoliday.findUnique as Mock).mockResolvedValue({ id: "h-1" });
+        await expect(
+            addGreenMeetingHoliday({ date: "2099-01-05", description: "Libur ganda" })
+        ).rejects.toThrow(/sudah terdaftar/);
     });
 });

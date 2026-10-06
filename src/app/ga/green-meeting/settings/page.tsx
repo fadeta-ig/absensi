@@ -22,6 +22,7 @@ export default function GreenMeetingSettingsPage() {
     const [units, setUnits] = useState<GreenMeetingUnit[]>([]);
     const [holidays, setHolidays] = useState<GreenMeetingHoliday[]>([]);
     const [config, setConfig] = useState<GreenMeetingConfig | null>(null);
+    const [pendingUnitId, setPendingUnitId] = useState<string | null>(null);
 
     const loadSettingsData = useCallback(async () => {
         setLoading(true);
@@ -41,7 +42,8 @@ export default function GreenMeetingSettingsPage() {
 
             if (holidaysRes.ok) {
                 const holidaysData = await holidaysRes.json();
-                setHolidays(holidaysData);
+                const sorted = [...holidaysData].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                setHolidays(sorted);
             }
 
             if (configRes.ok) {
@@ -73,7 +75,10 @@ export default function GreenMeetingSettingsPage() {
                 body: JSON.stringify(data),
             });
 
-            if (!res.ok) throw new Error("Gagal menyimpan konfigurasi.");
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                throw new Error(errJson.error || "Gagal menyimpan konfigurasi.");
+            }
             const updated = await res.json();
             setConfig(updated);
             toast("Parameter operasional rapat berhasil disimpan.", "success");
@@ -87,6 +92,8 @@ export default function GreenMeetingSettingsPage() {
         unitId: string,
         data: { isActiveInMeeting?: boolean; isDefaultRequired?: boolean }
     ) => {
+        if (pendingUnitId) return;
+        setPendingUnitId(unitId);
         try {
             const res = await fetch("/api/green-meeting/units", {
                 method: "PATCH",
@@ -94,13 +101,18 @@ export default function GreenMeetingSettingsPage() {
                 body: JSON.stringify({ id: unitId, ...data }),
             });
 
-            if (!res.ok) throw new Error("Gagal memperbarui departemen.");
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                throw new Error(errJson.error || "Gagal memperbarui departemen.");
+            }
             const updated = await res.json();
             setUnits((prev) => prev.map((u) => (u.id === unitId ? updated : u)));
             toast("Pengaturan departemen berhasil disimpan.", "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal memperbarui departemen.", "error");
             throw err;
+        } finally {
+            setPendingUnitId(null);
         }
     };
 
@@ -112,9 +124,18 @@ export default function GreenMeetingSettingsPage() {
                 body: JSON.stringify(data),
             });
 
-            if (!res.ok) throw new Error("Gagal menambahkan hari libur.");
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                throw new Error(errJson.error || "Gagal menambahkan hari libur.");
+            }
             const created = await res.json();
-            setHolidays((prev) => [...prev, created]);
+            // Dedup berdasarkan tanggal + urut menaik agar daftar tidak ganda.
+            setHolidays((prev) => {
+                const createdDate = String(created.date).slice(0, 10);
+                const merged = [...prev.filter((h) => String(h.date).slice(0, 10) !== createdDate), created];
+                merged.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                return merged;
+            });
             toast("Hari libur berhasil didaftarkan.", "success");
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal menambahkan hari libur.", "error");
@@ -123,12 +144,20 @@ export default function GreenMeetingSettingsPage() {
     };
 
     const handleDeleteHoliday = async (id: string) => {
+        const target = holidays.find((h) => h.id === id);
+        const label = target
+            ? new Date(target.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+            : "hari libur ini";
+        if (!window.confirm(`Hapus ${label} dari kalender libur?`)) return;
         try {
-            const res = await fetch(`/api/green-meeting/holidays?id=${id}`, {
+            const res = await fetch(`/api/green-meeting/holidays?id=${encodeURIComponent(id)}`, {
                 method: "DELETE",
             });
 
-            if (!res.ok) throw new Error("Gagal menghapus hari libur.");
+            if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                throw new Error(errJson.error || "Gagal menghapus hari libur.");
+            }
             setHolidays((prev) => prev.filter((h) => h.id !== id));
             toast("Hari libur berhasil dihapus.", "success");
         } catch (err) {
@@ -163,9 +192,18 @@ export default function GreenMeetingSettingsPage() {
 
             {/* Error Banner */}
             {loadError && (
-                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center gap-2 text-sm">
-                    <AlertCircle size={18} />
-                    <span>{loadError}</span>
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-between gap-2 text-sm">
+                    <span className="flex items-center gap-2">
+                        <AlertCircle size={18} />
+                        <span>{loadError}</span>
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => void loadSettingsData()}
+                        className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-500/30 hover:bg-rose-500/10 transition-colors"
+                    >
+                        Coba lagi
+                    </button>
                 </div>
             )}
 
@@ -179,6 +217,7 @@ export default function GreenMeetingSettingsPage() {
                 onDeleteHoliday={handleDeleteHoliday}
                 onUpdateUnit={handleUpdateUnit}
                 loading={loading}
+                pendingUnitId={pendingUnitId}
             />
         </div>
     );

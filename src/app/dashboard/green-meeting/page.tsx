@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
     Calendar,
     Clock,
@@ -29,9 +29,16 @@ import {
     TableHead,
     TableCell,
 } from "@/components/ui/table";
-import { toWIBDateString } from "@/lib/timezone";
+import { toWIBDateString, addCalendarDays } from "@/lib/timezone";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
 import { reportClientError } from "@/lib/clientErrors";
+import {
+    DeptRecapTable,
+    exportRecapDeptPdf,
+    exportRecapMemberExcel,
+    useGreenMeetingRecap,
+} from "@/components/green-meeting/GreenMeetingRecap";
+import { countAttendance, personRowsOf } from "@/app/ga/green-meeting/selectors";
 
 interface DepartmentInfo {
     id: string;
@@ -51,9 +58,16 @@ interface GreenMeetingUnit {
 interface GreenMeetingAttendance {
     id: string;
     status: "HADIR" | "IZIN" | "ALPA";
-    representativeName: string | null;
-    permitReason: string | null;
-    unit: GreenMeetingUnit;
+    employeeId: string | null;
+    employeeName: string | null;
+    departmentId: string | null;
+    departmentName: string | null;
+    /** LEGACY read-only: presensi tanpa kolom division di DB. */
+    divisionId?: string | null;
+    divisionName?: string | null;
+    representativeName?: string | null;
+    permitReason?: string | null;
+    unit?: GreenMeetingUnit | null;
 }
 
 interface GreenMeetingDeadline {
@@ -91,34 +105,10 @@ interface GreenMeetingSession {
     meetingDate: string;
     startTime: string;
     room: string;
+    isCancelled?: boolean;
     attendances: GreenMeetingAttendance[];
+    deptIzins?: { id: string; departmentId: string | null; reason: string }[];
     notes: GreenMeetingNote[];
-}
-
-interface UnitAttendanceStat {
-    departmentName: string;
-    totalSessions: number;
-    hadir: number;
-    izin: number;
-    alpa: number;
-    attendanceRate: number;
-}
-
-interface TaskSummary {
-    totalTasks: number;
-    completed: number;
-    inProgress: number;
-    notStarted: number;
-    cancelled: number;
-    extended: number;
-}
-
-interface RecapData {
-    startDate: string;
-    endDate: string;
-    totalSessions: number;
-    unitAttendanceStats: UnitAttendanceStat[];
-    taskSummary: TaskSummary;
 }
 
 type TabKey = "ATTENDANCE" | "NOTES" | "TASKS" | "RECAP";
@@ -179,39 +169,51 @@ export default function HrGreenMeetingMonitoringPage() {
     // Recap States
     const [recapStart, setRecapStart] = useState<string>(defaultStart);
     const [recapEnd, setRecapEnd] = useState<string>(todayStr);
-    const [recapData, setRecapData] = useState<RecapData | null>(null);
-    const [recapLoading, setRecapLoading] = useState(false);
+    const [memberQuery, setMemberQuery] = useState("");
+    const { recap: recapData, loading: recapLoading, error: recapError, fetchRecap } = useGreenMeetingRecap();
 
     const fetchedDateRef = useRef<string | null>(null);
 
     // Load Session Data
+    const abortRef = useRef<AbortController | null>(null);
     const loadSessionData = useCallback(async (targetDate: string) => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setLoading(true);
         setLoadError("");
 
         try {
             const [sessionRes, tasksRes] = await Promise.all([
-                fetch(`/api/green-meeting/sessions?date=${targetDate}`),
-                fetch("/api/green-meeting/notes?activeTasks=true"),
+                fetch(`/api/green-meeting/sessions?date=${targetDate}`, { signal: controller.signal }),
+                fetch("/api/green-meeting/notes?activeTasks=true", { signal: controller.signal }),
             ]);
 
-            if (!sessionRes.ok) throw new Error("Gagal memuat sesi Green Meeting.");
-
-            const sessionJson = await sessionRes.json();
-            setSession(sessionJson.session);
-            setOffDayInfo(sessionJson.offDayInfo || { isOffDay: false });
+            if (controller.signal.aborted) return;
+            if (sessionRes.status === 404) {
+                setSession(null);
+                setOffDayInfo({ isOffDay: false });
+            } else {
+                if (!sessionRes.ok) throw new Error("Gagal memuat sesi Green Meeting.");
+                const sessionJson = await sessionRes.json();
+                setSession(sessionJson.session);
+                setOffDayInfo(sessionJson.offDayInfo || { isOffDay: false });
+            }
 
             if (tasksRes.ok) {
                 const tasksJson = await tasksRes.json();
-                setActiveTasks(tasksJson);
+                if (!controller.signal.aborted) setActiveTasks(tasksJson);
             }
         } catch (err) {
+            if (err instanceof Error && err.name === "AbortError") return;
             reportClientError("HrGreenMeetingMonitoring", "Gagal memuat monitoring Green Meeting", err);
             setLoadError(err instanceof Error ? err.message : "Terjadi kesalahan memuat data.");
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) setLoading(false);
         }
     }, []);
+
+    useEffect(() => () => abortRef.current?.abort(), []);
 
     useEffect(() => {
         if (fetchedDateRef.current === currentDateStr) return;
@@ -223,109 +225,90 @@ export default function HrGreenMeetingMonitoringPage() {
         void loadSessionData(currentDateStr);
     }, [currentDateStr, loadSessionData]);
 
-    // Load Recap
-    const fetchRecap = useCallback(async () => {
-        setRecapLoading(true);
-        try {
-            const res = await fetch(`/api/green-meeting/recap?startDate=${recapStart}&endDate=${recapEnd}`);
-            if (res.ok) {
-                const data = await res.json();
-                setRecapData(data);
-            }
-        } catch (err) {
-            reportClientError("HrGreenMeetingRecap", "Gagal memuat rekap", err);
-        } finally {
-            setRecapLoading(false);
-        }
-    }, [recapStart, recapEnd]);
-
     useEffect(() => {
         if (activeTab === "RECAP") {
-            void fetchRecap();
+            void fetchRecap(recapStart, recapEnd);
         }
-    }, [activeTab, fetchRecap]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
 
-    // Export Excel
+    // Export Excel (peringkat per orang; bersama dengan GA)
     const handleExportExcel = () => {
-        if (!recapData?.unitAttendanceStats) return;
-
-        const excelRows = recapData.unitAttendanceStats.map((s: UnitAttendanceStat, idx: number) => ({
-            no: idx + 1,
-            unit: s.departmentName,
-            totalSesi: s.totalSessions,
-            hadir: s.hadir,
-            izin: s.izin,
-            alpa: s.alpa,
-            persentase: `${s.attendanceRate}%`,
-        }));
-
-        const headers = [
-            { key: "no", label: "No" },
-            { key: "unit", label: "Departemen" },
-            { key: "totalSesi", label: "Total Sesi Rapat" },
-            { key: "hadir", label: "Total Hadir" },
-            { key: "izin", label: "Total Izin" },
-            { key: "alpa", label: "Total Alpa" },
-            { key: "persentase", label: "Tingkat Kehadiran" },
-        ];
-
-        exportToExcel(excelRows, headers, `Monitoring_Green_Meeting_${recapStart}_sd_${recapEnd}`, "Rekap Kehadiran");
+        if (!recapData) return;
+        exportRecapMemberExcel(recapData, memberQuery, recapStart, recapEnd, "Monitoring_Green_Meeting", exportToExcel);
     };
 
-    // Export PDF
+    // Export PDF (rekap dept; bersama dengan GA)
     const handleExportPdf = () => {
-        if (!recapData?.unitAttendanceStats) return;
-
-        const pdfData = recapData.unitAttendanceStats.map((s: UnitAttendanceStat, idx: number) => [
-            String(idx + 1),
-            s.departmentName,
-            String(s.totalSessions),
-            String(s.hadir),
-            String(s.izin),
-            String(s.alpa),
-            `${s.attendanceRate}%`,
-        ]);
-
-        const headers = ["No", "Departemen", "Total Sesi", "Hadir", "Izin", "Alpa", "% Kehadiran"];
-
-        exportToPdfTable(
-            pdfData,
-            headers,
-            "Laporan Pemantauan Rapat Koordinasi Green Meeting",
+        if (!recapData) return;
+        exportRecapDeptPdf(
+            recapData,
+            recapStart,
+            recapEnd,
             `Monitoring_Green_Meeting_${recapStart}_sd_${recapEnd}`,
-            `Periode: ${recapStart} s/d ${recapEnd} | Total Sesi: ${recapData.totalSessions}`
+            "Laporan Pemantauan Rapat Koordinasi Green Meeting",
+            exportToPdfTable
         );
     };
 
-    // Derived HUD
-    const attendances = session?.attendances || [];
-    const hadirCount = attendances.filter((a) => a.status === "HADIR").length;
-    const izinCount = attendances.filter((a) => a.status === "IZIN").length;
-    const alpaCount = attendances.filter((a) => a.status === "ALPA").length;
-    const attendancePercent = attendances.length > 0 ? Math.round((hadirCount / attendances.length) * 100) : 0;
+    // Derived HUD (bersama dengan GA via selectors)
+    const attendances = useMemo(() => session?.attendances || [], [session]);
+    const personRows = useMemo(() => personRowsOf(attendances as never[]), [attendances]);
+    const { hadir: hadirCount, belumHadir: alpaCount, percent: attendancePercent } = useMemo(
+        () => countAttendance(personRows as never[]),
+        [personRows]
+    );
 
-    const dueTodayTasks = activeTasks.filter((t) => {
+    const dueTodayTasks = useMemo(() => activeTasks.filter((t) => {
         const latestDeadline = t.deadlines && t.deadlines.length > 0
             ? t.deadlines[t.deadlines.length - 1].deadlineDate.split("T")[0]
             : null;
         return latestDeadline === currentDateStr;
-    });
+    }), [activeTasks, currentDateStr]);
 
-    const extendedTasks = activeTasks.filter((t) => t.deadlines && t.deadlines.length > 1);
+    const extendedTasks = useMemo(
+        () => activeTasks.filter((t) => t.deadlines && t.deadlines.length > 1),
+        [activeTasks]
+    );
 
-    // Filters
-    const filteredAttendances = attendances.filter((a) => {
+    const taskChips = useMemo(() => {
+        const todayWib = toWIBDateString();
+        const overdue = activeTasks.filter((t) => {
+            if (t.taskStatus === "SELESAI" || t.taskStatus === "DIBATALKAN") return false;
+            const latest = t.deadlines && t.deadlines.length > 0 ? t.deadlines[t.deadlines.length - 1] : null;
+            return latest ? latest.deadlineDate.slice(0, 10) < todayWib : false;
+        }).length;
+        return {
+            total: activeTasks.length,
+            selesai: activeTasks.filter((t) => t.taskStatus === "SELESAI").length,
+            berjalan: activeTasks.filter((t) => t.taskStatus === "BELUM_DIMULAI" || t.taskStatus === "SEDANG_BERJALAN").length,
+            overdue,
+        };
+    }, [activeTasks]);
+
+    // Filters (per orang; baris legacy tanpa employee disembunyikan di sini, arsip di tab rekap)
+    const filteredAttendances = useMemo(() => personRows.filter((a) => {
         if (attendanceFilter === "ALL") return true;
-        return a.status === attendanceFilter;
-    });
+        if (attendanceFilter === "HADIR") return a.status === "HADIR";
+        return a.status !== "HADIR";
+    }), [personRows, attendanceFilter]);
+    const legacyRows = useMemo(() => attendances.filter((a) => !a.employeeId), [attendances]);
+    const hasLegacyArchive = legacyRows.length > 0;
+    const hasMixedArchive = personRows.length > 0 && legacyRows.length > 0;
 
-    const filteredNotes = (session?.notes || []).filter((n) => {
+    const filteredNotes = useMemo(() => (session?.notes || []).filter((n) => {
         if (noteFilter === "ALL") return true;
         if (noteFilter === "DIREKSI") return n.originType === "DIREKSI";
         if (noteFilter === "INFORMASI") return n.type === "INFORMASI";
         if (noteFilter === "TUGAS") return n.type === "TUGAS";
         return true;
-    });
+    }), [session, noteFilter]);
+
+    const filteredMembers = useMemo(() => (recapData?.memberStats ?? []).filter((m) => {
+        const q = memberQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${m.name} ${m.departmentName}`.toLowerCase().includes(q);
+    }), [recapData, memberQuery]);
 
     const formattedDate = new Date(`${currentDateStr}T00:00:00`).toLocaleDateString("id-ID", {
         weekday: "long",
@@ -349,7 +332,7 @@ export default function HrGreenMeetingMonitoringPage() {
                                 Pemantauan HR (Read-Only)
                             </span>
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-                                Dikelola Penuh oleh GA (WIG002)
+                                Dikelola Penuh oleh Tim General Affairs
                             </span>
                             {offDayInfo?.isOffDay && (
                                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center gap-1">
@@ -372,9 +355,7 @@ export default function HrGreenMeetingMonitoringPage() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    const d = new Date(`${currentDateStr}T00:00:00`);
-                                    d.setDate(d.getDate() - 1);
-                                    setCurrentDateStr(d.toISOString().split("T")[0]);
+                                    setCurrentDateStr(addCalendarDays(currentDateStr, -1));
                                 }}
                                 className="p-1.5 hover:bg-background rounded-md text-foreground transition-colors"
                                 title="Hari Sebelumnya"
@@ -406,9 +387,7 @@ export default function HrGreenMeetingMonitoringPage() {
                             <button
                                 type="button"
                                 onClick={() => {
-                                    const d = new Date(`${currentDateStr}T00:00:00`);
-                                    d.setDate(d.getDate() + 1);
-                                    setCurrentDateStr(d.toISOString().split("T")[0]);
+                                    setCurrentDateStr(addCalendarDays(currentDateStr, 1));
                                 }}
                                 className="p-1.5 hover:bg-background rounded-md text-foreground transition-colors"
                                 title="Hari Berikutnya"
@@ -451,30 +430,54 @@ export default function HrGreenMeetingMonitoringPage() {
                     </div>
 
                     <div className="text-xs text-muted-foreground">
-                        Status Sesi: <span className="font-semibold text-emerald-600 dark:text-emerald-400">● Aktif</span>
+                        Status Sesi:{" "}
+                        {!session ? (
+                            <span className="font-semibold text-muted-foreground">● Belum ada</span>
+                        ) : session.isCancelled ? (
+                            <span className="font-semibold text-rose-600 dark:text-rose-400">● Dibatalkan</span>
+                        ) : offDayInfo?.isOffDay ? (
+                            <span className="font-semibold text-amber-600 dark:text-amber-400">● Libur</span>
+                        ) : (
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">● Aktif</span>
+                        )}
                     </div>
                 </div>
             </div>
 
             {loadError && (
-                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm font-medium flex items-center gap-2">
-                    <AlertCircle size={16} />
-                    <span>{loadError}</span>
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 text-sm font-medium flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                        <AlertCircle size={16} />
+                        <span>{loadError}</span>
+                    </span>
+                    <button
+                        type="button"
+                        onClick={handleRefresh}
+                        className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-500/30 hover:bg-rose-500/10 transition-colors"
+                    >
+                        Coba lagi
+                    </button>
+                </div>
+            )}
+
+            {!loading && !session && !loadError && (
+                <div className="p-4 rounded-xl bg-muted/60 border border-border text-sm text-muted-foreground flex items-center gap-2">
+                    <Info size={16} className="shrink-0" />
+                    <span>Belum ada sesi rapat pada tanggal ini. Pilih tanggal lain atau hubungi Tim GA.</span>
                 </div>
             )}
 
             {/* KPI HUD */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-                    <span className="text-xs font-medium text-muted-foreground uppercase">Presensi Departemen Hari Ini</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Presensi Karyawan Hari Ini</span>
                     <div className="text-2xl font-bold text-foreground mt-1">
-                        {hadirCount} / {attendances.length}
+                        {hadirCount} / {personRows.length}
                         <span className="text-xs text-emerald-600 ml-1.5">({attendancePercent}%)</span>
                     </div>
                     <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
                         <span className="text-emerald-600 font-medium">{hadirCount} Hadir</span> •
-                        <span className="text-amber-600 font-medium">{izinCount} Izin</span> •
-                        <span className="text-rose-600 font-medium">{alpaCount} Alpa</span>
+                        <span className="text-rose-600 font-medium">{alpaCount} Belum hadir</span>
                     </div>
                 </div>
 
@@ -493,7 +496,7 @@ export default function HrGreenMeetingMonitoringPage() {
                 </div>
 
                 <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-                    <span className="text-xs font-medium text-muted-foreground uppercase">Tugas Pernah Molor</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase">Tugas Diperpanjang</span>
                     <div className="text-2xl font-bold text-foreground mt-1">{extendedTasks.length}</div>
                     <p className="mt-2 text-xs text-amber-600 font-medium">Mendapat perpanjangan deadline</p>
                 </div>
@@ -510,7 +513,7 @@ export default function HrGreenMeetingMonitoringPage() {
                         }`}
                 >
                     <CheckSquare size={16} />
-                    <span>Presensi Departemen ({attendances.length})</span>
+                    <span>Presensi Karyawan ({personRows.length})</span>
                 </button>
 
                 <button
@@ -552,16 +555,23 @@ export default function HrGreenMeetingMonitoringPage() {
 
             {/* TAB CONTENTS (Read-Only) */}
             <div className="pt-2">
-                {/* TAB 1: PRESENSI UNIT */}
+                {/* TAB 1: PRESENSI KARYAWAN */}
                 {activeTab === "ATTENDANCE" && (
                     <div className="space-y-4">
+                        {hasLegacyArchive && (
+                            <p className="text-xs text-muted-foreground bg-card border border-border rounded-xl px-4 py-3">
+                                {hasMixedArchive
+                                    ? `Sesi campuran: ${legacyRows.length} baris arsip lama disembunyikan, hanya ${personRows.length} baris per-orang ditampilkan. Detail arsip ada di tab Rekap.`
+                                    : "Sesi ini memakai format lama (per departemen). Datanya tersimpan sebagai arsip dan tidak ditampilkan di sini."}
+                            </p>
+                        )}
                         <div className="flex items-center gap-2 bg-card p-3 rounded-xl border border-border">
                             <button
                                 type="button"
                                 onClick={() => setAttendanceFilter("ALL")}
                                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${attendanceFilter === "ALL" ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}
                             >
-                                Semua ({attendances.length})
+                                Semua ({personRows.length})
                             </button>
                             <button
                                 type="button"
@@ -572,17 +582,10 @@ export default function HrGreenMeetingMonitoringPage() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setAttendanceFilter("IZIN")}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-lg ${attendanceFilter === "IZIN" ? "bg-amber-600 text-white" : "bg-muted text-muted-foreground"}`}
-                            >
-                                Izin ({izinCount})
-                            </button>
-                            <button
-                                type="button"
                                 onClick={() => setAttendanceFilter("ALPA")}
                                 className={`px-3 py-1.5 text-xs font-medium rounded-lg ${attendanceFilter === "ALPA" ? "bg-rose-600 text-white" : "bg-muted text-muted-foreground"}`}
                             >
-                                Alpa ({alpaCount})
+                                Belum hadir ({alpaCount})
                             </button>
                         </div>
 
@@ -591,17 +594,16 @@ export default function HrGreenMeetingMonitoringPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead className="w-[40px] text-center">No</TableHead>
+                                        <TableHead>Nama Karyawan</TableHead>
                                         <TableHead>Departemen</TableHead>
                                         <TableHead>Divisi</TableHead>
                                         <TableHead>Status Kehadiran</TableHead>
-                                        <TableHead>Nama Perwakilan</TableHead>
-                                        <TableHead>Keterangan Izin</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredAttendances.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground">
+                                            <TableCell colSpan={5} className="text-center py-6 text-xs text-muted-foreground">
                                                 Tidak ada data presensi.
                                             </TableCell>
                                         </TableRow>
@@ -610,45 +612,23 @@ export default function HrGreenMeetingMonitoringPage() {
                                             <TableRow key={att.id}>
                                                 <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
                                                 <TableCell className="font-semibold text-xs text-foreground">
-                                                    {att.unit.department.name}
+                                                    {att.employeeName || att.representativeName || "-"}
                                                 </TableCell>
                                                 <TableCell className="text-xs text-muted-foreground">
-                                                    {att.unit.department.division?.name || "-"}
+                                                    {att.departmentName || "-"}
+                                                </TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">
+                                                    {att.divisionName || "-"}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {att.status === "HADIR" && (
+                                                    {att.status === "HADIR" ? (
                                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                                                             <CheckCircle2 size={12} /> Hadir
                                                         </span>
-                                                    )}
-                                                    {att.status === "IZIN" && (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                                            Izin
-                                                        </span>
-                                                    )}
-                                                    {att.status === "ALPA" && (
+                                                    ) : (
                                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
-                                                            Alpa
+                                                            Belum hadir
                                                         </span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-xs text-foreground">
-                                                    {att.representativeName ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <User size={12} className="text-muted-foreground" />
-                                                            <span>{att.representativeName}</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-muted-foreground italic">Perwakilan Departemen</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-xs text-muted-foreground">
-                                                    {att.status === "IZIN" ? (
-                                                        <span className="text-amber-700 dark:text-amber-300 font-medium">
-                                                            {att.permitReason || "-"}
-                                                        </span>
-                                                    ) : (
-                                                        "-"
                                                     )}
                                                 </TableCell>
                                             </TableRow>
@@ -755,13 +735,30 @@ export default function HrGreenMeetingMonitoringPage() {
 
                 {/* TAB 3: ACTION ITEMS TRACKER */}
                 {activeTab === "TASKS" && (
-                    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                    <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className="px-2.5 py-1 rounded-full bg-muted text-muted-foreground font-semibold">
+                                Total {taskChips.total}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 font-semibold">
+                                Berjalan {taskChips.berjalan}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 font-semibold">
+                                Selesai {taskChips.selesai}
+                            </span>
+                            {taskChips.overdue > 0 && (
+                                <span className="px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-600 font-bold">
+                                    Terlambat {taskChips.overdue}
+                                </span>
+                            )}
+                        </div>
+                        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[40px] text-center">No</TableHead>
                                     <TableHead>Uraian Tugas</TableHead>
-                                    <TableHead>Dari ➔ Kepada</TableHead>
+                                    <TableHead>Dari ke Kepada</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Tenggat Terkini</TableHead>
                                     <TableHead>Riwayat Molor</TableHead>
@@ -830,6 +827,7 @@ export default function HrGreenMeetingMonitoringPage() {
                                 )}
                             </TableBody>
                         </Table>
+                        </div>
                     </div>
                 )}
 
@@ -856,7 +854,7 @@ export default function HrGreenMeetingMonitoringPage() {
                                 />
                                 <button
                                     type="button"
-                                    onClick={fetchRecap}
+                                    onClick={() => void fetchRecap(recapStart, recapEnd)}
                                     disabled={recapLoading}
                                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-muted hover:bg-muted/80 text-foreground"
                                 >
@@ -868,7 +866,7 @@ export default function HrGreenMeetingMonitoringPage() {
                                 <button
                                     type="button"
                                     onClick={handleExportExcel}
-                                    disabled={!recapData || recapData.unitAttendanceStats?.length === 0}
+                                    disabled={!recapData || recapData.memberStats?.length === 0}
                                     className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                                 >
                                     <FileSpreadsheet size={14} />
@@ -877,7 +875,7 @@ export default function HrGreenMeetingMonitoringPage() {
                                 <button
                                     type="button"
                                     onClick={handleExportPdf}
-                                    disabled={!recapData || recapData.unitAttendanceStats?.length === 0}
+                                    disabled={!recapData || recapData.deptStats?.length === 0}
                                     className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50"
                                 >
                                     <Printer size={14} />
@@ -886,47 +884,96 @@ export default function HrGreenMeetingMonitoringPage() {
                             </div>
                         </div>
 
+                        {recapError && (
+                            <div className="p-3 text-xs rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 font-medium flex items-center justify-between gap-2">
+                                <span>{recapError}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => void fetchRecap(recapStart, recapEnd)}
+                                    disabled={recapLoading}
+                                    className="shrink-0 px-3 py-1 text-xs font-semibold rounded-lg border border-rose-500/30 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                                >
+                                    Coba lagi
+                                </button>
+                            </div>
+                        )}
+
                         {recapData && (
-                            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-                                <div className="p-4 border-b border-border flex items-center gap-2">
-                                    <BarChart3 size={16} className="text-primary" />
-                                    <h4 className="text-sm font-bold text-foreground">
-                                        Rekapitulasi Kehadiran per Departemen (Total Sesi: {recapData.totalSessions})
-                                    </h4>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+                                        <span className="text-xs text-muted-foreground uppercase">Total Sesi</span>
+                                        <div className="text-2xl font-bold text-foreground mt-1">{recapData.kpi.totalSesi}</div>
+                                    </div>
+                                    <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+                                        <span className="text-xs text-muted-foreground uppercase">Hadir</span>
+                                        <div className="text-2xl font-bold text-emerald-600 mt-1">{recapData.kpi.totalHadir}</div>
+                                        <p className="text-[11px] text-muted-foreground mt-1">dari {recapData.kpi.totalOrang} orang</p>
+                                    </div>
+                                    <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+                                        <span className="text-xs text-muted-foreground uppercase">Tidak Hadir</span>
+                                        <div className="text-2xl font-bold text-rose-600 mt-1">{recapData.kpi.totalAlpa}</div>
+                                    </div>
                                 </div>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[40px] text-center">No</TableHead>
-                                            <TableHead>Departemen</TableHead>
-                                            <TableHead className="text-center">Total Sesi</TableHead>
-                                            <TableHead className="text-center">Hadir</TableHead>
-                                            <TableHead className="text-center">Izin</TableHead>
-                                            <TableHead className="text-center">Alpa</TableHead>
-                                            <TableHead className="text-right">% Kehadiran</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {recapData.unitAttendanceStats?.map((stat: UnitAttendanceStat, idx: number) => (
-                                            <TableRow key={stat.departmentName}>
-                                                <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
-                                                <TableCell className="text-xs font-semibold text-foreground">{stat.departmentName}</TableCell>
-                                                <TableCell className="text-center text-xs">{stat.totalSessions}</TableCell>
-                                                <TableCell className="text-center text-xs text-emerald-600 font-medium">{stat.hadir}</TableCell>
-                                                <TableCell className="text-center text-xs text-amber-600 font-medium">{stat.izin}</TableCell>
-                                                <TableCell className="text-center text-xs text-rose-600 font-medium">{stat.alpa}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${stat.attendanceRate >= 85
-                                                        ? "bg-emerald-500/10 text-emerald-600"
-                                                        : "bg-amber-500/10 text-amber-600"
-                                                        }`}>
-                                                        {stat.attendanceRate}%
-                                                    </span>
-                                                </TableCell>
+                                <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+                                    <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <BarChart3 size={16} className="text-primary" />
+                                            <h4 className="text-sm font-bold text-foreground">
+                                                Kehadiran Per Orang (Total Sesi: {recapData.totalSessions})
+                                            </h4>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={memberQuery}
+                                            onChange={(e) => setMemberQuery(e.target.value)}
+                                            placeholder="Cari nama / departemen…"
+                                            aria-label="Cari anggota rekap"
+                                            className="px-3 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="w-[40px] text-center">No</TableHead>
+                                                <TableHead>Nama</TableHead>
+                                                <TableHead>Departemen</TableHead>
+                                                <TableHead className="text-center">Hadir</TableHead>
+                                                <TableHead className="text-center">Tidak Hadir</TableHead>
+                                                <TableHead className="text-center">Total Sesi</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredMembers.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground">
+                                                        Tidak ada data untuk periode atau pencarian ini.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                filteredMembers.map((stat, idx: number) => (
+                                                <TableRow key={stat.employeeId}>
+                                                    <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
+                                                    <TableCell className="text-xs font-semibold text-foreground">{stat.name}</TableCell>
+                                                    <TableCell className="text-xs text-muted-foreground">{stat.departmentName}</TableCell>
+                                                    <TableCell className="text-center text-xs text-emerald-600 font-medium">{stat.hadir}</TableCell>
+                                                    <TableCell className="text-center text-xs text-rose-600 font-medium">{stat.alpa}</TableCell>
+                                                    <TableCell className="text-center text-xs">{stat.totalSesi}</TableCell>
+                                                </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                <DeptRecapTable title="Keterwakilan Departemen" stats={recapData.deptStats} />
+                                {recapData.archiveSessions > 0 && (
+                                    <DeptRecapTable
+                                        title={`Arsip Sesi Lama (${recapData.archiveSessions} sesi)`}
+                                        subtitle="Format per departemen, hanya baca, tidak dihitung dalam KPI."
+                                        stats={recapData.archiveStats}
+                                        showStatus={false}
+                                    />
+                                )}
                             </div>
                         )}
                     </div>

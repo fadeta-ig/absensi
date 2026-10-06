@@ -12,7 +12,8 @@ import {
     ChevronRight,
 } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
-import type { GreenMeetingSession } from "../types";
+import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
+import type { GreenMeetingConfig, GreenMeetingSession } from "../types";
 
 interface GreenMeetingHeaderProps {
     session: GreenMeetingSession | null;
@@ -22,6 +23,7 @@ interface GreenMeetingHeaderProps {
     onUpdateRoom: (newRoom: string) => Promise<void>;
     onUpdateTime?: (newTime: string) => Promise<void>;
     offDayInfo?: { isOffDay: boolean; reason?: string };
+    configDefaults?: Pick<GreenMeetingConfig, "defaultRoom" | "defaultTime"> | null;
     loading?: boolean;
 }
 
@@ -33,12 +35,24 @@ export default function GreenMeetingHeader({
     onUpdateRoom,
     onUpdateTime,
     offDayInfo,
+    configDefaults,
     loading = false,
 }: GreenMeetingHeaderProps) {
+    const fallbackRoom = configDefaults?.defaultRoom || "Ruang Rapat Utama Lt. 2";
+    const fallbackTime = configDefaults?.defaultTime || "08:30";
     const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
-    const [selectedRoom, setSelectedRoom] = useState(session?.room || "Ruang Rapat Utama Lt. 2");
+    const [selectedRoom, setSelectedRoom] = useState(session?.room || fallbackRoom);
     const [savingRoom, setSavingRoom] = useState(false);
     const [updatingTime, setUpdatingTime] = useState(false);
+
+    // Status sesi diturunkan dari data, bukan hardcode selalu aktif.
+    const sessionStatus = !session
+        ? { label: "Belum ada sesi", className: "text-muted-foreground" }
+        : session.isCancelled
+            ? { label: `Dibatalkan${session.cancelReason ? `: ${session.cancelReason}` : ""}`, className: "text-rose-600 dark:text-rose-400" }
+            : offDayInfo?.isOffDay
+                ? { label: `Libur${offDayInfo.reason ? `: ${offDayInfo.reason}` : ""}`, className: "text-amber-600 dark:text-amber-400" }
+                : { label: "Rapat Aktif", className: "text-emerald-600 dark:text-emerald-400" };
 
     // Format tanggal ramah pengguna (contoh: Kamis, 17 September 2026)
     const formattedDate = new Date(`${currentDateStr}T00:00:00`).toLocaleDateString("id-ID", {
@@ -49,23 +63,15 @@ export default function GreenMeetingHeader({
     });
 
     const handlePrevDay = () => {
-        const d = new Date(`${currentDateStr}T00:00:00`);
-        d.setDate(d.getDate() - 1);
-        onDateChange(d.toISOString().split("T")[0]);
+        onDateChange(addCalendarDays(currentDateStr, -1));
     };
 
     const handleNextDay = () => {
-        const d = new Date(`${currentDateStr}T00:00:00`);
-        d.setDate(d.getDate() + 1);
-        onDateChange(d.toISOString().split("T")[0]);
+        onDateChange(addCalendarDays(currentDateStr, 1));
     };
 
     const handleToday = () => {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, "0");
-        const d = String(now.getDate()).padStart(2, "0");
-        onDateChange(`${y}-${m}-${d}`);
+        onDateChange(toWIBDateString());
     };
 
     const handleSaveRoom = async () => {
@@ -89,7 +95,7 @@ export default function GreenMeetingHeader({
                             Green Meeting
                         </span>
                         <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-                            PIC: General Affairs (WIG002)
+                            Tim GA
                         </span>
                         {offDayInfo?.isOffDay && (
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
@@ -179,7 +185,7 @@ export default function GreenMeetingHeader({
                         <span>Jam Mulai:</span>
                         <input
                             type="time"
-                            value={session?.startTime || "08:30"}
+                            value={session?.startTime || fallbackTime}
                             disabled={updatingTime || !onUpdateTime}
                             onChange={async (e) => {
                                 const val = e.target.value;
@@ -199,11 +205,11 @@ export default function GreenMeetingHeader({
 
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                         <MapPin size={14} className="text-primary" />
-                        <span>Ruangan: <strong className="text-foreground">{session?.room || "Ruang Rapat Utama Lt. 2"}</strong></span>
+                        <span>Ruangan: <strong className="text-foreground">{session?.room || fallbackRoom}</strong></span>
                         <button
                             type="button"
                             onClick={() => {
-                                setSelectedRoom(session?.room || "Ruang Rapat Utama Lt. 2");
+                                setSelectedRoom(session?.room || fallbackRoom);
                                 setIsRoomModalOpen(true);
                             }}
                             className="ml-1 text-primary hover:underline font-semibold inline-flex items-center gap-0.5"
@@ -215,7 +221,7 @@ export default function GreenMeetingHeader({
                 </div>
 
                 <div className="text-xs text-muted-foreground">
-                    Status: <span className="font-semibold text-emerald-600 dark:text-emerald-400">● Rapat Aktif</span>
+                    Status: <span className={`font-semibold ${sessionStatus.className}`}>● {sessionStatus.label}</span>
                 </div>
             </div>
 

@@ -93,16 +93,16 @@ Basis data terdiri dari **66 model Prisma** yang dipetakan ke tabel fisik melalu
 - `GreenMeetingUnit` (`green_meeting_units`): Pemetaan satu-ke-satu ke `Department`; menentukan apakah departemen aktif sebagai peserta rapat dan apakah kehadirannya diwajibkan secara default.
 - `GreenMeetingHoliday` (`green_meeting_holidays`): Tanggal libur khusus beserta deskripsi dan flag pengulangan.
 - `GreenMeetingSession` (`green_meeting_sessions`): Satu sesi per `meetingDate`, menyimpan ruangan, jam mulai, status, notulis, serta relasi presensi dan notulen.
-- `GreenMeetingAttendance` (`green_meeting_attendances`): Presensi unik per kombinasi sesi dan departemen (`[sessionId, unitId]`), berstatus `HADIR`, `IZIN`, atau `ALPA`; nilai awal adalah `ALPA`, dan `IZIN` wajib memiliki alasan.
-- `GreenMeetingNote` (`green_meeting_notes`): Butir informasi atau tugas. `originType` mendukung `DIREKSI`, `DEPARTMENT`, `DIVISION`, `EMPLOYEE`, dan `LAINNYA`; `originName` menyimpan label sumber yang human-readable, sedangkan `lastEditedAt` dan `lastEditedBy` menandai koreksi terakhir.
+- `GreenMeetingAttendance` (`green_meeting_attendances`): Presensi unik per kombinasi sesi dan karyawan (`[sessionId, employeeId]`, warisan `[sessionId, unitId]` untuk arsip), berstatus `HADIR` atau `ALPA`; nilai awal adalah `ALPA`. Nilai enum `IZIN` serta kolom `representativeName`/`permitReason` adalah LEGACY arsip lama (izin kini dicatat di level dept via `GreenMeetingDeptIzin`, dept-only).
+- `GreenMeetingNote` (`green_meeting_notes`): Butir tugas (writer baru khusus `TUGAS` + arsip `INFORMASI` read-only). `originType` mendukung `DIREKSI`, `DEPARTMENT`, `DIVISION`, `EMPLOYEE`, dan `LAINNYA`; `originName` menyimpan label sumber yang human-readable, sedangkan `lastEditedAt` dan `lastEditedBy` menandai koreksi terakhir. Indeks `(type, createdAt)` mempercepat filter tracker. Default `type` = `TUGAS`; enum `INFORMASI` dipertahankan untuk arsip (tanpa migrasi hapus).
 - `GreenMeetingNoteRevision` (`green_meeting_note_revisions`): Riwayat revisi append-only berisi nomor revisi, alasan wajib, aktor, timestamp, dan snapshot JSON notulensi sebelum perubahan.
-- `GreenMeetingNoteTarget` (`green_meeting_note_targets`): Sasaran many-to-one untuk notulen. Setiap baris bertipe `DEPARTMENT`, `DIVISION`, atau `EMPLOYEE` dan menyimpan foreign key terkait serta label tampilan. Sasaran seluruh perusahaan direpresentasikan oleh `GreenMeetingNote.isAllTarget = true` tanpa baris target.
-- `GreenMeetingDeadlineHistory` (`green_meeting_deadline_histories`): Riwayat Deadline 1 dan setiap perpanjangan tugas secara berurutan (`sequence`), lengkap dengan alasan dan pembuat. Riwayat lama tidak ditimpa.
+- `GreenMeetingNoteTarget` (`green_meeting_note_targets`): Sasaran many-to-one untuk notulen. Setiap baris bertipe enum `GreenMeetingTargetType` (`DEPARTMENT`, `DIVISION`, atau `EMPLOYEE`) dan menyimpan foreign key terkait serta label tampilan. Sasaran seluruh perusahaan direpresentasikan oleh `GreenMeetingNote.isAllTarget = true` tanpa baris target.
+- `GreenMeetingDeadlineHistory` (`green_meeting_deadline_histories`): Riwayat Deadline 1 dan setiap perpanjangan tugas secara berurutan (`sequence`, unik per `(noteId, sequence)`), lengkap dengan alasan dan pembuat. Riwayat lama tidak ditimpa.
 
 Relasi inti Green Meeting:
 
 1. `Department` 1 ── 0..1 `GreenMeetingUnit`.
-2. `GreenMeetingSession` 1 ── * `GreenMeetingAttendance`; setiap sesi/departemen unik.
+2. `GreenMeetingSession` 1 ── * `GreenMeetingAttendance`; setiap sesi/karyawan unik (warisan sesi/unit untuk arsip lama).
 3. `GreenMeetingSession` 1 ── * `GreenMeetingNote`.
 4. `GreenMeetingNote` 1 ── * `GreenMeetingNoteTarget`.
 5. `GreenMeetingNote` 1 ── * `GreenMeetingDeadlineHistory`.
@@ -117,6 +117,7 @@ Relasi inti Green Meeting:
 - `CleaningDailyChecklistItem` (`cleaning_daily_checklist_items`): Snapshot item checklist harian. Kolom penting: `id`, `checklistId`, `templateItemId` (nullable), `itemNameSnapshot`, `sortOrder`, `isActive`, `isComplete`, `lastChangedByUserId` (nullable), `lastChangedAt` (nullable), timestamps. Item yang belum disentuh tidak memiliki aktor atau waktu.
 - `CleaningMonthlyApproval` (`cleaning_monthly_approvals`): Konfigurasi reviewer bulanan per ruangan dan bulan WIB, dengan snapshot nama ruangan serta employee `INSPECTED_BY` dan `KNOWN_BY`. Unik: `[roomId, monthWib]`.
 - `CleaningMonthlyApprovalSignature` (`cleaning_monthly_approval_signatures`): Tanda tangan berversi per approval/role. Menyimpan snapshot penanda tangan, payload tanda tangan, waktu, status `SIGNED`/`REOPENED`, alasan reopen, pelaku reopen, dan hubungan versi pengganti.
+- Pengaturan non-tabel (`app_settings`): `cleaning.topViewers` = JSON array max 5 `employeeId` atasan tertinggi (pemantau read-only; key tunggal `cleaning.topViewer.employeeId` sebagai fallback baca LEGACY), `cleaning.defaultReviewers` = JSON pasangan reviewer.
 - `CleaningApprovalIdempotency` (`cleaning_approval_idempotency`): Penyimpanan respons idempotent bertenggat waktu berdasarkan aktor, scope endpoint, dan idempotency key.
 
 Relasi inti Cleaning:

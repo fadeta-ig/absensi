@@ -83,7 +83,7 @@ describe("Top viewer routes (mock murni)", () => {
         vi.mocked(getTopViewerOverview).mockResolvedValue({ monthWib: "2026-10", rooms: [] });
         const res = await overviewGET(new NextRequest("http://localhost/api/ga/cleaning/overview?monthWib=2026-10"));
         expect(res.status).toBe(200);
-        expect(getTopViewerOverview).toHaveBeenCalledWith("2026-10");
+        expect(getTopViewerOverview).toHaveBeenCalledWith("2026-10", null);
     });
 
     it("overview GET 403 bila guard menolak (GM tak ditunjuk)", async () => {
