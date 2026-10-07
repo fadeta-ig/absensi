@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
 type ToastVariant = "success" | "error" | "warning" | "info";
@@ -13,6 +13,16 @@ interface ToastState {
 
 let globalToast: ((message: string, variant?: ToastVariant) => void) | null = null;
 let toastCounter = 0;
+
+/** Auto-dismiss per varian: error/warning lebih lama agar kebaca di mobile. */
+const DISMISS_MS: Record<ToastVariant, number> = {
+    success: 4000,
+    info: 4000,
+    warning: 6000,
+    error: 6000,
+};
+
+const MAX_STACK = 3;
 
 /**
  * Hook to show toast notifications.
@@ -29,21 +39,35 @@ export function useToast() {
  */
 export default function ToastContainer() {
     const [toasts, setToasts] = useState<ToastState[]>([]);
+    const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
     useEffect(() => {
+        const activeTimers = timers.current;
         globalToast = (message, variant = "info") => {
             const id = ++toastCounter;
-            setToasts((prev) => [...prev, { id, message, variant }]);
-            setTimeout(() => {
+            // Batasi tumpukan agar tidak menutup layar HP; yang lama dibuang.
+            setToasts((prev) => [...prev, { id, message, variant }].slice(-MAX_STACK));
+            const timer = setTimeout(() => {
+                timers.current.delete(id);
                 setToasts((prev) => prev.filter((t) => t.id !== id));
-            }, 4000);
+            }, DISMISS_MS[variant]);
+            timers.current.set(id, timer);
         };
-        return () => { globalToast = null; };
+        return () => {
+            globalToast = null;
+            for (const timer of activeTimers.values()) clearTimeout(timer);
+            activeTimers.clear();
+        };
     }, []);
 
-    const dismiss = (id: number) => {
+    const dismiss = useCallback((id: number) => {
+        const timer = timers.current.get(id);
+        if (timer) {
+            clearTimeout(timer);
+            timers.current.delete(id);
+        }
         setToasts((prev) => prev.filter((t) => t.id !== id));
-    };
+    }, []);
 
     const icons: Record<ToastVariant, typeof CheckCircle> = {
         success: CheckCircle,
@@ -61,7 +85,7 @@ export default function ToastContainer() {
 
     return (
         <div
-            className="fixed top-4 right-4 z-[9998] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
+            className="fixed left-4 right-4 top-[calc(1rem+env(safe-area-inset-top,0px))] z-[10000] flex flex-col gap-2 sm:left-auto sm:right-4 sm:w-full sm:max-w-sm pointer-events-none"
             aria-live="polite"
             aria-relevant="additions text"
         >
@@ -72,16 +96,16 @@ export default function ToastContainer() {
                         key={t.id}
                         role={t.variant === "error" || t.variant === "warning" ? "alert" : "status"}
                         aria-live={t.variant === "error" || t.variant === "warning" ? "assertive" : "polite"}
-                        className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl text-white shadow-lg animate-[slideIn_0.3s_ease] ${styles[t.variant]}`}
+                        className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl text-white shadow-lg animate-[slideIn_0.3s_ease] max-h-[40vh] overflow-y-auto ${styles[t.variant]}`}
                     >
-                        <Icon className="w-5 h-5 shrink-0" />
-                        <p className="text-sm font-medium flex-1">{t.message}</p>
+                        <Icon className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+                        <p className="text-sm font-medium flex-1 min-w-0 break-words [overflow-wrap:anywhere]">{t.message}</p>
                         <button
                             onClick={() => dismiss(t.id)}
-                            className="text-white/70 hover:text-white shrink-0"
+                            className="text-white/70 hover:text-white shrink-0 min-w-11 min-h-11 -m-2 flex items-center justify-center rounded-lg focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
                             aria-label="Tutup notifikasi"
                         >
-                            <X className="w-4 h-4" />
+                            <X className="w-4 h-4" aria-hidden="true" />
                         </button>
                     </div>
                 );
