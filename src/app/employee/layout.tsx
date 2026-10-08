@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
     Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User,
-    CalendarCheck,
+    CalendarCheck, CalendarClock,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
     { href: "/employee/documents", icon: FileText, label: "Dokumen" },
     { href: "/employee/assets", icon: Monitor, label: "Aset Saya" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
+    { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting" },
     { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
     { href: "/employee/profile", icon: User, label: "Profil" },
@@ -219,7 +220,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 />
             }
         >
-            <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") ? "max-w-4xl" : "max-w-md"}`}>
+            <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") ? "max-w-4xl" : "max-w-md"}`}>
                 {children}
             </div>
         </AppShell>

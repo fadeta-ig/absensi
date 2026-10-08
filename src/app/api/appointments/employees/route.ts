@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { prisma } from "@/lib/prisma";
-import { canManageGreenMeeting } from "@/lib/services/greenMeetingService";
+import { isWig002 } from "@/lib/services/appointmentService";
 import { PERMISSIONS } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const employeesQuerySchema = z.object({
     q: z.string().trim().max(50).optional().default(""),
-    limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+    limit: z.coerce.number().int().min(1).max(200).optional().default(20),
 });
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    // Autocomplete karyawan: GA pengelola atau HR pemantau (kontrak documentasikan GA-only sebelumnya).
-    const isManager = await canManageGreenMeeting(session);
-    const isHr = session.permissions.includes(PERMISSIONS.HR_MANAGE);
-    if (!isManager && !isHr) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session) && !session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);
@@ -71,20 +68,15 @@ export async function GET(request: NextRequest) {
             take: limit,
         });
 
-        // Format data agar mudah dikonsumsi frontend
-        const formatted = employees.map((emp) => ({
-            id: emp.id,
-            employeeId: emp.employeeId,
-            name: emp.name,
-            department: emp.departmentRel?.name || "-",
-            departmentId: emp.departmentRel?.id || null,
-            division: emp.divisionRel?.name || "-",
-            divisionId: emp.divisionRel?.id || null,
-            position: emp.positionRel?.name || "-",
-        }));
-
-        return NextResponse.json(formatted);
+        return NextResponse.json(
+            employees.map((emp) => ({
+                employeeId: emp.employeeId,
+                name: emp.name,
+                department: emp.departmentRel?.name || "-",
+                position: emp.positionRel?.name || "-",
+            }))
+        );
     } catch (err) {
-        return serverErrorResponse("GreenMeetingEmployeesGET", err);
+        return serverErrorResponse("AppointmentEmployeesGET", err);
     }
 }

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 interface EmployeeNotification {
     id: string;
-    type: "leave" | "overtime" | "correction" | "news" | "letter";
+    type: "leave" | "overtime" | "correction" | "news" | "letter" | "appointment";
     title: string;
     message: string;
     href: string;
@@ -24,9 +24,11 @@ export async function GET() {
     try {
         const { employeeId } = session;
         const notifications: EmployeeNotification[] = [];
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
         // Fetch semua data secara paralel
-        const [leaves, overtimes, corrections] = await Promise.all([
+        const [leaves, overtimes, corrections, appointmentInvites, appointmentOwnCancelled, appointmentFollowedCancelled, appointmentDeclined] = await Promise.all([
             // Pengajuan cuti yang baru diperbarui statusnya (bukan pending)
             prisma.leaveRequest.findMany({
                 where: {
@@ -56,6 +58,60 @@ export async function GET() {
                 orderBy: { updatedAt: "desc" },
                 take: 5,
                 select: { id: true, status: true, targetDate: true, updatedAt: true },
+            }),
+            // Undangan appointment yang belum dijawab (tanpa pandang waktu mulai)
+            prisma.meetingAppointment.findMany({
+                where: {
+                    status: "SCHEDULED",
+                    participants: { some: { employeeId, inviteStatus: "PENDING" } },
+                },
+                orderBy: { startAt: "asc" },
+                take: 5,
+                select: { id: true, title: true, startAt: true, createdAt: true, room: { select: { name: true } } },
+            }),
+            // Rapat milik sendiri yang dibatalkan (7 hari terakhir)
+            prisma.meetingAppointment.findMany({
+                where: {
+                    requesterEmployeeId: employeeId,
+                    status: "CANCELLED",
+                    updatedAt: { gte: sevenDaysAgo },
+                },
+                orderBy: { updatedAt: "desc" },
+                take: 5,
+                select: { id: true, title: true, status: true, startAt: true, updatedAt: true, room: { select: { name: true } } },
+            }),
+            // Rapat yang diikuti (bukan pembuat) — dibatalkan 7 hari terakhir
+            prisma.meetingAppointment.findMany({
+                where: {
+                    status: "CANCELLED",
+                    updatedAt: { gte: sevenDaysAgo },
+                    participants: { some: { employeeId } },
+                    NOT: { requesterEmployeeId: employeeId },
+                },
+                orderBy: { updatedAt: "desc" },
+                take: 5,
+                select: { id: true, title: true, status: true, startAt: true, updatedAt: true, room: { select: { name: true } } },
+            }),
+            // Penolakan peserta atas appointment milik sendiri (7 hari terakhir)
+            prisma.meetingAppointment.findMany({
+                where: {
+                    requesterEmployeeId: employeeId,
+                    status: "SCHEDULED",
+                    participants: { some: { inviteStatus: "DECLINED", inviteRespondedAt: { gte: sevenDaysAgo } } },
+                },
+                orderBy: { updatedAt: "desc" },
+                take: 5,
+                select: {
+                    id: true,
+                    title: true,
+                    startAt: true,
+                    updatedAt: true,
+                    participants: {
+                        where: { inviteStatus: "DECLINED", inviteRespondedAt: { gte: sevenDaysAgo } },
+                        select: { employeeId: true, guestName: true, inviteNote: true, employee: { select: { name: true } } },
+                        take: 3,
+                    },
+                },
             }),
         ]);
 
@@ -118,6 +174,56 @@ export async function GET() {
                 message: news.title,
                 href:    "/employee/news",
                 time:    news.createdAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
+        for (const invite of appointmentInvites) {
+            notifications.push({
+                id:      `appointment-invite-${invite.id}`,
+                type:    "appointment",
+                title:   "Undangan Rapat",
+                message: `${invite.title} — ${invite.room?.name ?? "Rapat Daring"}, ${new Date(invite.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                href:    `/employee/appointments?invite=${invite.id}`,
+                time:    invite.createdAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
+        for (const appt of appointmentFollowedCancelled) {
+            notifications.push({
+                id:      `appointment-follow-${appt.id}`,
+                type:    "appointment",
+                title:   "Rapat Dibatalkan",
+                message: `${appt.title} — ${appt.room?.name ?? "Rapat Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                href:    `/employee/appointments?invite=${appt.id}`,
+                time:    appt.updatedAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
+        for (const appt of appointmentDeclined) {
+            const names = appt.participants.map((p) => p.employee?.name ?? p.employeeId ?? p.guestName ?? "Peserta").join(", ");
+            const firstNote = appt.participants.find((p) => p.inviteNote)?.inviteNote;
+            notifications.push({
+                id:      `appointment-declined-${appt.id}`,
+                type:    "appointment",
+                title:   "Peserta Menolak Undangan",
+                message: `${names} menolak "${appt.title}"${firstNote ? ` — ${firstNote}` : ""}`,
+                href:    `/employee/appointments?invite=${appt.id}`,
+                time:    appt.updatedAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
+        for (const appt of appointmentOwnCancelled) {
+            notifications.push({
+                id:      `appointment-${appt.id}`,
+                type:    "appointment",
+                title:   "Rapat Anda Dibatalkan",
+                message: `${appt.title} — ${appt.room?.name ?? "Rapat Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                href:    `/employee/appointments?invite=${appt.id}`,
+                time:    appt.updatedAt.toISOString(),
                 isRead:  false,
             });
         }

@@ -223,6 +223,7 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/cron/cleanup-photos` | Mingguan | Pembersihan cache foto selfie sementara yang sudah diverifikasi dan kadaluarsa. |
 | `/api/cron/generate-payroll` | Bulanan | Otomasi kalkulasi draf rekapitulasi penggajian bulanan periode berjalan. |
 | `/api/cron/reset-leave` | Tahunan | Reset dan alokasi ulang kuota saldo cuti tahunan karyawan setiap awal tahun. |
+| `/api/cron/appointment-reminder` | Tiap 15 menit | Pengingat appointment SCHEDULED per offset dinamis PIC; exactly-once via `AppointmentReminderLog`. |
 
 ### K. Ekspor & Penarikan Laporan (`/api/export`)
 | Rute | Metode | Permission / Akses | Deskripsi |

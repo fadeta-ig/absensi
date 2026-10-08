@@ -142,6 +142,8 @@ efektif hari ini beserta sumber roster/fallback.
 
 ### B. Komunikasi & Otomasi
 - **Papan Berita Perusahaan**: Papan pengumuman informasi internal yang dikelola HR untuk seluruh karyawan.
+- **E Meeting (Rapat & Ruang Rapat)**: Karyawan membuat rapat yang langsung berjalan (ruangan tersedia berdasarkan urutan pemesanan, tanpa persetujuan, tanpa memandang jabatan); peserta menerima/menolak beserta alasan; PIC resepsionis (maksimal 2 orang, ditetapkan WIG002) hanya menjadwalkan ulang atau memindahkan ruangan dalam kondisi mendesak tanpa persetujuan penyelenggara; penanda sibuk mandiri dan cuti terbaca sebagai tidak tersedia. Modul `Green Meeting` tetap terpisah.
 - **Sistem Pengingat Ulang Tahun**: Pengingat harian otomatis jadwal ulang tahun staf (H-30, H-14, H-7) dengan alur persiapan custom dan ucapan selamat via email.
 - **Web Push Notifications**: Notifikasi browser PWA via protokol VAPID untuk pengingat presensi dan update permohonan cuti.
 - **Endpoint Cron Otomatis**: 5 jadwal tugas harian/bulanan otomatis di bawah `/api/cron/` terproteksi `CRON_SECRET`.
+- **Cron Pengingat Appointment**: `POST /api/cron/appointment-reminder` tiap 15 menit via cron-job.org (`Bearer CRON_SECRET`); offset dinamis milik PIC (`appointment.reminder.offsets`); exactly-once per `(appointmentId, offsetMin)`; endpoint push 404/410 dibersihkan.

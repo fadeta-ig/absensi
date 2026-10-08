@@ -135,6 +135,18 @@ Relasi inti Cleaning:
 
 RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Akun outsource memakai `UserAccount.employeeId = null` dan `createdByUserId` untuk membatasi kepemilikan administratif akun; tidak ada model outsource terpisah.
 
+## 4. Appointment Meeting + Ruangan (2026-10-07)
+
+1. `MeetingRoom` 1 ── * `MeetingAppointment` (`roomId` opsional; online boleh tanpa room + `meetingLink` wajib).
+2. `MeetingAppointment` 1 ── * `MeetingAppointmentParticipant` (unik `[appointmentId, employeeId]`; tamu eksternal `employeeId null + guestName`, tanpa akun/accept).
+3. `MeetingAppointment` 1 ── * `MeetingAppointmentRevision` (unik `[appointmentId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
+4. `MeetingAppointment` 1 ── * `AppointmentReminderLog` (unik `[appointmentId, offsetMin]`, exactly-once cron).
+5. `Employee` 1 ── * `MeetingAppointment` sebagai pemohon (`requesterEmployeeId`, Restrict) dan 1 ── * `MeetingAppointmentParticipant` (Restrict).
+6. Enum: `MeetingAppointmentStatus` (`SCHEDULED`, `COMPLETED`, `CANCELLED` — tanpa approval; lifecycle tampil `IN_PROGRESS` dihitung dari jam: mulai ≤ kini < selesai), `MeetingAttendanceMark` (`BELUM`, `HADIR`, `TIDAK_HADIR`), `MeetingInviteResponse` (`PENDING`, `ACCEPTED`, `DECLINED`; `TENTATIVE` legacy di DB, API/UI hanya ACCEPT/DECLINE + alasan tolak wajib min 5 dan dibaca penyelenggara via select/bell).
+7. Config: `AppSetting` `appointment.pic.employeeIds` (JSON list, max 2, cache 60 dtk) dan `appointment.reminder.offsets` (JSON menit, default `[1440]`, milik PIC).
+
+RBAC: tanpa permission baru. Master + PIC memakai `ga.manage` + `username WIG002`; operasional memakai daftar PIC; employee memakai `employee.self`. Akun PIC wajib berperan `GA_ADMIN` agar dapat membuka portal `/ga` (otorisasi operasional tetap via daftar PIC).
+
 ---
 
 ## 3. Migration & Synchronization Strategy
