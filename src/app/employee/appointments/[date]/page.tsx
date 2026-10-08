@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, MapPin, Link2, Clock3 } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
-import { useToast } from "@/components/Toast";
-import AppointmentDetailModal from "@/components/appointments/AppointmentDetailModal";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
 import { type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -33,15 +31,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export default function AppointmentDayDetailPage() {
     const params = useParams<{ date: string }>();
     const router = useRouter();
-    const toast = useToast();
     const date = params.date;
 
     const [items, setItems] = useState<AppointmentListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
-    const [detailId, setDetailId] = useState<string | null>(null);
-    const [detailItem, setDetailItem] = useState<AppointmentListItem | null>(null);
 
     const valid = DATE_RE.test(date ?? "");
 
@@ -72,31 +66,11 @@ export default function AppointmentDayDetailPage() {
         void load();
     }, [load]);
 
-    useEffect(() => {
-        fetch("/api/auth/me", { credentials: "same-origin" })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data: unknown) => {
-                if (data && typeof data === "object" && "employeeId" in data) {
-                    setMyEmployeeId(String((data as { employeeId: unknown }).employeeId ?? ""));
-                }
-            })
-            .catch(() => undefined);
-    }, []);
-
     const openDetail = useCallback(
-        async (id: string) => {
-            try {
-                const res = await fetch(`/api/appointments/${id}`);
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat detail."));
-                const json = (await res.json()) as { data: AppointmentListItem };
-                setDetailId(id);
-                setDetailItem(json.data);
-            } catch (error) {
-                reportClientError("AppointmentDayDetailPage", "Gagal detail", error);
-                toast(error instanceof Error ? error.message : "Gagal memuat detail.", "error");
-            }
+        (id: string) => {
+            router.push(`/employee/appointments/detail/${id}`);
         },
-        [toast]
+        [router]
     );
 
     if (!valid) {
@@ -234,22 +208,6 @@ export default function AppointmentDayDetailPage() {
                 </button>
             )}
 
-            {detailItem && detailId && (
-                <AppointmentDetailModal
-                    item={detailItem}
-                    canManage={myEmployeeId !== null && detailItem.requesterEmployeeId === myEmployeeId}
-                    myEmployeeId={myEmployeeId}
-                    onClose={() => {
-                        setDetailId(null);
-                        setDetailItem(null);
-                    }}
-                    onChanged={() => {
-                        void load();
-                        if (detailId) void openDetail(detailId);
-                    }}
-                    onEdit={() => router.push(`/employee/appointments?date=${date}&create=1`)}
-                />
-            )}
         </div>
     );
 }

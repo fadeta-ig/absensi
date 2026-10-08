@@ -10,6 +10,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
 import { participantDisplayName } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface IncomingItem {
     id: string;
@@ -37,6 +38,7 @@ function fmtDT(iso: string): string {
 
 export default function GaAppointmentsIncomingPage() {
     const toast = useToast();
+    const confirm = useConfirm();
     const [items, setItems] = useState<IncomingItem[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -280,8 +282,7 @@ export default function GaAppointmentsIncomingPage() {
                             </ul>
                         </div>
 
-                        {detail.status === "SCHEDULED" && (
-                            <div className="space-y-2">
+                        {detail.status === "SCHEDULED" && (                            <div className="space-y-2">
                                 <button type="button" onClick={() => setAskingResched(!askingResched)} className="btn btn-secondary w-full">
                                     <CalendarClock className="w-4 h-4" /> Ubah Jadwal dan Ruang Meeting
                                 </button>
@@ -392,6 +393,24 @@ export default function GaAppointmentsIncomingPage() {
                                             {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Ya, Batalkan Meeting
                                         </button>
                                     </div>
+                                )}
+                                {detail.lifecycle === "IN_PROGRESS" && (
+                                    <button
+                                        type="button"
+                                        disabled={acting}
+                                        onClick={() =>
+                                            confirm({
+                                                title: "Selesaikan Meeting?",
+                                                message: `Meeting "${detail.title}" akan ditandai selesai sekarang dan seluruh task diteruskan ke penerima.`,
+                                                confirmLabel: "Ya, Selesaikan",
+                                                variant: "info",
+                                                onConfirm: () => { void postAction(`/api/appointments/${detail.id}/complete`, "POST", {}, "Meeting selesai. Task diteruskan ke penerima."); },
+                                            })
+                                        }
+                                        className="btn btn-primary w-full"
+                                    >
+                                        {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Selesaikan Sekarang
+                                    </button>
                                 )}
                             </div>
                         )}

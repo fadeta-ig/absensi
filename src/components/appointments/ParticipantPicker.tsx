@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Search, X, Loader2, UserPlus } from "lucide-react";
 import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
+import { stripGelar } from "@/lib/utils/formatters";
 
 export interface PickedParticipant {
     key: string;
@@ -84,7 +85,7 @@ export default function ParticipantPicker({
                                 className="w-full text-left px-3 py-2 hover:bg-[var(--secondary)] flex items-center justify-between gap-2 min-h-11"
                             >
                                 <span className="min-w-0">
-                                    <span className="block text-sm font-semibold text-[var(--text-primary)] truncate">{r.name}</span>
+                                    <span className="block text-sm font-semibold text-[var(--text-primary)] truncate">{stripGelar(r.name)}</span>
                                     <span className="block text-[11px] text-[var(--text-muted)] truncate">{r.employeeId} · {r.department}</span>
                                 </span>
                             </button>
@@ -108,7 +109,7 @@ export default function ParticipantPicker({
                 <div className="mt-2 flex flex-wrap gap-1.5">
                     {value.map((p) => (
                         <span key={p.key} className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary)] border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)]">
-                            {p.name}
+                            {p.employeeId ? stripGelar(p.name) : p.name}
                             {p.employeeId === null && <span className="text-[10px] text-[var(--text-muted)]">(Tamu)</span>}
                             <button
                                 type="button"

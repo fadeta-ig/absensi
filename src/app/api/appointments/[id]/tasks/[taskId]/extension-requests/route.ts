@@ -38,11 +38,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const created = await requestTaskExtension(session, taskId, result.data, { userId: session.userId, username: session.username });
 
-        // Beritahu pemberi task + PIC agar segera diputuskan
+        // Beritahu pemberi task agar segera diputuskan
         const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { assignerEmployeeId: true, title: true } });
-        const { getAppointmentPicIds } = await import("@/lib/services/appointmentService");
-        const picIds = await getAppointmentPicIds().catch(() => [] as string[]);
-        const userIds = await collectUserIdsForEmployees([...(task ? [task.assignerEmployeeId] : []), ...picIds]);
+        const userIds = await collectUserIdsForEmployees([...(task ? [task.assignerEmployeeId] : [])]);
         await sendAppointmentPush(userIds, {
             title: "Pengajuan Perpanjangan Task",
             body: `${created.requestedBy?.name ?? "Penerima"} meminta perpanjangan "${task?.title ?? "task"}" ke ${result.data.proposedDate}`,

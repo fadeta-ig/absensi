@@ -23,8 +23,6 @@ function isPrismaUniqueViolation(err: unknown): boolean {
 
 // ─── Konstanta ────────────────────────────────────────────────
 
-export const APPOINTMENT_PIC_KEY = "appointment.pic.employeeIds" as const;
-export const MAX_APPOINTMENT_PICS = 2 as const;
 export const APPOINTMENT_REMINDER_KEY = "appointment.reminder.offsets" as const;
 export const DEFAULT_REMINDER_OFFSETS = [1440] as const;
 export const MAX_REMINDER_OFFSETS = 5 as const;
@@ -47,124 +45,19 @@ export function isWig002(session: SessionPayload): boolean {
     return session.username === "WIG002" && session.permissions.includes(PERMISSIONS.GA_MANAGE);
 }
 
-// ─── PIC resepsionis (AppSetting list max 2, pola cleaning.topViewers) ───
-
-let picIdsCache: { value: string[]; expiresAt: number } | null = null;
 let reminderOffsetsCache: { value: number[]; expiresAt: number } | null = null;
-
-export function invalidateAppointmentPicCache(): void {
-    picIdsCache = null;
-}
 
 export function invalidateReminderOffsetsCache(): void {
     reminderOffsetsCache = null;
 }
 
-function parsePicIds(raw: string | null | undefined): string[] {
-    if (!raw) return [];
-    try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return [];
-        return parsed
-            .filter((v): v is string => typeof v === "string")
-            .map((v) => v.trim())
-            .filter(Boolean)
-            .slice(0, MAX_APPOINTMENT_PICS);
-    } catch {
-        return [];
-    }
-}
-
-export async function getAppointmentPicIds(): Promise<string[]> {
-    if (picIdsCache && Date.now() <= picIdsCache.expiresAt) return [...picIdsCache.value];
-    try {
-        const row = await prisma.appSetting.findUnique({ where: { key: APPOINTMENT_PIC_KEY } });
-        const ids = parsePicIds(row?.value);
-        picIdsCache = { value: ids, expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS };
-        return [...ids];
-    } catch {
-        picIdsCache = { value: [], expiresAt: Date.now() + SETTINGS_CACHE_TTL_MS };
-        return [];
-    }
-}
-
-export async function isAppointmentPic(session: SessionPayload): Promise<boolean> {
-    if (!session.employeeId) return false;
-    const ids = await getAppointmentPicIds().catch(() => [] as string[]);
-    if (!ids.includes(session.employeeId)) return false;
-    const emp = await prisma.employee
-        .findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } })
-        .catch(() => null);
-    return emp?.isActive === true;
-}
-
 function requireWig002(session: SessionPayload): void {
     if (!isWig002(session)) {
-        throw new AppointmentError("Anda tidak memiliki akses untuk mengelola data ruangan dan PIC.", 403);
+        throw new AppointmentError("Anda tidak memiliki akses untuk mengelola data ruangan.", 403);
     }
 }
 
-async function assertPicCandidate(employeeId: string): Promise<string> {
-    const id = employeeId.trim();
-    if (!id || id.length > 100) throw new AppointmentError("ID karyawan PIC tidak valid. Periksa kembali ID karyawan.", 400);
-    const emp = await prisma.employee.findUnique({
-        where: { employeeId: id },
-        select: { employeeId: true, isActive: true, userAccount: { select: { id: true, username: true, isActive: true } } },
-    });
-    if (!emp || !emp.isActive || !emp.userAccount || !emp.userAccount.isActive) {
-        throw new AppointmentError("Karyawan tersebut bukan karyawan internal yang aktif.", 422);
-    }
-    if (emp.userAccount.username === "WIG002") {
-        throw new AppointmentError("Akun administrator tidak dapat ditunjuk sebagai PIC.", 422);
-    }
-    return emp.employeeId;
-}
-
-export async function setAppointmentPics(rawIds: string[], actor: { userId?: string | null; username: string }): Promise<string[]> {
-    const ids = [...new Set(rawIds.map((v) => v.trim()).filter(Boolean))];
-    if (ids.length > MAX_APPOINTMENT_PICS) {
-        throw new AppointmentError(`Jumlah PIC resepsionis maksimal ${MAX_APPOINTMENT_PICS} orang.`, 409);
-    }
-    const validated: string[] = [];
-    for (const id of ids) validated.push(await assertPicCandidate(id));
-    await prisma.appSetting.upsert({
-        where: { key: APPOINTMENT_PIC_KEY },
-        update: { value: JSON.stringify(validated), updatedByUserId: actor.userId ?? null },
-        create: { key: APPOINTMENT_PIC_KEY, value: JSON.stringify(validated), updatedByUserId: actor.userId ?? null },
-    });
-    invalidateAppointmentPicCache();
-    await prisma.auditLog
-        .create({
-            data: {
-                action: "SET_APPOINTMENT_PICS",
-                entity: "APP_SETTING",
-                entityId: APPOINTMENT_PIC_KEY,
-                details: JSON.stringify({ employeeIds: validated }),
-                actorType: "USER",
-                actorUserId: actor.userId ?? null,
-                actorIdentifier: actor.username,
-            },
-        })
-        .catch((err) => logger.error("appointment audit SET_PICS gagal", { err }));
-    return validated;
-}
-
-export async function getAppointmentPicInfos(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
-    const ids = await getAppointmentPicIds();
-    if (ids.length === 0) return [];
-    const employees = await prisma.employee.findMany({
-        where: { employeeId: { in: ids } },
-        select: { employeeId: true, name: true, isActive: true },
-    });
-    const byId = new Map(employees.map((e) => [e.employeeId, e]));
-    return ids.map((id) => {
-        const e = byId.get(id);
-        if (!e) return { employeeId: id, name: null, isActive: false };
-        return { employeeId: e.employeeId, name: e.name, isActive: e.isActive };
-    });
-}
-
-// ─── Reminder offsets dinamis (milik PIC, bukan WIG002) ───
+// ─── Reminder offsets dinamis (dikelola WIG002) ───
 
 function parseReminderOffsets(raw: string | null | undefined): number[] {
     if (!raw) return [...DEFAULT_REMINDER_OFFSETS];
@@ -472,14 +365,14 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
 
     const participants = await validateParticipants(input.participants);
     // Siapa cepat dia dapat: booking langsung SCHEDULED, meeting tetap jalan
-    // tanpa menunggu PIC. PIC hanya reschedule darurat.
+    // tanpa menunggu operator.
     const status = "SCHEDULED";
 
     const created = await prisma.$transaction(async (tx) => {
         if (room) {
             const overlap = await hasRoomOverlap(tx, room.id, startAt, endAt);
             if (overlap && !(asOperator && input.force)) {
-                throw new AppointmentError("Ruangan sudah terisi pada waktu tersebut. Pilih waktu lain atau hubungi PIC.", 409);
+                throw new AppointmentError("Ruangan sudah terisi pada waktu tersebut. Pilih waktu lain atau hubungi GA.", 409);
             }
         }
         const involvedIds = [...(session.employeeId ? [session.employeeId] : []), ...participants.filter((p) => p.employeeId).map((p) => p.employeeId as string)];
@@ -487,7 +380,7 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
         const blockedIds = await busyBlockEmployeeIds(tx, involvedIds, startAt, endAt);
         const busyNames = [...new Set([...personOverlap.map((o) => o.employeeId), ...blockedIds])];
         if (busyNames.length > 0 && !(asOperator && input.force)) {
-            throw new AppointmentError(`Peserta berikut berhalangan (jadwal bertabrakan/cuti/sibuk): ${busyNames.join(", ")}. Pilih waktu lain atau hubungi PIC.`, 409);
+            throw new AppointmentError(`Peserta berikut berhalangan (jadwal bertabrakan/cuti/sibuk): ${busyNames.join(", ")}. Pilih waktu lain atau hubungi GA.`, 409);
         }
         const appt = await tx.meetingAppointment.create({
             data: {
@@ -575,7 +468,7 @@ function withLifecycle<T extends { status: string; startAt: Date; endAt: Date }>
 }
 
 export async function getAppointments(session: SessionPayload, filters: AppointmentFilters): Promise<{ data: unknown[]; total: number }> {
-    const privileged = isWig002(session) || session.permissions.includes(PERMISSIONS.HR_MANAGE) || (await isAppointmentPic(session).catch(() => false));
+    const privileged = isWig002(session);
     const where = buildWhere(session, filters, privileged);
     const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
     const page = Math.max(filters.page ?? 1, 1);
@@ -606,7 +499,7 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
         },
     });
     if (!appt) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
-    const privileged = isWig002(session) || session.permissions.includes(PERMISSIONS.HR_MANAGE) || (await isAppointmentPic(session).catch(() => false));
+    const privileged = isWig002(session);
     if (!privileged) {
         const mine = appt.requesterEmployeeId === session.employeeId || appt.participants.some((p) => p.employeeId === session.employeeId);
         if (!mine) throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
@@ -630,6 +523,7 @@ export async function respondInvite(
             id: true,
             title: true,
             status: true,
+            endAt: true,
             requesterEmployeeId: true,
             participants: { where: { employeeId: session.employeeId }, select: { id: true, inviteStatus: true } },
         },
@@ -637,6 +531,9 @@ export async function respondInvite(
     if (!appt) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(appt.status)) {
         throw new AppointmentError("Undangan sudah tidak berlaku karena meeting telah dibatalkan atau selesai.", 409);
+    }
+    if (new Date() > appt.endAt) {
+        throw new AppointmentError("Undangan sudah kedaluwarsa karena meeting telah berakhir.", 409);
     }
     const mine = appt.participants[0];
     if (!mine) throw new AppointmentError("Anda bukan peserta undangan ini.", 403);
@@ -679,7 +576,7 @@ export async function rescheduleAppointment(
     input: RescheduleInput,
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
-    const operator = isWig002(session) || (await isAppointmentPic(session).catch(() => false));
+    const operator = isWig002(session);
     if (!session.employeeId && !operator) throw new AppointmentError("Hanya karyawan yang dapat mengubah jadwal meeting.", 403);
     if (!input.changeReason || input.changeReason.trim().length < 5) {
         throw new AppointmentError("Alasan perubahan minimal 5 karakter.", 400);
@@ -704,15 +601,18 @@ export async function rescheduleAppointment(
         if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
             throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
         }
+        if (resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt, new Date()) === "IN_PROGRESS") {
+            throw new AppointmentError("Meeting sedang berlangsung dan tidak dapat dijadwalkan ulang. Selesaikan atau batalkan meeting bila perlu.", 409);
+        }
         const isOwner = session.employeeId !== null && session.employeeId !== undefined && existing.requesterEmployeeId === session.employeeId;
         const lockMin = operator ? 15 : 60;
         if (!operator) {
-            if (!isOwner) throw new AppointmentError("Hanya pembuat meeting atau PIC yang dapat mengubah.", 403);
+            if (!isOwner) throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat mengubah.", 403);
             if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah pemilik.", 400);
         }
         const minutesLeft = (existing.startAt.getTime() - Date.now()) / 60000;
         if (minutesLeft < lockMin) {
-            throw new AppointmentError(`Perubahan dikunci. Batas perubahan ${lockMin} menit sebelum mulai. Hubungi PIC.`, 400);
+            throw new AppointmentError(`Perubahan dikunci. Batas perubahan ${lockMin} menit sebelum mulai. Hubungi penyelenggara atau WIG002.`, 400);
         }
         const nextRoomId = input.roomId === undefined ? existing.roomId : input.roomId;
         const nextLink = input.meetingLink === undefined ? existing.meetingLink : input.meetingLink?.trim() || null;
@@ -778,7 +678,7 @@ export async function cancelAppointment(
     reason: string,
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
-    const operator = isWig002(session) || (await isAppointmentPic(session).catch(() => false));
+    const operator = isWig002(session);
     if (!reason || reason.trim().length < 5) throw new AppointmentError("Alasan pembatalan minimal 5 karakter.", 400);
     const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true } });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
@@ -786,7 +686,7 @@ export async function cancelAppointment(
         throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
     }
     if (!operator) {
-        if (existing.requesterEmployeeId !== session.employeeId) throw new AppointmentError("Hanya pembuat meeting atau PIC yang dapat membatalkan.", 403);
+        if (existing.requesterEmployeeId !== session.employeeId) throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat membatalkan.", 403);
         if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan pemilik.", 400);
     }
     return prisma.$transaction(async (tx) => {
@@ -809,7 +709,54 @@ export async function cancelAppointment(
     });
 }
 
-// ─── Tandai hadir (PIC + pembuat, s/d H+1) ────────────────────
+// ─── Selesaikan lebih awal (pembuat + WIG002, saat berjalan) ───
+
+export async function completeAppointment(
+    session: SessionPayload,
+    id: string,
+    actor: { userId?: string | null; username: string }
+): Promise<unknown> {
+    const operator = isWig002(session);
+    const existing = await prisma.meetingAppointment.findUnique({
+        where: { id },
+        select: { id: true, title: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true },
+    });
+    if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
+    if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
+        throw new AppointmentError("Meeting sudah selesai atau dibatalkan.", 409);
+    }
+    if (!operator && existing.requesterEmployeeId !== session.employeeId) {
+        throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat menyelesaikan.", 403);
+    }
+    const now = new Date();
+    const lifecycle = resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt, now);
+    if (lifecycle !== "IN_PROGRESS") {
+        throw new AppointmentError("Hanya meeting yang sedang berjalan yang dapat diselesaikan lebih awal.", 409);
+    }
+    return prisma.$transaction(async (tx) => {
+        const res = await tx.meetingAppointment.updateMany({
+            where: { id, status: existing.status },
+            data: { status: "COMPLETED", endAt: now < existing.endAt ? now : existing.endAt },
+        });
+        if (res.count !== 1) throw new AppointmentError("Data berubah bersamaan. Muat ulang halaman lalu coba lagi.", 409);
+        const count = await tx.meetingAppointmentRevision.count({ where: { appointmentId: id } });
+        await tx.meetingAppointmentRevision.create({
+            data: {
+                appointmentId: id,
+                revisionNumber: count + 1,
+                changeReason: "Meeting diselesaikan lebih awal.",
+                changedBy: actor.username,
+                previousData: { status: existing.status, roomId: existing.roomId, startAt: existing.startAt, endAt: existing.endAt },
+            },
+        });
+        await tx.auditLog.create({
+            data: { action: "COMPLETE_APPOINTMENT", entity: "APPOINTMENT", entityId: id, details: JSON.stringify({ completedEarly: true }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
+        });
+        return tx.meetingAppointment.findUnique({ where: { id } });
+    });
+}
+
+// ─── Tandai hadir (WIG002 + pembuat, s/d H+1) ────────────────────
 
 export async function markAttendance(
     session: SessionPayload,
@@ -817,14 +764,14 @@ export async function markAttendance(
     marks: Array<{ participantId: string; attendance: "HADIR" | "TIDAK_HADIR" }>,
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
-    const operator = isWig002(session) || (await isAppointmentPic(session).catch(() => false));
+    const operator = isWig002(session);
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
         select: { id: true, requesterEmployeeId: true, startAt: true, endAt: true, status: true, participants: { select: { id: true } } },
     });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (!operator && !(session.employeeId && existing.requesterEmployeeId === session.employeeId)) {
-        throw new AppointmentError("Hanya PIC atau pembuat meeting yang dapat menandai kehadiran.", 403);
+        throw new AppointmentError("Hanya GA atau pembuat meeting yang dapat menandai kehadiran.", 403);
     }
     if (existing.status !== "SCHEDULED" && existing.status !== "COMPLETED") {
         throw new AppointmentError("Kehadiran hanya dapat ditandai untuk meeting yang sedang berlangsung.", 400);

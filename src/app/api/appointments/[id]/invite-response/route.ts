@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             title: `Peserta ${ACTION_LABEL[result.data.action]} Undangan Meeting`,
             body: `${session.name ?? session.username} ${ACTION_LABEL[result.data.action].toLowerCase()} "${data.title}"${reasonSuffix}`,
             tag: `appointment-${id}-rsvp-${session.employeeId}-${result.data.action}`,
-            url: `/employee/appointments?invite=${id}`,
+            url: `/employee/appointments/detail/${id}`,
         });
         return NextResponse.json({ success: true, data });
     } catch (err) {

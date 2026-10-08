@@ -42,10 +42,31 @@ export async function POST(request: NextRequest) {
         const maxOffset = Math.max(...offsets);
         const horizon = new Date(now.getTime() + (maxOffset + POLL_WINDOW_MIN) * 60000);
 
+        const dueToComplete = await prisma.meetingAppointment.findMany({
+            where: { status: "SCHEDULED", endAt: { lte: now } },
+            select: { id: true },
+        });
         const completed = await prisma.meetingAppointment.updateMany({
             where: { status: "SCHEDULED", endAt: { lte: now } },
             data: { status: "COMPLETED" },
         });
+
+        // Submit task dari meeting yang baru selesai (push sekali per penerima)
+        if (dueToComplete.length > 0) {
+            const { getUnsubmittedOpenTasks, claimSubmittedTasks } = await import("@/lib/services/meetingTaskService");
+            const { sendAppointmentPush, collectUserIdsForEmployees } = await import("@/lib/services/appointmentNotify");
+            const pending = await getUnsubmittedOpenTasks(dueToComplete.map((m) => m.id));
+            const claimed = await claimSubmittedTasks(pending);
+            for (const item of claimed) {
+                const userIds = await collectUserIdsForEmployees(item.employeeIds);
+                await sendAppointmentPush(userIds, {
+                    title: "Task Baru dari Meeting Selesai",
+                    body: `${item.title} — deadline ${item.activeDeadlineDate}`,
+                    tag: `meeting-task-${item.taskId}-submitted`,
+                    url: `/employee/appointments/tasks?highlight=${item.taskId}`,
+                });
+            }
+        }
 
         const upcoming = await prisma.meetingAppointment.findMany({
             where: { status: "SCHEDULED", startAt: { gt: now, lt: horizon } },

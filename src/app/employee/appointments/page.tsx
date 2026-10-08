@@ -9,13 +9,12 @@ import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AppointmentCalendar, { type CalendarAppointment } from "@/components/appointments/AppointmentCalendar";
 import AppointmentFormModal from "@/components/appointments/AppointmentFormModal";
-import AppointmentDetailModal from "@/components/appointments/AppointmentDetailModal";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
-import { fetchMonthAppointments, fetchUpcomingAppointments, type AppointmentListItem } from "@/components/appointments/useAppointments";
+import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { toDateString, formatIndonesianDate } from "@/lib/utils";
 
 type ViewMode = "upcoming" | "day" | "month";
-type ModalState = { type: "none" } | { type: "create" } | { type: "edit"; item: AppointmentListItem } | { type: "detail"; item: AppointmentListItem };
+type ModalState = { type: "none" } | { type: "create" };
 
 function fmtTime(iso: string): string {
     const d = new Date(iso);
@@ -95,10 +94,20 @@ export default function EmployeeAppointmentsPage() {
         [debouncedQ, filterRoom, filterStatus]
     );
 
-    type Scope = "all" | "mine" | "invited";
+    type Scope = "all" | "mine" | "invited" | "history";
     const [scope, setScope] = useState<Scope>("all");
 
     const [refreshKey, setRefreshKey] = useState(0);
+    const [historyTotal, setHistoryTotal] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!myEmployeeId) return;
+        const controller = new AbortController();
+        void fetchPastAppointments(controller.signal, {}).then(({ total }) => {
+            setHistoryTotal(total);
+        });
+        return () => controller.abort();
+    }, [myEmployeeId, refreshKey]);
 
     useEffect(() => {
         if (view === "upcoming") {
@@ -107,7 +116,8 @@ export default function EmployeeAppointmentsPage() {
             setLoading(true);
             setLoadError(null);
             const controller = new AbortController();
-            void fetchUpcomingAppointments(controller.signal, {
+            const fetcher = scope === "history" ? fetchPastAppointments : fetchUpcomingAppointments;
+            void fetcher(controller.signal, {
                 q: debouncedQ || undefined,
                 roomId: filterRoom || undefined,
                 status: filterStatus || undefined,
@@ -131,8 +141,14 @@ export default function EmployeeAppointmentsPage() {
     }, []);
 
     const scopedItems = useMemo(() => {
-        if (scope === "all" || !myEmployeeId) return items;
+        if (!myEmployeeId) return scope === "all" ? items : [];
+        if (scope === "all") return items;
         if (scope === "mine") return items.filter((a) => a.requesterEmployeeId === myEmployeeId);
+        if (scope === "history") {
+            return items.filter(
+                (a) => a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId)
+            );
+        }
         return items.filter((a) => a.requesterEmployeeId !== myEmployeeId && a.participants.some((p) => p.employeeId === myEmployeeId));
     }, [items, scope, myEmployeeId]);
 
@@ -170,23 +186,11 @@ export default function EmployeeAppointmentsPage() {
     }, [toast]);
 
     const openDetail = useCallback(
-        async (id: string) => {
-            try {
-                const res = await fetch(`/api/appointments/${id}`);
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat detail."));
-                const json: unknown = await res.json();
-                const data = json && typeof json === "object" ? (json as { data: AppointmentListItem }).data : null;
-                if (data) setModal({ type: "detail", item: data });
-            } catch (error) {
-                reportClientError("EmployeeAppointmentsPage", "Gagal memuat detail", error);
-                toast(error instanceof Error ? error.message : "Gagal memuat detail.", "error");
-            }
+        (id: string) => {
+            router.push(`/employee/appointments/detail/${id}`);
         },
-        [toast]
+        [router]
     );
-
-    const detailItem = modal.type === "detail" ? modal.item : null;
-    const editingItem = modal.type === "edit" ? modal.item : null;
 
     const [showBusy, setShowBusy] = useState(false);
     const [blocks, setBlocks] = useState<Array<{ id: string; startAt: string; endAt: string; reason: string | null }>>([]);
@@ -251,7 +255,7 @@ export default function EmployeeAppointmentsPage() {
         const inviteId = params.get("invite");
         if (inviteId) {
             window.history.replaceState(null, "", window.location.pathname);
-            void openDetail(inviteId);
+            router.push(`/employee/appointments/detail/${inviteId}`);
             return;
         }
         const presetDate = params.get("date");
@@ -264,7 +268,7 @@ export default function EmployeeAppointmentsPage() {
                 setModal({ type: "create" });
             }
         }
-    }, [openDetail]);
+    }, [router]);
 
     return (
         <div className="w-full min-w-0 space-y-4">
@@ -347,6 +351,7 @@ export default function EmployeeAppointmentsPage() {
                         { key: "all", label: `Semua (${scopeCounts.all})` },
                         { key: "mine", label: `Yang Saya Selenggarakan (${scopeCounts.mine})` },
                         { key: "invited", label: `Undangan untuk Saya (${scopeCounts.invited})` },
+                        { key: "history", label: `Meeting Sebelumnya${historyTotal === null ? "" : ` (${historyTotal})`}` },
                     ] as const
                 ).map((t) => (
                     <button
@@ -476,9 +481,13 @@ export default function EmployeeAppointmentsPage() {
                     ) : scopedItems.length === 0 ? (
                         <div className="card p-12 text-center border-dashed">
                             <p className="text-sm font-medium text-[var(--text-muted)]">
-                                {hasActiveFilter || scope !== "all"
-                                    ? "Tidak ada meeting mendatang yang sesuai."
-                                    : "Belum ada meeting mendatang."}
+                                {scope === "history"
+                                    ? hasActiveFilter
+                                        ? "Tidak ada riwayat meeting yang sesuai."
+                                        : "Belum ada meeting sebelumnya."
+                                    : hasActiveFilter || scope !== "all"
+                                        ? "Tidak ada meeting mendatang yang sesuai."
+                                        : "Belum ada meeting mendatang."}
                             </p>
                             {(hasActiveFilter || scope !== "all") && (
                                 <button
@@ -563,7 +572,9 @@ export default function EmployeeAppointmentsPage() {
                                         ? "Belum ada meeting yang Anda selenggarakan pada tanggal ini."
                                         : scope === "invited"
                                             ? "Belum ada undangan meeting untuk Anda pada tanggal ini."
-                                            : "Belum ada meeting pada tanggal ini."}
+                                            : scope === "history"
+                                                ? "Belum ada riwayat meeting pada tanggal ini."
+                                                : "Belum ada meeting pada tanggal ini."}
                             </p>
                             {hasActiveFilter ? (
                                 <button type="button" onClick={clearFilters} className="btn btn-secondary btn-sm mt-3">
@@ -601,33 +612,12 @@ export default function EmployeeAppointmentsPage() {
 
             {!loading && dayItems.length === 0 && view === "day" && loadError === null && items.length === 0 && (
                 <p className="text-[11px] text-[var(--text-muted)] text-center flex items-center justify-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5" /> Catatan: ruangan dan peserta tersedia berdasarkan urutan pemesanan; perubahan jadwal hanya untuk keperluan mendesak melalui PIC.
+                    <AlertCircle className="w-3.5 h-3.5" /> Catatan: ruangan dan peserta tersedia berdasarkan urutan pemesanan; perubahan jadwal hanya untuk keperluan mendesak melalui penyelenggara.
                 </p>
             )}
 
             {modal.type === "create" && (
                 <AppointmentFormModal initialDate={selectedDate} editing={null} onClose={() => setModal({ type: "none" })} onSaved={handleSaved} />
-            )}
-            {editingItem && (
-                <AppointmentFormModal
-                    initialDate={selectedDate}
-                    editing={editingItem}
-                    onClose={() => setModal({ type: "none" })}
-                    onSaved={handleSaved}
-                />
-            )}
-            {detailItem && (
-                <AppointmentDetailModal
-                    item={detailItem}
-                    canManage={myEmployeeId !== null && detailItem.requesterEmployeeId === myEmployeeId}
-                    myEmployeeId={myEmployeeId}
-                    onClose={() => setModal({ type: "none" })}
-                    onChanged={() => {
-                        setRefreshKey((k) => k + 1);
-                        void openDetail(detailItem.id);
-                    }}
-                    onEdit={() => setModal({ type: "edit", item: detailItem })}
-                />
             )}
         </div>
     );

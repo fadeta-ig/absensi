@@ -46,7 +46,7 @@ const GA_NAV_ITEMS: NavItem[] = [
         label: "Meeting & Ruang Meeting",
         subItems: [
             { href: "/ga/appointments/incoming", label: "Pemantauan Meeting" },
-            { href: "/ga/appointments/settings", label: "Ruang Meeting & PIC" },
+            { href: "/ga/appointments/settings", label: "Ruang Meeting" },
         ],
     },
     {

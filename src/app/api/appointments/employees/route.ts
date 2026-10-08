@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { isWig002 } from "@/lib/services/appointmentService";
-import { PERMISSIONS } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -13,7 +12,7 @@ const employeesQuerySchema = z.object({
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId && !isWig002(session) && !session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);

@@ -3,7 +3,6 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, ser
 import {
     AppointmentError,
     getReminderOffsets,
-    isAppointmentPic,
     isWig002,
     setReminderOffsets,
 } from "@/lib/services/appointmentService";
@@ -27,7 +26,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!(isWig002(session) || (await isAppointmentPic(session).catch(() => false)))) return forbiddenResponse();
+    if (!isWig002(session)) return forbiddenResponse();
 
     try {
         const result = await validateBody(request, reminderOffsetsSetSchema);

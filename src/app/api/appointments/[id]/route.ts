@@ -8,13 +8,12 @@ import {
     rescheduleAppointment,
 } from "@/lib/services/appointmentService";
 import { appointmentCancelSchema, appointmentRescheduleSchema } from "@/lib/validations/validationSchemas";
-import { PERMISSIONS } from "@/lib/permissions";
 import { sendAppointmentPush, collectAppointmentUserIds } from "@/lib/services/appointmentNotify";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId && !isWig002(session) && !session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { id } = await params;
@@ -64,12 +63,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             v ? new Date(v).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-";
         const userIds = await collectAppointmentUserIds(id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
-            title: isOrganizer ? "Jadwal Meeting Berubah" : `PIC memindahkan meeting "${before?.title ?? "Anda"}"`,
+            title: isOrganizer ? "Jadwal Meeting Berubah" : `WIG002 memindahkan meeting "${before?.title ?? "Anda"}"`,
             body: isOrganizer
                 ? result.data.changeReason
                 : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Meeting Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${result.data.changeReason}`,
             tag: `appointment-${id}-rescheduled`,
-            url: `/employee/appointments?invite=${id}`,
+            url: `/employee/appointments/detail/${id}`,
         });
         return NextResponse.json({ success: true, data });
     } catch (err) {

@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Pencil, Loader2, AlertTriangle, Trash2, X, UserPlus, BellRing } from "lucide-react";
+import { Plus, Pencil, Loader2, Trash2, X, BellRing } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
-import { useDebouncedSearch } from "@/hooks/useDebouncedSearch";
 
-type Tab = "rooms" | "pics" | "reminder";
+type Tab = "rooms" | "reminder";
 
 interface Room {
     id: string;
@@ -18,33 +17,6 @@ interface Room {
     location: string | null;
     facilities: string | null;
     isActive: boolean;
-}
-
-interface PicInfo {
-    employeeId: string;
-    name: string | null;
-    isActive: boolean;
-}
-
-interface EmployeeOption {
-    employeeId: string;
-    name: string;
-    department: string;
-    position: string;
-}
-
-/** Metode sendiri untuk settings PIC: /api/appointments/employees (departemen terisi dari server). */
-async function fetchEmployeeOptions(query: string, signal: AbortSignal): Promise<EmployeeOption[]> {
-    const res = await fetch(`/api/appointments/employees?q=${encodeURIComponent(query)}&limit=8`, { signal });
-    if (!res.ok) return [];
-    const data: unknown = await res.json();
-    if (!Array.isArray(data)) return [];
-    return (data as Array<{ employeeId: string; name: string; department?: string; position?: string }>).map((e) => ({
-        employeeId: e.employeeId,
-        name: e.name,
-        department: e.department ?? "-",
-        position: e.position ?? "-",
-    }));
 }
 
 export default function GaAppointmentSettingsPage() {
@@ -62,16 +34,6 @@ export default function GaAppointmentSettingsPage() {
     const [editingRoom, setEditingRoom] = useState<Room | null>(null);
     const [savingRoom, setSavingRoom] = useState(false);
 
-    const [pics, setPics] = useState<PicInfo[]>([]);
-    const [picQuery, setPicQuery] = useState("");
-    const [manualId, setManualId] = useState("");
-    const [allEmployees, setAllEmployees] = useState<EmployeeOption[]>([]);
-    const [selectedPic, setSelectedPic] = useState("");
-    const [savingPic, setSavingPic] = useState(false);
-    const [removingId, setRemovingId] = useState<string | null>(null);
-    const searchFetcher = useCallback((q: string, signal: AbortSignal) => fetchEmployeeOptions(q, signal), []);
-    const { results: picOptions, searching: searchingPic } = useDebouncedSearch<EmployeeOption>(picQuery, searchFetcher, 300, 2);
-
     const [offsets, setOffsets] = useState<number[]>([]);
     const [offsetsText, setOffsetsText] = useState("");
     const [savingOffsets, setSavingOffsets] = useState(false);
@@ -80,26 +42,17 @@ export default function GaAppointmentSettingsPage() {
         setLoading(true);
         setError(null);
         try {
-            const [roomsRes, picsRes, reminderRes, employeesRes] = await Promise.all([
+            const [roomsRes, reminderRes] = await Promise.all([
                 fetch("/api/ga/meeting-rooms"),
-                fetch("/api/ga/appointment-pics"),
                 fetch("/api/ga/appointment-reminder"),
-                fetch("/api/appointments/employees?limit=200"),
             ]);
             if (!roomsRes.ok) throw new Error(await getResponseErrorMessage(roomsRes, "Gagal memuat data ruang meeting."));
-            if (!picsRes.ok) throw new Error(await getResponseErrorMessage(picsRes, "Gagal memuat data PIC."));
             const roomsJson = (await roomsRes.json()) as { data: Room[] };
-            const picsJson = (await picsRes.json()) as { data: { infos: PicInfo[] } };
             setRooms(Array.isArray(roomsJson.data) ? roomsJson.data : []);
-            setPics(Array.isArray(picsJson.data.infos) ? picsJson.data.infos : []);
             if (reminderRes.ok) {
                 const reminderJson = (await reminderRes.json()) as { data: { offsets: number[] } };
                 setOffsets(reminderJson.data.offsets);
                 setOffsetsText(reminderJson.data.offsets.join(", "));
-            }
-            if (employeesRes.ok) {
-                const employeesJson: unknown = await employeesRes.json();
-                setAllEmployees(Array.isArray(employeesJson) ? (employeesJson as EmployeeOption[]) : []);
             }
         } catch (err) {
             reportClientError("GaAppointmentSettings", "Gagal memuat pengaturan", err);
@@ -182,55 +135,6 @@ export default function GaAppointmentSettingsPage() {
         });
     }
 
-    async function handleAddPic(employeeId: string) {
-        const id = employeeId.trim();
-        if (!id || savingPic) return;
-        const current = pics.map((p) => p.employeeId);
-        if (current.includes(id)) {
-            toast("Karyawan tersebut telah terdaftar sebagai PIC.", "error");
-            return;
-        }
-        if (current.length >= 2) {
-            toast("Jumlah PIC resepsionis maksimal 2 orang.", "error");
-            return;
-        }
-        setSavingPic(true);
-        try {
-            const res = await fetch("/api/ga/appointment-pics", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ employeeIds: [...current, id] }),
-            });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menambah PIC."));
-            const json = (await res.json()) as { data: { infos: PicInfo[] } };
-            setPics(Array.isArray(json.data.infos) ? json.data.infos : []);
-            setPicQuery("");
-            setManualId("");
-            toast("PIC berhasil ditambahkan.", "success");
-        } catch (err) {
-            reportClientError("GaAppointmentSettings", "Gagal tambah PIC", err);
-            toast(err instanceof Error ? err.message : "Gagal menambah PIC.", "error");
-        } finally {
-            setSavingPic(false);
-        }
-    }
-
-    async function handleRemovePic(employeeId: string) {
-        setRemovingId(employeeId);
-        try {
-            const res = await fetch(`/api/ga/appointment-pics?id=${encodeURIComponent(employeeId)}`, { method: "DELETE" });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus PIC."));
-            const json = (await res.json()) as { data: { infos: PicInfo[] } };
-            setPics(Array.isArray(json.data.infos) ? json.data.infos : []);
-            toast("PIC berhasil dihapus.", "success");
-        } catch (err) {
-            reportClientError("GaAppointmentSettings", "Gagal hapus PIC", err);
-            toast(err instanceof Error ? err.message : "Gagal menghapus PIC.", "error");
-        } finally {
-            setRemovingId(null);
-        }
-    }
-
     async function handleSaveOffsets(e: React.FormEvent) {
         e.preventDefault();
         if (savingOffsets) return;
@@ -271,8 +175,8 @@ export default function GaAppointmentSettingsPage() {
     return (
         <div className="w-full min-w-0 space-y-4">
             <div>
-                <h1 className="text-lg font-extrabold text-[var(--text-primary)]">Ruang Meeting & PIC</h1>
-                <p className="text-xs text-[var(--text-muted)]">Kelola data induk ruang meeting dan PIC resepsionis (maksimal 2 orang)</p>
+                <h1 className="text-lg font-extrabold text-[var(--text-primary)]">Ruang Meeting</h1>
+                <p className="text-xs text-[var(--text-muted)]">Kelola data induk ruang meeting</p>
             </div>
 
             {error && (
@@ -282,7 +186,7 @@ export default function GaAppointmentSettingsPage() {
             )}
 
             <div className="flex gap-1.5 border-b border-[var(--border)]">
-                {([["rooms", "Ruang Meeting"], ["pics", `PIC Resepsionis (${pics.length} dari 2)`], ["reminder", "Pengingat Otomatis"]] as [Tab, string][]).map(([key, label]) => (
+                {([["rooms", "Ruang Meeting"], ["reminder", "Pengingat Otomatis"]] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         type="button"
@@ -391,126 +295,13 @@ export default function GaAppointmentSettingsPage() {
                 </div>
             )}
 
-            {tab === "pics" && (
-                <div className="card p-4 space-y-4">
-                    <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                        <UserPlus className="w-4 h-4" /> PIC Resepsionis ({pics.length} dari 2)
-                    </h2>
-                    <p className="text-xs text-[var(--text-muted)]">Hanya karyawan internal yang aktif. PIC berwenang mengelola seluruh meeting harian.</p>
-                    {pics.length === 0 && (
-                        <FeedbackMessage variant="warning" compact>
-                            Belum ada PIC yang ditetapkan. Pengelolaan meeting belum dapat dilakukan hingga PIC ditetapkan.
-                        </FeedbackMessage>
-                    )}
-                    <ul className="space-y-2">
-                        {pics.map((p) => (
-                            <li key={p.employeeId} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-semibold truncate">{p.name ?? p.employeeId}</span>
-                                    <span className="block text-[11px] font-mono text-[var(--text-muted)]">{p.employeeId}</span>
-                                </span>
-                                <span className="flex items-center gap-2 shrink-0">
-                                    {!p.isActive && (
-                                        <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700">
-                                            <AlertTriangle className="w-3.5 h-3.5" /> Nonaktif — akses dinonaktifkan secara otomatis
-                                        </span>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => { void handleRemovePic(p.employeeId); }}
-                                        disabled={removingId === p.employeeId}
-                                        className="p-2 rounded-lg hover:bg-rose-50 text-rose-600 min-w-9 min-h-9 flex items-center justify-center"
-                                        aria-label={`Hapus PIC ${p.employeeId}`}
-                                    >
-                                        {removingId === p.employeeId ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                                    </button>
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                    <div className="relative">
-                        <label className="form-label" htmlFor="pic-select">Pilih dari Daftar Karyawan Aktif</label>
-                        <select
-                            id="pic-select"
-                            className="form-input"
-                            value={selectedPic}
-                            onChange={(e) => setSelectedPic(e.target.value)}
-                            disabled={savingPic || pics.length >= 2}
-                        >
-                            <option value="">Pilih karyawan…</option>
-                            {allEmployees.map((o) => (
-                                <option key={o.employeeId} value={o.employeeId}>
-                                    {o.name} · {o.department}
-                                </option>
-                            ))}
-                        </select>
-                        {selectedPic && (
-                            <button
-                                type="button"
-                                onClick={() => { void handleAddPic(selectedPic); setSelectedPic(""); }}
-                                disabled={savingPic || pics.length >= 2}
-                                className="btn btn-primary w-full mt-2"
-                            >
-                                {savingPic ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Tetapkan sebagai PIC
-                            </button>
-                        )}
-                    </div>
-                    <div className="relative">
-                        <input
-                            className="form-input"
-                            value={picQuery}
-                            onChange={(e) => setPicQuery(e.target.value)}
-                            placeholder="Cari nama karyawan (minimal 2 huruf)"
-                            aria-label="Cari karyawan PIC"
-                            disabled={savingPic || pics.length >= 2}
-                        />
-                        {searchingPic && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />}
-                        {picOptions.length > 0 && (
-                            <ul className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-[var(--border)] divide-y divide-[var(--border)]">
-                                {picOptions.map((o) => (
-                                    <li key={o.employeeId}>
-                                        <button
-                                            type="button"
-                                            onClick={() => { void handleAddPic(o.employeeId); }}
-                                            disabled={savingPic || pics.length >= 2}
-                                            className="w-full text-left px-3 py-2 hover:bg-[var(--secondary)] min-h-11"
-                                        >
-                                            <span className="block text-sm font-semibold truncate">{o.name}</span>
-                                            <span className="block text-[11px] text-[var(--text-muted)] truncate">{o.employeeId} · {o.department}</span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                    <div className="flex gap-2">
-                        <input
-                            className="form-input flex-1 font-mono"
-                            value={manualId}
-                            onChange={(e) => setManualId(e.target.value)}
-                            placeholder="Atau masukkan NIP secara manual"
-                            maxLength={100}
-                            disabled={savingPic || pics.length >= 2}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => { void handleAddPic(manualId); }}
-                            disabled={savingPic || !manualId.trim() || pics.length >= 2}
-                            className="btn btn-primary shrink-0"
-                        >
-                            {savingPic ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Tambahkan
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {tab === "reminder" && (
                 <form onSubmit={handleSaveOffsets} className="card p-4 space-y-3">
                     <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                         <BellRing className="w-4 h-4" /> Pengingat Otomatis
                     </h2>
                     <p className="text-xs text-[var(--text-muted)]">
-                        Daftar waktu pengingat dalam satuan menit sebelum jadwal dimulai. Contoh: <span className="font-mono">4320, 1440</span> berarti 3 hari dan 1 hari sebelumnya. Berlaku hanya untuk meeting baru; pengingat yang telah terkirim tidak akan dikirim ulang.
+                        Pengaturan bawaan (diatur WIG002). Daftar waktu pengingat dalam satuan menit sebelum jadwal dimulai. Contoh: <span className="font-mono">4320, 1440</span> berarti 3 hari dan 1 hari sebelumnya. Berlaku hanya untuk meeting baru; pengingat yang telah terkirim tidak akan dikirim ulang.
                     </p>
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="reminder-offsets">Waktu Pengingat (menit, dipisahkan koma)</label>

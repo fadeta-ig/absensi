@@ -12,7 +12,6 @@ async function main() {
         throw new Error("seedAppointmentDefaults hanya untuk DB lokal hris_local.");
     }
     const defaults: Array<[string, string]> = [
-        ["appointment.pic.employeeIds", JSON.stringify([])],
         ["appointment.reminder.offsets", JSON.stringify([1440])],
         ["meeting.task.maxExtensions", "3"],
     ];

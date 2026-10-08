@@ -7,6 +7,7 @@ vi.mock("@/lib/prisma", () => ({
         meetingAppointment: { findUnique: vi.fn(), update: vi.fn() },
         meetingAppointmentRevision: { count: vi.fn(), create: vi.fn() },
         meetingTask: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+        meetingTaskReminderLog: { create: vi.fn() },
         meetingTaskAssignee: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
         meetingTaskDeadlineHistory: { findMany: vi.fn(), count: vi.fn(), create: vi.fn() },
         meetingTaskRevision: { count: vi.fn(), create: vi.fn() },
@@ -35,6 +36,7 @@ import {
     isAssigneeOverdue,
     meetingTaskDueDateToDate,
     requestTaskExtension,
+    updateMeetingMinutes,
     updateMyTaskStatus,
 } from "@/lib/services/meetingTaskService";
 import { toWIBDateString } from "@/lib/timezone";
@@ -57,11 +59,13 @@ function empSession(over: Record<string, unknown> = {}) {
 const actor = { userId: "u-1", username: "ID-001" };
 
 function meetingRow() {
+    const now = Date.now();
     return {
         id: "appt-1",
         title: "Meeting",
         status: "SCHEDULED",
-        startAt: new Date(),
+        startAt: new Date(now - 60_000),
+        endAt: new Date(now + 60_000),
         requesterEmployeeId: "ID-001",
         participants: [{ employeeId: "ID-001" }, { employeeId: "ID-002" }],
     };
@@ -109,6 +113,51 @@ describe("createMeetingTask", () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "CANCELLED" } as never);
         await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 409 });
     });
+    it("meeting belum mulai (SCHEDULED future) = 409", async () => {
+        const now = Date.now();
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            ...meetingRow(),
+            status: "SCHEDULED",
+            startAt: new Date(now + 60 * 60 * 1000),
+            endAt: new Date(now + 2 * 60 * 60 * 1000),
+        } as never);
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({
+            statusCode: 409,
+            message: "Task hanya dapat dibuat ketika meeting sedang berjalan atau sudah terlaksana.",
+        });
+    });
+    it("meeting sedang berjalan (IN_PROGRESS) lolos validasi status", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: [], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("meeting sudah selesai (COMPLETED) = 409 read-only", async () => {
+        const now = Date.now();
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            ...meetingRow(),
+            status: "COMPLETED",
+            startAt: new Date(now - 2 * 60 * 60 * 1000),
+            endAt: new Date(now - 60 * 60 * 1000),
+        } as never);
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 409 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toThrow(
+            "Meeting sudah selesai. Task baru tidak dapat ditambahkan."
+        );
+    });
+    it("update notulensi di meeting COMPLETED = 409", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "COMPLETED", minutes: "lama" } as never);
+        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi" }, actor)).rejects.toMatchObject({
+            statusCode: 409,
+        });
+        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi" }, actor)).rejects.toThrow(
+            "Meeting sudah selesai. Notulensi tidak dapat diubah."
+        );
+    });
+    it("update notulensi di meeting CANCELLED = 409", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "CANCELLED", minutes: "lama" } as never);
+        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi" }, actor)).rejects.toMatchObject({
+            statusCode: 409,
+        });
+    });
     it("bukan peserta = 403", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), requesterEmployeeId: "ID-009", participants: [{ employeeId: "ID-009" }] } as never);
         await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-009"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 403 });
@@ -139,7 +188,7 @@ describe("updateMyTaskStatus", () => {
 });
 
 describe("extendTaskDeadline", () => {
-    it("bukan pemberi/PIC = 403", async () => {
+    it("bukan pemberi/GA = 403", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002" } as never);
         await expect(extendTaskDeadline(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh data tambahan" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
@@ -150,7 +199,7 @@ describe("extendTaskDeadline", () => {
 });
 
 describe("cancelMeetingTask", () => {
-    it("bukan pemberi/PIC = 403", async () => {
+    it("bukan pemberi/GA = 403", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002" } as never);
         await expect(cancelMeetingTask(empSession(), "task-1", "Alasan batal yang cukup panjang", actor)).rejects.toMatchObject({ statusCode: 403 });
     });
@@ -178,5 +227,38 @@ describe("getMeetingTaskMaxExtensions", () => {
     });
     it("MeetingTaskError membawa statusCode", () => {
         expect(new MeetingTaskError("x", 422).statusCode).toBe(422);
+    });
+});
+
+describe("submit on complete", () => {
+    it("melewati penerima yang sudah SUBMITTED", async () => {
+        const { getUnsubmittedOpenTasks } = await import("@/lib/services/meetingTaskService");
+        mocked.meetingTask.findMany.mockResolvedValue([
+            {
+                id: "t1",
+                title: "Tugas",
+                deadlineHistory: [{ deadlineDate: new Date("2026-10-12T16:59:00Z") }],
+                assignees: [{ employeeId: "ID-001" }, { employeeId: "ID-002" }],
+                reminderLogs: [{ employeeId: "ID-001" }],
+            },
+        ] as never);
+        const out = await getUnsubmittedOpenTasks(["appt-1"]);
+        expect(out).toHaveLength(1);
+        expect(out[0].employeeIds).toEqual(["ID-002"]);
+        expect(out[0].activeDeadlineDate).toBe("2026-10-12");
+    });
+    it("claim melewati P2002 (cron paralel)", async () => {
+        const { claimSubmittedTasks } = await import("@/lib/services/meetingTaskService");
+        mocked.meetingTaskReminderLog.create
+            .mockResolvedValueOnce({} as never)
+            .mockRejectedValueOnce({ code: "P2002" });
+        const out = await claimSubmittedTasks([{ taskId: "t1", title: "T", activeDeadlineDate: "2026-10-12", employeeIds: ["ID-001", "ID-002"] }]);
+        expect(out).toHaveLength(1);
+        expect(out[0].employeeIds).toEqual(["ID-001"]);
+    });
+    it("daftar kosong tanpa query berat", async () => {
+        const { getUnsubmittedOpenTasks } = await import("@/lib/services/meetingTaskService");
+        await expect(getUnsubmittedOpenTasks([])).resolves.toEqual([]);
+        expect(mocked.meetingTask.findMany).not.toHaveBeenCalled();
     });
 });

@@ -7,6 +7,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import ParticipantPicker, { type PickedParticipant } from "@/components/appointments/ParticipantPicker";
 import RoomSelect from "@/components/appointments/RoomSelect";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { stripGelar } from "@/lib/utils/formatters";
 import { toDateString } from "@/lib/utils";
 import type { AppointmentListItem } from "@/components/appointments/useAppointments";
 import { participantDisplayName } from "@/components/appointments/useAppointments";
@@ -73,7 +74,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
                     if (!p.employeeId) continue;
                     const intervals = busy[p.employeeId] ?? [];
                     if (intervals.some((b) => new Date(b.startAt).getTime() < slotEnd && new Date(b.endAt).getTime() > slotStart)) {
-                        hit.push(p.name);
+                        hit.push(stripGelar(p.name));
                     }
                 }
                 setConflicts(hit);
@@ -140,7 +141,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
             )}
             {conflicts.length > 0 && (
                 <FeedbackMessage variant="warning" className="mb-4" title="Peserta Tidak Tersedia">
-                    {conflicts.join(", ")} sudah memiliki jadwal meeting, cuti, atau periode sibuk pada jam tersebut. Ruangan tersedia berdasarkan urutan pemesanan — ubah jam meeting atau hubungi PIC apabila mendesak.
+                    {conflicts.join(", ")} sudah memiliki jadwal meeting, cuti, atau periode sibuk pada jam tersebut. Ruangan tersedia berdasarkan urutan pemesanan — ubah jam meeting atau hubungi penyelenggara apabila mendesak.
                 </FeedbackMessage>
             )}
 

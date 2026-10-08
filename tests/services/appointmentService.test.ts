@@ -37,16 +37,11 @@ vi.mock("@/lib/env", () => ({
 import { prisma } from "@/lib/prisma";
 import {
     AppointmentError,
-    MAX_APPOINTMENT_PICS,
     createAppointment,
-    getAppointmentPicIds,
     getReminderOffsets,
-    invalidateAppointmentPicCache,
     invalidateReminderOffsetsCache,
-    isAppointmentPic,
     normalizeRoomName,
     rescheduleAppointment,
-    setAppointmentPics,
     setReminderOffsets,
     slotToDates,
 } from "@/lib/services/appointmentService";
@@ -67,7 +62,6 @@ function empSession(over: Record<string, unknown> = {}) {    return {
 
 beforeEach(() => {
     vi.resetAllMocks();
-    invalidateAppointmentPicCache();
     invalidateReminderOffsetsCache();
     mocked.appSetting.findUnique.mockResolvedValue(null);
     mocked.auditLog.create.mockResolvedValue({} as never);
@@ -86,32 +80,6 @@ describe("slotToDates", () => {
     });
     it("tanggal invalid ditolak 400", () => {
         expect(() => slotToDates({ date: "2026-13-40", startTime: "10:00", endTime: "11:00" })).toThrowError(AppointmentError);
-    });
-});
-
-describe("PIC max 2", () => {
-    it(`menolak lebih dari ${MAX_APPOINTMENT_PICS}`, async () => {
-        await expect(setAppointmentPics(["A", "B", "C"], { userId: "u", username: "WIG002" })).rejects.toMatchObject({ statusCode: 409 });
-    });
-    it("menolak kandidat nonaktif/outsource 422", async () => {
-        mocked.employee.findUnique.mockResolvedValue(null);
-        await expect(setAppointmentPics(["X"], { userId: "u", username: "WIG002" })).rejects.toMatchObject({ statusCode: 422 });
-    });
-    it("menyimpan daftar valid + invalidate cache", async () => {
-        mocked.employee.findUnique.mockResolvedValue({ employeeId: "ID-002", isActive: true, userAccount: { id: "u2", username: "ID-002", isActive: true } } as never);
-        const ids = await setAppointmentPics(["ID-002"], { userId: "u", username: "WIG002" });
-        expect(ids).toEqual(["ID-002"]);
-        expect(mocked.appSetting.upsert).toHaveBeenCalledTimes(1);
-    });
-    it("getAppointmentPicIds parse + cache", async () => {
-        mocked.appSetting.findUnique.mockResolvedValue({ key: "k", value: JSON.stringify(["ID-002"]) } as never);
-        await expect(getAppointmentPicIds()).resolves.toEqual(["ID-002"]);
-        mocked.appSetting.findUnique.mockResolvedValue({ key: "k", value: JSON.stringify(["ZZZ"]) } as never);
-        await expect(getAppointmentPicIds()).resolves.toEqual(["ID-002"]); // cache
-    });
-    it("isAppointmentPic false bila tidak terdaftar", async () => {
-        mocked.appSetting.findUnique.mockResolvedValue({ key: "k", value: JSON.stringify(["ID-002"]) } as never);
-        await expect(isAppointmentPic(empSession())).resolves.toBe(false);
     });
 });
 
@@ -320,5 +288,91 @@ describe("EmployeeUnavailability (blokir sibuk mandiri)", () => {
         await expect(
             busyBlockEmployeeIds(tx as never, ["ID-002"], new Date("2026-12-01T10:00:00+07:00"), new Date("2026-12-01T11:00:00+07:00"))
         ).resolves.toEqual(["ID-002"]);
+    });
+});
+
+describe("rescheduleAppointment saat berjalan", () => {
+    it("IN_PROGRESS ditolak 409 dengan pesan jelas", async () => {
+        const { rescheduleAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([{ id: "a1" }]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1",
+                    status: "SCHEDULED",
+                    requesterEmployeeId: "ID-001",
+                    roomId: "r1",
+                    meetingLink: null,
+                    startAt: new Date(Date.now() - 600000),
+                    endAt: new Date(Date.now() + 3600000),
+                }),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        await expect(
+            rescheduleAppointment(empSession(), "a1", { date: "2026-12-02", startTime: "10:00", endTime: "11:00", roomId: "r1", changeReason: "perubahan mendesak" }, { userId: "u", username: "ID-001" })
+        ).rejects.toMatchObject({ statusCode: 409 });
+    });
+});
+
+describe("completeAppointment", () => {
+    it("bukan pembuat ditolak 403", async () => {
+        const { completeAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", status: "SCHEDULED", requesterEmployeeId: "ID-002",
+            roomId: null, startAt: new Date(Date.now() - 600000), endAt: new Date(Date.now() + 3600000),
+        } as never);
+        await expect(completeAppointment(empSession(), "a1", { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("belum mulai ditolak 409", async () => {
+        const { completeAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", status: "SCHEDULED", requesterEmployeeId: "ID-001",
+            roomId: null, startAt: new Date(Date.now() + 3600000), endAt: new Date(Date.now() + 7200000),
+        } as never);
+        await expect(completeAppointment(empSession(), "a1", { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("sudah selesai/dibatalkan ditolak 409", async () => {
+        const { completeAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", status: "COMPLETED", requesterEmployeeId: "ID-001",
+            roomId: null, startAt: new Date(Date.now() - 7200000), endAt: new Date(Date.now() - 3600000),
+        } as never);
+        await expect(completeAppointment(empSession(), "a1", { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("pembuat saat berjalan berhasil COMPLETED", async () => {
+        const { completeAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", status: "SCHEDULED", requesterEmployeeId: "ID-001",
+            roomId: null, startAt: new Date(Date.now() - 600000), endAt: new Date(Date.now() + 3600000),
+        } as never);
+        const tx = {
+            meetingAppointment: {
+                updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+                findUnique: vi.fn().mockResolvedValue({ id: "a1", status: "COMPLETED" }),
+            },
+            meetingAppointmentRevision: { count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({}) },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        const out = (await completeAppointment(empSession(), "a1", { userId: "u", username: "ID-001" })) as { status: string };
+        expect(out.status).toBe("COMPLETED");
+        expect(tx.meetingAppointment.updateMany).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ status: "COMPLETED" }) })
+        );
+    });
+});
+
+describe("respondInvite kedaluwarsa", () => {
+    it("lewat endAt ditolak 409", async () => {
+        const { respondInvite } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", status: "SCHEDULED",
+            endAt: new Date(Date.now() - 60000),
+            requesterEmployeeId: "ID-002",
+            participants: [{ id: "p1", inviteStatus: "PENDING" }],
+        } as never);
+        await expect(respondInvite(empSession(), "a1", "ACCEPT", null, { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 409 });
     });
 });

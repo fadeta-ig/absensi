@@ -219,12 +219,12 @@ Kontrak notulen penting:
 Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization: Bearer <CRON_SECRET>`.
 | Rute | Jadwal Rekomendasi | Deskripsi Tugas |
 |---|---|---|
-| `/api/cron/daily-greeting` | Harian (Pagi) | Mengirimkan ucapan selamat ulang tahun otomatis kepada staf yang berulang tahun. |
+| `/api/cron/daily-greeting` | Harian 07:00 WIB | Sapaan pagi + push kedua agenda meeting hari ini (judul, jam, penyelenggara, ruangan) hanya ke yang terlibat. |
 | `/api/cron/cleanup-photos` | Mingguan | Pembersihan cache foto selfie sementara yang sudah diverifikasi dan kadaluarsa. |
 | `/api/cron/generate-payroll` | Bulanan | Otomasi kalkulasi draf rekapitulasi penggajian bulanan periode berjalan. |
 | `/api/cron/reset-leave` | Tahunan | Reset dan alokasi ulang kuota saldo cuti tahunan karyawan setiap awal tahun. |
-| `/api/cron/appointment-reminder` | Tiap 15 menit | Pengingat appointment SCHEDULED per offset dinamis PIC; exactly-once via `AppointmentReminderLog`. |
-| `/api/cron/meeting-task-reminder` | Tiap 15 menit | Pengingat deadline task meeting (H-1440/H-180/H-60) + overdue harian sekali per penerima; exactly-once via `MeetingTaskReminderLog`. |
+| `/api/cron/appointment-reminder` | Tiap 15 menit | Pengingat appointment SCHEDULED per offset dinamis bawaan (diatur WIG002); exactly-once via `AppointmentReminderLog`. |
+| `/api/cron/meeting-task-reminder` | Harian 07:00 WIB | Satu push per hari per penerima untuk task yang masih terbuka (termasuk overdue); task selesai tidak dikirimi; exactly-once via `MeetingTaskReminderLog`. |
 
 ### K. Ekspor & Penarikan Laporan (`/api/export`)
 | Rute | Metode | Permission / Akses | Deskripsi |

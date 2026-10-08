@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Circle, ListChecks, Loader2 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { stripGelar } from "@/lib/utils/formatters";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface MyTaskAssignee {
     employeeId: string;
@@ -46,6 +49,7 @@ export default function EmployeeMeetingTasksPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [busyId, setBusyId] = useState<string | null>(null);
+    const confirm = useConfirm();
 
     const load = useCallback(async (f: Filter) => {
         setLoading(true);
@@ -181,13 +185,16 @@ export default function EmployeeMeetingTasksPage() {
                                     <div className="flex gap-1.5">
                                         <dt className="text-[var(--text-muted)] w-20 shrink-0">Meeting</dt>
                                         <dd className="text-[var(--text-secondary)]">
-                                            {task.appointment.title} · {new Date(task.appointment.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                                            <Link href={`/employee/appointments/detail/${task.appointmentId}`} className="text-[var(--primary)] font-semibold hover:underline">
+                                                {task.appointment.title}
+                                            </Link>{" "}
+                                            · {new Date(task.appointment.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
                                             {task.appointment.room ? ` · ${task.appointment.room.name}` : ""}
                                         </dd>
                                     </div>
                                     <div className="flex gap-1.5">
                                         <dt className="text-[var(--text-muted)] w-20 shrink-0">Dari</dt>
-                                        <dd className="text-[var(--text-secondary)]">{task.assigner.name ?? task.assigner.employeeId}</dd>
+                                        <dd className="text-[var(--text-secondary)]">{task.assigner.name ? stripGelar(task.assigner.name) : task.assigner.employeeId}</dd>
                                     </div>
                                     <div className="flex gap-1.5">
                                         <dt className="text-[var(--text-muted)] w-20 shrink-0">Deadline</dt>
@@ -200,35 +207,50 @@ export default function EmployeeMeetingTasksPage() {
                                         <div className="flex gap-1.5">
                                             <dt className="text-[var(--text-muted)] w-20 shrink-0">Penerima</dt>
                                             <dd className="text-[var(--text-secondary)]">
-                                                {task.assignees.map((a) => `${a.name} (${STATUS_LABEL[a.status] ?? a.status})`).join(", ")}
+                                                {task.assignees.map((a) => `${stripGelar(a.name)} (${STATUS_LABEL[a.status] ?? a.status})`).join(", ")}
                                             </dd>
                                         </div>
                                     )}
                                 </dl>
-                                {canAct && (
-                                    <div className="flex gap-1.5 mt-2.5">
-                                        {mine?.status === "BELUM_DIKERJAKAN" && (
-                                            <button
-                                                type="button"
-                                                disabled={busyId === task.id}
-                                                onClick={() => { void handleStatus(task, "ON_PROGRESS"); }}
-                                                className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex-1 flex items-center justify-center gap-1"
-                                            >
-                                                {busyId === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Circle className="w-3.5 h-3.5" />}
-                                                Mulai Kerjakan
-                                            </button>
-                                        )}
+                                <div className="flex gap-1.5 mt-2.5">
+                                    <Link
+                                        href={`/employee/appointments/detail/${task.appointmentId}/history?highlight=${encodeURIComponent(`task-created-${task.id}`)}`}
+                                        className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex items-center justify-center gap-1"
+                                        aria-label={`Lihat riwayat ${task.title}`}
+                                    >
+                                        Riwayat
+                                    </Link>
+                                    {canAct && mine?.status === "BELUM_DIKERJAKAN" && (
                                         <button
                                             type="button"
                                             disabled={busyId === task.id}
-                                            onClick={() => { void handleStatus(task, "SELESAI"); }}
+                                            onClick={() => { void handleStatus(task, "ON_PROGRESS"); }}
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex-1 flex items-center justify-center gap-1"
+                                        >
+                                            {busyId === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Circle className="w-3.5 h-3.5" />}
+                                            Mulai Kerjakan
+                                        </button>
+                                    )}
+                                    {canAct && (
+                                        <button
+                                            type="button"
+                                            disabled={busyId === task.id}
+                                            onClick={() =>
+                                                confirm({
+                                                    title: "Tandai Selesai?",
+                                                    message: `Task "${task.title}" akan ditandai selesai. Pastikan pekerjaan sudah benar-benar tuntas.`,
+                                                    confirmLabel: "Ya, Selesai",
+                                                    variant: "info",
+                                                    onConfirm: () => { void handleStatus(task, "SELESAI"); },
+                                                })
+                                            }
                                             className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-emerald-600 text-white flex-1 flex items-center justify-center gap-1"
                                         >
                                             {busyId === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                                             Tandai Selesai
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </article>
                         );
                     })}

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
+import { toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
+import { stripGelar } from "@/lib/utils/formatters";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -184,8 +186,43 @@ export async function GET() {
                 type:    "appointment",
                 title:   "Undangan Meeting",
                 message: `${invite.title} — ${invite.room?.name ?? "Meeting Daring"}, ${new Date(invite.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
-                href:    `/employee/appointments?invite=${invite.id}`,
+                href:    `/employee/appointments/detail/${invite.id}`,
                 time:    invite.createdAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
+        // Meeting yang berlangsung hari ini (jadwal WIB hari ini, saya terlibat)
+        const todayWib = toWIBDateString(new Date());
+        const todaysMeetings = await prisma.meetingAppointment.findMany({
+            where: {
+                status: "SCHEDULED",
+                startAt: { gte: wibDateTimeToDate(todayWib, "00:00"), lte: wibDateTimeToDate(todayWib, "23:59") },
+                OR: [
+                    { requesterEmployeeId: employeeId },
+                    { participants: { some: { employeeId } } },
+                ],
+            },
+            orderBy: { startAt: "asc" },
+            take: 3,
+            select: {
+                id: true,
+                title: true,
+                startAt: true,
+                requester: { select: { name: true } },
+                room: { select: { name: true } },
+            },
+        });
+        for (const appt of todaysMeetings) {
+            const time = new Date(appt.startAt).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }).replace(":", ".");
+            const organizer = appt.requester?.name ? stripGelar(appt.requester.name) : "Penyelenggara";
+            notifications.push({
+                id:      `appointment-today-${appt.id}`,
+                type:    "appointment",
+                title:   "Meeting Hari Ini",
+                message: `${time} — ${appt.title} oleh ${organizer}${appt.room ? ` @ ${appt.room.name}` : ""}`,
+                href:    `/employee/appointments/detail/${appt.id}`,
+                time:    new Date(appt.startAt).toISOString(),
                 isRead:  false,
             });
         }
@@ -196,7 +233,7 @@ export async function GET() {
                 type:    "appointment",
                 title:   "Meeting Dibatalkan",
                 message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
-                href:    `/employee/appointments?invite=${appt.id}`,
+                href:    `/employee/appointments/detail/${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
             });
@@ -210,7 +247,7 @@ export async function GET() {
                 type:    "appointment",
                 title:   "Peserta Menolak Undangan Meeting",
                 message: `${names} menolak "${appt.title}"${firstNote ? ` — ${firstNote}` : ""}`,
-                href:    `/employee/appointments?invite=${appt.id}`,
+                href:    `/employee/appointments/detail/${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
             });
@@ -222,30 +259,46 @@ export async function GET() {
                 type:    "appointment",
                 title:   "Meeting Anda Dibatalkan",
                 message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
-                href:    `/employee/appointments?invite=${appt.id}`,
+                href:    `/employee/appointments/detail/${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
             });
         }
 
-        // Task meeting: milik sendiri yang mendekati deadline (3 hari) atau overdue
-        const { getMyMeetingTasks } = await import("@/lib/services/meetingTaskService");
-        const myMeetingTasks = await getMyMeetingTasks(session, {}).catch(() => []);
+        // Task meeting: milik sendiri yang mendekati deadline (3 hari) atau overdue.
+        // Query ringan khusus bell (bukan DTO penuh) + batas 10 baris.
         const threeDaysAhead = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        const dueSoonRows = await prisma.meetingTaskAssignee.findMany({
+            where: { employeeId, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] }, task: { isCancelled: false } },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            select: {
+                status: true,
+                task: {
+                    select: {
+                        id: true,
+                        title: true,
+                        deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
+                    },
+                },
+            },
+        });
         let taskNotifCount = 0;
-        for (const task of myMeetingTasks) {
+        for (const row of dueSoonRows) {
             if (taskNotifCount >= 3) break;
-            const mine = task.assignees.find((a) => a.employeeId === employeeId);
-            if (!mine || mine.status === "SELESAI" || mine.status === "DIBATALKAN" || !task.activeDeadline) continue;
-            const dueTime = new Date(task.activeDeadline.deadlineAt).getTime();
-            if (dueTime > threeDaysAhead.getTime() && !mine.isOverdue) continue;
+            const due = row.task.deadlineHistory[0]?.deadlineDate;
+            if (!due) continue;
+            const dueTime = new Date(due).getTime();
+            const isOverdue = Date.now() > dueTime;
+            if (dueTime > threeDaysAhead.getTime() && !isOverdue) continue;
+            const dueLabel = new Date(due).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
             notifications.push({
-                id:      `meeting-task-${task.id}`,
+                id:      `meeting-task-${row.task.id}`,
                 type:    "task",
-                title:   mine.isOverdue ? "Task Overdue" : "Task Mendekati Deadline",
-                message: `${task.title} — deadline ${task.activeDeadline.date}`,
-                href:    `/employee/appointments/tasks?highlight=${task.id}`,
-                time:    new Date(task.activeDeadline.deadlineAt).toISOString(),
+                title:   isOverdue ? "Task Overdue" : "Task Mendekati Deadline",
+                message: `${row.task.title} — deadline ${dueLabel}`,
+                href:    `/employee/appointments/tasks?highlight=${row.task.id}`,
+                time:    new Date(due).toISOString(),
                 isRead:  false,
             });
             taskNotifCount++;
@@ -275,8 +328,47 @@ export async function GET() {
             });
         }
 
+        // Task baru dari meeting yang baru selesai (7 hari, deadline masih jauh agar tak dobel dengan blok dueSoon)
+        const freshTasks = await prisma.meetingTaskAssignee.findMany({
+            where: {
+                employeeId,
+                status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] },
+                task: {
+                    isCancelled: false,
+                    appointment: { status: "COMPLETED", updatedAt: { gte: sevenDaysAgo } },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            select: {
+                task: {
+                    select: {
+                        id: true,
+                        title: true,
+                        createdAt: true,
+                        deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
+                    },
+                },
+            },
+        });
+        for (const row of freshTasks.slice(0, 3)) {
+            const due = row.task.deadlineHistory[0]?.deadlineDate;
+            if (!due) continue;
+            if (new Date(due).getTime() <= threeDaysAhead.getTime()) continue;
+            notifications.push({
+                id:      `meeting-task-new-${row.task.id}`,
+                type:    "task",
+                title:   "Task Baru dari Meeting Selesai",
+                message: `${row.task.title} — deadline ${new Date(due).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                href:    `/employee/appointments/tasks?highlight=${row.task.id}`,
+                time:    row.task.createdAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
         // Sort by time descending
-        notifications.sort((a, b) => b.time.localeCompare(a.time));        const result = notifications.slice(0, 20);
+        notifications.sort((a, b) => b.time.localeCompare(a.time));
+        const result = notifications.slice(0, 20);
 
         return NextResponse.json({
             notifications: result,

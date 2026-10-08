@@ -23,17 +23,6 @@ export async function collectRequesterUserId(appointmentId: string): Promise<str
     return user ? [user.id] : [];
 }
 
-/** UserId para PIC aktif (untuk notif PENDING baru). */
-export async function collectPicUserIds(): Promise<string[]> {
-    const { getAppointmentPicIds } = await import("@/lib/services/appointmentService");
-    const ids = await getAppointmentPicIds().catch(() => [] as string[]);
-    if (ids.length === 0) return [];
-    const users = await prisma.userAccount.findMany({
-        where: { employeeId: { in: ids }, isActive: true },
-        select: { id: true },
-    });
-    return users.map((u) => u.id);
-}
 export async function collectAppointmentUserIds(appointmentId: string): Promise<string[]> {
     const appt = await prisma.meetingAppointment.findUnique({
         where: { id: appointmentId },
@@ -105,6 +94,15 @@ export async function collectUserIdsForEmployees(employeeIds: string[]): Promise
 export async function collectMeetingTaskUserIds(taskId: string): Promise<string[]> {
     const rows = await prisma.meetingTaskAssignee.findMany({
         where: { taskId },
+        select: { employeeId: true },
+    }).catch(() => [] as Array<{ employeeId: string }>);
+    return collectUserIdsForEmployees(rows.map((r) => r.employeeId));
+}
+
+/** UserId para penerima task yang statusnya masih terbuka (untuk submit on complete). */
+export async function collectOpenMeetingTaskUserIds(taskId: string): Promise<string[]> {
+    const rows = await prisma.meetingTaskAssignee.findMany({
+        where: { taskId, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
         select: { employeeId: true },
     }).catch(() => [] as Array<{ employeeId: string }>);
     return collectUserIdsForEmployees(rows.map((r) => r.employeeId));

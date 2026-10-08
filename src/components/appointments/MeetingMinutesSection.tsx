@@ -12,7 +12,7 @@ interface MinutesData {
     minutesUpdatedAt: string | null;
 }
 
-export default function MeetingMinutesSection({ appointmentId }: { appointmentId: string }) {
+export default function MeetingMinutesSection({ appointmentId, readOnly = false }: { appointmentId: string; readOnly?: boolean }) {
     const [data, setData] = useState<MinutesData | null>(null);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -76,7 +76,7 @@ export default function MeetingMinutesSection({ appointmentId }: { appointmentId
                 </p>
             ) : error && !data ? (
                 <FeedbackMessage variant="error">{error}</FeedbackMessage>
-            ) : !editing ? (
+            ) : !editing || readOnly ? (
                 <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 px-3 py-2.5">
                     {data?.minutes ? (
                         <>
@@ -91,13 +91,15 @@ export default function MeetingMinutesSection({ appointmentId }: { appointmentId
                     ) : (
                         <p className="text-xs text-[var(--text-muted)]">Belum ada notulensi. Peserta meeting dapat menuliskannya di sini.</p>
                     )}
-                    <button
-                        type="button"
-                        onClick={() => { setText(data?.minutes ?? ""); setReason(""); setEditing(true); }}
-                        className="btn btn-secondary btn-sm mt-2"
-                    >
-                        <Pencil className="w-3.5 h-3.5" /> {data?.minutes ? "Ubah Notulensi" : "Tulis Notulensi"}
-                    </button>
+                    {!readOnly && (
+                        <button
+                            type="button"
+                            onClick={() => { setText(data?.minutes ?? ""); setReason(""); setEditing(true); }}
+                            className="btn btn-secondary btn-sm mt-2"
+                        >
+                            <Pencil className="w-3.5 h-3.5" /> {data?.minutes ? "Ubah Notulensi" : "Tulis Notulensi"}
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="space-y-2 rounded-xl border border-[var(--border)] p-2.5">

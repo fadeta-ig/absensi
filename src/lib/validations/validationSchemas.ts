@@ -706,10 +706,6 @@ export const meetingRoomUpdateSchema = z.object({
     isActive: z.boolean().optional(),
 });
 
-export const appointmentPicSetSchema = z.object({
-    employeeIds: z.array(z.string().trim().min(1).max(100)).max(2),
-});
-
 export const reminderOffsetsSetSchema = z.object({
     offsets: z.array(z.number().int().min(15)).max(5),
 });

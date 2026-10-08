@@ -4,17 +4,15 @@ import {
     AppointmentError,
     createAppointment,
     getAppointments,
-    isAppointmentPic,
     isWig002,
 } from "@/lib/services/appointmentService";
 import { appointmentCreateSchema } from "@/lib/validations/validationSchemas";
-import { PERMISSIONS } from "@/lib/permissions";
 import { sendAppointmentPush, collectAppointmentUserIds } from "@/lib/services/appointmentNotify";
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId && !isWig002(session) && !session.permissions.includes(PERMISSIONS.HR_MANAGE)) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);
@@ -47,8 +45,7 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, appointmentCreateSchema);
         if ("error" in result) return result.error;
 
-        const asOperator =
-            isWig002(session) || (await isAppointmentPic(session).catch(() => false));
+        const asOperator = isWig002(session);
         const created = (await createAppointment(session, {
             title: result.data.title,
             agenda: result.data.agenda ?? null,
@@ -68,7 +65,7 @@ export async function POST(request: NextRequest) {
             title: "Undangan Meeting Baru",
             body: `${result.data.title} • ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB`,
             tag: `appointment-${created.id}-created`,
-            url: `/employee/appointments?invite=${created.id}`,
+            url: `/employee/appointments/detail/${created.id}`,
         });
         return NextResponse.json({ success: true, data: created }, { status: 201 });
     } catch (err) {

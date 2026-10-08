@@ -143,9 +143,9 @@ RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Ak
 4. `MeetingAppointment` 1 ── * `AppointmentReminderLog` (unik `[appointmentId, offsetMin]`, exactly-once cron).
 5. `Employee` 1 ── * `MeetingAppointment` sebagai pemohon (`requesterEmployeeId`, Restrict) dan 1 ── * `MeetingAppointmentParticipant` (Restrict).
 6. Enum: `MeetingAppointmentStatus` (`SCHEDULED`, `COMPLETED`, `CANCELLED` — tanpa approval; lifecycle tampil `IN_PROGRESS` dihitung dari jam: mulai ≤ kini < selesai), `MeetingAttendanceMark` (`BELUM`, `HADIR`, `TIDAK_HADIR`), `MeetingInviteResponse` (`PENDING`, `ACCEPTED`, `DECLINED`; `TENTATIVE` legacy di DB, API/UI hanya ACCEPT/DECLINE + alasan tolak wajib min 5 dan dibaca penyelenggara via select/bell).
-7. Config: `AppSetting` `appointment.pic.employeeIds` (JSON list, max 2, cache 60 dtk) dan `appointment.reminder.offsets` (JSON menit, default `[1440]`, milik PIC).
+7. Config: `AppSetting` `appointment.reminder.offsets` (JSON menit, default `[1440]`, pengaturan bawaan yang diatur WIG002).
 
-RBAC: tanpa permission baru. Master + PIC memakai `ga.manage` + `username WIG002`; operasional memakai daftar PIC; employee memakai `employee.self`. Akun PIC wajib berperan `GA_ADMIN` agar dapat membuka portal `/ga` (otorisasi operasional tetap via daftar PIC).
+RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; employee memakai `employee.self`.
 
 ## 5. Task Hasil Meeting + Notulensi (2026-10-08)
 
@@ -153,12 +153,12 @@ RBAC: tanpa permission baru. Master + PIC memakai `ga.manage` + `username WIG002
 2. `MeetingTask` 1 ── * `MeetingTaskAssignee` (unik `[taskId, employeeId]`; status per-orang `BELUM_DIKERJAKAN/ON_PROGRESS/SELESAI/DIBATALKAN`; overdue = hitung `now > dueAt`, bukan kolom).
 3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; kuota `meeting.task.maxExtensions` default 3).
 4. `MeetingTask` 1 ── * `MeetingTaskRevision` (unik `[taskId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
-5. `MeetingTask` 1 ── * `MeetingTaskExtensionRequest` (`PENDING/APPROVED/REJECTED`; penerima mengajukan, pemberi/PIC memutuskan).
-6. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `H-1440/H-180/H-60/OVERDUE-YYYY-MM-DD`; exactly-once cron).
+5. `MeetingTask` 1 ── * `MeetingTaskExtensionRequest` (`PENDING/APPROVED/REJECTED`; penerima mengajukan, pemberi memutuskan).
+6. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `DAILY-YYYY-MM-DD` WIB untuk reminder harian + `SUBMITTED` untuk submit on complete; exactly-once cron).
 
-Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; status diubah sendiri oleh penerima; perpanjang/batalkan oleh pemberi/PIC; overdue dihitung, badge kembali normal setelah diperpanjang (riwayat tercatat).
+Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; status diubah sendiri oleh penerima; perpanjang/batalkan oleh pemberi; overdue dihitung, badge kembali normal setelah diperpanjang (riwayat tercatat).
 
-RBAC: tanpa permission baru. Akses meeting = peserta/requester atau privileged (`ga.manage` WIG002, `hr.manage`, PIC).
+RBAC: tanpa permission baru. Akses meeting = peserta/requester atau WIG002 (`ga.manage`).
 
 ---
 

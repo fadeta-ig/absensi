@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { isValidCalendarDate, toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
-import { PERMISSIONS } from "@/lib/permissions";
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
-import { isAppointmentPic, isWig002 } from "@/lib/services/appointmentService";
+import { isWig002, resolveLifecycleStatus } from "@/lib/services/appointmentService";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -21,7 +20,6 @@ export class MeetingTaskError extends Error {
 
 export const MEETING_TASK_MAX_EXTENSIONS_KEY = "meeting.task.maxExtensions" as const;
 export const DEFAULT_MEETING_TASK_MAX_EXTENSIONS = 3 as const;
-export const MEETING_TASK_REMINDER_OFFSETS = [1440, 180, 60] as const;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 
 export type MeetingTaskAssigneeStatus = "BELUM_DIKERJAKAN" | "ON_PROGRESS" | "SELESAI" | "DIBATALKAN";
@@ -66,6 +64,7 @@ async function getMeetingOrThrow(appointmentId: string) {
             title: true,
             status: true,
             startAt: true,
+            endAt: true,
             requesterEmployeeId: true,
             participants: { select: { employeeId: true } },
         },
@@ -82,8 +81,7 @@ function internalParticipantIds(appt: { requesterEmployeeId: string | null; part
 }
 
 export async function isPrivileged(session: SessionPayload): Promise<boolean> {
-    if (isWig002(session) || session.permissions.includes(PERMISSIONS.HR_MANAGE)) return true;
-    return isAppointmentPic(session).catch(() => false);
+    return isWig002(session);
 }
 
 async function assertCanAccessMeeting(session: SessionPayload, appt: { requesterEmployeeId: string | null; participants: Array<{ employeeId: string | null }> }): Promise<void> {
@@ -111,6 +109,18 @@ const taskInclude = {
     appointment: { select: { id: true, title: true, startAt: true, status: true, room: { select: { name: true } } } },
     assignees: { include: { employee: { select: { employeeId: true, name: true } } }, orderBy: { createdAt: "asc" as const } },
     deadlineHistory: { orderBy: { sequence: "asc" as const } },
+    extensionRequests: {
+        where: { status: "PENDING" },
+        orderBy: { createdAt: "desc" as const },
+        select: {
+            id: true,
+            proposedDate: true,
+            reason: true,
+            status: true,
+            createdAt: true,
+            requestedBy: { select: { employeeId: true, name: true } },
+        },
+    },
 } satisfies Prisma.MeetingTaskInclude;
 
 type TaskRow = Prisma.MeetingTaskGetPayload<{ include: typeof taskInclude }>;
@@ -139,6 +149,14 @@ export function toTaskDto(task: TaskRow, now: Date = new Date()) {
             ? { date: toWIBDateString(activeDeadline.deadlineDate), deadlineAt: activeDeadline.deadlineDate, sequence: activeDeadline.sequence }
             : null,
         extensionsCount: Math.max(0, task.deadlineHistory.length - 1),
+        pendingExtensionRequests: task.extensionRequests.map((r) => ({
+            id: r.id,
+            proposedDate: r.proposedDate,
+            reason: r.reason,
+            status: r.status,
+            createdAt: r.createdAt,
+            requestedBy: r.requestedBy,
+        })),
         assignees,
         allDone: !task.isCancelled && assignees.length > 0 && open.length === 0 && assignees.every((a) => a.status === "SELESAI"),
         anyOverdue: !task.isCancelled && assignees.some((a) => a.isOverdue),
@@ -165,7 +183,13 @@ export async function createMeetingTask(
 ): Promise<MeetingTaskDto> {
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat membuat task meeting.", 403);
     const appt = await getMeetingOrThrow(appointmentId);
+    if (appt.status === "COMPLETED") throw new MeetingTaskError("Meeting sudah selesai. Task baru tidak dapat ditambahkan.", 409);
     if (appt.status === "CANCELLED") throw new MeetingTaskError("Meeting yang dibatalkan tidak dapat diberi task.", 409);
+    const now = new Date();
+    const lifecycle = resolveLifecycleStatus(appt.status, appt.startAt, appt.endAt, now);
+    if (lifecycle === "SCHEDULED" && now.getTime() < appt.startAt.getTime()) {
+        throw new MeetingTaskError("Task hanya dapat dibuat ketika meeting sedang berjalan atau sudah terlaksana.", 409);
+    }
     await assertCanAccessMeeting(session, appt);
 
     const assigneeIds = [...new Set(input.assigneeEmployeeIds.map((v) => v.trim()).filter(Boolean))];
@@ -282,7 +306,7 @@ export async function updateMyTaskStatus(
     return toTaskDto(task);
 }
 
-// ─── Perpanjangan (pemberi/PIC) ───────────────────────────────────
+// ─── Perpanjangan (pemberi/GA) ────────────────────────────────────
 
 async function applyExtensionTx(
     tx: TxClient,
@@ -338,7 +362,7 @@ export async function extendTaskDeadline(
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
-        throw new MeetingTaskError("Hanya pemberi task atau PIC yang dapat memperpanjang deadline.", 403);
+        throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memperpanjang deadline.", 403);
     }
     if (!input.reason || input.reason.trim().length < 5) throw new MeetingTaskError("Alasan perpanjangan minimal 5 karakter.", 400);
 
@@ -364,7 +388,7 @@ export async function extendTaskDeadline(
     return toTaskDto(updated);
 }
 
-// ─── Batalkan (pemberi/PIC) ───────────────────────────────────────
+// ─── Batalkan (pemberi/GA) ────────────────────────────────────────
 
 export async function cancelMeetingTask(
     session: SessionPayload,
@@ -378,7 +402,7 @@ export async function cancelMeetingTask(
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
-        throw new MeetingTaskError("Hanya pemberi task atau PIC yang dapat membatalkan.", 403);
+        throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat membatalkan.", 403);
     }
     if (!reason || reason.trim().length < 5) throw new MeetingTaskError("Alasan pembatalan minimal 5 karakter.", 400);
     await prisma.$transaction(async (tx) => {
@@ -450,7 +474,7 @@ export async function decideTaskExtension(
     if (req.task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
     const privileged = await isPrivileged(session);
     if (req.task.assignerEmployeeId !== session.employeeId && !privileged) {
-        throw new MeetingTaskError("Hanya pemberi task atau PIC yang dapat memutuskan.", 403);
+        throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memutuskan.", 403);
     }
     if (decision === "REJECTED") {
         await prisma.meetingTaskExtensionRequest.update({ where: { id: requestId }, data: { status: "REJECTED", decidedBy: actor.username, decidedAt: new Date() } });
@@ -489,6 +513,65 @@ export async function getPendingExtensionRequests(session: SessionPayload, taskI
     });
 }
 
+// ─── Submit on complete (push sekali per penerima) ─────────────────
+
+export interface UnsubmittedTask {
+    taskId: string;
+    title: string;
+    activeDeadlineDate: string;
+    employeeIds: string[];
+}
+
+/** Task open yang belum pernah di-submit (kind SUBMITTED) untuk daftar meeting. */
+export async function getUnsubmittedOpenTasks(appointmentIds: string[]): Promise<UnsubmittedTask[]> {
+    if (appointmentIds.length === 0) return [];
+    const tasks = await prisma.meetingTask.findMany({
+        where: { appointmentId: { in: appointmentIds }, isCancelled: false },
+        select: {
+            id: true,
+            title: true,
+            deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
+            assignees: {
+                where: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+                select: { employeeId: true },
+            },
+            reminderLogs: { where: { kind: "SUBMITTED" }, select: { employeeId: true } },
+        },
+    });
+    const result: UnsubmittedTask[] = [];
+    for (const t of tasks) {
+        const submitted = new Set(t.reminderLogs.map((l) => l.employeeId));
+        const pending = t.assignees.map((a) => a.employeeId).filter((id) => !submitted.has(id));
+        if (pending.length === 0) continue;
+        const due = t.deadlineHistory[0]?.deadlineDate;
+        result.push({
+            taskId: t.id,
+            title: t.title,
+            activeDeadlineDate: due ? toWIBDateString(due) : "-",
+            employeeIds: pending,
+        });
+    }
+    return result;
+}
+
+/** Tandai SUBMITTED (insert dulu, P2002 = sudah disubmit cron paralel) lalu kembalikan yang berhasil diklaim. */
+export async function claimSubmittedTasks(items: UnsubmittedTask[]): Promise<UnsubmittedTask[]> {
+    const claimed: UnsubmittedTask[] = [];
+    for (const item of items) {
+        const okIds: string[] = [];
+        for (const employeeId of item.employeeIds) {
+            try {
+                await prisma.meetingTaskReminderLog.create({ data: { taskId: item.taskId, employeeId, kind: "SUBMITTED" } });
+                okIds.push(employeeId);
+            } catch {
+                // P2002: sudah disubmit
+            }
+        }
+        if (okIds.length > 0) claimed.push({ ...item, employeeIds: okIds });
+    }
+    return claimed;
+}
+
 // ─── Notulensi ────────────────────────────────────────────────────
 
 export async function updateMeetingMinutes(
@@ -503,7 +586,7 @@ export async function updateMeetingMinutes(
         select: { id: true, title: true, status: true, minutes: true, requesterEmployeeId: true, participants: { select: { employeeId: true } } },
     });
     if (!appt) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
-    if (appt.status === "CANCELLED") throw new MeetingTaskError("Meeting yang dibatalkan tidak dapat dinotulensi.", 409);
+    if (appt.status === "COMPLETED" || appt.status === "CANCELLED") throw new MeetingTaskError("Meeting sudah selesai. Notulensi tidak dapat diubah.", 409);
     await assertCanAccessMeeting(session, appt);
     const minutes = input.minutes.trim();
     if (!minutes) throw new MeetingTaskError("Isi notulensi wajib diisi.", 400);
