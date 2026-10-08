@@ -8,9 +8,11 @@ import { consumeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { reportClientError } from "@/lib/clientErrors";
 import { getLandingPath } from "@/lib/permissions";
+import QualityPolicyModal from "@/components/QualityPolicyModal";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [policyAgreed, setPolicyAgreed] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -258,7 +260,17 @@ export default function LoginPage() {
             </div>
           </form>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setPolicyAgreed(false)}
+          className="mt-4 w-full text-center text-xs text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors"
+        >
+          Lihat Kebijakan Mutu Perusahaan
+        </button>
       </div>
+
+      <QualityPolicyModal open={!policyAgreed} onAgree={() => setPolicyAgreed(true)} />
     </div>
   );
 }
