@@ -68,7 +68,7 @@ describe("AppointmentDayDetailPage", () => {
             return { ok: true, json: async () => ({ employeeId: "ID-001" }) } as Response;
         }) as typeof fetch;
         render(<AppointmentDayDetailPage />);
-        await waitFor(() => expect(screen.getByText(/Belum ada janji rapat/)).toBeInTheDocument());
-        expect(screen.getByText(/Buat Janji Rapat pada Tanggal Ini/)).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByText(/Belum ada meeting/)).toBeInTheDocument());
+        expect(screen.getByText(/Buat Meeting pada Tanggal Ini/)).toBeInTheDocument();
     });
 });

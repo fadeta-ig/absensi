@@ -53,7 +53,7 @@ export default function RoomSelect({
         <div>
             <label className="form-label" htmlFor="appointment-room">
                 <span className="flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> Ruang Rapat (Kosongkan Apabila Rapat Daring)
+                    <Building2 className="w-3 h-3" /> Ruang Meeting (Kosongkan Apabila Meeting Daring)
                 </span>
             </label>
             <select
@@ -75,7 +75,7 @@ export default function RoomSelect({
             )}
             {overCapacity && (
                 <FeedbackMessage variant="warning" compact className="mt-2">
-                    Jumlah peserta melebihi kapasitas ruangan. Janji rapat tetap dapat dibuat — ruangan tersedia berdasarkan urutan pemesanan.
+                    Jumlah peserta melebihi kapasitas ruangan. Meeting tetap dapat dibuat — ruangan tersedia berdasarkan urutan pemesanan.
                 </FeedbackMessage>
             )}
         </div>

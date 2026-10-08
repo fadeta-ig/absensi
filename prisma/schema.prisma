@@ -79,6 +79,9 @@ model Employee {
   meetingAppointmentsRequested MeetingAppointment[]
   meetingParticipations        MeetingAppointmentParticipant[]
   unavailabilities             EmployeeUnavailability[]
+  meetingTasksAssigned         MeetingTask[]                      @relation("MeetingTaskAssigner")
+  meetingTaskAssignments       MeetingTaskAssignee[]
+  meetingTaskExtensionRequests MeetingTaskExtensionRequest[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -129,6 +132,7 @@ model UserAccount {
   cleaningEvidenceUploads    CleaningEvidencePhoto[]
   cleaningHolidaysCreated    CleaningHoliday[]
   meetingAppointmentsCreated MeetingAppointment[]
+  meetingTasksCreated        MeetingTask[]
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -1647,9 +1651,13 @@ model MeetingAppointment {
   requester Employee?    @relation(fields: [requesterEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
   createdBy UserAccount? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
-  participants MeetingAppointmentParticipant[]
-  revisions    MeetingAppointmentRevision[]
-  reminderLogs AppointmentReminderLog[]
+  participants     MeetingAppointmentParticipant[]
+  revisions        MeetingAppointmentRevision[]
+  reminderLogs     AppointmentReminderLog[]
+  tasks            MeetingTask[]
+  minutes          String?                         @map("minutes") @db.Text
+  minutesUpdatedBy String?                         @map("minutes_updated_by") @db.VarChar(100)
+  minutesUpdatedAt DateTime?                       @map("minutes_updated_at")
 
   @@index([roomId, startAt], map: "idx_meeting_appt_room_start")
   @@index([status], map: "idx_meeting_appt_status")
@@ -1722,4 +1730,129 @@ model EmployeeUnavailability {
 
   @@index([employeeId, startAt, endAt], map: "idx_emp_unavail_emp_period")
   @@map("employee_unavailabilities")
+}
+
+enum MeetingTaskAssigneeStatus {
+  BELUM_DIKERJAKAN
+  ON_PROGRESS
+  SELESAI
+  DIBATALKAN
+}
+
+enum MeetingTaskExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Task hasil meeting (dinamis antar-peserta, opsional) ──
+model MeetingTask {
+  id                 String    @id @default(uuid())
+  appointmentId      String    @map("appointment_id")
+  title              String    @db.VarChar(200)
+  detail             String?   @map("detail") @db.Text
+  assignerEmployeeId String    @map("assigner_employee_id")
+  createdByUserId    String?   @map("created_by_user_id")
+  isCancelled        Boolean   @default(false) @map("is_cancelled")
+  cancelReason       String?   @map("cancel_reason") @db.Text
+  cancelledAt        DateTime? @map("cancelled_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  appointment MeetingAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assigner    Employee           @relation("MeetingTaskAssigner", fields: [assignerEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy   UserAccount?       @relation(fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  assignees         MeetingTaskAssignee[]
+  deadlineHistory   MeetingTaskDeadlineHistory[]
+  revisions         MeetingTaskRevision[]
+  extensionRequests MeetingTaskExtensionRequest[]
+  reminderLogs      MeetingTaskReminderLog[]
+
+  @@index([appointmentId], map: "idx_meeting_task_appt")
+  @@index([assignerEmployeeId], map: "idx_meeting_task_assigner")
+  @@index([isCancelled], map: "idx_meeting_task_cancelled")
+  @@map("meeting_tasks")
+}
+
+model MeetingTaskAssignee {
+  id          String                    @id @default(uuid())
+  taskId      String                    @map("task_id")
+  employeeId  String                    @map("employee_id")
+  status      MeetingTaskAssigneeStatus @default(BELUM_DIKERJAKAN)
+  completedAt DateTime?                 @map("completed_at")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+
+  task     MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee Employee    @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([taskId, employeeId], map: "idx_meeting_task_assignee_unique")
+  @@index([taskId], map: "idx_meeting_task_assignee_task")
+  @@index([employeeId, status], map: "idx_meeting_task_assignee_emp_status")
+  @@map("meeting_task_assignees")
+}
+
+model MeetingTaskDeadlineHistory {
+  id           String   @id @default(uuid())
+  taskId       String   @map("task_id")
+  sequence     Int      @map("sequence")
+  deadlineDate DateTime @map("deadline_date")
+  reason       String?  @map("reason") @db.Text
+  createdBy    String?  @map("created_by") @db.VarChar(100)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  task MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([taskId, sequence], map: "idx_meeting_task_deadline_unique")
+  @@index([taskId], map: "idx_meeting_task_deadline_task")
+  @@map("meeting_task_deadline_history")
+}
+
+model MeetingTaskRevision {
+  id             String   @id @default(uuid())
+  taskId         String   @map("task_id")
+  revisionNumber Int      @map("revision_number")
+  changeReason   String   @map("change_reason") @db.Text
+  changedBy      String   @map("changed_by") @db.VarChar(100)
+  previousData   Json     @map("previous_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  task MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([taskId, revisionNumber], map: "idx_meeting_task_rev_unique")
+  @@index([taskId], map: "idx_meeting_task_rev_task")
+  @@map("meeting_task_revisions")
+}
+
+model MeetingTaskExtensionRequest {
+  id                    String                     @id @default(uuid())
+  taskId                String                     @map("task_id")
+  requestedByEmployeeId String                     @map("requested_by_employee_id")
+  proposedDate          DateTime                   @map("proposed_date")
+  reason                String                     @map("reason") @db.Text
+  status                MeetingTaskExtensionStatus @default(PENDING)
+  decidedBy             String?                    @map("decided_by") @db.VarChar(100)
+  decidedAt             DateTime?                  @map("decided_at")
+  createdAt             DateTime                   @default(now()) @map("created_at")
+
+  task        MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  requestedBy Employee    @relation(fields: [requestedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([taskId, status], map: "idx_meeting_task_ext_task_status")
+  @@map("meeting_task_extension_requests")
+}
+
+model MeetingTaskReminderLog {
+  id         String   @id @default(uuid())
+  taskId     String   @map("task_id")
+  employeeId String   @map("employee_id")
+  kind       String   @map("kind") @db.VarChar(50)
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  task MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([taskId, employeeId, kind], map: "idx_meeting_task_reminder_unique")
+  @@index([taskId], map: "idx_meeting_task_reminder_task")
+  @@map("meeting_task_reminder_logs")
 }

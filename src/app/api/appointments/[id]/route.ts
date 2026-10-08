@@ -64,10 +64,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             v ? new Date(v).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-";
         const userIds = await collectAppointmentUserIds(id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
-            title: isOrganizer ? "Jadwal Rapat Berubah" : `PIC memindahkan rapat "${before?.title ?? "Anda"}"`,
+            title: isOrganizer ? "Jadwal Meeting Berubah" : `PIC memindahkan meeting "${before?.title ?? "Anda"}"`,
             body: isOrganizer
                 ? result.data.changeReason
-                : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Rapat Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${result.data.changeReason}`,
+                : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Meeting Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${result.data.changeReason}`,
             tag: `appointment-${id}-rescheduled`,
             url: `/employee/appointments?invite=${id}`,
         });
@@ -93,8 +93,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         const data = (await cancelAppointment(session, id, result.data.reason, { userId: session.userId, username: session.username })) as { title?: unknown } | null;
         const userIds = await collectAppointmentUserIds(id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
-            title: "Rapat Dibatalkan",
-            body: `${typeof data?.title === "string" && data.title ? data.title : "Rapat"} — dibatalkan oleh ${session.name ?? session.username}. Alasan: ${result.data.reason}`,
+            title: "Meeting Dibatalkan",
+            body: `${typeof data?.title === "string" && data.title ? data.title : "Meeting"} — dibatalkan oleh ${session.name ?? session.username}. Alasan: ${result.data.reason}`,
             tag: `appointment-${id}-cancelled`,
             url: "/employee/appointments",
         });

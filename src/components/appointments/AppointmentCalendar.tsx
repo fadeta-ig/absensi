@@ -69,7 +69,7 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
             <div className="p-4 border-b border-[var(--border)] flex items-center justify-between gap-3 bg-[var(--secondary)]/50">
                 <div className="flex min-w-0 items-center gap-2">
                     <CalendarIcon className="w-4 h-4 text-[var(--primary)]" />
-                    <h3 className="font-bold text-sm text-[var(--text-primary)]">Kalender Janji Rapat</h3>
+                    <h3 className="font-bold text-sm text-[var(--text-primary)]">Kalender Meeting</h3>
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-[var(--text-secondary)] capitalize" aria-live="polite">

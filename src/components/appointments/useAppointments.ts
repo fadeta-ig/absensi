@@ -37,7 +37,7 @@ export async function fetchUpcomingAppointments(
     if (filter.status) params.set("status", filter.status);
     try {
         const res = await fetch(`/api/appointments?${params.toString()}`, { signal });
-        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat janji rapat mendatang."));
+        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat meeting mendatang."));
         const json: unknown = await res.json();
         const items =
             json && typeof json === "object" && Array.isArray((json as { data?: unknown }).data)
@@ -66,7 +66,7 @@ export async function fetchMonthAppointments(
     if (filter.status) params.set("status", filter.status);
     try {
         const res = await fetch(`/api/appointments?${params.toString()}`, { signal });
-        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat janji rapat."));
+        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat meeting."));
         const json: unknown = await res.json();
         const items =
             json && typeof json === "object" && Array.isArray((json as { data?: unknown }).data)
@@ -76,6 +76,6 @@ export async function fetchMonthAppointments(
     } catch (error) {
         if (signal.aborted) return { items: [], error: null };
         reportClientError("useAppointments", "Gagal memuat janji rapat", error, { year, month });
-        return { items: [], error: error instanceof Error ? error.message : "Gagal memuat janji rapat." };
+        return { items: [], error: error instanceof Error ? error.message : "Gagal memuat meeting." };
     }
 }

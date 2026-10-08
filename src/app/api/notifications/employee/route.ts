@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 interface EmployeeNotification {
     id: string;
-    type: "leave" | "overtime" | "correction" | "news" | "letter" | "appointment";
+    type: "leave" | "overtime" | "correction" | "news" | "letter" | "appointment" | "task";
     title: string;
     message: string;
     href: string;
@@ -182,8 +182,8 @@ export async function GET() {
             notifications.push({
                 id:      `appointment-invite-${invite.id}`,
                 type:    "appointment",
-                title:   "Undangan Rapat",
-                message: `${invite.title} — ${invite.room?.name ?? "Rapat Daring"}, ${new Date(invite.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                title:   "Undangan Meeting",
+                message: `${invite.title} — ${invite.room?.name ?? "Meeting Daring"}, ${new Date(invite.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments?invite=${invite.id}`,
                 time:    invite.createdAt.toISOString(),
                 isRead:  false,
@@ -194,8 +194,8 @@ export async function GET() {
             notifications.push({
                 id:      `appointment-follow-${appt.id}`,
                 type:    "appointment",
-                title:   "Rapat Dibatalkan",
-                message: `${appt.title} — ${appt.room?.name ?? "Rapat Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                title:   "Meeting Dibatalkan",
+                message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments?invite=${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
@@ -208,7 +208,7 @@ export async function GET() {
             notifications.push({
                 id:      `appointment-declined-${appt.id}`,
                 type:    "appointment",
-                title:   "Peserta Menolak Undangan",
+                title:   "Peserta Menolak Undangan Meeting",
                 message: `${names} menolak "${appt.title}"${firstNote ? ` — ${firstNote}` : ""}`,
                 href:    `/employee/appointments?invite=${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
@@ -220,17 +220,63 @@ export async function GET() {
             notifications.push({
                 id:      `appointment-${appt.id}`,
                 type:    "appointment",
-                title:   "Rapat Anda Dibatalkan",
-                message: `${appt.title} — ${appt.room?.name ?? "Rapat Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                title:   "Meeting Anda Dibatalkan",
+                message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments?invite=${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
             });
         }
 
+        // Task meeting: milik sendiri yang mendekati deadline (3 hari) atau overdue
+        const { getMyMeetingTasks } = await import("@/lib/services/meetingTaskService");
+        const myMeetingTasks = await getMyMeetingTasks(session, {}).catch(() => []);
+        const threeDaysAhead = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        let taskNotifCount = 0;
+        for (const task of myMeetingTasks) {
+            if (taskNotifCount >= 3) break;
+            const mine = task.assignees.find((a) => a.employeeId === employeeId);
+            if (!mine || mine.status === "SELESAI" || mine.status === "DIBATALKAN" || !task.activeDeadline) continue;
+            const dueTime = new Date(task.activeDeadline.deadlineAt).getTime();
+            if (dueTime > threeDaysAhead.getTime() && !mine.isOverdue) continue;
+            notifications.push({
+                id:      `meeting-task-${task.id}`,
+                type:    "task",
+                title:   mine.isOverdue ? "Task Overdue" : "Task Mendekati Deadline",
+                message: `${task.title} — deadline ${task.activeDeadline.date}`,
+                href:    `/employee/appointments/tasks?highlight=${task.id}`,
+                time:    new Date(task.activeDeadline.deadlineAt).toISOString(),
+                isRead:  false,
+            });
+            taskNotifCount++;
+        }
+
+        // Pengajuan perpanjangan task yang menunggu keputusan saya (pemberi)
+        const pendingExt = await prisma.meetingTaskExtensionRequest.findMany({
+            where: { status: "PENDING", task: { assignerEmployeeId: employeeId, isCancelled: false } },
+            orderBy: { createdAt: "desc" },
+            take: 3,
+            select: {
+                id: true,
+                createdAt: true,
+                requestedBy: { select: { name: true } },
+                task: { select: { id: true, title: true } },
+            },
+        });
+        for (const req of pendingExt) {
+            notifications.push({
+                id:      `meeting-task-ext-${req.id}`,
+                type:    "task",
+                title:   "Pengajuan Perpanjangan Task",
+                message: `${req.requestedBy?.name ?? "Penerima"} meminta perpanjangan "${req.task.title}"`,
+                href:    `/employee/appointments/tasks?highlight=${req.task.id}`,
+                time:    req.createdAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
         // Sort by time descending
-        notifications.sort((a, b) => b.time.localeCompare(a.time));
-        const result = notifications.slice(0, 20);
+        notifications.sort((a, b) => b.time.localeCompare(a.time));        const result = notifications.slice(0, 20);
 
         return NextResponse.json({
             notifications: result,

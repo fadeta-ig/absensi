@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2, CalendarClock } from "lucide-react";
+import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2, CalendarClock, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type NotifType = "leave" | "overtime" | "correction" | "news" | "letter" | "appointment";
+type NotifType = "leave" | "overtime" | "correction" | "news" | "letter" | "appointment" | "task";
 
 interface EmployeeNotification {
     id: string;
@@ -39,6 +39,7 @@ const TYPE_ICON: Record<NotifType, { icon: typeof Bell; color: string; bg: strin
     news:       { icon: Newspaper,   color: "text-green-600",  bg: "bg-green-50" },
     letter:     { icon: FileText,    color: "text-pink-500",   bg: "bg-pink-50" },
     appointment:{ icon: CalendarClock, color: "text-teal-600", bg: "bg-teal-50" },
+    task:       { icon: ListChecks, color: "text-amber-600", bg: "bg-amber-50" },
 };
 
 function fmtRelativeTime(isoStr: string): string {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Plus, Loader2, AlertCircle, CalendarDays, LayoutList, Search, X } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { useToast } from "@/components/Toast";
@@ -164,7 +165,7 @@ export default function EmployeeAppointmentsPage() {
     }, [appointmentsByDate, selectedDate]);
 
     const handleSaved = useCallback(() => {
-        toast("Janji rapat berhasil disimpan.", "success");
+        toast("Meeting berhasil disimpan.", "success");
         setRefreshKey((k) => k + 1);
     }, [toast]);
 
@@ -270,12 +271,20 @@ export default function EmployeeAppointmentsPage() {
             <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                     <h1 className="text-lg font-extrabold text-[var(--text-primary)] truncate">E Meeting</h1>
-                    <p className="text-xs text-[var(--text-muted)]">Kelola janji rapat, ruangan, dan ketersediaan Anda</p>
+                    <p className="text-xs text-[var(--text-muted)]">Kelola meeting, ruangan, dan ketersediaan Anda</p>
                 </div>
                 <button type="button" onClick={() => setModal({ type: "create" })} className="btn btn-primary shrink-0">
-                    <Plus className="w-4 h-4" /> Buat Janji
+                    <Plus className="w-4 h-4" /> Buat Meeting
                 </button>
             </div>
+
+            <Link href="/employee/appointments/tasks" className="card p-4 flex items-center justify-between gap-2">
+                <span>
+                    <span className="block text-sm font-bold text-[var(--text-primary)]">Task Meeting Saya</span>
+                    <span className="block text-[11px] text-[var(--text-muted)]">Kumpulan semua task dari hasil meeting untuk Anda</span>
+                </span>
+                <span className="text-[11px] font-bold text-[var(--primary)] shrink-0">Lihat</span>
+            </Link>
 
             <div className="card overflow-hidden">
                 <button
@@ -286,7 +295,7 @@ export default function EmployeeAppointmentsPage() {
                 >
                     <span>
                         <span className="block text-sm font-bold text-[var(--text-primary)]">Tandai Periode Sibuk</span>
-                        <span className="block text-[11px] text-[var(--text-muted)]">Contoh: tidak menerima janji rapat hingga minggu depan — nama Anda tetap dapat dicari</span>
+                        <span className="block text-[11px] text-[var(--text-muted)]">Contoh: tidak menerima meeting hingga minggu depan — nama Anda tetap dapat dicari</span>
                     </span>
                     <span className="text-[11px] font-bold text-[var(--primary)] shrink-0">{showBusy ? "Tutup" : blocks.length > 0 ? `${blocks.length} periode aktif` : "Kelola"}</span>
                 </button>
@@ -332,7 +341,7 @@ export default function EmployeeAppointmentsPage() {
                 )}
             </div>
 
-            <div className="flex gap-1.5 rounded-2xl bg-[var(--secondary)] p-1.5" role="tablist" aria-label="Kategori janji rapat">
+            <div className="flex gap-1.5 rounded-2xl bg-[var(--secondary)] p-1.5" role="tablist" aria-label="Kategori meeting">
                 {(
                     [
                         { key: "all", label: `Semua (${scopeCounts.all})` },
@@ -391,8 +400,8 @@ export default function EmployeeAppointmentsPage() {
                         className="form-input pl-10 pr-9"
                         value={filterQ}
                         onChange={(e) => setFilterQ(e.target.value)}
-                        placeholder="Cari topik rapat…"
-                        aria-label="Cari topik rapat"
+                        placeholder="Cari topik meeting…"
+                        aria-label="Cari topik meeting"
                     />
                     {filterQ && (
                         <button
@@ -459,7 +468,7 @@ export default function EmployeeAppointmentsPage() {
                 <div className="space-y-3">
                     {loading ? (
                         [0, 1, 2].map((i) => (
-                            <div key={i} className="card p-4 animate-pulse" role="status" aria-label="Memuat janji rapat">
+                            <div key={i} className="card p-4 animate-pulse" role="status" aria-label="Memuat meeting">
                                 <div className="h-4 w-2/3 rounded bg-[var(--secondary)]" />
                                 <div className="h-3 w-1/3 rounded bg-[var(--secondary)] mt-2" />
                             </div>
@@ -468,8 +477,8 @@ export default function EmployeeAppointmentsPage() {
                         <div className="card p-12 text-center border-dashed">
                             <p className="text-sm font-medium text-[var(--text-muted)]">
                                 {hasActiveFilter || scope !== "all"
-                                    ? "Tidak ada janji rapat mendatang yang sesuai."
-                                    : "Belum ada janji rapat mendatang."}
+                                    ? "Tidak ada meeting mendatang yang sesuai."
+                                    : "Belum ada meeting mendatang."}
                             </p>
                             {(hasActiveFilter || scope !== "all") && (
                                 <button
@@ -551,10 +560,10 @@ export default function EmployeeAppointmentsPage() {
                                 {hasActiveFilter
                                     ? "Tidak ada hasil untuk filter ini."
                                     : scope === "mine"
-                                        ? "Belum ada janji rapat yang Anda selenggarakan pada tanggal ini."
+                                        ? "Belum ada meeting yang Anda selenggarakan pada tanggal ini."
                                         : scope === "invited"
-                                            ? "Belum ada undangan rapat untuk Anda pada tanggal ini."
-                                            : "Belum ada janji rapat pada tanggal ini."}
+                                            ? "Belum ada undangan meeting untuk Anda pada tanggal ini."
+                                            : "Belum ada meeting pada tanggal ini."}
                             </p>
                             {hasActiveFilter ? (
                                 <button type="button" onClick={clearFilters} className="btn btn-secondary btn-sm mt-3">

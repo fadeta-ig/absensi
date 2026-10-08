@@ -14,6 +14,7 @@ async function main() {
     const defaults: Array<[string, string]> = [
         ["appointment.pic.employeeIds", JSON.stringify([])],
         ["appointment.reminder.offsets", JSON.stringify([1440])],
+        ["meeting.task.maxExtensions", "3"],
     ];
     for (const [key, value] of defaults) {
         await prisma.appSetting.upsert({

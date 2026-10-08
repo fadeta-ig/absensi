@@ -110,22 +110,22 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan janji rapat."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan meeting."));
             onSaved();
             onClose();
         } catch (err) {
             reportClientError("AppointmentFormModal", "Gagal menyimpan janji rapat", err);
-            setError(err instanceof Error ? err.message : "Gagal menyimpan janji rapat. Periksa koneksi Anda, lalu coba lagi.");
+            setError(err instanceof Error ? err.message : "Gagal menyimpan meeting. Periksa koneksi Anda, lalu coba lagi.");
         } finally {
             setLoading(false);
         }
     }
 
     return (
-        <AccessibleModal ariaLabel={editing ? "Ubah jadwal rapat" : "Buat janji rapat"} onClose={onClose} className="max-w-lg" disableClose={loading}>
+        <AccessibleModal ariaLabel={editing ? "Ubah jadwal meeting" : "Buat meeting"} onClose={onClose} className="max-w-lg" disableClose={loading}>
             <div className="modal-header">
-                <h2 className="modal-title">{editing ? "Ubah Jadwal Rapat" : "Buat Janji Rapat"}</h2>
-                <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup dialog janji rapat">
+                <h2 className="modal-title">{editing ? "Ubah Jadwal Meeting" : "Buat Meeting"}</h2>
+                <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup dialog meeting">
                     <X className="w-4 h-4" />
                 </button>
             </div>
@@ -140,7 +140,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
             )}
             {conflicts.length > 0 && (
                 <FeedbackMessage variant="warning" className="mb-4" title="Peserta Tidak Tersedia">
-                    {conflicts.join(", ")} sudah memiliki jadwal rapat, cuti, atau periode sibuk pada jam tersebut. Ruangan tersedia berdasarkan urutan pemesanan — ubah jam rapat atau hubungi PIC apabila mendesak.
+                    {conflicts.join(", ")} sudah memiliki jadwal meeting, cuti, atau periode sibuk pada jam tersebut. Ruangan tersedia berdasarkan urutan pemesanan — ubah jam meeting atau hubungi PIC apabila mendesak.
                 </FeedbackMessage>
             )}
 
@@ -149,10 +149,10 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="appt-title">
                             <span className="flex items-center gap-1">
-                                <FileText className="w-3 h-3" /> Topik Rapat *
+                                <FileText className="w-3 h-3" /> Topik Meeting *
                             </span>
                         </label>
-                        <input id="appt-title" className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Rapat koordinasi" required />
+                        <input id="appt-title" className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Meeting koordinasi" required />
                     </div>
                 )}
 
@@ -233,7 +233,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="appt-link">
                             <span className="flex items-center gap-1">
-                                <Link2 className="w-3 h-3" /> Tautan Rapat Daring *
+                                <Link2 className="w-3 h-3" /> Tautan Meeting Daring *
                             </span>
                         </label>
                         <input id="appt-link" className="form-input" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="Contoh: https://meet…" required />
@@ -251,7 +251,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
                                     <StickyNote className="w-3 h-3" /> Agenda (Opsional)
                                 </span>
                             </label>
-                            <textarea id="appt-agenda" className="form-input min-h-[60px] resize-none" value={agenda} onChange={(e) => setAgenda(e.target.value)} placeholder="Tuliskan pokok bahasan rapat…" />
+                            <textarea id="appt-agenda" className="form-input min-h-[60px] resize-none" value={agenda} onChange={(e) => setAgenda(e.target.value)} placeholder="Tuliskan pokok bahasan meeting…" />
                         </div>
                     </>
                 )}
@@ -265,7 +265,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
 
                 <button type="submit" className="btn btn-primary w-full" disabled={!canSubmit || (!!editing && changeReason.trim().length < 5)}>
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {loading ? "Menyimpan…" : editing ? "Simpan Perubahan" : "Buat Janji Rapat"}
+                    {loading ? "Menyimpan…" : editing ? "Simpan Perubahan" : "Buat Meeting"}
                 </button>
             </form>
         </AccessibleModal>

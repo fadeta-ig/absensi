@@ -86,7 +86,7 @@ export default function GaAppointmentSettingsPage() {
                 fetch("/api/ga/appointment-reminder"),
                 fetch("/api/appointments/employees?limit=200"),
             ]);
-            if (!roomsRes.ok) throw new Error(await getResponseErrorMessage(roomsRes, "Gagal memuat data ruang rapat."));
+            if (!roomsRes.ok) throw new Error(await getResponseErrorMessage(roomsRes, "Gagal memuat data ruang meeting."));
             if (!picsRes.ok) throw new Error(await getResponseErrorMessage(picsRes, "Gagal memuat data PIC."));
             const roomsJson = (await roomsRes.json()) as { data: Room[] };
             const picsJson = (await picsRes.json()) as { data: { infos: PicInfo[] } };
@@ -129,8 +129,8 @@ export default function GaAppointmentSettingsPage() {
                         : { name: roomName.trim(), capacity: roomCapacity ? Number(roomCapacity) : null, location: roomLocation.trim() || null }
                 ),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data ruang rapat."));
-            toast(editingRoom ? "Data ruang rapat berhasil diperbarui." : "Data ruang rapat berhasil ditambahkan.", "success");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data ruang meeting."));
+            toast(editingRoom ? "Data ruang meeting berhasil diperbarui." : "Data ruang meeting berhasil ditambahkan.", "success");
             setRoomName("");
             setRoomCapacity("");
             setRoomLocation("");
@@ -138,7 +138,7 @@ export default function GaAppointmentSettingsPage() {
             await fetchAll();
         } catch (err) {
             reportClientError("GaAppointmentSettings", "Gagal menyimpan data ruang rapat", err);
-            toast(err instanceof Error ? err.message : "Gagal menyimpan data ruang rapat.", "error");
+            toast(err instanceof Error ? err.message : "Gagal menyimpan data ruang meeting.", "error");
         } finally {
             setSavingRoom(false);
         }
@@ -151,19 +151,19 @@ export default function GaAppointmentSettingsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id: room.id, isActive: !room.isActive }),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status ruang rapat."));
-            toast(room.isActive ? "Ruang rapat berhasil dinonaktifkan." : "Ruang rapat berhasil diaktifkan.", "success");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status ruang meeting."));
+            toast(room.isActive ? "Ruang meeting berhasil dinonaktifkan." : "Ruang meeting berhasil diaktifkan.", "success");
             await fetchAll();
         } catch (err) {
             reportClientError("GaAppointmentSettings", "Gagal mengubah status ruang rapat", err);
-            toast(err instanceof Error ? err.message : "Gagal mengubah status ruang rapat.", "error");
+            toast(err instanceof Error ? err.message : "Gagal mengubah status ruang meeting.", "error");
         }
     }
 
     function handleDeleteRoom(room: Room) {
         confirm({
-            title: "Hapus Ruang Rapat?",
-            message: `Hapus ${room.name}? Hanya ruang rapat yang belum pernah digunakan yang dapat dihapus.`,
+            title: "Hapus Ruang Meeting?",
+            message: `Hapus ${room.name}? Hanya ruang meeting yang belum pernah digunakan yang dapat dihapus.`,
             confirmLabel: "Ya, Hapus Data",
             variant: "danger",
             onConfirm: () => {
@@ -171,7 +171,7 @@ export default function GaAppointmentSettingsPage() {
                     try {
                         const res = await fetch(`/api/ga/meeting-rooms?id=${encodeURIComponent(room.id)}`, { method: "DELETE" });
                         if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus data."));
-                        toast("Ruang rapat berhasil dihapus.", "success");
+                        toast("Ruang meeting berhasil dihapus.", "success");
                         await fetchAll();
                     } catch (err) {
                         reportClientError("GaAppointmentSettings", "Gagal menghapus ruang rapat", err);
@@ -250,7 +250,7 @@ export default function GaAppointmentSettingsPage() {
             const json = (await res.json()) as { data: { offsets: number[] } };
             setOffsets(json.data.offsets);
             setOffsetsText(json.data.offsets.join(", "));
-            toast("Pengaturan pengingat berhasil diperbarui dan berlaku untuk janji temu baru.", "success");
+            toast("Pengaturan pengingat berhasil diperbarui dan berlaku untuk meeting baru.", "success");
         } catch (err) {
             reportClientError("GaAppointmentSettings", "Gagal simpan pengingat", err);
             toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
@@ -271,8 +271,8 @@ export default function GaAppointmentSettingsPage() {
     return (
         <div className="w-full min-w-0 space-y-4">
             <div>
-                <h1 className="text-lg font-extrabold text-[var(--text-primary)]">Ruang Rapat & PIC</h1>
-                <p className="text-xs text-[var(--text-muted)]">Kelola data induk ruang rapat dan PIC resepsionis (maksimal 2 orang)</p>
+                <h1 className="text-lg font-extrabold text-[var(--text-primary)]">Ruang Meeting & PIC</h1>
+                <p className="text-xs text-[var(--text-muted)]">Kelola data induk ruang meeting dan PIC resepsionis (maksimal 2 orang)</p>
             </div>
 
             {error && (
@@ -282,7 +282,7 @@ export default function GaAppointmentSettingsPage() {
             )}
 
             <div className="flex gap-1.5 border-b border-[var(--border)]">
-                {([["rooms", "Ruang Rapat"], ["pics", `PIC Resepsionis (${pics.length} dari 2)`], ["reminder", "Pengingat Otomatis"]] as [Tab, string][]).map(([key, label]) => (
+                {([["rooms", "Ruang Meeting"], ["pics", `PIC Resepsionis (${pics.length} dari 2)`], ["reminder", "Pengingat Otomatis"]] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         type="button"
@@ -299,12 +299,12 @@ export default function GaAppointmentSettingsPage() {
                     <form onSubmit={handleSaveRoom} className="card p-4 space-y-3">
                         <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                             {editingRoom ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                            {editingRoom ? "Ubah Ruang Rapat" : "Tambah Ruang Rapat"}
+                            {editingRoom ? "Ubah Ruang Meeting" : "Tambah Ruang Meeting"}
                         </h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="form-group !mb-0">
                                 <label className="form-label" htmlFor="room-name">Nama Ruangan *</label>
-                                <input id="room-name" className="form-input" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Contoh: Ruang Rapat Lantai 2 Gedung A" required />
+                                <input id="room-name" className="form-input" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Contoh: Ruang Meeting Lantai 2 Gedung A" required />
                             </div>
                             <div className="form-group !mb-0">
                                 <label className="form-label" htmlFor="room-cap">Kapasitas (orang)</label>
@@ -341,7 +341,7 @@ export default function GaAppointmentSettingsPage() {
                             <TableBody>
                                 {rooms.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center text-[var(--text-muted)]">Belum ada data ruang rapat.</TableCell>
+                                        <TableCell colSpan={4} className="text-center text-[var(--text-muted)]">Belum ada data ruang meeting.</TableCell>
                                     </TableRow>
                                 )}
                                 {rooms.map((r) => (
@@ -396,10 +396,10 @@ export default function GaAppointmentSettingsPage() {
                     <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                         <UserPlus className="w-4 h-4" /> PIC Resepsionis ({pics.length} dari 2)
                     </h2>
-                    <p className="text-xs text-[var(--text-muted)]">Hanya karyawan internal yang aktif. PIC berwenang mengelola seluruh janji temu harian.</p>
+                    <p className="text-xs text-[var(--text-muted)]">Hanya karyawan internal yang aktif. PIC berwenang mengelola seluruh meeting harian.</p>
                     {pics.length === 0 && (
                         <FeedbackMessage variant="warning" compact>
-                            Belum ada PIC yang ditetapkan. Pengelolaan janji temu belum dapat dilakukan hingga PIC ditetapkan.
+                            Belum ada PIC yang ditetapkan. Pengelolaan meeting belum dapat dilakukan hingga PIC ditetapkan.
                         </FeedbackMessage>
                     )}
                     <ul className="space-y-2">
@@ -510,7 +510,7 @@ export default function GaAppointmentSettingsPage() {
                         <BellRing className="w-4 h-4" /> Pengingat Otomatis
                     </h2>
                     <p className="text-xs text-[var(--text-muted)]">
-                        Daftar waktu pengingat dalam satuan menit sebelum jadwal dimulai. Contoh: <span className="font-mono">4320, 1440</span> berarti 3 hari dan 1 hari sebelumnya. Berlaku hanya untuk janji temu baru; pengingat yang telah terkirim tidak akan dikirim ulang.
+                        Daftar waktu pengingat dalam satuan menit sebelum jadwal dimulai. Contoh: <span className="font-mono">4320, 1440</span> berarti 3 hari dan 1 hari sebelumnya. Berlaku hanya untuk meeting baru; pengingat yang telah terkirim tidak akan dikirim ulang.
                     </p>
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="reminder-offsets">Waktu Pengingat (menit, dipisahkan koma)</label>

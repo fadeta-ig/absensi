@@ -9,6 +9,8 @@ import { useConfirm } from "@/components/ConfirmModal";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import type { AppointmentListItem } from "@/components/appointments/useAppointments";
 import { participantDisplayName } from "@/components/appointments/useAppointments";
+import MeetingMinutesSection from "@/components/appointments/MeetingMinutesSection";
+import MeetingTaskSection from "@/components/appointments/MeetingTaskSection";
 
 interface AppointmentDetailModalProps {
     item: AppointmentListItem;
@@ -58,11 +60,11 @@ export default function AppointmentDetailModal({ item, canManage, myEmployeeId, 
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action, note: note?.trim() || null }),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal merespons undangan rapat."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal merespons undangan meeting."));
             onChanged();
         } catch (err) {
             reportClientError("AppointmentDetailModal", "Gagal RSVP", err);
-            setError(err instanceof Error ? err.message : "Gagal merespons undangan rapat.");
+            setError(err instanceof Error ? err.message : "Gagal merespons undangan meeting.");
         } finally {
             setRsvping(false);
         }
@@ -78,12 +80,12 @@ export default function AppointmentDetailModal({ item, canManage, myEmployeeId, 
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ reason: cancelReason.trim() }),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan rapat."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan meeting."));
             onChanged();
             onClose();
         } catch (err) {
             reportClientError("AppointmentDetailModal", "Gagal membatalkan rapat", err);
-            setError(err instanceof Error ? err.message : "Gagal membatalkan rapat.");
+            setError(err instanceof Error ? err.message : "Gagal membatalkan meeting.");
         } finally {
             setLoading(false);
         }
@@ -111,7 +113,7 @@ export default function AppointmentDetailModal({ item, canManage, myEmployeeId, 
     }
 
     return (
-        <AccessibleModal ariaLabel="Detail janji rapat" onClose={onClose} className="max-w-md" disableClose={loading}>
+        <AccessibleModal ariaLabel="Detail meeting" onClose={onClose} className="max-w-md" disableClose={loading}>
             <div className="modal-header">
                 <h2 className="modal-title">{item.title}</h2>
                 <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup detail">
@@ -253,6 +255,9 @@ export default function AppointmentDetailModal({ item, canManage, myEmployeeId, 
                     </ul>
                 </div>
 
+                <MeetingMinutesSection appointmentId={item.id} />
+                <MeetingTaskSection appointmentId={item.id} participants={item.participants} />
+
                 {canMark && Object.keys(marks).length > 0 && (
                     <button type="button" onClick={handleSaveMarks} disabled={marking} className="btn btn-secondary w-full">
                         {marking ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
@@ -272,8 +277,8 @@ export default function AppointmentDetailModal({ item, canManage, myEmployeeId, 
                             disabled={loading}
                             onClick={() =>
                                 confirm({
-                                    title: "Batalkan Janji Rapat?",
-                                    message: `Janji rapat "${item.title}" akan dibatalkan dan seluruh peserta akan diberi tahu.`,
+                                    title: "Batalkan Meeting?",
+                                    message: `Meeting "${item.title}" akan dibatalkan dan seluruh peserta akan diberi tahu.`,
                                     confirmLabel: "Lanjutkan",
                                     variant: "warning",
                                     onConfirm: () => setAskingCancel(true),
@@ -302,7 +307,7 @@ export default function AppointmentDetailModal({ item, canManage, myEmployeeId, 
                             className="btn w-full bg-rose-600 text-white hover:bg-rose-700"
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {loading ? "Membatalkan…" : "Ya, Batalkan Rapat"}
+                            {loading ? "Membatalkan…" : "Ya, Batalkan Meeting"}
                         </button>
                     </div>
                 )}

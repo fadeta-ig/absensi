@@ -198,7 +198,7 @@ export default function AllMenusSheet({
                 {
                     href: "/employee/appointments",
                     label: "E Meeting",
-                    description: "Buat jadwal rapat, cek ruangan dan ketersediaan peserta",
+                    description: "Buat jadwal meeting, cek ruangan dan ketersediaan peserta",
                     icon: CalendarClock,
                     bg: "bg-cyan-50 dark:bg-cyan-950/40",
                     color: "text-cyan-600 dark:text-cyan-400",

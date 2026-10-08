@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const requesterUsers = await collectRequesterUserId(id).catch(() => [] as string[]);
         const reasonSuffix = result.data.action === "DECLINE" && result.data.note?.trim() ? ` — ${result.data.note.trim()}` : "";
         await sendAppointmentPush(requesterUsers, {
-            title: `Peserta ${ACTION_LABEL[result.data.action]} Undangan`,
+            title: `Peserta ${ACTION_LABEL[result.data.action]} Undangan Meeting`,
             body: `${session.name ?? session.username} ${ACTION_LABEL[result.data.action].toLowerCase()} "${data.title}"${reasonSuffix}`,
             tag: `appointment-${id}-rsvp-${session.employeeId}-${result.data.action}`,
             url: `/employee/appointments?invite=${id}`,

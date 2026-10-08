@@ -128,7 +128,7 @@ export default function AppointmentDayDetailPage() {
                 <div className="min-w-0 flex-1">
                     <h1 className="text-base font-extrabold text-[var(--text-primary)] truncate">{formatIndonesianDate(new Date(`${date}T00:00:00+07:00`))}</h1>
                     <p className="text-xs text-[var(--text-muted)]">
-                        {loading ? "Memuat data…" : items.length === 0 ? "Tidak ada janji rapat" : `${items.length} janji rapat · Mulai pukul ${first ? fmtTime(first.startAt) : ""}`}
+                        {loading ? "Memuat data…" : items.length === 0 ? "Tidak ada meeting" : `${items.length} meeting · Mulai pukul ${first ? fmtTime(first.startAt) : ""}`}
                     </p>
                 </div>
                 <button
@@ -172,13 +172,13 @@ export default function AppointmentDayDetailPage() {
                 </div>
             ) : items.length === 0 ? (
                 <div className="card p-12 text-center border-dashed">
-                    <p className="text-sm font-medium text-[var(--text-muted)]">Belum ada janji rapat pada tanggal ini.</p>
+                    <p className="text-sm font-medium text-[var(--text-muted)]">Belum ada meeting pada tanggal ini.</p>
                     <button
                         type="button"
                         onClick={() => router.push(`/employee/appointments?date=${date}&create=1`)}
                         className="btn btn-primary btn-sm mt-3"
                     >
-                        <Plus className="w-3.5 h-3.5" /> Buat Janji Rapat pada Tanggal Ini
+                        <Plus className="w-3.5 h-3.5" /> Buat Meeting pada Tanggal Ini
                     </button>
                 </div>
             ) : (
@@ -230,7 +230,7 @@ export default function AppointmentDayDetailPage() {
                     onClick={() => router.push(`/employee/appointments?date=${date}&create=1`)}
                     className="btn btn-secondary w-full"
                 >
-                    <Plus className="w-4 h-4" /> Buat Janji Rapat pada Tanggal Ini
+                    <Plus className="w-4 h-4" /> Buat Meeting pada Tanggal Ini
                 </button>
             )}
 

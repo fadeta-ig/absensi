@@ -62,7 +62,7 @@ export default function GaAppointmentsIncomingPage() {
             const params = new URLSearchParams({ page: String(p), limit: String(limit) });
             if (status !== "ALL") params.set("status", status);
             const res = await fetch(`/api/appointments?${params.toString()}`);
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data janji temu."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat data meeting."));
             const json = (await res.json()) as { data: IncomingItem[]; total: number };
             if (fetchedRef.current !== key) return;
             setItems(json.data);
@@ -127,7 +127,7 @@ export default function GaAppointmentsIncomingPage() {
             resetForms(json.data);
         } catch (err) {
             reportClientError("GaAppointmentsIncoming", "Gagal memuat detail janji temu", err);
-            toast(err instanceof Error ? err.message : "Gagal memuat detail janji temu.", "error");
+            toast(err instanceof Error ? err.message : "Gagal memuat detail meeting.", "error");
         }
     }
 
@@ -153,8 +153,8 @@ export default function GaAppointmentsIncomingPage() {
     return (
         <div className="w-full min-w-0 space-y-4">
             <div>
-                <h1 className="text-lg font-extrabold text-[var(--text-primary)]">Pemantauan Janji Temu</h1>
-                <p className="text-xs text-[var(--text-muted)]">Menjadwalkan ulang, memindahkan ruang rapat, dan membatalkan janji temu dalam kondisi mendesak tanpa persetujuan penyelenggara</p>
+                <h1 className="text-lg font-extrabold text-[var(--text-primary)]">Pemantauan Meeting</h1>
+                <p className="text-xs text-[var(--text-muted)]">Menjadwalkan ulang, memindahkan ruang meeting, dan membatalkan meeting dalam kondisi mendesak tanpa persetujuan penyelenggara</p>
             </div>
 
             {error && (
@@ -184,7 +184,7 @@ export default function GaAppointmentsIncomingPage() {
                     <TableHeader>
                         <TableRow>
                             <TableHead>Topik dan Pemohon</TableHead>
-                            <TableHead>Jadwal dan Ruang Rapat</TableHead>
+                            <TableHead>Jadwal dan Ruang Meeting</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Tindakan</TableHead>
                         </TableRow>
@@ -200,7 +200,7 @@ export default function GaAppointmentsIncomingPage() {
                         )}
                         {!loading && items.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center text-[var(--text-muted)]">Tidak ada janji temu.</TableCell>
+                                <TableCell colSpan={4} className="text-center text-[var(--text-muted)]">Tidak ada meeting.</TableCell>
                             </TableRow>
                         )}
                         {items.map((a) => (
@@ -239,11 +239,11 @@ export default function GaAppointmentsIncomingPage() {
                 totalItems={total}
                 pageSize={limit}
                 onPageChange={setPage}
-                itemLabel="janji temu"
+                itemLabel="meeting"
             />
 
             {detail && (
-                <AccessibleModal ariaLabel="Detail janji temu" onClose={() => setDetail(null)} className="!max-w-2xl" disableClose={acting}>
+                <AccessibleModal ariaLabel="Detail meeting" onClose={() => setDetail(null)} className="!max-w-2xl" disableClose={acting}>
                     <div className="modal-header">
                         <h2 className="modal-title">{detail.title}</h2>
                         <button className="modal-close" onClick={() => setDetail(null)} disabled={acting} aria-label="Tutup detail">
@@ -283,7 +283,7 @@ export default function GaAppointmentsIncomingPage() {
                         {detail.status === "SCHEDULED" && (
                             <div className="space-y-2">
                                 <button type="button" onClick={() => setAskingResched(!askingResched)} className="btn btn-secondary w-full">
-                                    <CalendarClock className="w-4 h-4" /> Ubah Jadwal dan Ruang Rapat
+                                    <CalendarClock className="w-4 h-4" /> Ubah Jadwal dan Ruang Meeting
                                 </button>
                                 {askingResched && (
                                     <div className="space-y-3 rounded-xl border border-[var(--border)] p-3">
@@ -331,7 +331,7 @@ export default function GaAppointmentsIncomingPage() {
                                                 </div>
                                             ) : (
                                                 <div className="form-group !mb-0">
-                                                    <label className="form-label" htmlFor="rs-link">Tautan Rapat Daring *</label>
+                                                    <label className="form-label" htmlFor="rs-link">Tautan Meeting Daring *</label>
                                                     <input id="rs-link" className="form-input" value={resched.meetingLink} onChange={(e) => setResched({ ...resched, meetingLink: e.target.value })} placeholder="Contoh: https://meet.google.com/xxx-xxxx-xxx" />
                                                 </div>
                                             )}
@@ -377,7 +377,7 @@ export default function GaAppointmentsIncomingPage() {
                                     onClick={() => setAskingCancel(!askingCancel)}
                                     className="btn w-full bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300"
                                 >
-                                    <Trash2 className="w-4 h-4" /> Batalkan Janji Temu
+                                    <Trash2 className="w-4 h-4" /> Batalkan Meeting
                                 </button>
                                 {askingCancel && (
                                     <div className="space-y-2 rounded-xl border border-[var(--border)] p-3">
@@ -386,10 +386,10 @@ export default function GaAppointmentsIncomingPage() {
                                         <button
                                             type="button"
                                             disabled={acting || cancelReason.trim().length < 5}
-                                            onClick={() => { void postAction(`/api/appointments/${detail.id}`, "DELETE", { reason: cancelReason.trim() }, "Janji temu berhasil dibatalkan."); }}
+                                            onClick={() => { void postAction(`/api/appointments/${detail.id}`, "DELETE", { reason: cancelReason.trim() }, "Meeting berhasil dibatalkan."); }}
                                             className="btn w-full bg-rose-600 text-white hover:bg-rose-700"
                                         >
-                                            {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Ya, Batalkan Janji Temu
+                                            {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Ya, Batalkan Meeting
                                         </button>
                                     </div>
                                 )}

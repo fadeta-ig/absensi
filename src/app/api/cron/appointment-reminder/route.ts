@@ -87,8 +87,8 @@ export async function POST(request: NextRequest) {
                     select: { id: true, pushSubscriptions: { select: { endpoint: true, p256dh: true, auth: true } } },
                 });
                 const body = JSON.stringify({
-                    title: offset >= 1440 ? `Pengingat Rapat H-${Math.round(offset / 1440)}: ${appt.title}` : `Pengingat Rapat ${offset} Menit Lagi: ${appt.title}`,
-                    body: `${appt.room?.name ?? "Rapat Daring"} • ${appt.startAt.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB`,
+                    title: offset >= 1440 ? `Pengingat Meeting H-${Math.round(offset / 1440)}: ${appt.title}` : `Pengingat Meeting ${offset} Menit Lagi: ${appt.title}`,
+                    body: `${appt.room?.name ?? "Meeting Daring"} • ${appt.startAt.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB`,
                     icon: "/icons/android-chrome-192x192.png",
                     badge: "/icons/android-chrome-192x192.png",
                     tag: `appointment-${appt.id}-${offset}`,

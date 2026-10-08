@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
         const userIds = await collectAppointmentUserIds(created.id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
-            title: "Undangan Rapat Baru",
+            title: "Undangan Meeting Baru",
             body: `${result.data.title} • ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB`,
             tag: `appointment-${created.id}-created`,
             url: `/employee/appointments?invite=${created.id}`,

@@ -195,7 +195,7 @@ export async function getReminderOffsets(): Promise<number[]> {
 export async function setReminderOffsets(raw: number[], actor: { userId?: string | null; username: string }): Promise<number[]> {
     const offsets = [...new Set(raw.filter((v) => Number.isInteger(v) && v >= 15))].sort((a, b) => b - a);
     if (offsets.length > MAX_REMINDER_OFFSETS) {
-        throw new AppointmentError(`Jumlah pengingat maksimal ${MAX_REMINDER_OFFSETS} per rapat.`, 409);
+        throw new AppointmentError(`Jumlah pengingat maksimal ${MAX_REMINDER_OFFSETS} per meeting.`, 409);
     }
     await prisma.appSetting.upsert({
         where: { key: APPOINTMENT_REMINDER_KEY },
@@ -455,9 +455,9 @@ function parseReminderOverride(raw: number[] | null | undefined): string | null 
 }
 
 export async function createAppointment(session: SessionPayload, input: CreateAppointmentInput, asOperator: boolean): Promise<unknown> {
-    if (!session.employeeId && !isWig002(session)) throw new AppointmentError("Hanya karyawan yang dapat membuat rapat.", 403);
+    if (!session.employeeId && !isWig002(session)) throw new AppointmentError("Hanya karyawan yang dapat membuat meeting.", 403);
     const title = input.title.trim();
-    if (!title || title.length > 200) throw new AppointmentError("Topik rapat wajib diisi (maksimal 200 karakter).", 400);
+    if (!title || title.length > 200) throw new AppointmentError("Topik meeting wajib diisi (maksimal 200 karakter).", 400);
     const { startAt, endAt } = slotToDates(input);
     if (startAt <= new Date()) throw new AppointmentError("Jadwal harus setelah waktu saat ini.", 400);
 
@@ -467,7 +467,7 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
         if (!room) throw new AppointmentError("Ruangan tidak ditemukan.", 404);
         if (!room.isActive) throw new AppointmentError("Ruangan tersebut sedang nonaktif.", 422);
     } else if (!input.meetingLink?.trim()) {
-        throw new AppointmentError("Pilih ruang rapat atau isi tautan rapat daring.", 400);
+        throw new AppointmentError("Pilih ruang meeting atau isi tautan meeting daring.", 400);
     }
 
     const participants = await validateParticipants(input.participants);
@@ -605,11 +605,11 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
             participants: { select: { id: true, employeeId: true, guestName: true, isExternal: true, attendance: true, inviteStatus: true, inviteRespondedAt: true, inviteNote: true, employee: { select: { name: true } } } },
         },
     });
-    if (!appt) throw new AppointmentError("Jadwal rapat tidak ditemukan.", 404);
+    if (!appt) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     const privileged = isWig002(session) || session.permissions.includes(PERMISSIONS.HR_MANAGE) || (await isAppointmentPic(session).catch(() => false));
     if (!privileged) {
         const mine = appt.requesterEmployeeId === session.employeeId || appt.participants.some((p) => p.employeeId === session.employeeId);
-        if (!mine) throw new AppointmentError("Anda tidak memiliki akses ke jadwal rapat ini.", 403);
+        if (!mine) throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
     }
     return withLifecycle(appt);
 }
@@ -623,7 +623,7 @@ export async function respondInvite(
     note: string | null,
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
-    if (!session.employeeId) throw new AppointmentError("Hanya karyawan yang dapat merespons undangan rapat.", 403);
+    if (!session.employeeId) throw new AppointmentError("Hanya karyawan yang dapat merespons undangan meeting.", 403);
     const appt = await prisma.meetingAppointment.findUnique({
         where: { id },
         select: {
@@ -634,9 +634,9 @@ export async function respondInvite(
             participants: { where: { employeeId: session.employeeId }, select: { id: true, inviteStatus: true } },
         },
     });
-    if (!appt) throw new AppointmentError("Jadwal rapat tidak ditemukan.", 404);
+    if (!appt) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(appt.status)) {
-        throw new AppointmentError("Undangan sudah tidak berlaku karena rapat telah dibatalkan atau selesai.", 409);
+        throw new AppointmentError("Undangan sudah tidak berlaku karena meeting telah dibatalkan atau selesai.", 409);
     }
     const mine = appt.participants[0];
     if (!mine) throw new AppointmentError("Anda bukan peserta undangan ini.", 403);
@@ -680,7 +680,7 @@ export async function rescheduleAppointment(
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
     const operator = isWig002(session) || (await isAppointmentPic(session).catch(() => false));
-    if (!session.employeeId && !operator) throw new AppointmentError("Hanya karyawan yang dapat mengubah jadwal rapat.", 403);
+    if (!session.employeeId && !operator) throw new AppointmentError("Hanya karyawan yang dapat mengubah jadwal meeting.", 403);
     if (!input.changeReason || input.changeReason.trim().length < 5) {
         throw new AppointmentError("Alasan perubahan minimal 5 karakter.", 400);
     }
@@ -700,15 +700,15 @@ export async function rescheduleAppointment(
     return prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM meeting_appointments WHERE id = ${id} FOR UPDATE`;
         const existing = await tx.meetingAppointment.findUnique({ where: { id } });
-        if (!existing) throw new AppointmentError("Jadwal rapat tidak ditemukan.", 404);
+        if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
         if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
-            throw new AppointmentError("Rapat yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
+            throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
         }
         const isOwner = session.employeeId !== null && session.employeeId !== undefined && existing.requesterEmployeeId === session.employeeId;
         const lockMin = operator ? 15 : 60;
         if (!operator) {
-            if (!isOwner) throw new AppointmentError("Hanya pembuat rapat atau PIC yang dapat mengubah.", 403);
-            if (existing.status !== "SCHEDULED") throw new AppointmentError("Rapat yang sudah selesai atau dibatalkan tidak dapat diubah pemilik.", 400);
+            if (!isOwner) throw new AppointmentError("Hanya pembuat meeting atau PIC yang dapat mengubah.", 403);
+            if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah pemilik.", 400);
         }
         const minutesLeft = (existing.startAt.getTime() - Date.now()) / 60000;
         if (minutesLeft < lockMin) {
@@ -783,11 +783,11 @@ export async function cancelAppointment(
     const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true } });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
-        throw new AppointmentError("Rapat yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
+        throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
     }
     if (!operator) {
-        if (existing.requesterEmployeeId !== session.employeeId) throw new AppointmentError("Hanya pembuat rapat atau PIC yang dapat membatalkan.", 403);
-        if (existing.status !== "SCHEDULED") throw new AppointmentError("Rapat yang sudah selesai atau dibatalkan tidak dapat dibatalkan pemilik.", 400);
+        if (existing.requesterEmployeeId !== session.employeeId) throw new AppointmentError("Hanya pembuat meeting atau PIC yang dapat membatalkan.", 403);
+        if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan pemilik.", 400);
     }
     return prisma.$transaction(async (tx) => {
         const res = await tx.meetingAppointment.updateMany({ where: { id, status: existing.status }, data: { status: "CANCELLED" } });
@@ -824,16 +824,16 @@ export async function markAttendance(
     });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (!operator && !(session.employeeId && existing.requesterEmployeeId === session.employeeId)) {
-        throw new AppointmentError("Hanya PIC atau pembuat rapat yang dapat menandai kehadiran.", 403);
+        throw new AppointmentError("Hanya PIC atau pembuat meeting yang dapat menandai kehadiran.", 403);
     }
     if (existing.status !== "SCHEDULED" && existing.status !== "COMPLETED") {
-        throw new AppointmentError("Kehadiran hanya dapat ditandai untuk rapat yang sedang berlangsung.", 400);
+        throw new AppointmentError("Kehadiran hanya dapat ditandai untuk meeting yang sedang berlangsung.", 400);
     }
     if (Date.now() < existing.startAt.getTime()) {
-        throw new AppointmentError("Rapat belum dimulai. Kehadiran dapat ditandai setelah rapat dimulai.", 400);
+        throw new AppointmentError("Meeting belum dimulai. Kehadiran dapat ditandai setelah meeting dimulai.", 400);
     }
     if (Date.now() > existing.endAt.getTime() + 24 * 60 * 60 * 1000) {
-        throw new AppointmentError("Penandaan kehadiran dikunci maksimal 1 hari setelah rapat berakhir.", 400);
+        throw new AppointmentError("Penandaan kehadiran dikunci maksimal 1 hari setelah meeting berakhir.", 400);
     }
     const validIds = new Set(existing.participants.map((p) => p.id));
     for (const m of marks) {

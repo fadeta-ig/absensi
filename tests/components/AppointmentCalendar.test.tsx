@@ -26,7 +26,7 @@ const ITEMS = new Map([
 describe("AppointmentCalendar", () => {
     it("merender grid + item appointment + legend", () => {
         render(<AppointmentCalendar appointmentsByDate={ITEMS} selectedDate="2026-10-20" onSelectDate={() => undefined} />);
-        expect(screen.getByText("Kalender Janji Rapat")).toBeInTheDocument();
+        expect(screen.getByText("Kalender Meeting")).toBeInTheDocument();
         expect(screen.getByText("Oktober 2026")).toBeInTheDocument();
         expect(screen.getByTitle("10.00 Rapat Koordinasi")).toBeInTheDocument();
         expect(screen.getByText("Terjadwal")).toBeInTheDocument();

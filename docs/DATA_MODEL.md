@@ -147,6 +147,19 @@ RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Ak
 
 RBAC: tanpa permission baru. Master + PIC memakai `ga.manage` + `username WIG002`; operasional memakai daftar PIC; employee memakai `employee.self`. Akun PIC wajib berperan `GA_ADMIN` agar dapat membuka portal `/ga` (otorisasi operasional tetap via daftar PIC).
 
+## 5. Task Hasil Meeting + Notulensi (2026-10-08)
+
+1. `MeetingAppointment` 1 ── * `MeetingTask` (`appointmentId`, Cascade; notulensi via kolom `minutes/minutesUpdatedBy/minutesUpdatedAt` + `MeetingAppointmentRevision`).
+2. `MeetingTask` 1 ── * `MeetingTaskAssignee` (unik `[taskId, employeeId]`; status per-orang `BELUM_DIKERJAKAN/ON_PROGRESS/SELESAI/DIBATALKAN`; overdue = hitung `now > dueAt`, bukan kolom).
+3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; kuota `meeting.task.maxExtensions` default 3).
+4. `MeetingTask` 1 ── * `MeetingTaskRevision` (unik `[taskId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
+5. `MeetingTask` 1 ── * `MeetingTaskExtensionRequest` (`PENDING/APPROVED/REJECTED`; penerima mengajukan, pemberi/PIC memutuskan).
+6. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `H-1440/H-180/H-60/OVERDUE-YYYY-MM-DD`; exactly-once cron).
+
+Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; status diubah sendiri oleh penerima; perpanjang/batalkan oleh pemberi/PIC; overdue dihitung, badge kembali normal setelah diperpanjang (riwayat tercatat).
+
+RBAC: tanpa permission baru. Akses meeting = peserta/requester atau privileged (`ga.manage` WIG002, `hr.manage`, PIC).
+
 ---
 
 ## 3. Migration & Synchronization Strategy

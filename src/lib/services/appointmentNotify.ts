@@ -89,3 +89,23 @@ export async function sendAppointmentPush(userIds: string[], payload: Appointmen
         logger.warn("appointment push dilewati", { err });
     }
 }
+
+/** UserId aktif untuk daftar employeeId (untuk push task meeting). */
+export async function collectUserIdsForEmployees(employeeIds: string[]): Promise<string[]> {
+    const unique = [...new Set(employeeIds.filter(Boolean))];
+    if (unique.length === 0) return [];
+    const users = await prisma.userAccount.findMany({
+        where: { employeeId: { in: unique }, isActive: true },
+        select: { id: true },
+    }).catch(() => [] as Array<{ id: string }>);
+    return users.map((u) => u.id);
+}
+
+/** UserId para penerima task meeting (untuk push create/extend). */
+export async function collectMeetingTaskUserIds(taskId: string): Promise<string[]> {
+    const rows = await prisma.meetingTaskAssignee.findMany({
+        where: { taskId },
+        select: { employeeId: true },
+    }).catch(() => [] as Array<{ employeeId: string }>);
+    return collectUserIdsForEmployees(rows.map((r) => r.employeeId));
+}

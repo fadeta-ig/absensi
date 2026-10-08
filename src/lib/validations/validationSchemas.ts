@@ -622,7 +622,7 @@ const appointmentParticipantSchema = z.object({
 
 export const appointmentCreateSchema = z
     .object({
-        title: z.string().trim().min(1, "Topik rapat wajib diisi.").max(200, "Topik rapat maksimal 200 karakter."),
+        title: z.string().trim().min(1, "Topik meeting wajib diisi.").max(200, "Topik meeting maksimal 200 karakter."),
         agenda: z.string().trim().max(2000).nullable().optional(),
         roomId: z.string().trim().min(1, "Ruangan wajib dipilih.").nullable().optional(),
         meetingLink: z.string().trim().max(1000).nullable().optional(),
@@ -725,4 +725,43 @@ export const unavailabilityCreateSchema = z
             ctx.addIssue({ code: "custom", path: ["endDate"], message: "Tanggal selesai harus setelah tanggal mulai." });
         }
     });
+
+/* ───────────────────── Task Hasil Meeting ───────────────────── */
+
+export const meetingTaskCreateSchema = z.object({
+    title: z.string().trim().min(1, "Judul task wajib diisi.").max(200, "Judul task maksimal 200 karakter."),
+    detail: z.string().trim().max(5000).nullable().optional(),
+    assigneeEmployeeIds: z
+        .array(z.string().trim().min(1).max(100))
+        .min(1, "Pilih minimal satu penerima task.")
+        .max(20, "Penerima task maksimal 20 orang."),
+    dueDate: appointmentDateSchema,
+});
+
+export const meetingTaskStatusSchema = z.object({
+    status: z.enum(["BELUM_DIKERJAKAN", "ON_PROGRESS", "SELESAI"]),
+});
+
+export const meetingTaskExtendSchema = z.object({
+    proposedDate: appointmentDateSchema,
+    reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),
+});
+
+export const meetingTaskCancelSchema = z.object({
+    reason: z.string().trim().min(5, "Alasan pembatalan minimal 5 karakter.").max(1000),
+});
+
+export const meetingTaskExtensionRequestSchema = z.object({
+    proposedDate: appointmentDateSchema,
+    reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),
+});
+
+export const meetingTaskExtensionDecideSchema = z.object({
+    decision: z.enum(["APPROVED", "REJECTED"]),
+});
+
+export const meetingMinutesSchema = z.object({
+    minutes: z.string().trim().min(1, "Isi notulensi wajib diisi.").max(20000, "Notulensi maksimal 20000 karakter."),
+    changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter.").max(1000),
+});
 

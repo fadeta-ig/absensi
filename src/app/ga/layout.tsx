@@ -43,10 +43,10 @@ const GA_NAV_ITEMS: NavItem[] = [
     { href: "/ga/sim", icon: Phone, label: "Manajemen SIM" },
     {
         icon: CalendarClock,
-        label: "Rapat & Ruang Rapat",
+        label: "Meeting & Ruang Meeting",
         subItems: [
-            { href: "/ga/appointments/incoming", label: "Pemantauan Rapat" },
-            { href: "/ga/appointments/settings", label: "Ruang Rapat & PIC" },
+            { href: "/ga/appointments/incoming", label: "Pemantauan Meeting" },
+            { href: "/ga/appointments/settings", label: "Ruang Meeting & PIC" },
         ],
     },
     {
