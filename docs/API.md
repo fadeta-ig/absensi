@@ -80,6 +80,12 @@ export const POST = apiGuard(
 | `/api/auth/profile` | `GET`, `PUT` | Autentikasi | Membaca dan memperbarui profil pribadi pengguna yang sedang login. |
 | `/api/auth/change-password` | `POST` | Autentikasi | Mengganti kata sandi dan menaikkan nilai `session_version`. |
 | `/api/auth/send-password` | `POST` | `users:manage` | Mengirimkan kredensial akun baru via email SMTP ke pegawai terkait. |
+| `/api/auth/passkeys/register-options` | `POST` | Autentikasi | Menerbitkan tantangan pendaftaran perangkat passkey. |
+| `/api/auth/passkeys/register-verify` | `POST` | Autentikasi | Verifikasi + simpan kredensial passkey (`CREATE_PASSKEY`). |
+| `/api/auth/passkeys` | `GET` | Autentikasi | Daftar perangkat passkey milik sendiri (metadata saja). |
+| `/api/auth/passkeys/[id]` | `DELETE` | Autentikasi | Cabut perangkat passkey milik sendiri (`REVOKE_PASSKEY`). |
+| `/api/auth/passkeys/auth-options` | `POST` | Publik (rate-limit ketat) | Tantangan login passkey; username opsional — kosong = mode discoverable tanpa username (tantangan anonim). |
+| `/api/auth/passkeys/auth-verify` | `POST` | Publik (rate-limit ketat) | Verifikasi passkey → cookie `session` seperti login biasa (`LOGIN_PASSKEY`). Tanpa username: identifikasi via credentialId + cross-check userHandle. |
 
 ### B. Kehadiran & Presensi (`/api/attendance`)
 | Rute | Metode | Permission / Akses | Deskripsi |

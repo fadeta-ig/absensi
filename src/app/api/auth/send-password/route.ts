@@ -80,6 +80,10 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        // Reset HR = akun dianggap kompromi: cabut semua passkey agar harus daftar ulang.
+        const { revokeAllForUser } = await import("@/lib/services/passkeyService");
+        await revokeAllForUser(employee.userAccount.id).catch(() => undefined);
+
         const emailSent = await sendPasswordEmail(
             employee.email,
             employee.name,

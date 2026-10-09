@@ -16,6 +16,12 @@ const withPWA = withPWAInit({
         method: "GET",
         options: { cacheName: "attendance-live-context" },
       },
+      {
+        urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith("/api/auth/passkeys"),
+        handler: "NetworkOnly",
+        method: "GET",
+        options: { cacheName: "passkey-live" },
+      },
     ],
   },
 });

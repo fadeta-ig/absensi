@@ -133,6 +133,8 @@ model UserAccount {
   cleaningHolidaysCreated    CleaningHoliday[]
   meetingAppointmentsCreated MeetingAppointment[]
   meetingTasksCreated        MeetingTask[]
+  passkeyCredentials       PasskeyCredential[]
+  passkeyChallenges        PasskeyChallenge[]
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -248,6 +250,45 @@ model PushSubscription {
 
   @@index([userId], map: "push_subscriptions_user_id_fkey")
   @@map("push_subscriptions")
+}
+
+// ─── Passkey / WebAuthn (login sidik jari & Face ID) ──
+model PasskeyCredential {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  credentialId String    @unique(map: "idx_passkey_credential_id_unique") @map("credential_id") @db.VarChar(255)
+  publicKey    String    @map("public_key") @db.Text
+  counter      Int       @default(0)
+  transports   String?   @db.VarChar(255)
+  deviceType   String?   @map("device_type") @db.VarChar(50)
+  backedUp     Boolean   @default(false) @map("backed_up")
+  label        String?   @db.VarChar(100)
+  lastUsedAt   DateTime? @map("last_used_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_passkey_credentials_user_id")
+  @@map("passkey_credentials")
+}
+
+// Tantangan sekali pakai antar-request options -> verify (sesi stateless, tanpa Redis)
+model PasskeyChallenge {
+  id        String    @id @default(uuid())
+  userId    String?   @map("user_id")
+  clientIp  String?   @map("client_ip") @db.VarChar(100)
+  type      String    @db.VarChar(20)
+  challenge String    @unique(map: "idx_passkey_challenge_unique") @map("challenge") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user UserAccount? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_passkey_challenges_user_id")
+  @@index([expiresAt], map: "idx_passkey_challenges_expires_at")
+  @@index([clientIp, expiresAt], map: "idx_passkey_challenges_ip_expires")
+  @@map("passkey_challenges")
 }
 
 model VisitReport {

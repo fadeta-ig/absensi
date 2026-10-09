@@ -9,6 +9,7 @@ import { notifyAuthChanged } from "@/lib/authEvents";
 import { reportClientError } from "@/lib/clientErrors";
 import { getLandingPath } from "@/lib/permissions";
 import QualityPolicyModal from "@/components/QualityPolicyModal";
+import PasskeyLoginButton from "@/components/PasskeyLoginButton";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -176,6 +177,7 @@ export default function LoginPage() {
                 <input
                   id="username"
                   type="text"
+                  autoComplete="username webauthn"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Masukkan username atau ID karyawan"
@@ -195,6 +197,7 @@ export default function LoginPage() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Masukkan password"
@@ -248,6 +251,19 @@ export default function LoginPage() {
                 </>
               )}
             </button>
+
+            <div className="flex items-center gap-3 text-[11px] font-medium text-[var(--text-muted)]" aria-hidden="true">
+              <span className="flex-1 border-t border-[var(--border)]" />
+              atau
+              <span className="flex-1 border-t border-[var(--border)]" />
+            </div>
+
+            <PasskeyLoginButton
+              username={username}
+              disabled={loading || cooldown > 0}
+              onError={(msg) => setError(msg)}
+              onSuccess={(path) => router.replace(path)}
+            />
 
             <div className="mt-5 p-3 bg-[var(--secondary)] rounded-lg border border-[var(--border)]">
               <div className="flex items-center gap-2 mb-1">

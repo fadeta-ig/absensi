@@ -210,3 +210,19 @@ export async function verifyLogin(username: string, password: string): Promise<U
     logger.info("Login successful", { username: user.username });
     return principal;
 }
+
+/**
+ * Principal untuk login non-password (passkey). Memakai aturan yang sama
+ * dengan verifyLogin: user aktif + toPrincipal valid + sentuh lastLoginAt.
+ */
+export async function issuePrincipalForUserId(userId: string): Promise<UserPrincipal | null> {
+    const user = await findUserWithAccess({ id: userId });
+    if (!user) return null;
+    const principal = user.isActive ? toPrincipal(user) : null;
+    if (!principal) return null;
+    await prisma.userAccount.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+    }).catch(() => undefined);
+    return principal;
+}
