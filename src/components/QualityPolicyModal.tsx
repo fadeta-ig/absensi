@@ -27,12 +27,23 @@ export default function QualityPolicyModal({ open, onAgree }: QualityPolicyModal
     const contentRef = useRef<HTMLDivElement>(null);
 
     // Jika konten muat tanpa scroll (layar tinggi), langsung anggap sudah dibaca.
+    // Diukur via rAF + ResizeObserver (subscription), bukan setState sinkron di effect.
     useEffect(() => {
         if (!open) return;
         const el = contentRef.current;
-        if (el && el.scrollHeight <= el.clientHeight + 24) {
-            setHasReadAll(true);
-        }
+        if (!el) return;
+        let cancelled = false;
+        const check = () => {
+            if (!cancelled && el.scrollHeight <= el.clientHeight + 24) setHasReadAll(true);
+        };
+        const raf = requestAnimationFrame(check);
+        const ro = new ResizeObserver(check);
+        ro.observe(el);
+        return () => {
+            cancelled = true;
+            cancelAnimationFrame(raf);
+            ro.disconnect();
+        };
     }, [open ]);
 
     const handleScroll = () => {
