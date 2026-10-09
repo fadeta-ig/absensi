@@ -50,6 +50,9 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
 - Seluruh komunikasi data antar UI dan backend menggunakan format JSON murni (`application/json`) atau `multipart/form-data` untuk unggahan berkas.
 
 ### B. Cron & Background Schedulers (`/api/cron/*`)
+
+> Penjadwal = crontab root VPS via `/usr/local/bin/hris-cron.sh` (lihat
+> `WORKFLOWS.md` §5). cron-job.org dipensiunkan 2026-10-09 — jangan buat job baru di sana.
 - Menyediakan 6 endpoint tugas berkala (cron `birthday-reminder` dihapus 2026-10-06; modul/fungsi birthday tetap ada, hanya pemicu otomatisnya yang dimatikan):
   1. `/api/cron/cleanup-photos` (pembersihan berkas sementara/usang).
   2. `/api/cron/daily-greeting` (broadcast sapaan pagi + agenda meeting hari ini per employee yang terlibat).

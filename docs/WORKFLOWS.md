@@ -189,3 +189,28 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    Prisma/Next tanpa panduan resmi, `kill [-9]` tanpa audit, `pm2 reload`
    untuk app ini, commit `.env`/`*.sql`/`storage`/`logs`.
 
+---
+
+## 5. Penjadwal Cron Produksi (VPS, bukan cron-job.org)
+
+> Keputusan 2026-10-09: cron-job.org **dipensiunkan**. Satu-satunya penjadwal
+> adalah crontab root VPS. Jangan membuat job cron-job.org baru untuk endpoint
+> `/api/cron/*` — risiko double-fire (walau exactly-once log menahannya).
+
+- **Wrapper:** `/usr/local/bin/hris-cron.sh` (`root:root`, `700`). Membaca
+  `CRON_SECRET` dari `/var/www/hris/.env` (pola strip-kutip yang sama dengan
+  §4.4), timeout curl 60 detik, log ke `/var/log/hris-cron.log`.
+- **Jadwal (crontab root, zona Asia/Jakarta):**
+  ```cron
+  */15 * * * * /usr/local/bin/hris-cron.sh /api/cron/appointment-reminder
+  0 7 * * * /usr/local/bin/hris-cron.sh /api/cron/daily-greeting
+  5 7 * * * /usr/local/bin/hris-cron.sh /api/cron/meeting-task-reminder
+  ```
+- **Audit sebelum menambah job:** `crontab -l`, `crontab -u server-wig -l`,
+  `/etc/cron.d/`, `timedatectl` — VPS ini menampung banyak website, jangan
+  timpa job tetangga (`dashboard-pm2-snapshot`, backup dashboard-infra 01:15).
+- **Verifikasi:** `/usr/local/bin/hris-cron.sh /api/cron/appointment-reminder`
+  harus respons `{"success":true,...}`; cek `tail /var/log/hris-cron.log`.
+- Rotasi secret = ubah di 2 tempat: `.env` aplikasi + otomatis ikut (wrapper
+  baca `.env` tiap eksekusi, jadi cukup `.env` saja).
+
