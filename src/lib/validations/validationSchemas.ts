@@ -24,6 +24,32 @@ export const sendPasswordSchema = z.object({
     employeeId: z.string().min(1, "Employee ID harus diisi"),
 });
 
+/* ───────────────────── Passkey / WebAuthn ───────────────────── */
+// Respons WebAuthn adalah JSON opaque dari browser; validasi secukupnya di
+// tepi (bentuk + batas ukuran), verifikasi kriptografi milik service.
+
+const webauthnResponseShape = z.object({
+    id: z.string().min(1).max(500),
+    rawId: z.string().min(1).max(1000),
+    type: z.literal("public-key"),
+    authenticatorAttachment: z.string().max(50).nullable().optional(),
+    response: z.object({}).passthrough(),
+});
+
+export const passkeyRegisterVerifySchema = z.object({
+    response: webauthnResponseShape,
+    label: z.string().trim().max(100).nullable().optional(),
+});
+
+export const passkeyAuthOptionsSchema = z.object({
+    username: z.string().trim().max(100).nullable().optional(),
+});
+
+export const passkeyAuthVerifySchema = z.object({
+    username: z.string().trim().max(100).nullable().optional(),
+    response: webauthnResponseShape,
+});
+
 const AVATAR_HTTPS_MAX_LENGTH = 1000;
 const AVATAR_DATA_URL_MAX_LENGTH = 2_800_000;
 const AVATAR_DATA_PREFIXES = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"] as const;

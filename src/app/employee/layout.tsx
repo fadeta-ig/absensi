@@ -8,6 +8,7 @@ import {
     CalendarCheck, CalendarClock,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
+import PasskeyPrompt from "@/components/PasskeyPrompt";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
@@ -223,6 +224,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") ? "max-w-4xl" : "max-w-md"}`}>
                 {children}
             </div>
+            <PasskeyPrompt ownerKey={user.employeeId} />
         </AppShell>
     );
 }

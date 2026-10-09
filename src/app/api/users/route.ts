@@ -156,6 +156,8 @@ export async function PATCH(request: NextRequest) {
             const plainPassword = generatePassword();
             const passwordHash = await bcrypt.hash(plainPassword, 12);
             const user = await resetAdminUserPassword(result.data.id, session.userId, passwordHash);
+            const { revokeAllForUser } = await import("@/lib/services/passkeyService");
+            await revokeAllForUser(user.id).catch(() => undefined);
             const emailSent = await sendPasswordEmail(user.email, user.displayName, plainPassword, {
                 employeeId: user.employeeId ?? undefined,
                 username: user.username,

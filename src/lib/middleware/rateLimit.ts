@@ -27,7 +27,7 @@ if (typeof globalThis.setInterval !== "undefined") {
     }, CLEANUP_INTERVAL_MS);
 }
 
-function getClientIp(headers: Headers): string {
+export function getClientIp(headers: Headers): string {
     return (
         headers.get("cf-connecting-ip")
         || headers.get("x-forwarded-for")?.split(",")[0]?.trim()

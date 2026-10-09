@@ -21,14 +21,16 @@ Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Pr
 
 ## 2. Comprehensive Model & Table Catalog
 
-Basis data terdiri dari **66 model Prisma** yang dipetakan ke tabel fisik melalui deklarasi `@@map` pada schema Prisma:
+Basis data terdiri dari **87 model Prisma** yang dipetakan ke tabel fisik melalui deklarasi `@@map` pada schema Prisma:
 
-### A. Autentikasi & RBAC (5 Model)
+### A. Autentikasi & RBAC (7 Model)
 1. `UserAccount` (`user_accounts`): Akun pengguna aplikasi. Kolom penting: `id`, `username`, `email`, `password_hash`, `session_version`, `is_active`, `employee_id`.
 2. `Role` (`roles`): Peran sistem. Kolom penting: `id`, `code` (`SUPER_ADMIN`, `HR_ADMIN`, `GA_ADMIN`, `EMPLOYEE_USER`), `name`, `is_system`.
 3. `Permission` (`permissions`): Hak akses atomik. Kolom penting: `code` (`user.manage`, `hr.manage`, `ga.manage`, `employee.self`, `asset.read`).
 4. `UserRoleAssignment` (`user_role_assignments`): Pemetaan akun ke peran dengan audit pembuat (`assigned_by_user_id`).
 5. `RolePermission` (`role_permissions`): Pemetaan peran ke izin.
+6. `PasskeyCredential` (`passkey_credentials`): Kredensial WebAuthn per akun (login sidik jari/Face ID). Kolom penting: `credential_id` unik, `public_key`, `counter` anti-replay, `label`, `last_used_at`. Cascade dari `UserAccount`.
+7. `PasskeyChallenge` (`passkey_challenges`): Tantangan sekali pakai antar-request options→verify (pengganti session server, sesi stateless). Kolom penting: `challenge` unik, `type`, `client_ip` (cap anti-spam), `expires_at` 5 menit. Dihapus saat dipakai/kedaluwarsa.
 
 ### B. Kepegawaian & Master Data (11 Model)
 6. `Employee` (`employees`): Entitas induk karyawan. Kolom penting: `employee_id`, `name`, `email`, `department_id`, `division_id`, `position_id`, `employment_type`, `manager_id`, `total_leave`, `used_leave`, `bypass_location`, `is_active`.

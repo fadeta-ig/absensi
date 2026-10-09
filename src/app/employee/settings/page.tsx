@@ -2,6 +2,7 @@
 
 import { Settings } from "lucide-react";
 import { ChangePasswordCard } from "./components/ChangePasswordCard";
+import PasskeyCard from "./components/PasskeyCard";
 
 export default function SettingsPage() {
     return (
@@ -16,6 +17,9 @@ export default function SettingsPage() {
 
             {/* ═══ Change Password Card ═══ */}
             <ChangePasswordCard />
+
+            {/* ═══ Passkey Card ═══ */}
+            <PasskeyCard />
         </div>
     );
 }
