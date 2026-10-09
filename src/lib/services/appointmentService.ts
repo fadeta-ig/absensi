@@ -364,6 +364,9 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     }
 
     const participants = await validateParticipants(input.participants);
+    if (session.employeeId && participants.some((p) => p.employeeId === session.employeeId)) {
+        throw new AppointmentError("Anda sudah tercatat sebagai penyelenggara meeting ini dan tidak perlu ditambahkan sebagai peserta.", 400);
+    }
     // Siapa cepat dia dapat: booking langsung SCHEDULED, meeting tetap jalan
     // tanpa menunggu operator.
     const status = "SCHEDULED";

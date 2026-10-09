@@ -15,11 +15,12 @@ import { participantDisplayName } from "@/components/appointments/useAppointment
 interface AppointmentFormModalProps {
     initialDate: string;
     editing: AppointmentListItem | null;
+    myEmployeeId?: string | null;
     onClose: () => void;
     onSaved: () => void;
 }
 
-export default function AppointmentFormModal({ initialDate, editing, onClose, onSaved }: AppointmentFormModalProps) {
+export default function AppointmentFormModal({ initialDate, editing, myEmployeeId, onClose, onSaved }: AppointmentFormModalProps) {
     const [title, setTitle] = useState(editing?.title ?? "");
     const [date, setDate] = useState(() => {
         if (editing) return toDateString(editing.startAt);
@@ -244,7 +245,7 @@ export default function AppointmentFormModal({ initialDate, editing, onClose, on
                 {!editing && (
                     <>
                         <div className="form-group !mb-0">
-                            <ParticipantPicker value={participants} onChange={setParticipants} />
+                            <ParticipantPicker value={participants} onChange={setParticipants} excludeEmployeeId={editing ? undefined : (myEmployeeId ?? null)} />
                         </div>
                         <div className="form-group !mb-0">
                             <label className="form-label" htmlFor="appt-agenda">

@@ -617,7 +617,7 @@ export default function EmployeeAppointmentsPage() {
             )}
 
             {modal.type === "create" && (
-                <AppointmentFormModal initialDate={selectedDate} editing={null} onClose={() => setModal({ type: "none" })} onSaved={handleSaved} />
+                <AppointmentFormModal initialDate={selectedDate} editing={null} myEmployeeId={myEmployeeId} onClose={() => setModal({ type: "none" })} onSaved={handleSaved} />
             )}
         </div>
     );

@@ -18,26 +18,36 @@ interface EmployeeOption {
     position: string;
 }
 
-async function fetchEmployees(query: string, signal: AbortSignal): Promise<EmployeeOption[]> {
-    const res = await fetch(`/api/appointments/employees?q=${encodeURIComponent(query)}&limit=8`, { signal });
+async function fetchEmployees(query: string, signal: AbortSignal, excludeEmployeeId?: string | null): Promise<EmployeeOption[]> {
+    const params = new URLSearchParams({ q: query, limit: "8" });
+    if (excludeEmployeeId) params.set("exclude", excludeEmployeeId);
+    const res = await fetch(`/api/appointments/employees?${params.toString()}`, { signal });
     if (!res.ok) return [];
     const data: unknown = await res.json();
-    return Array.isArray(data) ? (data as EmployeeOption[]) : [];
+    const list = Array.isArray(data) ? (data as EmployeeOption[]) : [];
+    // Lapis kedua di client (anti race/paste): jangan tampilkan diri sendiri.
+    return excludeEmployeeId ? list.filter((e) => e.employeeId !== excludeEmployeeId) : list;
 }
 
 export default function ParticipantPicker({
     value,
     onChange,
+    excludeEmployeeId,
 }: {
     value: PickedParticipant[];
     onChange: (next: PickedParticipant[]) => void;
+    excludeEmployeeId?: string | null;
 }) {
     const [query, setQuery] = useState("");
     const [guestName, setGuestName] = useState("");
-    const fetcher = useCallback((q: string, signal: AbortSignal) => fetchEmployees(q, signal), []);
+    const fetcher = useCallback((q: string, signal: AbortSignal) => fetchEmployees(q, signal, excludeEmployeeId), [excludeEmployeeId]);
     const { results, searching } = useDebouncedSearch<EmployeeOption>(query, fetcher, 300, 2);
 
     const addEmployee = (e: EmployeeOption) => {
+        if (e.employeeId === excludeEmployeeId) {
+            setQuery("");
+            return;
+        }
         if (value.some((p) => p.employeeId === e.employeeId)) {
             setQuery("");
             return;

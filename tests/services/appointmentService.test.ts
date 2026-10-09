@@ -114,6 +114,17 @@ describe("createAppointment", () => {
             createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", participants: [] }, false)
         ).rejects.toMatchObject({ statusCode: 400 });
     });
+    it("diri sendiri sebagai peserta ditolak 400", async () => {
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-001", isActive: true }] as never);
+        await expect(
+            createAppointment(
+                empSession(),
+                { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-001" }] },
+                false
+            )
+        ).rejects.toMatchObject({ statusCode: 400 });
+    });
     it("overlap ruangan ditolak 409 untuk employee", async () => {
         mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
         mocked.meetingAppointment.findFirst.mockResolvedValue({ id: "bentrok" } as never);

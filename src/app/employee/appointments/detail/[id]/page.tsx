@@ -457,6 +457,7 @@ function DetailContent({ id }: { id: string }) {
                 <AppointmentFormModal
                     initialDate={item.startAt.slice(0, 10)}
                     editing={item}
+                    myEmployeeId={myEmployeeId}
                     onClose={() => setEditing(false)}
                     onSaved={() => { setEditing(false); void load(); }}
                 />
