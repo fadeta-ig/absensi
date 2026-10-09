@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { 
     Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, 
     ChevronRight, LogIn, Receipt, Bell, LayoutDashboard, AlertCircle, Loader2,
-    Grid, ChevronDown
+    Grid, ChevronDown, CalendarClock
 } from "lucide-react";
 import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
@@ -199,6 +199,7 @@ export default function EmployeeHomePage() {
                     { href: "/employee/todos", icon: LogIn, label: "To-Do", bg: "bg-violet-50 dark:bg-violet-950/40", color: "text-violet-600 dark:text-violet-400" },
                     { href: "/employee/documents", icon: Newspaper, label: "Dokumen", bg: "bg-orange-50 dark:bg-orange-950/40", color: "text-orange-600 dark:text-orange-400" },
                     { href: "/employee/attendance-history", icon: TrendingUp, label: "Riwayat", bg: "bg-emerald-50 dark:bg-emerald-950/40", color: "text-emerald-600 dark:text-emerald-400" },
+                    { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting", bg: "bg-cyan-50 dark:bg-cyan-950/40", color: "text-cyan-600 dark:text-cyan-400" },
                 ].map((item, i) => (
                     <Link key={i} href={item.href} className="flex flex-col items-center gap-1.5 group">
                         <div className={`w-[52px] h-[52px] rounded-2xl ${item.bg} border border-[var(--border)] flex items-center justify-center transition-all duration-200 active:scale-95 group-hover:border-[var(--primary)]`}>
@@ -232,7 +233,7 @@ export default function EmployeeHomePage() {
                 </div>
                 <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-semibold text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full">
-                        14 Layanan
+                        15 Layanan
                     </span>
                     <ChevronDown className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
                 </div>

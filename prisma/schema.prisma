@@ -21,61 +21,67 @@ model Employee {
   divisionId           String? @map("division_id")
   positionId           String  @map("position_id")
 
-  departmentRel         Department                    @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  divisionRel           Division?                     @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  positionRel           Position                      @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  gender                String                        @default("Laki-Laki")
-  employmentType        EmploymentType                @default(PERMANENT) @map("employment_type")
-  faceDescriptor        String?                       @map("face_descriptor") @db.LongText
-  joinDate              DateTime                      @map("join_date")
-  employmentStartDate   DateTime?                     @map("employment_start_date")
-  employmentEndDate     DateTime?                     @map("employment_end_date")
-  probationEndDate      DateTime?                     @map("probation_end_date")
-  totalLeave            Int                           @default(12) @map("total_leave")
-  usedLeave             Int                           @default(0) @map("used_leave")
-  avatarUrl             String?                       @map("avatar_url") @db.LongText
-  avatarPath            String?                       @map("avatar_path") @db.VarChar(500)
-  isActive              Boolean                       @default(true) @map("is_active")
-  statusChangedAt       DateTime?                     @map("status_changed_at")
-  shiftId               String?                       @map("shift_id")
-  bypassLocation        Boolean                       @default(false) @map("bypass_location")
-  basicSalary           Float                         @default(0) @map("basic_salary")
-  managerId             String?                       @map("manager_id")
-  attendances           AttendanceRecord[]
-  payrollComponents     EmployeePayrollComponent[]
-  manager               Employee?                     @relation("Hierarchy", fields: [managerId], references: [employeeId])
-  subordinates          Employee[]                    @relation("Hierarchy")
-  shift                 WorkShift?                    @relation(fields: [shiftId], references: [id])
-  shiftAssignments      ShiftAssignment[]
-  leaves                LeaveRequest[]
-  overtimes             OvertimeRequest[]
-  payslips              PayslipRecord[]
-  todos                 TodoItem[]
-  visits                VisitReport[]
-  locations             Location[]                    @relation("employeelocations")
-  userAccount           UserAccount?
-  assignedAssets        Asset[]
-  attendanceCorrections AttendanceCorrection[]        @relation("CorrectionRequester")
-  correctionApprovals   AttendanceCorrection[]        @relation("CorrectionApprover")
-  letterRequests        LetterRequest[]
-  statusHistories       EmployeeStatusHistory[]       @relation("EmployeeStatusSubject")
-  assetTickets          AssetTicket[]
-  simCards              SimCard[]
-  documents             EmployeeDocument[]
-  privateProfile        EmployeePrivateProfile?
-  identity              EmployeeIdentity?
-  addresses             EmployeeAddress[]
-  emergencyContacts     EmployeeEmergencyContact[]
-  bankAccounts          EmployeeBankAccount[]
-  taxProfile            EmployeeTaxProfile?
-  taxHistories          EmployeeTaxHistory[]
-  birthdayPreparations  EmployeeBirthdayPreparation[]
-  greenMeetingTargets   GreenMeetingNoteTarget[]
-  greenMeetingAttendances GreenMeetingAttendance[]
-  cleaningApprovalsInspected CleaningMonthlyApproval[]          @relation("CleaningApprovalInspectedBy")
-  cleaningApprovalsKnown     CleaningMonthlyApproval[]          @relation("CleaningApprovalKnownBy")
-  cleaningSignatures         CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureEmployee")
-  cleaningParafs             CleaningDailyParaf[]
+  departmentRel                Department                         @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  divisionRel                  Division?                          @relation("EmployeeDivision", fields: [divisionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  positionRel                  Position                           @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  gender                       String                             @default("Laki-Laki")
+  employmentType               EmploymentType                     @default(PERMANENT) @map("employment_type")
+  faceDescriptor               String?                            @map("face_descriptor") @db.LongText
+  joinDate                     DateTime                           @map("join_date")
+  employmentStartDate          DateTime?                          @map("employment_start_date")
+  employmentEndDate            DateTime?                          @map("employment_end_date")
+  probationEndDate             DateTime?                          @map("probation_end_date")
+  totalLeave                   Int                                @default(12) @map("total_leave")
+  usedLeave                    Int                                @default(0) @map("used_leave")
+  avatarUrl                    String?                            @map("avatar_url") @db.LongText
+  avatarPath                   String?                            @map("avatar_path") @db.VarChar(500)
+  isActive                     Boolean                            @default(true) @map("is_active")
+  statusChangedAt              DateTime?                          @map("status_changed_at")
+  shiftId                      String?                            @map("shift_id")
+  bypassLocation               Boolean                            @default(false) @map("bypass_location")
+  basicSalary                  Float                              @default(0) @map("basic_salary")
+  managerId                    String?                            @map("manager_id")
+  attendances                  AttendanceRecord[]
+  payrollComponents            EmployeePayrollComponent[]
+  manager                      Employee?                          @relation("Hierarchy", fields: [managerId], references: [employeeId])
+  subordinates                 Employee[]                         @relation("Hierarchy")
+  shift                        WorkShift?                         @relation(fields: [shiftId], references: [id])
+  shiftAssignments             ShiftAssignment[]
+  leaves                       LeaveRequest[]
+  overtimes                    OvertimeRequest[]
+  payslips                     PayslipRecord[]
+  todos                        TodoItem[]
+  visits                       VisitReport[]
+  locations                    Location[]                         @relation("employeelocations")
+  userAccount                  UserAccount?
+  assignedAssets               Asset[]
+  attendanceCorrections        AttendanceCorrection[]             @relation("CorrectionRequester")
+  correctionApprovals          AttendanceCorrection[]             @relation("CorrectionApprover")
+  letterRequests               LetterRequest[]
+  statusHistories              EmployeeStatusHistory[]            @relation("EmployeeStatusSubject")
+  assetTickets                 AssetTicket[]
+  simCards                     SimCard[]
+  documents                    EmployeeDocument[]
+  privateProfile               EmployeePrivateProfile?
+  identity                     EmployeeIdentity?
+  addresses                    EmployeeAddress[]
+  emergencyContacts            EmployeeEmergencyContact[]
+  bankAccounts                 EmployeeBankAccount[]
+  taxProfile                   EmployeeTaxProfile?
+  taxHistories                 EmployeeTaxHistory[]
+  birthdayPreparations         EmployeeBirthdayPreparation[]
+  greenMeetingTargets          GreenMeetingNoteTarget[]
+  greenMeetingAttendances      GreenMeetingAttendance[]
+  cleaningApprovalsInspected   CleaningMonthlyApproval[]          @relation("CleaningApprovalInspectedBy")
+  cleaningApprovalsKnown       CleaningMonthlyApproval[]          @relation("CleaningApprovalKnownBy")
+  cleaningSignatures           CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureEmployee")
+  cleaningParafs               CleaningDailyParaf[]
+  meetingAppointmentsRequested MeetingAppointment[]
+  meetingParticipations        MeetingAppointmentParticipant[]
+  unavailabilities             EmployeeUnavailability[]
+  meetingTasksAssigned         MeetingTask[]                      @relation("MeetingTaskAssigner")
+  meetingTaskAssignments       MeetingTaskAssignee[]
+  meetingTaskExtensionRequests MeetingTaskExtensionRequest[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -106,25 +112,27 @@ model UserAccount {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  employee            Employee?                    @relation(fields: [employeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
-  creator             UserAccount?                 @relation("UserCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdUsers        UserAccount[]                @relation("UserCreator")
-  roles               UserRoleAssignment[]         @relation("UserRoles")
-  roleAssignmentsMade UserRoleAssignment[]         @relation("RoleAssigner")
-  auditLogs           AuditLog[]                   @relation("UserAuditLogs")
-  statusChanges       EmployeeStatusHistory[]      @relation("EmployeeStatusActor")
-  pushSubscriptions   PushSubscription[]
-  assetHistories      AssetHistory[]               @relation("AssetHistoryActor")
-  assetBastUploads    AssetBastDocument[]          @relation("AssetBastActor")
-  assetInspections    AssetInspection[]            @relation("AssetInspectionActor")
-  employeeDocuments   EmployeeDocument[]           @relation("EmployeeDocumentUploader")
-  taxChanges          EmployeeTaxHistory[]         @relation("EmployeeTaxHistoryActor")
-  employeeImportJobs  EmployeeImportJob[]          @relation("EmployeeImportActor")
-  cleaningAssignments CleaningWorkerAssignment[]
-  cleaningItemChanges CleaningDailyChecklistItem[] @relation("CleaningItemActor")
+  employee                   Employee?                          @relation(fields: [employeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
+  creator                    UserAccount?                       @relation("UserCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdUsers               UserAccount[]                      @relation("UserCreator")
+  roles                      UserRoleAssignment[]               @relation("UserRoles")
+  roleAssignmentsMade        UserRoleAssignment[]               @relation("RoleAssigner")
+  auditLogs                  AuditLog[]                         @relation("UserAuditLogs")
+  statusChanges              EmployeeStatusHistory[]            @relation("EmployeeStatusActor")
+  pushSubscriptions          PushSubscription[]
+  assetHistories             AssetHistory[]                     @relation("AssetHistoryActor")
+  assetBastUploads           AssetBastDocument[]                @relation("AssetBastActor")
+  assetInspections           AssetInspection[]                  @relation("AssetInspectionActor")
+  employeeDocuments          EmployeeDocument[]                 @relation("EmployeeDocumentUploader")
+  taxChanges                 EmployeeTaxHistory[]               @relation("EmployeeTaxHistoryActor")
+  employeeImportJobs         EmployeeImportJob[]                @relation("EmployeeImportActor")
+  cleaningAssignments        CleaningWorkerAssignment[]
+  cleaningItemChanges        CleaningDailyChecklistItem[]       @relation("CleaningItemActor")
   reopenedCleaningSignatures CleaningMonthlyApprovalSignature[] @relation("CleaningSignatureReopener")
-  cleaningEvidenceUploads CleaningEvidencePhoto[]
-  cleaningHolidaysCreated CleaningHoliday[]
+  cleaningEvidenceUploads    CleaningEvidencePhoto[]
+  cleaningHolidaysCreated    CleaningHoliday[]
+  meetingAppointmentsCreated MeetingAppointment[]
+  meetingTasksCreated        MeetingTask[]
 
   @@index([createdByUserId], map: "idx_user_accounts_created_by")
   @@index([isActive], map: "idx_user_accounts_is_active")
@@ -310,22 +318,22 @@ model VisitPhoto {
 }
 
 model AttendanceRecord {
-  id               String    @id @default(uuid())
-  employeeId       String    @map("employee_id")
-  date             DateTime
-  clockIn          DateTime? @map("clock_in")
-  clockOut         DateTime? @map("clock_out")
-  clockInLocation  String?   @map("clock_in_location") @db.LongText
-  clockOutLocation String?   @map("clock_out_location") @db.LongText
-  clockInPhoto     String?   @map("clock_in_photo") @db.LongText
-  clockOutPhoto    String?   @map("clock_out_photo") @db.LongText
-  clockInPhotoPath String?   @map("clock_in_photo_path") @db.VarChar(500)
-  clockOutPhotoPath String?  @map("clock_out_photo_path") @db.VarChar(500)
-  status           String    @default("present")
-  notes            String?   @db.Text
-  isOffDay         Boolean   @default(false) @map("is_off_day")
-  offDayReason     String?   @map("off_day_reason") @db.Text
-  employee         Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
+  id                String    @id @default(uuid())
+  employeeId        String    @map("employee_id")
+  date              DateTime
+  clockIn           DateTime? @map("clock_in")
+  clockOut          DateTime? @map("clock_out")
+  clockInLocation   String?   @map("clock_in_location") @db.LongText
+  clockOutLocation  String?   @map("clock_out_location") @db.LongText
+  clockInPhoto      String?   @map("clock_in_photo") @db.LongText
+  clockOutPhoto     String?   @map("clock_out_photo") @db.LongText
+  clockInPhotoPath  String?   @map("clock_in_photo_path") @db.VarChar(500)
+  clockOutPhotoPath String?   @map("clock_out_photo_path") @db.VarChar(500)
+  status            String    @default("present")
+  notes             String?   @db.Text
+  isOffDay          Boolean   @default(false) @map("is_off_day")
+  offDayReason      String?   @map("off_day_reason") @db.Text
+  employee          Employee  @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@unique([employeeId, date])
   @@index([isOffDay], map: "idx_attendance_is_off_day")
@@ -399,13 +407,13 @@ model AttendanceCorrection {
 }
 
 model WorkShift {
-  id            String         @id @default(uuid())
+  id            String            @id @default(uuid())
   name          String
-  isDefault     Boolean        @default(false) @map("is_default")
-  earlyCheckIn  Int            @default(0) @map("early_check_in")
-  earlyCheckOut Int            @default(0) @map("early_check_out")
-  lateCheckIn   Int            @default(0) @map("late_check_in")
-  lateCheckOut  Int            @default(0) @map("late_check_out")
+  isDefault     Boolean           @default(false) @map("is_default")
+  earlyCheckIn  Int               @default(0) @map("early_check_in")
+  earlyCheckOut Int               @default(0) @map("early_check_out")
+  lateCheckIn   Int               @default(0) @map("late_check_in")
+  lateCheckOut  Int               @default(0) @map("late_check_out")
   employees     Employee[]
   days          WorkShiftDay[]
   assignments   ShiftAssignment[]
@@ -446,19 +454,19 @@ model ShiftAssignment {
 }
 
 model LeaveRequest {
-  id         String   @id @default(uuid())
-  employeeId String   @map("employee_id")
-  type       String
-  startDate  DateTime @map("start_date")
-  endDate    DateTime @map("end_date")
-  reason     String   @db.Text
-  status     String   @default("pending")
-  createdAt  DateTime @default(now()) @map("created_at")
-  attachment String?  @db.LongText
-  attachmentPath String? @map("attachment_path") @db.VarChar(500)
-  attachmentMime String? @map("attachment_mime") @db.VarChar(150)
-  attachmentSize Int?    @map("attachment_size")
-  employee   Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
+  id             String   @id @default(uuid())
+  employeeId     String   @map("employee_id")
+  type           String
+  startDate      DateTime @map("start_date")
+  endDate        DateTime @map("end_date")
+  reason         String   @db.Text
+  status         String   @default("pending")
+  createdAt      DateTime @default(now()) @map("created_at")
+  attachment     String?  @db.LongText
+  attachmentPath String?  @map("attachment_path") @db.VarChar(500)
+  attachmentMime String?  @map("attachment_mime") @db.VarChar(150)
+  attachmentSize Int?     @map("attachment_size")
+  employee       Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "leave_requests_employee_id_fkey")
   @@map("leave_requests")
@@ -510,17 +518,17 @@ model OvertimeRequest {
 }
 
 model Department {
-  id                  String                   @id @default(uuid())
-  name                String                   @unique
-  code                String?                  @unique
-  description         String?                  @db.Text
-  divisionId          String                   @map("division_id")
-  isActive            Boolean                  @default(true) @map("is_active")
-  createdAt           DateTime                 @default(now()) @map("created_at")
-  division            Division                 @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  employees           Employee[]               @relation("EmployeeDepartment")
-  greenMeetingUnit    GreenMeetingUnit?
-  greenMeetingTargets GreenMeetingNoteTarget[]
+  id                    String                   @id @default(uuid())
+  name                  String                   @unique
+  code                  String?                  @unique
+  description           String?                  @db.Text
+  divisionId            String                   @map("division_id")
+  isActive              Boolean                  @default(true) @map("is_active")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  division              Division                 @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  employees             Employee[]               @relation("EmployeeDepartment")
+  greenMeetingUnit      GreenMeetingUnit?
+  greenMeetingTargets   GreenMeetingNoteTarget[]
   greenMeetingDeptIzins GreenMeetingDeptIzin[]
 
   @@index([divisionId], map: "departments_division_id_fkey")
@@ -1267,12 +1275,12 @@ model GreenMeetingNoteRevision {
 }
 
 model GreenMeetingNoteTarget {
-  id           String  @id @default(uuid())
-  noteId       String  @map("note_id")
+  id           String                 @id @default(uuid())
+  noteId       String                 @map("note_id")
   targetType   GreenMeetingTargetType @default(DEPARTMENT) @map("target_type")
-  departmentId String? @map("department_id")
-  divisionId   String? @map("division_id")
-  employeeId   String? @map("employee_id")
+  departmentId String?                @map("department_id")
+  divisionId   String?                @map("division_id")
+  employeeId   String?                @map("employee_id")
   label        String? // Nama/label ringkas target (misal: "Aditya Pratama (IT)", "Divisi SGA", dll.)
 
   note       GreenMeetingNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
@@ -1314,11 +1322,11 @@ model CleaningRoom {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  template    CleaningTemplate           @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  assignments CleaningWorkerAssignment[]
-  checklists  CleaningDailyChecklist[]
-  approvals   CleaningMonthlyApproval[]
-  parafs      CleaningDailyParaf[]
+  template       CleaningTemplate           @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assignments    CleaningWorkerAssignment[]
+  checklists     CleaningDailyChecklist[]
+  approvals      CleaningMonthlyApproval[]
+  parafs         CleaningDailyParaf[]
   evidencePhotos CleaningEvidencePhoto[]
 
   @@index([templateId], map: "idx_cleaning_room_template")
@@ -1413,9 +1421,9 @@ model CleaningDailyChecklistItem {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  checklist     CleaningDailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  templateItem  CleaningTemplateItem?  @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  lastChangedBy UserAccount?           @relation("CleaningItemActor", fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  checklist      CleaningDailyChecklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  templateItem   CleaningTemplateItem?   @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastChangedBy  UserAccount?            @relation("CleaningItemActor", fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   evidencePhotos CleaningEvidencePhoto[]
 
   @@index([checklistId, sortOrder], map: "idx_cleaning_daily_item_order")
@@ -1549,18 +1557,18 @@ model CleaningDailyParaf {
 // ─── Cleaning Evidence Foto per Item (Tahap 1, opsional, batas global) ──
 // Disk + path on-premise; data lama utuh.
 model CleaningEvidencePhoto {
-  id               String    @id @default(uuid())
-  checklistItemId  String    @map("checklist_item_id")
-  roomId           String    @map("room_id")
-  wibDate          String    @map("wib_date") @db.VarChar(10)
-  filePath         String    @unique(map: "idx_cleaning_evidence_path_unique") @map("file_path") @db.VarChar(500)
-  mimeType         String    @map("mime_type") @db.VarChar(100)
-  size             Int       @map("size")
-  sha256           String    @map("sha256") @db.Char(64)
-  capturedAt       DateTime  @map("captured_at")
-  uploadedByUserId String?   @map("uploaded_by_user_id")
-  note             String?   @db.Text @map("note")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  checklistItemId  String   @map("checklist_item_id")
+  roomId           String   @map("room_id")
+  wibDate          String   @map("wib_date") @db.VarChar(10)
+  filePath         String   @unique(map: "idx_cleaning_evidence_path_unique") @map("file_path") @db.VarChar(500)
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  size             Int      @map("size")
+  sha256           String   @map("sha256") @db.Char(64)
+  capturedAt       DateTime @map("captured_at")
+  uploadedByUserId String?  @map("uploaded_by_user_id")
+  note             String?  @map("note") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
 
   checklistItem CleaningDailyChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   room          CleaningRoom               @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -1576,11 +1584,275 @@ model CleaningEvidencePhoto {
 model CleaningHoliday {
   id              String   @id @default(uuid())
   wibDate         String   @unique(map: "idx_cleaning_holiday_date_unique") @map("wib_date") @db.VarChar(10)
-  description     String   @db.Text @map("description")
+  description     String   @map("description") @db.Text
   createdByUserId String?  @map("created_by_user_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
   createdBy UserAccount? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@map("cleaning_holidays")
+}
+
+// ─── Meeting Room (master ruangan WIG002, pola CleaningRoom) ──
+model MeetingRoom {
+  id             String   @id @default(uuid())
+  name           String   @db.VarChar(200)
+  nameNormalized String   @unique(map: "idx_meeting_room_name_unique") @map("name_normalized") @db.VarChar(200)
+  capacity       Int?
+  location       String?  @db.VarChar(200)
+  facilities     String?  @map("facilities") @db.Text
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  appointments MeetingAppointment[]
+
+  @@index([isActive], map: "idx_meeting_room_active")
+  @@map("meeting_rooms")
+}
+
+enum MeetingAppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum MeetingAttendanceMark {
+  BELUM
+  HADIR
+  TIDAK_HADIR
+}
+
+enum MeetingInviteResponse {
+  PENDING
+  ACCEPTED
+  DECLINED
+  TENTATIVE
+}
+
+// ─── Appointment Meeting (bukan Green Meeting) ──
+model MeetingAppointment {
+  id                  String                   @id @default(uuid())
+  roomId              String?                  @map("room_id")
+  title               String                   @db.VarChar(200)
+  agenda              String?                  @map("agenda") @db.Text
+  meetingLink         String?                  @map("meeting_link") @db.Text
+  isFullDay           Boolean                  @default(false) @map("is_full_day")
+  status              MeetingAppointmentStatus @default(SCHEDULED)
+  startAt             DateTime                 @map("start_at")
+  endAt               DateTime                 @map("end_at")
+  requesterEmployeeId String?                  @map("requester_employee_id")
+  createdByUserId     String?                  @map("created_by_user_id")
+  reminderOffsets     String?                  @map("reminder_offsets") @db.Text
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+
+  room      MeetingRoom? @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  requester Employee?    @relation(fields: [requesterEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy UserAccount? @relation(fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  participants     MeetingAppointmentParticipant[]
+  revisions        MeetingAppointmentRevision[]
+  reminderLogs     AppointmentReminderLog[]
+  tasks            MeetingTask[]
+  minutes          String?                         @map("minutes") @db.Text
+  minutesUpdatedBy String?                         @map("minutes_updated_by") @db.VarChar(100)
+  minutesUpdatedAt DateTime?                       @map("minutes_updated_at")
+
+  @@index([roomId, startAt], map: "idx_meeting_appt_room_start")
+  @@index([status], map: "idx_meeting_appt_status")
+  @@index([startAt], map: "idx_meeting_appt_start")
+  @@index([requesterEmployeeId], map: "idx_meeting_appt_requester")
+  @@map("meeting_appointments")
+}
+
+model MeetingAppointmentParticipant {
+  id                String                @id @default(uuid())
+  appointmentId     String                @map("appointment_id")
+  employeeId        String?               @map("employee_id")
+  guestName         String?               @map("guest_name") @db.VarChar(200)
+  isExternal        Boolean               @default(false) @map("is_external")
+  attendance        MeetingAttendanceMark @default(BELUM)
+  inviteStatus      MeetingInviteResponse @default(PENDING) @map("invite_status")
+  inviteRespondedAt DateTime?             @map("invite_responded_at")
+  inviteNote        String?               @map("invite_note") @db.VarChar(500)
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  appointment MeetingAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee    Employee?          @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([appointmentId, employeeId], map: "idx_meeting_part_appt_emp")
+  @@index([appointmentId], map: "idx_meeting_part_appt")
+  @@index([employeeId], map: "idx_meeting_part_employee")
+  @@index([appointmentId, inviteStatus], map: "idx_meeting_part_appt_invite")
+  @@map("meeting_appointment_participants")
+}
+
+model MeetingAppointmentRevision {
+  id             String   @id @default(uuid())
+  appointmentId  String   @map("appointment_id")
+  revisionNumber Int      @map("revision_number")
+  changeReason   String   @map("change_reason") @db.Text
+  changedBy      String   @map("changed_by") @db.VarChar(100)
+  previousData   Json     @map("previous_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  appointment MeetingAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([appointmentId, revisionNumber], map: "idx_meeting_rev_appt_number")
+  @@index([appointmentId], map: "idx_meeting_rev_appt")
+  @@map("meeting_appointment_revisions")
+}
+
+model AppointmentReminderLog {
+  id            String   @id @default(uuid())
+  appointmentId String   @map("appointment_id")
+  offsetMin     Int      @map("offset_min")
+  sentAt        DateTime @default(now()) @map("sent_at")
+
+  appointment MeetingAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([appointmentId, offsetMin], map: "idx_appt_reminder_appt_offset")
+  @@index([appointmentId], map: "idx_appt_reminder_appt")
+  @@map("appointment_reminder_logs")
+}
+
+// ─── Blokir sibuk mandiri (OOO): tanpa hierarki, hanya fakta kalender ──
+model EmployeeUnavailability {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  startAt    DateTime @map("start_at")
+  endAt      DateTime @map("end_at")
+  reason     String?  @map("reason") @db.VarChar(500)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([employeeId, startAt, endAt], map: "idx_emp_unavail_emp_period")
+  @@map("employee_unavailabilities")
+}
+
+enum MeetingTaskAssigneeStatus {
+  BELUM_DIKERJAKAN
+  ON_PROGRESS
+  SELESAI
+  DIBATALKAN
+}
+
+enum MeetingTaskExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Task hasil meeting (dinamis antar-peserta, opsional) ──
+model MeetingTask {
+  id                 String    @id @default(uuid())
+  appointmentId      String    @map("appointment_id")
+  title              String    @db.VarChar(200)
+  detail             String?   @map("detail") @db.Text
+  assignerEmployeeId String    @map("assigner_employee_id")
+  createdByUserId    String?   @map("created_by_user_id")
+  isCancelled        Boolean   @default(false) @map("is_cancelled")
+  cancelReason       String?   @map("cancel_reason") @db.Text
+  cancelledAt        DateTime? @map("cancelled_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  appointment MeetingAppointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assigner    Employee           @relation("MeetingTaskAssigner", fields: [assignerEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  createdBy   UserAccount?       @relation(fields: [createdByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  assignees         MeetingTaskAssignee[]
+  deadlineHistory   MeetingTaskDeadlineHistory[]
+  revisions         MeetingTaskRevision[]
+  extensionRequests MeetingTaskExtensionRequest[]
+  reminderLogs      MeetingTaskReminderLog[]
+
+  @@index([appointmentId], map: "idx_meeting_task_appt")
+  @@index([assignerEmployeeId], map: "idx_meeting_task_assigner")
+  @@index([isCancelled], map: "idx_meeting_task_cancelled")
+  @@map("meeting_tasks")
+}
+
+model MeetingTaskAssignee {
+  id          String                    @id @default(uuid())
+  taskId      String                    @map("task_id")
+  employeeId  String                    @map("employee_id")
+  status      MeetingTaskAssigneeStatus @default(BELUM_DIKERJAKAN)
+  completedAt DateTime?                 @map("completed_at")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+
+  task     MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee Employee    @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([taskId, employeeId], map: "idx_meeting_task_assignee_unique")
+  @@index([taskId], map: "idx_meeting_task_assignee_task")
+  @@index([employeeId, status], map: "idx_meeting_task_assignee_emp_status")
+  @@map("meeting_task_assignees")
+}
+
+model MeetingTaskDeadlineHistory {
+  id           String   @id @default(uuid())
+  taskId       String   @map("task_id")
+  sequence     Int      @map("sequence")
+  deadlineDate DateTime @map("deadline_date")
+  reason       String?  @map("reason") @db.Text
+  createdBy    String?  @map("created_by") @db.VarChar(100)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  task MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([taskId, sequence], map: "idx_meeting_task_deadline_unique")
+  @@index([taskId], map: "idx_meeting_task_deadline_task")
+  @@map("meeting_task_deadline_history")
+}
+
+model MeetingTaskRevision {
+  id             String   @id @default(uuid())
+  taskId         String   @map("task_id")
+  revisionNumber Int      @map("revision_number")
+  changeReason   String   @map("change_reason") @db.Text
+  changedBy      String   @map("changed_by") @db.VarChar(100)
+  previousData   Json     @map("previous_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  task MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([taskId, revisionNumber], map: "idx_meeting_task_rev_unique")
+  @@index([taskId], map: "idx_meeting_task_rev_task")
+  @@map("meeting_task_revisions")
+}
+
+model MeetingTaskExtensionRequest {
+  id                    String                     @id @default(uuid())
+  taskId                String                     @map("task_id")
+  requestedByEmployeeId String                     @map("requested_by_employee_id")
+  proposedDate          DateTime                   @map("proposed_date")
+  reason                String                     @map("reason") @db.Text
+  status                MeetingTaskExtensionStatus @default(PENDING)
+  decidedBy             String?                    @map("decided_by") @db.VarChar(100)
+  decidedAt             DateTime?                  @map("decided_at")
+  createdAt             DateTime                   @default(now()) @map("created_at")
+
+  task        MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  requestedBy Employee    @relation(fields: [requestedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([taskId, status], map: "idx_meeting_task_ext_task_status")
+  @@map("meeting_task_extension_requests")
+}
+
+model MeetingTaskReminderLog {
+  id         String   @id @default(uuid())
+  taskId     String   @map("task_id")
+  employeeId String   @map("employee_id")
+  kind       String   @map("kind") @db.VarChar(50)
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  task MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([taskId, employeeId, kind], map: "idx_meeting_task_reminder_unique")
+  @@index([taskId], map: "idx_meeting_task_reminder_task")
+  @@map("meeting_task_reminder_logs")
 }

@@ -21,6 +21,7 @@ import {
     ChevronRight,
     LucideIcon,
     CalendarCheck,
+    CalendarClock,
     FileCheck2,
 } from "lucide-react";
 import { notifyAuthChanged } from "@/lib/authEvents";
@@ -195,12 +196,12 @@ export default function AllMenusSheet({
             title: "Produktivitas & Informasi",
             items: [
                 {
-                    href: "/employee/news",
-                    label: "Berita & Pengumuman",
-                    description: "Informasi internal dan edaran resmi WIG",
-                    icon: Newspaper,
-                    bg: "bg-amber-50 dark:bg-amber-950/40",
-                    color: "text-amber-600 dark:text-amber-400",
+                    href: "/employee/appointments",
+                    label: "E Meeting",
+                    description: "Buat jadwal meeting, cek ruangan dan ketersediaan peserta",
+                    icon: CalendarClock,
+                    bg: "bg-cyan-50 dark:bg-cyan-950/40",
+                    color: "text-cyan-600 dark:text-cyan-400",
                 },
                 {
                     href: "/employee/green-meeting",
@@ -209,6 +210,14 @@ export default function AllMenusSheet({
                     icon: CalendarCheck,
                     bg: "bg-emerald-50 dark:bg-emerald-950/40",
                     color: "text-emerald-600 dark:text-emerald-400",
+                },
+                {
+                    href: "/employee/news",
+                    label: "Berita & Pengumuman",
+                    description: "Informasi internal dan edaran resmi WIG",
+                    icon: Newspaper,
+                    bg: "bg-amber-50 dark:bg-amber-950/40",
+                    color: "text-amber-600 dark:text-amber-400",
                 },
                 ...(canReviewCleaning === false || canReviewCleaning === null ? [] : [
                     {

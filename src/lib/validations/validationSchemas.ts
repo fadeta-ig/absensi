@@ -606,3 +606,158 @@ export const greenMeetingExtendDeadlineSchema = z.object({
     reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter").max(1000),
 });
 
+/* ───────────────────── Appointment Meeting ───────────────────── */
+
+const appointmentDateSchema = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Gunakan format tanggal YYYY-MM-DD.")
+    .refine((value) => isValidCalendarDate(value), "Tanggal tidak valid. Periksa kembali tanggal (YYYY-MM-DD).");
+
+const appointmentTimeSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Gunakan format jam HH:mm (00:00–23:59).");
+
+const appointmentParticipantSchema = z.object({
+    employeeId: z.string().trim().min(1).max(100).optional(),
+    guestName: z.string().trim().min(1).max(200).optional(),
+});
+
+export const appointmentCreateSchema = z
+    .object({
+        title: z.string().trim().min(1, "Topik meeting wajib diisi.").max(200, "Topik meeting maksimal 200 karakter."),
+        agenda: z.string().trim().max(2000).nullable().optional(),
+        roomId: z.string().trim().min(1, "Ruangan wajib dipilih.").nullable().optional(),
+        meetingLink: z.string().trim().max(1000).nullable().optional(),
+        date: appointmentDateSchema,
+        startTime: appointmentTimeSchema.optional(),
+        endTime: appointmentTimeSchema.optional(),
+        isFullDay: z.boolean().optional(),
+        participants: z.array(appointmentParticipantSchema).max(100).default([]),
+        reminderOffsets: z.array(z.number().int().min(15)).max(5).nullable().optional(),
+        force: z.boolean().optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (!v.isFullDay && (!v.startTime || !v.endTime)) {
+            ctx.addIssue({ code: "custom", path: ["startTime"], message: "Jam mulai dan selesai wajib diisi." });
+        }
+        if (v.startTime && v.endTime && v.endTime <= v.startTime) {
+            ctx.addIssue({ code: "custom", path: ["endTime"], message: "Jam selesai harus setelah jam mulai." });
+        }
+    });
+
+export const appointmentRescheduleSchema = z
+    .object({
+        roomId: z.string().trim().min(1, "Ruangan wajib dipilih.").nullable().optional(),
+        meetingLink: z.string().trim().max(1000).nullable().optional(),
+        date: appointmentDateSchema,
+        startTime: appointmentTimeSchema.optional(),
+        endTime: appointmentTimeSchema.optional(),
+        isFullDay: z.boolean().optional(),
+        changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter.").max(1000, "Alasan perubahan maksimal 1000 karakter."),
+        force: z.boolean().optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (!v.isFullDay && (!v.startTime || !v.endTime)) {
+            ctx.addIssue({ code: "custom", path: ["startTime"], message: "Jam mulai dan jam selesai wajib diisi." });
+        }
+        if (v.startTime && v.endTime && v.endTime <= v.startTime) {
+            ctx.addIssue({ code: "custom", path: ["endTime"], message: "Jam selesai harus setelah jam mulai." });
+        }
+    });
+
+export const appointmentCancelSchema = z.object({
+    reason: z.string().trim().min(5, "Alasan pembatalan minimal 5 karakter.").max(1000, "Alasan pembatalan maksimal 1000 karakter."),
+});
+
+export const appointmentInviteResponseSchema = z
+    .object({
+        action: z.enum(["ACCEPT", "DECLINE"]),
+        note: z.string().trim().max(500).nullable().optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (v.action === "DECLINE" && (!v.note || v.note.trim().length < 5)) {
+            ctx.addIssue({ code: "custom", path: ["note"], message: "Alasan penolakan minimal 5 karakter." });
+        }
+    });
+
+export const appointmentAttendanceSchema = z.object({
+    marks: z
+        .array(
+            z.object({
+                participantId: z.string().trim().min(1),
+                attendance: z.enum(["HADIR", "TIDAK_HADIR"]),
+            })
+        )
+        .min(1)
+        .max(100),
+});
+
+export const meetingRoomCreateSchema = z.object({
+    name: z.string().trim().min(1, "Nama ruangan wajib diisi.").max(200, "Nama ruangan maksimal 200 karakter."),
+    capacity: z.number().int().min(1).nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional(),
+    facilities: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const meetingRoomUpdateSchema = z.object({
+    id: z.string().trim().min(1, "Parameter id wajib diisi"),
+    name: z.string().trim().min(1).max(200).optional(),
+    capacity: z.number().int().min(1).nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional(),
+    facilities: z.string().trim().max(2000).nullable().optional(),
+    isActive: z.boolean().optional(),
+});
+
+export const reminderOffsetsSetSchema = z.object({
+    offsets: z.array(z.number().int().min(15)).max(5),
+});
+
+export const unavailabilityCreateSchema = z
+    .object({
+        startDate: appointmentDateSchema,
+        endDate: appointmentDateSchema,
+        reason: z.string().trim().max(500).nullable().optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (v.endDate < v.startDate) {
+            ctx.addIssue({ code: "custom", path: ["endDate"], message: "Tanggal selesai harus setelah tanggal mulai." });
+        }
+    });
+
+/* ───────────────────── Task Hasil Meeting ───────────────────── */
+
+export const meetingTaskCreateSchema = z.object({
+    title: z.string().trim().min(1, "Judul task wajib diisi.").max(200, "Judul task maksimal 200 karakter."),
+    detail: z.string().trim().max(5000).nullable().optional(),
+    assigneeEmployeeIds: z
+        .array(z.string().trim().min(1).max(100))
+        .min(1, "Pilih minimal satu penerima task.")
+        .max(20, "Penerima task maksimal 20 orang."),
+    dueDate: appointmentDateSchema,
+});
+
+export const meetingTaskStatusSchema = z.object({
+    status: z.enum(["BELUM_DIKERJAKAN", "ON_PROGRESS", "SELESAI"]),
+});
+
+export const meetingTaskExtendSchema = z.object({
+    proposedDate: appointmentDateSchema,
+    reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),
+});
+
+export const meetingTaskCancelSchema = z.object({
+    reason: z.string().trim().min(5, "Alasan pembatalan minimal 5 karakter.").max(1000),
+});
+
+export const meetingTaskExtensionRequestSchema = z.object({
+    proposedDate: appointmentDateSchema,
+    reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),
+});
+
+export const meetingTaskExtensionDecideSchema = z.object({
+    decision: z.enum(["APPROVED", "REJECTED"]),
+});
+
+export const meetingMinutesSchema = z.object({
+    minutes: z.string().trim().min(1, "Isi notulensi wajib diisi.").max(20000, "Notulensi maksimal 20000 karakter."),
+    changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter.").max(1000),
+});
+
