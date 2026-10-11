@@ -82,8 +82,11 @@ const UNITS: Array<{ name: string; brand: string | null }> = [
 
 async function main() {
     const dbUrl = process.env.DATABASE_URL ?? "";
-    if (!dbUrl.includes("hris_local")) {
-        throw new Error("seedEquipment hanya untuk DB lokal hris_local.");
+    // Prod hanya bila eksplisit: flag --prod + CONFIRM_PROD_SEED=1 (mis. deploy awal).
+    // Tanpa itu, seed ini hanya untuk DB lokal hris_local. Upsert-only, aman diulang.
+    const allowProd = process.argv.includes("--prod") && process.env.CONFIRM_PROD_SEED === "1";
+    if (!dbUrl.includes("hris_local") && !allowProd) {
+        throw new Error("seedEquipment hanya untuk DB lokal hris_local (atau --prod + CONFIRM_PROD_SEED=1).");
     }
     const template = await prisma.equipmentTemplate.upsert({
         where: { nameNormalized: normalizeName(TEMPLATE_NAME) },
