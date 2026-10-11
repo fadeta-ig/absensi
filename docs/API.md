@@ -256,6 +256,8 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/cron/reset-leave` | Tahunan | Reset dan alokasi ulang kuota saldo cuti tahunan karyawan setiap awal tahun. |
 | `/api/cron/appointment-reminder` | Tiap 15 menit | Pengingat appointment SCHEDULED per offset dinamis bawaan (diatur WIG002); exactly-once via `AppointmentReminderLog`. |
 | `/api/cron/meeting-task-reminder` | Harian 07:00 WIB | Satu push per hari per penerima untuk task yang masih terbuka (termasuk overdue); task selesai tidak dikirimi; exactly-once via `MeetingTaskReminderLog`. |
+| `/api/cron/daily-recap` | Harian 23:59 WIB | Rekap gabungan alat+kebersihan (tanpa foto) via email ke Top Reviewer SAJA; exactly-once via `daily_recap_email_logs`. |
+| `/api/ga/recap/test-email` | Manual (WIG002) | Pratinjau rekap harian, SELALU ke email IT (`it.wijayainovasigemilang@gmail.com`), tidak pernah ke employee. |
 
 ### K. Ekspor & Penarikan Laporan (`/api/export`)
 | Rute | Metode | Permission / Akses | Deskripsi |

@@ -14,6 +14,7 @@ interface TopViewerInfo {
     employeeId: string | null;
     name: string | null;
     isActive: boolean | null;
+    email?: string | null;
 }
 
 const MAX_VIEWERS = 5;
@@ -151,6 +152,12 @@ export default function TopViewerCard() {
                                         <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
                                             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                                             Karyawan nonaktif — akses pantauannya mati sendiri.
+                                        </p>
+                                    )}
+                                    {!info.email && (
+                                        <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                                            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                                            Belum punya email HR — rekap harian tidak terkirim ke dia.
                                         </p>
                                     )}
                                 </div>

@@ -41,12 +41,14 @@ interface QcMember {
     employeeId: string;
     name: string;
     isActive: boolean;
+    email?: string | null;
 }
 
 interface TopViewer {
     employeeId: string;
     name: string;
     isActive: boolean;
+    email?: string | null;
 }
 
 interface EquipmentAssignment {
@@ -1037,6 +1039,13 @@ export default function EquipmentSettingsPage() {
                                             <TableCell>
                                                 <p className="font-medium text-foreground">{viewer.name}</p>
                                                 <p className="text-xs text-muted-foreground">{viewer.employeeId}</p>
+                                                {viewer.email ? (
+                                                    <p className="text-xs text-muted-foreground">{viewer.email}</p>
+                                                ) : (
+                                                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                                        Tanpa email — rekap harian tidak terkirim
+                                                    </p>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 <span

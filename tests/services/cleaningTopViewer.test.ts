@@ -46,6 +46,7 @@ describe("cleaning.topViewer.employeeId (mock murni)", () => {
             employeeId: null,
             name: null,
             isActive: null,
+            email: null,
         });
         await expect(isCleaningTopViewer(gmSession())).resolves.toBe(false);
         await expect(isCleaningTopViewer(null)).resolves.toBe(false);

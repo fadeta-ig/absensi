@@ -400,6 +400,18 @@ model EquipmentInspectionEvidence {
   @@map("equipment_inspection_evidence")
 }
 
+// ─── Rekap email harian (exactly-once per tanggal WIB) ──
+model DailyRecapEmailLog {
+  id        String   @id @default(uuid())
+  wibDate   String   @unique(map: "idx_daily_recap_wib_date_unique") @map("wib_date") @db.VarChar(10)
+  status    String   @map("status") @db.VarChar(20)
+  detail    String?  @map("detail") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("daily_recap_email_logs")
+}
+
 model EquipmentQcEvidence {
   id               String   @id @default(uuid())
   inspectionId     String   @map("inspection_id")

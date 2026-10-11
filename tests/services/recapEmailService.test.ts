@@ -1,0 +1,118 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/prisma", () => ({
+    prisma: {
+        appSetting: { findUnique: vi.fn() },
+        employee: { findMany: vi.fn() },
+        userAccount: { findMany: vi.fn() },
+        cleaningRoom: { findMany: vi.fn() },
+        equipmentInspection: { findMany: vi.fn(), count: vi.fn() },
+        dailyRecapEmailLog: { create: vi.fn(), update: vi.fn() },
+        pushSubscription: { findMany: vi.fn(), deleteMany: vi.fn() },
+    },
+}));
+
+vi.mock("@/lib/env", () => ({
+    env: {
+        JWT_SECRET: "test-jwt-secret-at-least-sixteen",
+        PII_ENCRYPTION_KEY: "test-pii-key-that-is-stable-and-long-enough",
+    },
+}));
+
+vi.mock("@/lib/services/emailService", () => ({
+    sendDailyRecapEmail: vi.fn(),
+}));
+
+vi.mock("@/lib/services/cleaningParafService", () => ({
+    getParafStatus: vi.fn(),
+}));
+
+import { prisma } from "@/lib/prisma";
+import { sendDailyRecapEmail } from "@/lib/services/emailService";
+import {
+    getDailyCleaningRecap,
+    resolveTopViewerEmails,
+    runDailyRecap,
+} from "@/lib/services/recapEmailService";
+
+const mocked = vi.mocked(prisma, true);
+const mockedSend = vi.mocked(sendDailyRecapEmail);
+
+function activeEmp(over: Record<string, unknown> = {}) {
+    return {
+        employeeId: "ID-24050016",
+        name: "Anang",
+        email: "anang@example.com",
+        isActive: true,
+        employmentStartDate: null,
+        employmentEndDate: null,
+        userAccount: { email: "anang@example.com", isActive: true },
+        ...over,
+    };
+}
+
+beforeEach(() => {
+    vi.resetAllMocks();
+});
+
+describe("resolveTopViewerEmails", () => {
+    it("gabung equipment + cleaning, hanya aktif beremail", async () => {
+        mocked.appSetting.findUnique.mockResolvedValue({ value: JSON.stringify(["ID-24050016", "ID-RESIGN", "ID-NOMAIL"]) } as never);
+        const { getCleaningTopViewerEmployeeIds } = await import("@/lib/services/appSettingsService");
+        void getCleaningTopViewerEmployeeIds;
+        mocked.employee.findMany.mockResolvedValue([
+            activeEmp(),
+            activeEmp({ employeeId: "ID-RESIGN", name: "Resign", email: "r@example.com", isActive: false }),
+            activeEmp({ employeeId: "ID-NOMAIL", name: "NoMail", email: "", userAccount: { email: "", isActive: true } }),
+        ] as never);
+        // cleaning ids kosong (mock default); hanya equipment dari appSetting
+        const { to, missing } = await resolveTopViewerEmails();
+        expect(to.map((r) => r.employeeId)).toEqual(["ID-24050016"]);
+        expect(missing.map((m) => m.employeeId).sort()).toEqual(["ID-NOMAIL", "ID-RESIGN"]);
+    });
+});
+
+describe("getDailyCleaningRecap", () => {
+    it("satu baris per ruangan aktif", async () => {
+        mocked.cleaningRoom.findMany.mockResolvedValue([
+            { id: "r1", name: "Resepsionis" },
+        ] as never);
+        const { getParafStatus } = await import("@/lib/services/cleaningParafService");
+        vi.mocked(getParafStatus).mockResolvedValue({
+            roomName: "Resepsionis",
+            isFree: false,
+            checklist: { exists: true, activeCount: 3, completedCount: 3, percent: 100, isComplete: true },
+            parafs: [{ id: "p1" }],
+            missingRoles: [],
+        } as never);
+        const out = await getDailyCleaningRecap("2026-10-12");
+        expect(out.lines).toHaveLength(1);
+        expect(out.lines[0]).toMatchObject({ roomName: "Resepsionis", complete: true, parafDone: 1 });
+    });
+});
+
+describe("runDailyRecap exactly-once", () => {
+    it("duplikat tanggal dilewati (P2002)", async () => {
+        mocked.dailyRecapEmailLog.create.mockRejectedValue({ code: "P2002" });
+        const out = await runDailyRecap("2026-10-12", { toOverride: ["it@example.com"] });
+        expect(out).toMatchObject({ sent: false, skipped: true });
+        expect(mockedSend).not.toHaveBeenCalled();
+    });
+
+    it("kirim ke override + tandai SENT", async () => {
+        mocked.dailyRecapEmailLog.create.mockResolvedValue({ id: "log1" } as never);
+        mocked.equipmentInspection.findMany.mockResolvedValue([]);
+        mocked.equipmentInspection.count.mockResolvedValue(0);
+        mocked.cleaningRoom.findMany.mockResolvedValue([]);
+        mocked.employee.findMany.mockResolvedValue([]);
+        mocked.appSetting.findUnique.mockResolvedValue({ value: "[]" } as never);
+        mockedSend.mockResolvedValue(true);
+        mocked.dailyRecapEmailLog.update.mockResolvedValue({} as never);
+        const out = await runDailyRecap("2026-10-12", { toOverride: ["it@example.com"] });
+        expect(out).toMatchObject({ sent: true, to: ["it@example.com"] });
+        expect(mockedSend).toHaveBeenCalledTimes(1);
+        expect(mocked.dailyRecapEmailLog.update).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { wibDate: "2026-10-12" } })
+        );
+    });
+});

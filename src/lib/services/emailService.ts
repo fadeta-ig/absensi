@@ -566,6 +566,121 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG.`;
     }
 }
 
+export interface DailyRecapEmailEquipmentLine {
+    unitName: string;
+    starterName: string;
+    status: string;
+    submittedAt: Date | null;
+    checkerName: string | null;
+}
+
+export interface DailyRecapEmailCleaningLine {
+    roomName: string;
+    isFree: boolean;
+    exists: boolean;
+    percent: number;
+    complete: boolean;
+    parafDone: number;
+    parafMissing: number;
+}
+
+export interface DailyRecapEmailInput {
+    to: string[];
+    wibDate: string;
+    dateLabel: string;
+    equipment: { open: number; submitted: number; done: number; total: number; lines: DailyRecapEmailEquipmentLine[] };
+    cleaning: { lines: DailyRecapEmailCleaningLine[] };
+}
+
+function escapeHtml(value: string): string {
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Rekap harian gabungan (alat + kebersihan) untuk Top Reviewer SAJA.
+ * Sengaja dibuat MINIMAL (tanpa gambar, tanpa lampiran, tanpa CSS berat,
+ * tanpa kata promosi) agar tidak diklasifikasikan sebagai spam.
+ */
+export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<boolean> {
+    const transporter = createTransporter();
+    if (!transporter) {
+        logger.warn("[Email] SMTP belum dikonfigurasi, rekap harian dilewati.");
+        return false;
+    }
+    const eqStatusLabel: Record<string, string> = { OPEN: "Berjalan", SUBMITTED: "Terkirim", DONE: "Selesai" };
+
+    const eqLinesText = input.equipment.lines.length === 0
+        ? "Tidak ada inspeksi alat."
+        : input.equipment.lines
+            .map((l) => `- ${l.unitName} — ${l.starterName} (${eqStatusLabel[l.status] ?? l.status})${l.checkerName ? `, QC: ${l.checkerName}` : ""}`)
+            .join("\n");
+    const clLinesText = input.cleaning.lines.length === 0
+        ? "Tidak ada ruangan."
+        : input.cleaning.lines
+            .map((l) => {
+                if (l.isFree) return `- ${l.roomName}: Libur`;
+                if (!l.exists) return `- ${l.roomName}: Belum ada data`;
+                const state = l.complete
+                    ? (l.parafMissing === 0 ? "Beres, sudah diperiksa" : "Beres, menunggu pemeriksaan")
+                    : `Dikerjakan ${l.percent}%`;
+                return `- ${l.roomName}: ${state} (paraf ${l.parafDone}, menunggu ${l.parafMissing})`;
+            })
+            .join("\n");
+
+    const text =
+        `Rekap Harian Inspeksi — ${input.dateLabel}\n` +
+        `\nPeralatan: ${input.equipment.open} berjalan, ${input.equipment.submitted} terkirim, ${input.equipment.done} selesai (total ${input.equipment.total}).\n` +
+        `${eqLinesText}\n` +
+        `\nKebersihan:\n${clLinesText}\n` +
+        `\nEmail otomatis Sistem HRIS PT Wijaya Inovasi Gemilang.`;
+
+    const eqLinesHtml = input.equipment.lines.length === 0
+        ? "<p>Tidak ada inspeksi alat.</p>"
+        : `<ul>${input.equipment.lines
+            .map((l) => `<li>${escapeHtml(l.unitName)} — ${escapeHtml(l.starterName)} (${escapeHtml(eqStatusLabel[l.status] ?? l.status)})${l.checkerName ? `, QC: ${escapeHtml(l.checkerName)}` : ""}</li>`)
+            .join("")}</ul>`;
+    const clLinesHtml = input.cleaning.lines.length === 0
+        ? "<p>Tidak ada ruangan.</p>"
+        : `<ul>${input.cleaning.lines
+            .map((l) => {
+                if (l.isFree) return `<li>${escapeHtml(l.roomName)}: Libur</li>`;
+                if (!l.exists) return `<li>${escapeHtml(l.roomName)}: Belum ada data</li>`;
+                const state = l.complete
+                    ? (l.parafMissing === 0 ? "Beres, sudah diperiksa" : "Beres, menunggu pemeriksaan")
+                    : `Dikerjakan ${l.percent}%`;
+                return `<li>${escapeHtml(l.roomName)}: ${escapeHtml(state)} (paraf ${l.parafDone}, menunggu ${l.parafMissing})</li>`;
+            })
+            .join("")}</ul>`;
+
+    const html =
+        `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"></head>` +
+        `<body style="font-family:Arial,Helvetica,sans-serif;color:#333333;max-width:600px;margin:0 auto;padding:16px;">` +
+        `<p style="font-size:12px;color:#666666;">PT Wijaya Inovasi Gemilang — Sistem HRIS</p>` +
+        `<h2 style="font-size:18px;color:#222222;">Rekap Harian Inspeksi — ${escapeHtml(input.dateLabel)}</h2>` +
+        `<h3 style="font-size:15px;color:#222222;">Peralatan</h3>` +
+        `<p>Berjalan: ${input.equipment.open}, Terkirim: ${input.equipment.submitted}, Selesai: ${input.equipment.done}, Total: ${input.equipment.total}.</p>` +
+        eqLinesHtml +
+        `<h3 style="font-size:15px;color:#222222;">Kebersihan</h3>` +
+        clLinesHtml +
+        `<p style="font-size:12px;color:#666666;">Email otomatis Sistem HRIS PT Wijaya Inovasi Gemilang. Balas ke alamat GA bila ada pertanyaan.</p>` +
+        `</body></html>`;
+
+    try {
+        await transporter.sendMail({
+            from: SMTP_FROM,
+            to: input.to.join(", "),
+            subject: `Rekap Harian Inspeksi — ${input.dateLabel}`,
+            text,
+            html,
+        });
+        logger.info("[Email] Rekap harian terkirim", { to: input.to, wibDate: input.wibDate });
+        return true;
+    } catch (err) {
+        logger.error("[Email] Rekap harian gagal", { to: input.to, wibDate: input.wibDate, err });
+        return false;
+    }
+}
+
 export async function sendTestBirthdayReminderEmail(
     recipients: string[]
 ): Promise<{ success: boolean; message: string }> {

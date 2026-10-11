@@ -461,13 +461,13 @@ export async function getCleaningTopViewerInfos(): Promise<CleaningTopViewerInfo
     if (ids.length === 0) return [];
     const employees = await prisma.employee.findMany({
         where: { employeeId: { in: ids } },
-        select: { employeeId: true, name: true, isActive: true },
+        select: { employeeId: true, name: true, isActive: true, email: true },
     });
     const byId = new Map(employees.map((e) => [e.employeeId, e]));
     return ids.map((id) => {
         const e = byId.get(id);
-        if (!e) return { employeeId: id, name: null, isActive: false };
-        return { employeeId: e.employeeId, name: e.name, isActive: e.isActive };
+        if (!e) return { employeeId: id, name: null, isActive: false, email: null };
+        return { employeeId: e.employeeId, name: e.name, isActive: e.isActive, email: e.email };
     });
 }
 
@@ -658,21 +658,22 @@ export interface CleaningTopViewerInfo {
     employeeId: string | null;
     name: string | null;
     isActive: boolean | null;
+    email: string | null;
 }
 
 /** Info penunjukan saat ini untuk UI settings (nama + status aktif employee). */
 export async function getCleaningTopViewerInfo(): Promise<CleaningTopViewerInfo> {
     const employeeId = await getCleaningTopViewerEmployeeId();
-    if (!employeeId) return { employeeId: null, name: null, isActive: null };
+    if (!employeeId) return { employeeId: null, name: null, isActive: null, email: null };
     try {
         const employee = await prisma.employee.findUnique({
             where: { employeeId },
-            select: { employeeId: true, name: true, isActive: true },
+            select: { employeeId: true, name: true, isActive: true, email: true },
         });
-        if (!employee) return { employeeId, name: null, isActive: false };
-        return { employeeId: employee.employeeId, name: employee.name, isActive: employee.isActive };
+        if (!employee) return { employeeId, name: null, isActive: false, email: null };
+        return { employeeId: employee.employeeId, name: employee.name, isActive: employee.isActive, email: employee.email };
     } catch {
-        return { employeeId, name: null, isActive: null };
+        return { employeeId, name: null, isActive: null, email: null };
     }
 }
 

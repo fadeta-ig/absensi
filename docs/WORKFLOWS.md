@@ -223,7 +223,9 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
   */15 * * * * /usr/local/bin/hris-cron.sh /api/cron/appointment-reminder
   0 7 * * * /usr/local/bin/hris-cron.sh /api/cron/daily-greeting
   5 7 * * * /usr/local/bin/hris-cron.sh /api/cron/meeting-task-reminder
+  59 23 * * * /usr/local/bin/hris-cron.sh /api/cron/daily-recap
   ```
+  `daily-recap` = rekap harian gabungan alat+kebersihan (tanpa foto) ke Top Reviewer SAJA, exactly-once per tanggal WIB (`daily_recap_email_logs`). Pratinjau manual: `POST /api/ga/recap/test-email` (WIG002, selalu ke email IT).
 - **Audit sebelum menambah job:** `crontab -l`, `crontab -u server-wig -l`,
   `/etc/cron.d/`, `timedatectl` — VPS ini menampung banyak website, jangan
   timpa job tetangga (`dashboard-pm2-snapshot`, backup dashboard-infra 01:15).

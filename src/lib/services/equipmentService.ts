@@ -57,12 +57,12 @@ export async function getEquipmentQcMemberIds(): Promise<string[]> {
     }
 }
 
-export async function getEquipmentQcMembers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+export async function getEquipmentQcMembers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
     const ids = await getEquipmentQcMemberIds();
     if (ids.length === 0) return [];
     const employees = await prisma.employee.findMany({
         where: { employeeId: { in: ids } },
-        select: { employeeId: true, name: true, isActive: true },
+        select: { employeeId: true, name: true, isActive: true, email: true },
     });
     const order = new Map(ids.map((id, idx) => [id, idx]));
     return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
@@ -140,7 +140,7 @@ export async function requireWig002OrTopViewer(session: SessionPayload): Promise
     throw new EquipmentError("Hanya WIG002 atau atasan yang ditunjuk yang dapat melihat.", 403);
 }
 
-export async function getEquipmentTopViewers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+export async function getEquipmentTopViewers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
     let ids: string[] = [];
     try {
         const row = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_TOP_VIEWERS_KEY } });
@@ -154,7 +154,7 @@ export async function getEquipmentTopViewers(): Promise<Array<{ employeeId: stri
     if (ids.length === 0) return [];
     const employees = await prisma.employee.findMany({
         where: { employeeId: { in: ids } },
-        select: { employeeId: true, name: true, isActive: true },
+        select: { employeeId: true, name: true, isActive: true, email: true },
     });
     const order = new Map(ids.map((id, idx) => [id, idx]));
     return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
@@ -518,7 +518,13 @@ export interface EquipmentRecapFilters {
     to?: string;
 }
 
-export async function getEquipmentRecap(session: SessionPayload, filters: EquipmentRecapFilters) {    await requireWig002OrTopViewer(session);
+export async function getEquipmentRecap(session: SessionPayload, filters: EquipmentRecapFilters) {
+    await requireWig002OrTopViewer(session);
+    return queryEquipmentRecap(filters);
+}
+
+/** Query rekap tanpa guard sesi — hanya untuk cron sistem internal. */
+export async function queryEquipmentRecap(filters: EquipmentRecapFilters) {
     const where: Prisma.EquipmentInspectionWhereInput = {};
     if (filters.unitId) where.unitId = filters.unitId;
     if (filters.status) where.status = filters.status;

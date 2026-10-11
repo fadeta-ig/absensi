@@ -113,6 +113,7 @@ describe("Top viewer routes (mock murni)", () => {
             employeeId: "ID-24050016",
             name: "General Manager",
             isActive: true,
+            email: "gm@example.com",
         });
         const ok = await topViewerPUT(
             new NextRequest("http://localhost/api/ga/cleaning/settings/top-viewer", {

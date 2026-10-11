@@ -53,13 +53,14 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
 
 > Penjadwal = crontab root VPS via `/usr/local/bin/hris-cron.sh` (lihat
 > `WORKFLOWS.md` §5). cron-job.org dipensiunkan 2026-10-09 — jangan buat job baru di sana.
-- Menyediakan 6 endpoint tugas berkala (cron `birthday-reminder` dihapus 2026-10-06; modul/fungsi birthday tetap ada, hanya pemicu otomatisnya yang dimatikan):
+- Menyediakan 7 endpoint tugas berkala (cron `birthday-reminder` dihapus 2026-10-06; modul/fungsi birthday tetap ada, hanya pemicu otomatisnya yang dimatikan):
   1. `/api/cron/cleanup-photos` (pembersihan berkas sementara/usang).
   2. `/api/cron/daily-greeting` (broadcast sapaan pagi + agenda meeting hari ini per employee yang terlibat).
   3. `/api/cron/generate-payroll` (agregasi otomatis gaji bulanan).
   4. `/api/cron/reset-leave` (pembaharuan kuota cuti tahunan).
   5. `/api/cron/appointment-reminder` (pengingat appointment per offset dinamis bawaan yang diatur WIG002, tiap 15 menit; exactly-once via `AppointmentReminderLog`).
   6. `/api/cron/meeting-task-reminder` (satu push per hari jam 07:00 WIB per penerima task terbuka, termasuk overdue; exactly-once via `MeetingTaskReminderLog`).
+  7. `/api/cron/daily-recap` (rekap harian gabungan alat+kebersihan jam 23:59 WIB ke Top Reviewer SAJA via email; exactly-once via `daily_recap_email_logs`; pratinjau manual `POST /api/ga/recap/test-email` selalu ke email IT).
 - **Otentikasi Cron**:
   - Dilindungi menggunakan header `Authorization: Bearer <CRON_SECRET>` untuk pemanggil sistem eksternal (seperti crontab / systemd timer), atau sesi HR Admin yang sah (`canManageHr`).
 
