@@ -33,6 +33,7 @@ export default function EmployeeHomePage() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
     const [cleaningCaps, setCleaningCaps] = useState<{ isReviewer: boolean; isTopViewer: boolean } | null>(null);
+    const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean } | null>(null);
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
@@ -42,11 +43,12 @@ export default function EmployeeHomePage() {
             setLoadingData(true);
             setLoadError("");
             try {
-                const [userRes, newsRes, attendanceRes, capsRes] = await Promise.all([
+                const [userRes, newsRes, attendanceRes, capsRes, equipCapsRes] = await Promise.all([
                     fetch("/api/auth/me"),
                     fetch("/api/news"),
                     fetch("/api/attendance"),
                     fetch("/api/employee/cleaning/capabilities").catch(() => null),
+                    fetch("/api/employee/equipment/capabilities").catch(() => null),
                 ]);
 
                 if (!userRes.ok) throw new Error(await getResponseErrorMessage(userRes, "Gagal memuat data profil."));
@@ -70,6 +72,17 @@ export default function EmployeeHomePage() {
                     );
                 } catch {
                     setCleaningCaps({ isReviewer: true, isTopViewer: true });
+                }
+                try {
+                    const equipJson = equipCapsRes && equipCapsRes.ok ? await equipCapsRes.json() : null;
+                    const equip = equipJson?.data;
+                    setEquipmentCaps(
+                        equip && typeof equip.canExecute === "boolean"
+                            ? { canExecute: equip.canExecute, canReview: Boolean(equip.canReview), canTopView: Boolean(equip.canTopView) }
+                            : null
+                    );
+                } catch {
+                    setEquipmentCaps(null);
                 }
                 if (userData?.totalLeave !== undefined && userData?.usedLeave !== undefined) {
                     setLeaveBalance({ total: userData.totalLeave, used: userData.usedLeave });
@@ -314,6 +327,10 @@ export default function EmployeeHomePage() {
                 hasSubordinates={Boolean(user?.hasSubordinates || (Array.isArray(user?.subordinates) && user.subordinates.length > 0))}
                 canReviewCleaning={cleaningCaps ? cleaningCaps.isReviewer : null}
                 canTopViewCleaning={cleaningCaps ? cleaningCaps.isTopViewer : null}
+                canUseEquipment={equipmentCaps ? equipmentCaps.canExecute || equipmentCaps.canReview || equipmentCaps.canTopView : null}
+                canExecuteEquipment={equipmentCaps ? equipmentCaps.canExecute : null}
+                canReviewEquipment={equipmentCaps ? equipmentCaps.canReview : null}
+                canTopViewEquipment={equipmentCaps ? equipmentCaps.canTopView : null}
             />
 
         </div>

@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
     Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User,
-    CalendarCheck, CalendarClock,
+    CalendarCheck, CalendarClock, Wrench,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
     { href: "/employee/leave", icon: CalendarOff, label: "Cuti" },
     { href: "/employee/documents", icon: FileText, label: "Dokumen" },
     { href: "/employee/assets", icon: Monitor, label: "Aset Saya" },
+    { href: "/employee/equipment", icon: Wrench, label: "Inspeksi Alat" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting" },
     { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
@@ -96,6 +97,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     const [user, setUser] = useState<AppShellUser | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
+    const [equipmentVisible, setEquipmentVisible] = useState(false);
     const fetchedRef = useRef(false);
 
     const checkAuth = useCallback(async () => {
@@ -133,6 +135,26 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         fetchedRef.current = true;
         void checkAuth();
     }, [checkAuth]);
+
+    // Inspeksi Alat tampil bila ditugaskan WIG002 (canExecute) atau QC (canReview) —
+    // kecuali atasan murni (topViewer tanpa peran QC).
+    // Pantau atasan hanya via sheet menu.
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        fetch("/api/employee/equipment/capabilities", { credentials: "same-origin" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json: unknown) => {
+                if (cancelled || !json || typeof json !== "object") return;
+                const data = (json as { data?: { canExecute?: boolean; canReview?: boolean; canTopView?: boolean } }).data;
+                const isTopOnly = data?.canTopView === true && data?.canReview !== true;
+                if ((data?.canExecute || data?.canReview) && !isTopOnly) setEquipmentVisible(true);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
 
     useEffect(() => subscribeAuthChanged((event) => {
         if (event.reason === "logout") {
@@ -195,7 +217,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     return (
         <AppShell
             user={user}
-            navItems={navItems}
+            navItems={equipmentVisible ? navItems : navItems.filter((i) => i.href !== "/employee/equipment")}
             brandTitle="WIG Portal"
             brandSubtitle="Employee"
             mobileTitle="WIG"

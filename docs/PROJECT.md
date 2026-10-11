@@ -2,7 +2,7 @@
 
 > **Purpose**: What this project is and what it does.  
 > **Source of Truth**: Repository scope, `package.json`, and business capabilities.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-10-11  
 
 ## 1. Project Purpose
 
@@ -39,7 +39,7 @@ Aplikasi melayani 4 kelompok peran utama:
 ### B. General Affairs (GA) Asset Lifecycle
 - **Katalog & Registrasi Aset**: Manajemen barcode/QR aset, serial number, IMEI, vendor, dan tanggal garansi.
 - **BAST Digital**: Unggah dan penyimpanan dokumen serah terima aset dalam bentuk `MediumBlob` database.
-- **Checklist Inspeksi Berkala**: Formulir checklist kondisi aset (`BAIK`, `KURANG_BAIK`, `RUSAK`) dengan item pemeriksaan dinamis.
+- **Inspeksi Alat Produksi (mode bebas)**: Karyawan aktif mana pun checklist unit alat mana pun kapan pun tanpa jadwal/penugasan (nilai Baik/Rusak, 1 tempat upload foto maks 5 per inspeksi); pool QC yang ditunjuk WIG002 menandai DONE dengan riwayat checked-by; atasan pemantau (topViewer) dan rekap GA melihat hasil tanpa mengubah. Master template/unit dikelola WIG002.
 - **Maintenance & Vendor Log**: Pelacakan biaya servis, estimasi penyelesaian, dan nota perbaikan.
 - **Manajemen Kartu SIM**: Inventarisasi nomor seluler korporat dan pelacakan masa aktif kuota.
 

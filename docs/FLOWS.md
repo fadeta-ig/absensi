@@ -2,7 +2,7 @@
 
 > **Purpose**: Alur sistem end-to-end utama (Data & Request Flows).  
 > **Source of Truth**: Alur navigasi UI, route handler API, dan service bisnis terpadu.  
-> **Last Verified**: 2026-09-29
+> **Last Verified**: 2026-10-11
 
 Dokumen ini memetakan alur kerja utama (*end-to-end user & data flows*) yang melintasi berbagai lapisan arsitektur platform dari interaksi pengguna, transport API, logika bisnis, hingga persistensi database.
 
@@ -223,3 +223,30 @@ Alur serah terima aset korporat dari GA ke karyawan:
 2. **Penugasan Berinterval**: Assignment dapat berlaku hari ini atau dijadwalkan mulai tanggal WIB berikutnya. Assignment yang belum berakhir menyinkronkan role `CLEANING_WORKER`, tetapi daftar ruangan petugas hanya membaca assignment yang sudah efektif. Jadwal yang belum mulai dapat dibatalkan; assignment berjalan diakhiri dengan alasan.
 3. **Checklist Harian**: Saat petugas membuka ruangan yang ditugaskan, sistem membuat maksimal satu snapshot checklist per ruangan/tanggal WIB. Perubahan template berikutnya tidak mengubah snapshot yang sudah dibuat.
 4. **Persetujuan Bulanan**: GA menetapkan dua reviewer employee. Masing-masing reviewer hanya dapat menandatangani role yang ditugaskan; reopen membuat versi baru, menyimpan alasan, dan mempertahankan histori tanda tangan.
+
+---
+
+## 8. Flow: Inspeksi Alat (Checklist Foreman → Submit → QC DONE → Pantau Atasan)
+
+```text
+[ Pelaksana (karyawan internal) ]     [ API /api/equipment/* ]              [ equipmentService.ts ]
+           │                                       │                                   │
+           │── Mulai inspeksi unit aktif ─────────>│── requireActiveInternalEmployee ──>│── snapshot item template aktif (OPEN)
+           │── Nilai tiap item (isPass) ──────────>│── tolak bila bukan OPEN (409) ───>│── updateEquipmentInspectionItem
+           │── Upload foto (maks 5, ≥1 wajib) ────>│── JPEG kamera + batas ukuran ────>│── saveEquipmentEvidence (OPEN saja)
+           │── Submit ───────────────────────────>│── semua item dinilai + foto OK ──>│── OPEN → SUBMITTED + audit log
+
+[ Anggota QC ] ── antrean SUBMITTED ──>│── requireQcMember ────────────────>│── getPendingEquipmentApprovals (terbaru di atas)
+           │── DONE + catatan opsional ──────────>│── hanya dari SUBMITTED (409) ───>│── SUBMITTED → DONE + snapshot nama QC + audit log
+
+[ WIG002 / topViewer ] ── rekap ──────>│── requireWig002OrTopViewer ───────>│── getEquipmentRecap (ringkasan open/submitted/done)
+```
+
+1. **Mulai checklist bebas**: Karyawan internal aktif mana pun memilih unit aktif dan memulai inspeksi; sistem membuat snapshot item dari template aktif saat itu (perubahan template berikutnya tidak mengubah inspeksi berjalan). Unit nonaktif, template nonaktif, atau template tanpa item aktif ditolak.
+2. **Penilaian + foto**: Pelaksana menilai tiap item (`isPass` + catatan opsional) dan mengunggah foto dokumentasi ke satu tempat per inspeksi (mewakili semua item, maks 5). Perubahan item/foto ditolak setelah inspeksi dikirim.
+3. **Submit**: Lolos bila semua item aktif sudah dinilai dan (bila ada item `requirePhoto`) minimal 1 foto ada. Status menjadi `SUBMITTED`; tidak ada jalan kembali ke `OPEN`.
+4. **Antrean QC pool**: Semua anggota QC melihat antrean `SUBMITTED` yang sama, terbaru di atas. QC boleh menambah foto QC opsional (maks 5) selama menunggu.
+5. **QC DONE**: Anggota QC menyelesaikan dengan klik DONE + catatan opsional (tanpa paraf/tanda tangan); nama pemeriksa disimpan sebagai snapshot. Hanya dari `SUBMITTED`; tidak ada reject.
+6. **Pantau atasan**: WIG002 dan topViewer (read-only) memantau via rekap berfilter (unit/status/rentang tanggal) dengan ringkasan `open/submitted/done/total`. Menu pelaksana/QC/atasan digerbang via `getEmployeeEquipmentCapabilities` (`canExecute`/`canReview`/`canTopView`).
+
+Rujukan: `src/lib/services/equipmentService.ts`, `tests/services/equipmentService.test.ts`.

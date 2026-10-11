@@ -2,7 +2,7 @@
 
 > **Purpose**: Business/domain knowledge.  
 > **Source of Truth**: Business services logic, calculations, and domain workflows.  
-> **Last Verified**: 2026-09-29
+> **Last Verified**: 2026-10-11
 
 Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan relasi utama dalam ekosistem **Presensi & HRIS WIG**.
 
@@ -86,6 +86,16 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **LetterRequest (`letter_requests`)**: Permohonan surat keterangan resmi: `SK_KERJA`, `KET_PENGHASILAN`, `KET_MASIH_BEKERJA`, `BPJS`.
 - **TodoItem (`todo_items`)**: Catatan tugas personal karyawan.
 
+### H. Inspeksi Alat (Equipment)
+- **Mode penugasan**: WIG002 menentukan siapa dapat modul Inspeksi Alat (per unit atau global `unitId` null); tanpa penugasan efektif = tanpa menu dan tanpa akses checklist. Karyawan internal aktif (karyawan aktif + akun aktif; outsource selalu ditolak) yang ditugaskan boleh mengisi checklist unitnya kapan pun. Tidak ada peran pelaksana khusus.
+- **Siklus satu arah tanpa reject**: `OPEN → SUBMITTED → DONE`. Item hanya dapat diubah saat `OPEN`; submit hanya dari `OPEN`; QC DONE hanya dari `SUBMITTED`. Tidak ada transisi mundur atau reject. Unit tidak dapat dinonaktifkan selama masih ada inspeksi `OPEN`/`SUBMITTED`.
+- **Syarat submit**: Semua item aktif sudah dinilai (`isPass` terisi semua); bila ada item aktif bertanda `requirePhoto`, wajib ada minimal 1 foto dokumentasi.
+- **Foto**: Satu tempat upload per inspeksi yang mewakili semua item — maksimal 5 foto pelaksana (hanya saat `OPEN`) + maksimal 5 foto QC opsional (hanya saat `SUBMITTED`). Foto harus JPEG valid dari kamera dengan batas ukuran dari setting.
+- **QC pool**: Anggota QC (maks 20 orang, ditetapkan WIG002 dari karyawan internal aktif) semuanya melihat antrean `SUBMITTED` yang sama. Service mengembalikan terbaru-di-atas; UI antrean default mengurut terlama-menunggu-dulu (bisa dibalik). Penyelesaian cukup klik DONE + catatan opsional — tanpa paraf/tanda tangan — dan nama pemeriksa disimpan sebagai snapshot (`checkedByNameSnapshot`) agar riwayat stabil bila nama berubah.
+- **Atasan read-only (topViewer)**: Maks 5 orang, ditetapkan WIG002 dari karyawan internal aktif; hanya boleh membaca master unit dan rekap, tidak dapat mutasi apa pun.
+- **WIG002**: Satu-satunya peran yang mengelola master (template, item template, unit, anggota QC, topViewer).
+- **Menu gating**: `getEmployeeEquipmentCapabilities` menghasilkan `canExecute` (punya penugasan efektif), `canReview` (anggota QC), `canTopView` (topViewer) untuk menggerbang menu pelaksana / antrean QC / rekap atasan.
+
 ---
 
 ## 2. Important Business Relationships & Cardinality
@@ -100,3 +110,4 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 8. `AssetCategory` 1 ── * `Asset` 1 ── * `AssetHistory` 1 ── * `AssetBastDocument`
 9. `VisitReport` 1 ── * `VisitPhoto`
 10. `UserAccount` * ── * `Role` * ── * `Permission` [RBAC Many-to-Many]
+11. `EquipmentTemplate` 1 ── * `EquipmentUnit` 1 ── * `EquipmentInspection` 1 ── * `EquipmentInspectionItem`

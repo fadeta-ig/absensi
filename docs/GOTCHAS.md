@@ -2,7 +2,7 @@
 
 > **Purpose**: Things that are easy to get wrong or surprising.  
 > **Source of Truth**: Verified technical gotchas, Edge runtime peculiarities, and historical migration artifacts.  
-> **Last Verified**: 2026-09-28
+> **Last Verified**: 2026-10-11
 
 Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragile areas*), dan hal-hal yang wajib dihindari oleh developer maupun AI agent saat memodifikasi codebase ini.
 
@@ -81,4 +81,15 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
   - Mengambil `.split("T")[0]` menghasilkan tanggal H-1 (`"2026-09-14"` bukannya `"2026-09-15"`).
   - Kolom matriks menjadi `"09-14"` dan mencocokkan data presensi tanggal 14 September.
 - **Solusi**: Selalu lakukan iterasi tanggal kalender menggunakan UTC midday (`Date.UTC(y, m - 1, d, 12, 0, 0)`) dengan `getUTCFullYear()`, `getUTCMonth()`, dan `getUTCDate()` agar kebal terhadap pergeseran jam lokal maupun UTC.
+
+---
+
+## 9. Inspeksi Alat Produksi (`src/lib/services/equipmentService.ts`)
+
+- **Gotcha**: Inspeksi yang sudah dikirim (`SUBMITTED`) tidak dapat diubah lagi — edit item checklist dan tambah foto pelaksana hanya diizinkan saat status `OPEN` (409 bila dilanggar). Foto QC sebaliknya HANYA dapat ditambah saat `SUBMITTED`.
+- **Pitfall**: Hapus item template tidak menghapus riwayat (relasi `SetNull`, snapshot `itemNameSnapshot` dipertahankan), tetapi nonaktifkan template/unit diblokir (409) selama masih dipakai unit aktif atau inspeksi berjalan (`OPEN`/`SUBMITTED`).
+- **Gotcha**: Validasi foto bukan sekadar MIME — `saveEquipmentEvidence()`/`saveQcEvidence()` memeriksa magic-byte JPEG (`FF D8 ... FF D9`), sehingga berkas non-kamera (mis. PNG rename `.jpg`) ditolak dengan 400.
+- **Gotcha**: Antrean QC adalah pool tanpa klaim/lock — anggota QC mana pun dapat menekan DONE pada `SUBMITTED` mana pun; QC kedua mendapat 409 karena status sudah `DONE`.
+- **Gotcha**: Keanggotaan QC/topViewer mensyaratkan karyawan internal aktif berhukum akun aktif (outsource selalu ditolak dengan 422), dan daftar QC di-cache 60 detik (`qcMembersCache`) — perubahan via WIG002 butuh hingga 1 menit untuk terlihat.
+- **Gotcha**: Atasan murni (`canTopView === true`, `canReview !== true`) disembunyikan dari menu pekerja dan diarahkan ke `/employee/equipment/overview`; jangan "memperbaiki" ini sebagai bug.
 

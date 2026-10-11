@@ -94,7 +94,7 @@ export default function QualityPolicyModal({ open, onAgree }: QualityPolicyModal
 
                 <section>
                     <h3 className="font-semibold text-[var(--text-primary)] mb-2">
-                        Kebijakan Mutu PT Wijaya Inovasi Gemilang
+                        Kebijakan Mutu dan keamanan pangan PT Wijaya Inovasi Gemilang
                     </h3>
                     <ol className="list-decimal list-outside ml-5 space-y-1.5 text-[var(--text-secondary)]">
                         {WIG_POLICY.map((item, i) => (

@@ -2,9 +2,9 @@
 
 > **Purpose**: Persistent data and schema knowledge.  
 > **Source of Truth**: `prisma/schema.prisma` and live database tables.  
-> **Last Verified**: 2026-09-29
+> **Last Verified**: 2026-10-11
 
-Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, model entitas, relasi antar tabel, dan strategi migrasi. Skema aktual memuat **67 model Prisma** dan **19 enum**; setiap model dipetakan ke tabel fisik.
+Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Prisma, model entitas, relasi antar tabel, dan strategi migrasi. Skema aktual memuat **94 model Prisma** dan **27 enum**; setiap model dipetakan ke tabel fisik.
 
 
 ---
@@ -21,7 +21,7 @@ Dokumen ini mendokumentasikan teknologi penyimpanan, skema basis data MariaDB/Pr
 
 ## 2. Comprehensive Model & Table Catalog
 
-Basis data terdiri dari **87 model Prisma** yang dipetakan ke tabel fisik melalui deklarasi `@@map` pada schema Prisma:
+Basis data terdiri dari **94 model Prisma** yang dipetakan ke tabel fisik melalui deklarasi `@@map` pada schema Prisma:
 
 ### A. Autentikasi & RBAC (7 Model)
 1. `UserAccount` (`user_accounts`): Akun pengguna aplikasi. Kolom penting: `id`, `username`, `email`, `password_hash`, `session_version`, `is_active`, `employee_id`.
@@ -161,6 +161,21 @@ RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; emp
 Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; status diubah sendiri oleh penerima; perpanjang/batalkan oleh pemberi; overdue dihitung, badge kembali normal setelah diperpanjang (riwayat tercatat).
 
 RBAC: tanpa permission baru. Akses meeting = peserta/requester atau WIG002 (`ga.manage`).
+
+## 6. Inspeksi Alat Produksi (2026-10-10)
+
+1. `EquipmentTemplate` 1 ── * `EquipmentTemplateItem` (unik `[templateId, nameNormalized]`; flag `requirePhoto` per item).
+2. `EquipmentTemplate` 1 ── * `EquipmentUnit` (nama unik global; `brand`, `location`; tanpa reviewer per unit).
+3. `EquipmentUnit` 1 ── * `EquipmentAssignment` (`userId` + interval WIB; `unitId` null = global semua unit; internal saja; WIG002 menentukan siapa dapat modul).
+3. `EquipmentUnit` 1 ── * `EquipmentInspection` (`OPEN/SUBMITTED/DONE`; snapshot nama unit; tanpa jadwal — dibuat saat dipakai; kolom QC `checkedByEmployeeId/checkedByNameSnapshot/checkedAt/qcNote`).
+4. `EquipmentInspection` 1 ── * `EquipmentInspectionItem` (snapshot nama + `requirePhoto`; hasil `isPass` null = belum dinilai).
+5. `EquipmentInspection` 1 ── * `EquipmentInspectionEvidence` (`equipment_inspection_evidence`; FK `inspectionId` per inspeksi, bukan per item; maks 5 JPEG, mewakili semua item; gate submit ≥1 bila ada item `requirePhoto`).
+6. `EquipmentInspection` 1 ── * `EquipmentQcEvidence` (`equipment_qc_evidence`; foto QC opsional per inspeksi via `inspectionId`, maks 5; hanya saat `SUBMITTED`).
+7. Config: `AppSetting` `equipment.qcMembers` (pool QC, maks 20, di-set WIG002) + `equipment.topViewers` (maks 5, baca rekap/monitor); limit `upload.equipmentEvidence.maxMb` (default 2, dipakai foto dokumentasi + QC).
+
+Aturan: master + penugasan = WIG002 (hanya karyawan yang ditugaskan yang melihat modul dan boleh checklist; tanpa penugasan = tanpa akses); QC = anggota pool (DONE + catatan/foto opsional, tanpa paraf/tanda tangan); foto wajib ditegakkan di server sebelum submit; menu QC/pantau sesuai peran.
+
+RBAC: tanpa permission baru. Master = WIG002; checklist = karyawan internal aktif; antrean QC = anggota pool `equipment.qcMembers`; rekap/monitor = WIG002 atau `equipment.topViewers`.
 
 ---
 

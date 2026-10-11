@@ -2,7 +2,7 @@
 
 > **Purpose**: Why important architectural decisions were made.  
 > **Source of Truth**: Architectural Decision Records verified via commit history and codebase.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-10-11  
 
 Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Records / ADR) yang dapat dibuktikan dari evidence kode sumber dan riwayat git repository ini.
 
@@ -91,3 +91,51 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 - **Consequences**:
   - Positif: Navigasi lebih jelas, halaman lebih fokus, URL stabil per fungsi, dan boundary pengelolaan GA eksplisit.
   - Negatif: Beberapa halaman perlu memuat data Green Meeting secara mandiri dan komponen navigasi bersama harus dijaga konsisten.
+
+---
+
+## ADR-007: Penyelesaian QC Inspeksi Alat Tanpa Paraf/Tanda Tangan (QC DONE + Snapshot Nama)
+
+- **Decision**: QC menyelesaikan inspeksi dengan satu klik DONE plus catatan opsional; identitas pemeriksa direkam sebagai `checkedByEmployeeId` + `checkedByNameSnapshot` ("Checked by QC - [nama]"), tanpa pasangan reviewer, paraf, atau tanda tangan digital.
+- **Context**: Modul cleaning memakai alur paraf/tanda tangan reviewer. Untuk inspeksi alat produksi yang frekuensinya tinggi dan pemeriksanya berganti-ganti, alur tanda tangan menambah friksi tanpa nilai audit tambahan.
+- **Chosen Approach**: `checkEquipmentDone()` di `src/lib/services/equipmentService.ts` mengubah status `SUBMITTED → DONE`, menulis `checkedByNameSnapshot` dari nama karyawan aktif, dan mencatat audit `QC_DONE_EQUIPMENT_INSPECTION`. Skema tidak memiliki kolom reviewer/paraf/signature untuk equipment.
+- **Alternatives**: Menyalin alur paraf/tanda tangan cleaning (kolom reviewer + `SignaturePad`) ke modul equipment.
+- **Consequences**:
+  - Positif: Satu klik selesai; riwayat tetap dapat diaudit via snapshot nama + `auditLog`.
+  - Negatif: Tidak ada bukti kriptografis/Visual tanda tangan bila suatu saat dipersyaratkan regulasi — perlu ADR baru.
+
+---
+
+## ADR-008: Mode Bebas Inspeksi Alat Tanpa Penugasan + Antrean QC Pool Terbaru-di-Atas
+
+- **Decision**: Karyawan internal aktif mana pun boleh checklist alat aktif mana pun kapan pun (tanpa tabel assignment); semua anggota QC melihat antrean `SUBMITTED` yang sama, diurutkan `submittedAt` menurun.
+- **Context**: Penugasan per alat per orang membutuhkan administrasi roster yang tidak sebanding dengan manfaat untuk inspeksi rutin harian.
+- **Chosen Approach**: `getMyEquipmentUnits()` mengembalikan semua unit aktif; `requireActiveInternalEmployee()` adalah satu-satunya syarat checklist. `getPendingEquipmentApprovals()` tanpa filter per orang, `orderBy: { submittedAt: "desc" }`.
+- **Alternatives**: Tabel assignment unit↔karyawan dengan jadwal, atau antrean QC yang dipartisi per anggota.
+- **Consequences**:
+  - Positif: Nol administrasi penugasan; QC mana pun yang longgar dapat memproses antrean.
+  - Negatif: Duplikasi checklist antar karyawan pada alat yang sama dimungkinkan; tidak ada klaim/lock antrean sehingga dua QC membuka item yang sama (yang kedua mendapat 409 setelah status berubah).
+
+---
+
+## ADR-009: Satu Tempat Upload Foto per Inspeksi (Maks 5, JPEG Kamera) + Foto QC Opsional Terpisah
+
+- **Decision**: Bukti foto inspeksi dikumpulkan di satu panel per inspeksi (maks 5 berkas), bukan per item checklist; foto QC disimpan di tabel dan direktori terpisah (`equipment_qc_evidence`).
+- **Context**: Checklist satu unit berisi banyak item; upload per item memperlambat pelaksana di lapangan dan menduplikasi foto yang sama.
+- **Chosen Approach**: `EQUIPMENT_EVIDENCE_MAX_PHOTOS = 5` dan `EQUIPMENT_QC_EVIDENCE_MAX_PHOTOS = 5` di `src/lib/services/equipmentService.ts`; submit mensyaratkan ≥1 foto bila ada item `requirePhoto`. Validasi magic-byte JPEG menolak berkas non-kamera. Penyimpanan disk lokal `storage/equipment-evidence/` dan `storage/equipment-qc-evidence/`.
+- **Alternatives**: Kolom foto per item inspeksi, atau satu tabel evidence gabungan pelaksana+QC.
+- **Consequences**:
+  - Positif: Alur foto cepat; foto QC tidak tercampur bukti pelaksana dan hanya dapat ditambah saat status `SUBMITTED`.
+  - Negatif: Foto tidak terpetakan ke item spesifik; scaling horizontal butuh shared storage seperti foto kunjungan dinas.
+
+---
+
+## ADR-010: Pantau Atasan (Top Viewer) di Portal Employee via Capabilities `canTopView`, Bukan di Portal GA
+
+- **Decision**: Rekap lintas unit untuk atasan ("Pantau Inspeksi Alat") tinggal di portal employee (`/employee/equipment/overview`), digating oleh `getEmployeeEquipmentCapabilities()` yang mengembalikan `{ canExecute, canReview, canTopView }`; atasan murni (topViewer tanpa peran QC) disembunyikan dari menu pekerja.
+- **Context**: Portal GA hanya berisi master dan rekap operasional (`/ga/equipment/settings`, `/ga/equipment/recap`). Atasan produksi adalah karyawan biasa yang butuh pantauan tanpa hak checklist/QC, sehingga menunya harus mengikuti identitas karyawan, bukan portal GA.
+- **Chosen Approach**: Daftar topViewer (maks 5) dan anggota QC (maks 20) disimpan di `appSetting` (`equipment.topViewers`, `equipment.qcMembers`) dan dikelola WIG002. `AllMenusSheet` menghitung `isTopViewOnly = canTopView === true && canReview !== true` untuk menyembunyikan menu "Inspeksi Alat" pekerja; halaman checklist mengarahkan atasan murni ke Pantau.
+- **Alternatives**: Halaman pantau di portal GA dengan permission baru, atau mengandalkan relasi atasan-bawahan (`managerId`) untuk cakupan pantau.
+- **Consequences**:
+  - Positif: Tanpa permission/role baru — otorisasi memakai `employee.self` + identitas WIG002 + daftar AppSetting yang sudah ada.
+  - Negatif: Cakupan pantau bersifat global (semua unit), bukan per tim/bawahan; perubahan daftar topViewer/QC bergantung pada cache 60 detik (`qcMembersCache`).

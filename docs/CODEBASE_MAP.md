@@ -2,7 +2,7 @@
 
 > **Purpose**: Peta repository dan lokasi implementation penting.  
 > **Source of Truth**: Struktur file dan direktori aktual repository.  
-> **Last Verified**: 2026-09-26
+> **Last Verified**: 2026-10-11
 
 Dokumen ini menyediakan peta mental komprehensif mengenai struktur repository, batas-batas modul, tanggung jawab layer, dan lokasi file implementasi penting bagi AI agent dan pengembang.
 
@@ -29,6 +29,7 @@ hriswig/
 │   ├── components/            # Komponen antarmuka React
 │   │   ├── dashboard/         # Komponen spesifik portal HR & GA
 │   │   ├── employee-form/     # Form multi-step profil dan data karyawan
+│   │   ├── equipment/         # Komponen inspeksi alat produksi (badge, evidence, picker)
 │   │   ├── layout/            # Komponen shell (Sidebar, Navbar, MobileNav)
 │   │   └── ui/                # UI primitives (Radix UI / Tailwind styled)
 │   ├── features/              # Modul fitur khusus yang diisolasi (fitur GA, dsb.)
@@ -91,6 +92,9 @@ hriswig/
   - `src/app/employee/payslips/page.tsx`: Daftar dan unduh slip gaji terenkripsi.
   - `src/app/employee/news/page.tsx`: Papan pengumuman dan berita internal perusahaan dengan detail modal.
   - `src/app/employee/green-meeting/page.tsx`: Pemantauan notulensi rapat, tindak lanjut tugas pribadi/departemen, dan transparansi presensi unit dengan antarmuka mobile-first responsif (zero-leak).
+  - `src/app/employee/equipment/page.tsx`: Daftar unit alat produksi dan entry inspeksi harian karyawan.
+  - `src/app/employee/equipment/overview/`: Ringkasan status inspeksi per unit (`page.tsx` + `overview/[id]/page.tsx`).
+  - `src/app/employee/equipment/approvals/`: Antrean dan detail persetujuan inspeksi (`page.tsx` + `approvals/[id]/page.tsx`).
 
 ### C. Portal General Affairs (`src/app/ga/`)
 - **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat, Green Meeting, dan Inspeksi Harian.
@@ -110,6 +114,9 @@ hriswig/
   - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, akun outsource, penetapan petugas inspeksi, dan daftar atasan tertinggi max 5 (`TopViewerCard` + `GET/POST/DELETE settings/top-viewers`).
   - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
   - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
+  - `src/app/ga/equipment/settings/page.tsx`: Pengaturan template/unit alat produksi, anggota QC, dan top viewers.
+  - `src/app/ga/equipment/recap/page.tsx`: Rekap inspeksi alat produksi.
+  - `src/components/equipment/`: Komponen bersama inspeksi alat (`EquipmentStatusBadge`, `EquipmentSearchField`, `EquipmentEvidencePanel`, `EmployeeSearchPicker`).
 
 ### D. Portal Inspeksi Harian (`src/app/cleaning/`)
 - **Purpose**: Portal operasional terbatas untuk petugas inspeksi.
@@ -134,6 +141,8 @@ hriswig/
   - `src/app/api/cleaning/`: Tiga route handler untuk petugas inspeksi: rooms (GET), checklists (GET/POST), dan checklist-items/[id] (PATCH).
   - `src/app/api/ga/cleaning/`: Dua belas route handler untuk WIG002: master ruangan/template, assignment dan kandidat user, akun outsource, checklist/recap, serta persetujuan bulanan, reopen, reviewer, dan ekspor PDF.
   - `src/app/api/employee/cleaning/`: Dua route handler bagi reviewer employee untuk membaca dan menandatangani persetujuan bulanan.
+  - `src/app/api/employee/equipment/`: Route handler inspeksi alat sisi karyawan: capabilities, units, inspections (+[id], +[id]/submit), items/[itemId], evidence (+[id]), qc-evidence (+[id]), overview, dan approvals (+done).
+  - `src/app/api/ga/equipment/`: Route handler inspeksi alat sisi GA: templates, template-items, units, inspections/[id], evidence (+[id]), qc-members, qc-evidence (+[id]), recap, dan settings/top-viewers.
 
 ---
 
@@ -153,6 +162,7 @@ hriswig/
   - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi per-orang + izin dept + arsip legacy, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap ringan Green Meeting.
   - `cleaningService.ts`: Domain service inspeksi harian: CRUD ruangan/template/item, akun outsource, penetapan petugas, sinkronisasi role CLEANING_WORKER, snapshot checklist harian, perubahan item, dan rekap bulanan.
   - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
+  - `equipmentService.ts`: Domain service inspeksi alat produksi: template/unit, lifecycle inspeksi + submit, evidence foto (operator & QC), anggota QC, top viewers, capabilities, approvals, dan rekap.
 
 ---
 
@@ -164,6 +174,7 @@ hriswig/
   - `prisma/schema.prisma`: Skema canonical untuk MariaDB 10.11 / MySQL.
   - `src/lib/prisma.ts`: Inisialisasi singleton `PrismaClient` dengan manajemen pool koneksi.
   - `prisma/seed.ts` & `prisma/seed-dev.ts`: Script pengisian data master awal (roles, permissions, divisi, departemen, admin).
+  - `prisma/seedEquipment.ts`: Seed non-destruktif template "Inspeksi Alat Produksi" dan unit alat awal (upsert saja, aman dijalankan ulang).
 
 ---
 
@@ -186,5 +197,6 @@ hriswig/
 - **Responsibility**: Menjalankan pengujian endpoint API dan fungsi service bisnis melalui framework Vitest.
 - **Important Files**:
   - `tests/services/`: Unit test service bisnis (overtime, BPJS, PPh 21, timezone).
+  - `tests/services/equipmentService.test.ts`: Unit test service inspeksi alat produksi (mock Prisma).
   - `tests/api/`: Integration test endpoint API yang melakukan HTTP fetch ke server lokal.
   - `tests/utils/apiTestHelper.ts`: Helper autentikasi pengujian dan penyediaan header sesi.

@@ -2,7 +2,7 @@
 
 > **Purpose**: Development, build, test, and deployment procedures.  
 > **Source of Truth**: `package.json` scripts, dev environment, and testing tools.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-10-11  
 
 Dokumen ini memuat panduan langkah demi langkah untuk instalasi, pengembangan lokal, sinkronisasi basis data, testing, build, dan deployment.
 
@@ -55,6 +55,24 @@ Dokumen ini memuat panduan langkah demi langkah untuk instalasi, pengembangan lo
    npm run dev
    ```
    Aplikasi akan berjalan di `http://localhost:3000`.
+
+### Seed Inspeksi Alat Produksi (fitur equipment-inspection)
+
+Branch `feature/equipment-inspection` menambah 7 model (`EquipmentTemplate`, `EquipmentTemplateItem`, `EquipmentUnit`, `EquipmentInspection`, `EquipmentInspectionItem`, `EquipmentInspectionEvidence`, `EquipmentQcEvidence` di `prisma/schema.prisma`). Urutan sinkronisasi lokal yang akurat:
+
+```bash
+npm run db:push
+npx prisma generate
+npx tsx prisma/seedEquipment.ts
+```
+
+- `npm run db:push` = `prisma db push` (terverifikasi di `package.json`); tidak ada script `db:seed:equipment`, jadi seed dipanggil langsung via `npx tsx`.
+- **Guard lokal**: `prisma/seedEquipment.ts` melempar error kecuali `DATABASE_URL` mengandung `hris_local`. Jangan jalankan di production/VPS.
+- **Non-destructive & aman diulang**: hanya `upsert` template `Inspeksi Alat Produksi` (+ 4 item) dan 64 unit berdasarkan nama ternormalisasi dengan `update: {}` — tidak menimpa data yang sudah ada.
+- Urutan `generate` sebelum seed: seed memakai `PrismaClient`, jadi client harus diregenerasi dulu setelah `db:push` menambah model equipment.
+
+> [!NOTE]
+> EPERM saat `generate` (UNKNOWN, requires verification): tidak ada bukti EPERM/`query_engine` di repo maupun riwayat git per 2026-10-11. Bila `npx prisma generate` gagal EPERM di Windows, hentikan dev server/proses Node yang mengunci DLL query engine lalu ulangi — prosedur ini belum terverifikasi di file.
 
 ---
 

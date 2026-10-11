@@ -2,7 +2,7 @@
 
 > **Purpose**: Security architecture and rules.  
 > **Source of Truth**: Authentication, authorization, PII encryption, and security middleware in `src/lib/`.  
-> **Last Verified**: 2026-09-28
+> **Last Verified**: 2026-10-11
 
 Dokumen ini mendokumentasikan mekanisme keamanan, autentikasi, otorisasi, penanganan rahasia (*secrets handling*), dan praktik yang dilarang pada sistem **Presensi & HRIS WIG**.
 
@@ -60,6 +60,14 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
   - Akun outsource dibuat tanpa relasi employee, wajib menggunakan password 8–128 karakter, tidak memperoleh role saat pembuatan, dan hanya dapat didaftarkan atau ditugaskan oleh akun WIG002 yang membuatnya (`createdByUserId`).
   - Penetapan petugas (`CleaningWorkerAssignment`) menjadi satu-satunya sumber role `CLEANING_WORKER`; penambahan/penghapusan role terjadi secara transaksional bersama mutasi assignment. Assignment terjadwal dapat memberikan role lebih awal, tetapi service petugas tetap menolak ruangan sebelum `startsOnWibDate` efektif.
   - `proxy.ts` menduplikasi string literal `"cleaning.execute"` karena berjalan di Edge Runtime dan tidak dapat mengimpor dari modul server.
+- **Boundary Inspeksi Alat (Equipment)**:
+  - Master (template, item template, unit, daftar QC, daftar top viewer) hanya untuk username `WIG002` (`requireWig002`/`isWig002` di `src/lib/services/equipmentService.ts`). Route GA tidak mensyaratkan `employeeId` karena WIG002 belum tentu punya entitas employee; otorisasi penuh di service.
+  - QC pool via setting `equipment.qcMembers` (maks 20, hanya karyawan internal aktif dengan akun aktif; outsource selalu ditolak). Semua anggota QC melihat semua antrean `SUBMITTED`; DONE (`checkEquipmentDone`) mensyaratkan `employeeId` + permission `employee.self` + keanggotaan QC aktif, hanya dari status `SUBMITTED`, tanpa paraf/TTD.
+  - Top viewer via setting `equipment.topViewers` (maks 5, karyawan internal aktif): read-only rekap, master unit, dan bukti foto. Tidak ada hak mutasi.
+  - Baca detail inspeksi/bukti selain WIG002/top viewer mensyaratkan keterlibatan (pemulai, anggota QC) atau status karyawan internal aktif; di luar itu `403`.
+  - Bukti foto JPEG-only: klaim MIME + magic-byte (SOI `FFD8` … EOI `FFD9`), batas ukuran dari setting `upload.equipmentEvidence.maxMb` (pre-check `Content-Length` → `413`), maks 5 foto inspeksi + 5 foto QC, upload hanya saat status `OPEN` (foto QC hanya saat `SUBMITTED`).
+  - Path traversal guard: `path.resolve` + pemeriksaan prefix direktori storage (`storage/equipment-evidence`, `storage/equipment-qc-evidence`); penyajian berkas memakai header `Cache-Control: private, no-store` + `X-Content-Type-Options: nosniff`.
+  - Halaman equipment menumpang guard portal yang ada (`/ga/*`, `/employee/*` di `proxy.ts`); setiap API route tetap menegakkan `requireAuth()` dan otorisasi sendiri.
 
 ---
 

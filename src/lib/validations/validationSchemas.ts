@@ -787,3 +787,79 @@ export const meetingMinutesSchema = z.object({
     changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter.").max(1000),
 });
 
+/* ───────────────────── Equipment Inspection ───────────────────── */
+
+export const equipmentTemplateCreateSchema = z.object({
+    name: z.string().trim().min(1, "Nama template wajib diisi.").max(200),
+});
+
+export const equipmentTemplateUpdateSchema = z.object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1).max(200).optional(),
+    isActive: z.boolean().optional(),
+});
+
+export const equipmentTemplateItemCreateSchema = z.object({
+    templateId: z.string().trim().min(1),
+    name: z.string().trim().min(1, "Nama item wajib diisi.").max(200),
+    requirePhoto: z.boolean().optional(),
+});
+
+export const equipmentTemplateItemUpdateSchema = z.object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1).max(200).optional(),
+    sortOrder: z.number().int().min(0).max(1000).optional(),
+    requirePhoto: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+});
+
+export const equipmentTemplateItemDeleteSchema = z.object({
+    id: z.string().trim().min(1),
+});
+
+export const equipmentUnitCreateSchema = z.object({
+    name: z.string().trim().min(1, "Nama alat wajib diisi.").max(200),
+    brand: z.string().trim().max(200).nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional(),
+    templateId: z.string().trim().min(1),
+});
+
+export const equipmentUnitUpdateSchema = z.object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1).max(200).optional(),
+    brand: z.string().trim().max(200).nullable().optional(),
+    location: z.string().trim().max(200).nullable().optional(),
+    templateId: z.string().trim().min(1).optional(),
+    isActive: z.boolean().optional(),
+});
+
+export const equipmentAssignSchema = z.object({
+    unitId: z.string().trim().min(1).nullable().optional(),
+    employeeId: z.string().trim().min(1).max(100),
+    startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
+    endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
+});
+
+export const equipmentEndAssignSchema = z.object({
+    assignmentId: z.string().trim().min(1),
+    endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
+});
+
+export const equipmentItemUpdateSchema = z.object({
+    isPass: z.boolean(),
+    note: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const equipmentQcDoneSchema = z.object({
+    inspectionId: z.string().trim().min(1),
+    note: z.string().trim().max(1000).nullable().optional(),
+});
+
+export const equipmentQcMembersSchema = z.object({
+    employeeIds: z.array(z.string().trim().min(1).max(100)).max(20),
+});
+
+export const equipmentTopViewersSchema = z.object({
+    employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
+});
+

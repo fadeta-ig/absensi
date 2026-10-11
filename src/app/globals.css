@@ -160,6 +160,17 @@ select {
   outline: none;
 }
 
+/* Fokus keyboard harus selalu terlihat (ganti outline:none di atas). */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 /* ===== Component Layer ===== */
 @layer components {
 

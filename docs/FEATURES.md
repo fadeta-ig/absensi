@@ -2,7 +2,7 @@
 
 > **Purpose**: Pengetahuan kapabilitas, modul fitur, dan batasan fungsional sistem.  
 > **Source of Truth**: Implementasi fitur di layer UI (`src/app/`) dan service bisnis (`src/lib/services/`).  
-> **Last Verified**: 2026-09-29
+> **Last Verified**: 2026-10-11
 
 Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **Presensi & HRIS WIG** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
 
@@ -139,6 +139,7 @@ efektif hari ini beserta sumber roster/fallback.
 - **Pengajuan Cuti**: Pengajuan cuti tahunan, cuti sakit, atau cuti khusus dengan pengurangan kuota saldo cuti tahunan (default 12 hari/tahun).
 - **Permohonan Surat Keterangan**: Pengajuan surat resmi (Surat Keterangan Kerja, Keterangan Penghasilan, Keterangan Masih Bekerja, Surat Pengantar BPJS).
 - **Papan Tugas Personal (Todo List)**: Fitur manajemen tugas harian personal karyawan.
+- **Inspeksi Alat Produksi**: Tanpa jadwal — template + unit + penugasan (WIG002 menentukan siapa dapat modul; tanpa penugasan efektif = tanpa akses, mis. IT/creative tak melihatnya) dan pool QC (maks 20 orang, semua anggota melihat semua antrean) dikelola WIG002; karyawan yang ditugaskan checklist (nilai Baik/Rusak per item, 1 tempat upload foto maks 5 mewakili semua parameter — min 1 hanya bila ada item bertanda wajib foto, submit dengan konfirmasi) → antrean QC (default terlama-menunggu-dulu, bisa dibalik ke terbaru) → QC DONE + catatan/foto QC opsional dengan riwayat checked-by; status hanya Berjalan→Terkirim→Selesai. Pantau topViewer (maks 5 atasan): list + halaman detail tanpa modal; rekap GA terpisah (filter + detail modal). List dengan pencarian + chip status + urut belum-dicek-dulu/A-Z; tombol aksi tinggi sentuh ramah sarung tangan.
 
 ### B. Komunikasi & Otomasi
 - **Papan Berita Perusahaan**: Papan pengumuman informasi internal yang dikelola HR untuk seluruh karyawan.

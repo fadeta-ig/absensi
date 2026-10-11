@@ -23,6 +23,8 @@ import {
     CalendarCheck,
     CalendarClock,
     FileCheck2,
+    Wrench,
+    Eye,
 } from "lucide-react";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { useToast } from "@/components/Toast";
@@ -48,6 +50,12 @@ interface AllMenusSheetProps {
     /** null = belum dimuat → sembunyikan dulu agar tak flash lalu hilang. */
     canReviewCleaning?: boolean | null;
     canTopViewCleaning?: boolean | null;
+    canUseEquipment?: boolean | null;
+    /** Split per-peran inspeksi alat (lebih presisi dari canUseEquipment gabungan). */
+    canExecuteEquipment?: boolean | null;
+    canReviewEquipment?: boolean | null;
+    /** Top Viewer Equipment: pantau + rekap lintas unit (modul alat, bukan cleaning). */
+    canTopViewEquipment?: boolean | null;
 }
 
 export default function AllMenusSheet({
@@ -56,6 +64,10 @@ export default function AllMenusSheet({
     hasSubordinates = false,
     canReviewCleaning = true,
     canTopViewCleaning = true,
+    canUseEquipment = true,
+    canExecuteEquipment,
+    canReviewEquipment,
+    canTopViewEquipment,
 }: AllMenusSheetProps) {
     const router = useRouter();
     const toast = useToast();
@@ -100,6 +112,25 @@ export default function AllMenusSheet({
     }, [onClose, router, toast]);
 
     if (!isOpen) return null;
+
+    // Split per-peran: bila props split tersedia (boolean), pakai itu;
+    // bila null/undefined fallback ke gabungan lama agar tak flash lalu hilang.
+    // Atasan murni (topViewer) tidak dapat menu pekerja — hanya Pantau.
+    const isTopViewOnly =
+        canTopViewEquipment === true &&
+        canReviewEquipment !== true;
+    const showExecuteEquipment =
+        (typeof canExecuteEquipment === "boolean"
+            ? canExecuteEquipment
+            : canUseEquipment !== false && canUseEquipment !== null) && !isTopViewOnly;
+    const showReviewEquipment =
+        typeof canReviewEquipment === "boolean"
+            ? canReviewEquipment
+            : canUseEquipment !== false && canUseEquipment !== null;
+    const showTopViewEquipment =
+        typeof canTopViewEquipment === "boolean"
+            ? canTopViewEquipment
+            : canUseEquipment !== false && canUseEquipment !== null;
 
     const categories: MenuCategory[] = [
         {
@@ -190,6 +221,42 @@ export default function AllMenusSheet({
                     bg: "bg-purple-50 dark:bg-purple-950/40",
                     color: "text-purple-600 dark:text-purple-400",
                 },
+                ...(showExecuteEquipment
+                    ? [
+                          {
+                              href: "/employee/equipment",
+                              label: "Inspeksi Alat",
+                              description: "Periksa kondisi peralatan yang ditugaskan kepada Anda",
+                              icon: Wrench,
+                              bg: "bg-amber-50 dark:bg-amber-950/40",
+                              color: "text-amber-600 dark:text-amber-400",
+                          },
+                      ]
+                    : []),
+                ...(showReviewEquipment
+                    ? [
+                          {
+                              href: "/employee/equipment/approvals",
+                              label: "Pemeriksaan QC Alat",
+                              description: "Periksa hasil produksi dan tandai DONE",
+                              icon: FileCheck2,
+                              bg: "bg-orange-50 dark:bg-orange-950/40",
+                              color: "text-orange-600 dark:text-orange-400",
+                          },
+                      ]
+                    : []),
+                ...(showTopViewEquipment
+                    ? [
+                          {
+                              href: "/employee/equipment/overview",
+                              label: "Pantau Inspeksi Alat",
+                              description: "Rekap kerja inspeksi bawahan per alat, foto, dan progres QC",
+                              icon: Eye,
+                              bg: "bg-cyan-50 dark:bg-cyan-950/40",
+                              color: "text-cyan-600 dark:text-cyan-400",
+                          },
+                      ]
+                    : []),
             ],
         },
         {

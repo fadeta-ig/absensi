@@ -56,6 +56,8 @@ const GA_NAV_ITEMS: NavItem[] = [
             { href: "/ga/cleaning/settings", label: "Pengaturan" },
             { href: "/ga/cleaning/recap", label: "Rekap Bulanan" },
             { href: "/ga/cleaning/approvals", label: "Tanda Tangan Bulanan" },
+            { href: "/ga/equipment/settings", label: "Peralatan" },
+            { href: "/ga/equipment/recap", label: "Rekap Peralatan" },
         ],
     },
 ];

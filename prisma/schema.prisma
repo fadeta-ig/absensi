@@ -82,6 +82,8 @@ model Employee {
   meetingTasksAssigned         MeetingTask[]                      @relation("MeetingTaskAssigner")
   meetingTaskAssignments       MeetingTaskAssignee[]
   meetingTaskExtensionRequests MeetingTaskExtensionRequest[]
+  equipmentInspectionsStarted  EquipmentInspection[] @relation("EquipmentInspectionStartedBy")
+  equipmentInspectionsChecked  EquipmentInspection[] @relation("EquipmentInspectionCheckedBy")
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -133,6 +135,8 @@ model UserAccount {
   cleaningHolidaysCreated    CleaningHoliday[]
   meetingAppointmentsCreated MeetingAppointment[]
   meetingTasksCreated        MeetingTask[]
+  equipmentItemChanges       EquipmentInspectionItem[]
+  equipmentAssignments       EquipmentAssignment[]
   passkeyCredentials       PasskeyCredential[]
   passkeyChallenges        PasskeyChallenge[]
 
@@ -250,6 +254,168 @@ model PushSubscription {
 
   @@index([userId], map: "push_subscriptions_user_id_fkey")
   @@map("push_subscriptions")
+}
+
+// ─── Inspeksi Alat Produksi (dinamis, tanpa jadwal; pelaksana internal) ──
+model EquipmentTemplate {
+  id             String   @id @default(uuid())
+  name           String   @db.VarChar(200)
+  nameNormalized String   @unique(map: "idx_equipment_template_name_unique") @map("name_normalized") @db.VarChar(200)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  items EquipmentTemplateItem[]
+  units EquipmentUnit[]
+
+  @@map("equipment_templates")
+}
+
+model EquipmentTemplateItem {
+  id             String   @id @default(uuid())
+  templateId     String   @map("template_id")
+  name           String   @db.VarChar(200)
+  nameNormalized String   @map("name_normalized") @db.VarChar(200)
+  sortOrder      Int      @default(0) @map("sort_order")
+  requirePhoto   Boolean  @default(true) @map("require_photo")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  template       EquipmentTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inspectionItems EquipmentInspectionItem[]
+
+  @@unique([templateId, nameNormalized], map: "idx_equipment_template_item_unique")
+  @@index([templateId, sortOrder], map: "idx_equipment_template_item_order")
+  @@map("equipment_template_items")
+}
+
+model EquipmentUnit {
+  id             String   @id @default(uuid())
+  name           String   @db.VarChar(200)
+  nameNormalized String   @unique(map: "idx_equipment_unit_name_unique") @map("name_normalized") @db.VarChar(200)
+  brand          String?  @db.VarChar(200)
+  location       String?  @db.VarChar(200)
+  templateId     String   @map("template_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  template    EquipmentTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  assignments EquipmentAssignment[]
+  inspections EquipmentInspection[]
+
+  @@index([templateId], map: "idx_equipment_unit_template")
+  @@index([isActive], map: "idx_equipment_unit_active")
+  @@map("equipment_units")
+}
+
+model EquipmentAssignment {
+  id               String   @id @default(uuid())
+  unitId           String?  @map("unit_id")
+  userId           String   @map("user_id")
+  startsOnWibDate  String   @map("starts_on_wib_date") @db.VarChar(10)
+  endsOnWibDate    String?  @map("ends_on_wib_date") @db.VarChar(10)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  unit EquipmentUnit? @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user UserAccount    @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([unitId], map: "idx_equipment_assignment_unit")
+  @@index([userId], map: "idx_equipment_assignment_user")
+  @@map("equipment_assignments")
+}
+
+enum EquipmentInspectionStatus {
+  OPEN
+  SUBMITTED
+  DONE
+}
+
+model EquipmentInspection {
+  id                    String                    @id @default(uuid())
+  unitId                String                    @map("unit_id")
+  unitNameSnapshot      String                    @map("unit_name_snapshot") @db.VarChar(200)
+  startedByEmployeeId   String                    @map("started_by_employee_id")
+  status                EquipmentInspectionStatus @default(OPEN)
+  submittedAt           DateTime?                 @map("submitted_at")
+  checkedByEmployeeId   String?                   @map("checked_by_employee_id")
+  checkedByNameSnapshot String?                  @map("checked_by_name_snapshot") @db.VarChar(200)
+  checkedAt             DateTime?                 @map("checked_at")
+  qcNote                String?                   @map("qc_note") @db.Text
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+
+  unit      EquipmentUnit           @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  startedBy Employee                @relation("EquipmentInspectionStartedBy", fields: [startedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  checkedBy Employee?               @relation("EquipmentInspectionCheckedBy", fields: [checkedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  items     EquipmentInspectionItem[]
+  evidence  EquipmentInspectionEvidence[]
+  qcEvidence EquipmentQcEvidence[]
+
+  @@index([unitId, status], map: "idx_equipment_inspection_unit_status")
+  @@index([startedByEmployeeId], map: "idx_equipment_inspection_starter")
+  @@index([status, submittedAt], map: "idx_equipment_inspection_status_submitted")
+  @@map("equipment_inspections")
+}
+
+model EquipmentInspectionItem {
+  id                String    @id @default(uuid())
+  inspectionId      String    @map("inspection_id")
+  templateItemId    String?   @map("template_item_id")
+  itemNameSnapshot  String    @map("item_name_snapshot") @db.VarChar(200)
+  sortOrder         Int       @default(0) @map("sort_order")
+  requirePhoto      Boolean   @default(true) @map("require_photo")
+  isActive          Boolean   @default(true) @map("is_active")
+  isPass            Boolean?  @map("is_pass")
+  note              String?   @db.Text
+  lastChangedByUserId String? @map("last_changed_by_user_id")
+  lastChangedAt     DateTime? @map("last_changed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  inspection    EquipmentInspection      @relation(fields: [inspectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  templateItem  EquipmentTemplateItem?   @relation(fields: [templateItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  lastChangedBy UserAccount?             @relation(fields: [lastChangedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([inspectionId, sortOrder], map: "idx_equipment_inspection_item_order")
+  @@map("equipment_inspection_items")
+}
+
+model EquipmentInspectionEvidence {
+  id               String   @id @default(uuid())
+  inspectionId     String   @map("inspection_id")
+  filePath         String   @unique(map: "idx_equipment_evidence_path_unique") @map("file_path") @db.VarChar(500)
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  size             Int      @map("size")
+  sha256           String   @map("sha256") @db.Char(64)
+  capturedAt       DateTime @map("captured_at")
+  uploadedByUserId String?  @map("uploaded_by_user_id")
+  note             String?  @map("note") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  inspection EquipmentInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([inspectionId], map: "idx_equipment_evidence_inspection")
+  @@map("equipment_inspection_evidence")
+}
+
+model EquipmentQcEvidence {
+  id               String   @id @default(uuid())
+  inspectionId     String   @map("inspection_id")
+  filePath         String   @unique(map: "idx_equipment_qc_evidence_path_unique") @map("file_path") @db.VarChar(500)
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  size             Int      @map("size")
+  sha256           String   @map("sha256") @db.Char(64)
+  capturedAt       DateTime @map("captured_at")
+  uploadedByUserId String?  @map("uploaded_by_user_id")
+  note             String?  @map("note") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  inspection EquipmentInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([inspectionId], map: "idx_equipment_qc_evidence_inspection")
+  @@map("equipment_qc_evidence")
 }
 
 // ─── Passkey / WebAuthn (login sidik jari & Face ID) ──

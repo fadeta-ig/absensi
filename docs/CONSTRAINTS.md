@@ -2,7 +2,7 @@
 
 > **Purpose**: What must or must not be done.  
 > **Source of Truth**: Framework constraints, Edge runtime, security policies, and business rules.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-10-11  
 
 Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, keamanan, dan deployment yang terbukti aktif dalam codebase ini.
 
@@ -19,6 +19,7 @@ Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, 
   - Pemaksaan Webpack disebabkan modul `@ducanh2912/next-pwa` dan dependensi native backend seperti `sharp` tidak sepenuhnya kompatibel dengan Turbopack pada Next.js 16.
 - **Penyimpanan Berkas di Disk Lokal**:
   - Berkas foto kunjungan disimpan secara lokal di filesystem server (`storage/visit-photos/`), dan file unggahan umum di `public/uploads/`.
+  - Bukti foto inspeksi alat disimpan di `storage/equipment-evidence/` (pelaksana) dan `storage/equipment-qc-evidence/` (QC), masing-masing maks 5 berkas JPEG per inspeksi.
   - Sistem saat ini belum menggunakan object storage cloud (seperti S3 atau GCS), sehingga arsitektur scaling horizontal multi-instance memerlukan shared NFS atau modifikasi storage driver.
 - **Batasan Ukuran Berkas**:
   - Dokumen BAST disimpan langsung ke database dalam bentuk `MediumBlob` (maksimal 16MB per file).
@@ -61,6 +62,9 @@ Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, 
   - Seluruh payload request yang dikirim melalui `validateBody()` wajib dibersihkan dari tag HTML menggunakan `sanitizeObject()`.
 - **Proteksi Cron Endpoint**:
   - Endpoint di `/api/cron/*` tidak boleh dapat diakses publik tanpa header `Authorization: Bearer <CRON_SECRET>` atau sesi aktif dengan izin `hr.manage`.
+- **Otorisasi Inspeksi Alat Tanpa Permission Baru**:
+  - Modul equipment tidak menambah permission code (`src/lib/permissions.ts` tidak berisi entri equipment). Otorisasi memakai primitif yang sudah ada: `employee.self` untuk karyawan, identitas WIG002 untuk master, dan daftar `appSetting` (`equipment.qcMembers` maks 20, `equipment.topViewers` maks 5) untuk peran QC/pantau.
+  - Jangan menambah permission/role baru untuk equipment tanpa ADR; ikuti pola AppSetting + guard service yang ada.
 
 ---
 

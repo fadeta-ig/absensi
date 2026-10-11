@@ -2,7 +2,7 @@
 
 > **Purpose**: How code is normally written.  
 > **Source of Truth**: Established patterns in `src/` and project styling.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-10-11  
 
 Dokumen ini memuat standar konvensi koding, struktur file, pola error handling, dan pola implementasi yang sudah mapan dalam codebase ini.
 
@@ -110,6 +110,11 @@ export async function POST(request: NextRequest) {
 - **403 Forbidden**: `{ error: "Anda tidak memiliki akses untuk melakukan tindakan ini." }`
 - **500 Internal Server Error**: `{ error: "Terjadi kesalahan pada server. Silakan coba lagi." }` (stack trace dan detail internal dicatat ke Winston, *tidak pernah* dikirim ke browser).
 
+### Pemetaan Domain Error (contoh: `EquipmentError` di `src/lib/services/equipmentService.ts`):
+- Service melempar typed error `new EquipmentError(pesan, statusCode)` untuk kegagalan domain yang boleh dilihat klien (404 data tidak ada, 409 konflik status, 422 prasyarat tidak terpenuhi, 403 otorisasi).
+- Route menangkapnya sebelum fallback: `if (err instanceof EquipmentError) return NextResponse.json({ error: err.message }, { status: err.statusCode });`, lalu `serverErrorResponse()` hanya untuk error tak terduga.
+- Respons sukses memakai envelope `{ success: true, data }`; pembuatan resource memakai status `201` (contoh: `POST .../equipment/evidence`).
+
 ---
 
 ## 4. Established Implementation Patterns
@@ -151,3 +156,11 @@ export async function POST(request: NextRequest) {
    - **Penyimpanan Preferensi Persisten**: Ketika pengguna beralih ke Mode Gelap (*Dark Mode*) melalui tombol `ThemeToggle`, preferensi tersebut otomatis disimpan di `localStorage` peramban dengan kunci `"theme"`.
    - **Pemulihan Otomatis**: Pada kunjungan/muat ulang berikutnya, `next-themes` secara otomatis memulihkan mode gelap yang dipilih pengguna tanpa kedipan (*anti-FOUC* via script inline di `<head>`).
    - **CSS Variables Mapping**: Seluruh komponen antarmuka wajib mengacu pada token variabel CSS di `src/app/globals.css` (`:root` untuk mode terang dan `.dark` untuk mode gelap) dengan konfigurasi Tailwind `darkMode: "class"`.
+
+9. **Standarisasi Komponen Scoped per Domain Dipakai Lintas Portal (contoh: `src/components/equipment/`)**:
+    - Komponen domain (`EquipmentEvidencePanel`, `EmployeeSearchPicker`, `EquipmentStatusBadge`, `EquipmentSearchField`) ditulis sekali dan dipakai ulang oleh portal GA dan employee; dilarang menduplikasi panel/badge per portal.
+    - Styling memakai token CSS (`var(--border)`, `var(--secondary)`, `var(--text-muted)`, atau utilitas `text-muted-foreground`); notifikasi memakai `useToast` dari `@/components/Toast`.
+
+10. **Standarisasi Upload Multipart Bukti Foto (contoh: equipment evidence)**:
+    - Route memakai `parseFormData()` dari `apiGuard.ts`; sebelum body dibaca, `Content-Length` dibandingkan dengan batas dari setting (`upload.equipmentEvidence.maxMb`, toleransi overhead multipart) dan ditolak `413` bila melebihi.
+    - Klaim MIME klien tidak dipercaya: service memvalidasi magic-byte JPEG (SOI `FFD8` … EOI `FFD9`) dan batas ukuran, menyimpan dengan nama acak `randomUUID().jpg` memakai flag `wx`, dan mencatat hash SHA-256.
