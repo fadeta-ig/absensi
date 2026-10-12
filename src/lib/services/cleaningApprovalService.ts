@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { toWIBDateString } from "@/lib/timezone";
 import { PERMISSIONS } from "@/lib/permissions";
-import { isWig002, requireWig002OrTopViewer, monthWibDateRange, CleaningError } from "@/lib/services/cleaningService";
+import { isWig002, requireWig002OrTopViewer, monthWibDateRange, isChecklistItemDecided, CleaningError } from "@/lib/services/cleaningService";
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import crypto from "node:crypto";
@@ -1121,7 +1121,7 @@ export async function getGaApprovalDetail(
         },
         include: {
             items: {
-                select: { isActive: true, isComplete: true },
+                select: { isActive: true, isComplete: true, isUnavailable: true },
             },
         },
     });
@@ -1153,12 +1153,14 @@ export async function getGaApprovalDetail(
         }
         const activeItems = cl.items.filter((i) => i.isActive);
         const completedItems = activeItems.filter((i) => i.isComplete);
-        const status = activeItems.length > 0 && activeItems.length === completedItems.length ? "SELESAI" : "BELUM";
+        const unavailableItems = activeItems.filter((i) => i.isUnavailable === true);
+        const status = activeItems.length > 0 && activeItems.every(isChecklistItemDecided) ? "SELESAI" : "BELUM";
         return {
             date,
             status,
             activeCount: activeItems.length,
             completedCount: completedItems.length,
+            unavailableCount: unavailableItems.length,
         };
     });
 
@@ -1524,7 +1526,7 @@ export async function getEmployeeApprovalDetail(
         },
         include: {
             items: {
-                select: { isActive: true, isComplete: true },
+                select: { isActive: true, isComplete: true, isUnavailable: true },
             },
         },
     });
@@ -1556,12 +1558,14 @@ export async function getEmployeeApprovalDetail(
         }
         const activeItems = cl.items.filter((i) => i.isActive);
         const completedItems = activeItems.filter((i) => i.isComplete);
-        const status = activeItems.length > 0 && activeItems.length === completedItems.length ? "SELESAI" : "BELUM";
+        const unavailableItems = activeItems.filter((i) => i.isUnavailable === true);
+        const status = activeItems.length > 0 && activeItems.every(isChecklistItemDecided) ? "SELESAI" : "BELUM";
         return {
             date,
             status,
             activeCount: activeItems.length,
             completedCount: completedItems.length,
+            unavailableCount: unavailableItems.length,
         };
     });
 
@@ -1696,6 +1700,7 @@ export async function getCleaningPdfExportData(
                     itemNameSnapshot: true,
                     isActive: true,
                     isComplete: true,
+                    isUnavailable: true,
                 },
             },
         },
@@ -1726,8 +1731,9 @@ export async function getCleaningPdfExportData(
             const snapshotItem = cl.items.find(
                 (ci) => ci.templateItemId === item.id
             );
+            const isUnavailable = Boolean(snapshotItem && snapshotItem.isActive && snapshotItem.isUnavailable);
             const isComplete = Boolean(snapshotItem && snapshotItem.isActive && snapshotItem.isComplete);
-            return { day: idx + 1, isComplete, isFuture: false };
+            return { day: idx + 1, isComplete, isFuture: false, isUnavailable };
         });
 
         return {

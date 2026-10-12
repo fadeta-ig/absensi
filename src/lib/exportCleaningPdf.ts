@@ -17,7 +17,7 @@ export interface CleaningPdfExportData {
     items: Array<{ id: string; name: string; sortOrder: number }>;
     matrix: Array<{
         itemName: string;
-        days: Array<{ day: number; isComplete: boolean; isFuture: boolean }>;
+        days: Array<{ day: number; isComplete: boolean; isFuture: boolean; isUnavailable?: boolean }>;
     }>;
     inspectedBy: CleaningPdfSignatureEntry;
     knownBy: CleaningPdfSignatureEntry;
@@ -105,7 +105,7 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
     const headers = ["Tanggal", ...Array.from({ length: data.daysInMonth }, (_, i) => String(i + 1))];
     const body = data.matrix.map((row) => [
         row.itemName,
-        ...row.days.map((d) => (d.isComplete ? "v" : d.isFuture ? "-" : "")),
+        ...row.days.map((d) => (d.isComplete ? "v" : d.isUnavailable ? "TA" : d.isFuture ? "-" : "")),
     ]);
 
     // Calculate dynamic column width
@@ -253,7 +253,8 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
     doc.text("Keterangan:", 10, noteY);
     doc.text("• v = Selesai dibersihkan & disanitasi", 10, noteY + 3.5);
     doc.text("• (kosong) = Belum dikerjakan", 10, noteY + 7);
-    doc.text("• - = Belum jadwal / tanggal mendatang", 10, noteY + 10.5);
+    doc.text("• TA = Tidak ada di ruangan", 10, noteY + 10.5);
+    doc.text("• - = Belum jadwal / tanggal mendatang", 10, noteY + 14);
 
     if (data.latestChange) {
         noteY += 15;

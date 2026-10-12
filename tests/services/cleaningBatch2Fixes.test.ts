@@ -182,7 +182,7 @@ describe("Batch 2 — checklist worker", () => {
         } as never);
         vi.mocked(prisma.cleaningWorkerAssignment.findFirst).mockResolvedValue({ id: "asg-1" } as never);
         vi.mocked(prisma.cleaningRoom.findUnique).mockResolvedValue({ isActive: false } as never);
-        await expect(updateChecklistItem(worker(), "item-1", true)).rejects.toMatchObject({ statusCode: 422 });
+        await expect(updateChecklistItem(worker(), "item-1", { isComplete: true })).rejects.toMatchObject({ statusCode: 422 });
         expect(prisma.cleaningDailyChecklistItem.update).not.toHaveBeenCalled();
     });
 
@@ -202,7 +202,7 @@ describe("Batch 2 — checklist worker", () => {
             { isActive: true, isComplete: true },
         ] as never);
 
-        const result = await updateChecklistItem(worker(), "item-1", true);
+        const result = await updateChecklistItem(worker(), "item-1", { isComplete: true });
         expect(result.derivedStatus).toBe("SELESAI");
         expect(prisma.cleaningDailyChecklistItem.update).not.toHaveBeenCalled();
         expect(prisma.$transaction).not.toHaveBeenCalled();

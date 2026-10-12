@@ -139,3 +139,29 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 - **Consequences**:
   - Positif: Tanpa permission/role baru — otorisasi memakai `employee.self` + identitas WIG002 + daftar AppSetting yang sudah ada.
   - Negatif: Cakupan pantau bersifat global (semua unit), bukan per tim/bawahan; perubahan daftar topViewer/QC bergantung pada cache 60 detik (`qcMembersCache`).
+
+---
+
+## ADR-011: Gate Kebijakan Mutu Tanpa Persistensi + Rencana Logout Harian
+
+- **Decision**: Modal Kebijakan Mutu menghalangi semua jalur login di `/` dan status persetujuannya tidak disimpan di mana pun; setiap login wajib baca ulang. Konsep logout otomatis semua akun tiap 00:00 WIB disetujui pemilik (implementasi menyusul).
+- **Context**: Pemilik mensyaratkan karyawan benar-benar membaca Kebijakan Mutu (MKI + WIG), bukan sekadar mencentang. Di codebase tidak ada flag `localStorage`/persistensi pada modal — itu disengaja, bukan kelalaian.
+- **Chosen Approach**: `QualityPolicyModal` (`src/components/QualityPolicyModal.tsx`) dirender dengan `open={!policyAgreed}` di atas form password dan tombol passkey (`src/app/page.tsx`); `policyAgreed` hanya `useState(false)`. Checkbox aktif hanya setelah `hasReadAll` (scroll bawah, toleransi 24px, termasuk kasus konten muat tanpa scroll). Rencana midnight logout: sesi dengan `iat` sebelum 00:00 WIB hari berjalan dianggap kedaluwarsa di `getActiveSession()` (cek absolut berbasis jam server WIB, bukan jam klien); mass logout saat penerapan diizinkan pemilik.
+- **Alternatives**: Gate sekali-sehari via flag tanggal (`localStorage`/DB) — ditolak pemilik karena melemahkan kewajiban baca. Invalidasi massal via increment `sessionVersion` semua user — ditolak implisit karena beban tulis DB dan hilangnya granularitas (cek waktu tanpa tulis DB sudah cukup).
+- **Consequences**:
+  - Positif: Frekuensi baca berlipat setiap hari; passkey tetap mempermudah autentikasi tanpa memangkas bacaan.
+  - Negatif: Shift 3 malam (23:00–07:00, lintas hari) berpotensi kena tendang tengah shift — butuh keputusan lanjutan (warning + simpan draf vs pengecualian) sebelum implementasi.
+  - Status: konsep disetujui 2026-10-11, belum diimplementasikan — jangan asumsikan logout tengah malam sudah berlaku.
+
+---
+
+## ADR-012: Status "Tidak Ada" per Item Kebersihan per Hari (klaim pekerja, bukan override master)
+
+- **Decision**: Item checklist yang fasilitasnya tidak ada di ruangan ditandai "Tidak Ada" oleh pekerja pada checklist hari berjalan (tri-state Belum/Selesai/Tidak ada), dikeluarkan dari penyebut persen, dan ditampilkan eksplisit ke checker/topViewer.
+- **Context**: Audit `hris_local` 2026-10-12 — Resepsionis memakai `Template Pembersihan Ruangan` (18 item); 8 item (Exhaust, Kipas, AC, Toilet, Teras, Dispenser, Kulkas, Cool Box) tidak ada di ruangan → 55,6% permanen → 0 paraf (gate 100% terkunci). Template spesifik per ruangan ditolak karena tidak skala (36 ruangan → puluhan template, 1 item global = edit puluhan template).
+- **Chosen Approach**: Tombol "Tidak Ada" per item per hari (konfirmasi + dapat dibatalkan sebelum paraf); gate paraf = semua item diputuskan; tiap tanda menyimpan siapa + jam dan masuk audit log (`UPDATE_CLEANING_ITEM`); persen = selesai ÷ (aktif − tidakAda); simbol + legenda baru di matriks rekap/PDF; klaim beruntun N hari dieskalasi sebagai usulan override permanen ke WIG002. Skema: hanya kolom nullable baru, riwayat lama tetap valid.
+- **Alternatives**: Override master per ruangan (ditunda — beban admin WIG002, layak sebagai tahap lanjutan dari data klaim); template klon per ruangan (ditolak — tidak skala); bypass diam-diam agar bisa paraf (ditolak — topViewer bingung melihat angka tidak 100%).
+- **Consequences**:
+  - Positif: Satu template tetap; paraf terbuka dengan angka jujur; klaim lapangan menjadi data master.
+  - Negatif: Risiko klaim asal-asalan → dimitigasi visibilitas (siapa+jam) + audit + eskalasi WIG002; checklist hari berjalan yang sudah telanjur snapshot memakai status baru tanpa regenerasi (kolom default false).
+  - Status: live 2026-10-12 (kolom `is_unavailable`, service + API + 4 UI + PDF + email + kartu usulan; bukti live: Resepsionis 55,6%→100% setelah 8 tanda, dikembalikan).

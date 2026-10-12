@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Eye, Loader2, RefreshCw, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Ban, CalendarDays, CheckCircle2, Clock, Eye, Loader2, RefreshCw, UserCheck, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
@@ -18,7 +18,7 @@ interface DayParaf {
     wibDate: string;
     isFree: boolean;
     holidayDescription: string | null;
-    checklist: { exists: boolean; activeCount: number; completedCount: number; percent: number; isComplete: boolean };
+    checklist: { exists: boolean; activeCount: number; completedCount: number; unavailableCount: number; percent: number; isComplete: boolean };
     reviewers: {
         inspectedByEmployeeId: string;
         inspectedByName: string;
@@ -38,6 +38,7 @@ interface DayChecklist {
             itemNameSnapshot: string;
             isActive: boolean;
             isComplete: boolean;
+            isUnavailable: boolean;
             lastChangedAt: string | null;
             lastChangedBy: { displayName: string } | null;
         }>;
@@ -261,6 +262,7 @@ export default function CleaningOverviewPage() {
     const activeItems =
         activeDetail?.type === "record" ? (activeDetail.checklist?.items.filter((i) => i.isActive) ?? []) : [];
     const activeSelesai = activeItems.filter((i) => i.isComplete).length;
+    const activeTidakAda = activeItems.filter((i) => i.isUnavailable).length;
 
     const visibleRooms = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -411,7 +413,8 @@ export default function CleaningOverviewPage() {
                                 : undefined;
                         const items = detail?.type === "record" ? (detail.checklist?.items.filter((i) => i.isActive) ?? []) : [];
                         const selesaiCount = items.filter((i) => i.isComplete).length;
-                        const kurangCount = items.length - selesaiCount;
+                        const tidakAdaCount = items.filter((i) => i.isUnavailable).length;
+                        const kurangCount = items.length - selesaiCount - tidakAdaCount;
 
                         let statusBadge = "Belum ada data";
                         let badgeClass = "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
@@ -455,7 +458,7 @@ export default function CleaningOverviewPage() {
                                             {day?.isFree
                                                 ? "Hari libur, tidak perlu pemeriksaan."
                                                 : day && detail?.type === "record"
-                                                  ? `${selesaiCount} dari ${items.length} pekerjaan sudah selesai · Pemeriksaan: sudah ${day.parafs.length}, menunggu ${day.missingRoles.length}`
+                                                  ? `${selesaiCount} dari ${items.length - tidakAdaCount} pekerjaan sudah selesai${tidakAdaCount > 0 ? ` · ${tidakAdaCount} tidak ada di ruangan` : ""} · Pemeriksaan: sudah ${day.parafs.length}, menunggu ${day.missingRoles.length}`
                                                   : "Buka rincian untuk melihat daftar pekerjaan dan pemeriksaan."}
                                         </p>
                                     </div>
@@ -582,13 +585,16 @@ export default function CleaningOverviewPage() {
                             </div>
                             <div className="border-t border-[var(--border)] pt-3">
                                 <p className="text-sm font-bold text-[var(--text-primary)] mb-1.5">
-                                    Daftar pekerjaan ({activeSelesai} dari {activeItems.length} selesai)
+                                    Daftar pekerjaan ({activeSelesai} dari {activeItems.length - activeTidakAda} selesai
+                                    {activeTidakAda > 0 ? ` · ${activeTidakAda} tidak ada di ruangan` : ""})
                                 </p>
                                 {activeDetail?.type === "record" && activeItems.length > 0 ? (
                                     <div className="space-y-1.5">
                                         {activeItems.map((item) => (
                                             <div key={item.id} className="flex items-start gap-2 text-xs">
-                                                {item.isComplete ? (
+                                                {item.isUnavailable ? (
+                                                    <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                ) : item.isComplete ? (
                                                     <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                                                 ) : (
                                                     <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -596,11 +602,11 @@ export default function CleaningOverviewPage() {
                                                 <div className="flex-1 min-w-0">
                                                     <p
                                                         className={
-                                                            item.isComplete ? "line-through text-muted-foreground" : "text-foreground"
+                                                            item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
                                                         }
                                                     >
                                                         {item.itemNameSnapshot} —{" "}
-                                                        {item.isComplete ? "sudah dikerjakan" : "belum dikerjakan"}
+                                                        {item.isUnavailable ? "tidak ada di ruangan" : item.isComplete ? "sudah dikerjakan" : "belum dikerjakan"}
                                                     </p>
                                                     <p className="text-muted-foreground">
                                                         {item.lastChangedBy

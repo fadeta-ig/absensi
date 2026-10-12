@@ -1238,7 +1238,12 @@ export async function getChecklist(session: SessionPayload, roomId: string, date
 
 // ─── Petugas: update item completion ──────────────────────────
 
-export async function updateChecklistItem(session: SessionPayload, itemId: string, isComplete: boolean) {
+export interface UpdateChecklistItemPatch {
+    isComplete?: boolean;
+    isUnavailable?: boolean;
+}
+
+export async function updateChecklistItem(session: SessionPayload, itemId: string, patch: UpdateChecklistItemPatch) {
     requireCleaningWorker(session);
     const wibToday = captureWibDate();
 
@@ -1266,8 +1271,22 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
         throw new CleaningError("Ruangan sudah tidak aktif sehingga tidak dapat diubah.", 422);
     }
 
+    const wantComplete = patch.isComplete;
+    const wantUnavailable = patch.isUnavailable;
+    if (wantComplete === undefined && wantUnavailable === undefined) {
+        throw new CleaningError("Tidak ada perubahan yang diminta.", 400);
+    }
+    // Menandai tidak ada sekaligus menyelesaikan = konflik; tandai dulu, selesaikan tidak berlaku.
+    const prevUnavailable = item.isUnavailable ?? false;
+    const prevComplete = item.isComplete ?? false;
+    const nextUnavailable = wantUnavailable ?? prevUnavailable;
+    const nextComplete = wantComplete ?? (wantUnavailable === true ? false : prevComplete);
+    if (nextComplete && nextUnavailable) {
+        throw new CleaningError("Item yang ditandai tidak ada tidak dapat diselesaikan. Batalkan tandanya terlebih dahulu.", 409);
+    }
+
     // Idempoten: nilai sama tidak menyentuh atribusi/audit.
-    if (item.isComplete === isComplete) {
+    if (prevComplete === nextComplete && prevUnavailable === nextUnavailable) {
         const allItems = await prisma.cleaningDailyChecklistItem.findMany({
             where: { checklistId: item.checklistId },
         });
@@ -1281,7 +1300,8 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
         const updated = await tx.cleaningDailyChecklistItem.update({
             where: { id: itemId },
             data: {
-                isComplete,
+                isComplete: nextComplete,
+                isUnavailable: nextUnavailable,
                 lastChangedByUserId: session.userId,
                 lastChangedAt: new Date(),
             },
@@ -1296,7 +1316,8 @@ export async function updateChecklistItem(session: SessionPayload, itemId: strin
 
     await logAction("UPDATE_CLEANING_ITEM", "CLEANING_DAILY_CHECKLIST_ITEM", actorFromSession(session), itemId, {
         checklistId: item.checklistId,
-        isComplete,
+        isComplete: nextComplete,
+        isUnavailable: nextUnavailable,
     });
 
     return {
@@ -1342,7 +1363,7 @@ export async function getRecap(session: SessionPayload, month: string) {
             wibDate: { gte: monthRange.gte, lt: monthRange.lt },
         },
         include: {
-            items: { select: { isActive: true, isComplete: true } },
+            items: { select: { isActive: true, isComplete: true, isUnavailable: true } },
         },
     });
 
@@ -1373,6 +1394,83 @@ export async function getRecap(session: SessionPayload, month: string) {
     }));
 
     return { month, rooms, matrix, dates };
+}
+
+export interface UnavailableCandidate {
+    roomId: string;
+    roomName: string;
+    templateItemId: string | null;
+    itemName: string;
+    /** Jumlah tanggal berbeda dalam sebulan yang ditandai tidak ada. */
+    unavailableDays: number;
+    /** Nama penanda (maks 3) sebagai konteks klaim. */
+    claimedBy: string[];
+}
+
+/**
+ * Usulan kunci permanen untuk WIG002/topViewer: item yang diklaim "tidak ada"
+ * minimal minDays tanggal berbeda dalam sebulan. Read-only, tanpa mutasi —
+ * tindak lanjut manual (nonaktifkan item template / template khusus ruangan).
+ */
+export async function getUnavailableCandidates(
+    session: SessionPayload,
+    month: string,
+    minDays = 5
+): Promise<{ month: string; minDays: number; candidates: UnavailableCandidate[] }> {
+    await requireWig002OrTopViewer(session);
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        throw new CleaningError("Format bulan tidak valid. Gunakan YYYY-MM.", 422);
+    }
+    const threshold = Number.isFinite(minDays) ? Math.min(31, Math.max(2, Math.floor(minDays))) : 5;
+
+    const monthRange = monthWibDateRange(month);
+    const rows = await prisma.cleaningDailyChecklistItem.findMany({
+        where: {
+            isActive: true,
+            isUnavailable: true,
+            checklist: { wibDate: { gte: monthRange.gte, lt: monthRange.lt } },
+        },
+        select: {
+            templateItemId: true,
+            itemNameSnapshot: true,
+            lastChangedBy: { select: { displayName: true } },
+            checklist: {
+                select: {
+                    roomId: true,
+                    wibDate: true,
+                    room: { select: { name: true } },
+                },
+            },
+        },
+    });
+
+    const byKey = new Map<string, { dates: Set<string>; names: Set<string>; row: (typeof rows)[number] }>();
+    for (const r of rows) {
+        const key = `${r.checklist.roomId}__${r.templateItemId ?? r.itemNameSnapshot}`;
+        let entry = byKey.get(key);
+        if (!entry) {
+            entry = { dates: new Set(), names: new Set(), row: r };
+            byKey.set(key, entry);
+        }
+        entry.dates.add(r.checklist.wibDate);
+        const name = r.lastChangedBy?.displayName?.trim();
+        if (name) entry.names.add(name);
+    }
+
+    const candidates: UnavailableCandidate[] = [...byKey.values()]
+        .filter((e) => e.dates.size >= threshold)
+        .map((e) => ({
+            roomId: e.row.checklist.roomId,
+            roomName: e.row.checklist.room.name,
+            templateItemId: e.row.templateItemId,
+            itemName: e.row.itemNameSnapshot,
+            unavailableDays: e.dates.size,
+            claimedBy: [...e.names].slice(0, 3),
+        }))
+        .sort((a, b) => b.unavailableDays - a.unavailableDays || a.roomName.localeCompare(b.roomName));
+
+    return { month, minDays: threshold, candidates };
 }
 
 // ─── WIG002: read checklist detail for any room/date ──────────
@@ -1466,10 +1564,20 @@ async function verifyRoomAssignment(userId: string, roomId: string, wibToday: st
     }
 }
 
-function deriveChecklistStatus(items: { isActive: boolean; isComplete: boolean }[]): "SELESAI" | "BELUM" {
+function deriveChecklistStatus(
+    items: { isActive: boolean; isComplete: boolean; isUnavailable?: boolean | null }[]
+): "SELESAI" | "BELUM" {
     const activeItems = items.filter((i) => i.isActive);
     if (activeItems.length === 0) return "BELUM";
-    return activeItems.every((i) => i.isComplete) ? "SELESAI" : "BELUM";
+    return activeItems.every(isChecklistItemDecided) ? "SELESAI" : "BELUM";
+}
+
+/**
+ * Item dianggap sudah diputuskan bila selesai dikerjakan ATAU ditandai
+ * tidak ada di ruangan. Dipakai paraf, rekap, dan overview agar konsisten.
+ */
+export function isChecklistItemDecided(item: { isComplete: boolean; isUnavailable?: boolean | null }): boolean {
+    return item.isComplete || item.isUnavailable === true;
 }
 
 function getDaysInMonth(month: string): number {

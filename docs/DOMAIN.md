@@ -96,6 +96,20 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - **WIG002**: Satu-satunya peran yang mengelola master (template, item template, unit, anggota QC, topViewer).
 - **Menu gating**: `getEmployeeEquipmentCapabilities` menghasilkan `canExecute` (punya penugasan efektif), `canReview` (anggota QC), `canTopView` (topViewer) untuk menggerbang menu pelaksana / antrean QC / rekap atasan.
 
+### I. Kebijakan Mutu & Kewajiban Baca Tiap Login
+- Setiap kunjungan halaman login (`src/app/page.tsx`) menampilkan `QualityPolicyModal` (`src/components/QualityPolicyModal.tsx`) menutupi form password maupun tombol passkey: modal tidak dapat ditutup (`disableClose`, `closeOnBackdrop={false}`), checkbox persetujuan aktif hanya setelah konten di-scroll hingga bawah (`hasReadAll`), tombol "Lanjut ke Login" aktif hanya setelah checkbox dicentang.
+- Status persetujuan hanya state React sesaat (`useState(false)`); sengaja tanpa `localStorage`/persistensi agar karyawan wajib membaca ulang setiap login — keputusan pemilik perusahaan.
+- Isi: 3 poin Kebijakan Mutu PT Mahakarya Kosmetika Indonesia (Mutu, Kepatuhan, Inovasi Berkelanjutan) + 3 poin PT Wijaya Inovasi Gemilang (Worth Quality, Integrity Compliance, Growth Improvement).
+- Intent pemilik (konsep disetujui 2026-10-11, implementasi menyusul — jangan asumsikan sudah berlaku): semua akun otomatis logout tiap 00:00 WIB agar frekuensi baca berlipat; mass logout saat penerapan diizinkan. Passkey mempermudah autentikasi tetapi tidak memangkas kewajiban baca.
+
+### J. Status "Tidak Ada" pada Item Kebersihan (live 2026-10-12)
+- Latar: template disamaratakan ke semua ruangan, padahal fasilitas tiap ruangan beda. Kasus Resepsionis 2026-10-12 (audit `hris_local`): 8 dari 18 item template tidak ada di ruangan → 55,6% permanen → paraf reviewer terkunci → topViewer bingung.
+- Aturan: pekerja menandai item "Tidak Ada" per checklist harian via tombol (konfirmasi, dapat dibatalkan sebelum paraf). Status tri-state: Belum / Selesai / Tidak ada. Template tidak dipecah per ruangan.
+- Hitungan: persen = selesai ÷ (aktif − tidakAda); paraf terbuka bila semua item sudah diputuskan (selesai ATAU tidakAda). Menyelesaikan item bertanda = 409.
+- Visibilitas: tiap tanda mencatat siapa + jam (reuse `lastChangedBy*`), masuk audit log `UPDATE_CLEANING_ITEM`, tampil eksplisit di modal paraf, badge pantau (`N tidak ada`), matriks rekap, PDF (simbol `TA` + legenda), dan email rekap harian — tidak disembunyikan dari 2 checker maupun topViewer.
+- Lanjutan: `GET /api/ga/cleaning/unavailable-candidates` + kartu usulan di rekap GA — item yang diklaim ≥ minDays hari diusulkan ke WIG002 untuk dikunci permanen (tindak lanjut manual).
+- Batasan: hanya kolom `is_unavailable` default-false; baris riwayat lama tetap valid tanpa migrasi.
+
 ---
 
 ## 2. Important Business Relationships & Cardinality

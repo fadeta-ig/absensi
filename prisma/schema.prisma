@@ -1635,6 +1635,7 @@ model CleaningDailyChecklistItem {
   sortOrder           Int       @default(0) @map("sort_order")
   isActive            Boolean   @default(true) @map("is_active")
   isComplete          Boolean   @default(false) @map("is_complete")
+  isUnavailable       Boolean   @default(false) @map("is_unavailable")
   lastChangedByUserId String?   @map("last_changed_by_user_id")
   lastChangedAt       DateTime? @map("last_changed_at")
   createdAt           DateTime  @default(now()) @map("created_at")

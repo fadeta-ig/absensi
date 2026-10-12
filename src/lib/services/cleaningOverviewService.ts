@@ -71,7 +71,7 @@ export async function getTopViewerOverview(monthWib: string, reviewerEmployeeId?
             select: {
                 roomId: true,
                 wibDate: true,
-                items: { select: { isActive: true, isComplete: true } },
+                items: { select: { isActive: true, isComplete: true, isUnavailable: true } },
             },
         }),
         prisma.cleaningDailyParaf.findMany({
@@ -117,7 +117,7 @@ export async function getTopViewerOverview(monthWib: string, reviewerEmployeeId?
             let selesai = 0;
             for (const cl of roomLists) {
                 const active = cl.items.filter((item) => item.isActive);
-                if (active.length > 0 && active.every((item) => item.isComplete)) selesai += 1;
+                if (active.length > 0 && active.every((item) => item.isComplete || item.isUnavailable === true)) selesai += 1;
             }
             const total = roomLists.length;
             const percent = total === 0 ? 0 : Math.round((selesai / total) * 100);

@@ -140,6 +140,7 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/cleaning/outsource-users` | `GET`, `POST` | WIG002 + `ga.manage` | Membaca akun outsource milik pengelola dan membuat akun tanpa relasi employee; password wajib 8–128 karakter. |
 | `/api/ga/cleaning/checklists` | `GET` | WIG002 + `ga.manage` | Membaca detail checklist inspeksi untuk pemantauan GA. |
 | `/api/ga/cleaning/recap` | `GET` | WIG002 + `ga.manage` | Membaca matriks rekap bulanan per ruangan. |
+| `/api/ga/cleaning/unavailable-candidates` | `GET` | WIG002 / topViewer | Usulan kunci permanen read-only: item yang diklaim tidak ada ≥ minDays hari (`?month=YYYY-MM&minDays=`, default 5, clamp 2–31). |
 | `/api/ga/cleaning/approvals` | `GET`, `POST` | WIG002 + `ga.manage` | Membaca atau menetapkan reviewer persetujuan bulanan. |
 | `/api/ga/cleaning/approvals/reviewers` | `GET` | WIG002 + `ga.manage` | Mencari employee internal yang dapat menjadi reviewer. |
 | `/api/ga/cleaning/approvals/reopen` | `POST` | WIG002 + `ga.manage` | Membuka kembali tanda tangan dengan alasan dan audit trail. |
@@ -149,7 +150,7 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/cleaning/overview` | `GET` | WIG002 / reviewer / topViewer | Baca agregat pantauan semua ruangan (read-only). |
 | `/api/cleaning/rooms` | `GET` | `cleaning.execute` | Daftar ruangan yang efektif untuk petugas pada tanggal WIB hari ini. |
 | `/api/cleaning/checklists` | `GET`, `POST` | `cleaning.execute` | Membaca atau membuat snapshot checklist harian ruangan yang ditugaskan. |
-| `/api/cleaning/checklist-items/[id]` | `PATCH` | `cleaning.execute` | Mengubah status item checklist pada tanggal WIB hari ini. |
+| `/api/cleaning/checklist-items/[id]` | `PATCH` | `cleaning.execute` | Mengubah status item checklist pada tanggal WIB hari ini; tepat satu dari `{isComplete}` / `{isUnavailable}` (tri-state Belum/Selesai/Tidak ada). |
 | `/api/employee/cleaning/approvals` | `GET` | Employee reviewer | Daftar dan detail persetujuan yang ditugaskan kepada employee aktif. |
 | `/api/employee/cleaning/approvals/sign` | `POST` | Employee reviewer | Menandatangani persetujuan untuk role reviewer yang ditetapkan. |
 | `/api/ga/equipment/templates` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Template inspeksi alat + item (flag foto wajib per item). |

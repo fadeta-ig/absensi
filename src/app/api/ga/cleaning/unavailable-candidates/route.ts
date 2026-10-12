@@ -1,0 +1,32 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { getUnavailableCandidates, requireWig002OrTopViewer, CleaningError } from "@/lib/services/cleaningService";
+
+export async function GET(request: NextRequest) {
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    try {
+        await requireWig002OrTopViewer(session);
+    } catch {
+        return forbiddenResponse();
+    }
+
+    try {
+        const { searchParams } = new URL(request.url);
+        const month = searchParams.get("month");
+
+        if (!month) {
+            return NextResponse.json({ error: "Parameter month wajib diisi (YYYY-MM)." }, { status: 400 });
+        }
+        const minDaysRaw = searchParams.get("minDays");
+        const minDays = minDaysRaw === null ? 5 : Number(minDaysRaw);
+
+        const data = await getUnavailableCandidates(session, month, minDays);
+        return NextResponse.json({ success: true, data });
+    } catch (err) {
+        if (err instanceof CleaningError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
+        return serverErrorResponse("GaCleaningUnavailableCandidatesGET", err);
+    }
+}

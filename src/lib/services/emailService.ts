@@ -580,6 +580,7 @@ export interface DailyRecapEmailCleaningLine {
     exists: boolean;
     percent: number;
     complete: boolean;
+    unavailableCount: number;
     parafDone: number;
     parafMissing: number;
 }
@@ -620,10 +621,11 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
             .map((l) => {
                 if (l.isFree) return `- ${l.roomName}: Libur`;
                 if (!l.exists) return `- ${l.roomName}: Belum ada data`;
+                const na = l.unavailableCount > 0 ? `, ${l.unavailableCount} tidak ada di ruangan` : "";
                 const state = l.complete
                     ? (l.parafMissing === 0 ? "Beres, sudah diperiksa" : "Beres, menunggu pemeriksaan")
                     : `Dikerjakan ${l.percent}%`;
-                return `- ${l.roomName}: ${state} (paraf ${l.parafDone}, menunggu ${l.parafMissing})`;
+                return `- ${l.roomName}: ${state}${na} (paraf ${l.parafDone}, menunggu ${l.parafMissing})`;
             })
             .join("\n");
 
@@ -645,10 +647,11 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
             .map((l) => {
                 if (l.isFree) return `<li>${escapeHtml(l.roomName)}: Libur</li>`;
                 if (!l.exists) return `<li>${escapeHtml(l.roomName)}: Belum ada data</li>`;
+                const na = l.unavailableCount > 0 ? `, ${l.unavailableCount} tidak ada di ruangan` : "";
                 const state = l.complete
                     ? (l.parafMissing === 0 ? "Beres, sudah diperiksa" : "Beres, menunggu pemeriksaan")
                     : `Dikerjakan ${l.percent}%`;
-                return `<li>${escapeHtml(l.roomName)}: ${escapeHtml(state)} (paraf ${l.parafDone}, menunggu ${l.parafMissing})</li>`;
+                return `<li>${escapeHtml(l.roomName)}: ${escapeHtml(state)}${escapeHtml(na)} (paraf ${l.parafDone}, menunggu ${l.parafMissing})</li>`;
             })
             .join("")}</ul>`;
 

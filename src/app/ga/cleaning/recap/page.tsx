@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Circle, Clock, FileCheck2, FileDown, PenLine, X, CalendarOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Circle, Clock, FileCheck2, FileDown, PenLine, X, CalendarOff, Ban } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
@@ -47,6 +47,7 @@ interface ChecklistDetail {
             itemNameSnapshot: string;
             isActive: boolean;
             isComplete: boolean;
+            isUnavailable: boolean;
             lastChangedAt: string | null;
             lastChangedBy: { id: string; displayName: string } | null;
         }[];
@@ -75,6 +76,7 @@ interface ParafStatusData {
         exists: boolean;
         activeCount: number;
         completedCount: number;
+        unavailableCount: number;
         percent: number;
         isComplete: boolean;
     };
@@ -97,6 +99,23 @@ interface ParafStatusData {
 
 function roleLabel(role: ParafRole): string {
     return role === "INSPECTED_BY" ? "Diperiksa Oleh" : "Mengetahui";
+}
+
+// "100% (10/10 · 8 tidak ada)" — penyebut = item yang diputuskan (aktif − tidak ada).
+function formatChecklistCount(c: { percent: number; completedCount: number; activeCount: number; unavailableCount?: number }): string {
+    const unavailable = c.unavailableCount ?? 0;
+    const decidable = c.activeCount - unavailable;
+    const na = unavailable > 0 ? ` · ${unavailable} tidak ada` : "";
+    return `${c.percent}% (${c.completedCount}/${decidable}${na})`;
+}
+
+interface UnavailableCandidate {
+    roomId: string;
+    roomName: string;
+    templateItemId: string | null;
+    itemName: string;
+    unavailableDays: number;
+    claimedBy: string[];
 }
 
 function getWibToday(): string {
@@ -162,6 +181,8 @@ export default function CleaningRecapPage() {
     const [paraf, setParaf] = useState<ParafStatusData | null>(null);
     const [parafLoading, setParafLoading] = useState(false);
     const [showParafModal, setShowParafModal] = useState(false);
+    // Usulan kunci permanen: item yang sering diklaim tidak ada bulan ini.
+    const [candidates, setCandidates] = useState<UnavailableCandidate[]>([]);
     const [parafRole, setParafRole] = useState<ParafRole>("INSPECTED_BY");
     const [parafSigning, setParafSigning] = useState(false);
     const [meEmployeeId, setMeEmployeeId] = useState<string | null>(null);
@@ -213,6 +234,18 @@ export default function CleaningRecapPage() {
     }, []);
 
     useEffect(() => { void fetchRecap(month); }, [month, fetchRecap]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setCandidates([]);
+        fetch(`/api/ga/cleaning/unavailable-candidates?month=${month}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json) => {
+                if (!cancelled) setCandidates(json?.data?.candidates ?? []);
+            })
+            .catch(() => undefined);
+        return () => { cancelled = true; };
+    }, [month]);
 
     const fetchParaf = useCallback(async (roomId: string, wibDate: string) => {
         setParafLoading(true);
@@ -360,6 +393,33 @@ export default function CleaningRecapPage() {
                 </div>
             )}
 
+            {candidates.length > 0 && !loading && (
+                <div className="bg-card border border-border rounded-lg p-4 mb-4">
+                    <h2 className="text-sm font-semibold text-foreground mb-1">
+                        Usulan kunci permanen ({candidates.length})
+                    </h2>
+                    <p className="text-xs text-muted-foreground mb-3">
+                        Item yang diklaim tidak ada ≥5 hari bulan ini. Tindak lanjut manual: nonaktifkan item template
+                        bila memang tidak ada di semua ruangan, atau buatkan template khusus ruangan.
+                    </p>
+                    <div className="space-y-1.5">
+                        {candidates.map((c) => (
+                            <div key={`${c.roomId}-${c.templateItemId ?? c.itemName}`} className="flex items-start gap-2 text-xs">
+                                <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-foreground font-medium">
+                                        {c.roomName} — {c.itemName}
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                        {c.unavailableDays} hari tidak ada{c.claimedBy.length > 0 ? ` · oleh ${c.claimedBy.join(", ")}` : ""}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {recap && !loading && (
                 <div className="flex gap-4">
                     {/* Matrix table */}
@@ -461,14 +521,17 @@ export default function CleaningRecapPage() {
                                             <div className="space-y-1.5 mt-2">
                                                 {detail.checklist.items.filter((i) => i.isActive).map((item) => (
                                                     <div key={item.id} className="flex items-start gap-2 text-xs">
-                                                        {item.isComplete ? (
+                                                        {item.isUnavailable ? (
+                                                            <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                        ) : item.isComplete ? (
                                                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                                                         ) : (
                                                             <Circle className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
                                                         )}
                                                         <div className="flex-1 min-w-0">
-                                                            <p className={item.isComplete ? "line-through text-muted-foreground" : "text-foreground"}>
+                                                            <p className={item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"}>
                                                                 {item.itemNameSnapshot}
+                                                                {item.isUnavailable ? " · Tidak ada di ruangan" : ""}
                                                             </p>
                                                             <p className="text-muted-foreground">
                                                                 {item.lastChangedBy
@@ -525,7 +588,7 @@ export default function CleaningRecapPage() {
                                                 ) : (
                                                     <>
                                                         <p className="text-xs text-muted-foreground">
-                                                            Checklist {paraf.checklist.percent}% ({paraf.checklist.completedCount}/{paraf.checklist.activeCount})
+                                                            Checklist {formatChecklistCount(paraf.checklist)}
                                                             {paraf.reviewers
                                                                 ? ` · ${paraf.reviewers.inspectedByName ?? paraf.reviewers.inspectedByEmployeeId} / ${paraf.reviewers.knownByName ?? paraf.reviewers.knownByEmployeeId}`
                                                                 : " · Reviewer belum ditetapkan"}

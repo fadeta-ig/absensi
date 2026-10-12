@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Circle, Loader2, AlertTriangle, RefreshCw, Camera } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, AlertTriangle, RefreshCw, Camera, Ban } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
@@ -20,6 +20,7 @@ interface ChecklistItem {
     sortOrder: number;
     isActive: boolean;
     isComplete: boolean;
+    isUnavailable: boolean;
     lastChangedAt: string | null;
     lastChangedBy: { id: string; displayName: string } | null;
 }
@@ -131,7 +132,7 @@ export default function CleaningPage() {
                     i.id === item.id ? { ...i, isComplete: previousComplete } : i
                 );
                 const activeItems = items.filter((i) => i.isActive);
-                const derivedStatus = activeItems.length > 0 && activeItems.every((i) => i.isComplete) ? "SELESAI" as const : "BELUM" as const;
+                const derivedStatus = activeItems.length > 0 && activeItems.every((i) => i.isComplete || i.isUnavailable) ? "SELESAI" as const : "BELUM" as const;
                 return { ...prev, items, derivedStatus };
             });
         };
@@ -143,7 +144,7 @@ export default function CleaningPage() {
                 i.id === item.id ? { ...i, isComplete: !previousComplete } : i
             );
             const activeItems = items.filter((i) => i.isActive);
-            const derivedStatus = activeItems.length > 0 && activeItems.every((i) => i.isComplete) ? "SELESAI" as const : "BELUM" as const;
+            const derivedStatus = activeItems.length > 0 && activeItems.every((i) => i.isComplete || i.isUnavailable) ? "SELESAI" as const : "BELUM" as const;
             return { ...prev, items, derivedStatus };
         });
 
@@ -175,9 +176,87 @@ export default function CleaningPage() {
         }
     }, [updatingItem, toast]);
 
+    // Tandai/batalkan "tidak ada di ruangan" (PATCH isUnavailable + optimistic + rollback).
+    const doMarkUnavailable = useCallback(async (item: ChecklistItem, unavailable: boolean) => {
+        if (updatingItem) return;
+        setUpdatingItem(item.id);
+        const prev = { isComplete: item.isComplete, isUnavailable: item.isUnavailable };
+
+        const applyState = (list: ChecklistItem[], state: { isComplete: boolean; isUnavailable: boolean }) => {
+            const items = list.map((i) => (i.id === item.id ? { ...i, ...state } : i));
+            const activeItems = items.filter((i) => i.isActive);
+            const derivedStatus = activeItems.length > 0 && activeItems.every((i) => i.isComplete || i.isUnavailable) ? "SELESAI" as const : "BELUM" as const;
+            return { items, derivedStatus };
+        };
+
+        setChecklist((prevChecklist) => {
+            if (!prevChecklist) return prevChecklist;
+            const { items, derivedStatus } = applyState(prevChecklist.items, unavailable ? { isComplete: false, isUnavailable: true } : { isComplete: false, isUnavailable: false });
+            return { ...prevChecklist, items, derivedStatus };
+        });
+
+        try {
+            const res = await fetch(`/api/cleaning/checklist-items/${item.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isUnavailable: unavailable }),
+            });
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan."));
+            }
+            const json = await res.json();
+            setChecklist((prevChecklist) => {
+                if (!prevChecklist) return prevChecklist;
+                const items = prevChecklist.items.map((i) =>
+                    i.id === item.id ? json.data.item : i
+                );
+                return { ...prevChecklist, items, derivedStatus: json.data.derivedStatus };
+            });
+        } catch (err) {
+            setChecklist((prevChecklist) => {
+                if (!prevChecklist) return prevChecklist;
+                const { items, derivedStatus } = applyState(prevChecklist.items, prev);
+                return { ...prevChecklist, items, derivedStatus };
+            });
+            const msg = err instanceof Error ? err.message : "Gagal menyimpan.";
+            toast(msg, "error");
+            reportClientError("CleaningPage", msg, err);
+        } finally {
+            setUpdatingItem(null);
+        }
+    }, [updatingItem, toast]);
+
+    // Wrapper tombol "Tidak ada": hanya untuk item yang belum diputuskan.
+    const markUnavailable = useCallback((item: ChecklistItem) => {
+        if (updatingItem || item.isUnavailable || item.isComplete) return;
+        confirm({
+            title: "Tandai tidak ada di ruangan?",
+            message: `"${item.itemNameSnapshot}" akan dikeluarkan dari hitungan dan terlihat oleh atasan pemeriksa. Lanjut?`,
+            confirmLabel: "Ya, tandai",
+            cancelLabel: "Tidak",
+            variant: "warning",
+            onConfirm: () => {
+                void doMarkUnavailable(item, true);
+            },
+        });
+    }, [updatingItem, confirm, doMarkUnavailable]);
+
     // Wrapper: check langsung, uncheck konfirmasi anti salah-klik (client-only).
     const toggleItem = useCallback(async (item: ChecklistItem) => {
         if (updatingItem) return;
+        if (item.isUnavailable) {
+            confirm({
+                title: "Batalkan tanda tidak ada?",
+                message: `"${item.itemNameSnapshot}" ditandai tidak ada di ruangan. Kembalikan menjadi belum dikerjakan?`,
+                confirmLabel: "Ya, kembalikan",
+                cancelLabel: "Tidak",
+                variant: "warning",
+                onConfirm: () => {
+                    void doMarkUnavailable(item, false);
+                },
+            });
+            return;
+        }
         if (item.isComplete) {
             confirm({
                 title: "Batalkan pekerjaan ini?",
@@ -192,7 +271,7 @@ export default function CleaningPage() {
             return;
         }
         await doToggleItem(item);
-    }, [updatingItem, confirm, doToggleItem]);
+    }, [updatingItem, confirm, doToggleItem, doMarkUnavailable]);
 
     // Back to room list
     const backToRooms = useCallback(() => {
@@ -270,7 +349,9 @@ export default function CleaningPage() {
                             <div key={item.id}>
                                 <div
                                     className={`w-full flex items-start gap-2 p-3 rounded-lg border transition-colors ${
-                                        item.isComplete
+                                        item.isUnavailable
+                                            ? "bg-muted/60 border-dashed border-border"
+                                            : item.isComplete
                                             ? "bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800"
                                             : "bg-card border-border"
                                     } ${updatingItem === item.id ? "opacity-50" : ""}`}
@@ -284,6 +365,8 @@ export default function CleaningPage() {
                                         <div className="mt-0.5 flex-shrink-0">
                                             {updatingItem === item.id ? (
                                                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                            ) : item.isUnavailable ? (
+                                                <Ban className="h-5 w-5 text-muted-foreground" />
                                             ) : item.isComplete ? (
                                                 <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
                                             ) : (
@@ -292,17 +375,34 @@ export default function CleaningPage() {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className={`text-sm font-medium ${
-                                                item.isComplete ? "text-green-800 dark:text-green-300 line-through" : "text-foreground"
+                                                item.isUnavailable
+                                                    ? "text-muted-foreground"
+                                                    : item.isComplete ? "text-green-800 dark:text-green-300 line-through" : "text-foreground"
                                             }`}>
                                                 {item.itemNameSnapshot}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-0.5">
-                                                {item.lastChangedBy
+                                                {item.isUnavailable
+                                                    ? `Tidak ada di ruangan${item.lastChangedBy ? ` · ${item.lastChangedBy.displayName} · ${formatTime(item.lastChangedAt)}` : ""}`
+                                                    : item.lastChangedBy
                                                     ? `${item.lastChangedBy.displayName} · ${formatTime(item.lastChangedAt)}`
                                                     : "Belum dikerjakan"}
                                             </p>
                                         </div>
                                     </button>
+                                    {!item.isUnavailable && !item.isComplete && (
+                                        <button
+                                            type="button"
+                                            onClick={() => markUnavailable(item)}
+                                            disabled={updatingItem === item.id}
+                                            title={`Tandai "${item.itemNameSnapshot}" tidak ada di ruangan`}
+                                            aria-label={`Tandai tidak ada: ${item.itemNameSnapshot}`}
+                                            className="mt-0.5 flex-shrink-0 min-h-[44px] min-w-[44px] inline-flex items-center justify-center gap-1 px-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent"
+                                        >
+                                            <Ban className="h-4 w-4" />
+                                            <span>Tidak ada</span>
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => toggleEvidence(item.id)}

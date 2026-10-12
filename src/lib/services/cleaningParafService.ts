@@ -18,6 +18,8 @@ export interface ParafChecklistSummary {
     exists: boolean;
     activeCount: number;
     completedCount: number;
+    /** Item aktif yang ditandai tidak ada di ruangan (dikeluarkan dari penyebut). */
+    unavailableCount: number;
     percent: number;
     isComplete: boolean;
 }
@@ -229,18 +231,27 @@ function isPrismaUniqueViolation(err: unknown): boolean {
     );
 }
 
-function summarizeChecklist(items: Array<{ isActive: boolean; isComplete: boolean }>): ParafChecklistSummary {
+function summarizeChecklist(
+    items: Array<{ isActive: boolean; isComplete: boolean; isUnavailable?: boolean | null }>
+): ParafChecklistSummary {
     const activeItems = items.filter((item) => item.isActive);
-    const completedItems = activeItems.filter((item) => item.isComplete);
+    const unavailableItems = activeItems.filter((item) => item.isUnavailable === true);
+    const decidableItems = activeItems.filter((item) => item.isUnavailable !== true);
+    const completedItems = decidableItems.filter((item) => item.isComplete);
     const activeCount = activeItems.length;
     const completedCount = completedItems.length;
-    const percent = activeCount === 0 ? 0 : Math.round((completedCount / activeCount) * 100);
+    const unavailableCount = unavailableItems.length;
+    // Tanpa penyebut (semua dikeluarkan) = tidak ada pekerjaan → 100% agar paraf dapat diputuskan reviewer.
+    const percent = decidableItems.length === 0 ? 100 : Math.round((completedCount / decidableItems.length) * 100);
     return {
         exists: true,
         activeCount,
         completedCount,
+        unavailableCount,
         percent,
-        isComplete: activeCount > 0 && activeCount === completedCount,
+        // Tanpa item aktif sama sekali tetap belum selesai (perilaku lama);
+        // semua-aktif-dikeluarkan = sudah diputuskan → boleh paraf.
+        isComplete: activeCount > 0 && decidableItems.every((item) => item.isComplete),
     };
 }
 
@@ -272,12 +283,12 @@ export async function getParafStatus(roomId: string, wibDate: string): Promise<G
 
     const checklist = await prisma.cleaningDailyChecklist.findUnique({
         where: { roomId_wibDate: { roomId, wibDate } },
-        include: { items: { select: { isActive: true, isComplete: true } } },
+        include: { items: { select: { isActive: true, isComplete: true, isUnavailable: true } } },
     });
 
     const checklistSummary: ParafChecklistSummary = checklist
         ? summarizeChecklist(checklist.items)
-        : { exists: false, activeCount: 0, completedCount: 0, percent: 0, isComplete: false };
+        : { exists: false, activeCount: 0, completedCount: 0, unavailableCount: 0, percent: 0, isComplete: false };
 
     const monthWib = wibDate.slice(0, 7);
     const approval = await prisma.cleaningMonthlyApproval.findUnique({
@@ -453,14 +464,17 @@ export async function signDailyParaf(input: SignDailyParafInput): Promise<SignDa
 
             const checklist = await tx.cleaningDailyChecklist.findUnique({
                 where: { roomId_wibDate: { roomId: input.roomId, wibDate: input.wibDate } },
-                include: { items: { select: { isActive: true, isComplete: true } } },
+                include: { items: { select: { isActive: true, isComplete: true, isUnavailable: true } } },
             });
             if (!checklist) {
                 throw new CleaningError("Checklist belum 100% selesai sehingga belum dapat diparaf.", 409);
             }
             const activeItems = checklist.items.filter((item) => item.isActive);
-            const completedItems = activeItems.filter((item) => item.isComplete);
-            if (activeItems.length === 0 || activeItems.length !== completedItems.length) {
+            const decidableItems = activeItems.filter((item) => item.isUnavailable !== true);
+            // Diputuskan = ada item aktif dan semuanya selesai/dikeluarkan.
+            // Semua-dikeluarkan tetap boleh paraf (reviewer melihat klaimnya);
+            // tanpa item aktif sama sekali tetap terkunci (perilaku lama).
+            if (activeItems.length === 0 || !decidableItems.every((item) => item.isComplete)) {
                 throw new CleaningError("Checklist belum 100% selesai sehingga belum dapat diparaf.", 409);
             }
 

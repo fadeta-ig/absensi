@@ -12,6 +12,7 @@ import {
     X,
     PenTool,
     ShieldAlert,
+    Ban,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
@@ -46,6 +47,7 @@ interface DetailTaskModalData {
         status: "SELESAI" | "BELUM" | "FUTURE" | "LIBUR";
         activeCount: number;
         completedCount: number;
+        unavailableCount?: number;
     }>;
     inspectedByEmployeeName: string;
     knownByEmployeeName: string;
@@ -139,6 +141,7 @@ interface DailyParafStatus {
         exists: boolean;
         activeCount: number;
         completedCount: number;
+        unavailableCount: number;
         percent: number;
         isComplete: boolean;
     };
@@ -171,6 +174,7 @@ interface DailyChecklistDetail {
             itemNameSnapshot: string;
             isActive: boolean;
             isComplete: boolean;
+            isUnavailable: boolean;
             lastChangedAt: string | null;
             lastChangedBy: { id: string; displayName: string } | null;
         }[];
@@ -186,6 +190,14 @@ interface DailyChecklistDetail {
 
 function dailyRoleLabel(role: DailyParafRole): string {
     return role === "INSPECTED_BY" ? "Diperiksa Oleh" : "Mengetahui";
+}
+
+// "100% (10/10 · 8 tidak ada)" — penyebut = item yang diputuskan (aktif − tidak ada).
+function formatChecklistCount(c: { percent: number; completedCount: number; activeCount: number; unavailableCount?: number }): string {
+    const unavailable = c.unavailableCount ?? 0;
+    const decidable = c.activeCount - unavailable;
+    const na = unavailable > 0 ? ` · ${unavailable} tidak ada` : "";
+    return `${c.percent}% (${c.completedCount}/${decidable}${na})`;
 }
 
 function reviewerNameFor(paraf: DailyParafStatus, role: DailyParafRole): string {
@@ -598,7 +610,7 @@ function DailyParafSection() {
                                     </div>
                                 </div>
                                 <p className="text-xs text-[var(--text-muted)] mb-2">
-                                    Checklist {p.checklist.percent}% ({p.checklist.completedCount}/{p.checklist.activeCount})
+                                    Checklist {formatChecklistCount(p.checklist)}
                                     {p.reviewers ? ` · Diperiksa oleh ${p.reviewers.inspectedByName ?? p.reviewers.inspectedByEmployeeId}, diketahui ${p.reviewers.knownByName ?? p.reviewers.knownByEmployeeId}` : " · Atasan pemeriksa bulan ini belum ditentukan"}
                                     {myRole ? ` · Tugas Anda: ${dailyRoleLabel(myRole)}` : ""}
                                 </p>
@@ -677,7 +689,7 @@ function DailyParafSection() {
                             </h2>
                             {detailParaf && (
                                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                    Checklist {detailParaf.checklist.percent}% ({detailParaf.checklist.completedCount}/{detailParaf.checklist.activeCount})
+                                    Checklist {formatChecklistCount(detailParaf.checklist)}
                                 </p>
                             )}
                         </div>
@@ -704,14 +716,17 @@ function DailyParafSection() {
                                             .filter((i) => i.isActive)
                                             .map((item) => (
                                                 <div key={item.id} className="flex items-start gap-2 text-xs">
-                                                    {item.isComplete ? (
+                                                    {item.isUnavailable ? (
+                                                        <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                    ) : item.isComplete ? (
                                                         <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                                                     ) : (
                                                         <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
                                                     )}
                                                     <div className="flex-1 min-w-0">
-                                                        <p className={item.isComplete ? "line-through text-muted-foreground" : "text-foreground"}>
+                                                        <p className={item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"}>
                                                             {item.itemNameSnapshot}
+                                                            {item.isUnavailable ? " · Tidak ada di ruangan" : ""}
                                                         </p>
                                                         <p className="text-muted-foreground">
                                                             {item.lastChangedBy
@@ -1303,7 +1318,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                                     ) : (
                                                         <>
                                                             <span className="text-xs text-[var(--text-muted)]">
-                                                                Checklist {dayParaf.checklist.percent}% ({dayParaf.checklist.completedCount}/{dayParaf.checklist.activeCount})
+                                                                Checklist {formatChecklistCount(dayParaf.checklist)}
                                                             </span>
                                                             {dayParaf.parafs.map((s) => (
                                                                 <span
@@ -1332,14 +1347,17 @@ export default function EmployeeCleaningApprovalsPage() {
                                                         .filter((item) => item.isActive)
                                                         .map((item) => (
                                                             <div key={item.id} className="flex items-start gap-2 text-xs">
-                                                                {item.isComplete ? (
+                                                                {item.isUnavailable ? (
+                                                                    <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                                ) : item.isComplete ? (
                                                                     <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                                                                 ) : (
                                                                     <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
                                                                 )}
                                                                 <div className="flex-1 min-w-0">
-                                                                    <p className={item.isComplete ? "line-through text-muted-foreground" : "text-foreground"}>
+                                                                    <p className={item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"}>
                                                                         {item.itemNameSnapshot}
+                                                                        {item.isUnavailable ? " · Tidak ada di ruangan" : ""}
                                                                     </p>
                                                                     <p className="text-muted-foreground">
                                                                         {item.lastChangedBy

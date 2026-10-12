@@ -98,6 +98,7 @@ interface ApprovalDetailData {
         status: "SELESAI" | "BELUM" | "FUTURE" | "LIBUR";
         activeCount: number;
         completedCount: number;
+        unavailableCount?: number;
     }>;
     inspectedBy?: ReviewerInfo;
     knownBy?: ReviewerInfo;
@@ -958,7 +959,7 @@ export default function GaCleaningApprovalsPage() {
                                                                     ? "bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400 border-[var(--border)]"
                                                                     : "bg-[var(--warning-bg)] text-[var(--warning)] border-[var(--warning-border)]"
                                                     }`}
-                                                    title={`${d.date}: ${d.status === "SELESAI" ? "Selesai" : d.status === "FUTURE" ? "Hari depan" : d.status === "LIBUR" ? "Libur (bebas paraf)" : "Belum"} (${d.completedCount}/${d.activeCount} selesai)`}
+                                                    title={`${d.date}: ${d.status === "SELESAI" ? "Selesai" : d.status === "FUTURE" ? "Hari depan" : d.status === "LIBUR" ? "Libur (bebas paraf)" : "Belum"} (${d.completedCount}/${d.activeCount - (d.unavailableCount ?? 0)} selesai${(d.unavailableCount ?? 0) > 0 ? ` · ${d.unavailableCount} tidak ada` : ""})`}
                                                 >
                                                     <span className="font-semibold">{parseInt(d.date.split("-")[2], 10)}</span>
                                                     <span className="text-[8px] font-bold">

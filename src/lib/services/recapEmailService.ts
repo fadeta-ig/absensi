@@ -111,6 +111,7 @@ export interface CleaningRecapLine {
     exists: boolean;
     percent: number;
     complete: boolean;
+    unavailableCount: number;
     parafDone: number;
     parafMissing: number;
 }
@@ -151,6 +152,7 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 exists: st.checklist.exists,
                 percent: st.checklist.percent,
                 complete: st.checklist.isComplete,
+                unavailableCount: st.checklist.unavailableCount,
                 parafDone: st.parafs.length,
                 parafMissing: st.missingRoles.length,
             });

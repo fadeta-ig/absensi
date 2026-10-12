@@ -315,7 +315,7 @@ describe("cleaningService contract", () => {
             checklist: { roomId: CLEANING_IDS.room, wibDate: "2026-09-20" },
         }));
 
-        await expect(updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, true)).rejects.toEqual(
+        await expect(updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, { isComplete: true })).rejects.toEqual(
             expect.objectContaining({ statusCode: 422 }),
         );
         expect(db.cleaningDailyChecklistItem.update).not.toHaveBeenCalled();
@@ -338,11 +338,12 @@ describe("cleaningService contract", () => {
             makeChecklistItem({ isComplete: true }),
         ]);
 
-        const result = await updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, true);
+        const result = await updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, { isComplete: true });
 
         expect(db.cleaningDailyChecklistItem.update).toHaveBeenCalledWith(expect.objectContaining({
             data: {
                 isComplete: true,
+                isUnavailable: false,
                 lastChangedByUserId: CLEANING_IDS.workerUser,
                 lastChangedAt: changedAt,
             },
@@ -356,7 +357,7 @@ describe("cleaningService contract", () => {
             "CLEANING_DAILY_CHECKLIST_ITEM",
             expect.anything(),
             CLEANING_IDS.checklistItem,
-            { checklistId: CLEANING_IDS.checklist, isComplete: true },
+            { checklistId: CLEANING_IDS.checklist, isComplete: true, isUnavailable: false },
         );
     });
 
@@ -376,8 +377,8 @@ describe("cleaningService contract", () => {
         mock(db.cleaningDailyChecklistItem.findMany).mockResolvedValue([makeChecklistItem({ isComplete: false })]);
 
         const [completed, reopened] = await Promise.all([
-            updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, true),
-            updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, false),
+            updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, { isComplete: true }),
+            updateChecklistItem(makeWorkerSession(), CLEANING_IDS.checklistItem, { isComplete: false }),
         ]);
 
         expect(completed.item.isComplete).toBe(true);

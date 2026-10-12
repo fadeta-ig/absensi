@@ -89,6 +89,7 @@ export function makeChecklistItem(overrides: Record<string, unknown> = {}) {
         sortOrder: 1,
         isActive: true,
         isComplete: false,
+        isUnavailable: false,
         lastChangedByUserId: null,
         lastChangedAt: null,
         lastChangedBy: null,
