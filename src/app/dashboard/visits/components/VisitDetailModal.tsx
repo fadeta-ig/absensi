@@ -1,3 +1,4 @@
+import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
 import {
     Building2, CheckCircle, Clock, FileText,
     LogIn, LogOut, MapPin, Navigation, User, X, XCircle
@@ -87,16 +88,16 @@ export function VisitDetailModal({
                         {/* Clock In / Clock Out Times */}
                         <div className="flex items-center gap-4 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
                             <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> {selectedVisit.date}
+                                <Clock className="w-3 h-3" /> {formatDisplayDate(selectedVisit.date)}
                             </span>
                             {selectedVisit.clockInTime && (
                                 <span className="flex items-center gap-1 font-mono text-blue-600 font-bold">
-                                    <LogIn className="w-3 h-3" /> {selectedVisit.clockInTime}
+                                    <LogIn className="w-3 h-3" /> {formatDisplayTime(selectedVisit.clockInTime)}
                                 </span>
                             )}
                             {selectedVisit.clockOutTime && (
                                 <span className="flex items-center gap-1 font-mono text-orange-600 font-bold">
-                                    <LogOut className="w-3 h-3" /> {selectedVisit.clockOutTime}
+                                    <LogOut className="w-3 h-3" /> {formatDisplayTime(selectedVisit.clockOutTime)}
                                 </span>
                             )}
                         </div>

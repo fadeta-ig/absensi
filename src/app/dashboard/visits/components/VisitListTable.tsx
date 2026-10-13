@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
+
 import { useState, useMemo } from "react";
 import { AlertCircle, CheckCircle, Eye, Loader2, XCircle, LogIn, LogOut, CheckSquare, Square, FileSpreadsheet, Check } from "lucide-react";
 import { VisitReport, STATUS_CONFIG } from "../types";
@@ -246,18 +248,18 @@ export function VisitListTable({
                                         <td className="hidden md:table-cell text-xs text-[var(--text-secondary)] max-w-[200px]">
                                             <p className="line-clamp-2">{v.purpose}</p>
                                         </td>
-                                        <td className="hidden lg:table-cell text-xs">{v.date}</td>
+                                        <td className="hidden lg:table-cell text-xs">{formatDisplayDate(v.date)}</td>
                                         <td className="hidden lg:table-cell text-xs font-mono">
                                             {v.clockInTime ? (
                                                 <span className="flex items-center gap-1 text-blue-600">
-                                                    <LogIn className="w-3 h-3" /> {v.clockInTime}
+                                                    <LogIn className="w-3 h-3" /> {formatDisplayTime(v.clockInTime)}
                                                 </span>
                                             ) : "-"}
                                         </td>
                                         <td className="hidden lg:table-cell text-xs font-mono">
                                             {v.clockOutTime ? (
                                                 <span className="flex items-center gap-1 text-orange-600">
-                                                    <LogOut className="w-3 h-3" /> {v.clockOutTime}
+                                                    <LogOut className="w-3 h-3" /> {formatDisplayTime(v.clockOutTime)}
                                                 </span>
                                             ) : "-"}
                                         </td>

@@ -61,6 +61,33 @@ export function formatIndonesianDate(d: Date | string | null | undefined): strin
     });
 }
 
+/** Human-readable date for UI only; API/storage date keys remain unchanged. */
+export function formatDisplayDate(value: Date | string | null | undefined): string {
+    if (!value) return "-";
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return "-";
+    return formatWIBDateTime(date, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Accept both serialized instants and already formatted legacy clock values. */
+export function formatDisplayTime(value: Date | string | null | undefined): string {
+    if (typeof value === "string" && /^(?:[01]\d|2[0-3])\.[0-5]\d(?:\.[0-5]\d)?$/.test(value)) {
+        return value.slice(0, 5).replace(".", ":");
+    }
+    if (typeof value === "string" && /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?$/.test(value)) {
+        return value.slice(0, 5);
+    }
+    return toTimeString(value);
+}
+
+/** UI timestamp with explicit WIB, never a raw ISO fallback. */
+export function formatDisplayDateTime(value: Date | string | null | undefined): string {
+    if (!value) return "-";
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return "-";
+    return `${formatDisplayDate(date)}, ${toTimeString(date)} WIB`;
+}
+
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters
   const phi1 = (lat1 * Math.PI) / 180;

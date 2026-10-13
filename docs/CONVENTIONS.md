@@ -119,6 +119,8 @@ export async function POST(request: NextRequest) {
 
 ## 4. Established Implementation Patterns
 
+- **Tanggal/jam di UI**: gunakan `formatDisplayDate`, `formatDisplayTime`, atau `formatDisplayDateTime` dari `@/lib/utils` untuk tampilan tanggal Indonesia dan jam WIB. `formatDisplayTime` menerima instant ISO maupun jam legacy `HH:mm`; timestamp tampil dengan label WIB. Helper transport/storage (`toISOOrNull`, date-key) tetap dipertahankan. Jangan mencetak instant ISO mentah ke antarmuka pengguna.
+
 1. **Pemisahan Antara Akun Pengguna (`UserAccount`) dan Profil Pegawai (`Employee`)**:
    - Akun admin dapat berdiri sendiri di `UserAccount` tanpa keharusan memiliki entitas `Employee`.
    - Pegawai memiliki relasi 1-ke-1 opsional dengan `UserAccount` untuk login portal mandiri.

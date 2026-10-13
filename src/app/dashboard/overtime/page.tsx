@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
+
 import { useEffect, useState, useMemo, useRef, Suspense } from "react";
 import {
     AlertCircle, Clock4, Search, CheckCircle, XCircle,
@@ -192,7 +194,7 @@ function DashboardOvertimeContent() {
             employeeId: r.employeeId,
             name: r.employee?.name || r.employeeId,
             date: r.date,
-            time: `${r.startTime} - ${r.endTime}`,
+            time: `${formatDisplayTime(r.startTime)} - ${formatDisplayTime(r.endTime)}`,
             hours: r.hours,
             approvedHours: r.approvedHours ?? r.hours,
             isHoliday: r.isHoliday ? "Hari Libur" : "Hari Kerja",
@@ -538,8 +540,8 @@ function DashboardOvertimeContent() {
                                                     <span className="font-mono text-[10px] text-[var(--text-muted)]">{r.employeeId}</span>
                                                 </div>
                                             </td>
-                                            <td className="text-xs font-medium">{r.date}</td>
-                                            <td className="hidden md:table-cell text-xs font-mono text-blue-600">{r.startTime} — {r.endTime}</td>
+                                            <td className="text-xs font-medium">{formatDisplayDate(r.date)}</td>
+                                            <td className="hidden md:table-cell text-xs font-mono text-blue-600">{formatDisplayTime(r.startTime)} — {formatDisplayTime(r.endTime)}</td>
                                             <td className="hidden md:table-cell text-xs text-center font-bold text-[var(--text-primary)]">
                                                 <span className="px-2 py-0.5 rounded-full bg-[var(--secondary)]">
                                                     {Number(r.hours.toFixed(2))}h
@@ -667,11 +669,11 @@ function DashboardOvertimeContent() {
                             <div className="grid grid-cols-2 gap-3 text-xs">
                                 <div>
                                     <span className="text-[var(--text-muted)]">Tanggal</span>
-                                    <p className="font-semibold">{selectedReq.date}</p>
+                                    <p className="font-semibold">{formatDisplayDate(selectedReq.date)}</p>
                                 </div>
                                 <div>
                                     <span className="text-[var(--text-muted)]">Jam</span>
-                                    <p className="font-semibold">{selectedReq.startTime} — {selectedReq.endTime}</p>
+                                    <p className="font-semibold">{formatDisplayTime(selectedReq.startTime)} — {formatDisplayTime(selectedReq.endTime)}</p>
                                 </div>
                                 <div>
                                     <span className="text-[var(--text-muted)]">Durasi Diajukan</span>

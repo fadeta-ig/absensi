@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
+
 import {
     X, Clock, FileText, Navigation, MapPin, CheckCircle,
     AlertCircle, Building2, LogIn, LogOut, ArrowRight
@@ -50,7 +52,7 @@ function TimelineStep({
             </span>
             {time && (
                 <span className="text-[10px] font-mono text-[var(--text-muted)] ml-auto">
-                    {time}
+                    {formatDisplayTime(time)}
                 </span>
             )}
         </div>
@@ -95,7 +97,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                                 {visit.clientName}
                             </h3>
                             <p className="text-sm text-[var(--text-muted)] mt-1 flex items-center gap-1">
-                                <Clock className="w-4 h-4" /> {visit.date}
+                                <Clock className="w-4 h-4" /> {formatDisplayDate(visit.date)}
                             </p>
                         </div>
                         <span className={`badge ${statusConfig.class} text-xs px-2.5 py-1.5`}>
@@ -143,7 +145,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                                         <LogIn className="w-3 h-3" /> Clock In
                                     </p>
                                     <p className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                                        {visit.clockInTime || "-"}
+                                        {formatDisplayTime(visit.clockInTime || "-")}
                                     </p>
                                 </div>
                                 <div className="text-[var(--text-muted)] flex justify-center">
@@ -154,7 +156,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                                         <LogOut className="w-3 h-3" /> Clock Out
                                     </p>
                                     <p className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                                        {visit.clockOutTime || "-"}
+                                        {formatDisplayTime(visit.clockOutTime || "-")}
                                     </p>
                                 </div>
                             </div>

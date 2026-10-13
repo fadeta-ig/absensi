@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
+
 import { useState, useEffect } from "react";
 import {
     Clock4, Plus, Loader2, CheckCircle, AlertCircle, X,
@@ -174,11 +176,11 @@ export default function EmployeeOvertimePage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <Calendar className="w-4 h-4 text-[var(--primary)] shrink-0" />
-                                            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{req.date}</h3>
+                                            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{formatDisplayDate(req.date)}</h3>
                                         </div>
                                         <p className="text-xs text-[var(--text-muted)] mb-1">
                                             <Clock className="w-3 h-3 inline mr-1" />
-                                            {req.startTime} — {req.endTime} ({req.hours} jam)
+                                            {formatDisplayTime(req.startTime)} — {formatDisplayTime(req.endTime)} ({req.hours} jam)
                                         </p>
                                         <p className="text-xs text-[var(--text-secondary)] line-clamp-2">
                                             <FileText className="w-3 h-3 inline mr-1" />{req.reason}

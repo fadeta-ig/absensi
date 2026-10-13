@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayTime } from "@/lib/utils";
+
 import { useState, useCallback } from "react";
 import { X, Loader2, LogOut } from "lucide-react";
 import { VisitPhotoDraft, VisitReport } from "@/types";
@@ -103,7 +105,7 @@ export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps
 
                 {visit.clockInTime && (
                     <FeedbackMessage variant="info" compact>
-                        Clock In: {visit.clockInTime}
+                        Clock In: {formatDisplayTime(visit.clockInTime)}
                     </FeedbackMessage>
                 )}
 

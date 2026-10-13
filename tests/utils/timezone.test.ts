@@ -10,9 +10,26 @@ import {
     toWIBISOString,
     wibDateTimeToDate,
 } from "@/lib/timezone";
-import { formatIndonesianDate, toDateDisplay, toDateString, toTimeString } from "@/lib/utils";
+import { formatDisplayDate, formatDisplayDateTime, formatDisplayTime, formatIndonesianDate, toDateDisplay, toDateString, toTimeString } from "@/lib/utils";
 
 describe("WIB timezone helpers", () => {
+    it("displays ISO instants as readable WIB dates/times without changing transport helpers", () => {
+        expect(formatDisplayTime("2026-10-02T10:03:26.704Z")).toBe("17:03");
+        expect(formatDisplayDate("2026-10-02")).toBe("2 Okt 2026");
+        expect(formatDisplayDateTime("2026-10-02T18:30:00Z")).toBe("3 Okt 2026, 01:30 WIB");
+        expect(formatDisplayTime("08:03")).toBe("08:03");
+        expect(formatDisplayTime("08:03:26.704")).toBe("08:03");
+        expect(formatDisplayTime("08.03.26")).toBe("08:03");
+    });
+
+    it("never leaks raw invalid timestamps as display fallbacks", () => {
+        for (const value of [null, undefined, "", "invalid-time"]) {
+            expect(formatDisplayDate(value)).toBe("-");
+            expect(formatDisplayTime(value)).toBe("-");
+            expect(formatDisplayDateTime(value)).toBe("-");
+        }
+    });
+
     it("validates YYYY-MM-DD calendar dates strictly", () => {
         expect(isValidCalendarDate("2024-02-29")).toBe(true);
         expect(isValidCalendarDate("2026-02-29")).toBe(false);

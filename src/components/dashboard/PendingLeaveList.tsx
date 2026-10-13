@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayDate } from "@/lib/utils";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarOff, ArrowRight } from "lucide-react";
@@ -52,7 +54,7 @@ export default function PendingLeaveList({ leaves, getEmployeeName }: PendingLea
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-[var(--text-primary)]">{getEmployeeName(l.employeeId)}</p>
-                                            <p className="text-[10px] text-[var(--text-muted)]">{l.type} • {l.startDate} — {l.endDate}</p>
+                                            <p className="text-[10px] text-[var(--text-muted)]">{l.type} • {formatDisplayDate(l.startDate)} — {formatDisplayDate(l.endDate)}</p>
                                         </div>
                                     </div>
                                     <span className="badge badge-warning">Pending</span>

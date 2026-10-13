@@ -1,5 +1,7 @@
 "use client";
 
+import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
+
 import { Building2, Navigation, Clock, LogIn, LogOut, Trash2, ArrowRight } from "lucide-react";
 import { VisitReport } from "@/types";
 import { VISIT_STATUS_CONFIG } from "../visitTypes";
@@ -36,7 +38,7 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
                         </span>
                         <span className="flex items-center gap-1 shrink-0">
                             <Clock className="w-3 h-3 shrink-0" />
-                            {visit.date}
+                            {formatDisplayDate(visit.date)}
                         </span>
                     </div>
                 </div>
@@ -47,12 +49,12 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
                 <div className="flex items-center gap-3 mb-3 text-xs">
                     {visit.clockInTime && (
                         <span className="flex items-center gap-1 font-mono text-blue-600 font-semibold">
-                            <LogIn className="w-3 h-3" /> {visit.clockInTime}
+                            <LogIn className="w-3 h-3" /> {formatDisplayTime(visit.clockInTime)}
                         </span>
                     )}
                     {visit.clockOutTime && (
                         <span className="flex items-center gap-1 font-mono text-orange-600 font-semibold">
-                            <LogOut className="w-3 h-3" /> {visit.clockOutTime}
+                            <LogOut className="w-3 h-3" /> {formatDisplayTime(visit.clockOutTime)}
                         </span>
                     )}
                 </div>
