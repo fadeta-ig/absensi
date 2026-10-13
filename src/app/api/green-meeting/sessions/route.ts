@@ -53,17 +53,17 @@ export async function GET(request: NextRequest) {
                 offDayInfo,
             });
         }
-        const scopedAttendances = (meetingSession.attendances as Array<{
-            employeeId: string | null; departmentId: string | null; divisionId?: string | null;
-        }>).filter(
-            (a) =>
-                (session.employeeId && a.employeeId === session.employeeId) ||
-                (session.departmentId && a.departmentId === session.departmentId)
-        );
-        const scopedNotes = (meetingSession.notes as Array<{
-            isAllTarget: boolean;
-            targets: Array<{ targetType: string; departmentId?: string | null; divisionId?: string | null; employeeId?: string | null }>;
-        }>).filter((n) => {
+        // Presensi bersifat transparan read-only: seluruh peserta sesi ditampilkan ke karyawan.
+        // Hanya notulensi (notes) yang disaring berdasarkan sasaran penerima.
+        const sessionWithRelations = meetingSession as unknown as {
+            attendances: Array<unknown>;
+            notes: Array<{
+                isAllTarget: boolean;
+                targets: Array<{ targetType: string; departmentId?: string | null; divisionId?: string | null; employeeId?: string | null }>;
+            }>;
+        };
+        const scopedAttendances = sessionWithRelations.attendances;
+        const scopedNotes = sessionWithRelations.notes.filter((n) => {
             if (n.isAllTarget) return true;
             if (!n.targets || n.targets.length === 0) return false;
             return n.targets.some(

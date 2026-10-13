@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     CheckCircle2,
     XCircle,
@@ -8,6 +8,8 @@ import {
     Check,
     X,
     Search,
+    Loader2,
+    UserPlus,
 } from "lucide-react";
 import {
     Table,
@@ -85,6 +87,20 @@ export default function AttendanceTab({
 
     const [quickQuery, setQuickQuery] = useState("");
     const [quickMarkingId, setQuickMarkingId] = useState<string | null>(null);
+    const [isQuickOpen, setIsQuickOpen] = useState(false);
+    const quickSearchRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (quickSearchRef.current && !quickSearchRef.current.contains(event.target as Node)) {
+                setIsQuickOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
 
     const fetchQuickEmployees = useCallback(async (q: string, signal: AbortSignal): Promise<EmployeeHit[]> => {
         const list = await fetchGreenMeetingEmployees(q, signal);
@@ -102,6 +118,7 @@ export default function AttendanceTab({
         try {
             await onQuickMark(hit.employeeId);
             setQuickQuery("");
+            setIsQuickOpen(false);
         } finally {
             setQuickMarkingId(null);
         }
@@ -227,7 +244,7 @@ export default function AttendanceTab({
     return (
         <div className="space-y-4">
             {/* Top Action Bar */}
-            <div className="flex flex-col gap-3 bg-card p-4 rounded-xl border border-border">
+            <div className="flex flex-col gap-3 bg-white dark:bg-[#15151C] p-4 rounded-xl border border-[var(--border)] shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
                         <button
@@ -271,67 +288,119 @@ export default function AttendanceTab({
                         <span>{markingAll ? "Memproses..." : "Tandai Semua Hadir"}</span>
                     </button>
                 </div>
-                <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Cari nama atau departemen…"
-                        className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                </div>
-                <div className="relative">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1.5">
-                        <Search size={13} className="text-muted-foreground" />
-                        Cari nama langsung dari HR — departemen otomatis terisi
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-[var(--border)]/60">
+                    {/* Kolom 1: Saring tabel presensi yang aktif */}
                     <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            type="text"
-                            value={quickQuery}
-                            onChange={(e) => setQuickQuery(e.target.value)}
-                            placeholder="Ketik nama karyawan, pilih, langsung hadir…"
-                            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-primary/40 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                    </div>
-                    {(quickSearching || quickResults.length > 0) && quickQuery.trim().length >= 2 && (
-                        <div className="absolute z-20 mt-1 w-full bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-                            {quickSearching && quickResults.length === 0 && (
-                                <p className="px-3 py-2 text-xs text-muted-foreground">Mencari…</p>
+                        <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1.5">
+                            <Search size={13} className="text-muted-foreground" />
+                            <span>Saring daftar kehadiran sesi ini</span>
+                        </label>
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Cari nama atau departemen…"
+                                className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-[var(--border)] bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch("")}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                                    title="Hapus pencarian"
+                                >
+                                    <X size={13} />
+                                </button>
                             )}
-                            {!quickSearching && quickResults.length === 0 && (
-                                <p className="px-3 py-2 text-xs text-muted-foreground">Tidak ketemu di data HR.</p>
-                            )}
-                            {quickResults.map((hit) => {
-                                const already = personRows.some((r) => r.employeeId === hit.employeeId && r.status === "HADIR");
-                                return (
-                                    <button
-                                        key={hit.employeeId}
-                                        type="button"
-                                        disabled={quickMarkingId !== null}
-                                        onClick={() => void handleQuickPick(hit)}
-                                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-accent/60 transition-colors disabled:opacity-50"
-                                    >
-                                        <span className="min-w-0">
-                                            <span className="block text-xs font-bold text-foreground truncate">{hit.name}</span>
-                                            <span className="block text-[11px] text-muted-foreground truncate">
-                                                {hit.department}
-                                            </span>
-                                        </span>
-                                        <span className="shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">
-                                            {quickMarkingId === hit.employeeId
-                                                ? "Menyimpan…"
-                                                : already
-                                                    ? "Sudah hadir"
-                                                    : "Hadirkan"}
-                                        </span>
-                                    </button>
-                                );
-                            })}
                         </div>
-                    )}
+                    </div>
+
+                    {/* Kolom 2: Pencarian cepat dari Master HR */}
+                    <div ref={quickSearchRef} className="relative z-30">
+                        <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1.5">
+                            <UserPlus size={13} className="text-primary" />
+                            <span>Cari & Hadirkan dari Master HR</span>
+                        </label>
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                                type="text"
+                                value={quickQuery}
+                                onChange={(e) => {
+                                    setQuickQuery(e.target.value);
+                                    setIsQuickOpen(true);
+                                }}
+                                onFocus={() => setIsQuickOpen(true)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Escape") setIsQuickOpen(false);
+                                }}
+                                placeholder="Ketik nama karyawan HR, langsung hadirkan…"
+                                className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-primary/40 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            {quickSearching ? (
+                                <Loader2 size={14} className="animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            ) : quickQuery ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setQuickQuery("");
+                                        setIsQuickOpen(false);
+                                    }}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                                    title="Bersihkan"
+                                >
+                                    <X size={13} />
+                                </button>
+                            ) : null}
+                        </div>
+
+                        {/* Dropdown Hasil Pencarian Autocomplete Solid & Terisolasi */}
+                        {isQuickOpen && (quickSearching || quickResults.length > 0) && quickQuery.trim().length >= 2 && (
+                            <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white dark:bg-[#15151C] border border-[var(--border)] rounded-xl shadow-2xl overflow-y-auto max-h-72 divide-y divide-[var(--border)]/60">
+                                {quickSearching && quickResults.length === 0 && (
+                                    <div className="p-3.5 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                                        <Loader2 size={13} className="animate-spin text-primary" />
+                                        <span>Mencari di data HR…</span>
+                                    </div>
+                                )}
+                                {!quickSearching && quickResults.length === 0 && (
+                                    <p className="px-3.5 py-3 text-xs text-muted-foreground text-center">
+                                        Tidak ditemukan di data master HR.
+                                    </p>
+                                )}
+                                {quickResults.map((hit) => {
+                                    const already = personRows.some((r) => r.employeeId === hit.employeeId && r.status === "HADIR");
+                                    return (
+                                        <button
+                                            key={hit.employeeId}
+                                            type="button"
+                                            disabled={quickMarkingId !== null}
+                                            onClick={() => void handleQuickPick(hit)}
+                                            className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-left bg-white dark:bg-[#15151C] hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block text-xs font-bold text-foreground truncate">{hit.name}</span>
+                                                <span className="block text-[11px] text-muted-foreground truncate">
+                                                    {hit.department || "Tanpa Departemen"}
+                                                </span>
+                                            </span>
+                                            <span className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full text-white transition-colors ${
+                                                already ? "bg-zinc-500" : "bg-emerald-600 hover:bg-emerald-700 shadow-2xs"
+                                            }`}>
+                                                {quickMarkingId === hit.employeeId
+                                                    ? "Menyimpan…"
+                                                    : already
+                                                        ? "Sudah hadir"
+                                                        : "Hadirkan"}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -373,7 +442,7 @@ export default function AttendanceTab({
 
             {/* Strip departemen: filter + aksi per dept (logika terwakili jalan di belakang) */}
             {groups.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 bg-card p-3 rounded-xl border border-border">
+                <div className="flex flex-wrap items-center gap-1.5 bg-white dark:bg-[#15151C] p-3 rounded-xl border border-[var(--border)] shadow-xs">
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase mr-1">Dept:</span>
                     <button
                         type="button"
@@ -451,7 +520,7 @@ export default function AttendanceTab({
             )}
 
             {/* Attendance Table: daftar nama langsung */}
-            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-white dark:bg-[#15151C] border border-[var(--border)] rounded-xl overflow-hidden shadow-sm">
                 <Table>
                     <TableHeader>
                         <TableRow>
