@@ -98,18 +98,18 @@ export const UPLOAD_LIMIT_META: Record<UploadLimitKey, { label: string; descript
  * `app_settings` belum memiliki baris untuk kunci tersebut atau DB gagal dibaca.
  */
 export const DEFAULT_UPLOAD_LIMITS_MB: Record<UploadLimitKey, number> = {
-    "upload.selfie.maxMb": 2,
-    "upload.visitPhoto.maxMb": 2,
+    "upload.selfie.maxMb": 10,
+    "upload.visitPhoto.maxMb": 10,
     "upload.news.maxMb": 10,
     "upload.document.maxMb": 10,
-    "upload.leaveAttachment.maxMb": 2,
+    "upload.leaveAttachment.maxMb": 10,
     "upload.bast.maxMb": 5,
-    "upload.correction.maxMb": 2,
+    "upload.correction.maxMb": 10,
     "upload.import.maxMb": 10,
-    "upload.avatar.maxMb": 2,
+    "upload.avatar.maxMb": 10,
     "upload.signature.maxMb": 0.25,
-    "upload.cleaningEvidence.maxMb": 2,
-    "upload.equipmentEvidence.maxMb": 2,
+    "upload.cleaningEvidence.maxMb": 10,
+    "upload.equipmentEvidence.maxMb": 10,
 };
 
 /** Pola libur mingguan cleaning (CSV day-of-week 0=Min..6=Sab, dinamis via setting). */

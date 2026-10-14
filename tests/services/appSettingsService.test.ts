@@ -171,12 +171,12 @@ describe("appSettingsService", () => {
     });
 
     describe("Tahap 1: kunci cleaning evidence (mock-murni, tanpa tulis hris_local)", () => {
-        it("upload.cleaningEvidence.maxMb terdaftar dengan default 2 MB", async () => {
+        it("upload.cleaningEvidence.maxMb terdaftar dengan default 10 MB", async () => {
             expect(isUploadLimitKey("upload.cleaningEvidence.maxMb")).toBe(true);
-            expect(DEFAULT_UPLOAD_LIMITS_MB["upload.cleaningEvidence.maxMb"]).toBe(2);
+            expect(DEFAULT_UPLOAD_LIMITS_MB["upload.cleaningEvidence.maxMb"]).toBe(10);
 
             findUnique().mockResolvedValue(null);
-            expect(await getUploadLimit("upload.cleaningEvidence.maxMb")).toBe(2);
+            expect(await getUploadLimit("upload.cleaningEvidence.maxMb")).toBe(10);
         });
 
         it("getAllUploadLimits memuat kunci evidence baru beserta sumbernya", async () => {
