@@ -65,6 +65,7 @@ function LeaveManagementContent() {
     const [editStartDate, setEditStartDate] = useState("");
     const [editEndDate, setEditEndDate] = useState("");
     const [isUpdating, setIsUpdating] = useState(false);
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
@@ -193,18 +194,16 @@ function LeaveManagementContent() {
         setIsModalOpen(true);
     };
 
-    const handleQuickAction = async (l: LeaveRequest, status: string) => {
-        setIsUpdating(true);
+    const doQuickAction = async (l: LeaveRequest, status: string) => {
+        if (updatingId) return;
+        setUpdatingId(l.id);
         try {
+            // Approve/reject murni by ID: tanggal tidak dikirim ulang agar
+            // tak terjegal validasi format (GET ISO vs PUT YYYY-MM-DD).
             const res = await fetch("/api/leave", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    id: l.id,
-                    status,
-                    startDate: l.startDate,
-                    endDate: l.endDate,
-                }),
+                body: JSON.stringify({ id: l.id, status }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui status cuti."));
             await fetchLeaves();
@@ -213,8 +212,26 @@ function LeaveManagementContent() {
             reportClientError("LeaveManagementPage", "Gagal memperbarui status cuti dari quick action", error, { leaveId: l.id, status });
             toast(error instanceof Error ? error.message : "Gagal memperbarui status cuti.", "error");
         } finally {
-            setIsUpdating(false);
+            setUpdatingId(null);
         }
+    };
+
+    const handleQuickAction = (l: LeaveRequest, status: string) => {
+        if (updatingId) return;
+        if (status === "rejected") {
+            confirm({
+                title: "Tolak Cuti?",
+                message: `Pengajuan ${l.employee?.name || l.employeeId} (${formatIndonesianDate(l.startDate)} s/d ${formatIndonesianDate(l.endDate)}) akan ditolak.`,
+                confirmLabel: "Ya, Tolak",
+                cancelLabel: "Batal",
+                variant: "danger",
+                onConfirm: () => {
+                    void doQuickAction(l, status);
+                },
+            });
+            return;
+        }
+        void doQuickAction(l, status);
     };
 
     const handleUpdate = async (id: string, status: string) => {
@@ -268,12 +285,7 @@ function LeaveManagementContent() {
                             const res = await fetch("/api/leave", {
                                 method: "PUT",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    id: item.id,
-                                    status,
-                                    startDate: item.startDate,
-                                    endDate: item.endDate,
-                                }),
+                                body: JSON.stringify({ id: item.id, status }),
                             });
                             if (res.ok) {
                                 succeededIds.push(item.id);
@@ -706,22 +718,32 @@ function LeaveManagementContent() {
                                                 <div className="flex items-center justify-end gap-1">
                                                     {l.status === "pending" && (
                                                         <>
-                                                            <button
-                                                                onClick={() => handleQuickAction(l, "approved")}
-                                                                disabled={isUpdating}
-                                                                className="btn btn-ghost btn-sm !p-1.5 text-emerald-600 hover:!bg-emerald-50"
-                                                                title="Setujui Cuti"
-                                                            >
-                                                                <Check className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleQuickAction(l, "rejected")}
-                                                                disabled={isUpdating}
-                                                                className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:!bg-red-50"
-                                                                title="Tolak Cuti"
-                                                            >
-                                                                <X className="w-3.5 h-3.5" />
-                                                            </button>
+                                                            {(() => {
+                                                                const busy = updatingId === l.id;
+                                                                const quotaHabis = remainingQuota !== null && remainingQuota <= 0;
+                                                                return (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => handleQuickAction(l, "approved")}
+                                                                            disabled={busy || quotaHabis}
+                                                                            className="btn btn-ghost btn-sm !p-1.5 text-emerald-600 hover:!bg-emerald-50 disabled:opacity-40 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
+                                                                            title={quotaHabis ? "Kuota habis — buka detail untuk persetujuan sebagian" : "Setujui Cuti"}
+                                                                            aria-label={`Setujui cuti ${l.employee?.name || l.employeeId}`}
+                                                                        >
+                                                                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleQuickAction(l, "rejected")}
+                                                                            disabled={busy}
+                                                                            className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:!bg-red-50 disabled:opacity-40 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
+                                                                            title="Tolak Cuti"
+                                                                            aria-label={`Tolak cuti ${l.employee?.name || l.employeeId}`}
+                                                                        >
+                                                                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                                                                        </button>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </>
                                                     )}
                                                     <button
