@@ -102,6 +102,7 @@ export interface EquipmentRecapLine {
     status: string;
     createdAt: Date;
     submittedAt: Date | null;
+    checkedAt: Date | null;
     checkerName: string | null;
 }
 
@@ -114,6 +115,9 @@ export interface CleaningRecapLine {
     unavailableCount: number;
     parafDone: number;
     parafMissing: number;
+    doneParafs: { name: string; signedAt: Date }[];
+    pendingNames: string[];
+    pendingItems: string[];
 }
 
 /** Rekap peralatan 1 hari WIB (batas createdAt, pola getEquipmentRecap). */
@@ -130,6 +134,7 @@ export async function getDailyEquipmentRecap(wibDate: string) {
         status: row.status,
         createdAt: row.createdAt,
         submittedAt: row.submittedAt,
+        checkedAt: row.checkedAt,
         checkerName: row.checkedBy ? stripGelar(row.checkedBy.name) : (row.checkedByNameSnapshot ? stripGelar(row.checkedByNameSnapshot) : null),
     }));
     return { summary: data.summary, lines };
@@ -146,6 +151,36 @@ export async function getDailyCleaningRecap(wibDate: string) {
     for (const room of rooms) {
         try {
             const st = await getParafStatus(room.id, wibDate);
+            const doneParafs = (st.parafs ?? [])
+                .map((p) => ({ name: stripGelar(p.signerName ?? p.signerEmployeeId ?? ""), signedAt: p.signedAt }))
+                .filter((p) => p.name.length > 0);
+            const pendingNames = (st.missingRoles ?? [])
+                .map((role) => {
+                    const raw =
+                        role === "INSPECTED_BY"
+                            ? (st.reviewers?.inspectedByName ?? "")
+                            : (st.reviewers?.knownByName ?? "");
+                    return stripGelar(raw);
+                })
+                .filter((n) => n.length > 0);
+            // Item aktif yang belum selesai & tidak dikecualikan (untuk kolom "Belum dibersihkan").
+            let pendingItems: string[] = [];
+            try {
+                const checklist = await prisma.cleaningDailyChecklist.findUnique({
+                    where: { roomId_wibDate: { roomId: room.id, wibDate } },
+                    select: {
+                        items: {
+                            select: { itemNameSnapshot: true, sortOrder: true, isActive: true, isComplete: true, isUnavailable: true },
+                            orderBy: { sortOrder: "asc" },
+                        },
+                    },
+                });
+                pendingItems = (checklist?.items ?? [])
+                    .filter((it) => it.isActive && !it.isComplete && !it.isUnavailable)
+                    .map((it) => it.itemNameSnapshot);
+            } catch {
+                pendingItems = [];
+            }
             lines.push({
                 roomName: st.roomName,
                 isFree: st.isFree,
@@ -155,6 +190,9 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 unavailableCount: st.checklist.unavailableCount,
                 parafDone: st.parafs.length,
                 parafMissing: st.missingRoles.length,
+                doneParafs,
+                pendingNames,
+                pendingItems,
             });
         } catch (err) {
             logger.warn("rekap cleaning per ruangan dilewati", { roomId: room.id, wibDate, err });

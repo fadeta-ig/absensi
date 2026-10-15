@@ -571,6 +571,7 @@ export interface DailyRecapEmailEquipmentLine {
     starterName: string;
     status: string;
     submittedAt: Date | null;
+    checkedAt: Date | null;
     checkerName: string | null;
 }
 
@@ -583,6 +584,9 @@ export interface DailyRecapEmailCleaningLine {
     unavailableCount: number;
     parafDone: number;
     parafMissing: number;
+    doneParafs: { name: string; signedAt: Date }[];
+    pendingNames: string[];
+    pendingItems: string[];
 }
 
 export interface DailyRecapEmailInput {
@@ -597,6 +601,61 @@ function escapeHtml(value: string): string {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function formatShortWib(value: Date | string): string {
+    const d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).formatToParts(d);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    const hm = `${get("hour")}.${get("minute")}`;
+    return `${get("day")} ${get("month")} ${hm}`;
+}
+
+/**
+ * Daftar bernomor: ["1. Nama (14 Okt 09.20)", "2. Nama (14 Okt 10.05)"].
+ * Tanpa label peran (Diperiksa/Mengetahui) — itu hanya di PDF/dashboard.
+ */
+function numberedParafList(l: DailyRecapEmailCleaningLine): string[] {
+    return l.doneParafs
+        .map((p) => {
+            const t = formatShortWib(p.signedAt);
+            return t ? `${p.name} (${t})` : p.name;
+        })
+        .filter(Boolean)
+        .map((s, i) => `${i + 1}. ${s}`);
+}
+
+function numberedItemList(items: string[]): string[] {
+    return items.filter(Boolean).map((s, i) => `${i + 1}. ${s}`);
+}
+
+/**
+ * Kalimat paraf per ruangan: nama tanpa gelar + jam WIB.
+ */
+function cleaningParafSentence(l: DailyRecapEmailCleaningLine): string {
+    const done = numberedParafList(l);
+    const pending = l.pendingNames.filter(Boolean);
+    const bits: string[] = [];
+    if (done.length > 0) bits.push(`Sudah paraf: ${done.join("; ")}.`);
+    if (pending.length > 0) bits.push(`Belum paraf: ${pending.join(", ")}.`);
+    else if (l.parafMissing > 0 && done.length === 0) bits.push(`Belum paraf.`);
+    const items = numberedItemList(l.pendingItems);
+    if (items.length > 0) bits.push(`Belum dibersihkan: ${items.join("; ")}.`);
+    return bits.join(" ");
+}
+
+function cleaningLineState(l: DailyRecapEmailCleaningLine): string {
+    if (l.isFree) return "Libur";
+    if (!l.exists) return "Pembersihan Belum Selesai (belum ada laporan)";
+    return l.complete ? "Pembersihan Selesai" : "Pembersihan Belum Selesai";
+}
+
 /**
  * Rekap harian gabungan (alat + kebersihan) untuk Top Reviewer SAJA.
  * Sengaja dibuat MINIMAL (tanpa gambar, tanpa lampiran, tanpa CSS berat,
@@ -608,52 +667,102 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         logger.warn("[Email] SMTP belum dikonfigurasi, rekap harian dilewati.");
         return false;
     }
-    const eqStatusLabel: Record<string, string> = { OPEN: "Berjalan", SUBMITTED: "Terkirim", DONE: "Selesai" };
+    // Peralatan: hanya yang sudah diajukan ke QC (SUBMITTED/DONE).
+    // OPEN (masih dikerjakan foreman) tidak ditampilkan di email.
+    const eqStatusLabel: Record<string, string> = { SUBMITTED: "Menunggu Inspeksi", DONE: "Sudah Inspeksi" };
+    const eq = input.equipment.lines.filter((l) => l.status === "SUBMITTED" || l.status === "DONE");
+    const eqWaiting = eq.filter((l) => l.status === "SUBMITTED");
+    const eqDone = eq.filter((l) => l.status === "DONE");
 
-    const eqLinesText = input.equipment.lines.length === 0
-        ? "Tidak ada inspeksi alat."
-        : input.equipment.lines
-            .map((l) => `- ${l.unitName} — ${l.starterName} (${eqStatusLabel[l.status] ?? l.status})${l.checkerName ? `, QC: ${l.checkerName}` : ""}`)
-            .join("\n");
-    const clLinesText = input.cleaning.lines.length === 0
+    function eqSubmitter(l: DailyRecapEmailEquipmentLine): string {
+        const t = l.submittedAt ? formatShortWib(l.submittedAt) : "";
+        return t ? `${l.starterName} (${t})` : l.starterName;
+    }
+
+    function eqChecker(l: DailyRecapEmailEquipmentLine): string {
+        if (l.status !== "DONE" || !l.checkerName) return "—";
+        const t = l.checkedAt ? formatShortWib(l.checkedAt) : "";
+        return t ? `${l.checkerName} (${t})` : l.checkerName;
+    }
+
+    const eqSummaryText =
+        eq.length === 0
+            ? "Tidak ada alat yang diajukan ke QC."
+            : `Ringkasan: ${eqWaiting.length} Menunggu Inspeksi, ${eqDone.length} Sudah Inspeksi.`;
+    const eqLinesText = eq
+        .map((l, i) => `${i + 1}. ${l.unitName} — ${eqStatusLabel[l.status] ?? l.status}. Diajukan oleh: ${eqSubmitter(l)}. Inspeksi QC oleh: ${eqChecker(l)}.`)
+        .join("\n");
+
+    const eqSummaryHtml =
+        eq.length === 0
+            ? "<p>Tidak ada alat yang diajukan ke QC.</p>"
+            : `<p><strong>Ringkasan:</strong> ${eqWaiting.length} Menunggu Inspeksi, ` +
+              `${eqDone.length} Sudah Inspeksi.</p>`;
+    const eqLinesHtml = eq.length === 0
+        ? ""
+        : `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;">` +
+          `<thead><tr>` +
+          `<th style="text-align:left;">No</th>` +
+          `<th style="text-align:left;">Alat</th>` +
+          `<th style="text-align:left;">Diajukan oleh</th>` +
+          `<th style="text-align:left;">Status</th>` +
+          `<th style="text-align:left;">Inspeksi QC oleh</th>` +
+          `</tr></thead><tbody>${eq
+              .map((l, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(l.unitName)}</td><td>${escapeHtml(eqSubmitter(l))}</td><td>${escapeHtml(eqStatusLabel[l.status] ?? l.status)}</td><td>${escapeHtml(eqChecker(l))}</td></tr>`)
+              .join("")}</tbody></table>`;
+    const cl = input.cleaning.lines;
+    const clDone = cl.filter((l) => !l.isFree && l.exists && l.complete);
+    const clTodo = cl.filter((l) => !l.isFree && (!l.exists || !l.complete));
+    const clParafFull = clDone.filter((l) => l.parafMissing === 0);
+    const clSummaryText =
+        cl.length === 0
+            ? "Tidak ada ruangan."
+            : `Ringkasan: ${clDone.length} Pembersihan Selesai, ${clTodo.length} Belum Selesai (total ${cl.length} ruang). Paraf lengkap ${clParafFull.length} ruang.`;
+    const clLinesText = cl.length === 0
         ? "Tidak ada ruangan."
-        : input.cleaning.lines
-            .map((l) => {
-                if (l.isFree) return `- ${l.roomName}: Libur`;
-                if (!l.exists) return `- ${l.roomName}: Belum ada data`;
-                const na = l.unavailableCount > 0 ? `, ${l.unavailableCount} tidak ada di ruangan` : "";
-                const state = l.complete
-                    ? (l.parafMissing === 0 ? "Beres, sudah diperiksa" : "Beres, menunggu pemeriksaan")
-                    : `Dikerjakan ${l.percent}%`;
-                return `- ${l.roomName}: ${state}${na} (paraf ${l.parafDone}, menunggu ${l.parafMissing})`;
+        : cl
+            .map((l, i) => {
+                const paraf = cleaningParafSentence(l);
+                return `${i + 1}. ${l.roomName} — ${cleaningLineState(l)}.${paraf ? ` ${paraf}` : ""}`;
             })
             .join("\n");
 
     const text =
         `Rekap Harian Inspeksi — ${input.dateLabel}\n` +
-        `\nPeralatan: ${input.equipment.open} berjalan, ${input.equipment.submitted} terkirim, ${input.equipment.done} selesai (total ${input.equipment.total}).\n` +
-        `${eqLinesText}\n` +
-        `\nKebersihan:\n${clLinesText}\n` +
+        `\nPeralatan: ${eqSummaryText}\n${eqLinesText}\n` +
+        `\nKebersihan: ${clSummaryText}\n${clLinesText}\n` +
         `\nEmail otomatis Sistem HRIS PT Wijaya Inovasi Gemilang.`;
-
-    const eqLinesHtml = input.equipment.lines.length === 0
-        ? "<p>Tidak ada inspeksi alat.</p>"
-        : `<ul>${input.equipment.lines
-            .map((l) => `<li>${escapeHtml(l.unitName)} — ${escapeHtml(l.starterName)} (${escapeHtml(eqStatusLabel[l.status] ?? l.status)})${l.checkerName ? `, QC: ${escapeHtml(l.checkerName)}` : ""}</li>`)
-            .join("")}</ul>`;
-    const clLinesHtml = input.cleaning.lines.length === 0
-        ? "<p>Tidak ada ruangan.</p>"
-        : `<ul>${input.cleaning.lines
-            .map((l) => {
-                if (l.isFree) return `<li>${escapeHtml(l.roomName)}: Libur</li>`;
-                if (!l.exists) return `<li>${escapeHtml(l.roomName)}: Belum ada data</li>`;
-                const na = l.unavailableCount > 0 ? `, ${l.unavailableCount} tidak ada di ruangan` : "";
-                const state = l.complete
-                    ? (l.parafMissing === 0 ? "Beres, sudah diperiksa" : "Beres, menunggu pemeriksaan")
-                    : `Dikerjakan ${l.percent}%`;
-                return `<li>${escapeHtml(l.roomName)}: ${escapeHtml(state)}${escapeHtml(na)} (paraf ${l.parafDone}, menunggu ${l.parafMissing})</li>`;
-            })
-            .join("")}</ul>`;
+    const clSummaryHtml =
+        cl.length === 0
+            ? "<p>Tidak ada ruangan.</p>"
+            : `<p><strong>Ringkasan:</strong> ${clDone.length} Pembersihan Selesai, ` +
+              `${clTodo.length} Belum Selesai (total ${cl.length} ruang). ` +
+              `Paraf lengkap ${clParafFull.length} ruang.</p>`;
+    const clLinesHtml = cl.length === 0
+        ? ""
+        : `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;">` +
+          `<thead><tr>` +
+          `<th style="text-align:left;">No</th>` +
+          `<th style="text-align:left;">Ruangan</th>` +
+          `<th style="text-align:left;">Status</th>` +
+          `<th style="text-align:left;">Belum dibersihkan</th>` +
+          `<th style="text-align:left;">Sudah paraf</th>` +
+          `<th style="text-align:left;">Belum paraf</th>` +
+          `</tr></thead><tbody>${cl
+              .map((l, i) => {
+                  const doneCell = numberedParafList(l).map(escapeHtml).join("<br>") || "—";
+                  const pendingCell = l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf" : "—");
+                  const itemsCell = numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—";
+                  return `<tr>` +
+                      `<td>${i + 1}</td>` +
+                      `<td>${escapeHtml(l.roomName)}</td>` +
+                      `<td>${escapeHtml(cleaningLineState(l))}</td>` +
+                      `<td>${itemsCell}</td>` +
+                      `<td>${doneCell}</td>` +
+                      `<td>${pendingCell}</td>` +
+                      `</tr>`;
+              })
+              .join("")}</tbody></table>`;
 
     const html =
         `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"></head>` +
@@ -661,9 +770,10 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         `<p style="font-size:12px;color:#666666;">PT Wijaya Inovasi Gemilang — Sistem HRIS</p>` +
         `<h2 style="font-size:18px;color:#222222;">Rekap Harian Inspeksi — ${escapeHtml(input.dateLabel)}</h2>` +
         `<h3 style="font-size:15px;color:#222222;">Peralatan</h3>` +
-        `<p>Berjalan: ${input.equipment.open}, Terkirim: ${input.equipment.submitted}, Selesai: ${input.equipment.done}, Total: ${input.equipment.total}.</p>` +
+        eqSummaryHtml +
         eqLinesHtml +
         `<h3 style="font-size:15px;color:#222222;">Kebersihan</h3>` +
+        clSummaryHtml +
         clLinesHtml +
         `<p style="font-size:12px;color:#666666;">Email otomatis Sistem HRIS PT Wijaya Inovasi Gemilang. Balas ke alamat GA bila ada pertanyaan.</p>` +
         `</body></html>`;

@@ -6,6 +6,7 @@ vi.mock("@/lib/prisma", () => ({
         employee: { findMany: vi.fn() },
         userAccount: { findMany: vi.fn() },
         cleaningRoom: { findMany: vi.fn() },
+        cleaningDailyChecklist: { findUnique: vi.fn() },
         equipmentInspection: { findMany: vi.fn(), count: vi.fn() },
         dailyRecapEmailLog: { create: vi.fn(), update: vi.fn() },
         pushSubscription: { findMany: vi.fn(), deleteMany: vi.fn() },
@@ -82,12 +83,22 @@ describe("getDailyCleaningRecap", () => {
             roomName: "Resepsionis",
             isFree: false,
             checklist: { exists: true, activeCount: 3, completedCount: 3, percent: 100, isComplete: true },
-            parafs: [{ id: "p1" }],
-            missingRoles: [],
+            parafs: [{ id: "p1", signerName: "H. Aris Sudarisman", signerEmployeeId: "ID-1", signedAt: new Date("2026-10-14T02:20:00Z") }],
+            missingRoles: ["KNOWN_BY"],
+            reviewers: { inspectedByEmployeeId: "ID-1", inspectedByName: "H. Aris Sudarisman", knownByEmployeeId: "ID-2", knownByName: "Dicky" },
+        } as never);
+        mocked.cleaningDailyChecklist.findUnique.mockResolvedValue({
+            items: [
+                { itemNameSnapshot: "Kaca", sortOrder: 1, isActive: true, isComplete: false, isUnavailable: false },
+                { itemNameSnapshot: "Lantai", sortOrder: 2, isActive: true, isComplete: true, isUnavailable: false },
+            ],
         } as never);
         const out = await getDailyCleaningRecap("2026-10-12");
         expect(out.lines).toHaveLength(1);
         expect(out.lines[0]).toMatchObject({ roomName: "Resepsionis", complete: true, parafDone: 1 });
+        expect(out.lines[0].doneParafs).toMatchObject([{ name: "Aris Sudarisman" }]);
+        expect(out.lines[0].pendingNames).toEqual(["Dicky"]);
+        expect(out.lines[0].pendingItems).toEqual(["Kaca"]);
     });
 });
 
