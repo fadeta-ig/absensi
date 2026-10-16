@@ -115,7 +115,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
         if (!detail || approving) return;
         confirm({
             title: "Setujui Inspeksi?",
-            message: `${detail.unit.name} — hasil QC akan disetujui final atas nama Anda. Tidak bisa dibatalkan.`,
+            message: `${detail.unit.name} — hasil pemeriksaan akan disetujui atas nama Anda. Keputusan ini tidak dapat dibatalkan.`,
             confirmLabel: "Ya, Setujui",
             cancelLabel: "Batal",
             onConfirm: () => {
@@ -129,7 +129,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                         });
                         if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyetujui inspeksi."));
                         await fetchDetail();
-                        toast("Inspeksi disetujui final.", "success");
+                        toast("Inspeksi telah disetujui.", "success");
                     } catch (err) {
                         const msg = err instanceof Error ? err.message : "Gagal menyetujui inspeksi.";
                         reportClientError("EmployeeEquipmentOverviewDetail", msg, err, { inspectionId: detail.id });
@@ -229,7 +229,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                         <span className="text-muted-foreground shrink-0 w-16">QC</span>
                         <span className="text-foreground">
                             {detail.checkedByNameSnapshot || detail.checkedBy
-                                ? `Checked by QC - ${stripGelar(detail.checkedByNameSnapshot ?? detail.checkedBy?.name ?? "")} · ${formatDateTime(detail.checkedAt)}`
+                                ? `Diperiksa oleh ${stripGelar(detail.checkedByNameSnapshot ?? detail.checkedBy?.name ?? "")} (QC) · ${formatDateTime(detail.checkedAt)}`
                                 : "Menunggu pemeriksaan QC"}
                         </span>
                     </li>
@@ -252,7 +252,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                         className="btn btn-primary btn-sm mt-3 min-h-[44px] px-4 inline-flex items-center gap-2 disabled:opacity-50"
                     >
                         {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                        {approving ? "Menyimpan..." : "Setujui Final"}
+                        {approving ? "Menyimpan..." : "Setujui Pemeriksaan"}
                     </button>
                 )}
             </div>

@@ -113,8 +113,8 @@ export default function EmployeeEquipmentApprovalsPage() {
                     <h1 className="text-2xl font-bold text-[var(--text-primary)]">Pemeriksaan QC</h1>
                     <p className="text-sm text-[var(--text-muted)] mt-0.5">
                         {tasks.length === 0
-                            ? "Periksa hasil inspeksi produksi lalu tandai DONE."
-                            : `${tasks.length} antrean · ${readyCount} siap DONE`}
+                            ? "Periksa hasil inspeksi produksi, lalu selesaikan pemeriksaannya."
+                            : `${tasks.length} antrean · ${readyCount} siap diselesaikan`}
                     </p>
                 </div>
                 <button
@@ -123,7 +123,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                     disabled={loading}
                     className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 shrink-0"
                 >
-                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Muat Ulang
                 </button>
             </div>
 
@@ -154,7 +154,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                     <FileCheck2 aria-hidden="true" className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
                     <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">Tidak Ada Antrean QC</h3>
                     <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
-                        Tidak ada inspeksi yang menunggu pemeriksaan QC. Refresh untuk memuat terbaru.
+                        Tidak ada inspeksi yang menunggu pemeriksaan QC. Muat ulang untuk melihat data terbaru.
                     </p>
                 </div>
             )}
@@ -173,7 +173,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                             {(
                                 [
                                     ["ALL", "Semua"],
-                                    ["READY", `Siap DONE (${readyCount})`],
+                                    ["READY", `Siap diselesaikan (${readyCount})`],
                                     ["ATTENTION", "Perlu perhatian"],
                                 ] as Array<[QcFilter, string]>
                             ).map(([key, label]) => (
@@ -203,7 +203,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                     </div>
                     {visibleTasks.length === 0 && (
                         <div className="text-center py-12 border-2 border-dashed border-[var(--border)] rounded-xl">
-                            <p className="text-sm font-medium text-[var(--text-primary)]">Tidak ketemu.</p>
+                            <p className="text-sm font-medium text-[var(--text-primary)]">Tidak ditemukan.</p>
                             <p className="text-sm text-[var(--text-muted)] mt-1">Coba kata kunci atau filter lain.</p>
                             <button
                                 type="button"
@@ -234,7 +234,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                                             </p>
                                             <p className={`text-xs mt-0.5 ${stats.rusak > 0 ? "font-semibold text-red-600 dark:text-red-400" : stats.belum > 0 ? "font-medium text-amber-700 dark:text-amber-300" : "text-[var(--text-muted)]"}`}>
                                                 {stats.baik} baik · {stats.rusak} rusak · {stats.belum} belum dinilai
-                                                {stats.ready && stats.rusak === 0 ? " · siap DONE" : ""}
+                                                {stats.ready && stats.rusak === 0 ? " · siap diselesaikan" : ""}
                                             </p>
                                         </div>
                                     </div>
@@ -242,7 +242,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                                         href={`/employee/equipment/approvals/${task.id}`}
                                         className="btn btn-primary mt-3 w-full min-h-[48px]"
                                     >
-                                        Lihat &amp; DONE
+                                        Lihat &amp; Selesaikan
                                     </Link>
                                 </div>
                             );

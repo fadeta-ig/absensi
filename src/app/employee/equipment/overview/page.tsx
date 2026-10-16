@@ -147,7 +147,7 @@ export default function EmployeeEquipmentOverviewPage() {
                 <div>
                     <h1 className="text-2xl font-semibold text-foreground">Pantau Inspeksi Alat</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Pantau kerja inspeksi bawahan: alat, foto, dan progres QC.
+                        Pantau hasil pemeriksaan bawahan: alat, foto, dan pemeriksaan QC.
                     </p>
                 </div>
                 <button
@@ -156,7 +156,7 @@ export default function EmployeeEquipmentOverviewPage() {
                     disabled={loading}
                     className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 shrink-0"
                 >
-                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Muat Ulang
                 </button>
             </div>
 
@@ -271,12 +271,12 @@ export default function EmployeeEquipmentOverviewPage() {
                                             </p>
                                             {item.status === "SUBMITTED" && (
                                                 <p className="text-xs text-muted-foreground">
-                                                    Submit {formatDateTime(item.submittedAt)}
+                                                    Dikirim {formatDateTime(item.submittedAt)}
                                                 </p>
                                             )}
                                             {(item.checkedByNameSnapshot || item.checkedBy) && (
                                                 <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
-                                                    Checked by QC - {stripGelar(item.checkedByNameSnapshot ?? item.checkedBy?.name ?? "")}
+                                                    Diperiksa oleh {stripGelar(item.checkedByNameSnapshot ?? item.checkedBy?.name ?? "")} (QC)
                                                 </p>
                                             )}
                                             {(item.approvedByNameSnapshot || item.approvedBy) && (
@@ -300,7 +300,7 @@ export default function EmployeeEquipmentOverviewPage() {
                                 <p className="text-center text-muted-foreground py-8 text-sm">
                                     {inspections.length === 0
                                         ? "Tidak ada inspeksi pada rentang ini."
-                                        : "Tidak ketemu. Coba kata kunci lain."}
+                                        : "Tidak ditemukan. Coba kata kunci lain."}
                                 </p>
                             )}
                         </div>

@@ -139,9 +139,9 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
         const baik = detail.items.filter((i) => i.isActive && i.isPass === true).length;
         const rusak = detail.items.filter((i) => i.isActive && i.isPass === false).length;
         confirm({
-            title: "Selesaikan inspeksi ini?",
-            message: `${detail.unit.name} — ${baik} baik, ${rusak} rusak. Riwayat akan mencatat "checked by QC" atas nama Anda. Tidak bisa dibatalkan.`,
-            confirmLabel: "Ya, DONE",
+            title: "Selesaikan pemeriksaan ini?",
+            message: `${detail.unit.name} — ${baik} baik, ${rusak} rusak. Riwayat akan mencatat pemeriksaan QC atas nama Anda. Keputusan ini tidak dapat dibatalkan.`,
+            confirmLabel: "Ya, selesaikan",
             cancelLabel: "Batal",
             variant: "info",
             onConfirm: () => {
@@ -157,7 +157,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                         const json = await res.json();
                         const dto = json.data as ApprovalDto;
                         setDetail(dto);
-                        toast(`Checked by QC - ${stripGelar(dto.checkedByNameSnapshot ?? dto.checkedBy?.name ?? "")}`, "success");
+                        toast(`Pemeriksaan QC oleh ${stripGelar(dto.checkedByNameSnapshot ?? dto.checkedBy?.name ?? "")} telah dicatat.`, "success");
                     } catch (err) {
                         const msg = err instanceof Error ? err.message : "Gagal menyelesaikan inspeksi.";
                         toast(msg, "error");
@@ -216,7 +216,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                 <h1 className="text-xl font-semibold text-foreground">{detail.unit.name}</h1>
                 {detail.unit.brand && <p className="text-sm text-muted-foreground">{detail.unit.brand}</p>}
                 <p className="text-sm text-muted-foreground mt-1">
-                    Dari {stripGelar(detail.startedBy.name)} · Submit {formatDateTime(detail.submittedAt)}
+                    Dari {stripGelar(detail.startedBy.name)} · Dikirim {formatDateTime(detail.submittedAt)}
                 </p>
                 <p className={`text-sm font-medium mt-1 ${rusak > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
                     {baik} baik · {rusak} rusak · {detail.progress.decided}/{detail.progress.total} dinilai
@@ -226,7 +226,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
             {isDone ? (
                 <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-800 px-4 py-3 mb-4">
                     <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                        Checked by QC - {stripGelar(detail.checkedByNameSnapshot ?? detail.checkedBy?.name ?? "")}
+                        Diperiksa oleh {stripGelar(detail.checkedByNameSnapshot ?? detail.checkedBy?.name ?? "")} (QC)
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(detail.checkedAt)}</p>
                     {detail.qcNote && <p className="text-sm text-muted-foreground mt-1">Catatan QC: {detail.qcNote}</p>}
@@ -241,7 +241,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                             id="qc-note"
                             value={qcNote}
                             onChange={(e) => setQcNote(e.target.value)}
-                            placeholder="Contoh: sudah dicek, kondisi baik."
+                            placeholder="Contoh: sudah diperiksa, kondisi baik."
                             maxLength={1000}
                             rows={2}
                             className="form-textarea mt-1 min-h-[64px] text-sm"
@@ -254,7 +254,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                             className="btn btn-primary w-full min-h-[52px] text-base mt-1"
                         >
                             {doneBusy && <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" />}
-                            {doneBusy ? "Menyimpan..." : "DONE — Selesai Diperiksa"}
+                            {doneBusy ? "Menyimpan..." : "Selesaikan Pemeriksaan"}
                         </button>
                     </div>
                 </div>
@@ -342,11 +342,11 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                             onClick={() => fileRef.current?.click()}
                             className="btn btn-secondary min-h-[48px] shrink-0"
                         >
-                            <Camera aria-hidden="true" className="h-4 w-4" /> {uploading ? "Mengunggah..." : "Foto"}
+                            <Camera aria-hidden="true" className="h-4 w-4" /> {uploading ? "Mengunggah..." : "Ambil Foto"}
                         </button>
                     </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-2">Foto JPEG dari kamera aplikasi.</p>
+                <p className="text-xs text-muted-foreground mt-2">Foto harus diambil dari kamera dalam format JPEG.</p>
             </div>
         </div>
     );

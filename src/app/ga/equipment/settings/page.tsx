@@ -65,6 +65,21 @@ type Tab = "templates" | "units" | "assignments" | "atasan";
 const inputClass =
     "w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm";
 
+/** Tanggal WIB hari ini (YYYY-MM-DD). Jangan pakai toISOString (UTC, meleset ±1 hari). */
+function wibTodayStr(): string {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
+
+/** Aktif bila belum ada tanggal selesai, atau tanggal selesai masih di depan hari ini (eksklusif). */
+function isAssignmentActive(a: { endsOnWibDate: string | null }): boolean {
+    return !a.endsOnWibDate || a.endsOnWibDate > wibTodayStr();
+}
+
 export default function EquipmentSettingsPage() {
     const toast = useToast();
     const confirm = useConfirm();
@@ -1015,11 +1030,13 @@ export default function EquipmentSettingsPage() {
                         <p className="text-xs text-muted-foreground mb-3">
                             {assignments.length === 0
                                 ? "Belum ada penugasan."
-                                : "Akhiri penugasan yang sudah tidak berlaku."}
+                                : "Penugasan aktif bisa diakhiri; yang sudah berakhir tercatat sebagai riwayat."}
                         </p>
                         {assignments.length > 0 && (
                             <ul className="space-y-2">
-                                {assignments.map((a) => (
+                                {[...assignments]
+                                    .sort((a, b) => Number(isAssignmentActive(b)) - Number(isAssignmentActive(a)))
+                                    .map((a) => (
                                     <li
                                         key={a.id}
                                         className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
@@ -1033,7 +1050,7 @@ export default function EquipmentSettingsPage() {
                                                 {a.endsOnWibDate ? ` → ${a.endsOnWibDate}` : " → berjalan"}
                                             </span>
                                         </span>
-                                        {!a.endsOnWibDate || a.endsOnWibDate >= new Date().toISOString().slice(0, 10) ? (
+                                        {isAssignmentActive(a) ? (
                                             <button
                                                 type="button"
                                                 onClick={() => endAssignment(a)}

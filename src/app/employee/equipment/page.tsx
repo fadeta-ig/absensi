@@ -82,7 +82,7 @@ function formatDateTime(value: string | null): string {
     });
 }
 
-/** Tanggal WIB hari ini (YYYY-MM-DD) untuk chip "dicek hari ini". */
+/** Tanggal WIB hari ini (YYYY-MM-DD) untuk chip "diperiksa hari ini". */
 function wibToday(): string {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Jakarta",
@@ -107,7 +107,7 @@ type SortMode = "NEVER_FIRST" | "AZ";
 
 const STATUS_CHIPS: Array<{ key: StatusFilter; label: string }> = [
     { key: "ALL", label: "Semua" },
-    { key: "NEVER", label: "Belum dicek" },
+    { key: "NEVER", label: "Belum diperiksa" },
     { key: "OPEN", label: "Berjalan" },
     { key: "SUBMITTED", label: "Menunggu Verifikasi" },
     { key: "DONE", label: "Menunggu Approval" },
@@ -258,12 +258,12 @@ export default function EmployeeEquipmentPage() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ unitId }),
                 });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memulai checklist."));
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memulai pemeriksaan."));
                 const json = await res.json();
                 setInspection(json.data as InspectionDto);
                 await fetchUnits();
             } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal memulai checklist.";
+                const msg = err instanceof Error ? err.message : "Gagal memulai pemeriksaan.";
                 setStartError(msg);
                 reportClientError("EmployeeEquipment", "Start inspection failed", err);
             } finally {
@@ -401,8 +401,8 @@ export default function EmployeeEquipmentPage() {
             const decided = row.progress?.decided ?? 0;
             const total = row.progress?.total ?? 0;
             confirm({
-                title: "Batalkan checklist ini?",
-                message: `${row.unit.name} — ${decided}/${total} item sudah dinilai. Checklist yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
+                title: "Batalkan pemeriksaan ini?",
+                message: `${row.unit.name} — ${decided}/${total} item sudah dinilai. Pemeriksaan yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
                 confirmLabel: "Ya, batalkan",
                 cancelLabel: "Jangan batalkan",
                 variant: "danger",
@@ -411,12 +411,12 @@ export default function EmployeeEquipmentPage() {
                         setCancellingId(row.id);
                         try {
                             const res = await fetch(`/api/employee/equipment/inspections/${row.id}/cancel`, { method: "POST" });
-                            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan checklist."));
-                            toast("Checklist dibatalkan.", "success");
+                            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan pemeriksaan."));
+                            toast("Pemeriksaan dibatalkan.", "success");
                             await fetchHistory();
                             await fetchUnits();
                         } catch (err) {
-                            const msg = err instanceof Error ? err.message : "Gagal membatalkan checklist.";
+                            const msg = err instanceof Error ? err.message : "Gagal membatalkan pemeriksaan.";
                             toast(msg, "error");
                             reportClientError("EmployeeEquipment", msg, err, { inspectionId: row.id });
                         } finally {
@@ -491,7 +491,7 @@ export default function EmployeeEquipmentPage() {
         const needsPhoto = active.some((i) => i.requirePhoto);
         confirm({
             title: "Kirim inspeksi?",
-            message: `Ringkasan: ${active.length} item — ${baik} baik, ${rusak} rusak, ${belum} belum dinilai, ${fotoCount}/5 foto.${needsPhoto && fotoCount === 0 ? " Minimal 1 foto wajib." : ""} Inspeksi yang dikirim tidak bisa diubah lagi.`,
+            message: `Ringkasan: ${active.length} item — ${baik} baik, ${rusak} rusak, ${belum} belum dinilai, ${fotoCount}/5 foto.${needsPhoto && fotoCount === 0 ? " Minimal 1 foto wajib." : ""} Inspeksi yang dikirim tidak dapat diubah lagi.`,
             confirmLabel: "Ya, kirim",
             cancelLabel: "Periksa lagi",
             variant: "info",
@@ -543,9 +543,9 @@ export default function EmployeeEquipmentPage() {
         return (
             <div className="max-w-2xl mx-auto px-4 py-6">
                 <div className="bg-card border border-border rounded-lg p-6 text-center">
-                    <p className="text-foreground font-medium">Halaman ini untuk pelaksana checklist.</p>
+                    <p className="text-foreground font-medium">Halaman ini untuk pelaksana pemeriksaan.</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Peran Anda sebagai atasan — pantau kerja inspeksi di bawah.
+                        Peran Anda sebagai atasan. Silakan pantau hasil pemeriksaan melalui tombol di bawah.
                     </p>
                     <Link
                         href="/employee/equipment/overview"
@@ -595,7 +595,7 @@ export default function EmployeeEquipmentPage() {
                     )}
                     {readOnly && inspection && (
                         <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
-                            Mode lihat — tidak ada perubahan yang dibuat. Detail ini read-only.
+                            Tampilan baca — data tidak dapat diubah di sini.
                         </p>
                     )}
                     {readOnly && inspection && inspection.status === "OPEN" && (
@@ -630,10 +630,10 @@ export default function EmployeeEquipmentPage() {
                 {!detailLoading && !starting && !inspection && unitChoice && (
                     <div className="bg-card border border-border rounded-lg p-4">
                         <p className="text-sm text-foreground font-medium">
-                            Tidak ada checklist berjalan untuk alat ini.
+                            Tidak ada pemeriksaan yang sedang berjalan untuk alat ini.
                         </p>
                         <p className="text-xs text-muted-foreground mt-1 mb-3">
-                            Melihat riwayat tidak membuat checklist baru. Checklist baru hanya dibuat bila Anda menekan tombol mulai.
+                            Melihat riwayat tidak akan membuat pemeriksaan baru. Pemeriksaan baru hanya dibuat setelah Anda menekan tombol mulai.
                         </p>
                         <div className="flex flex-col gap-2">
                             <button
@@ -651,7 +651,7 @@ export default function EmployeeEquipmentPage() {
                                 }}
                                 className="w-full px-4 min-h-[48px] inline-flex items-center justify-center gap-2 text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
                             >
-                                Mulai checklist baru
+                                Mulai pemeriksaan baru
                             </button>
                         </div>
 
@@ -696,7 +696,7 @@ export default function EmployeeEquipmentPage() {
                                 <span className="text-sm font-medium">
                                     {inspection.progress.allDecided && inspection.progress.photoOk
                                         ? "Siap dikirim."
-                                        : `Sisa ${inspection.progress.total - inspection.progress.decided} belum dinilai${needsPhoto && fotoCount === 0 ? " · Tambah minimal 1 foto" : ""}`}
+                                        : `Sisa ${inspection.progress.total - inspection.progress.decided} belum dinilai${needsPhoto && fotoCount === 0 ? " · Tambahkan minimal 1 foto" : ""}`}
                                 </span>
                                 <span className="block text-xs mt-0.5">
                                     Penilaian {inspection.progress.decided}/{inspection.progress.total} · Foto {fotoCount}/5
@@ -787,7 +787,7 @@ export default function EmployeeEquipmentPage() {
                                                 disabled={updatingItem !== null || readOnly}
                                                 className="mt-1.5 px-3 min-h-[44px] inline-flex items-center text-xs font-semibold text-primary border border-primary/40 rounded-md hover:bg-primary/10 disabled:opacity-50"
                                             >
-                                                {updatingItem === item.id ? "Menyimpan..." : item.isPass === null ? "Simpan + nilai Baik" : "Simpan catatan"}
+                                                {updatingItem === item.id ? "Menyimpan..." : item.isPass === null ? "Simpan dan nilai Baik" : "Simpan catatan"}
                                             </button>
                                         )}
                                     </div>
@@ -801,10 +801,10 @@ export default function EmployeeEquipmentPage() {
 
                         <div className="rounded-lg border border-border bg-card p-3">
                             <p className="text-sm font-medium text-foreground mb-1">
-                                Foto dokumentasi {needsPhoto ? <span className="font-normal text-muted-foreground">(minimal 1, maks 5)</span> : <span className="font-normal text-muted-foreground">(opsional, maks 5)</span>}
+                                Foto dokumentasi {needsPhoto ? <span className="font-normal text-muted-foreground">(minimal 1, maksimal 5)</span> : <span className="font-normal text-muted-foreground">(opsional, maksimal 5)</span>}
                             </p>
                             <p className="text-xs text-muted-foreground mb-2">
-                                Satu tempat upload ini mewakili semua parameter di atas.
+                                Satu tempat pengunggahan ini mewakili semua parameter di atas.
                             </p>
                             <EquipmentEvidencePanel
                                 inspectionId={inspection.id}
@@ -819,8 +819,8 @@ export default function EmployeeEquipmentPage() {
                                     {!canSubmit && (
                                         <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-2">
                                             {!inspection.progress.allDecided
-                                                ? `Nilai semua item dulu (sisa ${inspection.progress.total - inspection.progress.decided}).`
-                                                : "Tambah minimal 1 foto dokumentasi dulu."}
+                                                ? `Nilai semua item terlebih dahulu (sisa ${inspection.progress.total - inspection.progress.decided}).`
+                                                : "Tambahkan minimal 1 foto dokumentasi terlebih dahulu."}
                                         </p>
                                     )}
                                     <button
@@ -833,7 +833,7 @@ export default function EmployeeEquipmentPage() {
                                         {submitting ? "Mengirim..." : `Kirim Inspeksi (${inspection.progress.decided}/${inspection.progress.total})`}
                                     </button>
                                     <p id="kirim-hint" className="sr-only">
-                                        Inspeksi yang dikirim tidak bisa diubah lagi.
+                                        Inspeksi yang dikirim tidak dapat diubah lagi.
                                     </p>
                                 </div>
                             </div>
@@ -849,8 +849,8 @@ export default function EmployeeEquipmentPage() {
             <h1 className="text-2xl font-semibold text-foreground mb-1">Inspeksi Alat</h1>
             <p className="text-sm text-muted-foreground mb-4">
                 {units.length === 0
-                    ? "Pilih alat yang ditugaskan kepada Anda untuk dicek."
-                    : `${checkedTodayCount}/${units.length} alat dicek hari ini. Pilih alat untuk checklist.`}
+                    ? "Pilih alat yang ditugaskan kepada Anda untuk diperiksa."
+                    : `${checkedTodayCount}/${units.length} alat diperiksa hari ini. Pilih alat untuk diperiksa.`}
             </p>
 
             <div className="flex gap-2 mb-4" role="tablist" aria-label="Alat dan riwayat">
@@ -886,7 +886,7 @@ export default function EmployeeEquipmentPage() {
                         {(
                             [
                                 { key: "ALL", label: "Semua" },
-                                { key: "OPEN", label: "Sedang saya lakukan" },
+                                { key: "OPEN", label: "Sedang dikerjakan" },
                                 { key: "SUBMITTED", label: "Menunggu Verifikasi" },
                                 { key: "DONE", label: "Menunggu Approval" },
                                 { key: "APPROVED", label: "Selesai" },
@@ -956,7 +956,7 @@ export default function EmployeeEquipmentPage() {
                                                 type="button"
                                                 onClick={() => handleCancel(h)}
                                                 disabled={cancellingId === h.id}
-                                                aria-label={`Batalkan checklist ${h.unit.name}`}
+                                                aria-label={`Batalkan pemeriksaan ${h.unit.name}`}
                                                 className="flex-1 px-3 min-h-[44px] inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-destructive border border-destructive/40 rounded-md hover:bg-destructive/10 disabled:opacity-50"
                                             >
                                                 {cancellingId === h.id ? (
@@ -974,7 +974,7 @@ export default function EmployeeEquipmentPage() {
                     {!historyLoading && history.filter((h) => (historyFilter === "ALL" ? h.status !== "CANCELLED" : h.status === historyFilter)).length === 0 && (
                         <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
                             <p className="text-sm font-medium text-foreground">Belum ada riwayat.</p>
-                            <p className="text-sm text-muted-foreground mt-1">Checklist yang Anda mulai akan tercatat di sini.</p>
+                            <p className="text-sm text-muted-foreground mt-1">Pemeriksaan yang Anda mulai akan tercatat di sini.</p>
                         </div>
                     )}
                 </div>
@@ -1024,12 +1024,12 @@ export default function EmployeeEquipmentPage() {
                         <button
                             type="button"
                             onClick={() => setSortMode((m) => (m === "NEVER_FIRST" ? "AZ" : "NEVER_FIRST"))}
-                            title={sortMode === "NEVER_FIRST" ? "Urut: belum dicek dulu" : "Urut: A-Z"}
-                            aria-label={sortMode === "NEVER_FIRST" ? "Urut: belum dicek dulu. Ketuk untuk urut A-Z." : "Urut: A-Z. Ketuk untuk belum dicek dulu."}
+                            title={sortMode === "NEVER_FIRST" ? "Urut: belum diperiksa dulu" : "Urut: A-Z"}
+                            aria-label={sortMode === "NEVER_FIRST" ? "Urut: belum diperiksa dulu. Ketuk untuk urut A-Z." : "Urut: A-Z. Ketuk untuk belum diperiksa dulu."}
                             className="shrink-0 px-3 min-h-[44px] inline-flex items-center gap-1.5 text-sm font-medium rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
                         >
                             <ArrowUpDown aria-hidden="true" className="h-4 w-4" />
-                            {sortMode === "NEVER_FIRST" ? "Belum dicek" : "A-Z"}
+                            {sortMode === "NEVER_FIRST" ? "Belum diperiksa" : "A-Z"}
                         </button>
                     </div>
                 </div>
@@ -1037,13 +1037,13 @@ export default function EmployeeEquipmentPage() {
 
             {mainTab === "alat" && units.length === 0 && !error && (
                 <div className="text-center py-12">
-                    <p className="text-muted-foreground">Anda belum ditugaskan ke alat manapun.</p>
+                    <p className="text-muted-foreground">Anda belum ditugaskan ke alat mana pun.</p>
                 </div>
             )}
 
             {mainTab === "alat" && visibleUnits.length === 0 && units.length > 0 && !error && (
                 <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                    <p className="text-sm font-medium text-foreground">Tidak ketemu.</p>
+                    <p className="text-sm font-medium text-foreground">Tidak ditemukan.</p>
                     <p className="text-sm text-muted-foreground mt-1">Coba kata kunci atau filter lain.</p>
                     <button
                         type="button"
@@ -1075,8 +1075,8 @@ export default function EmployeeEquipmentPage() {
                                 {meta && <p className="text-sm text-muted-foreground truncate">{meta}</p>}
                                 <p className={`text-xs mt-0.5 truncate ${last ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}`}>
                                     {last
-                                        ? `Terakhir dicek ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`
-                                        : "Belum pernah dicek — ketuk untuk melihat"}
+                                        ? `Terakhir diperiksa ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`
+                                        : "Belum pernah diperiksa — ketuk untuk melihat"}
                                 </p>
                             </div>
                             <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
