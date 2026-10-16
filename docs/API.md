@@ -159,6 +159,7 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | List + penugasan employee internal (gerbang modul); `unitId` null = global; akhiri via tombol. |
 | `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar employee QC (maks 20); semua anggota melihat semua antrean. |
 | `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 + `ga.manage` | Atasan tertinggi maks 5 (baca rekap/monitor, pola cleaning). |
+| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Approver final tunggal (`equipment.approverId`, dinamis). |
 | `/api/ga/equipment/recap` | `GET` | WIG002 / atasan | Rekap inspeksi + ringkasan status (filter unit/status/tanggal). |
 | `/api/ga/equipment/inspections/[id]` | `GET` | WIG002 / atasan | Drill-down detail + foto (read-only). |
 | `/api/ga/equipment/evidence` | `GET` | WIG002 / atasan | List foto dokumentasi per inspeksi (`?inspectionId=`, drill-down rekap). |
@@ -166,16 +167,19 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/equipment/qc-evidence` | `GET` | WIG002 / atasan | List foto QC per inspeksi (`?inspectionId=`, drill-down rekap). |
 | `/api/ga/equipment/qc-evidence/[id]` | `GET` | WIG002 / atasan | Serve berkas foto QC. |
 | `/api/employee/equipment/units` | `GET` | Employee yang ditugaskan | Unit yang ditugaskan + info terakhir dicek. |
-| `/api/employee/equipment/capabilities` | `GET` | Employee | Kapabilitas ringan untuk gating menu (`canExecute/canReview/canTopView`). |
+| `/api/employee/equipment/units/[unitId]/history` | `GET` | Ditugaskan/QC/atasan | Riwayat inspeksi satu unit lintas pelaksana (read-only, 20 terakhir). |
+| `/api/employee/equipment/capabilities` | `GET` | Employee | Kapabilitas ringan untuk gating menu (`canExecute/canReview/canTopView/canApprove`). |
 | `/api/employee/equipment/overview` | `GET` | WIG002 / atasan (Top Viewer) | Rekap pantauan lintas unit + ringkasan (filter unit/status/tanggal). |
-| `/api/employee/equipment/inspections` | `GET`, `POST` | Employee yang ditugaskan | Mulai checklist unit yang ditugaskan (`POST {unitId}`) + riwayat milik sendiri (filter `?status=OPEN/SUBMITTED/DONE`). |
+| `/api/employee/equipment/inspections` | `GET`, `POST` | Employee yang ditugaskan | Mulai checklist unit yang ditugaskan (`POST {unitId}`) + riwayat milik sendiri (filter `?status=OPEN/SUBMITTED/DONE/APPROVED`). |
 | `/api/employee/equipment/inspections/[id]` | `GET` | Terlibat | Detail inspeksi + item + foto + info QC. |
 | `/api/employee/equipment/inspections/[id]/submit` | `POST` | Pelaksana | Kirim hasil (gate: semua dinilai + foto wajib lengkap). |
+| `/api/employee/equipment/inspections/[id]/cancel` | `POST` | Pemulai | Batalkan checklist Berjalan (`OPEN → CANCELLED`, riwayat dipertahankan). |
 | `/api/employee/equipment/items/[itemId]` | `PATCH` | Pelaksana | Nilai Lulus/Gagal + catatan. |
 | `/api/employee/equipment/evidence` | `GET`, `POST` | Terlibat | List + upload foto dokumentasi per inspeksi (`?inspectionId=`, maks 5). |
 | `/api/employee/equipment/evidence/[id]` | `GET` | Terlibat | Serve berkas foto. |
 | `/api/employee/equipment/approvals` | `GET` | Anggota QC | Antrean QC: semua SUBMITTED, terbaru di atas. |
 | `/api/employee/equipment/approvals/done` | `POST` | Anggota QC | DONE + catatan opsional; riwayat mencatat checked-by QC. |
+| `/api/employee/equipment/approvals/approve` | `POST` | Approver tunggal (`equipment.approverId`) | `DONE → APPROVED` final; satu arah tanpa reject. |
 | `/api/employee/equipment/qc-evidence` | `GET`, `POST` | Terlibat | List + upload foto QC (opsional, maks 5 per inspeksi). |
 | `/api/employee/equipment/qc-evidence/[id]` | `GET` | Terlibat | Serve berkas foto QC. |
 

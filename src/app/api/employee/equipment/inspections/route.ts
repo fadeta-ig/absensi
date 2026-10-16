@@ -17,7 +17,7 @@ const startSchema = z.object({
     unitId: z.string().trim().min(1, "unitId wajib diisi."),
 });
 
-const ALLOWED_STATUS = new Set(["OPEN", "SUBMITTED", "DONE"]);
+const ALLOWED_STATUS = new Set(["OPEN", "SUBMITTED", "DONE", "APPROVED"]);
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();

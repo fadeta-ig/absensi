@@ -855,11 +855,19 @@ export const equipmentQcDoneSchema = z.object({
     note: z.string().trim().max(1000).nullable().optional(),
 });
 
+export const equipmentApproveSchema = z.object({
+    inspectionId: z.string().trim().min(1),
+});
+
 export const equipmentQcMembersSchema = z.object({
     employeeIds: z.array(z.string().trim().min(1).max(100)).max(20),
 });
 
 export const equipmentTopViewersSchema = z.object({
     employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
+});
+
+export const equipmentApproverSchema = z.object({
+    employeeId: z.string().trim().min(1).max(100),
 });
 

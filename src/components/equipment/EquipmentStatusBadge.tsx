@@ -2,8 +2,10 @@
 
 export const EQUIPMENT_STATUS_LABEL: Record<string, string> = {
     OPEN: "Berjalan",
-    SUBMITTED: "Terkirim",
-    DONE: "Selesai",
+    SUBMITTED: "Menunggu Verifikasi",
+    DONE: "Menunggu Approval",
+    APPROVED: "Selesai",
+    CANCELLED: "Dibatalkan",
 };
 
 export function equipmentStatusLabel(status: string): string {
@@ -17,7 +19,11 @@ function badgeClass(status: string): string {
         case "SUBMITTED":
             return "badge badge-info";
         case "DONE":
+            return "badge badge-warning";
+        case "APPROVED":
             return "badge badge-success";
+        case "CANCELLED":
+            return "badge";
         default:
             return "badge badge-info";
     }
@@ -35,6 +41,8 @@ function dotClass(status: string | null): string {
         case "SUBMITTED":
             return "bg-blue-500";
         case "DONE":
+            return "bg-amber-500";
+        case "APPROVED":
             return "bg-green-500";
         default:
             return "bg-gray-300 dark:bg-gray-600";

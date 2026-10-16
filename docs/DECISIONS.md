@@ -165,3 +165,14 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Satu template tetap; paraf terbuka dengan angka jujur; klaim lapangan menjadi data master.
   - Negatif: Risiko klaim asal-asalan → dimitigasi visibilitas (siapa+jam) + audit + eskalasi WIG002; checklist hari berjalan yang sudah telanjur snapshot memakai status baru tanpa regenerasi (kolom default false).
   - Status: live 2026-10-12 (kolom `is_unavailable`, service + API + 4 UI + PDF + email + kartu usulan; bukti live: Resepsionis 55,6%→100% setelah 8 tanda, dikembalikan).
+
+## ADR-013: Approval Final Inspeksi Alat oleh Satu Atasan Lapangan
+
+- **Decision**: Tambah stage ke-4 `APPROVED`: `OPEN → SUBMITTED → DONE → APPROVED`. DONE kini berarti "terverifikasi QC, menunggu approval"; hanya approver tunggal (dinamis via setting `equipment.approverId` oleh WIG002) yang dapat `DONE → APPROVED`. Satu arah, tanpa reject. Tanpa lock posisi inspektor/verifikator — semua tetap dinamis via assignment + QC pool.
+- **Context**: Permintaan pemilik 2026-10-16 — atasan tertinggi (GM, topViewer read-only + penerima email) memantau; satu atasan lapangan (Deputy GM) memberi approval final. Tabel pantau/email 6 kolom: NO | ALAT | STATUS | INSPEKTOR | VERIFIKATOR | APPROVAL.
+- **Chosen Approach**: Kolom nullable `approvedByEmployeeId/NameSnapshot/approvedAt` + relasi `EquipmentInspectionApprovedBy`; audit `APPROVE_EQUIPMENT_INSPECTION`; `canApprove` di capabilities; tombol di detail pantau employee; kartu approver di settings GA; DONE lama di-grandfather final tanpa approval.
+- **Alternatives**: Quorum banyak approver (ditolak — pemilik minta satu orang); reject/return ke QC (ditolak — pertahankan filosofi satu arah).
+- **Consequences**:
+  - Positif: Akuntabilitas 3 lapis tanpa mengubah peran existing; approver bisa diganti tanpa deploy.
+  - Negatif: Tanpa approver yang ditetapkan, final terkunci di DONE (UI settings memberi peringatan eksplisit).
+  - Status: live lokal 2026-10-16 (bukti live: approve 1 inspeksi DONE via service → APPROVED + snapshot + audit, dikembalikan).

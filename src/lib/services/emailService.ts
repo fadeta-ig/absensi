@@ -573,6 +573,8 @@ export interface DailyRecapEmailEquipmentLine {
     submittedAt: Date | null;
     checkedAt: Date | null;
     checkerName: string | null;
+    approvedAt: Date | null;
+    approverName: string | null;
 }
 
 export interface DailyRecapEmailCleaningLine {
@@ -593,7 +595,7 @@ export interface DailyRecapEmailInput {
     to: string[];
     wibDate: string;
     dateLabel: string;
-    equipment: { open: number; submitted: number; done: number; total: number; lines: DailyRecapEmailEquipmentLine[] };
+    equipment: { open: number; submitted: number; done: number; total: number; approved?: number; lines: DailyRecapEmailEquipmentLine[]; verifiers: string[]; approverName: string | null };
     cleaning: { lines: DailyRecapEmailCleaningLine[] };
 }
 
@@ -667,48 +669,78 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         logger.warn("[Email] SMTP belum dikonfigurasi, rekap harian dilewati.");
         return false;
     }
-    // Peralatan: hanya yang sudah diajukan ke QC (SUBMITTED/DONE).
-    // OPEN (masih dikerjakan foreman) tidak ditampilkan di email.
-    const eqStatusLabel: Record<string, string> = { SUBMITTED: "Menunggu Inspeksi", DONE: "Sudah Inspeksi" };
-    const eq = input.equipment.lines.filter((l) => l.status === "SUBMITTED" || l.status === "DONE");
-    const eqWaiting = eq.filter((l) => l.status === "SUBMITTED");
-    const eqDone = eq.filter((l) => l.status === "DONE");
+    // Peralatan: hanya yang sudah diajukan (SUBMITTED/DONE/APPROVED).
+    // OPEN (masih dikerjakan inspektor) tidak ditampilkan di email.
+    const eqStatusLabel: Record<string, string> = { SUBMITTED: "Menunggu Verifikasi", DONE: "Menunggu Approval", APPROVED: "Selesai" };
+    const eq = input.equipment.lines.filter((l) => l.status === "SUBMITTED" || l.status === "DONE" || l.status === "APPROVED");
+    const eqWaitingVerify = eq.filter((l) => l.status === "SUBMITTED");
+    const eqWaitingApproval = eq.filter((l) => l.status === "DONE");
+    const eqApproved = eq.filter((l) => l.status === "APPROVED");
 
-    function eqSubmitter(l: DailyRecapEmailEquipmentLine): string {
+    function eqInspector(l: DailyRecapEmailEquipmentLine): string {
         const t = l.submittedAt ? formatShortWib(l.submittedAt) : "";
         return t ? `${l.starterName} (${t})` : l.starterName;
     }
 
-    function eqChecker(l: DailyRecapEmailEquipmentLine): string {
-        if (l.status !== "DONE" || !l.checkerName) return "—";
-        const t = l.checkedAt ? formatShortWib(l.checkedAt) : "";
-        return t ? `${l.checkerName} (${t})` : l.checkerName;
+    function eqVerifierList(l: DailyRecapEmailEquipmentLine): string[] {
+        // Yang memverifikasi naik ke #1 + jam; seluruh roster pool tetap tampil dengan (-).
+        const ordered = l.checkerName
+            ? [l.checkerName, ...input.equipment.verifiers.filter((v) => v !== l.checkerName)]
+            : [...input.equipment.verifiers];
+        return ordered.map((name, i) => {
+            const acted = !!l.checkerName && name === l.checkerName;
+            const t = acted && l.checkedAt ? formatShortWib(l.checkedAt) : "";
+            return `${i + 1}. ${name} (${t || "-"})`;
+        });
+    }
+
+    function eqVerifier(l: DailyRecapEmailEquipmentLine): string {
+        const list = eqVerifierList(l);
+        return list.length > 0 ? list.join("; ") : "—";
+    }
+
+    function eqApprovalList(l: DailyRecapEmailEquipmentLine): string[] {
+        // Approver tunggal: (-) sebelum menyetujui, jam setelah menyetujui.
+        if (!input.equipment.approverName) return [];
+        const acted = !!l.approverName;
+        const t = acted && l.approvedAt ? formatShortWib(l.approvedAt) : "";
+        return [`1. ${input.equipment.approverName} (${t || "-"})`];
+    }
+
+    function eqApproval(l: DailyRecapEmailEquipmentLine): string {
+        const list = eqApprovalList(l);
+        return list.length > 0 ? list.join("; ") : "—";
     }
 
     const eqSummaryText =
         eq.length === 0
-            ? "Tidak ada alat yang diajukan ke QC."
-            : `Ringkasan: ${eqWaiting.length} Menunggu Inspeksi, ${eqDone.length} Sudah Inspeksi.`;
+            ? "Tidak ada alat yang diajukan."
+            : `Ringkasan: ${eqWaitingVerify.length} Menunggu Verifikasi, ${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.`;
     const eqLinesText = eq
-        .map((l, i) => `${i + 1}. ${l.unitName} — ${eqStatusLabel[l.status] ?? l.status}. Diajukan oleh: ${eqSubmitter(l)}. Inspeksi QC oleh: ${eqChecker(l)}.`)
+        .map((l, i) => `${i + 1}. ${l.unitName} — ${eqStatusLabel[l.status] ?? l.status}. Inspektor: ${eqInspector(l)}. Verifikator: ${eqVerifier(l)}. Approval: ${eqApproval(l)}.`)
         .join("\n");
 
     const eqSummaryHtml =
         eq.length === 0
-            ? "<p>Tidak ada alat yang diajukan ke QC.</p>"
-            : `<p><strong>Ringkasan:</strong> ${eqWaiting.length} Menunggu Inspeksi, ` +
-              `${eqDone.length} Sudah Inspeksi.</p>`;
+            ? "<p>Tidak ada alat yang diajukan.</p>"
+            : `<p><strong>Ringkasan:</strong> ${eqWaitingVerify.length} Menunggu Verifikasi, ` +
+              `${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.</p>`;
     const eqLinesHtml = eq.length === 0
         ? ""
         : `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;">` +
           `<thead><tr>` +
           `<th style="text-align:left;">No</th>` +
           `<th style="text-align:left;">Alat</th>` +
-          `<th style="text-align:left;">Diajukan oleh</th>` +
           `<th style="text-align:left;">Status</th>` +
-          `<th style="text-align:left;">Inspeksi QC oleh</th>` +
+          `<th style="text-align:left;">Inspektor</th>` +
+          `<th style="text-align:left;">Verifikator</th>` +
+          `<th style="text-align:left;">Approval</th>` +
           `</tr></thead><tbody>${eq
-              .map((l, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(l.unitName)}</td><td>${escapeHtml(eqSubmitter(l))}</td><td>${escapeHtml(eqStatusLabel[l.status] ?? l.status)}</td><td>${escapeHtml(eqChecker(l))}</td></tr>`)
+              .map((l, i) => {
+                  const verifierCell = eqVerifierList(l).map(escapeHtml).join("<br>") || "—";
+                  const approvalCell = eqApprovalList(l).map(escapeHtml).join("<br>") || "—";
+                  return `<tr><td>${i + 1}</td><td>${escapeHtml(l.unitName)}</td><td>${escapeHtml(eqStatusLabel[l.status] ?? l.status)}</td><td>${escapeHtml(eqInspector(l))}</td><td>${verifierCell}</td><td>${approvalCell}</td></tr>`;
+              })
               .join("")}</tbody></table>`;
     const cl = input.cleaning.lines;
     const clDone = cl.filter((l) => !l.isFree && l.exists && l.complete);

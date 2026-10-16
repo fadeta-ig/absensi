@@ -27,6 +27,8 @@ vi.mock("@/lib/env", () => ({
 
 import { prisma } from "@/lib/prisma";
 import {
+    approveEquipmentInspection,
+    cancelEquipmentInspection,
     assignEquipmentUnit,
     checkEquipmentDone,
     createEquipmentTemplate,
@@ -36,6 +38,7 @@ import {
     getPendingEquipmentApprovals,
     invalidateEquipmentQcMembersCache,
     requireActiveInternalEmployee,
+    setEquipmentApprover,
     setEquipmentQcMembers,
     setEquipmentTopViewers,
     startEquipmentInspection,
@@ -282,6 +285,88 @@ describe("QC DONE", () => {
         expect(out.status).toBe("DONE");
         expect(out.checkedByNameSnapshot).toBe("Daffa Fakhuddin Arrozy");
         expect(out.qcNote).toBe("OK");
+    });
+});
+
+describe("APPROVAL final", () => {
+    const doneRow = {
+        id: "in1",
+        status: "DONE",
+        unit: { id: "u1" },
+        items: [],
+        evidence: [],
+        qcEvidence: [],
+    };
+    function approverSession() {
+        return empSession({ userId: "u-ap", username: "AP-001", name: "Feri", employeeId: "AP-001" });
+    }
+    function mockApprover() {
+        mocked.appSetting.findUnique.mockResolvedValue({ value: "AP-001" } as never);
+        mocked.employee.findUnique.mockResolvedValue({ isActive: true } as never);
+    }
+    it("bukan approver ditolak 403", async () => {
+        mockApprover();
+        mocked.equipmentInspection.findUnique.mockResolvedValue(doneRow as never);
+        await expect(approveEquipmentInspection(empSession(), "in1")).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("set approver bukan WIG002 ditolak 403", async () => {
+        await expect(setEquipmentApprover(empSession(), "AP-001", actor)).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("APPROVE di luar DONE ditolak 409", async () => {
+        mockApprover();
+        mocked.equipmentInspection.findUnique.mockResolvedValue({ ...doneRow, status: "SUBMITTED" } as never);
+        mocked.employee.findFirst.mockResolvedValue({ employeeId: "AP-001", name: "Feri", isActive: true, userAccount: { id: "u-ap" } } as never);
+        await expect(approveEquipmentInspection(approverSession(), "in1")).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("APPROVE sukses mencatat approved-by", async () => {
+        mockApprover();
+        mocked.employee.findFirst.mockResolvedValue({ employeeId: "AP-001", name: "H. Feri", isActive: true, userAccount: { id: "u-ap" } } as never);
+        (mocked.$transaction as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue(undefined);
+        const approved = {
+            ...doneRow,
+            status: "APPROVED",
+            approvedByEmployeeId: "AP-001",
+            approvedByNameSnapshot: "H. Feri",
+            approvedAt: new Date(),
+            approvedBy: { employeeId: "AP-001", name: "H. Feri" },
+            items: [],
+            evidence: [],
+            qcEvidence: [],
+        };
+        mocked.equipmentInspection.findUnique
+            .mockResolvedValueOnce(doneRow as never)
+            .mockResolvedValue(approved as never);
+        const out = await approveEquipmentInspection(approverSession(), "in1");
+        expect(out.status).toBe("APPROVED");
+        expect(out.approvedByNameSnapshot).toBe("H. Feri");
+    });
+});
+
+describe("CANCEL berjalan", () => {
+    const openRow = {
+        id: "in1",
+        status: "OPEN",
+        unit: { id: "u1" },
+        startedByEmployeeId: "ID-001",
+        items: [],
+        evidence: [],
+        qcEvidence: [],
+    };
+    it("bukan pemulai ditolak 403", async () => {
+        mocked.equipmentInspection.findUnique.mockResolvedValue(openRow as never);
+        await expect(cancelEquipmentInspection(qcSession(), "in1")).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("CANCEL di luar OPEN ditolak 409", async () => {
+        mocked.equipmentInspection.findUnique.mockResolvedValue({ ...openRow, status: "SUBMITTED" } as never);
+        await expect(cancelEquipmentInspection(empSession(), "in1")).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("CANCEL sukses menjadi CANCELLED", async () => {
+        (mocked.$transaction as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue(undefined);
+        mocked.equipmentInspection.findUnique
+            .mockResolvedValueOnce(openRow as never)
+            .mockResolvedValue({ ...openRow, status: "CANCELLED" } as never);
+        const out = await cancelEquipmentInspection(empSession(), "in1");
+        expect(out.status).toBe("CANCELLED");
     });
 });
 

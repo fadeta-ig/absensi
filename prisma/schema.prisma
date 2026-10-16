@@ -84,6 +84,7 @@ model Employee {
   meetingTaskExtensionRequests MeetingTaskExtensionRequest[]
   equipmentInspectionsStarted  EquipmentInspection[] @relation("EquipmentInspectionStartedBy")
   equipmentInspectionsChecked  EquipmentInspection[] @relation("EquipmentInspectionCheckedBy")
+  equipmentInspectionsApproved EquipmentInspection[] @relation("EquipmentInspectionApprovedBy")
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -330,6 +331,8 @@ enum EquipmentInspectionStatus {
   OPEN
   SUBMITTED
   DONE
+  APPROVED
+  CANCELLED
 }
 
 model EquipmentInspection {
@@ -343,12 +346,16 @@ model EquipmentInspection {
   checkedByNameSnapshot String?                  @map("checked_by_name_snapshot") @db.VarChar(200)
   checkedAt             DateTime?                 @map("checked_at")
   qcNote                String?                   @map("qc_note") @db.Text
+  approvedByEmployeeId   String?                  @map("approved_by_employee_id")
+  approvedByNameSnapshot String?                 @map("approved_by_name_snapshot") @db.VarChar(200)
+  approvedAt            DateTime?                 @map("approved_at")
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
 
   unit      EquipmentUnit           @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   startedBy Employee                @relation("EquipmentInspectionStartedBy", fields: [startedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
   checkedBy Employee?               @relation("EquipmentInspectionCheckedBy", fields: [checkedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  approvedBy Employee?              @relation("EquipmentInspectionApprovedBy", fields: [approvedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
   items     EquipmentInspectionItem[]
   evidence  EquipmentInspectionEvidence[]
   qcEvidence EquipmentQcEvidence[]

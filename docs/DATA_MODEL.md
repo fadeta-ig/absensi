@@ -167,7 +167,7 @@ RBAC: tanpa permission baru. Akses meeting = peserta/requester atau WIG002 (`ga.
 1. `EquipmentTemplate` 1 ── * `EquipmentTemplateItem` (unik `[templateId, nameNormalized]`; flag `requirePhoto` per item).
 2. `EquipmentTemplate` 1 ── * `EquipmentUnit` (nama unik global; `brand`, `location`; tanpa reviewer per unit).
 3. `EquipmentUnit` 1 ── * `EquipmentAssignment` (`userId` + interval WIB; `unitId` null = global semua unit; internal saja; WIG002 menentukan siapa dapat modul).
-3. `EquipmentUnit` 1 ── * `EquipmentInspection` (`OPEN/SUBMITTED/DONE`; snapshot nama unit; tanpa jadwal — dibuat saat dipakai; kolom QC `checkedByEmployeeId/checkedByNameSnapshot/checkedAt/qcNote`).
+3. `EquipmentUnit` 1 ── * `EquipmentInspection` (`OPEN/SUBMITTED/DONE/APPROVED`; snapshot nama unit; tanpa jadwal — dibuat saat dipakai; kolom QC `checkedByEmployeeId/checkedByNameSnapshot/checkedAt/qcNote`; kolom approval `approvedByEmployeeId/approvedByNameSnapshot/approvedAt`).
 4. `EquipmentInspection` 1 ── * `EquipmentInspectionItem` (snapshot nama + `requirePhoto`; hasil `isPass` null = belum dinilai).
 5. `EquipmentInspection` 1 ── * `EquipmentInspectionEvidence` (`equipment_inspection_evidence`; FK `inspectionId` per inspeksi, bukan per item; maks 5 JPEG, mewakili semua item; gate submit ≥1 bila ada item `requirePhoto`).
 6. `EquipmentInspection` 1 ── * `EquipmentQcEvidence` (`equipment_qc_evidence`; foto QC opsional per inspeksi via `inspectionId`, maks 5; hanya saat `SUBMITTED`).

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowUpDown, CheckCircle2, ChevronRight, Circle, Loader2, RefreshCw, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, CheckCircle2, ChevronRight, Circle, Eye, Loader2, RefreshCw, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
@@ -46,10 +46,29 @@ interface InspectionDto {
     id: string;
     unit: { id: string; name: string; brand: string | null };
     status: string;
+    createdAt: string;
+    submittedAt: string | null;
+    checkedByNameSnapshot: string | null;
+    checkedAt: string | null;
+    approvedByNameSnapshot: string | null;
+    approvedAt: string | null;
     items: InspectionItem[];
     evidence: Array<{ id: string }>;
     checkedBy: { employeeId: string; name: string } | null;
     progress: { total: number; decided: number; allDecided: boolean; photoOk: boolean };
+}
+
+interface UnitHistoryRow {
+    id: string;
+    status: string;
+    createdAt: string;
+    submittedAt: string | null;
+    checkedAt: string | null;
+    approvedAt: string | null;
+    unit: { id: string; name: string; brand: string | null; location: string | null };
+    startedBy: { employeeId: string; name: string };
+    checkedByNameSnapshot: string | null;
+    approvedByNameSnapshot: string | null;
 }
 
 function formatDateTime(value: string | null): string {
@@ -83,15 +102,16 @@ function wibDateOf(value: string): string {
     }).format(new Date(value));
 }
 
-type StatusFilter = "ALL" | "NEVER" | "OPEN" | "SUBMITTED" | "DONE";
+type StatusFilter = "ALL" | "NEVER" | "OPEN" | "SUBMITTED" | "DONE" | "APPROVED";
 type SortMode = "NEVER_FIRST" | "AZ";
 
 const STATUS_CHIPS: Array<{ key: StatusFilter; label: string }> = [
     { key: "ALL", label: "Semua" },
     { key: "NEVER", label: "Belum dicek" },
     { key: "OPEN", label: "Berjalan" },
-    { key: "SUBMITTED", label: "Terkirim" },
-    { key: "DONE", label: "Selesai" },
+    { key: "SUBMITTED", label: "Menunggu Verifikasi" },
+    { key: "DONE", label: "Menunggu Approval" },
+    { key: "APPROVED", label: "Selesai" },
 ];
 
 export default function EmployeeEquipmentPage() {
@@ -112,6 +132,18 @@ export default function EmployeeEquipmentPage() {
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
     const [sortMode, setSortMode] = useState<SortMode>("NEVER_FIRST");
+
+    // Tab Alat vs Riwayat Saya + mode lihat read-only (anti klik-diam-diam-jalan).
+    const [mainTab, setMainTab] = useState<"alat" | "riwayat">("alat");
+    const [history, setHistory] = useState<InspectionDto[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyFilter, setHistoryFilter] = useState<"ALL" | "OPEN" | "SUBMITTED" | "DONE" | "APPROVED" | "CANCELLED">("ALL");
+    const [cancellingId, setCancellingId] = useState<string | null>(null);
+    const [readOnly, setReadOnly] = useState(false);
+    // Unit dipilih tanpa draf OPEN: tampilkan pilihan eksplisit (lihat riwayat / mulai baru).
+    const [unitChoice, setUnitChoice] = useState<MyUnit | null>(null);
+    const [unitHistory, setUnitHistory] = useState<UnitHistoryRow[]>([]);
+    const [unitHistoryLoading, setUnitHistoryLoading] = useState(false);
 
     const fetchUnits = useCallback(async () => {
         setLoading(true);
@@ -167,6 +199,7 @@ export default function EmployeeEquipmentPage() {
                 case "OPEN":
                 case "SUBMITTED":
                 case "DONE":
+                case "APPROVED":
                     return last?.status === statusFilter;
                 default:
                     return true;
@@ -242,12 +275,16 @@ export default function EmployeeEquipmentPage() {
 
     const openUnit = useCallback(
         async (entry: MyUnit) => {
+            // Lihat dulu, aksi kemudian: tidak ada auto-mulai checklist.
+            // Bila ada draf OPEN milik saya → lanjutkan; bila tidak → pilihan eksplisit.
             setSelectedUnit(entry);
             setInspection(null);
             setStartError(null);
+            setReadOnly(false);
+            setUnitChoice(null);
+            setUnitHistory([]);
             setDetailLoading(true);
             try {
-                // Mode bebas: lanjutkan draf OPEN milik saya bila ada, kalau tidak langsung mulai baru.
                 const res = await fetch("/api/employee/equipment/inspections?status=OPEN");
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat inspeksi."));
                 const json = await res.json();
@@ -257,7 +294,7 @@ export default function EmployeeEquipmentPage() {
                     await fetchInspectionDetail(open.id);
                 } else {
                     setDetailLoading(false);
-                    await startInspection(entry.unit.id);
+                    setUnitChoice(entry);
                 }
             } catch (err) {
                 const msg = err instanceof Error ? err.message : "Gagal memuat inspeksi.";
@@ -265,7 +302,7 @@ export default function EmployeeEquipmentPage() {
                 setDetailLoading(false);
             }
         },
-        [toast, fetchInspectionDetail, startInspection]
+        [toast, fetchInspectionDetail]
     );
 
     // Nilai Baik/Rusak: optimistic, tanpa konfirmasi untuk penilaian pertama.
@@ -312,7 +349,7 @@ export default function EmployeeEquipmentPage() {
     // Catatan yang diubah tetap bisa disimpan tanpa mengubah nilai.
     const gradeItem = useCallback(
         (item: InspectionItem, isPass: boolean) => {
-            if (updatingItem) return;
+            if (updatingItem || readOnly) return;
             const noteDirty = (notes[item.id] ?? "") !== (item.note ?? "");
             if (item.isPass !== null && item.isPass !== isPass) {
                 confirm({
@@ -330,17 +367,122 @@ export default function EmployeeEquipmentPage() {
             if (item.isPass === isPass && !noteDirty) return;
             void doGradeItem(item, isPass);
         },
-        [updatingItem, confirm, doGradeItem, notes]
+        [updatingItem, readOnly, confirm, doGradeItem, notes]
     );
 
     const backToUnits = useCallback(() => {
         setSelectedUnit(null);
         setInspection(null);
         setStartError(null);
+        setReadOnly(false);
+        setUnitChoice(null);
+        setUnitHistory([]);
     }, []);
 
+    const fetchHistory = useCallback(async () => {
+        setHistoryLoading(true);
+        try {
+            const res = await fetch("/api/employee/equipment/inspections");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat."));
+            const json = await res.json();
+            setHistory((json.data ?? []) as InspectionDto[]);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat riwayat.";
+            toast(msg, "error");
+            reportClientError("EmployeeEquipment", msg, err);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [toast]);
+
+    const handleCancel = useCallback(
+        (row: InspectionDto) => {
+            if (cancellingId) return;
+            const decided = row.progress?.decided ?? 0;
+            const total = row.progress?.total ?? 0;
+            confirm({
+                title: "Batalkan checklist ini?",
+                message: `${row.unit.name} — ${decided}/${total} item sudah dinilai. Checklist yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
+                confirmLabel: "Ya, batalkan",
+                cancelLabel: "Jangan batalkan",
+                variant: "danger",
+                onConfirm: () => {
+                    void (async () => {
+                        setCancellingId(row.id);
+                        try {
+                            const res = await fetch(`/api/employee/equipment/inspections/${row.id}/cancel`, { method: "POST" });
+                            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan checklist."));
+                            toast("Checklist dibatalkan.", "success");
+                            await fetchHistory();
+                            await fetchUnits();
+                        } catch (err) {
+                            const msg = err instanceof Error ? err.message : "Gagal membatalkan checklist.";
+                            toast(msg, "error");
+                            reportClientError("EmployeeEquipment", msg, err, { inspectionId: row.id });
+                        } finally {
+                            setCancellingId(null);
+                        }
+                    })();
+                },
+            });
+        },
+        [cancellingId, confirm, toast, fetchHistory, fetchUnits]
+    );
+
+    const openHistoryDetail = useCallback(
+        async (row: InspectionDto | UnitHistoryRow, opts?: { edit?: boolean }) => {
+            setSelectedUnit({
+                unit: {
+                    id: row.unit.id,
+                    name: row.unit.name,
+                    brand: row.unit.brand ?? null,
+                    location: (row.unit as { location?: string | null }).location ?? null,
+                    template: { name: "" },
+                    inspections: [],
+                },
+            });
+            setInspection(null);
+            setUnitChoice(null);
+            setReadOnly(!opts?.edit);
+            setDetailLoading(true);
+            try {
+                const res = await fetch(`/api/employee/equipment/inspections/${row.id}`);
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat detail."));
+                const json = await res.json();
+                setInspection(json.data as InspectionDto);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : "Gagal memuat detail.";
+                toast(msg, "error");
+                reportClientError("EmployeeEquipment", msg, err);
+            } finally {
+                setDetailLoading(false);
+            }
+        },
+        [toast]
+    );
+
+    const fetchUnitHistory = useCallback(
+        async (unitId: string) => {
+            setUnitHistoryLoading(true);
+            setUnitHistory([]);
+            try {
+                const res = await fetch(`/api/employee/equipment/units/${unitId}/history`);
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat riwayat unit."));
+                const json = await res.json();
+                setUnitHistory((json.data ?? []) as UnitHistoryRow[]);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : "Gagal memuat riwayat unit.";
+                toast(msg, "error");
+                reportClientError("EmployeeEquipment", msg, err);
+            } finally {
+                setUnitHistoryLoading(false);
+            }
+        },
+        [toast]
+    );
+
     const submitInspection = useCallback(() => {
-        if (!inspection || submitting) return;
+        if (!inspection || submitting || readOnly) return;
         const active = inspection.items.filter((i) => i.isActive);
         const baik = active.filter((i) => i.isPass === true).length;
         const rusak = active.filter((i) => i.isPass === false).length;
@@ -373,7 +515,7 @@ export default function EmployeeEquipmentPage() {
                 })();
             },
         });
-    }, [inspection, submitting, confirm, toast, fetchUnits]);
+    }, [inspection, submitting, readOnly, confirm, toast, fetchUnits]);
 
     if (loading) {
         return (
@@ -451,6 +593,20 @@ export default function EmployeeEquipmentPage() {
                             {inspection.status === "OPEN" ? "Berjalan" : equipmentStatusLabel(inspection.status)}
                         </span>
                     )}
+                    {readOnly && inspection && (
+                        <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
+                            Mode lihat — tidak ada perubahan yang dibuat. Detail ini read-only.
+                        </p>
+                    )}
+                    {readOnly && inspection && inspection.status === "OPEN" && (
+                        <button
+                            type="button"
+                            onClick={() => setReadOnly(false)}
+                            className="mt-2 px-4 min-h-[44px] inline-flex items-center text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                        >
+                            Lanjutkan mengerjakan
+                        </button>
+                    )}
                 </div>
 
                 {(detailLoading || starting) && (
@@ -468,6 +624,68 @@ export default function EmployeeEquipmentPage() {
                         >
                             Coba lagi
                         </button>
+                    </div>
+                )}
+
+                {!detailLoading && !starting && !inspection && unitChoice && (
+                    <div className="bg-card border border-border rounded-lg p-4">
+                        <p className="text-sm text-foreground font-medium">
+                            Tidak ada checklist berjalan untuk alat ini.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1 mb-3">
+                            Melihat riwayat tidak membuat checklist baru. Checklist baru hanya dibuat bila Anda menekan tombol mulai.
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void fetchUnitHistory(unitChoice.unit.id)}
+                                className="w-full px-4 min-h-[48px] inline-flex items-center justify-center gap-2 text-sm font-semibold border border-border rounded-md hover:bg-accent"
+                            >
+                                <Eye aria-hidden="true" className="h-4 w-4" /> Lihat riwayat unit ini
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setUnitChoice(null);
+                                    void startInspection(unitChoice.unit.id);
+                                }}
+                                className="w-full px-4 min-h-[48px] inline-flex items-center justify-center gap-2 text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                            >
+                                Mulai checklist baru
+                            </button>
+                        </div>
+
+                        {unitHistoryLoading && (
+                            <div className="flex items-center justify-center py-6">
+                                <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-muted-foreground" />
+                            </div>
+                        )}
+
+                        {!unitHistoryLoading && unitHistory.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                                {unitHistory.map((row) => (
+                                    <button
+                                        key={row.id}
+                                        type="button"
+                                        onClick={() => void openHistoryDetail(row)}
+                                        className="w-full flex items-start gap-2.5 p-3 bg-background border border-border rounded-lg hover:bg-accent/50 text-left"
+                                    >
+                                        <EquipmentStatusDot status={row.status} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-sm font-medium text-foreground truncate">
+                                                {stripGelar(row.startedBy.name)} · {equipmentStatusLabel(row.status)}
+                                            </span>
+                                            <span className="block text-xs text-muted-foreground truncate">
+                                                Mulai {formatDateTime(row.createdAt)}
+                                                {row.checkedByNameSnapshot ? ` · QC: ${stripGelar(row.checkedByNameSnapshot)}` : ""}
+                                                {row.approvedByNameSnapshot ? ` · Approval: ${stripGelar(row.approvedByNameSnapshot)}` : ""}
+                                            </span>
+                                        </span>
+                                        <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -514,7 +732,7 @@ export default function EmployeeEquipmentPage() {
                                     <button
                                         type="button"
                                         onClick={() => gradeItem(item, true)}
-                                        disabled={updatingItem !== null || inspection.status !== "OPEN"}
+                                        disabled={updatingItem !== null || inspection.status !== "OPEN" || readOnly}
                                         aria-pressed={item.isPass === true}
                                         className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-md text-base font-semibold border transition-colors disabled:opacity-50 min-h-[52px] ${
                                             item.isPass === true
@@ -532,7 +750,7 @@ export default function EmployeeEquipmentPage() {
                                     <button
                                         type="button"
                                         onClick={() => gradeItem(item, false)}
-                                        disabled={updatingItem !== null || inspection.status !== "OPEN"}
+                                        disabled={updatingItem !== null || inspection.status !== "OPEN" || readOnly}
                                         aria-pressed={item.isPass === false}
                                         className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-md text-base font-semibold border transition-colors disabled:opacity-50 min-h-[52px] ${
                                             item.isPass === false
@@ -548,7 +766,7 @@ export default function EmployeeEquipmentPage() {
                                         Rusak
                                     </button>
                                 </div>
-                                {inspection.status === "OPEN" && (
+                                {inspection.status === "OPEN" && !readOnly && (
                                     <div className="mt-2">
                                         <label htmlFor={`note-${item.id}`} className="sr-only">
                                             Catatan {item.itemNameSnapshot}
@@ -566,7 +784,7 @@ export default function EmployeeEquipmentPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => gradeItem(item, item.isPass ?? true)}
-                                                disabled={updatingItem !== null}
+                                                disabled={updatingItem !== null || readOnly}
                                                 className="mt-1.5 px-3 min-h-[44px] inline-flex items-center text-xs font-semibold text-primary border border-primary/40 rounded-md hover:bg-primary/10 disabled:opacity-50"
                                             >
                                                 {updatingItem === item.id ? "Menyimpan..." : item.isPass === null ? "Simpan + nilai Baik" : "Simpan catatan"}
@@ -574,7 +792,7 @@ export default function EmployeeEquipmentPage() {
                                         )}
                                     </div>
                                 )}
-                                {item.note && inspection.status !== "OPEN" && (
+                                {item.note && (inspection.status !== "OPEN" || readOnly) && (
                                     <p className="mt-1.5 text-xs text-muted-foreground">Catatan: {item.note}</p>
                                 )}
                             </div>
@@ -590,12 +808,12 @@ export default function EmployeeEquipmentPage() {
                             </p>
                             <EquipmentEvidencePanel
                                 inspectionId={inspection.id}
-                                canUpload={inspection.status === "OPEN"}
+                                canUpload={inspection.status === "OPEN" && !readOnly}
                                 onChanged={() => void fetchInspectionDetail(inspection.id)}
                             />
                         </div>
 
-                        {inspection.status === "OPEN" && (
+                        {inspection.status === "OPEN" && !readOnly && (
                             <div className="sticky bottom-4 z-10 pt-1">
                                 <div className="bg-card/95 backdrop-blur border border-border rounded-lg p-3 shadow-lg">
                                     {!canSubmit && (
@@ -635,7 +853,134 @@ export default function EmployeeEquipmentPage() {
                     : `${checkedTodayCount}/${units.length} alat dicek hari ini. Pilih alat untuk checklist.`}
             </p>
 
-            {error && (
+            <div className="flex gap-2 mb-4" role="tablist" aria-label="Alat dan riwayat">
+                {(
+                    [
+                        { key: "alat", label: "Alat" },
+                        { key: "riwayat", label: "Riwayat Saya" },
+                    ] as const
+                ).map((tab) => (
+                    <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={mainTab === tab.key}
+                        onClick={() => {
+                            setMainTab(tab.key);
+                            if (tab.key === "riwayat" && history.length === 0 && !historyLoading) void fetchHistory();
+                        }}
+                        className={`flex-1 px-3 min-h-[44px] inline-flex items-center justify-center text-sm font-semibold rounded-md border transition-colors ${
+                            mainTab === tab.key
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {mainTab === "riwayat" && (
+                <div className="space-y-3" aria-live="polite">
+                    <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter status riwayat">
+                        {(
+                            [
+                                { key: "ALL", label: "Semua" },
+                                { key: "OPEN", label: "Sedang saya lakukan" },
+                                { key: "SUBMITTED", label: "Menunggu Verifikasi" },
+                                { key: "DONE", label: "Menunggu Approval" },
+                                { key: "APPROVED", label: "Selesai" },
+                                { key: "CANCELLED", label: "Dibatalkan" },
+                            ] as const
+                        ).map((chip) => (
+                            <button
+                                key={chip.key}
+                                type="button"
+                                onClick={() => setHistoryFilter(chip.key)}
+                                aria-pressed={historyFilter === chip.key}
+                                className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-sm font-medium rounded-full border transition-colors ${
+                                    historyFilter === chip.key
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                                }`}
+                            >
+                                {chip.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {historyLoading && (
+                        <div className="flex items-center justify-center py-12" role="status" aria-label="Memuat riwayat">
+                            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    )}
+
+                    {!historyLoading &&
+                        history
+                            .filter((h) => (historyFilter === "ALL" ? h.status !== "CANCELLED" : h.status === historyFilter))
+                            .map((h) => (
+                                <div
+                                    key={h.id}
+                                    className="bg-card border border-border rounded-lg p-4"
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => void openHistoryDetail(h)}
+                                        className="w-full flex items-start gap-2.5 text-left"
+                                    >
+                                        <EquipmentStatusDot status={h.status} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block font-medium text-foreground truncate">{h.unit.name}</span>
+                                            <span className="block text-xs text-muted-foreground truncate">
+                                                Mulai {formatDateTime(h.createdAt)} · {equipmentStatusLabel(h.status)}
+                                            </span>
+                                            {h.checkedByNameSnapshot && (
+                                                <span className="block text-xs text-muted-foreground truncate">
+                                                    QC: {stripGelar(h.checkedByNameSnapshot)}
+                                                    {h.approvedByNameSnapshot ? ` · Approval: ${stripGelar(h.approvedByNameSnapshot)}` : ""}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
+                                    </button>
+                                    {h.status === "OPEN" && (
+                                        <div className="flex gap-2 mt-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => void openHistoryDetail(h, { edit: true })}
+                                                className="flex-1 px-3 min-h-[44px] inline-flex items-center justify-center text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                                            >
+                                                Lanjutkan
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCancel(h)}
+                                                disabled={cancellingId === h.id}
+                                                aria-label={`Batalkan checklist ${h.unit.name}`}
+                                                className="flex-1 px-3 min-h-[44px] inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-destructive border border-destructive/40 rounded-md hover:bg-destructive/10 disabled:opacity-50"
+                                            >
+                                                {cancellingId === h.id ? (
+                                                    <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <X aria-hidden="true" className="h-4 w-4" />
+                                                )}
+                                                {cancellingId === h.id ? "Membatalkan..." : "Batalkan"}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+
+                    {!historyLoading && history.filter((h) => (historyFilter === "ALL" ? h.status !== "CANCELLED" : h.status === historyFilter)).length === 0 && (
+                        <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
+                            <p className="text-sm font-medium text-foreground">Belum ada riwayat.</p>
+                            <p className="text-sm text-muted-foreground mt-1">Checklist yang Anda mulai akan tercatat di sini.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {mainTab === "alat" && error && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center mb-4">
                     <AlertTriangle aria-hidden="true" className="h-5 w-5 text-destructive mx-auto mb-2" />
                     <p className="text-sm text-destructive">{error}</p>
@@ -648,7 +993,7 @@ export default function EmployeeEquipmentPage() {
                 </div>
             )}
 
-            {units.length > 0 && (
+            {mainTab === "alat" && units.length > 0 && (
                 <div className="sticky top-0 z-10 bg-background/95 backdrop-blur pb-2 -mx-4 px-4 pt-1">
                     <EquipmentSearchField
                         id="cari-alat"
@@ -690,14 +1035,13 @@ export default function EmployeeEquipmentPage() {
                 </div>
             )}
 
-            {units.length === 0 && !error && (
+            {mainTab === "alat" && units.length === 0 && !error && (
                 <div className="text-center py-12">
                     <p className="text-muted-foreground">Anda belum ditugaskan ke alat manapun.</p>
-                    <p className="text-sm text-muted-foreground mt-1">Hubungi admin GA untuk penugasan.</p>
                 </div>
             )}
 
-            {visibleUnits.length === 0 && units.length > 0 && !error && (
+            {mainTab === "alat" && visibleUnits.length === 0 && units.length > 0 && !error && (
                 <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
                     <p className="text-sm font-medium text-foreground">Tidak ketemu.</p>
                     <p className="text-sm text-muted-foreground mt-1">Coba kata kunci atau filter lain.</p>
@@ -714,6 +1058,7 @@ export default function EmployeeEquipmentPage() {
                 </div>
             )}
 
+            {mainTab === "alat" && (
             <div className="space-y-3" aria-live="polite">
                 {visibleUnits.map((entry) => {
                     const last = entry.unit.inspections[0];
@@ -731,7 +1076,7 @@ export default function EmployeeEquipmentPage() {
                                 <p className={`text-xs mt-0.5 truncate ${last ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}`}>
                                     {last
                                         ? `Terakhir dicek ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`
-                                        : "Belum pernah dicek — ketuk untuk checklist"}
+                                        : "Belum pernah dicek — ketuk untuk melihat"}
                                 </p>
                             </div>
                             <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
@@ -739,6 +1084,7 @@ export default function EmployeeEquipmentPage() {
                     );
                 })}
             </div>
+            )}
         </div>
     );
 }

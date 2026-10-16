@@ -13,6 +13,8 @@ interface OverviewInspection {
     startedBy: { employeeId: string; name: string };
     checkedBy: { employeeId: string; name: string } | null;
     checkedByNameSnapshot: string | null;
+    approvedBy: { employeeId: string; name: string } | null;
+    approvedByNameSnapshot: string | null;
     status: string;
     createdAt: string;
     submittedAt: string | null;
@@ -23,15 +25,17 @@ interface OverviewSummary {
     open: number;
     submitted: number;
     done: number;
+    approved: number;
     total: number;
 }
 
-const STATUS_OPTIONS = ["", "OPEN", "SUBMITTED", "DONE"] as const;
+const STATUS_OPTIONS = ["", "OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
 
 const STATUS_LABEL: Record<string, string> = {
     OPEN: "Berjalan",
-    SUBMITTED: "Terkirim",
-    DONE: "Selesai",
+    SUBMITTED: "Menunggu Verifikasi",
+    DONE: "Menunggu Approval",
+    APPROVED: "Selesai",
 };
 
 function statusBadgeClass(status: string): string {
@@ -41,6 +45,8 @@ function statusBadgeClass(status: string): string {
         case "SUBMITTED":
             return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
         case "DONE":
+            return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+        case "APPROVED":
             return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
         default:
             return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
@@ -228,12 +234,13 @@ export default function EmployeeEquipmentOverviewPage() {
                     )}
 
                     {!loading && !error && summary && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
                             {(
                                 [
                                     ["Berjalan", summary.open],
-                                    ["Terkirim", summary.submitted],
-                                    ["Selesai", summary.done],
+                                    ["Verifikasi", summary.submitted],
+                                    ["Approval", summary.done],
+                                    ["Selesai", summary.approved],
                                     ["Total", summary.total],
                                 ] as [string, number][]
                             ).map(([label, value]) => (
@@ -270,6 +277,11 @@ export default function EmployeeEquipmentOverviewPage() {
                                             {(item.checkedByNameSnapshot || item.checkedBy) && (
                                                 <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
                                                     Checked by QC - {stripGelar(item.checkedByNameSnapshot ?? item.checkedBy?.name ?? "")}
+                                                </p>
+                                            )}
+                                            {(item.approvedByNameSnapshot || item.approvedBy) && (
+                                                <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                                                    Approval - {stripGelar(item.approvedByNameSnapshot ?? item.approvedBy?.name ?? "")}
                                                 </p>
                                             )}
                                         </div>

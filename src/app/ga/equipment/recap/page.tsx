@@ -18,6 +18,7 @@ interface RecapSummary {
     open: number;
     submitted: number;
     done: number;
+    approved: number;
     total: number;
 }
 
@@ -47,15 +48,19 @@ interface RecapDetail {
     checkedByNameSnapshot: string | null;
     checkedAt: string | null;
     qcNote: string | null;
+    approvedBy: { employeeId: string; name: string } | null;
+    approvedByNameSnapshot: string | null;
+    approvedAt: string | null;
     items: RecapDetailItem[];
 }
 
-const STATUS_OPTIONS = ["", "OPEN", "SUBMITTED", "DONE"] as const;
+const STATUS_OPTIONS = ["", "OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
 
 const STATUS_LABEL: Record<string, string> = {
     OPEN: "Berjalan",
-    SUBMITTED: "Terkirim",
-    DONE: "Selesai",
+    SUBMITTED: "Menunggu Verifikasi",
+    DONE: "Menunggu Approval",
+    APPROVED: "Selesai",
 };
 
 function formatDateTime(value: string): string {
@@ -74,6 +79,8 @@ function statusBadgeClass(status: string): string {    switch (status) {
         case "SUBMITTED":
             return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
         case "DONE":
+            return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+        case "APPROVED":
             return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
         default:
             return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
@@ -312,12 +319,13 @@ export default function EquipmentRecapPage() {
                     )}
 
                     {!loading && !error && summary && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
                             {(
                                 [
                                     ["Berjalan", summary.open],
-                                    ["Terkirim", summary.submitted],
-                                    ["Selesai", summary.done],
+                                    ["Verifikasi", summary.submitted],
+                                    ["Approval", summary.done],
+                                    ["Selesai", summary.approved],
                                     ["Total", summary.total],
                                 ] as [string, number][]
                             ).map(([label, value]) => (
@@ -451,6 +459,12 @@ export default function EquipmentRecapPage() {
                                     </p>
                                     <p className="text-xs text-[var(--text-muted)] mt-0.5">{detail.checkedAt ? formatDateTime(detail.checkedAt) : ""}</p>
                                     {detail.qcNote && <p className="text-xs text-[var(--text-muted)] mt-1">Catatan QC: {detail.qcNote}</p>}
+                                    {(detail.approvedByNameSnapshot || detail.approvedBy) && (
+                                        <p className="text-xs font-medium text-green-800 dark:text-green-300 mt-1">
+                                            Approval final - {stripGelar(detail.approvedByNameSnapshot ?? detail.approvedBy?.name ?? "")}
+                                            {detail.approvedAt ? ` · ${formatDateTime(detail.approvedAt)}` : ""}
+                                        </p>
+                                    )}
                                     <div className="mt-1.5">
                                         <EquipmentEvidencePanel
                                             inspectionId={detail.id}

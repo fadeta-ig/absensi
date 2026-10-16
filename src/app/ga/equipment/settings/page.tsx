@@ -118,6 +118,12 @@ export default function EquipmentSettingsPage() {
     const [newTopViewer, setNewTopViewer] = useState<EmployeePick | null>(null);
     const [savingTopViewers, setSavingTopViewers] = useState(false);
 
+    // ─── Approver final (satu atasan lapangan) ───
+    const [approver, setApprover] = useState<{ employeeId: string; name: string | null; isActive: boolean } | null>(null);
+    const [approverError, setApproverError] = useState<string | null>(null);
+    const [newApprover, setNewApprover] = useState<EmployeePick | null>(null);
+    const [savingApprover, setSavingApprover] = useState(false);
+
     const fetchTopViewers = useCallback(async () => {
         setTopViewerError(null);
         try {
@@ -132,8 +138,7 @@ export default function EquipmentSettingsPage() {
         }
     }, []);
 
-    const fetchQcMembers = useCallback(async () => {
-        setQcError(null);
+    const fetchQcMembers = useCallback(async () => {        setQcError(null);
         try {
             const res = await fetch("/api/ga/equipment/qc-members");
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat anggota QC."));
@@ -145,6 +150,44 @@ export default function EquipmentSettingsPage() {
             reportClientError("EquipmentSettings", msg, err);
         }
     }, []);
+
+    const fetchApprover = useCallback(async () => {
+        setApproverError(null);
+        try {
+            const res = await fetch("/api/ga/equipment/settings/approver");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat approver."));
+            const json = await res.json();
+            setApprover(json.data ?? null);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat approver.";
+            setApproverError(msg);
+            reportClientError("EquipmentSettings", msg, err);
+        }
+    }, []);
+
+    const saveApprover = useCallback(async () => {
+        if (!newApprover) {
+            toast("Cari dan pilih karyawan terlebih dahulu.", "warning");
+            return;
+        }
+        setSavingApprover(true);
+        try {
+            const res = await fetch("/api/ga/equipment/settings/approver", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ employeeId: newApprover.employeeId }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan approver."));
+            toast("Approver ditetapkan.", "success");
+            setNewApprover(null);
+            await fetchApprover();
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+            reportClientError("EquipmentSettings", "Approver save failed", err);
+        } finally {
+            setSavingApprover(false);
+        }
+    }, [newApprover, toast, fetchApprover]);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -175,7 +218,8 @@ export default function EquipmentSettingsPage() {
         void fetchAll();
         void fetchTopViewers();
         void fetchQcMembers();
-    }, [fetchAll, fetchTopViewers, fetchQcMembers]);
+        void fetchApprover();
+    }, [fetchAll, fetchTopViewers, fetchQcMembers, fetchApprover]);
 
     // ─── Template CRUD ───
 
@@ -1094,6 +1138,49 @@ export default function EquipmentSettingsPage() {
                                 Batas 5 top reviewer tercapai. Hapus salah satu untuk menambah.
                             </p>
                         )}
+                    </div>
+
+                    <div className="bg-card border border-border rounded-lg p-4">
+                        <h2 className="text-base font-medium mb-1">Approver Final</h2>
+                        <p className="text-xs text-muted-foreground mb-3">
+                            Satu atasan lapangan yang memberi approval final (DONE → Selesai). Dinamis, bisa diganti kapan saja.
+                        </p>
+                        {approverError && (
+                            <FeedbackMessage variant="error" className="mb-3">
+                                {approverError}{" "}
+                                <button onClick={() => void fetchApprover()} className="underline">
+                                    Coba lagi
+                                </button>
+                            </FeedbackMessage>
+                        )}
+                        {approver ? (
+                            <p className="text-sm text-foreground mb-3">
+                                <span className="font-medium">{approver.name}</span>{" "}
+                                <span className="text-xs text-muted-foreground">{approver.employeeId}</span>
+                            </p>
+                        ) : (
+                            !approverError && (
+                                <p className="text-sm text-muted-foreground mb-3">
+                                    Belum ada approver — approval final terkunci sampai ditetapkan.
+                                </p>
+                            )
+                        )}
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <div className="flex-1">
+                                <EmployeeSearchPicker
+                                    label="Cari karyawan"
+                                    value={newApprover}
+                                    onChange={setNewApprover}
+                                />
+                            </div>
+                            <button
+                                onClick={saveApprover}
+                                disabled={savingApprover}
+                                className="shrink-0 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 self-end min-h-10"
+                            >
+                                {savingApprover ? "Menyimpan..." : "Tetapkan"}
+                            </button>
+                        </div>
                     </div>
 
                     <div className="bg-card border border-border rounded-lg p-4">

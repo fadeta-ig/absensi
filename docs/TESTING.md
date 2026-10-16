@@ -58,7 +58,7 @@ tests/
 │   ├── employeeMasterV2.integration.test.ts
 │   ├── employeeStatus.integration.test.ts
 │   ├── employeeStatusService.test.ts
-│   ├── equipmentService.test.ts # Guard WIG002/QC, free-mode tanpa assignment, antrean QC, DONE, submit gate (mock Prisma, 20 test)
+│   ├── equipmentService.test.ts # Guard WIG002/QC/approver, assignment, antrean QC, DONE, APPROVE, submit gate (mock Prisma, 28 test)
 │   ├── holidayService.test.ts
 │   ├── leaveService.test.ts
 │   ├── leaveValidation.test.ts # Batas rentang cuti inklusif 366 hari pada helper dan schema API
@@ -88,7 +88,7 @@ tests/
 |---|---|---|
 | **Semua Test (One-shot)** | `npm test -- --run` | Menjalankan seluruh test suite dan keluar |
 | **Service Layer Saja** | `npx vitest run tests/services/` | Menguji logika bisnis langsung tanpa butuh server aktif |
-| **Service Equipment Saja** | `npx vitest run tests/services/equipmentService.test.ts` | Mock Prisma (`vi.mock`), tanpa server/DB; 20 test lolos per 2026-10-11 |
+| **Service Equipment Saja** | `npx vitest run tests/services/equipmentService.test.ts` | Mock Prisma (`vi.mock`), tanpa server/DB; 28 test lolos per 2026-10-16 |
 | **Utilitas Saja** | `npx vitest run tests/utils/` | Menguji modul utilitas (pii, tanggal, ip validator) |
 | **API Endpoints Saja** | `npx vitest run tests/api/` | **Wajib**: Jalankan server `npm run dev` di terminal lain terlebih dahulu |
 | **Watch Mode (Dev)** | `npm test` | Menjalankan Vitest dalam mode interaktif watch |
@@ -108,4 +108,4 @@ tests/
 
 - **Ketergantungan Port 3000**: Test suite di `tests/api/` tidak menggunakan mock HTTP handler internal (seperti Supertest atau Next.js test runner in-process), melainkan `fetch` nyata ke port 3000. Akibatnya, test ini tidak dapat berjalan di CI/CD yang terisolasi tanpa langkah `npm start &` terlebih dahulu.
 - **Frontend Component Tests**: React Testing Library + jsdom tersedia dan dipakai oleh suite `tests/components/`; belum ada framework end-to-end browser seperti Playwright/Cypress.
-- **Equipment (inspeksi alat)**: `tests/services/equipmentService.test.ts` hanya unit bermock (guard template/unit/QC, free-mode tanpa assignment, antrean QC, DONE, submit gate termasuk aturan 1 foto). Happy-path E2E dan HTTP API (`src/app/api/ga/equipment/`, `src/app/api/employee/equipment/`) belum dicover — tidak ada suite equipment di `tests/api/`.
+- **Equipment (inspeksi alat)**: `tests/services/equipmentService.test.ts` hanya unit bermock (guard template/unit/QC/approver, assignment, antrean QC, DONE, APPROVE, submit gate termasuk aturan 1 foto). Happy-path E2E dan HTTP API (`src/app/api/ga/equipment/`, `src/app/api/employee/equipment/`) belum dicover — tidak ada suite equipment di `tests/api/`.

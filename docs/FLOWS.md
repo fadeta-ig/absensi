@@ -226,7 +226,7 @@ Alur serah terima aset korporat dari GA ke karyawan:
 
 ---
 
-## 8. Flow: Inspeksi Alat (Checklist Foreman → Submit → QC DONE → Pantau Atasan)
+## 8. Flow: Inspeksi Alat (Checklist → Submit → QC DONE → Approval → Pantau Atasan)
 
 ```text
 [ Pelaksana (karyawan internal) ]     [ API /api/equipment/* ]              [ equipmentService.ts ]
@@ -239,14 +239,17 @@ Alur serah terima aset korporat dari GA ke karyawan:
 [ Anggota QC ] ── antrean SUBMITTED ──>│── requireQcMember ────────────────>│── getPendingEquipmentApprovals (terbaru di atas)
            │── DONE + catatan opsional ──────────>│── hanya dari SUBMITTED (409) ───>│── SUBMITTED → DONE + snapshot nama QC + audit log
 
-[ WIG002 / topViewer ] ── rekap ──────>│── requireWig002OrTopViewer ───────>│── getEquipmentRecap (ringkasan open/submitted/done)
+[ Approver ] ── DONE ──>│── requireApprover (tunggal, setting WIG002) ──>│── DONE → APPROVED + snapshot nama + audit log
+
+[ WIG002 / topViewer ] ── rekap ──────>│── requireWig002OrTopViewer ───────>│── getEquipmentRecap (ringkasan open/submitted/done/approved)
 ```
 
 1. **Mulai checklist bebas**: Karyawan internal aktif mana pun memilih unit aktif dan memulai inspeksi; sistem membuat snapshot item dari template aktif saat itu (perubahan template berikutnya tidak mengubah inspeksi berjalan). Unit nonaktif, template nonaktif, atau template tanpa item aktif ditolak.
 2. **Penilaian + foto**: Pelaksana menilai tiap item (`isPass` + catatan opsional) dan mengunggah foto dokumentasi ke satu tempat per inspeksi (mewakili semua item, maks 5). Perubahan item/foto ditolak setelah inspeksi dikirim.
-3. **Submit**: Lolos bila semua item aktif sudah dinilai dan (bila ada item `requirePhoto`) minimal 1 foto ada. Status menjadi `SUBMITTED`; tidak ada jalan kembali ke `OPEN`.
+3. **Submit**: Lolos bila semua item aktif sudah dinilai dan (bila ada item `requirePhoto`) minimal 1 foto ada. Status menjadi `SUBMITTED`; tidak ada jalan kembali ke `OPEN`. Pemulai dapat membatalkan yang masih `OPEN` (`CANCELLED`, via konfirmasi).
 4. **Antrean QC pool**: Semua anggota QC melihat antrean `SUBMITTED` yang sama, terbaru di atas. QC boleh menambah foto QC opsional (maks 5) selama menunggu.
 5. **QC DONE**: Anggota QC menyelesaikan dengan klik DONE + catatan opsional (tanpa paraf/tanda tangan); nama pemeriksa disimpan sebagai snapshot. Hanya dari `SUBMITTED`; tidak ada reject.
-6. **Pantau atasan**: WIG002 dan topViewer (read-only) memantau via rekap berfilter (unit/status/rentang tanggal) dengan ringkasan `open/submitted/done/total`. Menu pelaksana/QC/atasan digerbang via `getEmployeeEquipmentCapabilities` (`canExecute`/`canReview`/`canTopView`).
+5b. **Approval final**: Approver tunggal (setting `equipment.approverId` oleh WIG002) menyetujui dari `DONE` → `APPROVED` + snapshot nama + audit; satu arah tanpa reject. DONE lama di-grandfather final.
+6. **Pantau atasan**: WIG002 dan topViewer (read-only) memantau via rekap berfilter (unit/status/rentang tanggal) dengan ringkasan `open/submitted/done/approved/total`. Menu pelaksana/QC/atasan/tombol approval digerbang via `getEmployeeEquipmentCapabilities` (`canExecute`/`canReview`/`canTopView`/`canApprove`).
 
 Rujukan: `src/lib/services/equipmentService.ts`, `tests/services/equipmentService.test.ts`.

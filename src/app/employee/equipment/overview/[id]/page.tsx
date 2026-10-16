@@ -5,6 +5,8 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import { useToast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmModal";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface DetailItem {
@@ -25,14 +27,18 @@ interface InspectionDetail {
     checkedByNameSnapshot: string | null;
     checkedAt: string | null;
     qcNote: string | null;
+    approvedBy: { employeeId: string; name: string } | null;
+    approvedByNameSnapshot: string | null;
+    approvedAt: string | null;
     items: DetailItem[];
     progress: { total: number; decided: number };
 }
 
 const STATUS_LABEL: Record<string, string> = {
     OPEN: "Berjalan",
-    SUBMITTED: "Terkirim",
-    DONE: "Selesai",
+    SUBMITTED: "Menunggu Verifikasi",
+    DONE: "Menunggu Approval",
+    APPROVED: "Selesai",
 };
 
 function statusBadgeClass(status: string): string {
@@ -42,6 +48,8 @@ function statusBadgeClass(status: string): string {
         case "SUBMITTED":
             return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
         case "DONE":
+            return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+        case "APPROVED":
             return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
         default:
             return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
@@ -64,6 +72,10 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
+    const [canApprove, setCanApprove] = useState(false);
+    const [approving, setApproving] = useState(false);
+    const toast = useToast();
+    const confirm = useConfirm();
 
     const fetchDetail = useCallback(async () => {
         setLoading(true);
@@ -91,6 +103,44 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
     useEffect(() => {
         void fetchDetail();
     }, [fetchDetail]);
+
+    useEffect(() => {
+        fetch("/api/employee/equipment/capabilities")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json) => setCanApprove(json?.data?.canApprove === true))
+            .catch(() => setCanApprove(false));
+    }, []);
+
+    const handleApprove = () => {
+        if (!detail || approving) return;
+        confirm({
+            title: "Setujui Inspeksi?",
+            message: `${detail.unit.name} — hasil QC akan disetujui final atas nama Anda. Tidak bisa dibatalkan.`,
+            confirmLabel: "Ya, Setujui",
+            cancelLabel: "Batal",
+            onConfirm: () => {
+                void (async () => {
+                    setApproving(true);
+                    try {
+                        const res = await fetch("/api/employee/equipment/approvals/approve", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ inspectionId: detail.id }),
+                        });
+                        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyetujui inspeksi."));
+                        await fetchDetail();
+                        toast("Inspeksi disetujui final.", "success");
+                    } catch (err) {
+                        const msg = err instanceof Error ? err.message : "Gagal menyetujui inspeksi.";
+                        reportClientError("EmployeeEquipmentOverviewDetail", msg, err, { inspectionId: detail.id });
+                        toast(msg, "error");
+                    } finally {
+                        setApproving(false);
+                    }
+                })();
+            },
+        });
+    };
 
     if (loading) {
         return (
@@ -183,9 +233,27 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                                 : "Menunggu pemeriksaan QC"}
                         </span>
                     </li>
+                    <li className="flex gap-2">
+                        <span className="text-muted-foreground shrink-0 w-16">Approval</span>
+                        <span className="text-foreground">
+                            {detail.approvedByNameSnapshot || detail.approvedBy
+                                ? `Disetujui - ${stripGelar(detail.approvedByNameSnapshot ?? detail.approvedBy?.name ?? "")} · ${formatDateTime(detail.approvedAt)}`
+                                : "Menunggu approval atasan"}
+                        </span>
+                    </li>
                 </ol>
                 {detail.qcNote && (
                     <p className="text-xs text-muted-foreground mt-2">Catatan QC: {detail.qcNote}</p>
+                )}
+                {detail.status === "DONE" && canApprove && (
+                    <button
+                        onClick={handleApprove}
+                        disabled={approving}
+                        className="btn btn-primary btn-sm mt-3 min-h-[44px] px-4 inline-flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                        {approving ? "Menyimpan..." : "Setujui Final"}
+                    </button>
                 )}
             </div>
 

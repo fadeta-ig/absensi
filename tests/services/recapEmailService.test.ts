@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({
     prisma: {
         appSetting: { findUnique: vi.fn() },
-        employee: { findMany: vi.fn() },
+        employee: { findMany: vi.fn(), findUnique: vi.fn() },
         userAccount: { findMany: vi.fn() },
         cleaningRoom: { findMany: vi.fn() },
         cleaningDailyChecklist: { findUnique: vi.fn() },
@@ -115,13 +115,26 @@ describe("runDailyRecap exactly-once", () => {
         mocked.equipmentInspection.findMany.mockResolvedValue([]);
         mocked.equipmentInspection.count.mockResolvedValue(0);
         mocked.cleaningRoom.findMany.mockResolvedValue([]);
-        mocked.employee.findMany.mockResolvedValue([]);
-        mocked.appSetting.findUnique.mockResolvedValue({ value: "[]" } as never);
+        mocked.employee.findMany.mockResolvedValue([
+            { employeeId: "QC-001", name: "Fanisa Nur Jasiya Putri", isActive: true, email: "f@example.com" },
+        ] as never);
+        mocked.appSetting.findUnique.mockImplementation((((args: { where: { key: string } }) => {
+            const key = args.where.key;
+            if (key === "equipment.qcMembers") return Promise.resolve({ value: JSON.stringify(["QC-001"]) });
+            if (key === "equipment.approverId") return Promise.resolve({ value: "AP-001" });
+            return Promise.resolve({ value: "[]" });
+        }) as never) as never);
+        mocked.employee.findUnique.mockResolvedValue({ employeeId: "AP-001", name: "Feri", isActive: true } as never);
         mockedSend.mockResolvedValue(true);
         mocked.dailyRecapEmailLog.update.mockResolvedValue({} as never);
         const out = await runDailyRecap("2026-10-12", { toOverride: ["it@example.com"] });
         expect(out).toMatchObject({ sent: true, to: ["it@example.com"] });
         expect(mockedSend).toHaveBeenCalledTimes(1);
+        expect(mockedSend).toHaveBeenCalledWith(
+            expect.objectContaining({
+                equipment: expect.objectContaining({ verifiers: ["Fanisa Nur Jasiya Putri"], approverName: "Feri" }),
+            })
+        );
         expect(mocked.dailyRecapEmailLog.update).toHaveBeenCalledWith(
             expect.objectContaining({ where: { wibDate: "2026-10-12" } })
         );
