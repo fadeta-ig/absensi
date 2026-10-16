@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { isWig002 } from "@/lib/services/cleaningService";
-import { EquipmentError, getEquipmentApprover, setEquipmentApprover } from "@/lib/services/equipmentService";
-import { equipmentApproverSchema } from "@/lib/validations/validationSchemas";
+import { EquipmentError, getEquipmentApprovers, setEquipmentApprovers } from "@/lib/services/equipmentService";
+import { equipmentApproversSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET() {
     const session = await requireAuth();
@@ -10,7 +10,7 @@ export async function GET() {
     if (!isWig002(session)) return forbiddenResponse();
 
     try {
-        const data = await getEquipmentApprover();
+        const data = await getEquipmentApprovers();
         return NextResponse.json({ success: true, data });
     } catch (err) {
         if (err instanceof EquipmentError) {
@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
     if (!isWig002(session)) return forbiddenResponse();
 
     try {
-        const result = await validateBody(request, equipmentApproverSchema);
+        const result = await validateBody(request, equipmentApproversSchema);
         if ("error" in result) return result.error;
-        const data = await setEquipmentApprover(session, result.data.employeeId, { userId: session.userId, username: session.username });
+        const data = await setEquipmentApprovers(session, result.data.employeeIds, { userId: session.userId, username: session.username });
         return NextResponse.json({ success: true, data });
     } catch (err) {
         if (err instanceof EquipmentError) {

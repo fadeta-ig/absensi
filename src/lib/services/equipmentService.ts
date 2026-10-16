@@ -25,8 +25,11 @@ export const EQUIPMENT_QC_MEMBERS_KEY = "equipment.qcMembers" as const;
 export const EQUIPMENT_QC_MEMBERS_MAX = 20;
 export const EQUIPMENT_TOP_VIEWERS_KEY = "equipment.topViewers" as const;
 export const EQUIPMENT_TOP_VIEWERS_MAX = 5;
-/** Approver tunggal final (atasan lapangan). Di-set WIG002, dinamis per kondisi. */
-export const EQUIPMENT_APPROVER_KEY = "equipment.approverId" as const;
+/** Approver final inspeksi alat (dinamis maks 5, di-set WIG002). */
+export const EQUIPMENT_APPROVER_KEY = "equipment.approvers" as const;
+export const EQUIPMENT_APPROVERS_MAX = 5;
+/** Kunci lama (tunggal). Tetap dibaca sebagai fallback bila kunci baru belum ada. */
+const EQUIPMENT_APPROVER_LEGACY_KEY = "equipment.approverId" as const;
 const EQUIPMENT_EVIDENCE_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "equipment-evidence");
 const EQUIPMENT_QC_EVIDENCE_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "equipment-qc-evidence");
 const EQUIPMENT_EVIDENCE_MAX_PHOTOS = 5;
@@ -182,25 +185,64 @@ export async function setEquipmentTopViewers(
     return ids;
 }
 
-/** Approver tunggal final inspeksi alat (dinamis, di-set WIG002). */
-export async function getEquipmentApproverId(): Promise<string | null> {
+/** Daftar approver final (dinamis, di-set WIG002, maks 5). */
+export async function getEquipmentApproverIds(): Promise<string[]> {
     try {
         const row = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_APPROVER_KEY } });
-        const id = row?.value?.trim() ?? "";
-        return id.length > 0 ? id : null;
+        if (row?.value) {
+            try {
+                const parsed = JSON.parse(row.value) as unknown;
+                if (Array.isArray(parsed)) {
+                    const ids = [...new Set(parsed.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))];
+                    if (ids.length > 0) return ids.slice(0, EQUIPMENT_APPROVERS_MAX);
+                }
+            } catch {
+                // Bukan JSON array — lanjut ke fallback kunci lama.
+            }
+        }
+        // Fallback kunci lama (string tunggal).
+        const legacy = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_APPROVER_LEGACY_KEY } });
+        const id = legacy?.value?.trim() ?? "";
+        return id.length > 0 ? [id] : [];
     } catch {
-        return null;
+        return [];
     }
 }
 
-export async function getEquipmentApprover(): Promise<{ employeeId: string; name: string | null; isActive: boolean } | null> {
-    const id = await getEquipmentApproverId();
-    if (!id) return null;
-    const emp = await prisma.employee.findUnique({
-        where: { employeeId: id },
+export async function getEquipmentApprovers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+    const ids = await getEquipmentApproverIds();
+    if (ids.length === 0) return [];
+    const employees = await prisma.employee.findMany({
+        where: { employeeId: { in: ids } },
         select: { employeeId: true, name: true, isActive: true },
     });
-    return emp;
+    const order = new Map(ids.map((id, idx) => [id, idx]));
+    return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
+}
+
+export async function getEquipmentApprover(): Promise<{ employeeId: string; name: string | null; isActive: boolean } | null> {
+    const list = await getEquipmentApprovers();
+    return list[0] ?? null;
+}
+
+export async function setEquipmentApprovers(
+    session: SessionPayload,
+    employeeIds: string[],
+    actor: { userId?: string | null; username: string }
+): Promise<string[]> {
+    requireWig002(session);
+    const ids = [...new Set(employeeIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length > EQUIPMENT_APPROVERS_MAX) {
+        throw new EquipmentError(`Approver maksimal ${EQUIPMENT_APPROVERS_MAX} orang.`, 409);
+    }
+    const today = toWIBDateString();
+    for (const id of ids) await assertActiveInternalEmployee(prisma, id, today);
+    await prisma.appSetting.upsert({
+        where: { key: EQUIPMENT_APPROVER_KEY },
+        update: { value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
+        create: { key: EQUIPMENT_APPROVER_KEY, value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
+    });
+    return ids;
 }
 
 export async function setEquipmentApprover(
@@ -208,23 +250,15 @@ export async function setEquipmentApprover(
     employeeId: string,
     actor: { userId?: string | null; username: string }
 ): Promise<string> {
-    requireWig002(session);
-    const id = employeeId.trim();
-    if (!id) throw new EquipmentError("Approver wajib diisi.", 400);
-    await assertActiveInternalEmployee(prisma, id, toWIBDateString());
-    await prisma.appSetting.upsert({
-        where: { key: EQUIPMENT_APPROVER_KEY },
-        update: { value: id, updatedByUserId: actor.userId ?? null },
-        create: { key: EQUIPMENT_APPROVER_KEY, value: id, updatedByUserId: actor.userId ?? null },
-    });
-    return id;
+    const ids = await setEquipmentApprovers(session, employeeId.trim() ? [employeeId.trim()] : [], actor);
+    return ids[0] ?? "";
 }
 
 export async function isEquipmentApprover(session: SessionPayload): Promise<boolean> {
     if (!session.employeeId) return false;
     try {
-        const approverId = await getEquipmentApproverId();
-        if (!approverId || approverId !== session.employeeId) return false;
+        const ids = await getEquipmentApproverIds();
+        if (!ids.includes(session.employeeId)) return false;
         const emp = await prisma.employee.findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } });
         return emp?.isActive === true;
     } catch {
@@ -749,7 +783,7 @@ export async function getEquipmentInspection(session: SessionPayload, id: string
     const isTop = !isWig && (await isEquipmentTopViewer(session).catch(() => false));
     if (!isWig && !isTop) {
         if (!session.userId) throw new EquipmentError("Sesi tidak valid.", 401);
-        // Yang terlibat = assignee efektif, anggota QC, atau pemulai.
+        // Yang terlibat = assignee efektif, anggota QC, approver, atau pemulai.
         const today = toWIBDateString();
         const assigned = await prisma.equipmentAssignment.findMany({
             where: { userId: session.userId, OR: [{ unitId: null }, { unitId: insp.unit.id }] },
@@ -757,8 +791,9 @@ export async function getEquipmentInspection(session: SessionPayload, id: string
         });
         const mine = assigned.some((a) => isEffectiveOn(today, a.startsOnWibDate, a.endsOnWibDate));
         const isQc = session.employeeId !== null && (await isEquipmentQcMember(session).catch(() => false));
+        const isApprover = session.employeeId !== null && (await isEquipmentApprover(session).catch(() => false));
         const isStarter = session.employeeId !== null && insp.startedByEmployeeId === session.employeeId;
-        if (!mine && !isQc && !isStarter) throw new EquipmentError("Anda tidak terlibat inspeksi ini.", 403);
+        if (!mine && !isQc && !isApprover && !isStarter) throw new EquipmentError("Anda tidak terlibat inspeksi ini.", 403);
     }
     return toInspectionDto(insp);
 }
@@ -819,12 +854,28 @@ export async function getUnitInspectionHistory(session: SessionPayload, unitId: 
     return rows;
 }
 
-export async function getPendingEquipmentApprovals(session: SessionPayload): Promise<EquipmentInspectionDto[]> {    // Wadah QC: semua anggota QC melihat semua inspeksi SUBMITTED, terbaru di atas.
+export async function getPendingEquipmentApprovals(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
+    // Wadah QC: semua anggota QC melihat semua inspeksi SUBMITTED, terbaru di atas.
     // QC tak perlu melihat 64 alat — hanya yang disubmit produksi.
     await requireQcMember(session);
     const rows = await prisma.equipmentInspection.findMany({
         where: { status: "SUBMITTED" },
         orderBy: { submittedAt: "desc" },
+        take: 100,
+        include: inspectionInclude,
+    });
+    return rows.map(toInspectionDto);
+}
+
+/**
+ * Antrean approval final: semua DONE terbaru di atas, khusus approver.
+ * Kuorum 1 — siapa pun di daftar yang menyetujui lebih dulu mengunci.
+ */
+export async function getApprovalQueue(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
+    await requireApprover(session);
+    const rows = await prisma.equipmentInspection.findMany({
+        where: { status: "DONE" },
+        orderBy: { checkedAt: "desc" },
         take: 100,
         include: inspectionInclude,
     });

@@ -159,7 +159,7 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | List + penugasan employee internal (gerbang modul); `unitId` null = global; akhiri via tombol. |
 | `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar employee QC (maks 20); semua anggota melihat semua antrean. |
 | `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 + `ga.manage` | Atasan tertinggi maks 5 (baca rekap/monitor, pola cleaning). |
-| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Approver final tunggal (`equipment.approverId`, dinamis). |
+| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar approver final maks 5 (`equipment.approvers`, dinamis; terima `{employeeIds}`; kunci lama tunggal tetap dibaca). |
 | `/api/ga/equipment/recap` | `GET` | WIG002 / atasan | Rekap inspeksi + ringkasan status (filter unit/status/tanggal). |
 | `/api/ga/equipment/inspections/[id]` | `GET` | WIG002 / atasan | Drill-down detail + foto (read-only). |
 | `/api/ga/equipment/evidence` | `GET` | WIG002 / atasan | List foto dokumentasi per inspeksi (`?inspectionId=`, drill-down rekap). |
@@ -179,7 +179,8 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/employee/equipment/evidence/[id]` | `GET` | Terlibat | Serve berkas foto. |
 | `/api/employee/equipment/approvals` | `GET` | Anggota QC | Antrean QC: semua SUBMITTED, terbaru di atas. |
 | `/api/employee/equipment/approvals/done` | `POST` | Anggota QC | DONE + catatan opsional; riwayat mencatat checked-by QC. |
-| `/api/employee/equipment/approvals/approve` | `POST` | Approver tunggal (`equipment.approverId`) | `DONE → APPROVED` final; satu arah tanpa reject. |
+| `/api/employee/equipment/approvals/approve` | `POST` | Approver terdaftar (`equipment.approvers`, kuorum 1) | `DONE → APPROVED` final; satu arah tanpa reject. |
+| `/api/employee/equipment/approvals/pending-approval` | `GET` | Approver terdaftar | Antrean approval: semua DONE terbaru di atas. |
 | `/api/employee/equipment/qc-evidence` | `GET`, `POST` | Terlibat | List + upload foto QC (opsional, maks 5 per inspeksi). |
 | `/api/employee/equipment/qc-evidence/[id]` | `GET` | Terlibat | Serve berkas foto QC. |
 

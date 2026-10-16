@@ -33,7 +33,7 @@ export default function EmployeeHomePage() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
     const [cleaningCaps, setCleaningCaps] = useState<{ isReviewer: boolean; isTopViewer: boolean } | null>(null);
-    const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean } | null>(null);
+    const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean; canApprove: boolean } | null>(null);
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
@@ -78,7 +78,7 @@ export default function EmployeeHomePage() {
                     const equip = equipJson?.data;
                     setEquipmentCaps(
                         equip && typeof equip.canExecute === "boolean"
-                            ? { canExecute: equip.canExecute, canReview: Boolean(equip.canReview), canTopView: Boolean(equip.canTopView) }
+                            ? { canExecute: equip.canExecute, canReview: Boolean(equip.canReview), canTopView: Boolean(equip.canTopView), canApprove: Boolean(equip.canApprove) }
                             : null
                     );
                 } catch {
@@ -327,10 +327,11 @@ export default function EmployeeHomePage() {
                 hasSubordinates={Boolean(user?.hasSubordinates || (Array.isArray(user?.subordinates) && user.subordinates.length > 0))}
                 canReviewCleaning={cleaningCaps ? cleaningCaps.isReviewer : null}
                 canTopViewCleaning={cleaningCaps ? cleaningCaps.isTopViewer : null}
-                canUseEquipment={equipmentCaps ? equipmentCaps.canExecute || equipmentCaps.canReview || equipmentCaps.canTopView : null}
+                canUseEquipment={equipmentCaps ? equipmentCaps.canExecute || equipmentCaps.canReview || equipmentCaps.canTopView || equipmentCaps.canApprove : null}
                 canExecuteEquipment={equipmentCaps ? equipmentCaps.canExecute : null}
                 canReviewEquipment={equipmentCaps ? equipmentCaps.canReview : null}
                 canTopViewEquipment={equipmentCaps ? equipmentCaps.canTopView : null}
+                canApproveEquipment={equipmentCaps ? equipmentCaps.canApprove : null}
             />
 
         </div>

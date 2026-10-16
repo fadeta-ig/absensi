@@ -3,7 +3,7 @@ import logger from "@/lib/logger";
 import { toWIBDateString } from "@/lib/timezone";
 import { stripGelar } from "@/lib/utils/formatters";
 import { webPush } from "@/lib/webPush";
-import { EQUIPMENT_TOP_VIEWERS_KEY, getEquipmentApprover, getEquipmentQcMembers, queryEquipmentRecap } from "@/lib/services/equipmentService";
+import { EQUIPMENT_TOP_VIEWERS_KEY, getEquipmentApprovers, getEquipmentQcMembers, queryEquipmentRecap } from "@/lib/services/equipmentService";
 import { getCleaningTopViewerEmployeeIds } from "@/lib/services/appSettingsService";
 import { getParafStatus } from "@/lib/services/cleaningParafService";
 import { sendDailyRecapEmail } from "@/lib/services/emailService";
@@ -142,12 +142,12 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     }));
     // Roster penanggung jawab untuk kolom email: semua verifikator pool + approver tunggal.
     // Yang bertindak naik ke #1 + jam; sisanya (-) — agar pemilik tahu penanggung jawab tiap baris.
-    const [qcMembers, approver] = await Promise.all([
+    const [qcMembers, approvers] = await Promise.all([
         getEquipmentQcMembers().catch(() => []),
-        getEquipmentApprover().catch(() => null),
+        getEquipmentApprovers().catch(() => []),
     ]);
     const verifiers = qcMembers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean);
-    return { summary: data.summary, lines, verifiers, approverName: approver ? stripGelar(approver.name ?? approver.employeeId) : null };
+    return { summary: data.summary, lines, verifiers, approverNames: approvers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean) };
 }
 
 /** Rekap kebersihan 1 hari WIB per ruangan (read-only, reuse getParafStatus). */
@@ -298,7 +298,7 @@ export async function runDailyRecap(
             await notifyWig002Missing(missing, wibDate);
             return { wibDate, sent: false, skipped: true, to, missing, equipmentTotal: equipment.lines.length, cleaningTotal: cleaning.lines.length };
         }
-        const ok = await sendDailyRecapEmail({ to, wibDate, dateLabel: formatWibDateLabel(wibDate), equipment: { ...equipment.summary, lines: equipment.lines, verifiers: equipment.verifiers, approverName: equipment.approverName }, cleaning });
+        const ok = await sendDailyRecapEmail({ to, wibDate, dateLabel: formatWibDateLabel(wibDate), equipment: { ...equipment.summary, lines: equipment.lines, verifiers: equipment.verifiers, approverNames: equipment.approverNames }, cleaning });
         await prisma.dailyRecapEmailLog.update({
             where: { wibDate },
             data: {

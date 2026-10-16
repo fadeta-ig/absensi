@@ -595,7 +595,7 @@ export interface DailyRecapEmailInput {
     to: string[];
     wibDate: string;
     dateLabel: string;
-    equipment: { open: number; submitted: number; done: number; total: number; approved?: number; lines: DailyRecapEmailEquipmentLine[]; verifiers: string[]; approverName: string | null };
+    equipment: { open: number; submitted: number; done: number; total: number; approved?: number; lines: DailyRecapEmailEquipmentLine[]; verifiers: string[]; approverNames: string[] };
     cleaning: { lines: DailyRecapEmailCleaningLine[] };
 }
 
@@ -700,11 +700,17 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
     }
 
     function eqApprovalList(l: DailyRecapEmailEquipmentLine): string[] {
-        // Approver tunggal: (-) sebelum menyetujui, jam setelah menyetujui.
-        if (!input.equipment.approverName) return [];
-        const acted = !!l.approverName;
-        const t = acted && l.approvedAt ? formatShortWib(l.approvedAt) : "";
-        return [`1. ${input.equipment.approverName} (${t || "-"})`];
+        // Roster approver: yang menyetujui naik ke #1 + jam, sisanya (-).
+        const roster = input.equipment.approverNames.filter(Boolean);
+        if (roster.length === 0) return [];
+        const ordered = l.approverName
+            ? [l.approverName, ...roster.filter((v) => v !== l.approverName)]
+            : roster;
+        return ordered.map((name, i) => {
+            const acted = !!l.approverName && name === l.approverName;
+            const t = acted && l.approvedAt ? formatShortWib(l.approvedAt) : "";
+            return `${i + 1}. ${name} (${t || "-"})`;
+        });
     }
 
     function eqApproval(l: DailyRecapEmailEquipmentLine): string {

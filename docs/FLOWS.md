@@ -249,7 +249,7 @@ Alur serah terima aset korporat dari GA ke karyawan:
 3. **Submit**: Lolos bila semua item aktif sudah dinilai dan (bila ada item `requirePhoto`) minimal 1 foto ada. Status menjadi `SUBMITTED`; tidak ada jalan kembali ke `OPEN`. Pemulai dapat membatalkan yang masih `OPEN` (`CANCELLED`, via konfirmasi).
 4. **Antrean QC pool**: Semua anggota QC melihat antrean `SUBMITTED` yang sama, terbaru di atas. QC boleh menambah foto QC opsional (maks 5) selama menunggu.
 5. **QC DONE**: Anggota QC menyelesaikan dengan klik DONE + catatan opsional (tanpa paraf/tanda tangan); nama pemeriksa disimpan sebagai snapshot. Hanya dari `SUBMITTED`; tidak ada reject.
-5b. **Approval final**: Approver tunggal (setting `equipment.approverId` oleh WIG002) menyetujui dari `DONE` → `APPROVED` + snapshot nama + audit; satu arah tanpa reject. DONE lama di-grandfather final.
+5b. **Approval final**: Siapa pun dalam daftar approver (setting `equipment.approvers` oleh WIG002, maks 5, kuorum 1) menyetujui dari `DONE` → `APPROVED` + snapshot nama + audit; satu arah tanpa reject. DONE lama di-grandfather final.
 6. **Pantau atasan**: WIG002 dan topViewer (read-only) memantau via rekap berfilter (unit/status/rentang tanggal) dengan ringkasan `open/submitted/done/approved/total`. Menu pelaksana/QC/atasan/tombol approval digerbang via `getEmployeeEquipmentCapabilities` (`canExecute`/`canReview`/`canTopView`/`canApprove`).
 
 Rujukan: `src/lib/services/equipmentService.ts`, `tests/services/equipmentService.test.ts`.

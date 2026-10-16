@@ -871,3 +871,7 @@ export const equipmentApproverSchema = z.object({
     employeeId: z.string().trim().min(1).max(100),
 });
 
+export const equipmentApproversSchema = z.object({
+    employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
+});
+

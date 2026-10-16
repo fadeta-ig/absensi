@@ -168,7 +168,7 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 
 ## ADR-013: Approval Final Inspeksi Alat oleh Satu Atasan Lapangan
 
-- **Decision**: Tambah stage ke-4 `APPROVED`: `OPEN → SUBMITTED → DONE → APPROVED`. DONE kini berarti "terverifikasi QC, menunggu approval"; hanya approver tunggal (dinamis via setting `equipment.approverId` oleh WIG002) yang dapat `DONE → APPROVED`. Satu arah, tanpa reject. Tanpa lock posisi inspektor/verifikator — semua tetap dinamis via assignment + QC pool.
+- **Decision**: Tambah stage ke-4 `APPROVED`: `OPEN → SUBMITTED → DONE → APPROVED`. DONE kini berarti "terverifikasi QC, menunggu approval"; siapa pun dalam daftar approver (dinamis via setting `equipment.approvers` oleh WIG002, maks 5, kuorum 1) yang internal aktif dapat `DONE → APPROVED`. Satu arah, tanpa reject. Tanpa lock posisi inspektor/verifikator — semua tetap dinamis via assignment + QC pool.
 - **Context**: Permintaan pemilik 2026-10-16 — atasan tertinggi (GM, topViewer read-only + penerima email) memantau; satu atasan lapangan (Deputy GM) memberi approval final. Tabel pantau/email 6 kolom: NO | ALAT | STATUS | INSPEKTOR | VERIFIKATOR | APPROVAL.
 - **Chosen Approach**: Kolom nullable `approvedByEmployeeId/NameSnapshot/approvedAt` + relasi `EquipmentInspectionApprovedBy`; audit `APPROVE_EQUIPMENT_INSPECTION`; `canApprove` di capabilities; tombol di detail pantau employee; kartu approver di settings GA; DONE lama di-grandfather final tanpa approval.
 - **Alternatives**: Quorum banyak approver (ditolak — pemilik minta satu orang); reject/return ke QC (ditolak — pertahankan filosofi satu arah).

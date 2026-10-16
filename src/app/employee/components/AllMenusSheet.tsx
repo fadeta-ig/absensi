@@ -23,6 +23,7 @@ import {
     CalendarCheck,
     CalendarClock,
     FileCheck2,
+    BadgeCheck,
     Wrench,
     Eye,
 } from "lucide-react";
@@ -56,6 +57,8 @@ interface AllMenusSheetProps {
     canReviewEquipment?: boolean | null;
     /** Top Viewer Equipment: pantau + rekap lintas unit (modul alat, bukan cleaning). */
     canTopViewEquipment?: boolean | null;
+    /** Approver Equipment: memberi approval final (tanpa perlu assignment/QC/topViewer). */
+    canApproveEquipment?: boolean | null;
 }
 
 export default function AllMenusSheet({
@@ -68,6 +71,7 @@ export default function AllMenusSheet({
     canExecuteEquipment,
     canReviewEquipment,
     canTopViewEquipment,
+    canApproveEquipment,
 }: AllMenusSheetProps) {
     const router = useRouter();
     const toast = useToast();
@@ -131,6 +135,7 @@ export default function AllMenusSheet({
         typeof canTopViewEquipment === "boolean"
             ? canTopViewEquipment
             : canUseEquipment !== false && canUseEquipment !== null;
+    const showApproveEquipment = canApproveEquipment === true;
 
     const categories: MenuCategory[] = [
         {
@@ -238,10 +243,22 @@ export default function AllMenusSheet({
                           {
                               href: "/employee/equipment/approvals",
                               label: "Pemeriksaan QC Alat",
-                              description: "Periksa hasil produksi dan tandai DONE",
+                              description: "Periksa hasil produksi dan selesaikan pemeriksaan",
                               icon: FileCheck2,
                               bg: "bg-orange-50 dark:bg-orange-950/40",
                               color: "text-orange-600 dark:text-orange-400",
+                          },
+                      ]
+                    : []),
+                ...(showApproveEquipment
+                    ? [
+                          {
+                              href: "/employee/equipment/approval-queue",
+                              label: "Persetujuan Final Alat",
+                              description: "Setujui hasil pemeriksaan yang menunggu approval final",
+                              icon: BadgeCheck,
+                              bg: "bg-emerald-50 dark:bg-emerald-950/40",
+                              color: "text-emerald-600 dark:text-emerald-400",
                           },
                       ]
                     : []),

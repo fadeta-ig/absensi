@@ -38,6 +38,7 @@ import {
     getPendingEquipmentApprovals,
     invalidateEquipmentQcMembersCache,
     requireActiveInternalEmployee,
+    setEquipmentApprovers,
     setEquipmentApprover,
     setEquipmentQcMembers,
     setEquipmentTopViewers,
@@ -301,7 +302,8 @@ describe("APPROVAL final", () => {
         return empSession({ userId: "u-ap", username: "AP-001", name: "Feri", employeeId: "AP-001" });
     }
     function mockApprover() {
-        mocked.appSetting.findUnique.mockResolvedValue({ value: "AP-001" } as never);
+        mocked.appSetting.findUnique.mockResolvedValue({ value: JSON.stringify(["AP-001"]) } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "AP-001", name: "Feri", isActive: true }] as never);
         mocked.employee.findUnique.mockResolvedValue({ isActive: true } as never);
     }
     it("bukan approver ditolak 403", async () => {
@@ -311,6 +313,17 @@ describe("APPROVAL final", () => {
     });
     it("set approver bukan WIG002 ditolak 403", async () => {
         await expect(setEquipmentApprover(empSession(), "AP-001", actor)).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("approver lebih dari 5 ditolak 409", async () => {
+        await expect(
+            setEquipmentApprovers(wigSession(), ["A", "B", "C", "D", "E", "F"], actor)
+        ).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("legacy string tunggal tetap dibaca", async () => {
+        mocked.appSetting.findUnique.mockResolvedValue({ value: "AP-001" } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "AP-001", name: "Feri", isActive: true }] as never);
+        const { getEquipmentApproverIds } = await import("@/lib/services/equipmentService");
+        await expect(getEquipmentApproverIds()).resolves.toEqual(["AP-001"]);
     });
     it("APPROVE di luar DONE ditolak 409", async () => {
         mockApprover();

@@ -115,16 +115,18 @@ describe("runDailyRecap exactly-once", () => {
         mocked.equipmentInspection.findMany.mockResolvedValue([]);
         mocked.equipmentInspection.count.mockResolvedValue(0);
         mocked.cleaningRoom.findMany.mockResolvedValue([]);
-        mocked.employee.findMany.mockResolvedValue([
-            { employeeId: "QC-001", name: "Fanisa Nur Jasiya Putri", isActive: true, email: "f@example.com" },
-        ] as never);
+        mocked.employee.findMany.mockImplementation((((args: { where?: { employeeId?: { in?: string[] } } }) => {
+            const ids = args.where?.employeeId?.in ?? [];
+            if (ids.includes("AP-001")) return Promise.resolve([{ employeeId: "AP-001", name: "Feri", isActive: true }]);
+            return Promise.resolve([{ employeeId: "QC-001", name: "Fanisa Nur Jasiya Putri", isActive: true, email: "f@example.com" }]);
+        }) as never) as never);
         mocked.appSetting.findUnique.mockImplementation((((args: { where: { key: string } }) => {
             const key = args.where.key;
             if (key === "equipment.qcMembers") return Promise.resolve({ value: JSON.stringify(["QC-001"]) });
-            if (key === "equipment.approverId") return Promise.resolve({ value: "AP-001" });
+            if (key === "equipment.approvers") return Promise.resolve({ value: JSON.stringify(["AP-001"]) });
+            if (key === "equipment.approverId") return Promise.resolve(null);
             return Promise.resolve({ value: "[]" });
         }) as never) as never);
-        mocked.employee.findUnique.mockResolvedValue({ employeeId: "AP-001", name: "Feri", isActive: true } as never);
         mockedSend.mockResolvedValue(true);
         mocked.dailyRecapEmailLog.update.mockResolvedValue({} as never);
         const out = await runDailyRecap("2026-10-12", { toOverride: ["it@example.com"] });
@@ -132,7 +134,7 @@ describe("runDailyRecap exactly-once", () => {
         expect(mockedSend).toHaveBeenCalledTimes(1);
         expect(mockedSend).toHaveBeenCalledWith(
             expect.objectContaining({
-                equipment: expect.objectContaining({ verifiers: ["Fanisa Nur Jasiya Putri"], approverName: "Feri" }),
+                equipment: expect.objectContaining({ verifiers: ["Fanisa Nur Jasiya Putri"], approverNames: ["Feri"] }),
             })
         );
         expect(mocked.dailyRecapEmailLog.update).toHaveBeenCalledWith(

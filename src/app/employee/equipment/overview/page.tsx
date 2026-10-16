@@ -72,12 +72,45 @@ function toInputDate(d: Date): string {
 const inputClass =
     "w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm";
 
+const OVERVIEW_FILTER_KEY = "employee-equipment-overview-filter";
+
+function isWibDateStr(v: unknown): v is string {
+    return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+/** Filter terakhir yang dipakai (agar kembali dari detail tidak me-reset ke hari ini). */
+function loadSavedFilter(): { status: string; from: string; to: string } {
+    const today = toInputDate(new Date());
+    const fallback = { status: "", from: today, to: today };
+    if (typeof window === "undefined") return fallback;
+    try {
+        const raw = window.sessionStorage.getItem(OVERVIEW_FILTER_KEY);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw) as { status?: unknown; from?: unknown; to?: unknown };
+        return {
+            status: typeof parsed.status === "string" ? parsed.status : "",
+            from: isWibDateStr(parsed.from) ? parsed.from : today,
+            to: isWibDateStr(parsed.to) ? parsed.to : today,
+        };
+    } catch {
+        return fallback;
+    }
+}
+
+function saveFilter(f: { status: string; from: string; to: string }) {
+    try {
+        window.sessionStorage.setItem(OVERVIEW_FILTER_KEY, JSON.stringify(f));
+    } catch {
+        // Penyimpanan penuh/diblokir: filter tetap jalan sesi ini.
+    }
+}
+
 export default function EmployeeEquipmentOverviewPage() {
     const [inspections, setInspections] = useState<OverviewInspection[]>([]);
     const [summary, setSummary] = useState<OverviewSummary | null>(null);
-    const [status, setStatus] = useState<string>("");
-    const [from, setFrom] = useState(() => toInputDate(new Date()));
-    const [to, setTo] = useState(() => toInputDate(new Date()));
+    const [status, setStatus] = useState<string>(() => loadSavedFilter().status);
+    const [from, setFrom] = useState<string>(() => loadSavedFilter().from);
+    const [to, setTo] = useState<string>(() => loadSavedFilter().to);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
@@ -100,6 +133,7 @@ export default function EmployeeEquipmentOverviewPage() {
             try {
                 const params = new URLSearchParams();
                 const f = filters ?? { status, from, to };
+                saveFilter({ status: f.status ?? "", from: f.from ?? "", to: f.to ?? "" });
                 if (f.status) params.set("status", f.status);
                 if (f.from) params.set("from", f.from);
                 if (f.to) {
