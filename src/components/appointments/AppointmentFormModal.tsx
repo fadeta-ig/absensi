@@ -36,7 +36,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
         if (editing?.meetingLink) return "daring";
         return "fisik";
     });
-    const [agenda, setAgenda] = useState("");
+    const [agenda, setAgenda] = useState(editing?.agenda ?? "");
     const [participants, setParticipants] = useState<PickedParticipant[]>(() =>
         (editing?.participants ?? []).map((p) => ({
             key: p.employeeId ? `e:${p.employeeId}` : `g:${(p.guestName ?? "").toLowerCase()}`,
@@ -50,8 +50,39 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     const [conflicts, setConflicts] = useState<string[]>([]);
     const [checkingConflicts, setCheckingConflicts] = useState(false);
 
+    const initialEditDate = editing ? toDateString(editing.startAt) : initialDate;
+    const initialEditStart = editing && !editing.isFullDay ? toHM(editing.startAt) : "09:00";
+    const initialEditEnd = editing && !editing.isFullDay ? toHM(editing.endAt) : "10:00";
+    const initialEditFullDay = editing?.isFullDay ?? false;
+    const initialEditRoomId = editing?.room?.id ?? "";
+    const initialEditLink = editing?.meetingLink ?? "";
+    const initialEditMode: "fisik" | "daring" = editing?.room?.id ? "fisik" : editing?.meetingLink ? "daring" : "fisik";
+
+    const isScheduleOrPlaceChanged = Boolean(
+        editing && (
+            date !== initialEditDate ||
+            isFullDay !== initialEditFullDay ||
+            (!isFullDay && (startTime !== initialEditStart || endTime !== initialEditEnd)) ||
+            mode !== initialEditMode ||
+            (mode === "fisik" ? roomId !== initialEditRoomId : meetingLink.trim() !== initialEditLink.trim())
+        )
+    );
+
+    const isReasonValid = !editing
+        ? true
+        : isScheduleOrPlaceChanged
+            ? changeReason.trim().length >= 5
+            : changeReason.trim().length === 0 || changeReason.trim().length >= 5;
+
     const canSubmit =
-        (editing || title.trim()) && date && (isFullDay || (startTime && endTime)) && (mode === "fisik" ? roomId : meetingLink.trim()) && !loading;
+        (editing || title.trim()) &&
+        date &&
+        (isFullDay || (startTime && endTime)) &&
+        (mode === "fisik" ? roomId : meetingLink.trim()) &&
+        isReasonValid &&
+        !loading;
+
+    const editingId = editing?.id;
 
     useEffect(() => {
         setConflicts([]);
@@ -61,7 +92,8 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             setCheckingConflicts(true);
             try {
                 const controller = new AbortController();
-                const res = await fetch(`/api/appointments/availability?date=${date}&employees=${encodeURIComponent(ids.join(","))}`, {
+                const excludeParam = editingId ? `&excludeId=${encodeURIComponent(editingId)}` : "";
+                const res = await fetch(`/api/appointments/availability?date=${date}&employees=${encodeURIComponent(ids.join(","))}${excludeParam}`, {
                     signal: controller.signal,
                 });
                 if (!res.ok) return;
@@ -86,7 +118,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [date, startTime, endTime, isFullDay, participants]);
+    }, [date, startTime, endTime, isFullDay, participants, editingId]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -94,8 +126,20 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
         setLoading(true);
         setError(null);
         try {
+            const mappedParticipants = participants.map((p) => (p.employeeId ? { employeeId: p.employeeId } : { guestName: p.name }));
             const payload = editing
-                ? { roomId: mode === "fisik" ? roomId || null : null, meetingLink: mode === "daring" ? meetingLink.trim() || null : null, date, startTime: isFullDay ? undefined : startTime, endTime: isFullDay ? undefined : endTime, isFullDay, changeReason }
+                ? {
+                    title: title.trim(),
+                    agenda: agenda.trim() || null,
+                    roomId: mode === "fisik" ? roomId || null : null,
+                    meetingLink: mode === "daring" ? meetingLink.trim() || null : null,
+                    date,
+                    startTime: isFullDay ? undefined : startTime,
+                    endTime: isFullDay ? undefined : endTime,
+                    isFullDay,
+                    participants: mappedParticipants,
+                    changeReason,
+                }
                 : {
                     title: title.trim(),
                     agenda: agenda.trim() || null,
@@ -105,7 +149,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                     startTime: isFullDay ? undefined : startTime,
                     endTime: isFullDay ? undefined : endTime,
                     isFullDay,
-                    participants: participants.map((p) => (p.employeeId ? { employeeId: p.employeeId } : { guestName: p.name })),
+                    participants: mappedParticipants,
                 };
             const res = await fetch(editing ? `/api/appointments/${editing.id}` : "/api/appointments", {
                 method: editing ? "PATCH" : "POST",
@@ -147,16 +191,14 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                {!editing && (
-                    <div className="form-group !mb-0">
-                        <label className="form-label" htmlFor="appt-title">
-                            <span className="flex items-center gap-1">
-                                <FileText className="w-3 h-3" /> Topik Meeting *
-                            </span>
-                        </label>
-                        <input id="appt-title" className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Meeting koordinasi" required />
-                    </div>
-                )}
+                <div className="form-group !mb-0">
+                    <label className="form-label" htmlFor="appt-title">
+                        <span className="flex items-center gap-1">
+                            <FileText className="w-3 h-3" /> Topik Meeting *
+                        </span>
+                    </label>
+                    <input id="appt-title" className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Meeting koordinasi" required />
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                     <div className="form-group !mb-0">
@@ -242,30 +284,40 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                     </div>
                 )}
 
-                {!editing && (
-                    <>
-                        <div className="form-group !mb-0">
-                            <ParticipantPicker value={participants} onChange={setParticipants} excludeEmployeeId={editing ? undefined : (myEmployeeId ?? null)} />
-                        </div>
-                        <div className="form-group !mb-0">
-                            <label className="form-label" htmlFor="appt-agenda">
-                                <span className="flex items-center gap-1">
-                                    <StickyNote className="w-3 h-3" /> Agenda (Opsional)
-                                </span>
-                            </label>
-                            <textarea id="appt-agenda" className="form-input min-h-[60px] resize-none" value={agenda} onChange={(e) => setAgenda(e.target.value)} placeholder="Tuliskan pokok bahasan meeting…" />
-                        </div>
-                    </>
-                )}
+                <div className="form-group !mb-0">
+                    <ParticipantPicker
+                        value={participants}
+                        onChange={setParticipants}
+                        excludeEmployeeId={editing ? (editing.requesterEmployeeId ?? myEmployeeId ?? null) : (myEmployeeId ?? null)}
+                    />
+                </div>
+
+                <div className="form-group !mb-0">
+                    <label className="form-label" htmlFor="appt-agenda">
+                        <span className="flex items-center gap-1">
+                            <StickyNote className="w-3 h-3" /> Agenda / Pokok Bahasan (Opsional)
+                        </span>
+                    </label>
+                    <textarea id="appt-agenda" className="form-input min-h-[60px] resize-none" value={agenda} onChange={(e) => setAgenda(e.target.value)} placeholder="Tuliskan pokok bahasan meeting…" />
+                </div>
 
                 {editing && (
                     <div className="form-group !mb-0">
-                        <label className="form-label" htmlFor="appt-reason">Alasan Perubahan *</label>
-                        <input id="appt-reason" className="form-input" value={changeReason} onChange={(e) => setChangeReason(e.target.value)} placeholder="Tuliskan alasan (minimal 5 karakter)" required />
+                        <label className="form-label" htmlFor="appt-reason">
+                            {isScheduleOrPlaceChanged ? "Alasan Perubahan Jadwal *" : "Alasan Perubahan (Opsional untuk tambah/hapus peserta)"}
+                        </label>
+                        <input
+                            id="appt-reason"
+                            className="form-input"
+                            value={changeReason}
+                            onChange={(e) => setChangeReason(e.target.value)}
+                            placeholder={isScheduleOrPlaceChanged ? "Tuliskan alasan (minimal 5 karakter)" : "Kosongkan bila hanya menambah/menghapus peserta"}
+                            required={isScheduleOrPlaceChanged}
+                        />
                     </div>
                 )}
 
-                <button type="submit" className="btn btn-primary w-full" disabled={!canSubmit || (!!editing && changeReason.trim().length < 5)}>
+                <button type="submit" className="btn btn-primary w-full" disabled={!canSubmit}>
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     {loading ? "Menyimpan…" : editing ? "Simpan Perubahan" : "Buat Meeting"}
                 </button>

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
             date,
             roomId: searchParams.get("roomId") ?? undefined,
             employeeIds,
+            excludeId: searchParams.get("excludeId") ?? undefined,
         });
         return NextResponse.json({ success: true, data });
     } catch (err) {

@@ -22,6 +22,7 @@ interface AppointmentCalendarProps {
     appointmentsByDate: Map<string, CalendarAppointment[]>;
     selectedDate: string;
     onSelectDate: (date: string) => void;
+    onMonthChange?: (year: number, month: number) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -37,7 +38,7 @@ function fmtTime(iso: string): string {
     return `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function AppointmentCalendar({ appointmentsByDate, selectedDate, onSelectDate }: AppointmentCalendarProps) {
+export default function AppointmentCalendar({ appointmentsByDate, selectedDate, onSelectDate, onMonthChange }: AppointmentCalendarProps) {
     const [currentDate, setCurrentDate] = useState(() => {
         const [y, m] = selectedDate.split("-").map(Number);
         return new Date(y || new Date().getFullYear(), (m || new Date().getMonth() + 1) - 1, 1);
@@ -45,6 +46,12 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
+
+    function changeMonth(delta: number) {
+        const next = new Date(year, month + delta, 1);
+        setCurrentDate(next);
+        onMonthChange?.(next.getFullYear(), next.getMonth());
+    }
 
     const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
     const totalDays = daysInMonth(year, month);
@@ -78,7 +85,7 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
                     <div className="flex items-center gap-1">
                         <button
                             type="button"
-                            onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
+                            onClick={() => changeMonth(-1)}
                             className="min-w-11 min-h-11 p-2.5 flex items-center justify-center hover:bg-[var(--secondary)] rounded-xl transition-colors focus-visible:ring-2"
                             aria-label="Bulan sebelumnya"
                         >
@@ -86,7 +93,7 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
                         </button>
                         <button
                             type="button"
-                            onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
+                            onClick={() => changeMonth(1)}
                             className="min-w-11 min-h-11 p-2.5 flex items-center justify-center hover:bg-[var(--secondary)] rounded-xl transition-colors focus-visible:ring-2"
                             aria-label="Bulan berikutnya"
                         >

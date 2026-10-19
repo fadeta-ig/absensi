@@ -4,6 +4,7 @@ import { stripGelar } from "@/lib/utils/formatters";
 export interface AppointmentListItem {
     id: string;
     title: string;
+    agenda?: string | null;
     status: string;
     lifecycle?: string;
     startAt: string;
@@ -11,13 +12,19 @@ export interface AppointmentListItem {
     isFullDay: boolean;
     meetingLink: string | null;
     requesterEmployeeId: string | null;
-    room: { id: string; name: string } | null;
+    requester?: { name: string | null } | null;
+    room: { id: string; name: string; capacity?: number | null; location?: string | null } | null;
     participants: Array<{ id: string; employeeId: string | null; guestName: string | null; isExternal: boolean; attendance: string; inviteStatus?: string; inviteRespondedAt?: string | null; inviteNote?: string | null; employee?: { name: string } | null }>;
 }
 
 export function participantDisplayName(p: { employeeId: string | null; guestName: string | null; employee?: { name: string | null } | null }): string {
     if (p.employeeId) return p.employee?.name ? stripGelar(p.employee.name) : p.employeeId;
     return p.guestName ?? "Tamu";
+}
+
+export function requesterDisplayName(a: { requesterEmployeeId: string | null; requester?: { name: string | null } | null }): string {
+    if (a.requester?.name) return stripGelar(a.requester.name);
+    return a.requesterEmployeeId ?? "-";
 }
 
 export interface AppointmentListFilter {

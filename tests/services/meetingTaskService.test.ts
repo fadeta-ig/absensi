@@ -143,13 +143,77 @@ describe("createMeetingTask", () => {
             "Meeting sudah selesai. Task baru tidak dapat ditambahkan."
         );
     });
-    it("update notulensi di meeting COMPLETED = 409", async () => {
-        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "COMPLETED", minutes: "lama" } as never);
-        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi" }, actor)).rejects.toMatchObject({
+    it("update notulensi sebelum jam mulai (SCHEDULED) = 409", async () => {
+        const now = Date.now();
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            ...meetingRow(),
+            status: "SCHEDULED",
+            startAt: new Date(now + 60_000),
+            endAt: new Date(now + 120_000),
+            minutes: null,
+        } as never);
+        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru" }, actor)).rejects.toMatchObject({
             statusCode: 409,
         });
-        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi" }, actor)).rejects.toThrow(
-            "Meeting sudah selesai. Notulensi tidak dapat diubah."
+    });
+    it("update notulensi saat sedang berjalan (IN_PROGRESS) berhasil tanpa alasan perubahan", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "SCHEDULED", minutes: null } as never);
+        mocked.employee.findMany.mockResolvedValue([] as never);
+        const tx = {
+            meetingAppointment: {
+                update: vi.fn().mockResolvedValue({ id: "appt-1", minutes: "Catatan rapat", minutesUpdatedBy: "ID-001", minutesUpdatedAt: new Date() }),
+            },
+            meetingAppointmentRevision: {
+                count: vi.fn().mockResolvedValue(0),
+                create: vi.fn().mockResolvedValue({}),
+            },
+        };
+        mocked.$transaction.mockImplementation(async (cb: (t: never) => Promise<unknown>) => cb(tx as never));
+        const res = await updateMeetingMinutes(empSession({ employeeId: "ID-002" }), "appt-1", { minutes: "Catatan rapat" }, { userId: "u-2", username: "ID-002" });
+        expect(res).toBeDefined();
+        expect(tx.meetingAppointment.update).toHaveBeenCalled();
+    });
+    it("update notulensi bila notulis sudah ditunjuk menolak peserta lain = 403", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            ...meetingRow(),
+            status: "SCHEDULED",
+            notulisEmployeeId: "ID-002",
+            minutes: null,
+        } as never);
+        await expect(
+            updateMeetingMinutes(
+                empSession({ employeeId: "ID-003" }),
+                "appt-1",
+                { minutes: "Coba isi" },
+                { userId: "u-3", username: "ID-003" }
+            )
+        ).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("update notulensi di meeting COMPLETED wajib alasan perubahan >= 5 karakter", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "COMPLETED", minutes: "lama" } as never);
+        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "" }, actor)).rejects.toMatchObject({
+            statusCode: 400,
+        });
+        mocked.employee.findMany.mockResolvedValue([] as never);
+        const tx = {
+            meetingAppointment: {
+                update: vi.fn().mockResolvedValue({ id: "appt-1", minutes: "baru", minutesUpdatedBy: "ID-001", minutesUpdatedAt: new Date() }),
+            },
+            meetingAppointmentRevision: {
+                count: vi.fn().mockResolvedValue(1),
+                create: vi.fn().mockResolvedValue({}),
+            },
+        };
+        mocked.$transaction.mockImplementation(async (cb: (t: never) => Promise<unknown>) => cb(tx as never));
+        await expect(
+            updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi pasca rapat" }, actor)
+        ).resolves.toBeDefined();
+        expect(tx.meetingAppointmentRevision.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    changeReason: "Koreksi isi notulensi pasca rapat",
+                }),
+            })
         );
     });
     it("update notulensi di meeting CANCELLED = 409", async () => {

@@ -2,7 +2,7 @@
 
 import { Suspense, use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, History, Link2, Loader2, MapPin, Pencil, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Pencil, StickyNote, Trash2, User, Users, X } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
@@ -13,11 +13,16 @@ import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import {
     participantDisplayName,
+    requesterDisplayName,
     type AppointmentListItem,
 } from "@/components/appointments/useAppointments";
 
 function fmtDT(iso: string): string {
-    return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtDateOnly(iso: string): string {
+    return new Date(iso).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -46,6 +51,7 @@ function DetailContent({ id }: { id: string }) {
     const [declineNote, setDeclineNote] = useState("");
     const [askingDecline, setAskingDecline] = useState(false);
     const [editing, setEditing] = useState(false);
+    const [syncKey, setSyncKey] = useState(0);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -62,6 +68,7 @@ function DetailContent({ id }: { id: string }) {
             if (!detailRes.ok) throw new Error(await getResponseErrorMessage(detailRes, "Gagal memuat detail meeting."));
             const json = await detailRes.json();
             setItem(json.data);
+            setSyncKey((k) => k + 1);
         } catch (err) {
             reportClientError("MeetingDetailPage", "Gagal memuat detail", err, { id });
             setError(err instanceof Error ? err.message : "Gagal memuat detail meeting.");
@@ -187,7 +194,7 @@ function DetailContent({ id }: { id: string }) {
 
     const canManage = !!myEmployeeId && item.requesterEmployeeId === myEmployeeId;
     const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
-    const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
+    const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle !== "COMPLETED" && item.lifecycle !== "CANCELLED";
     const canCancel = canManage && item.status === "SCHEDULED";
     const canComplete = canManage && item.lifecycle === "IN_PROGRESS";
     const nowMs = Date.now();
@@ -201,6 +208,18 @@ function DetailContent({ id }: { id: string }) {
         declined: item.participants.filter((p) => p.inviteStatus === "DECLINED").length,
         pending: item.participants.filter((p) => !p.inviteStatus || p.inviteStatus === "PENDING").length,
     };
+    const taskParticipants = [
+        ...(item.requesterEmployeeId && !item.participants.some((p) => p.employeeId === item.requesterEmployeeId)
+            ? [{
+                employeeId: item.requesterEmployeeId,
+                guestName: null,
+                isExternal: false,
+                employee: { name: item.requester?.name ?? item.requesterEmployeeId },
+            }]
+            : []),
+        ...item.participants,
+    ];
+    const hasStarted = nowMs >= new Date(item.startAt).getTime();
 
     return (
         <div className="space-y-4">
@@ -216,7 +235,7 @@ function DetailContent({ id }: { id: string }) {
                 <div className="min-w-0">
                     <h1 className="text-base font-extrabold text-[var(--text-primary)] truncate">{item.title}</h1>
                     <p className="text-xs text-[var(--text-muted)]">
-                        {item.isFullDay ? "Seharian" : `${fmtDT(item.startAt)} – ${fmtDT(item.endAt)}`}
+                        {item.isFullDay ? `${fmtDateOnly(item.startAt)} · Seharian Penuh` : `${fmtDT(item.startAt)} – ${fmtDT(item.endAt)}`}
                     </p>
                 </div>
             </div>
@@ -224,8 +243,12 @@ function DetailContent({ id }: { id: string }) {
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
 
             {isFrozen && (
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/60 px-3 py-2.5" role="status" aria-label="Meeting selesai read-only">
-                    <p className="text-xs font-semibold text-[var(--text-secondary)]">Meeting sudah selesai — halaman ini read-only.</p>
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/60 px-3 py-2.5" role="status" aria-label="Status meeting">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)]">
+                        {item.status === "CANCELLED"
+                            ? "Meeting ini telah dibatalkan."
+                            : "Meeting telah selesai. Revisi notulensi tetap dapat dilakukan dengan mencantumkan alasan perubahan."}
+                    </p>
                 </div>
             )}
 
@@ -240,6 +263,17 @@ function DetailContent({ id }: { id: string }) {
                         <History className="w-3.5 h-3.5" /> Riwayat
                     </button>
                 </div>
+
+                {item.requesterEmployeeId && (
+                    <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
+                        <span>
+                            Penyelenggara: <strong className="font-semibold text-[var(--text-primary)]">{requesterDisplayName(item)}</strong>
+                            {canManage ? " (Anda)" : ""}
+                        </span>
+                    </p>
+                )}
+
                 {item.room && (
                     <p className="text-sm text-[var(--text-secondary)] flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5 shrink-0" /> {item.room.name}
@@ -248,8 +282,27 @@ function DetailContent({ id }: { id: string }) {
                 {item.meetingLink && (
                     <p className="text-sm text-[var(--text-secondary)] flex items-center gap-1.5 min-w-0">
                         <Link2 className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{item.meetingLink}</span>
+                        <a
+                            href={item.meetingLink.startsWith("http") ? item.meetingLink : `https://${item.meetingLink}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="truncate text-[var(--primary)] hover:underline inline-flex items-center gap-1 min-w-0"
+                        >
+                            <span className="truncate">{item.meetingLink}</span>
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
                     </p>
+                )}
+
+                {item.agenda && (
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 p-3 space-y-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1">
+                            <StickyNote className="w-3.5 h-3.5" /> Agenda / Pokok Bahasan
+                        </p>
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
+                            {item.agenda}
+                        </p>
+                    </div>
                 )}
 
                 <div>
@@ -432,25 +485,40 @@ function DetailContent({ id }: { id: string }) {
                             onChange={(e) => setCancelReason(e.target.value)}
                             placeholder="Tuliskan alasan (minimal 5 karakter)"
                         />
-                        <button
-                            type="button"
-                            onClick={() => { void handleCancel(); }}
-                            disabled={actionLoading || cancelReason.trim().length < 5}
-                            className="btn w-full bg-rose-600 text-white hover:bg-rose-700"
-                        >
-                            {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {actionLoading ? "Membatalkan…" : "Ya, Batalkan Meeting"}
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => { setAskingCancel(false); setCancelReason(""); }}
+                                disabled={actionLoading}
+                                className="btn btn-secondary flex-1"
+                            >
+                                Kembali
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { void handleCancel(); }}
+                                disabled={actionLoading || cancelReason.trim().length < 5}
+                                className="btn flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                            >
+                                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                {actionLoading ? "Membatalkan…" : "Ya, Batalkan Meeting"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
 
             <div className="card p-4">
-                <MeetingMinutesSection appointmentId={item.id} readOnly={isFrozen} />
+                <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED"} refreshKey={syncKey} />
             </div>
 
             <div className="card p-4">
-                <MeetingTaskSection appointmentId={item.id} participants={item.participants} readOnly={isFrozen} />
+                <MeetingTaskSection
+                    appointmentId={item.id}
+                    participants={taskParticipants}
+                    readOnly={isFrozen}
+                    canCreateTask={hasStarted}
+                />
             </div>
 
             {editing && (

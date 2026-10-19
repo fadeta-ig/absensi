@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, MapPin, Link2, Clock3 } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
-import { type AppointmentListItem } from "@/components/appointments/useAppointments";
+import { requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { formatIndonesianDate } from "@/lib/utils";
 
@@ -173,6 +173,9 @@ export default function AppointmentDayDetailPage() {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-bold text-[var(--text-primary)] truncate">{a.title}</p>
+                                            {a.agenda && (
+                                                <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-1">{a.agenda}</p>
+                                            )}
                                             <p className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center gap-1 truncate">
                                                 {a.room ? (
                                                     <>
@@ -183,6 +186,7 @@ export default function AppointmentDayDetailPage() {
                                                         <Link2 className="w-3 h-3 shrink-0" /> Daring
                                                     </>
                                                 )}
+                                                {a.requesterEmployeeId ? ` · Penyelenggara: ${requesterDisplayName(a)}` : ""}
                                             </p>
                                             <p className="text-[11px] text-[var(--text-muted)] mt-0.5 flex items-center gap-1">
                                                 <Clock3 className="w-3 h-3 shrink-0" />

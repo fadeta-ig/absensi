@@ -173,13 +173,14 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
     for (const rev of appt.revisions) {
         const prev = rev.previousData as Record<string, unknown> | null;
         if (prev && typeof prev === "object" && "minutes" in prev) {
-            const isFirst = prev.minutes === null || prev.minutes === undefined;
+            const isDeleted = prev.deleted === true;
+            const isFirst = !isDeleted && (prev.minutes === null || prev.minutes === undefined);
             push({
                 id: `rev-${rev.id}`,
                 at: rev.createdAt.toISOString(),
                 scope: "meeting",
                 action: isFirst ? "minutes_created" : "minutes_updated",
-                title: isFirst ? "Notulensi ditulis" : "Notulensi diubah",
+                title: isDeleted ? "Notulensi dihapus" : isFirst ? "Notulensi ditulis" : "Notulensi diubah",
                 detail: rev.changeReason,
                 actorName: resolveActor(rev.changedBy),
                 reason: rev.changeReason,

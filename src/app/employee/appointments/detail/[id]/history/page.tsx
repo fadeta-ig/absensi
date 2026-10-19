@@ -18,6 +18,7 @@ const ACTION_STYLE: Record<string, { icon: typeof Info; chip: string }> = {
     completed_early: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
     minutes_created: { icon: FileText, chip: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" },
     minutes_updated: { icon: Pencil, chip: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" },
+    minutes_deleted: { icon: XCircle, chip: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" },
     rsvp_accepted: { icon: UserCheck, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
     rsvp_declined: { icon: UserX, chip: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
     task_created: { icon: ClipboardList, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
@@ -142,7 +143,9 @@ function HistoryContent({ id }: { id: string }) {
                     <div className="flex gap-1.5">
                         <dt className="text-[var(--text-muted)] w-24 shrink-0">Jadwal</dt>
                         <dd className="text-[var(--text-secondary)]">
-                            {a.isFullDay ? "Seharian" : `${fmtDay(a.startAt)} – ${fmtDay(a.endAt)}`}
+                            {a.isFullDay
+                                ? `${new Date(a.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })} · Seharian Penuh`
+                                : `${fmtDay(a.startAt)} – ${fmtDay(a.endAt)}`}
                         </dd>
                     </div>
                     <div className="flex gap-1.5">
@@ -162,6 +165,12 @@ function HistoryContent({ id }: { id: string }) {
                         <dd className="text-[var(--text-secondary)]">{s.tasks} task · {s.tasksDone} selesai · {s.tasksOverdue} overdue · {s.extensions} perpanjangan</dd>
                     </div>
                 </dl>
+                {a.agenda && (
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 px-3 py-2.5 mt-1">
+                        <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Agenda / Pokok Bahasan</p>
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{a.agenda}</p>
+                    </div>
+                )}
                 {a.minutes && (
                     <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 px-3 py-2.5 mt-1">
                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Notulensi Final</p>

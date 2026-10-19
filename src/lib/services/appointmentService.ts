@@ -482,8 +482,9 @@ export async function getAppointments(session: SessionPayload, filters: Appointm
             skip: (page - 1) * limit,
             take: limit,
             select: {
-                id: true, title: true, status: true, startAt: true, endAt: true, isFullDay: true,
+                id: true, title: true, agenda: true, status: true, startAt: true, endAt: true, isFullDay: true,
                 meetingLink: true, requesterEmployeeId: true,
+                requester: { select: { name: true } },
                 room: { select: { id: true, name: true } },
                 participants: { select: { id: true, employeeId: true, guestName: true, isExternal: true, attendance: true, inviteStatus: true, inviteRespondedAt: true, inviteNote: true, employee: { select: { name: true } } } },
             },
@@ -497,6 +498,7 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
     const appt = await prisma.meetingAppointment.findUnique({
         where: { id },
         include: {
+            requester: { select: { name: true } },
             room: { select: { id: true, name: true, capacity: true, location: true } },
             participants: { select: { id: true, employeeId: true, guestName: true, isExternal: true, attendance: true, inviteStatus: true, inviteRespondedAt: true, inviteNote: true, employee: { select: { name: true } } } },
         },
@@ -567,9 +569,12 @@ export async function respondInvite(
 // ─── Reschedule / pindah ruangan ──────────────────────────────
 
 export interface RescheduleInput extends AppointmentSlot {
+    title?: string;
+    agenda?: string | null;
     roomId?: string | null;
     meetingLink?: string | null;
-    changeReason: string;
+    participants?: ParticipantInput[];
+    changeReason?: string;
     force?: boolean;
 }
 
@@ -581,11 +586,14 @@ export async function rescheduleAppointment(
 ): Promise<unknown> {
     const operator = isWig002(session);
     if (!session.employeeId && !operator) throw new AppointmentError("Hanya karyawan yang dapat mengubah jadwal meeting.", 403);
-    if (!input.changeReason || input.changeReason.trim().length < 5) {
+    const rawReason = input.changeReason?.trim() ?? "";
+    if (rawReason.length > 0 && rawReason.length < 5) {
+        throw new AppointmentError("Alasan perubahan minimal 5 karakter.", 400);
+    }
+    if (input.participants === undefined && rawReason.length < 5) {
         throw new AppointmentError("Alasan perubahan minimal 5 karakter.", 400);
     }
     const { startAt, endAt } = slotToDates(input);
-    if (startAt <= new Date()) throw new AppointmentError("Jadwal baru harus di masa depan.", 400);
 
     let room: { id: string } | null = null;
     if (input.roomId !== undefined) {
@@ -597,6 +605,10 @@ export async function rescheduleAppointment(
         }
     }
 
+    const normalizedParticipants = input.participants !== undefined
+        ? await validateParticipants(input.participants)
+        : undefined;
+
     return prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM meeting_appointments WHERE id = ${id} FOR UPDATE`;
         const existing = await tx.meetingAppointment.findUnique({ where: { id } });
@@ -604,56 +616,163 @@ export async function rescheduleAppointment(
         if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
             throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
         }
-        if (resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt, new Date()) === "IN_PROGRESS") {
-            throw new AppointmentError("Meeting sedang berlangsung dan tidak dapat dijadwalkan ulang. Selesaikan atau batalkan meeting bila perlu.", 409);
-        }
         const isOwner = session.employeeId !== null && session.employeeId !== undefined && existing.requesterEmployeeId === session.employeeId;
-        const lockMin = operator ? 15 : 60;
         if (!operator) {
             if (!isOwner) throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat mengubah.", 403);
             if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah pemilik.", 400);
         }
-        const minutesLeft = (existing.startAt.getTime() - Date.now()) / 60000;
-        if (minutesLeft < lockMin) {
-            throw new AppointmentError(`Perubahan dikunci. Batas perubahan ${lockMin} menit sebelum mulai. Hubungi penyelenggara atau WIG002.`, 400);
-        }
+        const nextTitle = input.title !== undefined && input.title.trim() ? input.title.trim().slice(0, 200) : existing.title;
+        const nextAgenda = input.agenda === undefined ? existing.agenda : (input.agenda?.trim() || null);
         const nextRoomId = input.roomId === undefined ? existing.roomId : input.roomId;
         const nextLink = input.meetingLink === undefined ? existing.meetingLink : input.meetingLink?.trim() || null;
+        const nextFullDay = input.isFullDay === undefined ? (existing.isFullDay ?? false) : input.isFullDay;
         if (!nextRoomId && !nextLink) {
             throw new AppointmentError("Pilih ruangan fisik atau isi link meeting online.", 400);
         }
-        if (nextRoomId) {
+
+        const isTimeChanged =
+            startAt.getTime() !== existing.startAt.getTime() ||
+            endAt.getTime() !== existing.endAt.getTime() ||
+            nextFullDay !== (existing.isFullDay ?? false);
+        const isPlaceChanged =
+            nextRoomId !== existing.roomId ||
+            (nextLink ?? null) !== (existing.meetingLink ?? null);
+        const isScheduleOrPlaceChanged = isTimeChanged || isPlaceChanged;
+
+        const now = new Date();
+        if (!isScheduleOrPlaceChanged && now >= existing.endAt) {
+            throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
+        }
+        if (isScheduleOrPlaceChanged) {
+            if (resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt, now) === "IN_PROGRESS") {
+                throw new AppointmentError("Meeting sedang berlangsung dan tidak dapat dijadwalkan ulang. Selesaikan atau batalkan meeting bila perlu.", 409);
+            }
+            if (isTimeChanged && startAt <= now) {
+                throw new AppointmentError("Jadwal baru harus di masa depan.", 400);
+            }
+            if (rawReason.length < 5) {
+                throw new AppointmentError("Alasan perubahan minimal 5 karakter.", 400);
+            }
+        }
+
+        if (normalizedParticipants && existing.requesterEmployeeId && normalizedParticipants.some((p) => p.employeeId === existing.requesterEmployeeId)) {
+            throw new AppointmentError("Pembuat meeting otomatis terdaftar sebagai penyelenggara dan tidak perlu ditambahkan sebagai peserta.", 400);
+        }
+        if (nextRoomId && (isTimeChanged || nextRoomId !== existing.roomId)) {
             const overlap = await hasRoomOverlap(tx, nextRoomId, startAt, endAt, id);
             if (overlap && !(operator && input.force)) {
                 throw new AppointmentError("Ruangan sudah terisi pada jadwal baru. Pilih waktu atau ruangan lain.", 409);
             }
         }
-        const involvedRows = await tx.meetingAppointmentParticipant.findMany({ where: { appointmentId: id, employeeId: { not: null } }, select: { employeeId: true } });
-        const involvedIds = [...(existing.requesterEmployeeId ? [existing.requesterEmployeeId] : []), ...involvedRows.map((p) => p.employeeId as string)];
-        const personOverlap = await hasEmployeeOverlap(tx, involvedIds, startAt, endAt, id);
-        const blockedIds = await busyBlockEmployeeIds(tx, involvedIds, startAt, endAt);
-        const busyNames = [...new Set([...personOverlap.map((o) => o.employeeId), ...blockedIds])];
-        if (busyNames.length > 0 && !(operator && input.force)) {
-            throw new AppointmentError(`Peserta berikut berhalangan (jadwal bertabrakan/cuti/sibuk): ${busyNames.join(", ")}.`, 409);
+        const existingParticipants = await tx.meetingAppointmentParticipant.findMany({
+            where: { appointmentId: id },
+            select: { id: true, employeeId: true, guestName: true, isExternal: true },
+        });
+        const existingInternalSet = new Set(
+            existingParticipants.filter((ep) => ep.employeeId).map((ep) => ep.employeeId as string)
+        );
+        const participantEmployeeIds = normalizedParticipants
+            ? normalizedParticipants.map((p) => p.employeeId).filter((v): v is string => Boolean(v))
+            : existingParticipants.map((p) => p.employeeId).filter((v): v is string => Boolean(v));
+        const addedEmployeeIds = normalizedParticipants
+            ? participantEmployeeIds.filter((empId) => !existingInternalSet.has(empId))
+            : [];
+        const checkOverlapIds = isTimeChanged
+            ? [...(existing.requesterEmployeeId ? [existing.requesterEmployeeId] : []), ...participantEmployeeIds]
+            : addedEmployeeIds;
+        if (checkOverlapIds.length > 0) {
+            const personOverlap = await hasEmployeeOverlap(tx, checkOverlapIds, startAt, endAt, id);
+            const blockedIds = await busyBlockEmployeeIds(tx, checkOverlapIds, startAt, endAt);
+            const busyNames = [...new Set([...personOverlap.map((o) => o.employeeId), ...blockedIds])];
+            if (busyNames.length > 0 && !(operator && input.force)) {
+                throw new AppointmentError(`Peserta berikut berhalangan (jadwal bertabrakan/cuti/sibuk): ${busyNames.join(", ")}.`, 409);
+            }
         }
+        const effectiveReason = rawReason || "Perubahan daftar peserta";
         const count = await tx.meetingAppointmentRevision.count({ where: { appointmentId: id } });
         try {
             await tx.meetingAppointmentRevision.create({
                 data: {
                     appointmentId: id,
                     revisionNumber: count + 1,
-                    changeReason: input.changeReason.trim(),
+                    changeReason: effectiveReason,
                     changedBy: actor.username,
-                    previousData: { status: existing.status, roomId: existing.roomId, meetingLink: existing.meetingLink, startAt: existing.startAt, endAt: existing.endAt },
+                    previousData: {
+                        status: existing.status,
+                        roomId: existing.roomId,
+                        meetingLink: existing.meetingLink,
+                        startAt: existing.startAt,
+                        endAt: existing.endAt,
+                        ...(normalizedParticipants
+                            ? {
+                                  participants: existingParticipants.map((ep) => ({
+                                      employeeId: ep.employeeId,
+                                      guestName: ep.guestName,
+                                      isExternal: ep.isExternal,
+                                  })),
+                              }
+                            : {}),
+                    },
                 },
             });
         } catch (err) {
             if (isPrismaUniqueViolation(err)) throw new AppointmentError("Data berubah bersamaan. Muat ulang halaman lalu coba lagi.", 409);
             throw err;
         }
+        if (normalizedParticipants) {
+            const desiredInternal = new Set(
+                normalizedParticipants.filter((p) => p.employeeId).map((p) => p.employeeId as string)
+            );
+            const desiredExternal = new Set(
+                normalizedParticipants.filter((p) => !p.employeeId && p.guestName).map((p) => (p.guestName as string).toLowerCase())
+            );
+
+            const toDeleteIds = existingParticipants
+                .filter((ep) => {
+                    if (ep.employeeId) return !desiredInternal.has(ep.employeeId);
+                    if (ep.guestName) return !desiredExternal.has(ep.guestName.toLowerCase());
+                    return true;
+                })
+                .map((ep) => ep.id);
+
+            if (toDeleteIds.length > 0) {
+                await tx.meetingAppointmentParticipant.deleteMany({
+                    where: { id: { in: toDeleteIds } },
+                });
+            }
+
+            const existingExternal = new Set(
+                existingParticipants.filter((ep) => !ep.employeeId && ep.guestName).map((ep) => (ep.guestName as string).toLowerCase())
+            );
+
+            const toCreate = normalizedParticipants.filter((np) => {
+                if (np.employeeId) return !existingInternalSet.has(np.employeeId);
+                if (np.guestName) return !existingExternal.has(np.guestName.toLowerCase());
+                return false;
+            });
+
+            for (const np of toCreate) {
+                await tx.meetingAppointmentParticipant.create({
+                    data: {
+                        appointmentId: id,
+                        employeeId: np.employeeId,
+                        guestName: np.guestName,
+                        isExternal: np.isExternal,
+                    },
+                });
+            }
+        }
         const updated = await tx.meetingAppointment.update({
             where: { id },
-            data: { roomId: nextRoomId, meetingLink: nextLink, startAt, endAt, isFullDay: input.isFullDay ?? false },
+            data: {
+                title: nextTitle,
+                agenda: nextAgenda,
+                roomId: nextRoomId,
+                meetingLink: nextLink,
+                startAt,
+                endAt,
+                isFullDay: nextFullDay,
+            },
         });
         const actorInfo = actorFromSession(session);
         await tx.auditLog.create({
@@ -661,7 +780,7 @@ export async function rescheduleAppointment(
                 action: input.roomId !== undefined && input.roomId !== existing.roomId ? "MOVE_APPOINTMENT_ROOM" : "RESCHEDULE_APPOINTMENT",
                 entity: "APPOINTMENT",
                 entityId: id,
-                details: JSON.stringify({ changeReason: input.changeReason.trim(), force: operator && input.force ? true : false }),
+                details: JSON.stringify({ changeReason: effectiveReason, force: operator && input.force ? true : false }),
                 actorType: "USER",
                 actorUserId: actorInfo.userId ?? null,
                 actorIdentifier: actorInfo.identifier,
@@ -874,6 +993,7 @@ export interface AvailabilityQuery {
     date: string;
     roomId?: string;
     employeeIds?: string[];
+    excludeId?: string;
 }
 
 export async function getAvailability(query: AvailabilityQuery): Promise<unknown> {
@@ -884,7 +1004,13 @@ export async function getAvailability(query: AvailabilityQuery): Promise<unknown
     const result: Record<string, unknown> = {};
     if (query.roomId) {
         const busy = await prisma.meetingAppointment.findMany({
-            where: { roomId: query.roomId, status: "SCHEDULED", startAt: { lt: next }, endAt: { gt: dayStart } },
+            where: {
+                roomId: query.roomId,
+                status: "SCHEDULED",
+                startAt: { lt: next },
+                endAt: { gt: dayStart },
+                ...(query.excludeId ? { id: { not: query.excludeId } } : {}),
+            },
             select: { startAt: true, endAt: true },
             orderBy: { startAt: "asc" },
         });
@@ -897,6 +1023,7 @@ export async function getAvailability(query: AvailabilityQuery): Promise<unknown
                 status: "SCHEDULED",
                 startAt: { lt: next },
                 endAt: { gt: dayStart },
+                ...(query.excludeId ? { id: { not: query.excludeId } } : {}),
                 OR: [{ participants: { some: { employeeId: { in: ids } } } }, { requesterEmployeeId: { in: ids } }],
             },
             select: { startAt: true, endAt: true, requesterEmployeeId: true, participants: { where: { employeeId: { in: ids } }, select: { employeeId: true } } },

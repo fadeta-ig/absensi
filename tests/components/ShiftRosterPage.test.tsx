@@ -65,6 +65,9 @@ function baseFetch(handler: (url: string, init?: RequestInit) => Promise<Respons
         const url = String(input);
         if (url === "/api/employees") return response(employees);
         if (url === "/api/shifts") return response(shifts);
+        if (url === "/api/shifts/assignments" && (!init?.method || init.method === "GET")) {
+            return response({ date: "2026-09-29", today: "2026-09-29", roster: [] });
+        }
         return handler(url, init);
     });
 }
@@ -290,5 +293,36 @@ describe("ShiftRosterPage", () => {
         expect(await screen.findByText("Gagal membatalkan jadwal masa depan.")).toBeInTheDocument();
         expect(clientMocks.reportClientError).toHaveBeenCalled();
         expect(clientMocks.toast).toHaveBeenCalledWith("Gagal membatalkan jadwal masa depan.", "error");
+    });
+
+    it("loads today's active roster on initial mount and displays the active shift and inclusive period", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url === "/api/shifts/assignments") {
+                return response({
+                    date: "2026-10-19",
+                    today: "2026-10-19",
+                    roster: [{
+                        employeeId: "EMP001",
+                        shiftId: "shift-night",
+                        source: "assignment",
+                        assignment: {
+                            id: "asg-active",
+                            effectiveFrom: "2026-10-19",
+                            effectiveTo: "2026-10-25",
+                        },
+                    }],
+                });
+            }
+            throw new Error(`Unexpected fetch ${url}`);
+        }));
+
+        render(<ShiftRosterPage />);
+
+        expect(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
+        expect(screen.getByLabelText("Tanggal Lihat Roster")).toHaveValue("2026-10-19");
+        expect(screen.getByText("Jadwal Berjalan")).toBeInTheDocument();
     });
 });

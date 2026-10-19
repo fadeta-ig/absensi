@@ -151,7 +151,7 @@ RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; emp
 
 ## 5. Task Hasil Meeting + Notulensi (2026-10-08)
 
-1. `MeetingAppointment` 1 ── * `MeetingTask` (`appointmentId`, Cascade; notulensi via kolom `minutes/minutesUpdatedBy/minutesUpdatedAt` + `MeetingAppointmentRevision`).
+1. `MeetingAppointment` 1 ── * `MeetingTask` (`appointmentId`, Cascade; notulensi via kolom `notulisEmployeeId/minutes/minutesUpdatedBy/minutesUpdatedAt` + `MeetingAppointmentRevision`).
 2. `MeetingTask` 1 ── * `MeetingTaskAssignee` (unik `[taskId, employeeId]`; status per-orang `BELUM_DIKERJAKAN/ON_PROGRESS/SELESAI/DIBATALKAN`; overdue = hitung `now > dueAt`, bukan kolom).
 3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; kuota `meeting.task.maxExtensions` default 3).
 4. `MeetingTask` 1 ── * `MeetingTaskRevision` (unik `[taskId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).

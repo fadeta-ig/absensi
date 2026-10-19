@@ -1,20 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Eye, X, CalendarClock, Trash2 } from "lucide-react";
+import { Loader2, Eye, X, CalendarClock, ExternalLink, StickyNote, Trash2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
-import { participantDisplayName } from "@/components/appointments/useAppointments";
+import ParticipantPicker, { type PickedParticipant } from "@/components/appointments/ParticipantPicker";
+import { participantDisplayName, requesterDisplayName } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useConfirm } from "@/components/ConfirmModal";
 
 interface IncomingItem {
     id: string;
     title: string;
+    agenda?: string | null;
     status: string;
     lifecycle?: string;
     startAt: string;
@@ -22,6 +24,7 @@ interface IncomingItem {
     isFullDay: boolean;
     meetingLink: string | null;
     requesterEmployeeId: string | null;
+    requester?: { name: string | null } | null;
     room: { id: string; name: string } | null;
     participants: Array<{ id: string; employeeId: string | null; guestName: string | null; isExternal: boolean; attendance: string; inviteStatus?: string; inviteNote?: string | null; employee?: { name: string } | null }>;
 }
@@ -33,7 +36,11 @@ interface RoomOption {
 }
 
 function fmtDT(iso: string): string {
-    return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtDateOnly(iso: string): string {
+    return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function GaAppointmentsIncomingPage() {
@@ -48,7 +55,19 @@ export default function GaAppointmentsIncomingPage() {
     const [detail, setDetail] = useState<IncomingItem | null>(null);
     const [rooms, setRooms] = useState<RoomOption[]>([]);
     const [acting, setActing] = useState(false);
-    const [resched, setResched] = useState({ date: "", startTime: "", endTime: "", roomId: "", meetingLink: "", reason: "", force: false });
+    const [resched, setResched] = useState<{
+        title: string;
+        agenda: string;
+        mode: "fisik" | "daring";
+        date: string;
+        startTime: string;
+        endTime: string;
+        roomId: string;
+        meetingLink: string;
+        reason: string;
+        force: boolean;
+    }>({ title: "", agenda: "", mode: "fisik", date: "", startTime: "", endTime: "", roomId: "", meetingLink: "", reason: "", force: false });
+    const [reschedParticipants, setReschedParticipants] = useState<PickedParticipant[]>([]);
     const [askingResched, setAskingResched] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
     const [askingCancel, setAskingCancel] = useState(false);
@@ -110,14 +129,24 @@ export default function GaAppointmentsIncomingPage() {
         const d = new Date(item.startAt);
         const pad = (n: number) => String(n).padStart(2, "0");
         setResched({
+            title: item.title,
+            agenda: item.agenda ?? "",
+            mode: item.room?.id ? "fisik" : item.meetingLink ? "daring" : "fisik",
             date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
             startTime: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
             endTime: `${pad(new Date(item.endAt).getHours())}:${pad(new Date(item.endAt).getMinutes())}`,
-            roomId: item.room?.id ?? "",
+            roomId: item.room?.id ?? (rooms[0]?.id ?? ""),
             meetingLink: item.meetingLink ?? "",
             reason: "",
             force: false,
         });
+        setReschedParticipants(
+            (item.participants ?? []).map((p) => ({
+                key: p.employeeId ? `e:${p.employeeId}` : `g:${(p.guestName ?? "").toLowerCase()}`,
+                employeeId: p.employeeId,
+                name: participantDisplayName(p),
+            }))
+        );
     }
 
     async function openDetail(id: string) {
@@ -209,11 +238,16 @@ export default function GaAppointmentsIncomingPage() {
                             <TableRow key={a.id}>
                                 <TableCell>
                                     <span className="font-semibold block truncate max-w-[220px]">{a.title}</span>
-                                    <span className="block text-[11px] font-mono text-[var(--text-muted)]">{a.requesterEmployeeId ?? "-"}</span>
+                                    <span className="block text-[11px] text-[var(--text-secondary)]">
+                                        {requesterDisplayName(a)}
+                                        {a.requesterEmployeeId && a.requester?.name ? (
+                                            <span className="font-mono text-[var(--text-muted)]"> ({a.requesterEmployeeId})</span>
+                                        ) : null}
+                                    </span>
                                     <span className="block text-[11px] text-[var(--text-muted)]">{a.participants.length} peserta</span>
                                 </TableCell>
                                 <TableCell>
-                                    <span className="block text-xs">{a.isFullDay ? "Seharian" : `${fmtDT(a.startAt)} – ${fmtDT(a.endAt)}`}</span>
+                                    <span className="block text-xs">{a.isFullDay ? `${fmtDateOnly(a.startAt)} · Seharian Penuh` : `${fmtDT(a.startAt)} – ${fmtDT(a.endAt)}`}</span>
                                     <span className="block text-[11px] text-[var(--text-muted)]">{a.room?.name ?? "Online"}</span>
                                 </TableCell>
                                 <TableCell>
@@ -256,10 +290,39 @@ export default function GaAppointmentsIncomingPage() {
                     <div className="space-y-3">
                         <AppointmentStatusBadge status={detail.status} lifecycle={detail.lifecycle} />
                         <p className="text-sm text-[var(--text-secondary)]">
-                            {detail.isFullDay ? "Seharian" : `${fmtDT(detail.startAt)} – ${fmtDT(detail.endAt)}`} · {detail.room?.name ?? "Online"}
-                            {detail.meetingLink ? ` · ${detail.meetingLink}` : ""}
+                            {detail.isFullDay ? `${fmtDateOnly(detail.startAt)} · Seharian Penuh` : `${fmtDT(detail.startAt)} – ${fmtDT(detail.endAt)}`} · {detail.room?.name ?? "Online"}
                         </p>
-                        <p className="text-xs text-[var(--text-muted)]">Pemohon: <span className="font-mono">{detail.requesterEmployeeId ?? "-"}</span></p>
+                        {detail.meetingLink && (
+                            <p className="text-xs text-[var(--text-secondary)]">
+                                Tautan:{" "}
+                                <a
+                                    href={detail.meetingLink.startsWith("http") ? detail.meetingLink : `https://${detail.meetingLink}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[var(--primary)] hover:underline inline-flex items-center gap-1"
+                                >
+                                    <span>{detail.meetingLink}</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                </a>
+                            </p>
+                        )}
+                        <p className="text-xs text-[var(--text-muted)]">
+                            Pemohon: <span className="font-semibold text-[var(--text-primary)]">{requesterDisplayName(detail)}</span>
+                            {detail.requesterEmployeeId && detail.requester?.name ? (
+                                <span className="font-mono"> ({detail.requesterEmployeeId})</span>
+                            ) : null}
+                        </p>
+
+                        {detail.agenda && (
+                            <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 p-3 space-y-1">
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1">
+                                    <StickyNote className="w-3.5 h-3.5" /> Agenda / Pokok Bahasan
+                                </p>
+                                <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
+                                    {detail.agenda}
+                                </p>
+                            </div>
+                        )}
 
                         <div>
                             <p className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">Peserta ({detail.participants.length})</p>
@@ -289,6 +352,16 @@ export default function GaAppointmentsIncomingPage() {
                                 {askingResched && (
                                     <div className="space-y-3 rounded-xl border border-[var(--border)] p-3">
                                         <div className="form-group !mb-0">
+                                            <label className="form-label" htmlFor="rs-title">Topik Meeting *</label>
+                                            <input
+                                                id="rs-title"
+                                                className="form-input"
+                                                value={resched.title}
+                                                onChange={(e) => setResched({ ...resched, title: e.target.value })}
+                                                placeholder="Topik meeting"
+                                            />
+                                        </div>
+                                        <div className="form-group !mb-0">
                                             <span className="form-label" id="rs-mode-label">Tempat Pelaksanaan *</span>
                                             <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="rs-mode-label">
                                                 {(
@@ -300,13 +373,20 @@ export default function GaAppointmentsIncomingPage() {
                                                     <button
                                                         key={m.key}
                                                         type="button"
-                                                        aria-pressed={(resched.roomId ? "fisik" : "daring") === m.key}
+                                                        aria-pressed={resched.mode === m.key}
                                                         onClick={() => {
-                                                            if (m.key === "fisik") setResched({ ...resched, meetingLink: "" });
-                                                            else setResched({ ...resched, roomId: "" });
+                                                            if (m.key === "fisik") {
+                                                                setResched({
+                                                                    ...resched,
+                                                                    mode: "fisik",
+                                                                    roomId: resched.roomId || rooms[0]?.id || "",
+                                                                });
+                                                            } else {
+                                                                setResched({ ...resched, mode: "daring" });
+                                                            }
                                                         }}
                                                         className={`min-h-11 rounded-xl border px-3 text-sm font-semibold transition-colors ${
-                                                            (resched.roomId ? "fisik" : "daring") === m.key
+                                                            resched.mode === m.key
                                                                 ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
                                                                 : "border-[var(--border)] text-[var(--text-secondary)]"
                                                         }`}
@@ -321,7 +401,7 @@ export default function GaAppointmentsIncomingPage() {
                                                 <label className="form-label" htmlFor="rs-date">Tanggal *</label>
                                                 <input id="rs-date" type="date" className="form-input" value={resched.date} onChange={(e) => setResched({ ...resched, date: e.target.value })} />
                                             </div>
-                                            {resched.roomId ? (
+                                            {resched.mode === "fisik" ? (
                                                 <div className="form-group !mb-0">
                                                     <label className="form-label" htmlFor="rs-room">Ruangan *</label>
                                                     <select id="rs-room" className="form-input" value={resched.roomId} onChange={(e) => setResched({ ...resched, roomId: e.target.value })}>
@@ -346,8 +426,25 @@ export default function GaAppointmentsIncomingPage() {
                                             </div>
                                         </div>
                                         <div className="form-group !mb-0">
-                                            <label className="form-label" htmlFor="rs-reason">Alasan Perubahan *</label>
-                                            <input id="rs-reason" className="form-input" value={resched.reason} onChange={(e) => setResched({ ...resched, reason: e.target.value })} placeholder="Tuliskan alasan perubahan jadwal (minimal 5 karakter)" />
+                                            <ParticipantPicker
+                                                value={reschedParticipants}
+                                                onChange={setReschedParticipants}
+                                                excludeEmployeeId={detail.requesterEmployeeId}
+                                            />
+                                        </div>
+                                        <div className="form-group !mb-0">
+                                            <label className="form-label" htmlFor="rs-agenda">Agenda / Pokok Bahasan (Opsional)</label>
+                                            <textarea
+                                                id="rs-agenda"
+                                                className="form-input min-h-[60px] resize-none"
+                                                value={resched.agenda}
+                                                onChange={(e) => setResched({ ...resched, agenda: e.target.value })}
+                                                placeholder="Tuliskan pokok bahasan meeting…"
+                                            />
+                                        </div>
+                                        <div className="form-group !mb-0">
+                                            <label className="form-label" htmlFor="rs-reason">Alasan Perubahan (Opsional bila hanya ubah peserta)</label>
+                                            <input id="rs-reason" className="form-input" value={resched.reason} onChange={(e) => setResched({ ...resched, reason: e.target.value })} placeholder="Tuliskan alasan bila mengubah jadwal/ruangan (min. 5 karakter)" />
                                         </div>
                                         <label className="flex items-center gap-2 text-xs font-medium">
                                             <input type="checkbox" checked={resched.force} onChange={(e) => setResched({ ...resched, force: e.target.checked })} className="w-4 h-4" />
@@ -355,14 +452,18 @@ export default function GaAppointmentsIncomingPage() {
                                         </label>
                                         <button
                                             type="button"
-                                            disabled={acting || !resched.date || !resched.startTime || !resched.endTime || (!resched.roomId && !resched.meetingLink.trim()) || resched.reason.trim().length < 5}
+                                            disabled={acting || !resched.title.trim() || !resched.date || !resched.startTime || !resched.endTime || (resched.mode === "fisik" ? !resched.roomId : !resched.meetingLink.trim()) || (resched.reason.trim().length > 0 && resched.reason.trim().length < 5)}
                                             onClick={() => {
                                                 void postAction(`/api/appointments/${detail.id}`, "PATCH", {
+                                                    title: resched.title.trim(),
+                                                    agenda: resched.agenda.trim() || null,
                                                     date: resched.date,
                                                     startTime: resched.startTime,
                                                     endTime: resched.endTime,
-                                                    roomId: resched.roomId || null,
-                                                    meetingLink: resched.meetingLink.trim() || null,
+                                                    isFullDay: detail.isFullDay,
+                                                    roomId: resched.mode === "fisik" ? resched.roomId || null : null,
+                                                    meetingLink: resched.mode === "daring" ? resched.meetingLink.trim() || null : null,
+                                                    participants: reschedParticipants.map((p) => (p.employeeId ? { employeeId: p.employeeId } : { guestName: p.name })),
                                                     changeReason: resched.reason.trim(),
                                                     force: resched.force,
                                                 }, "Perubahan jadwal berhasil disimpan.");

@@ -1,35 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { MeetingTaskError, updateMeetingMinutes, isPrivileged } from "@/lib/services/meetingTaskService";
-import { meetingMinutesSchema } from "@/lib/validations/validationSchemas";
-import { prisma } from "@/lib/prisma";
+import {
+    MeetingTaskError,
+    deleteMeetingMinutes,
+    getMeetingMinutes,
+    isPrivileged,
+    setMeetingNotulis,
+    updateMeetingMinutes,
+} from "@/lib/services/meetingTaskService";
+import {
+    meetingMinutesDeleteSchema,
+    meetingMinutesSchema,
+    meetingNotulisSchema,
+} from "@/lib/validations/validationSchemas";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !(await isPrivileged(session))) return forbiddenResponse();
 
     try {
         const { id } = await params;
-        const appt = await prisma.meetingAppointment.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                minutes: true,
-                minutesUpdatedBy: true,
-                minutesUpdatedAt: true,
-                requesterEmployeeId: true,
-                participants: { select: { employeeId: true } },
-            },
-        });
-        if (!appt) return NextResponse.json({ error: "Jadwal meeting tidak ditemukan." }, { status: 404 });
-        const allowed =
-            (await isPrivileged(session)) ||
-            appt.requesterEmployeeId === session.employeeId ||
-            appt.participants.some((p) => p.employeeId === session.employeeId);
-        if (!allowed) return NextResponse.json({ error: "Anda bukan peserta meeting ini." }, { status: 403 });
-        return NextResponse.json({ success: true, data: appt });
+        const data = await getMeetingMinutes(session, id);
+        return NextResponse.json({ success: true, data });
     } catch (err) {
+        if (err instanceof MeetingTaskError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("MeetingMinutesGET", err);
     }
 }
@@ -51,5 +48,63 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json({ error: err.message }, { status: err.statusCode });
         }
         return serverErrorResponse("MeetingMinutesPUT", err);
+    }
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    if (!session.employeeId && !(await isPrivileged(session))) return forbiddenResponse();
+
+    try {
+        const { id } = await params;
+        const result = await validateBody(request, meetingNotulisSchema);
+        if ("error" in result) return result.error;
+
+        const data = await setMeetingNotulis(session, id, result.data.notulisEmployeeId, {
+            userId: session.userId,
+            username: session.username,
+        });
+        return NextResponse.json({ success: true, data });
+    } catch (err) {
+        if (err instanceof MeetingTaskError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
+        return serverErrorResponse("MeetingMinutesNotulisPATCH", err);
+    }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
+
+    try {
+        const { id } = await params;
+        let reasonPayload: { changeReason?: string } = {};
+        try {
+            const rawText = await request.text();
+            if (rawText.trim()) {
+                const parsed = meetingMinutesDeleteSchema.safeParse(JSON.parse(rawText));
+                if (!parsed.success) {
+                    const firstIssue = parsed.error.issues[0]?.message ?? "Input tidak valid.";
+                    return NextResponse.json({ error: firstIssue }, { status: 400 });
+                }
+                reasonPayload = parsed.data;
+            }
+        } catch {
+            return NextResponse.json({ error: "Format permintaan tidak valid." }, { status: 400 });
+        }
+
+        const data = await deleteMeetingMinutes(session, id, reasonPayload, {
+            userId: session.userId,
+            username: session.username,
+        });
+        return NextResponse.json({ success: true, data });
+    } catch (err) {
+        if (err instanceof MeetingTaskError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
+        return serverErrorResponse("MeetingMinutesDELETE", err);
     }
 }

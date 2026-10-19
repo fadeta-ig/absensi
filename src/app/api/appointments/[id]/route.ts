@@ -43,16 +43,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             room?: { name: string } | null;
             requesterEmployeeId?: string | null;
         } | null;
+        const reasonText = result.data.changeReason?.trim() || "Perubahan daftar peserta meeting";
         const data = await rescheduleAppointment(
             session,
             id,
             {
+                title: result.data.title,
+                agenda: result.data.agenda,
                 roomId: result.data.roomId,
                 meetingLink: result.data.meetingLink,
                 date: result.data.date,
                 startTime: result.data.startTime ?? "00:00",
                 endTime: result.data.endTime ?? "23:59",
                 isFullDay: result.data.isFullDay ?? false,
+                participants: result.data.participants,
                 changeReason: result.data.changeReason,
                 force: result.data.force ?? false,
             },
@@ -65,8 +69,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         await sendAppointmentPush(userIds, {
             title: isOrganizer ? "Jadwal Meeting Berubah" : `WIG002 memindahkan meeting "${before?.title ?? "Anda"}"`,
             body: isOrganizer
-                ? result.data.changeReason
-                : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Meeting Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${result.data.changeReason}`,
+                ? reasonText
+                : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Meeting Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${reasonText}`,
             tag: `appointment-${id}-rescheduled`,
             url: `/employee/appointments/detail/${id}`,
         });

@@ -10,7 +10,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AppointmentCalendar, { type CalendarAppointment } from "@/components/appointments/AppointmentCalendar";
 import AppointmentFormModal from "@/components/appointments/AppointmentFormModal";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
-import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, type AppointmentListItem } from "@/components/appointments/useAppointments";
+import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { toDateString, formatIndonesianDate } from "@/lib/utils";
 
 type ViewMode = "upcoming" | "day" | "month";
@@ -517,9 +517,16 @@ export default function EmployeeAppointmentsPage() {
                                         {formatIndonesianDate(a.startAt)} · {a.isFullDay ? "Seharian Penuh" : `${fmtTime(a.startAt)}–${fmtTime(a.endAt)}`}
                                     </p>
                                     <p className="text-sm font-bold text-[var(--text-primary)] truncate mt-1">{a.title}</p>
+                                    {a.agenda && (
+                                        <p className="text-xs text-[var(--text-secondary)] mt-0.5 line-clamp-1">{a.agenda}</p>
+                                    )}
                                     <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
                                         {a.room ? a.room.name : "Daring"} · {a.participants.length} peserta · {accepted} menerima
-                                        {isMine ? " · Diselenggarakan oleh Anda" : ""}
+                                        {isMine
+                                            ? " · Diselenggarakan oleh Anda"
+                                            : a.requesterEmployeeId
+                                                ? ` · Penyelenggara: ${requesterDisplayName(a)}`
+                                                : ""}
                                     </p>
                                     <span className="mt-1.5 inline-block">
                                         <AppointmentStatusBadge status={a.status} lifecycle={a.lifecycle} />
@@ -535,6 +542,7 @@ export default function EmployeeAppointmentsPage() {
                 <AppointmentCalendar
                     appointmentsByDate={appointmentsByDate}
                     selectedDate={selectedDate}
+                    onMonthChange={(y, m) => setMonth({ year: y, month: m })}
                     onSelectDate={(d) => {
                         router.push(`/employee/appointments/${d}`);
                     }}

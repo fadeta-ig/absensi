@@ -60,10 +60,12 @@ export default function MeetingTaskSection({
     appointmentId,
     participants,
     readOnly = false,
+    canCreateTask = true,
 }: {
     appointmentId: string;
     participants: TaskParticipant[];
     readOnly?: boolean;
+    canCreateTask?: boolean;
 }) {
     const [tasks, setTasks] = useState<MeetingTask[]>([]);
     const [loading, setLoading] = useState(true);
@@ -173,14 +175,14 @@ export default function MeetingTaskSection({
                 <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">
                     <ListChecks className="w-3.5 h-3.5" /> Task Hasil Meeting ({tasks.length})
                 </p>
-                {!readOnly && (
+                {!readOnly && canCreateTask && (
                     <button type="button" onClick={() => setTaskModal({ mode: "create" })} className="btn btn-secondary btn-sm">
                         <Plus className="w-3.5 h-3.5" /> Beri Task
                     </button>
                 )}
             </div>
 
-            {taskModal && !readOnly && (
+            {taskModal && (
                 <TaskFormModal
                     mode={taskModal.mode}
                     appointmentId={appointmentId}

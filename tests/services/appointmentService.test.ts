@@ -387,3 +387,195 @@ describe("respondInvite kedaluwarsa", () => {
         await expect(respondInvite(empSession(), "a1", "ACCEPT", null, { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 409 });
     });
 });
+
+describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
+    it("menghapus peserta yang dikeluarkan, menambah peserta baru, dan mempertahankan peserta lama", async () => {
+        mocked.employee.findMany.mockResolvedValue([
+            { employeeId: "ID-002", isActive: true },
+            { employeeId: "ID-004", isActive: true },
+        ] as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1",
+                    status: "SCHEDULED",
+                    requesterEmployeeId: "ID-001",
+                    roomId: null,
+                    meetingLink: "https://meet.example.com/123",
+                    startAt: new Date(Date.now() + 7200000),
+                    endAt: new Date(Date.now() + 10800000),
+                }),
+                findFirst: vi.fn().mockResolvedValue(null),
+                findMany: vi.fn().mockResolvedValue([]),
+                update: vi.fn().mockResolvedValue({ id: "a1", status: "SCHEDULED" }),
+            },
+            meetingAppointmentParticipant: {
+                findMany: vi.fn().mockResolvedValue([
+                    { id: "p-keep", employeeId: "ID-002", guestName: null, isExternal: false },
+                    { id: "p-remove", employeeId: "ID-003", guestName: null, isExternal: false },
+                ]),
+                deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+                create: vi.fn().mockResolvedValue({ id: "p-new" }),
+            },
+            meetingAppointmentRevision: {
+                count: vi.fn().mockResolvedValue(0),
+                create: vi.fn().mockResolvedValue({}),
+            },
+            employeeUnavailability: {
+                findMany: vi.fn().mockResolvedValue([]),
+            },
+            auditLog: {
+                create: vi.fn().mockResolvedValue({}),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+
+        await rescheduleAppointment(
+            empSession(),
+            "a1",
+            {
+                date: "2026-12-10",
+                startTime: "10:00",
+                endTime: "11:00",
+                meetingLink: "https://meet.example.com/123",
+                participants: [{ employeeId: "ID-002" }, { employeeId: "ID-004" }, { guestName: "Tamu Baru" }],
+                changeReason: "Update peserta meeting",
+            },
+            { userId: "u-1", username: "ID-001" }
+        );
+
+        expect(tx.meetingAppointmentParticipant.deleteMany).toHaveBeenCalledWith({
+            where: { id: { in: ["p-remove"] } },
+        });
+        expect(tx.meetingAppointmentParticipant.create).toHaveBeenCalledTimes(2);
+        expect(tx.meetingAppointmentParticipant.create).toHaveBeenCalledWith({
+            data: {
+                appointmentId: "a1",
+                employeeId: "ID-004",
+                guestName: null,
+                isExternal: false,
+            },
+        });
+        expect(tx.meetingAppointmentParticipant.create).toHaveBeenCalledWith({
+            data: {
+                appointmentId: "a1",
+                employeeId: null,
+                guestName: "Tamu Baru",
+                isExternal: true,
+            },
+        });
+    });
+
+    it("menolak apabila penyelenggara dimasukkan sebagai peserta saat edit", async () => {
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-001", isActive: true }] as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1",
+                    status: "SCHEDULED",
+                    requesterEmployeeId: "ID-001",
+                    roomId: null,
+                    meetingLink: "https://meet.example.com/123",
+                    startAt: new Date(Date.now() + 7200000),
+                    endAt: new Date(Date.now() + 10800000),
+                }),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+
+        await expect(
+            rescheduleAppointment(
+                empSession(),
+                "a1",
+                {
+                    date: "2026-12-10",
+                    startTime: "10:00",
+                    endTime: "11:00",
+                    meetingLink: "https://meet.example.com/123",
+                    participants: [{ employeeId: "ID-001" }],
+                    changeReason: "Salah tambah penyelenggara",
+                },
+                { userId: "u-1", username: "ID-001" }
+            )
+        ).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it("mengizinkan tambah/hapus peserta tanpa lock (<60 menit atau sedang berlangsung) dan tanpa alasan manual bila jadwal tidak berubah", async () => {
+        const { slotToDates } = await import("@/lib/services/appointmentService");
+        const slot = slotToDates({ date: "2026-12-10", startTime: "10:00", endTime: "11:00", isFullDay: false });
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-005", isActive: true }] as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1",
+                    status: "SCHEDULED",
+                    requesterEmployeeId: "ID-001",
+                    roomId: null,
+                    meetingLink: "https://meet.example.com/123",
+                    isFullDay: false,
+                    startAt: slot.startAt,
+                    endAt: slot.endAt,
+                }),
+                findMany: vi.fn().mockResolvedValue([]),
+                update: vi.fn().mockResolvedValue({ id: "a1", status: "SCHEDULED" }),
+            },
+            meetingAppointmentParticipant: {
+                findMany: vi.fn().mockResolvedValue([
+                    { id: "p-existing", employeeId: "ID-002", guestName: null, isExternal: false },
+                ]),
+                deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+                create: vi.fn().mockResolvedValue({ id: "p-added" }),
+            },
+            meetingAppointmentRevision: {
+                count: vi.fn().mockResolvedValue(0),
+                create: vi.fn().mockResolvedValue({}),
+            },
+            employeeUnavailability: {
+                findMany: vi.fn().mockResolvedValue([]),
+            },
+            auditLog: {
+                create: vi.fn().mockResolvedValue({}),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+
+        await expect(
+            rescheduleAppointment(
+                empSession(),
+                "a1",
+                {
+                    date: "2026-12-10",
+                    startTime: "10:00",
+                    endTime: "11:00",
+                    isFullDay: false,
+                    meetingLink: "https://meet.example.com/123",
+                    participants: [{ employeeId: "ID-005" }],
+                    changeReason: "",
+                },
+                { userId: "u-1", username: "ID-001" }
+            )
+        ).resolves.toMatchObject({ id: "a1" });
+
+        expect(tx.meetingAppointmentParticipant.deleteMany).toHaveBeenCalledWith({
+            where: { id: { in: ["p-existing"] } },
+        });
+        expect(tx.meetingAppointmentParticipant.create).toHaveBeenCalledWith({
+            data: {
+                appointmentId: "a1",
+                employeeId: "ID-005",
+                guestName: null,
+                isExternal: false,
+            },
+        });
+        expect(tx.meetingAppointmentRevision.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    changeReason: "Perubahan daftar peserta",
+                }),
+            })
+        );
+    });
+});

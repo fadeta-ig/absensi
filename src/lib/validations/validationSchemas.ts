@@ -671,13 +671,21 @@ export const appointmentCreateSchema = z
 
 export const appointmentRescheduleSchema = z
     .object({
+        title: z.string().trim().min(1, "Topik meeting wajib diisi.").max(200, "Topik maksimal 200 karakter.").optional(),
+        agenda: z.string().trim().max(2000, "Agenda maksimal 2000 karakter.").nullable().optional(),
         roomId: z.string().trim().min(1, "Ruangan wajib dipilih.").nullable().optional(),
         meetingLink: z.string().trim().max(1000).nullable().optional(),
         date: appointmentDateSchema,
         startTime: appointmentTimeSchema.optional(),
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
-        changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter.").max(1000, "Alasan perubahan maksimal 1000 karakter."),
+        participants: z.array(appointmentParticipantSchema).max(100).optional(),
+        changeReason: z
+            .string()
+            .trim()
+            .max(1000, "Alasan perubahan maksimal 1000 karakter.")
+            .refine((val) => val.length === 0 || val.length >= 5, "Alasan perubahan minimal 5 karakter.")
+            .optional(),
         force: z.boolean().optional(),
     })
     .superRefine((v, ctx) => {
@@ -784,7 +792,25 @@ export const meetingTaskExtensionDecideSchema = z.object({
 
 export const meetingMinutesSchema = z.object({
     minutes: z.string().trim().min(1, "Isi notulensi wajib diisi.").max(20000, "Notulensi maksimal 20000 karakter."),
-    changeReason: z.string().trim().min(5, "Alasan perubahan minimal 5 karakter.").max(1000),
+    changeReason: z
+        .string()
+        .trim()
+        .max(1000, "Alasan perubahan maksimal 1000 karakter.")
+        .refine((val) => val.length === 0 || val.length >= 5, "Alasan perubahan minimal 5 karakter.")
+        .optional(),
+});
+
+export const meetingNotulisSchema = z.object({
+    notulisEmployeeId: z.string().trim().min(1).max(100).nullable(),
+});
+
+export const meetingMinutesDeleteSchema = z.object({
+    changeReason: z
+        .string()
+        .trim()
+        .max(1000, "Alasan perubahan maksimal 1000 karakter.")
+        .refine((val) => val.length === 0 || val.length >= 5, "Alasan perubahan minimal 5 karakter.")
+        .optional(),
 });
 
 /* ───────────────────── Equipment Inspection ───────────────────── */

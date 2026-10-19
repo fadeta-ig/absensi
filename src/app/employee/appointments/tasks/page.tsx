@@ -45,6 +45,7 @@ export default function EmployeeMeetingTasksPage() {
     const searchParams = useSearchParams();
     const highlight = searchParams.get("highlight");
     const [tasks, setTasks] = useState<MyTask[]>([]);
+    const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
     const [filter, setFilter] = useState<Filter>("open");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -59,12 +60,27 @@ export default function EmployeeMeetingTasksPage() {
             if (f === "overdue") params.set("overdue", "1");
             if (f === "done") params.set("status", "SELESAI");
             const qs = params.toString();
-            const res = await fetch(`/api/employee/meeting-tasks${qs ? `?${qs}` : ""}`, { credentials: "same-origin" });
+            const [meRes, res] = await Promise.all([
+                fetch("/api/auth/me", { credentials: "same-origin" }),
+                fetch(`/api/employee/meeting-tasks${qs ? `?${qs}` : ""}`, { credentials: "same-origin" }),
+            ]);
+            let currentEmpId: string | null = null;
+            if (meRes.ok) {
+                const me = await meRes.json();
+                currentEmpId = me.employeeId ?? null;
+                setMyEmployeeId(currentEmpId);
+            }
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat task."));
             const json = await res.json();
             let list: MyTask[] = json.data ?? [];
             if (f === "open") {
-                list = list.filter((t) => !t.isCancelled && t.assignees.some((a) => a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS"));
+                list = list.filter((t) =>
+                    !t.isCancelled &&
+                    t.assignees.some((a) =>
+                        (!currentEmpId || a.employeeId === currentEmpId) &&
+                        (a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS")
+                    )
+                );
             }
             setTasks(list);
         } catch (err) {
@@ -160,7 +176,9 @@ export default function EmployeeMeetingTasksPage() {
             ) : (
                 <div className="space-y-2.5">
                     {tasks.map((task) => {
-                        const mine = task.assignees.find((a) => a.status !== "DIBATALKAN");
+                        const mine =
+                            (myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") : null) ??
+                            task.assignees.find((a) => a.status !== "DIBATALKAN");
                         const canAct = !task.isCancelled && mine && (mine.status === "BELUM_DIKERJAKAN" || mine.status === "ON_PROGRESS");
                         return (
                             <article

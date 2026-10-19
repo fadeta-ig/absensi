@@ -574,28 +574,336 @@ export async function claimSubmittedTasks(items: UnsubmittedTask[]): Promise<Uns
 
 // ─── Notulensi ────────────────────────────────────────────────────
 
+async function readNotulisEmployeeId(appt: { id: string; notulisEmployeeId?: string | null }): Promise<string | null> {
+    if ("notulisEmployeeId" in appt && appt.notulisEmployeeId !== undefined) {
+        return appt.notulisEmployeeId ?? null;
+    }
+    if (typeof prisma.$queryRaw === "function") {
+        try {
+            const rows = (await prisma.$queryRaw`SELECT notulis_employee_id AS notulisEmployeeId FROM meeting_appointments WHERE id = ${appt.id} LIMIT 1`) as Array<{
+                notulisEmployeeId: string | null;
+            }>;
+            if (Array.isArray(rows) && rows.length > 0) {
+                return rows[0].notulisEmployeeId ?? null;
+            }
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+async function assertCanWriteMinutes(
+    session: SessionPayload,
+    appt: {
+        id: string;
+        status: string;
+        startAt: Date;
+        endAt: Date;
+        requesterEmployeeId: string | null;
+        notulisEmployeeId?: string | null;
+        participants: Array<{ employeeId: string | null }>;
+    },
+    now: Date
+): Promise<{ notulisEmployeeId: string | null; isMeetingFinished: boolean }> {
+    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat mengelola notulensi.", 403);
+    if (appt.status === "CANCELLED") {
+        throw new MeetingTaskError("Meeting yang dibatalkan tidak dapat diisi atau diubah notulensinya.", 409);
+    }
+    await assertCanAccessMeeting(session, appt);
+    const lifecycle = resolveLifecycleStatus(appt.status, appt.startAt, appt.endAt, now);
+    if (lifecycle === "SCHEDULED" && now.getTime() < appt.startAt.getTime()) {
+        throw new MeetingTaskError("Notulensi belum dibuka. Notulensi hanya dapat diisi setelah jam meeting dimulai.", 409);
+    }
+    const notulisEmployeeId = await readNotulisEmployeeId(appt);
+    const privileged = await isPrivileged(session);
+    const isOrganizer = Boolean(session.employeeId && appt.requesterEmployeeId === session.employeeId) || privileged;
+    if (notulisEmployeeId && session.employeeId !== notulisEmployeeId && !isOrganizer) {
+        throw new MeetingTaskError("Penyelenggara telah menunjuk petugas notulensi khusus untuk meeting ini.", 403);
+    }
+    const isMeetingFinished = appt.status === "COMPLETED" || lifecycle === "COMPLETED";
+    return { notulisEmployeeId, isMeetingFinished };
+}
+
+export async function getMeetingMinutes(session: SessionPayload, appointmentId: string) {
+    if (!session.employeeId && !(await isPrivileged(session))) {
+        throw new MeetingTaskError("Hanya karyawan yang dapat mengakses notulensi.", 403);
+    }
+    const appt = await prisma.meetingAppointment.findUnique({
+        where: { id: appointmentId },
+        select: {
+            id: true,
+            status: true,
+            startAt: true,
+            endAt: true,
+            minutes: true,
+            minutesUpdatedBy: true,
+            minutesUpdatedAt: true,
+            requesterEmployeeId: true,
+            participants: { select: { employeeId: true, employee: { select: { name: true } } } },
+        },
+    });
+    if (!appt) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
+    const privileged = await isPrivileged(session);
+    const allowed =
+        privileged ||
+        appt.requesterEmployeeId === session.employeeId ||
+        appt.participants.some((p) => p.employeeId === session.employeeId);
+    if (!allowed) throw new MeetingTaskError("Anda bukan peserta meeting ini.", 403);
+
+    const notulisEmployeeId = await readNotulisEmployeeId(appt);
+    const memberIds = internalParticipantIds(appt);
+    const lookupIds = [...new Set([...memberIds, ...(appt.minutesUpdatedBy ? [appt.minutesUpdatedBy] : []), ...(notulisEmployeeId ? [notulisEmployeeId] : [])])];
+    const empRows =
+        lookupIds.length > 0
+            ? ((await prisma.employee.findMany({
+                  where: { employeeId: { in: lookupIds } },
+                  select: { employeeId: true, name: true },
+              })) ?? [])
+            : [];
+    const nameMap = new Map<string, string>();
+    for (const p of appt.participants) {
+        if (p.employeeId && p.employee?.name) nameMap.set(p.employeeId, p.employee.name);
+    }
+    for (const r of empRows) {
+        nameMap.set(r.employeeId, r.name);
+    }
+
+    const now = new Date();
+    const lifecycle = resolveLifecycleStatus(appt.status, appt.startAt, appt.endAt, now);
+    const isOrganizer = Boolean(session.employeeId && appt.requesterEmployeeId === session.employeeId) || privileged;
+    const isStarted = lifecycle !== "SCHEDULED" || now.getTime() >= appt.startAt.getTime();
+    const isMeetingFinished = appt.status === "COMPLETED" || lifecycle === "COMPLETED";
+    const canConfigureNotulis = isOrganizer && appt.status !== "CANCELLED" && isStarted && !isMeetingFinished;
+    const canWriteMinutes =
+        Boolean(session.employeeId) &&
+        appt.status !== "CANCELLED" &&
+        isStarted &&
+        (notulisEmployeeId ? session.employeeId === notulisEmployeeId || isOrganizer : true);
+
+    return {
+        id: appt.id,
+        status: appt.status,
+        lifecycle,
+        startAt: appt.startAt,
+        endAt: appt.endAt,
+        requesterEmployeeId: appt.requesterEmployeeId,
+        notulisEmployeeId,
+        notulisName: notulisEmployeeId ? (nameMap.get(notulisEmployeeId) ?? notulisEmployeeId) : null,
+        minutes: appt.minutes,
+        minutesUpdatedBy: appt.minutesUpdatedBy,
+        minutesUpdatedByName: appt.minutesUpdatedBy ? (nameMap.get(appt.minutesUpdatedBy) ?? appt.minutesUpdatedBy) : null,
+        minutesUpdatedAt: appt.minutesUpdatedAt,
+        myEmployeeId: session.employeeId ?? null,
+        isOrganizer,
+        canConfigureNotulis,
+        canWriteMinutes,
+        requiresChangeReason: isMeetingFinished,
+        eligibleMembers: memberIds.map((empId) => ({
+            employeeId: empId,
+            name: nameMap.get(empId) ?? empId,
+            isOrganizer: empId === appt.requesterEmployeeId,
+        })),
+    };
+}
+
+export async function setMeetingNotulis(
+    session: SessionPayload,
+    appointmentId: string,
+    notulisEmployeeId: string | null,
+    actor: { userId?: string | null; username: string }
+) {
+    if (!session.employeeId && !(await isPrivileged(session))) {
+        throw new MeetingTaskError("Hanya penyelenggara yang dapat mengatur petugas notulensi.", 403);
+    }
+    const appt = await prisma.meetingAppointment.findUnique({
+        where: { id: appointmentId },
+        select: {
+            id: true,
+            status: true,
+            startAt: true,
+            endAt: true,
+            requesterEmployeeId: true,
+            participants: { select: { employeeId: true } },
+        },
+    });
+    if (!appt) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
+    const privileged = await isPrivileged(session);
+    const isOrganizer = Boolean(session.employeeId && appt.requesterEmployeeId === session.employeeId) || privileged;
+    if (!isOrganizer) {
+        throw new MeetingTaskError("Hanya penyelenggara meeting yang dapat mengatur petugas notulensi.", 403);
+    }
+    if (appt.status === "CANCELLED") {
+        throw new MeetingTaskError("Meeting telah dibatalkan.", 409);
+    }
+    const now = new Date();
+    const lifecycle = resolveLifecycleStatus(appt.status, appt.startAt, appt.endAt, now);
+    if (lifecycle === "SCHEDULED" && now.getTime() < appt.startAt.getTime()) {
+        throw new MeetingTaskError("Pengaturan petugas notulensi baru dapat dilakukan saat meeting dimulai.", 409);
+    }
+    if (appt.status === "COMPLETED" || lifecycle === "COMPLETED") {
+        throw new MeetingTaskError("Meeting sudah selesai. Petugas notulensi tidak dapat diubah.", 409);
+    }
+
+    const nextNotulisId = notulisEmployeeId?.trim() || null;
+    if (nextNotulisId) {
+        const members = internalParticipantIds(appt);
+        if (!members.includes(nextNotulisId)) {
+            throw new MeetingTaskError("Petugas notulensi harus peserta internal meeting ini.", 422);
+        }
+    }
+
+    const rawExec = (prisma as unknown as { $executeRaw?: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown> }).$executeRaw;
+    if (typeof rawExec === "function") {
+        await rawExec.call(
+            prisma,
+            Object.assign(["UPDATE meeting_appointments SET notulis_employee_id = ", ", updated_at = NOW(3) WHERE id = ", ""], {
+                raw: ["UPDATE meeting_appointments SET notulis_employee_id = ", ", updated_at = NOW(3) WHERE id = ", ""],
+            }),
+            nextNotulisId,
+            appointmentId
+        );
+    } else {
+        await prisma.meetingAppointment.update({
+            where: { id: appointmentId },
+            data: { notulisEmployeeId: nextNotulisId } as never,
+        });
+    }
+
+    await prisma.auditLog
+        .create({
+            data: {
+                action: "SET_MEETING_NOTULIS",
+                entity: "APPOINTMENT",
+                entityId: appointmentId,
+                details: JSON.stringify({ notulisEmployeeId: nextNotulisId }),
+                actorType: "USER",
+                actorUserId: actor.userId ?? null,
+                actorIdentifier: actor.username,
+            },
+        })
+        .catch((err) => logger.error("meetingTask audit SET_MEETING_NOTULIS gagal", { err }));
+
+    return getMeetingMinutes(session, appointmentId);
+}
+
 export async function updateMeetingMinutes(
     session: SessionPayload,
     appointmentId: string,
-    input: { minutes: string; changeReason: string },
+    input: { minutes: string; changeReason?: string },
     actor: { userId?: string | null; username: string }
 ) {
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat menulis notulensi.", 403);
     const appt = await prisma.meetingAppointment.findUnique({
         where: { id: appointmentId },
-        select: { id: true, title: true, status: true, minutes: true, requesterEmployeeId: true, participants: { select: { employeeId: true } } },
+        select: {
+            id: true,
+            title: true,
+            status: true,
+            startAt: true,
+            endAt: true,
+            minutes: true,
+            requesterEmployeeId: true,
+            participants: { select: { employeeId: true } },
+        },
     });
     if (!appt) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
-    if (appt.status === "COMPLETED" || appt.status === "CANCELLED") throw new MeetingTaskError("Meeting sudah selesai. Notulensi tidak dapat diubah.", 409);
-    await assertCanAccessMeeting(session, appt);
+    const now = new Date();
+    const { isMeetingFinished } = await assertCanWriteMinutes(session, appt, now);
+
     const minutes = input.minutes.trim();
     if (!minutes) throw new MeetingTaskError("Isi notulensi wajib diisi.", 400);
     if (minutes.length > 20000) throw new MeetingTaskError("Notulensi maksimal 20000 karakter.", 400);
-    if (!input.changeReason || input.changeReason.trim().length < 5) throw new MeetingTaskError("Alasan perubahan minimal 5 karakter.", 400);
-    const result = await prisma.$transaction(async (tx) => {
-        const updated = await tx.meetingAppointment.update({
+
+    const rawReason = input.changeReason?.trim() ?? "";
+    if (isMeetingFinished) {
+        if (rawReason.length < 5) {
+            throw new MeetingTaskError("Meeting telah selesai. Alasan perubahan notulensi wajib diisi (minimal 5 karakter) untuk audit.", 400);
+        }
+    } else if (rawReason.length > 0 && rawReason.length < 5) {
+        throw new MeetingTaskError("Alasan perubahan minimal 5 karakter.", 400);
+    }
+
+    const effectiveReason = rawReason || (appt.minutes ? "Pembaruan notulensi saat meeting berlangsung." : "Penulisan notulensi saat meeting berlangsung.");
+
+    await prisma.$transaction(async (tx) => {
+        await tx.meetingAppointment.update({
             where: { id: appointmentId },
-            data: { minutes, minutesUpdatedBy: session.employeeId, minutesUpdatedAt: new Date() },
+            data: { minutes, minutesUpdatedBy: session.employeeId, minutesUpdatedAt: now },
+            select: { id: true, minutes: true, minutesUpdatedBy: true, minutesUpdatedAt: true },
+        });
+        if (isMeetingFinished || rawReason.length >= 5 || appt.minutes === null) {
+            const revCount = await tx.meetingAppointmentRevision.count({ where: { appointmentId } });
+            await tx.meetingAppointmentRevision.create({
+                data: {
+                    appointmentId,
+                    revisionNumber: revCount + 1,
+                    changeReason: effectiveReason,
+                    changedBy: actor.username,
+                    previousData: { minutes: appt.minutes },
+                },
+            });
+        }
+    });
+    await prisma.auditLog
+        .create({
+            data: {
+                action: "UPDATE_MEETING_MINUTES",
+                entity: "APPOINTMENT",
+                entityId: appointmentId,
+                details: JSON.stringify({ changeReason: effectiveReason, postCompletionAudit: isMeetingFinished }),
+                actorType: "USER",
+                actorUserId: actor.userId ?? null,
+                actorIdentifier: actor.username,
+            },
+        })
+        .catch((err) => logger.error("meetingTask audit MINUTES gagal", { err }));
+    return getMeetingMinutes(session, appointmentId);
+}
+
+export async function deleteMeetingMinutes(
+    session: SessionPayload,
+    appointmentId: string,
+    input: { changeReason?: string },
+    actor: { userId?: string | null; username: string }
+) {
+    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat menghapus notulensi.", 403);
+    const appt = await prisma.meetingAppointment.findUnique({
+        where: { id: appointmentId },
+        select: {
+            id: true,
+            title: true,
+            status: true,
+            startAt: true,
+            endAt: true,
+            minutes: true,
+            requesterEmployeeId: true,
+            participants: { select: { employeeId: true } },
+        },
+    });
+    if (!appt) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
+    const now = new Date();
+    const { isMeetingFinished } = await assertCanWriteMinutes(session, appt, now);
+
+    if (!appt.minutes) {
+        throw new MeetingTaskError("Belum ada notulensi untuk dihapus.", 400);
+    }
+
+    const rawReason = input.changeReason?.trim() ?? "";
+    if (isMeetingFinished) {
+        if (rawReason.length < 5) {
+            throw new MeetingTaskError("Meeting telah selesai. Alasan penghapusan notulensi wajib diisi (minimal 5 karakter) untuk audit.", 400);
+        }
+    } else if (rawReason.length > 0 && rawReason.length < 5) {
+        throw new MeetingTaskError("Alasan perubahan minimal 5 karakter.", 400);
+    }
+
+    const effectiveReason = rawReason || "Penghapusan notulensi saat meeting berlangsung.";
+
+    await prisma.$transaction(async (tx) => {
+        await tx.meetingAppointment.update({
+            where: { id: appointmentId },
+            data: { minutes: null, minutesUpdatedBy: null, minutesUpdatedAt: null },
             select: { id: true, minutes: true, minutesUpdatedBy: true, minutesUpdatedAt: true },
         });
         const revCount = await tx.meetingAppointmentRevision.count({ where: { appointmentId } });
@@ -603,15 +911,26 @@ export async function updateMeetingMinutes(
             data: {
                 appointmentId,
                 revisionNumber: revCount + 1,
-                changeReason: input.changeReason.trim(),
+                changeReason: effectiveReason,
                 changedBy: actor.username,
-                previousData: { minutes: appt.minutes },
+                previousData: { minutes: appt.minutes, deleted: true },
             },
         });
-        return updated;
     });
-    await prisma.auditLog.create({
-        data: { action: "UPDATE_MEETING_MINUTES", entity: "APPOINTMENT", entityId: appointmentId, details: JSON.stringify({ changeReason: input.changeReason.trim() }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
-    }).catch((err) => logger.error("meetingTask audit MINUTES gagal", { err }));
-    return result;
+
+    await prisma.auditLog
+        .create({
+            data: {
+                action: "DELETE_MEETING_MINUTES",
+                entity: "APPOINTMENT",
+                entityId: appointmentId,
+                details: JSON.stringify({ changeReason: effectiveReason, postCompletionAudit: isMeetingFinished }),
+                actorType: "USER",
+                actorUserId: actor.userId ?? null,
+                actorIdentifier: actor.username,
+            },
+        })
+        .catch((err) => logger.error("meetingTask audit DELETE_MEETING_MINUTES gagal", { err }));
+
+    return getMeetingMinutes(session, appointmentId);
 }
