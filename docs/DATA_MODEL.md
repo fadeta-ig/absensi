@@ -139,7 +139,7 @@ RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Ak
 
 ## 4. Appointment Meeting + Ruangan (2026-10-07)
 
-1. `MeetingRoom` 1 ── * `MeetingAppointment` (`roomId` opsional; online boleh tanpa room + `meetingLink` wajib).
+1. `MeetingRoom` 1 ── * `MeetingAppointment` (`roomId` wajib untuk appointment baru/berubah sejak ADR-015; kolom `meetingLink` hanya warisan historis read-only, tidak lagi diisi jalur baru).
 2. `MeetingAppointment` 1 ── * `MeetingAppointmentParticipant` (unik `[appointmentId, employeeId]`; tamu eksternal `employeeId null + guestName`, tanpa akun/accept).
 3. `MeetingAppointment` 1 ── * `MeetingAppointmentRevision` (unik `[appointmentId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
 4. `MeetingAppointment` 1 ── * `AppointmentReminderLog` (unik `[appointmentId, offsetMin]`, exactly-once cron).

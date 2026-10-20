@@ -433,7 +433,6 @@ export default function EmployeeAppointmentsPage() {
                             {filterRooms.map((r) => (
                                 <option key={r.id} value={r.id}>{r.name}</option>
                             ))}
-                            <option value="__online__">Daring</option>
                         </select>
                     </div>
                     <div>

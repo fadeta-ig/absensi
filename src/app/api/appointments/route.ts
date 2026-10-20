@@ -49,8 +49,7 @@ export async function POST(request: NextRequest) {
         const created = (await createAppointment(session, {
             title: result.data.title,
             agenda: result.data.agenda ?? null,
-            roomId: result.data.roomId ?? null,
-            meetingLink: result.data.meetingLink ?? null,
+            roomId: result.data.roomId,
             date: result.data.date,
             startTime: result.data.startTime ?? "00:00",
             endTime: result.data.endTime ?? "23:59",

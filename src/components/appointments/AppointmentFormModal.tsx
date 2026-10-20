@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, CalendarDays, Clock3, X, Loader2, Link2, StickyNote } from "lucide-react";
+import { FileText, CalendarDays, Clock3, X, Loader2, StickyNote } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import ParticipantPicker, { type PickedParticipant } from "@/components/appointments/ParticipantPicker";
 import RoomSelect from "@/components/appointments/RoomSelect";
+import TimeRangeFields, { minutesToHm } from "@/components/appointments/TimeRangeFields";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
-import { toDateString } from "@/lib/utils";
+import { getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 import type { AppointmentListItem } from "@/components/appointments/useAppointments";
 import { participantDisplayName } from "@/components/appointments/useAppointments";
 
@@ -22,20 +23,15 @@ interface AppointmentFormModalProps {
 
 export default function AppointmentFormModal({ initialDate, editing, myEmployeeId, onClose, onSaved }: AppointmentFormModalProps) {
     const [title, setTitle] = useState(editing?.title ?? "");
+    const createSlot = !editing ? nextWibSlot(initialDate) : null;
     const [date, setDate] = useState(() => {
-        if (editing) return toDateString(editing.startAt);
+        if (editing) return toWIBDateString(new Date(editing.startAt));
         return initialDate;
     });
-    const [startTime, setStartTime] = useState(() => (editing && !editing.isFullDay ? toHM(editing.startAt) : "09:00"));
-    const [endTime, setEndTime] = useState(() => (editing && !editing.isFullDay ? toHM(editing.endAt) : "10:00"));
+    const [startTime, setStartTime] = useState(() => (editing && !editing.isFullDay ? toHM(editing.startAt) : createSlot?.start ?? "09:00"));
+    const [endTime, setEndTime] = useState(() => (editing && !editing.isFullDay ? toHM(editing.endAt) : createSlot?.end ?? "10:00"));
     const [isFullDay, setIsFullDay] = useState(editing?.isFullDay ?? false);
     const [roomId, setRoomId] = useState(editing?.room?.id ?? "");
-    const [meetingLink, setMeetingLink] = useState(editing?.meetingLink ?? "");
-    const [mode, setMode] = useState<"fisik" | "daring">(() => {
-        if (editing?.room?.id) return "fisik";
-        if (editing?.meetingLink) return "daring";
-        return "fisik";
-    });
     const [agenda, setAgenda] = useState(editing?.agenda ?? "");
     const [participants, setParticipants] = useState<PickedParticipant[]>(() =>
         (editing?.participants ?? []).map((p) => ({
@@ -50,21 +46,18 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     const [conflicts, setConflicts] = useState<string[]>([]);
     const [checkingConflicts, setCheckingConflicts] = useState(false);
 
-    const initialEditDate = editing ? toDateString(editing.startAt) : initialDate;
+    const initialEditDate = editing ? toWIBDateString(new Date(editing.startAt)) : initialDate;
     const initialEditStart = editing && !editing.isFullDay ? toHM(editing.startAt) : "09:00";
     const initialEditEnd = editing && !editing.isFullDay ? toHM(editing.endAt) : "10:00";
     const initialEditFullDay = editing?.isFullDay ?? false;
     const initialEditRoomId = editing?.room?.id ?? "";
-    const initialEditLink = editing?.meetingLink ?? "";
-    const initialEditMode: "fisik" | "daring" = editing?.room?.id ? "fisik" : editing?.meetingLink ? "daring" : "fisik";
 
     const isScheduleOrPlaceChanged = Boolean(
         editing && (
             date !== initialEditDate ||
             isFullDay !== initialEditFullDay ||
             (!isFullDay && (startTime !== initialEditStart || endTime !== initialEditEnd)) ||
-            mode !== initialEditMode ||
-            (mode === "fisik" ? roomId !== initialEditRoomId : meetingLink.trim() !== initialEditLink.trim())
+            roomId !== initialEditRoomId
         )
     );
 
@@ -77,8 +70,8 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     const canSubmit =
         (editing || title.trim()) &&
         date &&
-        (isFullDay || (startTime && endTime)) &&
-        (mode === "fisik" ? roomId : meetingLink.trim()) &&
+        (isFullDay || (startTime && endTime && endTime > startTime)) &&
+        roomId &&
         isReasonValid &&
         !loading;
 
@@ -131,8 +124,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 ? {
                     title: title.trim(),
                     agenda: agenda.trim() || null,
-                    roomId: mode === "fisik" ? roomId || null : null,
-                    meetingLink: mode === "daring" ? meetingLink.trim() || null : null,
+                    roomId: roomId || null,
                     date,
                     startTime: isFullDay ? undefined : startTime,
                     endTime: isFullDay ? undefined : endTime,
@@ -143,8 +135,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 : {
                     title: title.trim(),
                     agenda: agenda.trim() || null,
-                    roomId: mode === "fisik" ? roomId || null : null,
-                    meetingLink: mode === "daring" ? meetingLink.trim() || null : null,
+                    roomId: roomId || null,
                     date,
                     startTime: isFullDay ? undefined : startTime,
                     endTime: isFullDay ? undefined : endTime,
@@ -227,62 +218,17 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 </div>
 
                 {!isFullDay && (
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="form-group !mb-0">
-                            <label className="form-label" htmlFor="appt-start">Jam Mulai *</label>
-                            <input id="appt-start" type="time" className="form-input" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
-                        </div>
-                        <div className="form-group !mb-0">
-                            <label className="form-label" htmlFor="appt-end">Jam Selesai *</label>
-                            <input id="appt-end" type="time" className="form-input" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
-                        </div>
-                    </div>
+                    <TimeRangeFields
+                        idPrefix="appt"
+                        startTime={startTime}
+                        endTime={endTime}
+                        onChange={(s, e) => { setStartTime(s); setEndTime(e); }}
+                    />
                 )}
 
                 <div className="form-group !mb-0">
-                    <span className="form-label" id="appt-mode-label">Tempat Pelaksanaan *</span>
-                    <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="appt-mode-label">
-                        {(
-                            [
-                                { key: "fisik", label: "Ruang Fisik" },
-                                { key: "daring", label: "Daring" },
-                            ] as const
-                        ).map((m) => (
-                            <button
-                                key={m.key}
-                                type="button"
-                                aria-pressed={mode === m.key}
-                                onClick={() => {
-                                    setMode(m.key);
-                                    if (m.key === "fisik") setMeetingLink("");
-                                    else setRoomId("");
-                                }}
-                                className={`min-h-11 rounded-xl border px-3 text-sm font-semibold transition-colors ${
-                                    mode === m.key
-                                        ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
-                                        : "border-[var(--border)] text-[var(--text-secondary)]"
-                                }`}
-                            >
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
+                    <RoomSelect value={roomId} onChange={setRoomId} participantCount={participants.length} />
                 </div>
-
-                {mode === "fisik" ? (
-                    <div className="form-group !mb-0">
-                        <RoomSelect value={roomId} onChange={setRoomId} participantCount={participants.length} />
-                    </div>
-                ) : (
-                    <div className="form-group !mb-0">
-                        <label className="form-label" htmlFor="appt-link">
-                            <span className="flex items-center gap-1">
-                                <Link2 className="w-3 h-3" /> Tautan Meeting Daring *
-                            </span>
-                        </label>
-                        <input id="appt-link" className="form-input" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="Contoh: https://meet…" required />
-                    </div>
-                )}
 
                 <div className="form-group !mb-0">
                     <ParticipantPicker
@@ -327,6 +273,18 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
 }
 
 function toHM(iso: string): string {
-    const d = new Date(iso);
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const { hours, minutes } = getWIBHoursMinutes(new Date(iso));
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+/**
+ * Jam mulai bawaan mengikuti WIB saat ini: untuk tanggal hari ini dipakai
+ * slot 30 menit berikutnya dari sekarang; tanggal lain mulai 09:00.
+ * Durasi bawaan 1 jam.
+ */
+function nextWibSlot(dateStr: string): { start: string; end: string } {
+    if (dateStr !== toWIBDateString(new Date())) return { start: "09:00", end: "10:00" };
+    const { hours, minutes } = getWIBHoursMinutes();
+    const startMin = Math.min(Math.ceil((hours * 60 + minutes + 1) / 30) * 30, 23 * 60);
+    return { start: minutesToHm(startMin), end: minutesToHm(startMin + 60) };
 }

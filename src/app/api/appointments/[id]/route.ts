@@ -51,7 +51,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 title: result.data.title,
                 agenda: result.data.agenda,
                 roomId: result.data.roomId,
-                meetingLink: result.data.meetingLink,
                 date: result.data.date,
                 startTime: result.data.startTime ?? "00:00",
                 endTime: result.data.endTime ?? "23:59",

@@ -109,14 +109,14 @@ describe("createAppointment langsung SCHEDULED", () => {
 });
 
 describe("createAppointment", () => {
-    it("tanpa room dan tanpa link ditolak 400", async () => {
+    it("tanpa ruangan ditolak 400", async () => {
         await expect(
             createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", participants: [] }, false)
         ).rejects.toMatchObject({ statusCode: 400 });
     });
     it("diri sendiri sebagai peserta ditolak 400", async () => {
-        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
         mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-001", isActive: true }] as never);
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
         await expect(
             createAppointment(
                 empSession(),
@@ -143,7 +143,7 @@ describe("rescheduleAppointment", () => {
             rescheduleAppointment(empSession(), "a1", { date: "2026-12-02", startTime: "10:00", endTime: "11:00", changeReason: "x" }, { userId: "u", username: "ID-001" })
         ).rejects.toMatchObject({ statusCode: 400 });
     });
-    it("online tanpa link ditolak 400", async () => {
+    it("ruangan kosong saat jadwal ulang ditolak 400", async () => {
         const tx = {
             $queryRaw: vi.fn().mockResolvedValue([]),
             meetingAppointment: {
@@ -153,7 +153,7 @@ describe("rescheduleAppointment", () => {
         vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
         const wig = empSession({ username: "WIG002", employeeId: null, permissions: ["ga.manage"] });
         await expect(
-            rescheduleAppointment(wig, "a1", { date: "2026-12-02", startTime: "10:00", endTime: "11:00", roomId: null, changeReason: "pindah online" }, { userId: "u", username: "WIG002" })
+            rescheduleAppointment(wig, "a1", { date: "2026-12-02", startTime: "10:00", endTime: "11:00", roomId: null, changeReason: "pindah ruangan" }, { userId: "u", username: "WIG002" })
         ).rejects.toMatchObject({ statusCode: 400 });
     });
     it("absensi sebelum mulai ditolak 400", async () => {
@@ -394,6 +394,7 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
             { employeeId: "ID-002", isActive: true },
             { employeeId: "ID-004", isActive: true },
         ] as never);
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
         const tx = {
             $queryRaw: vi.fn().mockResolvedValue([]),
             meetingAppointment: {
@@ -401,8 +402,8 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                     id: "a1",
                     status: "SCHEDULED",
                     requesterEmployeeId: "ID-001",
-                    roomId: null,
-                    meetingLink: "https://meet.example.com/123",
+                    roomId: "r1",
+                    meetingLink: null,
                     startAt: new Date(Date.now() + 7200000),
                     endAt: new Date(Date.now() + 10800000),
                 }),
@@ -438,7 +439,7 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                 date: "2026-12-10",
                 startTime: "10:00",
                 endTime: "11:00",
-                meetingLink: "https://meet.example.com/123",
+                roomId: "r1",
                 participants: [{ employeeId: "ID-002" }, { employeeId: "ID-004" }, { guestName: "Tamu Baru" }],
                 changeReason: "Update peserta meeting",
             },
@@ -469,6 +470,7 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
 
     it("menolak apabila penyelenggara dimasukkan sebagai peserta saat edit", async () => {
         mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-001", isActive: true }] as never);
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
         const tx = {
             $queryRaw: vi.fn().mockResolvedValue([]),
             meetingAppointment: {
@@ -476,8 +478,8 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                     id: "a1",
                     status: "SCHEDULED",
                     requesterEmployeeId: "ID-001",
-                    roomId: null,
-                    meetingLink: "https://meet.example.com/123",
+                    roomId: "r1",
+                    meetingLink: null,
                     startAt: new Date(Date.now() + 7200000),
                     endAt: new Date(Date.now() + 10800000),
                 }),
@@ -493,7 +495,7 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                     date: "2026-12-10",
                     startTime: "10:00",
                     endTime: "11:00",
-                    meetingLink: "https://meet.example.com/123",
+                    roomId: "r1",
                     participants: [{ employeeId: "ID-001" }],
                     changeReason: "Salah tambah penyelenggara",
                 },
@@ -506,6 +508,7 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
         const { slotToDates } = await import("@/lib/services/appointmentService");
         const slot = slotToDates({ date: "2026-12-10", startTime: "10:00", endTime: "11:00", isFullDay: false });
         mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-005", isActive: true }] as never);
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
         const tx = {
             $queryRaw: vi.fn().mockResolvedValue([]),
             meetingAppointment: {
@@ -513,8 +516,8 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                     id: "a1",
                     status: "SCHEDULED",
                     requesterEmployeeId: "ID-001",
-                    roomId: null,
-                    meetingLink: "https://meet.example.com/123",
+                    roomId: "r1",
+                    meetingLink: null,
                     isFullDay: false,
                     startAt: slot.startAt,
                     endAt: slot.endAt,
@@ -551,7 +554,7 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                     startTime: "10:00",
                     endTime: "11:00",
                     isFullDay: false,
-                    meetingLink: "https://meet.example.com/123",
+                    roomId: "r1",
                     participants: [{ employeeId: "ID-005" }],
                     changeReason: "",
                 },

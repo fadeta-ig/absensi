@@ -53,7 +53,7 @@ export default function RoomSelect({
         <div>
             <label className="form-label" htmlFor="appointment-room">
                 <span className="flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> Ruang Meeting (Kosongkan Apabila Meeting Daring)
+                    <Building2 className="w-3 h-3" /> Ruangan *
                 </span>
             </label>
             <select
@@ -63,7 +63,7 @@ export default function RoomSelect({
                 onChange={(e) => onChange(e.target.value)}
                 disabled={loading}
             >
-                <option value="">— Daring / Tanpa Ruangan —</option>
+                <option value="">— Pilih ruangan —</option>
                 {rooms.map((r) => (
                     <option key={r.id} value={r.id}>
                         {r.name}{r.capacity ? ` (Kapasitas ${r.capacity} orang)` : ""}

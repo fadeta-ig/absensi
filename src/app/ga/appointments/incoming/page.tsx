@@ -9,7 +9,9 @@ import DataTablePagination from "@/components/ui/DataTablePagination";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
 import ParticipantPicker, { type PickedParticipant } from "@/components/appointments/ParticipantPicker";
+import TimeRangeFields from "@/components/appointments/TimeRangeFields";
 import { participantDisplayName, requesterDisplayName } from "@/components/appointments/useAppointments";
+import { getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useConfirm } from "@/components/ConfirmModal";
 
@@ -58,15 +60,13 @@ export default function GaAppointmentsIncomingPage() {
     const [resched, setResched] = useState<{
         title: string;
         agenda: string;
-        mode: "fisik" | "daring";
         date: string;
         startTime: string;
         endTime: string;
         roomId: string;
-        meetingLink: string;
         reason: string;
         force: boolean;
-    }>({ title: "", agenda: "", mode: "fisik", date: "", startTime: "", endTime: "", roomId: "", meetingLink: "", reason: "", force: false });
+    }>({ title: "", agenda: "", date: "", startTime: "", endTime: "", roomId: "", reason: "", force: false });
     const [reschedParticipants, setReschedParticipants] = useState<PickedParticipant[]>([]);
     const [askingResched, setAskingResched] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
@@ -126,17 +126,16 @@ export default function GaAppointmentsIncomingPage() {
         setCancelReason("");
         setAskingCancel(false);
         setAskingResched(false);
-        const d = new Date(item.startAt);
         const pad = (n: number) => String(n).padStart(2, "0");
+        const startWib = getWIBHoursMinutes(new Date(item.startAt));
+        const endWib = getWIBHoursMinutes(new Date(item.endAt));
         setResched({
             title: item.title,
             agenda: item.agenda ?? "",
-            mode: item.room?.id ? "fisik" : item.meetingLink ? "daring" : "fisik",
-            date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-            startTime: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-            endTime: `${pad(new Date(item.endAt).getHours())}:${pad(new Date(item.endAt).getMinutes())}`,
+            date: toWIBDateString(new Date(item.startAt)),
+            startTime: `${pad(startWib.hours)}:${pad(startWib.minutes)}`,
+            endTime: `${pad(endWib.hours)}:${pad(endWib.minutes)}`,
             roomId: item.room?.id ?? (rooms[0]?.id ?? ""),
-            meetingLink: item.meetingLink ?? "",
             reason: "",
             force: false,
         });
@@ -361,70 +360,27 @@ export default function GaAppointmentsIncomingPage() {
                                                 placeholder="Topik meeting"
                                             />
                                         </div>
-                                        <div className="form-group !mb-0">
-                                            <span className="form-label" id="rs-mode-label">Tempat Pelaksanaan *</span>
-                                            <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="rs-mode-label">
-                                                {(
-                                                    [
-                                                        { key: "fisik", label: "Ruang Fisik" },
-                                                        { key: "daring", label: "Daring" },
-                                                    ] as const
-                                                ).map((m) => (
-                                                    <button
-                                                        key={m.key}
-                                                        type="button"
-                                                        aria-pressed={resched.mode === m.key}
-                                                        onClick={() => {
-                                                            if (m.key === "fisik") {
-                                                                setResched({
-                                                                    ...resched,
-                                                                    mode: "fisik",
-                                                                    roomId: resched.roomId || rooms[0]?.id || "",
-                                                                });
-                                                            } else {
-                                                                setResched({ ...resched, mode: "daring" });
-                                                            }
-                                                        }}
-                                                        className={`min-h-11 rounded-xl border px-3 text-sm font-semibold transition-colors ${
-                                                            resched.mode === m.key
-                                                                ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
-                                                                : "border-[var(--border)] text-[var(--text-secondary)]"
-                                                        }`}
-                                                    >
-                                                        {m.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="form-group !mb-0">
                                                 <label className="form-label" htmlFor="rs-date">Tanggal *</label>
                                                 <input id="rs-date" type="date" className="form-input" value={resched.date} onChange={(e) => setResched({ ...resched, date: e.target.value })} />
                                             </div>
-                                            {resched.mode === "fisik" ? (
-                                                <div className="form-group !mb-0">
-                                                    <label className="form-label" htmlFor="rs-room">Ruangan *</label>
-                                                    <select id="rs-room" className="form-input" value={resched.roomId} onChange={(e) => setResched({ ...resched, roomId: e.target.value })}>
-                                                        {rooms.map((r) => (
-                                                            <option key={r.id} value={r.id}>{r.name}{r.capacity ? ` (Kapasitas ${r.capacity} orang)` : ""}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            ) : (
-                                                <div className="form-group !mb-0">
-                                                    <label className="form-label" htmlFor="rs-link">Tautan Meeting Daring *</label>
-                                                    <input id="rs-link" className="form-input" value={resched.meetingLink} onChange={(e) => setResched({ ...resched, meetingLink: e.target.value })} placeholder="Contoh: https://meet.google.com/xxx-xxxx-xxx" />
-                                                </div>
-                                            )}
                                             <div className="form-group !mb-0">
-                                                <label className="form-label" htmlFor="rs-start">Jam Mulai *</label>
-                                                <input id="rs-start" type="time" className="form-input" value={resched.startTime} onChange={(e) => setResched({ ...resched, startTime: e.target.value })} />
-                                            </div>
-                                            <div className="form-group !mb-0">
-                                                <label className="form-label" htmlFor="rs-end">Jam Selesai *</label>
-                                                <input id="rs-end" type="time" className="form-input" value={resched.endTime} onChange={(e) => setResched({ ...resched, endTime: e.target.value })} />
+                                                <label className="form-label" htmlFor="rs-room">Ruangan *</label>
+                                                <select id="rs-room" className="form-input" value={resched.roomId} onChange={(e) => setResched({ ...resched, roomId: e.target.value })}>
+                                                    <option value="">— Pilih ruangan —</option>
+                                                    {rooms.map((r) => (
+                                                        <option key={r.id} value={r.id}>{r.name}{r.capacity ? ` (Kapasitas ${r.capacity} orang)` : ""}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         </div>
+                                        <TimeRangeFields
+                                            idPrefix="rs"
+                                            startTime={resched.startTime}
+                                            endTime={resched.endTime}
+                                            onChange={(s, e) => setResched((prev) => ({ ...prev, startTime: s, endTime: e }))}
+                                        />
                                         <div className="form-group !mb-0">
                                             <ParticipantPicker
                                                 value={reschedParticipants}
@@ -452,7 +408,7 @@ export default function GaAppointmentsIncomingPage() {
                                         </label>
                                         <button
                                             type="button"
-                                            disabled={acting || !resched.title.trim() || !resched.date || !resched.startTime || !resched.endTime || (resched.mode === "fisik" ? !resched.roomId : !resched.meetingLink.trim()) || (resched.reason.trim().length > 0 && resched.reason.trim().length < 5)}
+                                            disabled={acting || !resched.title.trim() || !resched.date || !resched.startTime || !resched.endTime || resched.endTime <= resched.startTime || !resched.roomId || (resched.reason.trim().length > 0 && resched.reason.trim().length < 5)}
                                             onClick={() => {
                                                 void postAction(`/api/appointments/${detail.id}`, "PATCH", {
                                                     title: resched.title.trim(),
@@ -461,8 +417,7 @@ export default function GaAppointmentsIncomingPage() {
                                                     startTime: resched.startTime,
                                                     endTime: resched.endTime,
                                                     isFullDay: detail.isFullDay,
-                                                    roomId: resched.mode === "fisik" ? resched.roomId || null : null,
-                                                    meetingLink: resched.mode === "daring" ? resched.meetingLink.trim() || null : null,
+                                                    roomId: resched.roomId || null,
                                                     participants: reschedParticipants.map((p) => (p.employeeId ? { employeeId: p.employeeId } : { guestName: p.name })),
                                                     changeReason: resched.reason.trim(),
                                                     force: resched.force,

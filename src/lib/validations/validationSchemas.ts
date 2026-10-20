@@ -650,8 +650,7 @@ export const appointmentCreateSchema = z
     .object({
         title: z.string().trim().min(1, "Topik meeting wajib diisi.").max(200, "Topik meeting maksimal 200 karakter."),
         agenda: z.string().trim().max(2000).nullable().optional(),
-        roomId: z.string().trim().min(1, "Ruangan wajib dipilih.").nullable().optional(),
-        meetingLink: z.string().trim().max(1000).nullable().optional(),
+        roomId: z.string().trim().min(1, "Ruangan wajib dipilih."),
         date: appointmentDateSchema,
         startTime: appointmentTimeSchema.optional(),
         endTime: appointmentTimeSchema.optional(),
@@ -673,8 +672,7 @@ export const appointmentRescheduleSchema = z
     .object({
         title: z.string().trim().min(1, "Topik meeting wajib diisi.").max(200, "Topik maksimal 200 karakter.").optional(),
         agenda: z.string().trim().max(2000, "Agenda maksimal 2000 karakter.").nullable().optional(),
-        roomId: z.string().trim().min(1, "Ruangan wajib dipilih.").nullable().optional(),
-        meetingLink: z.string().trim().max(1000).nullable().optional(),
+        roomId: z.string().trim().min(1, "Ruangan wajib dipilih."),
         date: appointmentDateSchema,
         startTime: appointmentTimeSchema.optional(),
         endTime: appointmentTimeSchema.optional(),

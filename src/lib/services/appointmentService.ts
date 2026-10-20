@@ -335,7 +335,6 @@ export interface CreateAppointmentInput extends AppointmentSlot {
     title: string;
     agenda?: string | null;
     roomId?: string | null;
-    meetingLink?: string | null;
     participants: ParticipantInput[];
     reminderOffsets?: number[] | null;
     force?: boolean;
@@ -354,14 +353,14 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     const { startAt, endAt } = slotToDates(input);
     if (startAt <= new Date()) throw new AppointmentError("Jadwal harus setelah waktu saat ini.", 400);
 
-    let room: { id: string; isActive: boolean } | null = null;
-    if (input.roomId) {
-        room = await prisma.meetingRoom.findUnique({ where: { id: input.roomId }, select: { id: true, isActive: true } });
-        if (!room) throw new AppointmentError("Ruangan tidak ditemukan.", 404);
-        if (!room.isActive) throw new AppointmentError("Ruangan tersebut sedang nonaktif.", 422);
-    } else if (!input.meetingLink?.trim()) {
-        throw new AppointmentError("Pilih ruang meeting atau isi tautan meeting daring.", 400);
+    // Meeting hanya luring: ruangan wajib. Kolom meetingLink dipertahankan
+    // di skema untuk data historis (read-only), tidak lagi diisi jalur baru.
+    if (!input.roomId) {
+        throw new AppointmentError("Ruangan wajib dipilih.", 400);
     }
+    const room = await prisma.meetingRoom.findUnique({ where: { id: input.roomId }, select: { id: true, isActive: true } });
+    if (!room) throw new AppointmentError("Ruangan tidak ditemukan.", 404);
+    if (!room.isActive) throw new AppointmentError("Ruangan tersebut sedang nonaktif.", 422);
 
     const participants = await validateParticipants(input.participants);
     if (session.employeeId && participants.some((p) => p.employeeId === session.employeeId)) {
@@ -387,10 +386,10 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
         }
         const appt = await tx.meetingAppointment.create({
             data: {
-                roomId: room?.id ?? null,
+                roomId: room.id,
                 title,
                 agenda: input.agenda?.trim() || null,
-                meetingLink: input.meetingLink?.trim() || null,
+                meetingLink: null,
                 isFullDay: input.isFullDay ?? false,
                 status,
                 startAt,
@@ -436,8 +435,7 @@ export interface AppointmentFilters {
 function buildWhere(session: SessionPayload, filters: AppointmentFilters, isPrivileged: boolean): Prisma.MeetingAppointmentWhereInput {
     const where: Prisma.MeetingAppointmentWhereInput = {};
     if (filters.roomId) {
-        if (filters.roomId === "__online__") where.roomId = null;
-        else where.roomId = filters.roomId;
+        where.roomId = filters.roomId;
     }
     if (filters.q?.trim()) where.title = { contains: filters.q.trim() };
     const and: Prisma.MeetingAppointmentWhereInput[] = [];
@@ -572,7 +570,6 @@ export interface RescheduleInput extends AppointmentSlot {
     title?: string;
     agenda?: string | null;
     roomId?: string | null;
-    meetingLink?: string | null;
     participants?: ParticipantInput[];
     changeReason?: string;
     force?: boolean;
@@ -624,10 +621,12 @@ export async function rescheduleAppointment(
         const nextTitle = input.title !== undefined && input.title.trim() ? input.title.trim().slice(0, 200) : existing.title;
         const nextAgenda = input.agenda === undefined ? existing.agenda : (input.agenda?.trim() || null);
         const nextRoomId = input.roomId === undefined ? existing.roomId : input.roomId;
-        const nextLink = input.meetingLink === undefined ? existing.meetingLink : input.meetingLink?.trim() || null;
+        // Link daring historis dibersihkan pada perubahan berikutnya; data
+        // selesai historis tidak pernah masuk jalur ini sehingga utuh.
+        const nextLink: string | null = null;
         const nextFullDay = input.isFullDay === undefined ? (existing.isFullDay ?? false) : input.isFullDay;
-        if (!nextRoomId && !nextLink) {
-            throw new AppointmentError("Pilih ruangan fisik atau isi link meeting online.", 400);
+        if (!nextRoomId) {
+            throw new AppointmentError("Ruangan wajib dipilih.", 400);
         }
 
         const isTimeChanged =

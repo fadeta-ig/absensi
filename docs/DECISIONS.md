@@ -189,3 +189,16 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Laporan cetak jadi akuntabel per penanda item; tanpa perubahan skema maupun permission; generator kode deterministik sehingga legenda stabil.
   - Negatif: Foot note menambah baris kiri bawah PDF (satu baris per 3 petugas); banyaknya petugas dibatasi ruang sebelum footer "Dicetak".
   - Status: live lokal 2026-10-20 (service `checkedBy` + klien PDF; dua suite test hijau: `CleaningSettingsPage`, `cleaningApprovalService`).
+
+---
+
+## ADR-015: Meeting Appointment Hanya Luring (Tanpa Daring)
+
+- **Decision**: Appointment meeting hanya diselenggarakan luring di ruangan fisik. Pilihan "Tempat Pelaksanaan" (Ruang Fisik/Daring) dihapus; form langsung mewajibkan satu field "Ruangan". Data daring historis dipertahankan apa adanya sebagai arsip.
+- **Context**: Revisi pemilik 2026-10-20 — daring tidak lagi diperlukan; satu-satunya sumber tempat adalah ruangan. Audit menemukan daring bukan tipe tersendiri melainkan keadaan implisit `roomId = null` + `meetingLink` terisi, tersebar di form employee, form jadwal ulang GA, `RoomSelect`, Zod, service, filter daftar, notifikasi, dan penanda revisi riwayat.
+- **Chosen Approach**: Bertahap tanpa migrasi skema. (1) UI: hapus toggle mode + input tautan dari `AppointmentFormModal` dan halaman GA incoming; `RoomSelect` langsung "Ruangan *" wajib. (2) Kontrak: `appointmentCreateSchema`/`appointmentRescheduleSchema` mewajibkan `roomId`, field `meetingLink` dibuang dari skema dan interface service; `createAppointment`/`rescheduleAppointment` menolak tanpa ruangan (400) dan selalu menulis `meetingLink: null` untuk data baru/berubah. (3) Filter `__online__` dihapus. (4) Historis: kolom `meeting_link` dan snapshot `previousData.meetingLink` dipertahankan — detail/riwayat tetap menampilkan tautan lama sebagai "Daring", dan `meetingHistoryService` tetap memakai kehadiran kunci `meetingLink` sebagai penanda revisi jadwal ulang vs pembatalan.
+- **Alternatives**: Langsung `roomId NOT NULL` + drop kolom `meeting_link` (ditolak untuk tahap ini — memblokir baris historis daring di dump produksi dan merusak penanda revisi riwayat); menghapus tampilan daring historis (ditolak pemilik — data lama tetap terbaca sebagai historis).
+- **Consequences**:
+  - Positif: Satu sumber kebenaran tempat (ruangan) sehingga cek bentrok ruangan selalu berjalan; form lebih sederhana tanpa pertanyaan mode.
+  - Negatif: Kolom `roomId` di skema tetap nullable demi arsip; penegakan wajib berada di Zod + service. Edit/jadwal ulang appointment daring warisan akan mewajibkan pemilihan ruangan dan membersihkan tautannya.
+  - Status: live lokal 2026-10-20 (UI + Zod + service + filter; suite `appointmentService` hijau, `tsc` bersih).
