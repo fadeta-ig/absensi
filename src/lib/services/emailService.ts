@@ -591,16 +591,55 @@ export interface DailyRecapEmailCleaningLine {
     pendingItems: string[];
 }
 
+export interface DailyRecapEmailReviewerStat {
+    name: string;
+    roleLabel: string;
+    signed: number;
+    total: number;
+}
+
+export interface DailyRecapEmailInspectorStat {
+    name: string;
+    submitted: number;
+}
+
+export interface DailyRecapEmailActorStat {
+    name: string;
+    handled: number;
+    total: number;
+}
+
 export interface DailyRecapEmailInput {
     to: string[];
     wibDate: string;
     dateLabel: string;
-    equipment: { open: number; submitted: number; done: number; total: number; approved?: number; lines: DailyRecapEmailEquipmentLine[]; verifiers: string[]; approverNames: string[] };
-    cleaning: { lines: DailyRecapEmailCleaningLine[] };
+    equipment: {
+        open: number; submitted: number; done: number; total: number; approved?: number;
+        lines: DailyRecapEmailEquipmentLine[]; verifiers: string[]; approverNames: string[];
+        inspectorStats?: DailyRecapEmailInspectorStat[];
+        verifierStats?: DailyRecapEmailActorStat[];
+        approverStats?: DailyRecapEmailActorStat[];
+        verificationQueue?: number;
+        approvalQueue?: number;
+    };
+    cleaning: { lines: DailyRecapEmailCleaningLine[]; reviewerStats?: DailyRecapEmailReviewerStat[] };
 }
 
 function escapeHtml(value: string): string {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Gaya tabel email terpusat: inline-style only (kompatibel Gmail/Outlook,
+// tanpa <style>), sel lega, header abu terang, kolom angka rata tengah,
+// dan jarak antar blok agar tidak bertumpuk.
+const EMAIL_TABLE_OPEN = `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 16px 0;">`;
+
+function emailTh(label: string, align: "left" | "center" = "left"): string {
+    return `<th style="text-align:${align};background-color:#f5f5f5;">${label}</th>`;
+}
+
+function emailTd(content: string, align: "left" | "center" = "left"): string {
+    return `<td style="text-align:${align};vertical-align:top;">${content}</td>`;
 }
 
 function formatShortWib(value: Date | string): string {
@@ -722,6 +761,25 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         eq.length === 0
             ? "Tidak ada alat yang diajukan."
             : `Ringkasan: ${eqWaitingVerify.length} Menunggu Verifikasi, ${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.`;
+    const eqInspectors = input.equipment.inspectorStats ?? [];
+    const eqVerifierStats = input.equipment.verifierStats ?? [];
+    const eqApproverStats = input.equipment.approverStats ?? [];
+    const eqActorsText =
+        (eqInspectors.length === 0
+            ? ""
+            : `Inspektor hari ini:\n${eqInspectors
+                .map((r) => `- ${r.name}: diajukan ${r.submitted}.`)
+                .join("\n")}\n`) +
+        (eqVerifierStats.length === 0
+            ? ""
+            : `Verifikator hari ini:\n${eqVerifierStats
+                .map((r) => `- ${r.name}: menangani ${r.handled}/${r.total}.`)
+                .join("\n")}\nAntrean verifikasi hari ini: ${input.equipment.verificationQueue ?? 0}.\n`) +
+        (eqApproverStats.length === 0
+            ? ""
+            : `Approver hari ini:\n${eqApproverStats
+                .map((r) => `- ${r.name}: menyetujui ${r.handled}/${r.total}.`)
+                .join("\n")}\nAntrean approval hari ini: ${input.equipment.approvalQueue ?? 0}.\n`);
     const eqLinesText = eq
         .map((l, i) => `${i + 1}. ${l.unitName} — ${eqStatusLabel[l.status] ?? l.status}. Inspektor: ${eqInspector(l)}. Verifikator: ${eqVerifier(l)}. Approval: ${eqApproval(l)}.`)
         .join("\n");
@@ -731,27 +789,55 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
             ? "<p>Tidak ada alat yang diajukan.</p>"
             : `<p><strong>Ringkasan:</strong> ${eqWaitingVerify.length} Menunggu Verifikasi, ` +
               `${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.</p>`;
+    const eqActorsHtml =
+        (eqInspectors.length === 0
+            ? ""
+            : EMAIL_TABLE_OPEN +
+              `<thead><tr>${emailTh("No", "center")}${emailTh("Inspektor")}${emailTh("Diajukan", "center")}</tr></thead><tbody>` +
+              eqInspectors
+                  .map((r, i) => `<tr>${emailTd(String(i + 1), "center")}${emailTd(escapeHtml(r.name))}${emailTd(String(r.submitted), "center")}</tr>`)
+                  .join("") +
+              `</tbody></table>`) +
+        (eqVerifierStats.length === 0
+            ? ""
+            : EMAIL_TABLE_OPEN +
+              `<thead><tr>${emailTh("No", "center")}${emailTh("Verifikator")}${emailTh("Menangani", "center")}</tr></thead><tbody>` +
+              eqVerifierStats
+                  .map((r, i) => `<tr>${emailTd(String(i + 1), "center")}${emailTd(escapeHtml(r.name))}${emailTd(`${r.handled}/${r.total}`, "center")}</tr>`)
+                  .join("") +
+              `</tbody></table>` +
+              `<p>Antrean verifikasi hari ini: ${input.equipment.verificationQueue ?? 0}.</p>`) +
+        (eqApproverStats.length === 0
+            ? ""
+            : EMAIL_TABLE_OPEN +
+              `<thead><tr>${emailTh("No", "center")}${emailTh("Approver")}${emailTh("Menyetujui", "center")}</tr></thead><tbody>` +
+              eqApproverStats
+                  .map((r, i) => `<tr>${emailTd(String(i + 1), "center")}${emailTd(escapeHtml(r.name))}${emailTd(`${r.handled}/${r.total}`, "center")}</tr>`)
+                  .join("") +
+              `</tbody></table>` +
+              `<p>Antrean approval hari ini: ${input.equipment.approvalQueue ?? 0}.</p>`);
     const eqLinesHtml = eq.length === 0
         ? ""
-        : `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;">` +
+        : EMAIL_TABLE_OPEN +
           `<thead><tr>` +
-          `<th style="text-align:left;">No</th>` +
-          `<th style="text-align:left;">Alat</th>` +
-          `<th style="text-align:left;">Status</th>` +
-          `<th style="text-align:left;">Inspektor</th>` +
-          `<th style="text-align:left;">Verifikator</th>` +
-          `<th style="text-align:left;">Approval</th>` +
+          emailTh("No", "center") +
+          emailTh("Alat") +
+          emailTh("Status") +
+          emailTh("Inspektor") +
+          emailTh("Verifikator") +
+          emailTh("Approval") +
           `</tr></thead><tbody>${eq
               .map((l, i) => {
                   const verifierCell = eqVerifierList(l).map(escapeHtml).join("<br>") || "—";
                   const approvalCell = eqApprovalList(l).map(escapeHtml).join("<br>") || "—";
-                  return `<tr><td>${i + 1}</td><td>${escapeHtml(l.unitName)}</td><td>${escapeHtml(eqStatusLabel[l.status] ?? l.status)}</td><td>${escapeHtml(eqInspector(l))}</td><td>${verifierCell}</td><td>${approvalCell}</td></tr>`;
+                  return `<tr>${emailTd(String(i + 1), "center")}${emailTd(escapeHtml(l.unitName))}${emailTd(escapeHtml(eqStatusLabel[l.status] ?? l.status))}${emailTd(escapeHtml(eqInspector(l)))}${emailTd(verifierCell)}${emailTd(approvalCell)}</tr>`;
               })
               .join("")}</tbody></table>`;
     const cl = input.cleaning.lines;
     const clDone = cl.filter((l) => !l.isFree && l.exists && l.complete);
     const clTodo = cl.filter((l) => !l.isFree && (!l.exists || !l.complete));
     const clParafFull = clDone.filter((l) => l.parafMissing === 0);
+    const clReviewers = input.cleaning.reviewerStats ?? [];
     const clSummaryText =
         cl.length === 0
             ? "Tidak ada ruangan."
@@ -764,11 +850,16 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
                 return `${i + 1}. ${l.roomName} — ${cleaningLineState(l)}.${paraf ? ` ${paraf}` : ""}`;
             })
             .join("\n");
+    const clReviewerText = clReviewers.length === 0
+        ? ""
+        : `Paraf per reviewer:\n${clReviewers
+            .map((r) => `- ${r.name} (${r.roleLabel}): ${r.signed}/${r.total}, kurang ${r.total - r.signed}.`)
+            .join("\n")}\n`;
 
     const text =
         `Rekap Harian Inspeksi — ${input.dateLabel}\n` +
-        `\nPeralatan: ${eqSummaryText}\n${eqLinesText}\n` +
-        `\nKebersihan: ${clSummaryText}\n${clLinesText}\n` +
+        `\nPeralatan: ${eqSummaryText}\n${eqActorsText}${eqLinesText}\n` +
+        `\nKebersihan: ${clSummaryText}\n${clReviewerText}${clLinesText}\n` +
         `\nEmail otomatis Sistem HRIS PT Wijaya Inovasi Gemilang.`;
     const clSummaryHtml =
         cl.length === 0
@@ -776,28 +867,43 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
             : `<p><strong>Ringkasan:</strong> ${clDone.length} Pembersihan Selesai, ` +
               `${clTodo.length} Belum Selesai (total ${cl.length} ruang). ` +
               `Paraf lengkap ${clParafFull.length} ruang.</p>`;
+    const clReviewerHtml = clReviewers.length === 0
+        ? ""
+        : EMAIL_TABLE_OPEN +
+          `<thead><tr>` +
+          emailTh("No", "center") +
+          emailTh("Reviewer") +
+          emailTh("Peran") +
+          emailTh("Sudah paraf", "center") +
+          emailTh("Kurang", "center") +
+          `</tr></thead><tbody>${clReviewers
+              .map((r, i) =>
+                  `<tr>${emailTd(String(i + 1), "center")}${emailTd(escapeHtml(r.name))}${emailTd(escapeHtml(r.roleLabel))}` +
+                  `${emailTd(`${r.signed}/${r.total}`, "center")}${emailTd(String(r.total - r.signed), "center")}</tr>`
+              )
+              .join("")}</tbody></table>`;
     const clLinesHtml = cl.length === 0
         ? ""
-        : `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-size:13px;">` +
+        : EMAIL_TABLE_OPEN +
           `<thead><tr>` +
-          `<th style="text-align:left;">No</th>` +
-          `<th style="text-align:left;">Ruangan</th>` +
-          `<th style="text-align:left;">Status</th>` +
-          `<th style="text-align:left;">Belum dibersihkan</th>` +
-          `<th style="text-align:left;">Sudah paraf</th>` +
-          `<th style="text-align:left;">Belum paraf</th>` +
+          emailTh("No", "center") +
+          emailTh("Ruangan") +
+          emailTh("Status") +
+          emailTh("Belum dibersihkan") +
+          emailTh("Sudah paraf") +
+          emailTh("Belum paraf") +
           `</tr></thead><tbody>${cl
               .map((l, i) => {
                   const doneCell = numberedParafList(l).map(escapeHtml).join("<br>") || "—";
                   const pendingCell = l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf" : "—");
                   const itemsCell = numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—";
                   return `<tr>` +
-                      `<td>${i + 1}</td>` +
-                      `<td>${escapeHtml(l.roomName)}</td>` +
-                      `<td>${escapeHtml(cleaningLineState(l))}</td>` +
-                      `<td>${itemsCell}</td>` +
-                      `<td>${doneCell}</td>` +
-                      `<td>${pendingCell}</td>` +
+                      emailTd(String(i + 1), "center") +
+                      emailTd(escapeHtml(l.roomName)) +
+                      emailTd(escapeHtml(cleaningLineState(l))) +
+                      emailTd(itemsCell) +
+                      emailTd(doneCell) +
+                      emailTd(pendingCell) +
                       `</tr>`;
               })
               .join("")}</tbody></table>`;
@@ -809,9 +915,11 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         `<h2 style="font-size:18px;color:#222222;">Rekap Harian Inspeksi — ${escapeHtml(input.dateLabel)}</h2>` +
         `<h3 style="font-size:15px;color:#222222;">Peralatan</h3>` +
         eqSummaryHtml +
+        eqActorsHtml +
         eqLinesHtml +
         `<h3 style="font-size:15px;color:#222222;">Kebersihan</h3>` +
         clSummaryHtml +
+        clReviewerHtml +
         clLinesHtml +
         `<p style="font-size:12px;color:#666666;">Email otomatis Sistem HRIS PT Wijaya Inovasi Gemilang. Balas ke alamat GA bila ada pertanyaan.</p>` +
         `</body></html>`;

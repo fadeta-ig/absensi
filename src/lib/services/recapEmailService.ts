@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
-import { toWIBDateString } from "@/lib/timezone";
+import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
 import { stripGelar } from "@/lib/utils/formatters";
 import { webPush } from "@/lib/webPush";
 import { EQUIPMENT_TOP_VIEWERS_KEY, getEquipmentApprovers, getEquipmentQcMembers, queryEquipmentRecap } from "@/lib/services/equipmentService";
@@ -122,14 +122,34 @@ export interface CleaningRecapLine {
     pendingItems: string[];
 }
 
+/** Agregat paraf per reviewer untuk satu tanggal: sudah X dari total ruangannya. */
+export interface CleaningReviewerStat {
+    employeeId: string;
+    name: string;
+    role: "INSPECTED_BY" | "KNOWN_BY";
+    roleLabel: string;
+    signed: number;
+    total: number;
+    missing: number;
+}
+
+export interface EquipmentInspectorStat {
+    name: string;
+    submitted: number;
+}
+
+export interface EquipmentChainedStat {
+    name: string;
+    handled: number;
+    total: number;
+}
+
 /** Rekap peralatan 1 hari WIB (batas createdAt, pola getEquipmentRecap). */
 export async function getDailyEquipmentRecap(wibDate: string) {
-    const next = new Date(wibDate + "T00:00:00+07:00");
-    next.setDate(next.getDate() + 1);
-    const yyyy = next.getFullYear();
-    const mm = String(next.getMonth() + 1).padStart(2, "0");
-    const dd = String(next.getDate()).padStart(2, "0");
-    const data = await queryEquipmentRecap({ from: wibDate, to: `${yyyy}-${mm}-${dd}` });
+    const nextDay = addCalendarDays(wibDate, 1);
+    const dayStart = new Date(wibDate + "T00:00:00+07:00");
+    const nextStart = new Date(nextDay + "T00:00:00+07:00");
+    const data = await queryEquipmentRecap({ from: wibDate, to: nextDay });
     const lines: EquipmentRecapLine[] = data.inspections.map((row) => ({        unitName: row.unit.name,
         starterName: stripGelar(row.startedBy.name),
         status: row.status,
@@ -142,12 +162,85 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     }));
     // Roster penanggung jawab untuk kolom email: semua verifikator pool + approver tunggal.
     // Yang bertindak naik ke #1 + jam; sisanya (-) — agar pemilik tahu penanggung jawab tiap baris.
-    const [qcMembers, approvers] = await Promise.all([
+    const [qcMembers, approvers, submittedToday, checkedToday, approvedToday] = await Promise.all([
         getEquipmentQcMembers().catch(() => []),
         getEquipmentApprovers().catch(() => []),
+        prisma.equipmentInspection.findMany({
+            where: { submittedAt: { gte: dayStart, lt: nextStart } },
+            select: { startedByEmployeeId: true, startedBy: { select: { name: true } } },
+        }).catch(() => []),
+        prisma.equipmentInspection.findMany({
+            where: { checkedAt: { gte: dayStart, lt: nextStart } },
+            select: { checkedByEmployeeId: true, checkedByNameSnapshot: true, checkedBy: { select: { name: true } } },
+        }).catch(() => []),
+        prisma.equipmentInspection.findMany({
+            where: { approvedAt: { gte: dayStart, lt: nextStart } },
+            select: { approvedByEmployeeId: true, approvedByNameSnapshot: true, approvedBy: { select: { name: true } } },
+        }).catch(() => []),
     ]);
     const verifiers = qcMembers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean);
-    return { summary: data.summary, lines, verifiers, approverNames: approvers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean) };
+    // Inspektor: cukup angka diajukan hari itu (basis tanggal-tindakan).
+    const inspMap = new Map<string, EquipmentInspectorStat>();
+    for (const r of submittedToday) {
+        const cur = inspMap.get(r.startedByEmployeeId) ?? { name: stripGelar(r.startedBy.name) || r.startedByEmployeeId, submitted: 0 };
+        cur.submitted += 1;
+        inspMap.set(r.startedByEmployeeId, cur);
+    }
+    const inspectorStats = [...inspMap.values()].sort((a, b) => b.submitted - a.submitted || a.name.localeCompare(b.name));
+    // Rantai pecahan: penyebut = keluaran tahap sebelumnya hari itu.
+    // Verifikator X/diajukan, approver X/diverifikasi. Pelaku di luar roster
+    // tetap tampil (mis. approver legacy) — roster + aktor digabung.
+    function toChainedStats(
+        roster: Array<{ employeeId: string; name: string | null }>,
+        actions: Array<{ employeeId: string | null; name: string }>,
+        denom: number
+    ): EquipmentChainedStat[] {
+        const counts = new Map<string, { name: string; handled: number }>();
+        for (const a of actions) {
+            const key = a.employeeId ?? `name:${a.name}`;
+            const cur = counts.get(key) ?? { name: a.name, handled: 0 };
+            cur.handled += 1;
+            counts.set(key, cur);
+        }
+        const rows: EquipmentChainedStat[] = roster.map((r) => ({
+            name: stripGelar(r.name ?? r.employeeId) || r.employeeId,
+            handled: counts.get(r.employeeId)?.handled ?? 0,
+            total: denom,
+        }));
+        const rosterIds = new Set(roster.map((r) => r.employeeId));
+        for (const [key, v] of counts) {
+            if (!key.startsWith("name:") && rosterIds.has(key)) continue;
+            rows.push({ name: v.name, handled: v.handled, total: denom });
+        }
+        return rows.sort((a, b) => b.handled - a.handled || a.name.localeCompare(b.name));
+    }
+    const verifierStats = toChainedStats(
+        qcMembers,
+        checkedToday.map((r) => ({
+            employeeId: r.checkedByEmployeeId,
+            name: stripGelar(r.checkedBy?.name ?? r.checkedByNameSnapshot ?? r.checkedByEmployeeId ?? "-") || "-",
+        })),
+        submittedToday.length
+    );
+    const approverStats = toChainedStats(
+        approvers,
+        approvedToday.map((r) => ({
+            employeeId: r.approvedByEmployeeId,
+            name: stripGelar(r.approvedBy?.name ?? r.approvedByNameSnapshot ?? r.approvedByEmployeeId ?? "-") || "-",
+        })),
+        checkedToday.length
+    );
+    return {
+        summary: data.summary,
+        lines,
+        verifiers,
+        approverNames: approvers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean),
+        inspectorStats,
+        verifierStats,
+        approverStats,
+        verificationQueue: data.summary.submitted,
+        approvalQueue: data.summary.done,
+    };
 }
 
 /** Rekap kebersihan 1 hari WIB per ruangan (read-only, reuse getParafStatus). */
@@ -158,9 +251,36 @@ export async function getDailyCleaningRecap(wibDate: string) {
         select: { id: true, name: true },
     });
     const lines: CleaningRecapLine[] = [];
+    const stats = new Map<string, CleaningReviewerStat>();
     for (const room of rooms) {
         try {
             const st = await getParafStatus(room.id, wibDate);
+            // Agregat per reviewer: hanya ruang non-libur yang punya reviewer
+            // terpasang (penentu paraf = missingRoles, bukan kehadiran baris).
+            if (!st.isFree && st.reviewers) {
+                const slots = [
+                    { role: "INSPECTED_BY", employeeId: st.reviewers.inspectedByEmployeeId, name: st.reviewers.inspectedByName },
+                    { role: "KNOWN_BY", employeeId: st.reviewers.knownByEmployeeId, name: st.reviewers.knownByName },
+                ] as const;
+                for (const s of slots) {
+                    const key = `${s.role}:${s.employeeId}`;
+                    let stat = stats.get(key);
+                    if (!stat) {
+                        stat = {
+                            employeeId: s.employeeId,
+                            name: stripGelar(s.name) || s.employeeId,
+                            role: s.role,
+                            roleLabel: s.role === "INSPECTED_BY" ? "Diperiksa" : "Mengetahui",
+                            signed: 0,
+                            total: 0,
+                            missing: 0,
+                        };
+                        stats.set(key, stat);
+                    }
+                    stat.total += 1;
+                    if (!st.missingRoles.includes(s.role)) stat.signed += 1;
+                }
+            }
             const doneParafs = (st.parafs ?? [])
                 .map((p) => ({ name: stripGelar(p.signerName ?? p.signerEmployeeId ?? ""), signedAt: p.signedAt }))
                 .filter((p) => p.name.length > 0);
@@ -208,7 +328,10 @@ export async function getDailyCleaningRecap(wibDate: string) {
             logger.warn("rekap cleaning per ruangan dilewati", { roomId: room.id, wibDate, err });
         }
     }
-    return { lines };
+    const reviewerStats = [...stats.values()]
+        .map((s) => ({ ...s, missing: s.total - s.signed }))
+        .sort((a, b) => a.role.localeCompare(b.role) || a.name.localeCompare(b.name));
+    return { lines, reviewerStats };
 }
 
 /** Notifikasi in-app via push ke akun WIG002 (best-effort, tak pernah melempar). */
@@ -298,7 +421,7 @@ export async function runDailyRecap(
             await notifyWig002Missing(missing, wibDate);
             return { wibDate, sent: false, skipped: true, to, missing, equipmentTotal: equipment.lines.length, cleaningTotal: cleaning.lines.length };
         }
-        const ok = await sendDailyRecapEmail({ to, wibDate, dateLabel: formatWibDateLabel(wibDate), equipment: { ...equipment.summary, lines: equipment.lines, verifiers: equipment.verifiers, approverNames: equipment.approverNames }, cleaning });
+        const ok = await sendDailyRecapEmail({ to, wibDate, dateLabel: formatWibDateLabel(wibDate), equipment: { ...equipment.summary, lines: equipment.lines, verifiers: equipment.verifiers, approverNames: equipment.approverNames, inspectorStats: equipment.inspectorStats, verifierStats: equipment.verifierStats, approverStats: equipment.approverStats, verificationQueue: equipment.verificationQueue, approvalQueue: equipment.approvalQueue }, cleaning });
         await prisma.dailyRecapEmailLog.update({
             where: { wibDate },
             data: {

@@ -30,8 +30,10 @@ vi.mock("@/lib/services/cleaningParafService", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { sendDailyRecapEmail } from "@/lib/services/emailService";
+import { invalidateEquipmentQcMembersCache } from "@/lib/services/equipmentService";
 import {
     getDailyCleaningRecap,
+    getDailyEquipmentRecap,
     resolveTopViewerEmails,
     runDailyRecap,
 } from "@/lib/services/recapEmailService";
@@ -54,6 +56,7 @@ function activeEmp(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
     vi.resetAllMocks();
+    invalidateEquipmentQcMembersCache();
 });
 
 describe("resolveTopViewerEmails", () => {
@@ -99,6 +102,93 @@ describe("getDailyCleaningRecap", () => {
         expect(out.lines[0].doneParafs).toMatchObject([{ name: "Aris Sudarisman" }]);
         expect(out.lines[0].pendingNames).toEqual(["Dicky"]);
         expect(out.lines[0].pendingItems).toEqual(["Kaca"]);
+        expect(out.reviewerStats).toEqual([
+            { employeeId: "ID-1", name: "Aris Sudarisman", role: "INSPECTED_BY", roleLabel: "Diperiksa", signed: 1, total: 1, missing: 0 },
+            { employeeId: "ID-2", name: "Dicky", role: "KNOWN_BY", roleLabel: "Mengetahui", signed: 0, total: 1, missing: 1 },
+        ]);
+    });
+    it("ruang libur tidak masuk agregat reviewer", async () => {
+        mocked.cleaningRoom.findMany.mockResolvedValue([
+            { id: "r1", name: "Resepsionis" },
+        ] as never);
+        const { getParafStatus } = await import("@/lib/services/cleaningParafService");
+        vi.mocked(getParafStatus).mockResolvedValue({
+            roomName: "Resepsionis",
+            isFree: true,
+            checklist: { exists: false, activeCount: 0, completedCount: 0, percent: 0, isComplete: false },
+            parafs: [],
+            missingRoles: ["INSPECTED_BY", "KNOWN_BY"],
+            reviewers: { inspectedByEmployeeId: "ID-1", inspectedByName: "Aris", knownByEmployeeId: "ID-2", knownByName: "Dicky" },
+        } as never);
+        mocked.cleaningDailyChecklist.findUnique.mockResolvedValue(null);
+        const out = await getDailyCleaningRecap("2026-10-12");
+        expect(out.lines).toHaveLength(1);
+        expect(out.reviewerStats).toEqual([]);
+    });
+});
+
+describe("getDailyEquipmentRecap actor stats", () => {
+    it("inspektor X/Y + verifikator/approver tindakan hari ini + antrean", async () => {
+        const recapRows = [0, 1, 2, 3].map(() => ({
+            unit: { name: "Manual Filling" },
+            startedBy: { employeeId: "ST-1", name: "Aris Sudarisman, S.T." },
+            status: "SUBMITTED",
+            createdAt: new Date("2026-10-19T01:00:00Z"),
+            submittedAt: new Date("2026-10-19T02:00:00Z"),
+            checkedAt: null,
+            checkedBy: null,
+            checkedByNameSnapshot: null,
+            approvedAt: null,
+            approvedBy: null,
+            approvedByNameSnapshot: null,
+        }));
+        mocked.equipmentInspection.findMany.mockImplementation((async (args: { where?: Record<string, unknown> }) => {
+            if (args?.where && "submittedAt" in args.where) {
+                return [0, 1, 2, 3].map(() => ({
+                    startedByEmployeeId: "ST-1",
+                    startedBy: { name: "Aris Sudarisman, S.T." },
+                }));
+            }
+            if (args?.where && "checkedAt" in args.where) {
+                return [
+                    { checkedByEmployeeId: "QC-1", checkedByNameSnapshot: null, checkedBy: { name: "Fanisa Nur Jasiya Putri, S.Tr.T" } },
+                    { checkedByEmployeeId: "QC-1", checkedByNameSnapshot: null, checkedBy: { name: "Fanisa Nur Jasiya Putri, S.Tr.T" } },
+                ];
+            }
+            if (args?.where && "approvedAt" in args.where) {
+                return [{ approvedByEmployeeId: "AP-9", approvedByNameSnapshot: null, approvedBy: { name: "Feri, S.TP." } }];
+            }
+            return recapRows;
+        }) as never);
+        mocked.equipmentInspection.count.mockImplementation((async (args: { where?: { status?: string } }) =>
+            (args?.where?.status === "SUBMITTED" ? 4 : 0)
+        ) as never);
+        mocked.appSetting.findUnique.mockImplementation((async (args: { where: { key: string } }) => {
+            if (args.where.key === "equipment.qcMembers") return { value: JSON.stringify(["QC-1", "QC-2"]) };
+            if (args.where.key === "equipment.approvers") return { value: JSON.stringify(["AP-1"]) };
+            return { value: "[]" };
+        }) as never);
+        mocked.employee.findMany.mockImplementation((async (args: { where?: { employeeId?: { in?: string[] } } }) => {
+            const ids = args.where?.employeeId?.in ?? [];
+            const all = [
+                { employeeId: "QC-1", name: "Fanisa Nur Jasiya Putri, S.Tr.T", isActive: true },
+                { employeeId: "QC-2", name: "Yulistya Vidyaning Maulidya, S.Si", isActive: true },
+                { employeeId: "AP-1", name: "Sutikno", isActive: true },
+            ];
+            return all.filter((e) => ids.includes(e.employeeId));
+        }) as never);
+        const out = await getDailyEquipmentRecap("2026-10-19");
+        expect(out.inspectorStats).toEqual([{ name: "Aris Sudarisman", submitted: 4 }]);
+        expect(out.verifierStats).toEqual([
+            { name: "Fanisa Nur Jasiya Putri", handled: 2, total: 4 },
+            { name: "Yulistya Vidyaning Maulidya", handled: 0, total: 4 },
+        ]);
+        expect(out.approverStats).toEqual([
+            { name: "Feri", handled: 1, total: 2 },
+            { name: "Sutikno", handled: 0, total: 2 },
+        ]);
+        expect(out.verificationQueue).toBe(4);
+        expect(out.approvalQueue).toBe(0);
     });
 });
 
