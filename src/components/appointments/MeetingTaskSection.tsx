@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Circle, ListChecks, Loader2, Plus } from "lucide-react";
+import { CheckCircle2, Circle, ListChecks, Loader2, Plus, Undo2 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
@@ -228,52 +228,83 @@ export default function MeetingTaskSection({
                                     {task.activeDeadline ? ` · Deadline ${task.activeDeadline.date}` : ""}
                                     {task.extensionsCount > 0 ? ` · Diperpanjang ${task.extensionsCount}x` : ""}
                                 </p>
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                    {task.assignees.map((a) => (
-                                        <span
-                                            key={a.employeeId}
-                                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border border-[var(--border)] ${
-                                                a.status === "SELESAI"
-                                                    ? "bg-emerald-600 text-white border-emerald-600"
-                                                    : a.isOverdue
-                                                      ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                                                      : "bg-[var(--card)] text-[var(--text-secondary)]"
-                                            }`}
-                                            title={`${stripGelar(a.name)}: ${STATUS_LABEL[a.status] ?? a.status}`}
-                                        >
-                                            {a.status === "SELESAI" ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
-                                            {stripGelar(a.name)} · {STATUS_LABEL[a.status] ?? a.status}
-                                        </span>
-                                    ))}
-                                </div>
-
-                                {!task.isCancelled && mine && mine.status !== "SELESAI" && mine.status !== "DIBATALKAN" && (
-                                    <div className="flex gap-1.5 mt-2">
-                                        {STATUS_ACTION.filter((s) => s !== mine.status).map((s) => (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                disabled={busy}
-                                                onClick={() => {
-                                                    if (s === "SELESAI") {
-                                                        confirm({
-                                                            title: "Tandai Selesai?",
-                                                            message: `Task "${task.title}" akan ditandai selesai. Pastikan pekerjaan sudah benar-benar tuntas.`,
-                                                            confirmLabel: "Ya, Selesai",
-                                                            variant: "info",
-                                                            onConfirm: () => { void handleStatus(task.id, s); },
-                                                        });
-                                                    } else {
-                                                        void handleStatus(task.id, s);
-                                                    }
-                                                }}
-                                                className="px-2 py-1.5 rounded-lg text-[11px] font-semibold min-h-9 bg-[var(--card)] border border-[var(--border)] text-[var(--text-secondary)]"
-                                            >
-                                                {s === "SELESAI" ? "Tandai Selesai" : STATUS_LABEL[s]}
-                                            </button>
-                                        ))}
+                                {!task.isCancelled && mine && mine.status !== "DIBATALKAN" && (
+                                    <div className="mt-2 rounded-xl border border-[var(--primary)]/40 bg-[var(--card)] p-2.5" aria-label={`Status saya pada ${task.title}`}>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                            Status saya · <span className="text-[var(--text-primary)]">{STATUS_LABEL[mine.status] ?? mine.status}</span>
+                                        </p>
+                                        {mine.status !== "SELESAI" ? (
+                                            <div className="flex gap-1.5 mt-1.5">
+                                                {STATUS_ACTION.filter((s) => s !== mine.status).map((s) => (
+                                                    <button
+                                                        key={s}
+                                                        type="button"
+                                                        disabled={busy}
+                                                        aria-label={`Ubah status saya menjadi ${STATUS_LABEL[s] ?? s} pada ${task.title}`}
+                                                        onClick={() => {
+                                                            if (s === "SELESAI") {
+                                                                confirm({
+                                                                    title: "Tandai Selesai?",
+                                                                    message: `Status Anda pada task "${task.title}" akan ditandai selesai. Status penerima lain tidak berubah. Pastikan pekerjaan sudah benar-benar tuntas.`,
+                                                                    confirmLabel: "Ya, Selesai",
+                                                                    variant: "info",
+                                                                    onConfirm: () => { void handleStatus(task.id, s); },
+                                                                });
+                                                            } else {
+                                                                void handleStatus(task.id, s);
+                                                            }
+                                                        }}
+                                                        className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold min-h-9 flex-1 flex items-center justify-center gap-1 ${
+                                                            s === "SELESAI"
+                                                                ? "bg-emerald-600 text-white"
+                                                                : "bg-[var(--secondary)] text-[var(--text-secondary)]"
+                                                        }`}
+                                                    >
+                                                        {s === "SELESAI" ? (
+                                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                                        ) : s === "ON_PROGRESS" ? (
+                                                            <Circle className="w-3.5 h-3.5" />
+                                                        ) : (
+                                                            <Undo2 className="w-3.5 h-3.5" />
+                                                        )}
+                                                        {s === "SELESAI" ? "Tandai Selesai" : s === "ON_PROGRESS" ? "Mulai Kerjakan" : "Tandai Belum Dikerjakan"}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
+                                                <CheckCircle2 className="w-3.5 h-3.5" /> Anda sudah menyelesaikan bagian Anda.
+                                            </p>
+                                        )}
                                     </div>
                                 )}
+
+                                <div className="mt-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                                        Penerima ({task.assignees.length})
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {task.assignees.map((a) => {
+                                            const isMine = a.employeeId === myEmployeeId;
+                                            return (
+                                                <span
+                                                    key={a.employeeId}
+                                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border border-[var(--border)] ${
+                                                        a.status === "SELESAI"
+                                                            ? "bg-emerald-600 text-white border-emerald-600"
+                                                            : a.isOverdue
+                                                              ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                                                              : "bg-[var(--card)] text-[var(--text-secondary)]"
+                                                    }${isMine ? " ring-1 ring-[var(--primary)] font-semibold" : ""}`}
+                                                    title={`${stripGelar(a.name)}${isMine ? " (Anda)" : ""}: ${STATUS_LABEL[a.status] ?? a.status}`}
+                                                >
+                                                    {a.status === "SELESAI" ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
+                                                    {stripGelar(a.name)}{isMine ? " (Anda)" : ""} · {STATUS_LABEL[a.status] ?? a.status}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
 
                                 {!task.isCancelled && (iAmAssigner || mine) && (
                                     <div className="flex gap-1.5 mt-2">

@@ -225,7 +225,7 @@ export default function EmployeeMeetingTasksPage() {
                                         <div className="flex gap-1.5">
                                             <dt className="text-[var(--text-muted)] w-20 shrink-0">Penerima</dt>
                                             <dd className="text-[var(--text-secondary)]">
-                                                {task.assignees.map((a) => `${stripGelar(a.name)} (${STATUS_LABEL[a.status] ?? a.status})`).join(", ")}
+                                                {task.assignees.map((a) => `${stripGelar(a.name)}${a.employeeId === myEmployeeId ? " (Anda)" : ""} (${STATUS_LABEL[a.status] ?? a.status})`).join(", ")}
                                             </dd>
                                         </div>
                                     )}
@@ -256,7 +256,7 @@ export default function EmployeeMeetingTasksPage() {
                                             onClick={() =>
                                                 confirm({
                                                     title: "Tandai Selesai?",
-                                                    message: `Task "${task.title}" akan ditandai selesai. Pastikan pekerjaan sudah benar-benar tuntas.`,
+                                                    message: `Status Anda pada task "${task.title}" akan ditandai selesai. Status penerima lain tidak berubah. Pastikan pekerjaan sudah benar-benar tuntas.`,
                                                     confirmLabel: "Ya, Selesai",
                                                     variant: "info",
                                                     onConfirm: () => { void handleStatus(task, "SELESAI"); },
