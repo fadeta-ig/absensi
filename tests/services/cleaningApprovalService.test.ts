@@ -581,6 +581,7 @@ describe("Monthly Cleaning Approvals Service", () => {
                             itemNameSnapshot: "Lantai",
                             isActive: true,
                             isComplete: true,
+                            lastChangedBy: { displayName: "Dicky" },
                         },
                     ],
                 },
@@ -593,6 +594,7 @@ describe("Monthly Cleaning Approvals Service", () => {
             expect(result.daysInMonth).toBe(31);
             expect(result.items).toHaveLength(1);
             expect(result.matrix[0].days[0].isComplete).toBe(true);
+            expect(result.matrix[0].days[0].checkedBy).toBe("Dicky");
             expect(result.inspectedBy.employeeName).toBe("Manager A");
             expect(result.inspectedBy.signaturePayload).toBe(VALID_PNG_SIGNATURE);
             expect(result.knownBy.employeeName).toBe("Direksi B");

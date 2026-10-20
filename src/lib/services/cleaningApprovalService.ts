@@ -1701,6 +1701,8 @@ export async function getCleaningPdfExportData(
                     isActive: true,
                     isComplete: true,
                     isUnavailable: true,
+                    // Aktor terakhir per item (legenda nama pada PDF rekap bulanan).
+                    lastChangedBy: { select: { displayName: true } },
                 },
             },
         },
@@ -1723,17 +1725,24 @@ export async function getCleaningPdfExportData(
             const cl = checklistMap.get(date);
             const isFuture = date > wibToday;
             if (isFuture) {
-                return { day: idx + 1, isComplete: false, isFuture: true };
+                return { day: idx + 1, isComplete: false, isFuture: true, checkedBy: null };
             }
             if (!cl) {
-                return { day: idx + 1, isComplete: false, isFuture: false };
+                return { day: idx + 1, isComplete: false, isFuture: false, checkedBy: null };
             }
             const snapshotItem = cl.items.find(
                 (ci) => ci.templateItemId === item.id
             );
             const isUnavailable = Boolean(snapshotItem && snapshotItem.isActive && snapshotItem.isUnavailable);
             const isComplete = Boolean(snapshotItem && snapshotItem.isActive && snapshotItem.isComplete);
-            return { day: idx + 1, isComplete, isFuture: false, isUnavailable };
+            return {
+                day: idx + 1,
+                isComplete,
+                isFuture: false,
+                isUnavailable,
+                // Siapa yang menandai item ini (diubah jadi singkatan oleh klien PDF).
+                checkedBy: isComplete ? snapshotItem?.lastChangedBy?.displayName ?? null : null,
+            };
         });
 
         return {

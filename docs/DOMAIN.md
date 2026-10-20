@@ -109,7 +109,7 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - Latar: template disamaratakan ke semua ruangan, padahal fasilitas tiap ruangan beda. Kasus Resepsionis 2026-10-12 (audit `hris_local`): 8 dari 18 item template tidak ada di ruangan → 55,6% permanen → paraf reviewer terkunci → topViewer bingung.
 - Aturan: pekerja menandai item "Tidak Ada" per checklist harian via tombol (konfirmasi, dapat dibatalkan sebelum paraf). Status tri-state: Belum / Selesai / Tidak ada. Template tidak dipecah per ruangan.
 - Hitungan: persen = selesai ÷ (aktif − tidakAda); paraf terbuka bila semua item sudah diputuskan (selesai ATAU tidakAda). Menyelesaikan item bertanda = 409.
-- Visibilitas: tiap tanda mencatat siapa + jam (reuse `lastChangedBy*`), masuk audit log `UPDATE_CLEANING_ITEM`, tampil eksplisit di modal paraf, badge pantau (`N tidak ada`), matriks rekap, PDF (simbol `TA` + legenda), dan email rekap harian — tidak disembunyikan dari 2 checker maupun topViewer.
+- Visibilitas: tiap tanda mencatat siapa + jam (reuse `lastChangedBy*`), masuk audit log `UPDATE_CLEANING_ITEM`, tampil eksplisit di modal paraf, badge pantau (`N tidak ada`), matriks rekap, PDF (sel selesai = kode singkatan petugas + foot note daftar nama [ADR-014], simbol `TA` + legenda), dan email rekap harian — tidak disembunyikan dari 2 checker maupun topViewer.
 - Lanjutan: `GET /api/ga/cleaning/unavailable-candidates` + kartu usulan di rekap GA — item yang diklaim ≥ minDays hari diusulkan ke WIG002 untuk dikunci permanen (tindak lanjut manual).
 - Batasan: hanya kolom `is_unavailable` default-false; baris riwayat lama tetap valid tanpa migrasi.
 

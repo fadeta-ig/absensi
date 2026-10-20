@@ -17,7 +17,7 @@ export interface CleaningPdfExportData {
     items: Array<{ id: string; name: string; sortOrder: number }>;
     matrix: Array<{
         itemName: string;
-        days: Array<{ day: number; isComplete: boolean; isFuture: boolean; isUnavailable?: boolean }>;
+        days: Array<{ day: number; isComplete: boolean; isFuture: boolean; isUnavailable?: boolean; checkedBy?: string | null }>;
     }>;
     inspectedBy: CleaningPdfSignatureEntry;
     knownBy: CleaningPdfSignatureEntry;
@@ -79,6 +79,45 @@ function formatDateTimeDisplay(isoString: string | null | undefined): string {
     }) + " WIB";
 }
 
+/**
+ * Singkatan deterministik untuk nama petugas penanda checklist pada PDF rekap:
+ * nama satu kata memakai 2 huruf pertama (Heri → HE), nama multi-kata memakai inisial
+ * dua token pertama (Andi Saputra → AS). Bila dua nama menghasilkan kode sama,
+ * kode diperpanjang dari huruf nama sampai unik. DAFTAR ini dikembalikan untuk
+ * dicetakan sebagai foot note legenda.
+ */
+export function buildCheckerCodeList(data: Pick<CleaningPdfExportData, "matrix">): Array<{ code: string; name: string }> {
+    const names = new Set<string>();
+    for (const row of data.matrix) {
+        for (const day of row.days) {
+            const name = day.checkedBy?.trim();
+            if (day.isComplete && name) names.add(name);
+        }
+    }
+    const ordered = Array.from(names).sort((a, b) => a.localeCompare(b, "id"));
+    const used = new Set<string>();
+    const entries: Array<{ code: string; name: string }> = [];
+    for (const name of ordered) {
+        const tokens = name.toUpperCase().replace(/[^A-Z\s]/g, " ").split(/\s+/).filter(Boolean);
+        const letters = tokens.join("");
+        let code =
+            tokens.length === 0
+                ? "??"
+                : tokens.length === 1
+                    ? tokens[0].slice(0, 2)
+                    : `${tokens[0][0]}${tokens[1][0]}`;
+        let cursor = 2;
+        while (used.has(code)) {
+            cursor += 1;
+            const extended = letters.slice(0, cursor);
+            code = extended || `${code}?`;
+        }
+        used.add(code);
+        entries.push({ code, name });
+    }
+    return entries;
+}
+
 export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
     const doc = new jsPDF("l", "mm", "a4");
     const pageWidth = 297;
@@ -102,10 +141,23 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
     doc.line(10, 26.5, 287, 26.5);
 
     // 2. Table Grid matching image 1
+    // Sel "selesai" memakai singkatan nama petugas (legenda di kaki PDF),
+    // bukan simbol v — agar terlihat siapa yang menandai setiap item.
+    const checkerCodes = buildCheckerCodeList(data);
+    const codeByName = new Map(checkerCodes.map((c) => [c.name, c.code]));
     const headers = ["Tanggal", ...Array.from({ length: data.daysInMonth }, (_, i) => String(i + 1))];
     const body = data.matrix.map((row) => [
         row.itemName,
-        ...row.days.map((d) => (d.isComplete ? "v" : d.isUnavailable ? "TA" : d.isFuture ? "-" : "")),
+        ...row.days.map((d) => {
+            if (d.isComplete) {
+                // Data lama tanpa aktor tetap ditandai "v".
+                const name = d.checkedBy?.trim();
+                return (name && codeByName.get(name)) || "v";
+            }
+            if (d.isUnavailable) return "TA";
+            if (d.isFuture) return "-";
+            return "";
+        }),
     ]);
 
     // Calculate dynamic column width
@@ -249,29 +301,76 @@ export function exportCleaningMatrixPdf(data: CleaningPdfExportData) {
     doc.setFontSize(6.5);
     doc.setTextColor(100, 100, 100);
 
+    // Lebar kolom kiri sebelum kotak TTD kanan (sigTableX=157): bungkus teks
+    // agar tidak melebar ke area TTD bila nama petugas panjang.
+    const leftNotesWidth = sigTableX - 10 - 4;
+    const LINE_STEP = 3.5;
+
     let noteY = sigTableY + 4;
     doc.text("Keterangan:", 10, noteY);
-    doc.text("• v = Selesai dibersihkan & disanitasi", 10, noteY + 3.5);
-    doc.text("• (kosong) = Belum dikerjakan", 10, noteY + 7);
-    doc.text("• TA = Tidak ada di ruangan", 10, noteY + 10.5);
-    doc.text("• - = Belum jadwal / tanggal mendatang", 10, noteY + 14);
-
-    if (data.latestChange) {
-        noteY += 15;
-        doc.text(
-            `* Pembaruan data checklist terakhir: ${formatDateTimeDisplay(data.latestChange.timestamp)}${
-                data.latestChange.actorName ? ` oleh ${data.latestChange.actorName}` : ""
-            }`,
-            10,
-            noteY
-        );
+    const legendLines = [
+        checkerCodes.length > 0
+            ? "• Kode singkat = Selesai dibersihkan & disanitasi (petugas tercantum di bawah)"
+            : "• v = Selesai dibersihkan & disanitasi",
+        "• (kosong) = Belum dikerjakan",
+        "• TA = Tidak ada di ruangan",
+        "• - = Belum jadwal / tanggal mendatang",
+    ];
+    for (const line of legendLines) {
+        const wrapped = doc.splitTextToSize(line, leftNotesWidth) as string[];
+        for (const sub of wrapped) {
+            noteY += LINE_STEP;
+            doc.text(sub, 10, noteY);
+        }
     }
 
-    // Footer bottom
+    // Foot note: siapa siapa (kode → nama lengkap), kelompok 3 entri per baris.
+    // Jeda seksi 5mm (bukan 1.5mm) agar tidak timpa baris legenda di atasnya.
+    if (checkerCodes.length > 0) {
+        noteY += 5;
+        doc.setFont("helvetica", "bold");
+        doc.text("Catatan singkatan petugas:", 10, noteY);
+        doc.setFont("helvetica", "normal");
+        for (let i = 0; i < checkerCodes.length; i += 3) {
+            const rowText =
+                "• " + checkerCodes.slice(i, i + 3).map((c) => `${c.code} = ${c.name}`).join("  ·  ");
+            const wrapped = doc.splitTextToSize(rowText, leftNotesWidth) as string[];
+            for (const sub of wrapped) {
+                noteY += LINE_STEP;
+                doc.text(sub, 10, noteY);
+            }
+        }
+    }
+
+    if (data.latestChange) {
+        const changeText =
+            `* Pembaruan data checklist terakhir: ${formatDateTimeDisplay(data.latestChange.timestamp)}${
+                data.latestChange.actorName ? ` oleh ${data.latestChange.actorName}` : ""
+            }`;
+        const wrapped = doc.splitTextToSize(changeText, leftNotesWidth) as string[];
+        // Baris pertama diberi jeda seksi 6mm, lanjutannya rapat normal.
+        let first = true;
+        for (const sub of wrapped) {
+            noteY += first ? 6 : LINE_STEP;
+            first = false;
+            doc.text(sub, 10, noteY);
+        }
+    }
+
+    // Footer: tetap di 202 bila muat, turun mengikuti catatan bila panjang,
+    // pindah halaman baru bila sudah mepet batas bawah (tinggi halaman 210).
+    let footerY = Math.max(202, noteY + 8);
+    if (footerY > 205) {
+        doc.addPage();
+        footerY = 20;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(100, 100, 100);
+    }
     doc.text(
         `Dicetak: ${formatDateTimeDisplay(new Date().toISOString())} | PT Wijaya Inovasi Gemilang`,
         10,
-        202
+        footerY
     );
 
     // Save PDF

@@ -681,36 +681,75 @@ export default function CleaningSettingsPage() {
                     </div>
 
                     {showRoomForm && (
-                        <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                            <h3 className="text-sm font-medium mb-2">{editingRoom ? "Edit Ruangan" : "Ruangan Baru"}</h3>
-                            <div className="space-y-3">
-                                <input
-                                    type="text"
-                                    value={roomName}
-                                    onChange={(e) => setRoomName(e.target.value)}
-                                    placeholder="Nama ruangan"
-                                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
-                                />
-                                <select
-                                    value={roomTemplateId}
-                                    onChange={(e) => setRoomTemplateId(e.target.value)}
-                                    className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
+                        <AccessibleModal
+                            ariaLabel={editingRoom ? "Edit Ruangan" : "Tambah Ruangan"}
+                            onClose={() => { setShowRoomForm(false); setEditingRoom(null); }}
+                            className="!max-w-md !p-6"
+                        >
+                            <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
+                                <div>
+                                    <h2 className="modal-title">{editingRoom ? "Edit Ruangan" : "Ruangan Baru"}</h2>
+                                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                                        {editingRoom
+                                            ? "Ubah nama ruangan atau template checklist yang dipakai."
+                                            : "Daftarkan ruangan baru beserta template checklist yang dipakai."}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="modal-close"
+                                    onClick={() => { setShowRoomForm(false); setEditingRoom(null); }}
+                                    aria-label="Tutup modal"
                                 >
-                                    <option value="">Pilih template</option>
-                                    {roomTemplateOptions.map((t) => (
-                                        <option key={t.id} value={t.id}>{t.name}{t.isActive ? "" : " (nonaktif)"}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="flex gap-2 mt-3">
-                                <button onClick={saveRoom} disabled={savingRoom} className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50">
-                                    {savingRoom ? "Menyimpan..." : "Simpan"}
-                                </button>
-                                <button onClick={() => { setShowRoomForm(false); setEditingRoom(null); }} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-                                    Batal
+                                    <X className="h-5 w-5" />
                                 </button>
                             </div>
-                        </div>
+                            <form onSubmit={(e) => { e.preventDefault(); void saveRoom(); }} className="space-y-3">
+                                <div className="form-group !mb-0">
+                                    <label className="form-label" htmlFor="room-name">Nama ruangan</label>
+                                    <input
+                                        id="room-name"
+                                        type="text"
+                                        value={roomName}
+                                        onChange={(e) => setRoomName(e.target.value)}
+                                        placeholder="cth: Resepsionis"
+                                        required
+                                        className="form-input"
+                                    />
+                                </div>
+                                <div className="form-group !mb-0">
+                                    <label className="form-label" htmlFor="room-template">Template checklist</label>
+                                    <select
+                                        id="room-template"
+                                        value={roomTemplateId}
+                                        onChange={(e) => setRoomTemplateId(e.target.value)}
+                                        className="form-input"
+                                    >
+                                        <option value="">Pilih template</option>
+                                        {roomTemplateOptions.map((t) => (
+                                            <option key={t.id} value={t.id}>{t.name}{t.isActive ? "" : " (nonaktif)"}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setShowRoomForm(false); setEditingRoom(null); }}
+                                        className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={savingRoom || !roomName.trim() || !roomTemplateId}
+                                        className="btn btn-primary btn-sm"
+                                    >
+                                        {savingRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                                        Simpan
+                                    </button>
+                                </div>
+                            </form>
+                        </AccessibleModal>
                     )}
 
                     <div className="space-y-2">
@@ -730,6 +769,8 @@ export default function CleaningSettingsPage() {
                                         <button
                                             onClick={() => { setShowRoomForm(true); setEditingRoom(room); setRoomName(room.name); setRoomTemplateId(room.template.id); }}
                                             className="p-1 text-muted-foreground hover:text-foreground"
+                                            aria-label={`Edit ruangan ${room.name}`}
+                                            title="Edit"
                                         >
                                             <Pencil className="h-3.5 w-3.5" />
                                         </button>

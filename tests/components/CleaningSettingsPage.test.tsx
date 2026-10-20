@@ -103,6 +103,36 @@ describe("CleaningSettingsPage", () => {
         expect(screen.getByRole("button", { name: "Penugasan" })).toBeInTheDocument();
     });
 
+    it("AC-6 opens room editing in a modal dialog and submits an update", async () => {
+        const { calls } = installSettingsFetch();
+        const user = userEvent.setup();
+        render(<CleaningSettingsPage />);
+
+        await user.click(await screen.findByRole("button", { name: "Ruangan" }));
+        await user.click(await screen.findByRole("button", { name: "Edit ruangan Ruang Test Cleaning" }));
+
+        const dialog = await screen.findByRole("dialog", { name: "Edit Ruangan" });
+        expect(dialog).toBeInTheDocument();
+        expect(screen.getByLabelText("Nama ruangan")).toHaveValue("Ruang Test Cleaning");
+        expect(screen.getByLabelText("Template checklist")).toHaveValue(CLEANING_IDS.template);
+
+        await user.clear(screen.getByLabelText("Nama ruangan"));
+        await user.type(screen.getByLabelText("Nama ruangan"), "Ruang Test Cleaning Baru");
+        await user.click(screen.getByRole("button", { name: "Simpan" }));
+
+        await waitFor(() => {
+            expect(calls).toContainEqual({
+                url: "/api/ga/cleaning/rooms",
+                method: "PATCH",
+                body: {
+                    id: CLEANING_IDS.room,
+                    name: "Ruang Test Cleaning Baru",
+                    templateId: CLEANING_IDS.template,
+                },
+            });
+        });
+    });
+
     it("AC-6 sends explicit applyToToday confirmation for a bulk assignment", async () => {
         const { calls } = installSettingsFetch();
         const user = userEvent.setup();

@@ -176,3 +176,16 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Akuntabilitas 3 lapis tanpa mengubah peran existing; approver bisa diganti tanpa deploy.
   - Negatif: Tanpa approver yang ditetapkan, final terkunci di DONE (UI settings memberi peringatan eksplisit).
   - Status: live lokal 2026-10-16 (bukti live: approve 1 inspeksi DONE via service → APPROVED + snapshot + audit, dikembalikan).
+
+---
+
+## ADR-014: PDF Rekap Bulanan Menampilkan Kode Nama Petugas Penanda Checklist
+
+- **Decision**: Pada PDF rekap bulanan (`exportCleaningMatrixPdf`), sel item "selesai" mencetak kode singkatan nama petugas terakhir yang menandai item tersebut, bukan simbol "v"; daftar makna kode dicetak sebagai foot note di kaki PDF. Simbol `TA` (tidak ada), kosong (belum dikerjakan), dan `-` (tanggal mendatang) tidak berubah. Memodifikasi legenda ADR-012 untuk sel "selesai".
+- **Context**: Permintaan pemilik 2026-10-20 — kolom checklist pada PDF harus terbaca siapa yang mencentang setiap item (contoh: Heri, Ismail, Dicky) tanpa memperlebar kolom harian; format singkatan diserahkan ke implementasi. Kolom harian hanya sekitar ±7,5 mm sehingga nama penuh tidak muat.
+- **Chosen Approach**: `getCleaningPdfExportData` menyertakan `checkedBy` (displayName relasi `lastChangedBy` pada `CleaningDailyChecklistItem`) per sel hari; klien membentuk kode via `buildCheckerCodeList` (`src/lib/exportCleaningPdf.ts`): nama satu kata → 2 huruf pertama (Heri → HE), nama multi-kata → inisial dua token pertama (Andi Saputra → AS); bila dua nama menghasilkan kode sama, kode diperpanjang dari huruf nama sampai unik. Foot note "Catatan singkatan petugas" mengelompokkan 3 entri per baris (`HE = Heri  ·  IS = Ismail`). Sel "selesai" tanpa aktor (baris lama pra-ADR-012 atau mock tanpa data) tetap memakai "v" sebagai fallback.
+- **Alternatives**: Kode manual yang diatur per petugas lewat settings GA (ditolak — beban konfigurasi tambahan untuk nilai estetis); menulis nama penuh di sel (ditolak — kolom terlalu sempit); tetap "v" + daftar petugas terpisah (ditolak pemilik — ingin terbaca langsung di kolom).
+- **Consequences**:
+  - Positif: Laporan cetak jadi akuntabel per penanda item; tanpa perubahan skema maupun permission; generator kode deterministik sehingga legenda stabil.
+  - Negatif: Foot note menambah baris kiri bawah PDF (satu baris per 3 petugas); banyaknya petugas dibatasi ruang sebelum footer "Dicetak".
+  - Status: live lokal 2026-10-20 (service `checkedBy` + klien PDF; dua suite test hijau: `CleaningSettingsPage`, `cleaningApprovalService`).
