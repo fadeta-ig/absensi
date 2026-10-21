@@ -3,7 +3,7 @@ import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
-import { toWIBDateString } from "@/lib/timezone";
+import { toWIBDateString, isValidCalendarDate, addCalendarDays } from "@/lib/timezone";
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import { actorFromSession } from "@/lib/services/auditService";
@@ -868,14 +868,72 @@ export async function getPendingEquipmentApprovals(session: SessionPayload): Pro
 }
 
 /**
- * Antrean approval final: semua DONE terbaru di atas, khusus approver.
+ * Antrean approval final: DONE terbaru di atas, khusus approver.
  * Kuorum 1 — siapa pun di daftar yang menyetujui lebih dulu mengunci.
+ * Mendukung filter riwayat agar approver bisa melihat hari sebelumnya:
+ * - status DONE (default): tanggal = checkedAt (masuk antrean)
+ * - status APPROVED: tanggal = approvedAt (riwayat disetujui)
+ * - status ALL: tanggal = checkedAt ATAU approvedAt (digabung via OR)
+ * from/to inklusif YYYY-MM-DD WIB; tanpa filter tanggal = semua backlog.
  */
-export async function getApprovalQueue(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
+export interface ApprovalQueueFilters {
+    from?: string;
+    to?: string;
+    status?: "DONE" | "APPROVED" | "ALL";
+}
+
+export async function getApprovalQueue(session: SessionPayload, filters: ApprovalQueueFilters = {}): Promise<EquipmentInspectionDto[]> {
     await requireApprover(session);
+    const status = filters.status ?? "DONE";
+    if (status !== "DONE" && status !== "APPROVED" && status !== "ALL") {
+        throw new EquipmentError("Status antrean tidak valid.", 400);
+    }
+    const from = filters.from?.trim() ? filters.from.trim() : undefined;
+    const to = filters.to?.trim() ? filters.to.trim() : undefined;
+    if (from !== undefined && !isValidCalendarDate(from)) {
+        throw new EquipmentError("Tanggal mulai tidak valid (YYYY-MM-DD).", 400);
+    }
+    if (to !== undefined && !isValidCalendarDate(to)) {
+        throw new EquipmentError("Tanggal sampai tidak valid (YYYY-MM-DD).", 400);
+    }
+    if (from !== undefined && to !== undefined && to < from) {
+        throw new EquipmentError("Tanggal sampai harus setelah tanggal mulai.", 400);
+    }
+    const toExclusive = to !== undefined ? addCalendarDays(to, 1) : undefined;
+    const dateRange = (field: "checkedAt" | "approvedAt") =>
+        from !== undefined || toExclusive !== undefined
+            ? {
+                  [field]: {
+                      ...(from !== undefined ? { gte: new Date(`${from}T00:00:00+07:00`) } : {}),
+                      ...(toExclusive !== undefined ? { lt: new Date(`${toExclusive}T00:00:00+07:00`) } : {}),
+                  },
+              }
+            : {};
+
+    let where: Prisma.EquipmentInspectionWhereInput;
+    if (status === "DONE") {
+        where = { status: "DONE", ...dateRange("checkedAt") };
+    } else if (status === "APPROVED") {
+        where = { status: "APPROVED", ...dateRange("approvedAt") };
+    } else {
+        const rangeActive = from !== undefined || toExclusive !== undefined;
+        where = rangeActive
+            ? {
+                  status: { in: ["DONE", "APPROVED"] },
+                  OR: [
+                      { status: "DONE", ...dateRange("checkedAt") },
+                      { status: "APPROVED", ...dateRange("approvedAt") },
+                  ],
+              }
+            : { status: { in: ["DONE", "APPROVED"] } };
+    }
+    const orderBy =
+        status === "APPROVED"
+            ? [{ approvedAt: "desc" as const }, { checkedAt: "desc" as const }]
+            : [{ checkedAt: "desc" as const }, { approvedAt: "desc" as const }];
     const rows = await prisma.equipmentInspection.findMany({
-        where: { status: "DONE" },
-        orderBy: { checkedAt: "desc" },
+        where,
+        orderBy,
         take: 100,
         include: inspectionInclude,
     });

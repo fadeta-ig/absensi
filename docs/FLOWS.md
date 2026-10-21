@@ -239,7 +239,7 @@ Alur serah terima aset korporat dari GA ke karyawan:
 [ Anggota QC ] ── antrean SUBMITTED ──>│── requireQcMember ────────────────>│── getPendingEquipmentApprovals (terbaru di atas)
            │── DONE + catatan opsional ──────────>│── hanya dari SUBMITTED (409) ───>│── SUBMITTED → DONE + snapshot nama QC + audit log
 
-[ Approver ] ── DONE ──>│── requireApprover (tunggal, setting WIG002) ──>│── DONE → APPROVED + snapshot nama + audit log
+[ Approver ] ── DONE ──>│── requireApprover (daftar equipment.approvers, kuorum 1) ──>│── DONE → APPROVED + snapshot nama + audit log; antrean berfilter status/tanggal (DONE=checkedAt, APPROVED=approvedAt)
 
 [ WIG002 / topViewer ] ── rekap ──────>│── requireWig002OrTopViewer ───────>│── getEquipmentRecap (ringkasan open/submitted/done/approved)
 ```

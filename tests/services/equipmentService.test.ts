@@ -33,6 +33,7 @@ import {
     checkEquipmentDone,
     createEquipmentTemplate,
     createEquipmentUnit,
+    getApprovalQueue,
     getEmployeeEquipmentCapabilities,
     getEquipmentQcMemberIds,
     getPendingEquipmentApprovals,
@@ -352,6 +353,45 @@ describe("APPROVAL final", () => {
         const out = await approveEquipmentInspection(approverSession(), "in1");
         expect(out.status).toBe("APPROVED");
         expect(out.approvedByNameSnapshot).toBe("H. Feri");
+    });
+    it("antrean default hanya DONE tanpa filter tanggal", async () => {
+        mockApprover();
+        mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
+        await getApprovalQueue(approverSession());
+        expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { status: "DONE" } })
+        );
+    });
+    it("riwayat APPROVED memakai rentang approvedAt inklusif", async () => {
+        mockApprover();
+        mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
+        await getApprovalQueue(approverSession(), { status: "APPROVED", from: "2026-10-17", to: "2026-10-19" });
+        expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    status: "APPROVED",
+                    approvedAt: {
+                        gte: new Date("2026-10-17T00:00:00+07:00"),
+                        lt: new Date("2026-10-20T00:00:00+07:00"),
+                    },
+                },
+            })
+        );
+    });
+    it("status ALL menggabung checkedAt dan approvedAt", async () => {
+        mockApprover();
+        mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
+        await getApprovalQueue(approverSession(), { status: "ALL", from: "2026-10-19", to: "2026-10-19" });
+        const arg = mocked.equipmentInspection.findMany.mock.calls[0]?.[0] as { where: { OR?: unknown[] } };
+        expect(arg.where.OR).toHaveLength(2);
+    });
+    it("tanggal tidak valid ditolak 400", async () => {
+        mockApprover();
+        await expect(getApprovalQueue(approverSession(), { from: "2026-13-40" })).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("rentang terbalik ditolak 400", async () => {
+        mockApprover();
+        await expect(getApprovalQueue(approverSession(), { from: "2026-10-19", to: "2026-10-17" })).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 

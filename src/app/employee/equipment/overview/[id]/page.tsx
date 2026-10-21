@@ -74,6 +74,19 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
     const [forbidden, setForbidden] = useState(false);
     const [canApprove, setCanApprove] = useState(false);
     const [approving, setApproving] = useState(false);
+    const [fromParam, setFromParam] = useState<string | null>(null);
+    // Detail dipakai dari dua pintu: pantauan atasan dan antrean approval.
+    // Approver (tanpa akses overview) harus kembali ke approval-queue.
+    // Baca query manual (tanpa useSearchParams) agar aman saat prerender.
+    useEffect(() => {
+        try {
+            setFromParam(new URLSearchParams(window.location.search).get("from"));
+        } catch {
+            setFromParam(null);
+        }
+    }, []);
+    const backHref = fromParam === "approval-queue" ? "/employee/equipment/approval-queue" : "/employee/equipment/overview";
+    const backLabel = backHref === "/employee/equipment/approval-queue" ? "← Kembali ke approval" : "← Kembali ke pantauan";
     const toast = useToast();
     const confirm = useConfirm();
 
@@ -156,8 +169,8 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                 <div className="bg-card border border-border rounded-lg p-6 text-center">
                     <p className="text-foreground font-medium">Detail tidak tersedia untuk akun Anda.</p>
                     <p className="text-sm text-muted-foreground mt-1">Halaman ini hanya untuk atasan yang ditunjuk.</p>
-                    <Link href="/employee/equipment/overview" className="mt-3 inline-block text-sm text-primary hover:underline">
-                        ← Kembali ke pantauan
+                    <Link href={backHref} className="mt-3 inline-block text-sm text-primary hover:underline">
+                        {backLabel}
                     </Link>
                 </div>
             </div>
@@ -174,7 +187,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                         <button onClick={() => void fetchDetail()} className="text-primary hover:underline min-h-[44px] px-3 inline-flex items-center">
                             Coba lagi
                         </button>
-                        <Link href="/employee/equipment/overview" className="text-muted-foreground hover:text-foreground min-h-[44px] px-3 inline-flex items-center">
+                        <Link href={backHref} className="text-muted-foreground hover:text-foreground min-h-[44px] px-3 inline-flex items-center">
                             ← Kembali
                         </Link>
                     </div>
@@ -189,10 +202,10 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
     return (
         <div className="max-w-2xl mx-auto px-4 py-6">
             <Link
-                href="/employee/equipment/overview"
+                href={backHref}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
             >
-                ← Kembali ke pantauan
+                {backLabel}
             </Link>
 
             <div className="bg-card border border-border rounded-lg p-4 mb-4">

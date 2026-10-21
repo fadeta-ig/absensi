@@ -180,7 +180,7 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/employee/equipment/approvals` | `GET` | Anggota QC | Antrean QC: semua SUBMITTED, terbaru di atas. |
 | `/api/employee/equipment/approvals/done` | `POST` | Anggota QC | DONE + catatan opsional; riwayat mencatat checked-by QC. |
 | `/api/employee/equipment/approvals/approve` | `POST` | Approver terdaftar (`equipment.approvers`, kuorum 1) | `DONE → APPROVED` final; satu arah tanpa reject. |
-| `/api/employee/equipment/approvals/pending-approval` | `GET` | Approver terdaftar | Antrean approval: semua DONE terbaru di atas. |
+| `/api/employee/equipment/approvals/pending-approval` | `GET` | Approver terdaftar | Antrean + riwayat: `?status=DONE/APPROVED/ALL&from=&to=` (tanggal WIB inklusif; DONE=checkedAt, APPROVED=approvedAt; tanpa tanggal = semua backlog). |
 | `/api/employee/equipment/qc-evidence` | `GET`, `POST` | Terlibat | List + upload foto QC (opsional, maks 5 per inspeksi). |
 | `/api/employee/equipment/qc-evidence/[id]` | `GET` | Terlibat | Serve berkas foto QC. |
 
