@@ -910,9 +910,8 @@ export async function completeAppointment(
         throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat menyelesaikan.", 403);
     }
     const now = new Date();
-    const lifecycle = resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt, now);
-    if (lifecycle !== "IN_PROGRESS") {
-        throw new AppointmentError("Hanya meeting yang sedang berjalan yang dapat diselesaikan lebih awal.", 409);
+    if (now < existing.startAt) {
+        throw new AppointmentError("Meeting belum dimulai. Penyelesaian hanya dapat dilakukan setelah jam mulai.", 409);
     }
     return prisma.$transaction(async (tx) => {
         const res = await tx.meetingAppointment.updateMany({

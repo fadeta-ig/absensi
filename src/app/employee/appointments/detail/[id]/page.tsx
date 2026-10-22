@@ -206,7 +206,7 @@ function DetailContent({ id }: { id: string }) {
     const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
     const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
     const canCancel = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
-    const canComplete = canManage && item.lifecycle === "IN_PROGRESS";
+    const canComplete = canManage && item.status === "SCHEDULED" && Date.now() >= new Date(item.startAt).getTime();
     const nowMs = Date.now();
     const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
     const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
@@ -264,7 +264,7 @@ function DetailContent({ id }: { id: string }) {
             {isOverdueStored && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" role="status" aria-label="Meeting lewat jadwal">
                     <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                        Jadwal sudah lewat dan menunggu penyelesaian otomatis oleh sistem. Pengaturan dan pembatalan dikunci.
+                        Jadwal sudah lewat. Tekan Selesaikan untuk menutup meeting, atau biarkan sistem menyelesaikannya otomatis. Pengaturan dan pembatalan dikunci; notulensi dan task ikut tertutup.
                     </p>
                 </div>
             )}

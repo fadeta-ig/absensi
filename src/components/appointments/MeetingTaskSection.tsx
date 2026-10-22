@@ -193,6 +193,11 @@ export default function MeetingTaskSection({
                     </button>
                 )}
             </div>
+            {readOnly && tasks.length > 0 && (
+                <p className="text-[11px] text-[var(--text-muted)] mb-2" role="note">
+                    Task meeting ditutup karena meeting telah selesai/dibatalkan.
+                </p>
+            )}
 
             {taskModal && (
                 <TaskFormModal
@@ -240,7 +245,7 @@ export default function MeetingTaskSection({
                                     {task.activeDeadline ? ` · Deadline ${task.activeDeadline.date}` : ""}
                                     {task.extensionsCount > 0 ? ` · Diperpanjang ${task.extensionsCount}x` : ""}
                                 </p>
-                                {!task.isCancelled && mine && mine.status !== "DIBATALKAN" && (
+                                {!task.isCancelled && !readOnly && mine && mine.status !== "DIBATALKAN" && (
                                     <div className="mt-2 rounded-xl border border-[var(--primary)]/40 bg-[var(--card)] p-2.5" aria-label={`Status saya pada ${task.title}`}>
                                         <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
                                             Status saya · <span className="text-[var(--text-primary)]">{STATUS_LABEL[mine.status] ?? mine.status}</span>

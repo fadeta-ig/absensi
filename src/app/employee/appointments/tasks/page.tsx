@@ -201,7 +201,8 @@ export default function EmployeeMeetingTasksPage() {
                 <div className="space-y-2.5" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     {tasks.map((task) => {
                         const mine = myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") ?? null : null;
-                        const canAct = !task.isCancelled && mine && (mine.status === "BELUM_DIKERJAKAN" || mine.status === "ON_PROGRESS");
+                        const meetingClosed = task.appointment.status !== "SCHEDULED";
+                        const canAct = !meetingClosed && !task.isCancelled && mine && (mine.status === "BELUM_DIKERJAKAN" || mine.status === "ON_PROGRESS");
                         return (
                             <article
                                 key={task.id}
