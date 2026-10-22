@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, Search, X } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -34,8 +34,22 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
+    const [assigneeQuery, setAssigneeQuery] = useState("");
 
-    const internalParticipants = participants.filter((p) => !p.isExternal && p.employeeId);
+    const internalParticipants = useMemo(
+        () => participants.filter((p) => !p.isExternal && p.employeeId),
+        [participants]
+    );
+
+    const filteredAssignees = useMemo(() => {
+        const q = assigneeQuery.trim().toLowerCase();
+        if (!q) return internalParticipants;
+        return internalParticipants.filter((p) => {
+            const name = p.employee?.name ? stripGelar(p.employee.name).toLowerCase() : "";
+            const id = (p.employeeId ?? "").toLowerCase();
+            return name.includes(q) || id.includes(q);
+        });
+    }, [assigneeQuery, internalParticipants]);
 
     const canSubmit =
         !busy &&
@@ -128,11 +142,62 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
                         </div>
                         <div>
                             <span className="form-label">Penerima * (peserta meeting)</span>
+                            <div className="relative mb-2">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                                <input
+                                    className="form-input pl-10"
+                                    value={assigneeQuery}
+                                    onChange={(e) => setAssigneeQuery(e.target.value)}
+                                    placeholder="Cari nama peserta yang hadir…"
+                                    aria-label="Cari nama penerima task"
+                                />
+                            </div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <p className="text-[11px] text-[var(--text-muted)]" aria-live="polite">
+                                    {assigneeQuery.trim()
+                                        ? `${filteredAssignees.length} dari ${internalParticipants.length} cocok · ${picked.length} dipilih`
+                                        : `${picked.length} dari ${internalParticipants.length} dipilih`}
+                                </p>
+                                {internalParticipants.length > 1 && (
+                                    <div className="flex gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setPicked((prev) => {
+                                                    const next = new Set(prev);
+                                                    for (const p of filteredAssignees) {
+                                                        if (p.employeeId) next.add(p.employeeId);
+                                                    }
+                                                    return [...next];
+                                                })
+                                            }
+                                            disabled={filteredAssignees.length === 0}
+                                            className="text-[11px] font-semibold text-[var(--primary)] hover:underline disabled:opacity-40"
+                                        >
+                                            Pilih hasil
+                                        </button>
+                                        {picked.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPicked([])}
+                                                className="text-[11px] font-semibold text-[var(--text-muted)] hover:underline"
+                                            >
+                                                Bersihkan
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                             <div className="max-h-40 overflow-y-auto rounded-lg border border-[var(--border)] p-2 space-y-1">
                                 {internalParticipants.length === 0 && (
                                     <p className="text-xs text-[var(--text-muted)]">Tidak ada peserta internal.</p>
                                 )}
-                                {internalParticipants.map((p) => (
+                                {internalParticipants.length > 0 && filteredAssignees.length === 0 && (
+                                    <p className="text-xs text-[var(--text-muted)]">
+                                        Tidak ada peserta yang cocok dengan &ldquo;{assigneeQuery.trim()}&rdquo;.
+                                    </p>
+                                )}
+                                {filteredAssignees.map((p) => (
                                     <label key={p.employeeId as string} className="flex items-center gap-2 text-sm cursor-pointer min-h-9">
                                         <input
                                             type="checkbox"

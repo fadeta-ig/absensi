@@ -159,9 +159,9 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     }
 
     return (
-        <AccessibleModal ariaLabel={editing ? "Ubah jadwal meeting" : "Buat meeting"} onClose={onClose} className="max-w-lg" disableClose={loading}>
+        <AccessibleModal ariaLabel={editing ? "Pengaturan meeting" : "Buat meeting"} onClose={onClose} className="max-w-lg" disableClose={loading}>
             <div className="modal-header">
-                <h2 className="modal-title">{editing ? "Ubah Jadwal Meeting" : "Buat Meeting"}</h2>
+                <h2 className="modal-title">{editing ? "Pengaturan Meeting" : "Buat Meeting"}</h2>
                 <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup dialog meeting">
                     <X className="w-4 h-4" />
                 </button>

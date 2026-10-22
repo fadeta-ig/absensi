@@ -2,7 +2,7 @@
 
 import { Suspense, use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Pencil, StickyNote, Trash2, User, Users, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Settings, StickyNote, Trash2, User, Users, X } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
@@ -434,8 +434,8 @@ function DetailContent({ id }: { id: string }) {
 
                 <div className="flex gap-2">
                     {canEdit && (
-                        <button type="button" onClick={() => setEditing(true)} disabled={actionLoading} className="btn btn-secondary flex-1">
-                            <Pencil className="w-4 h-4" /> Ubah Jadwal
+                        <button type="button" onClick={() => setEditing(true)} disabled={actionLoading} className="btn btn-secondary flex-1" aria-label="Pengaturan meeting">
+                            <Settings className="w-4 h-4" /> Pengaturan Meeting
                         </button>
                     )}
                     {canComplete && (
