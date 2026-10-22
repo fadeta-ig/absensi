@@ -28,6 +28,7 @@ import {
     Eye,
 } from "lucide-react";
 import { notifyAuthChanged } from "@/lib/authEvents";
+import { unsubscribePush } from "@/lib/pushClient";
 import { useToast } from "@/components/Toast";
 
 interface MenuItem {
@@ -103,6 +104,7 @@ export default function AllMenusSheet({
         onClose();
         toast("Memproses logout...", "info");
         try {
+            void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (res.ok) {
                 notifyAuthChanged("logout");

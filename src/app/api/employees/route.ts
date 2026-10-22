@@ -107,9 +107,10 @@ export async function POST(request: NextRequest) {
 
         // Send password via email (Synchronous with try/catch for reliability)
         let emailWarning = false;
+        let emailSent = false;
         try {
             const { sendPasswordEmail } = await import("@/lib/services/emailService");
-            const emailSent = await sendPasswordEmail(employee.email, employee.name, plainPassword, {
+            emailSent = await sendPasswordEmail(employee.email, employee.name, plainPassword, {
                 employeeId: employee.employeeId,
                 username: employee.employeeId,
             });
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
         }
 
         logger.info("New employee created", { employeeId: employee.employeeId, createdBy: session.username });
-        await logAction("CREATE", "Employee", actor, employee.id, { employeeId: employee.employeeId, name: employee.name });
+        await logAction("CREATE", "Employee", actor, employee.id, { employeeId: employee.employeeId, name: employee.name, emailSent });
 
         return NextResponse.json({ ...serializeEmployee(employee, true), _emailWarning: emailWarning }, { status: 201 });
     } catch (err: unknown) {

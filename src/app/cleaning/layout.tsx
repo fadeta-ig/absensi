@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
+import { unsubscribePush } from "@/lib/pushClient";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const CLEANING_NAV_ITEMS: NavItem[] = [
@@ -79,6 +80,7 @@ export default function CleaningLayout({ children }: { children: React.ReactNode
         setLoggingOut(true);
         toast("Memproses logout...", "info");
         try {
+            void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
             notifyAuthChanged("logout");

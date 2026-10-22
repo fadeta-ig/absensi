@@ -125,6 +125,7 @@ model UserAccount {
   auditLogs                  AuditLog[]                         @relation("UserAuditLogs")
   statusChanges              EmployeeStatusHistory[]            @relation("EmployeeStatusActor")
   pushSubscriptions          PushSubscription[]
+  notificationReads          NotificationRead[]
   assetHistories             AssetHistory[]                     @relation("AssetHistoryActor")
   assetBastUploads           AssetBastDocument[]                @relation("AssetBastActor")
   assetInspections           AssetInspection[]                  @relation("AssetInspectionActor")
@@ -255,8 +256,23 @@ model PushSubscription {
   createdAt DateTime    @default(now()) @map("created_at")
   user      UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId], map: "push_subscriptions_user_id_fkey")
+  @@index([userId], map: "idx_push_subscriptions_user_id")
   @@map("push_subscriptions")
+}
+
+// ─── Status baca notifikasi in-app (per user, per item) ───
+// Bell hanya menampilkan yang belum dibaca; riwayat tetap terbaca via flag.
+model NotificationRead {
+  id     String   @id @default(uuid())
+  userId String   @map("user_id")
+  key    String   @db.VarChar(191)
+  readAt DateTime @default(now()) @map("read_at")
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, key], map: "idx_notif_read_user_key")
+  @@index([userId], map: "idx_notif_read_user")
+  @@map("notification_reads")
 }
 
 // ─── Inspeksi Alat Produksi (dinamis, tanpa jadwal; pelaksana internal) ──
@@ -690,6 +706,7 @@ model LeaveRequest {
   reason         String   @db.Text
   status         String   @default("pending")
   createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
   attachment     String?  @db.LongText
   attachmentPath String?  @map("attachment_path") @db.VarChar(500)
   attachmentMime String?  @map("attachment_mime") @db.VarChar(150)
@@ -739,6 +756,7 @@ model OvertimeRequest {
   reason        String   @db.Text
   status        String   @default("pending")
   createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
   employee      Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict)
 
   @@index([employeeId], map: "overtime_requests_employee_id_fkey")
@@ -2089,5 +2107,6 @@ model MeetingTaskReminderLog {
 
   @@unique([taskId, employeeId, kind], map: "idx_meeting_task_reminder_unique")
   @@index([taskId], map: "idx_meeting_task_reminder_task")
+  @@index([employeeId], map: "idx_meeting_task_reminder_employee")
   @@map("meeting_task_reminder_logs")
 }

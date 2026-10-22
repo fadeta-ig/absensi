@@ -77,13 +77,14 @@ Basis data terdiri dari **94 model Prisma** yang dipetakan ke tabel fisik melalu
 38. `EmployeePayrollComponent` (`employee_payroll_components`): Komponen gaji spesifik karyawan.
 39. `PayslipRecord` (`payslip_records`): Master slip gaji bulanan per karyawan.
 40. `PayslipItem` (`payslip_items`): Rincian baris slip gaji (`type`, `name`, `amount`).
-41. `LeaveRequest` (`leave_requests`): Permohonan cuti karyawan.
-42. `OvertimeRequest` (`overtime_requests`): Permohonan lembur karyawan.
+41. `LeaveRequest` (`leave_requests`): Permohonan cuti karyawan (`updatedAt` untuk sortir keputusan terbaru).
+42. `OvertimeRequest` (`overtime_requests`): Permohonan lembur karyawan (`updatedAt` untuk sortir keputusan terbaru).
 43. `LetterRequest` (`letter_requests`): Permohonan surat keterangan resmi.
 44. `NewsItem` (`news_items`): Pengumuman dan berita internal perusahaan.
 45. `TodoItem` (`todo_items`): Daftar tugas personal karyawan.
 46. `AuditLog` (`audit_logs`): Catatan audit sistem terpusat (`action`, `entity`, `details` JSON, metadata aktor).
 47. `PushSubscription` (`push_subscriptions`): Langganan Web Push VAPID browser.
+48. `NotificationRead` (`notification_reads`): Status baca notifikasi in-app per user per item (`userId` FK Cascade, `key` VarChar 191, unik `[userId, key]`). Bell = belum dibaca; riwayat = semua + flag.
 48. `BirthdayReminderSetting` (`birthday_reminder_settings`): Konfigurasi pengingat email ulang tahun.
 49. `BirthdayPreparationStatus` (`birthday_preparation_statuses`): Status alur persiapan ulang tahun.
 50. `EmployeeBirthdayPreparation` (`employee_birthday_preparations`): Rekap persiapan per karyawan per tahun.

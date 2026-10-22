@@ -10,6 +10,7 @@ import {
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
+import { unsubscribePush } from "@/lib/pushClient";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
@@ -172,6 +173,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         setLoggingOut(true);
         toast("Memproses logout...", "info");
         try {
+            void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
             notifyAuthChanged("logout");

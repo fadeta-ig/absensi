@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2, CalendarClock, ListChecks } from "lucide-react";
+import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2, CalendarClock, ListChecks, History } from "lucide-react";
 import Link from "next/link";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 type NotifType = "leave" | "overtime" | "correction" | "news" | "letter" | "appointment" | "task";
 
@@ -20,9 +20,9 @@ interface EmployeeNotification {
 }
 
 interface NotifResponse {
-    notifications: EmployeeNotification[];
-    total: number;
-    unread: number;
+    notifications?: EmployeeNotification[];
+    total?: number;
+    unread?: number;
 }
 
 interface EmployeeNotificationPanelProps {
@@ -30,7 +30,7 @@ interface EmployeeNotificationPanelProps {
     onAccessDenied?: () => void;
 }
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// ─── Config ─────────────────────────────────────────────────────────────────
 
 const TYPE_ICON: Record<NotifType, { icon: typeof Bell; color: string; bg: string }> = {
     leave:      { icon: CalendarOff, color: "text-blue-600",   bg: "bg-blue-50" },
@@ -39,32 +39,40 @@ const TYPE_ICON: Record<NotifType, { icon: typeof Bell; color: string; bg: strin
     news:       { icon: Newspaper,   color: "text-green-600",  bg: "bg-green-50" },
     letter:     { icon: FileText,    color: "text-pink-500",   bg: "bg-pink-50" },
     appointment:{ icon: CalendarClock, color: "text-teal-600", bg: "bg-teal-50" },
-    task:       { icon: ListChecks, color: "text-amber-600", bg: "bg-amber-50" },
+    task:       { icon: ListChecks,  color: "text-amber-600", bg: "bg-amber-50" },
 };
+
+type Tab = "unread" | "history";
 
 function fmtRelativeTime(isoStr: string): string {
     const diff = Date.now() - new Date(isoStr).getTime();
+    if (diff < 0) {
+        const mins = Math.ceil(-diff / 60000);
+        if (mins < 60) return `dalam ${mins} mnt`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `dalam ${hours} jam`;
+        return `dalam ${Math.floor(hours / 24)} hari`;
+    }
     const minutes = Math.floor(diff / 60000);
     if (minutes < 1) return "Baru saja";
     if (minutes < 60) return `${minutes} menit lalu`;
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours} jam lalu`;
-    const days = Math.floor(hours / 24);
-    return `${days} hari lalu`;
+    return `${Math.floor(hours / 24)} hari lalu`;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: EmployeeNotificationPanelProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [tab, setTab] = useState<Tab>("unread");
     const [notifications, setNotifications] = useState<EmployeeNotification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [markingAll, setMarkingAll] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
-    const [readIds, setReadIds] = useState<Set<string>>(new Set());
     const [authBlocked, setAuthBlocked] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
-    const hasFetched = useRef(false);
 
     const stopForAuthChange = useCallback(() => {
         setAuthBlocked(true);
@@ -72,13 +80,27 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
         setNotifications([]);
         setUnreadCount(0);
         setLoadError(null);
-        setReadIds(new Set());
-        hasFetched.current = false;
         onAccessDenied?.();
     }, [onAccessDenied]);
 
+    const fetchBadgeCount = useCallback(async () => {
+        if (!enabled || authBlocked) return;
+        try {
+            const res = await fetch("/api/notifications/employee?countOnly=1");
+            if (res.status === 401 || res.status === 403) {
+                stopForAuthChange();
+                return;
+            }
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
+            const data = await res.json() as NotifResponse;
+            setUnreadCount(data.unread ?? 0);
+        } catch (error) {
+            reportClientError("EmployeeNotificationPanel", "Gagal memuat badge notifikasi employee", error);
+        }
+    }, [authBlocked, enabled, stopForAuthChange]);
+
     const fetchNotifications = useCallback(async () => {
-        if (!enabled || authBlocked || loading) return;
+        if (!enabled || authBlocked) return;
         setLoading(true);
         setLoadError(null);
         try {
@@ -97,81 +119,89 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
         } finally {
             setLoading(false);
         }
-    }, [authBlocked, enabled, loading, stopForAuthChange]);
-
-    const fetchBadgeCount = useCallback(async () => {
-        if (!enabled || authBlocked) return;
-        try {
-            const res = await fetch("/api/notifications/employee");
-            if (res.status === 401 || res.status === 403) {
-                stopForAuthChange();
-                return;
-            }
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat notifikasi."));
-            const data = await res.json() as NotifResponse;
-            setUnreadCount(data.unread ?? 0);
-        } catch (error) {
-            reportClientError("EmployeeNotificationPanel", "Gagal memuat badge notifikasi employee", error);
-            setLoadError(error instanceof Error ? error.message : "Gagal memuat notifikasi.");
-        }
     }, [authBlocked, enabled, stopForAuthChange]);
 
+    const markRead = useCallback(async (id: string) => {
+        try {
+            await fetch("/api/notifications/employee", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids: [id] }),
+            });
+        } catch (error) {
+            reportClientError("EmployeeNotificationPanel", "Gagal menandai dibaca", error, { id });
+        } finally {
+            setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+        }
+    }, []);
+
+    const markAllRead = useCallback(async () => {
+        const ids = notifications.filter((n) => !n.isRead).map((n) => n.id);
+        if (ids.length === 0 || markingAll) return;
+        setMarkingAll(true);
+        try {
+            const res = await fetch("/api/notifications/employee", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ all: true, allIds: ids }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menandai semua dibaca."));
+            const markedIds = new Set(ids);
+            setNotifications((prev) => prev.map((n) => (markedIds.has(n.id) ? { ...n, isRead: true } : n)));
+            setUnreadCount(0);
+            setTab("history");
+        } catch (error) {
+            reportClientError("EmployeeNotificationPanel", "Gagal menandai semua dibaca", error);
+            setLoadError(error instanceof Error ? error.message : "Gagal menandai semua dibaca.");
+        } finally {
+            setMarkingAll(false);
+        }
+    }, [markingAll, notifications]);
+
     useEffect(() => {
-        if (enabled) {
-            setAuthBlocked(false);
+        if (!enabled) {
+            setIsOpen(false);
+            setNotifications([]);
+            setUnreadCount(0);
+            setLoadError(null);
+            setTab("unread");
             return;
         }
-
-        setIsOpen(false);
-        setNotifications([]);
-        setUnreadCount(0);
-        setLoadError(null);
-        setReadIds(new Set());
-        hasFetched.current = false;
+        setAuthBlocked(false);
     }, [enabled]);
 
-    // Auto-fetch saat pertama kali dibuka
+    // Fetch daftar saat dibuka
     useEffect(() => {
-        if (enabled && !authBlocked && isOpen && !hasFetched.current) {
-            hasFetched.current = true;
-            fetchNotifications();
+        if (enabled && !authBlocked && isOpen) {
+            void fetchNotifications();
         }
     }, [authBlocked, enabled, isOpen, fetchNotifications]);
 
-    // Fetch badge count saat mount (background)
+    // Badge: saat mount + polling ringan tiap 2 menit
     useEffect(() => {
+        if (!enabled || authBlocked) return;
         void fetchBadgeCount();
-    }, [fetchBadgeCount]);
+        const timer = setInterval(() => { void fetchBadgeCount(); }, 120000);
+        return () => clearInterval(timer);
+    }, [authBlocked, enabled, fetchBadgeCount]);
 
     // Close on outside click
     useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
+        const handler = (e: MouseEvent) => {
             if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
                 setIsOpen(false);
             }
         };
-        if (isOpen) document.addEventListener("mousedown", handleClick);
-        return () => document.removeEventListener("mousedown", handleClick);
+        if (isOpen) document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
     }, [isOpen]);
 
-    const markAllRead = () => {
-        const allIds = new Set(notifications.map((n) => n.id));
-        setReadIds(allIds);
-        setUnreadCount(0);
-    };
-
-    const markRead = (id: string) => {
-        setReadIds((prev) => {
-            const next = new Set(prev);
-            next.add(id);
-            return next;
-        });
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-    };
-
-    const displayUnread = Math.max(0, unreadCount - readIds.size);
-
     if (!enabled || authBlocked) return null;
+
+    const unreadList = notifications.filter((n) => !n.isRead);
+    const readList = notifications.filter((n) => n.isRead);
+    const shown = tab === "unread" ? unreadList : readList;
 
     return (
         <div className="relative" ref={panelRef}>
@@ -182,9 +212,9 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
                 aria-label="Notifikasi"
             >
                 <Bell className="w-5 h-5 text-[var(--text-secondary)]" />
-                {displayUnread > 0 && (
+                {unreadCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 animate-pulse">
-                        {displayUnread > 9 ? "9+" : displayUnread}
+                        {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                 )}
             </button>
@@ -198,25 +228,59 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
                             Notifikasi
                         </h3>
                         <div className="flex items-center gap-2">
-                            {displayUnread > 0 && (
+                            {unreadCount > 0 && (
                                 <button
-                                    onClick={markAllRead}
-                                    className="text-[10px] font-semibold text-[var(--primary)] hover:underline"
+                                    onClick={() => { void markAllRead(); }}
+                                    disabled={markingAll}
+                                    className="text-[10px] font-semibold text-[var(--primary)] hover:underline disabled:opacity-60"
                                 >
-                                    Tandai semua dibaca
+                                    {markingAll ? "Menyimpan…" : "Tandai Semua Dibaca"}
                                 </button>
                             )}
                             <button
                                 onClick={() => setIsOpen(false)}
                                 className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-[var(--border)] transition-colors"
+                                aria-label="Tutup notifikasi"
                             >
                                 <X className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                             </button>
                         </div>
                     </div>
 
+                    {/* Tabs */}
+                    <div className="flex gap-1.5 px-4 pt-3" role="tablist" aria-label="Filter notifikasi" onKeyDown={(e) => {
+                        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                        e.preventDefault();
+                        setTab((t) => (t === "unread" ? "history" : "unread"));
+                    }}>
+                        {(
+                            [
+                                { key: "unread", label: `Belum Dibaca${unreadCount > 0 ? ` (${unreadCount})` : ""}` },
+                                { key: "history", label: `Riwayat (${readList.length})` },
+                            ] as const
+                        ).map((t) => (
+                            <button
+                                key={t.key}
+                                type="button"
+                                role="tab"
+                                id={`tab-empnotif-${t.key}`}
+                                aria-selected={tab === t.key}
+                                aria-controls="panel-empnotif"
+                                tabIndex={tab === t.key ? 0 : -1}
+                                onClick={() => setTab(t.key)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold min-h-9 ${
+                                    tab === t.key
+                                        ? "bg-[var(--primary)] text-white"
+                                        : "bg-[var(--secondary)] text-[var(--text-secondary)]"
+                                }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Body */}
-                    <div className="max-h-80 overflow-y-auto">
+                    <div className="max-h-80 overflow-y-auto" role="tabpanel" id="panel-empnotif" aria-labelledby={`tab-empnotif-${tab}`}>
                         {loading ? (
                             <div className="flex items-center justify-center py-10">
                                 <Loader2 className="w-5 h-5 animate-spin text-[var(--primary)] opacity-50" />
@@ -227,28 +291,34 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
                                 <p className="text-xs text-[var(--destructive)] font-medium">
                                     {loadError}
                                 </p>
+                                <button
+                                    type="button"
+                                    onClick={() => { void fetchNotifications(); void fetchBadgeCount(); }}
+                                    className="text-[10px] font-semibold text-[var(--primary)] hover:underline mt-2"
+                                >
+                                    Coba lagi
+                                </button>
                             </div>
-                        ) : notifications.length === 0 ? (
+                        ) : shown.length === 0 ? (
                             <div className="py-10 text-center">
                                 <Bell className="w-8 h-8 text-[var(--text-muted)] opacity-20 mx-auto mb-2" />
                                 <p className="text-xs text-[var(--text-muted)] font-medium">
-                                    Tidak ada notifikasi terbaru
+                                    {tab === "unread" ? "Tidak ada notifikasi baru" : "Belum ada riwayat"}
                                 </p>
                             </div>
                         ) : (
                             <div className="divide-y divide-[var(--border)]">
-                                {notifications.map((notif) => {
+                                {shown.map((notif) => {
                                     const cfg = TYPE_ICON[notif.type];
                                     const Icon = cfg.icon;
-                                    const isRead = readIds.has(notif.id);
 
                                     return (
                                         <Link
                                             key={notif.id}
                                             href={notif.href}
-                                            onClick={() => { markRead(notif.id); setIsOpen(false); }}
+                                            onClick={() => { if (!notif.isRead) void markRead(notif.id); setIsOpen(false); }}
                                             className={`flex items-start gap-3 px-4 py-3 hover:bg-[var(--secondary)]/50 transition-colors ${
-                                                !isRead ? "bg-[var(--primary)]/3" : ""
+                                                !notif.isRead ? "bg-[var(--primary)]/3" : ""
                                             }`}
                                         >
                                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${cfg.bg}`}>
@@ -259,7 +329,7 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
                                                     <p className="text-xs font-bold text-[var(--text-primary)] leading-tight">
                                                         {notif.title}
                                                     </p>
-                                                    {!isRead && (
+                                                    {!notif.isRead && (
                                                         <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] shrink-0 mt-1" />
                                                     )}
                                                 </div>
@@ -281,7 +351,7 @@ export function EmployeeNotificationPanel({ enabled = true, onAccessDenied }: Em
                     {(notifications.length > 0 || loadError) && (
                         <div className="px-4 py-2.5 border-t border-[var(--border)] bg-[var(--secondary)]/30">
                             <button
-                                onClick={fetchNotifications}
+                                onClick={() => { void fetchNotifications(); void fetchBadgeCount(); }}
                                 className="text-[10px] font-semibold text-[var(--primary)] hover:underline flex items-center gap-1"
                             >
                                 {loading

@@ -29,6 +29,20 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   async headers() {
     return [
+      // Service worker + hasil generate-nya: jangan di-cache agar update langsung aktif.
+      {
+        source: "/(sw\\.js|workbox-*.js|worker-*.js|swe-worker-*.js|manifest\\.json)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate",
+          },
+          {
+            key: "Service-Worker-Allowed",
+            value: "/",
+          },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [

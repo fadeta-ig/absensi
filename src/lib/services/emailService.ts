@@ -2,7 +2,8 @@ import nodemailer from "nodemailer";
 import logger from "@/lib/logger";
 
 const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const parsedPort = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 587;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 const SMTP_FROM = process.env.SMTP_FROM || "WIG HRIS <noreply@wijayainovasi.co.id>";
@@ -16,6 +17,9 @@ function createTransporter() {
         port: SMTP_PORT,
         secure: SMTP_PORT === 465,      // true untuk SSL (465), false untuk STARTTLS (587)
         requireTLS: SMTP_PORT === 587,  // wajib upgrade ke TLS untuk Gmail port 587
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
 }
@@ -39,6 +43,11 @@ export async function sendPasswordEmail(
     const employeeId = opts.employeeId?.trim() || null;
     const username = opts.username?.trim() || employeeId || email;
     const appUrl = (opts.loginUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://hris.wijayainovasi.co.id").replace(/\/$/, "");
+    const safeName = escapeHtml(name);
+    const safeEmployeeId = employeeId ? escapeHtml(employeeId) : null;
+    const safeUsername = escapeHtml(username);
+    const safeEmail = escapeHtml(email);
+    const safeAppUrl = escapeHtml(appUrl);
 
     const html = `
 <!DOCTYPE html>
@@ -72,7 +81,7 @@ export async function sendPasswordEmail(
             <td style="padding: 28px 32px 32px;">
               
               <p style="font-size: 14px; line-height: 1.6; color: #27272a; margin: 0 0 16px;">
-                Halo <strong>${name}</strong>,
+                Halo <strong>${safeName}</strong>,
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 24px;">
                 Akun HRIS dan Presensi Kehadiran Anda pada PT Wijaya Inovasi Gemilang telah aktif. Berikut adalah rincian informasi kredensial akun Anda:
@@ -85,16 +94,16 @@ export async function sendPasswordEmail(
                     Nama Lengkap
                   </td>
                   <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; border-bottom: 1px solid #f4f4f5; font-weight: 600;">
-                    ${name}
+                    ${safeName}
                   </td>
                 </tr>
-                ${employeeId ? `
+                ${safeEmployeeId ? `
                 <tr>
                   <td style="padding: 11px 14px; font-size: 12.5px; color: #71717a; border-bottom: 1px solid #f4f4f5; font-weight: 500;">
                     NIP / ID Karyawan
                   </td>
                   <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; border-bottom: 1px solid #f4f4f5; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Consolas, Monaco, monospace;">
-                    ${employeeId}
+                    ${safeEmployeeId}
                   </td>
                 </tr>
                 ` : ''}
@@ -103,7 +112,7 @@ export async function sendPasswordEmail(
                     Username Login
                   </td>
                   <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; border-bottom: 1px solid #f4f4f5; font-weight: 600;">
-                    ${username}
+                    ${safeUsername}
                   </td>
                 </tr>
                 <tr>
@@ -111,7 +120,7 @@ export async function sendPasswordEmail(
                     Email Terdaftar
                   </td>
                   <td style="padding: 11px 14px; font-size: 12.5px; color: #09090b; font-weight: 500;">
-                    ${email}
+                    ${safeEmail}
                   </td>
                 </tr>
               </table>
@@ -122,7 +131,7 @@ export async function sendPasswordEmail(
                   KATA SANDI SEMENTARA
                 </div>
                 <div style="color: #0f172a; font-size: 20px; font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', Consolas, Monaco, monospace; font-weight: 700; letter-spacing: 3px; padding: 4px 0;">
-                  ${password}
+                  ${escapeHtml(password)}
                 </div>
                 <div style="color: #94a3b8; font-size: 11.5px; margin-top: 4px;">
                   Perhatikan penggunaan huruf besar, huruf kecil, dan angka saat memasukkan kata sandi
@@ -131,11 +140,11 @@ export async function sendPasswordEmail(
 
               <!-- Action Button -->
               <div style="text-align: center; margin-bottom: 28px;">
-                <a href="${appUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                <a href="${safeAppUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
                   Masuk ke Portal HRIS
                 </a>
                 <div style="margin-top: 10px; font-size: 11.5px; color: #71717a;">
-                  Tautan akses: <a href="${appUrl}" style="color: #0f172a; text-decoration: underline;">${appUrl}</a>
+                  Tautan akses: <a href="${safeAppUrl}" style="color: #0f172a; text-decoration: underline;">${safeAppUrl}</a>
                 </div>
               </div>
 
@@ -257,6 +266,8 @@ export async function sendPasswordChangedEmail(
     }) + " WIB";
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://hris.wijayainovasi.co.id").replace(/\/$/, "");
+    const safeName = escapeHtml(name);
+    const safeAppUrl = escapeHtml(appUrl);
 
     const html = `
 <!DOCTYPE html>
@@ -289,7 +300,7 @@ export async function sendPasswordChangedEmail(
           <tr>
             <td style="padding: 28px 32px 32px;">
               <p style="font-size: 14px; line-height: 1.6; color: #27272a; margin: 0 0 16px;">
-                Halo <strong>${name}</strong>,
+                Halo <strong>${safeName}</strong>,
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 20px;">
                 Kata sandi untuk akun HRIS &amp; Presensi Anda baru saja berhasil diperbarui pada <strong>${timeFormatted}</strong>.
@@ -304,11 +315,11 @@ export async function sendPasswordChangedEmail(
 
               <!-- Action Button -->
               <div style="text-align: center; margin-bottom: 28px;">
-                <a href="${appUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+                <a href="${safeAppUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
                   Masuk ke Portal HRIS
                 </a>
                 <div style="margin-top: 10px; font-size: 11.5px; color: #71717a;">
-                  Tautan akses: <a href="${appUrl}" style="color: #0f172a; text-decoration: underline;">${appUrl}</a>
+                  Tautan akses: <a href="${safeAppUrl}" style="color: #0f172a; text-decoration: underline;">${safeAppUrl}</a>
                 </div>
               </div>
 
@@ -433,7 +444,16 @@ export async function sendBirthdayReminderEmail(
         minute: "2-digit",
     });
 
-    const rowsHtml = items.map((item) => {
+    const rowsHtml = items.map((rawItem) => {
+        const item = {
+            ...rawItem,
+            name: escapeHtml(rawItem.name),
+            department: escapeHtml(rawItem.department),
+            position: escapeHtml(rawItem.position),
+            birthDateFormatted: escapeHtml(rawItem.birthDateFormatted),
+            milestone: escapeHtml(rawItem.milestone),
+            statusName: rawItem.statusName ? escapeHtml(rawItem.statusName) : rawItem.statusName,
+        };
         const scheduleBadge = item.daysUntil === 0
             ? '<span style="display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#fee2e2;color:#991b1b;">Hari Ini</span>'
             : item.daysUntil <= 7
@@ -457,7 +477,7 @@ export async function sendBirthdayReminderEmail(
         </tr>`;
     }).join("");
 
-    const title = milestoneTitle || "Pengingat Persiapan Ulang Tahun Pegawai";
+    const title = milestoneTitle ? escapeHtml(milestoneTitle) : "Pengingat Persiapan Ulang Tahun Pegawai";
 
     const textContent = `PENGINGAT ULANG TAHUN PEGAWAI
 PT Wijaya Inovasi Gemilang - HRIS System
@@ -465,10 +485,10 @@ PT Wijaya Inovasi Gemilang - HRIS System
 
 Berikut adalah daftar pegawai yang memiliki jadwal ulang tahun mendatang:
 
-${items.map((item) => `- ${item.name} (${item.department} - ${item.position})
-  Tanggal Lahir: ${item.birthDateFormatted} (Usia ke-${item.ageTurning})
-  Jadwal: ${item.daysUntil === 0 ? "Hari Ini" : `${item.daysUntil} hari lagi (${item.milestone})`}
-  Status: ${item.statusName || "Belum Diproses"}`).join("\n\n")}
+${items.map((rawItem) => `- ${escapeHtml(rawItem.name)} (${escapeHtml(rawItem.department)} - ${escapeHtml(rawItem.position)})
+  Tanggal Lahir: ${escapeHtml(rawItem.birthDateFormatted)} (Usia ke-${rawItem.ageTurning})
+  Jadwal: ${rawItem.daysUntil === 0 ? "Hari Ini" : `${rawItem.daysUntil} hari lagi (${escapeHtml(rawItem.milestone)})`}
+  Status: ${rawItem.statusName ? escapeHtml(rawItem.statusName) : "Belum Diproses"}`).join("\n\n")}
 
 ==================================================
 Catatan: Pembaruan status persiapan dan catatan dapat dilakukan melalui menu Ulang Tahun di Dashboard HRIS.
