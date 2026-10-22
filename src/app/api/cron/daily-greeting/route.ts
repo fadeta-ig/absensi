@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { webPush } from "@/lib/webPush";
 import logger, { serializeError } from "@/lib/logger";
 import { stripGelar } from "@/lib/utils/formatters";
-import { toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
+import { getWIBDayOfWeek, toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
 
 /**
  * POST /api/cron/daily-greeting
  *
- * Triggered externally (e.g. cron-job.org) every day at 07:00 WIB.
+ * Dijadwalkan crontab root VPS via hris-cron.sh setiap hari jam 07:00 WIB.
  * Sends a push notification to every active employee with a push subscription.
  *
  * Security: protected by CRON_SECRET bearer token.
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const now = new Date();
-        const todayDay = now.getDay(); // 0=Sunday … 6=Saturday
+        const todayDay = getWIBDayOfWeek(now); // 0=Sunday … 6=Saturday (WIB)
         const todayWib = toWIBDateString(now);
         const dayStart = wibDateTimeToDate(todayWib, "00:00");
         const dayEnd = wibDateTimeToDate(todayWib, "23:59");
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
                 body,
                 icon: "/icons/android-chrome-192x192.png",
                 badge: "/icons/android-chrome-192x192.png",
-                tag: `daily-greeting-${now.toISOString().split("T")[0]}`,
+                tag: `daily-greeting-${todayWib}`,
             });
 
             for (const sub of emp.userAccount?.pushSubscriptions ?? []) {
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
         if (failedEndpoints.length > 0) {
             await prisma.pushSubscription.deleteMany({
                 where: { endpoint: { in: failedEndpoints } },
-            });
+            }).catch(() => undefined);
         }
 
         logger.info("Daily greeting cron completed", {

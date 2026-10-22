@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { AppointmentError, markAttendance } from "@/lib/services/appointmentService";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { AppointmentError, isWig002, markAttendance } from "@/lib/services/appointmentService";
 import { appointmentAttendanceSchema } from "@/lib/validations/validationSchemas";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { id } = await params;

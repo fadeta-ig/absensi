@@ -5,6 +5,7 @@ import { FileText, Loader2, Lock, Pencil, Trash2, UserCheck, Users } from "lucid
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import { useConfirm } from "@/components/ConfirmModal";
 
 interface EligibleMember {
     employeeId: string;
@@ -51,6 +52,7 @@ export default function MeetingMinutesSection({
     const [saving, setSaving] = useState(false);
     const [savingNotulis, setSavingNotulis] = useState(false);
     const [error, setError] = useState("");
+    const confirm = useConfirm();
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -200,7 +202,16 @@ export default function MeetingMinutesSection({
                                     value={data.notulisEmployeeId ?? ""}
                                     disabled={savingNotulis}
                                     onChange={(e) => {
-                                        void handleNotulisChange(e.target.value);
+                                        const next = e.target.value;
+                                        confirm({
+                                            title: "Ubah Petugas Notulis?",
+                                            message: next
+                                                ? "Hanya petugas terpilih (dan penyelenggara) yang dapat mengisi notulensi setelah ini."
+                                                : "Semua peserta kembali berhak mengisi notulensi.",
+                                            confirmLabel: "Ya, Ubah",
+                                            variant: "info",
+                                            onConfirm: () => { void handleNotulisChange(next); },
+                                        });
                                     }}
                                 >
                                     <option value="">Semua Peserta Berhak Input (Tidak Dibatasi)</option>

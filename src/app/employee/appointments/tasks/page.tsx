@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle2, Circle, ListChecks, Loader2 } from "lucide-rea
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
+import { formatWIBDateTime } from "@/lib/timezone";
 import { useConfirm } from "@/components/ConfirmModal";
 
 interface MyTaskAssignee {
@@ -77,7 +78,8 @@ export default function EmployeeMeetingTasksPage() {
                 list = list.filter((t) =>
                     !t.isCancelled &&
                     t.assignees.some((a) =>
-                        (!currentEmpId || a.employeeId === currentEmpId) &&
+                        currentEmpId !== null &&
+                        a.employeeId === currentEmpId &&
                         (a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS")
                     )
                 );
@@ -97,9 +99,21 @@ export default function EmployeeMeetingTasksPage() {
 
     useEffect(() => {
         if (!highlight || loading) return;
+        if (!/^[A-Za-z0-9-]{1,120}$/.test(highlight)) return;
         const el = document.getElementById(`task-${highlight}`);
         el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, [highlight, loading, tasks]);
+
+    useEffect(() => {
+        if (loading) return;
+        const timer = setInterval(() => { void load(filter); }, 300000);
+        const onVisible = () => { if (document.visibilityState === "visible") void load(filter); };
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener("visibilitychange", onVisible);
+        };
+    }, [load, filter, loading]);
 
     async function handleStatus(task: MyTask, status: string) {
         setBusyId(task.id);
@@ -142,13 +156,23 @@ export default function EmployeeMeetingTasksPage() {
                 </div>
             </div>
 
-            <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Filter task">
+            <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Filter task" onKeyDown={(e) => {
+                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                e.preventDefault();
+                const order = ["open", "overdue", "done", "all"] as const;
+                const idx = order.indexOf(filter);
+                const next = e.key === "ArrowRight" ? (idx + 1) % order.length : (idx - 1 + order.length) % order.length;
+                setFilter(order[next]);
+            }}>
                 {filters.map((f) => (
                     <button
                         key={f.key}
                         type="button"
                         role="tab"
+                        id={`tab-task-${f.key}`}
                         aria-selected={filter === f.key}
+                        aria-controls="panel-tasks"
+                        tabIndex={filter === f.key ? 0 : -1}
                         onClick={() => setFilter(f.key)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold min-h-9 ${
                             filter === f.key
@@ -168,18 +192,17 @@ export default function EmployeeMeetingTasksPage() {
                     <Loader2 className="w-4 h-4 animate-spin" /> Memuat task…
                 </p>
             ) : tasks.length === 0 ? (
-                <div className="card p-6 text-center">
+                <div className="card p-6 text-center" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     <ListChecks className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
                     <p className="text-sm font-medium text-[var(--text-primary)]">Tidak ada task</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Task dari hasil meeting yang ditugaskan kepada Anda akan muncul di sini.</p>
                 </div>
             ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2.5" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     {tasks.map((task) => {
-                        const mine =
-                            (myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") : null) ??
-                            task.assignees.find((a) => a.status !== "DIBATALKAN");
-                        const canAct = !task.isCancelled && mine && (mine.status === "BELUM_DIKERJAKAN" || mine.status === "ON_PROGRESS");
+                        const mine = myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") ?? null : null;
+                        const meetingClosed = task.appointment.status !== "SCHEDULED";
+                        const canAct = !meetingClosed && !task.isCancelled && mine && (mine.status === "BELUM_DIKERJAKAN" || mine.status === "ON_PROGRESS");
                         return (
                             <article
                                 key={task.id}
@@ -193,9 +216,9 @@ export default function EmployeeMeetingTasksPage() {
                                     ) : mine?.status === "SELESAI" ? (
                                         <span className="badge-success shrink-0">Selesai</span>
                                     ) : mine?.isOverdue ? (
-                                        <span className="badge-error shrink-0">Overdue</span>
+                                        <span className="badge-error shrink-0" title="Overdue untuk Anda">Overdue</span>
                                     ) : (
-                                        <span className="badge-info shrink-0">{mine ? STATUS_LABEL[mine.status] : "Berjalan"}</span>
+                                        <span className="badge-info shrink-0" title={task.anyOverdue ? "Ada penerima lain yang overdue" : undefined}>{mine ? STATUS_LABEL[mine.status] : "Berjalan"}</span>
                                     )}
                                 </div>
                                 {task.detail && <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{task.detail}</p>}
@@ -206,7 +229,7 @@ export default function EmployeeMeetingTasksPage() {
                                             <Link href={`/employee/appointments/detail/${task.appointmentId}`} className="text-[var(--primary)] font-semibold hover:underline">
                                                 {task.appointment.title}
                                             </Link>{" "}
-                                            · {new Date(task.appointment.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                                            · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short" })}
                                             {task.appointment.room ? ` · ${task.appointment.room.name}` : ""}
                                         </dd>
                                     </div>

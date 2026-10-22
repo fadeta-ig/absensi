@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { webPush } from "@/lib/webPush";
 import logger from "@/lib/logger";
 import { SYSTEM_ACTOR, logAction } from "@/lib/services/auditService";
-import { getReminderOffsets } from "@/lib/services/appointmentService";
+import { getReminderOffsets, isReminderOffsetDue, parseReminderOffsets } from "@/lib/services/appointmentService";
 
 /**
  * POST /api/cron/appointment-reminder
  *
- * Triggered externally (e.g. cron-job.org) every 15 minutes.
+ * Dijadwalkan crontab root VPS via hris-cron.sh setiap 15 menit.
  * Sends due reminders (offsets dinamis milik PIC) for SCHEDULED appointments.
  * Also flips ended SCHEDULED rows to COMPLETED (lifecycle berbasis jam).
  * Exactly-once per (appointmentId, offsetMin) via AppointmentReminderLog unique.
@@ -87,13 +87,14 @@ export async function POST(request: NextRequest) {
         const failedEndpoints: string[] = [];
 
         for (const appt of upcoming) {
-            const effective = appt.reminderOffsets ? parseOverride(appt.reminderOffsets) : offsets;
+            const parsed = appt.reminderOffsets ? parseReminderOffsets(appt.reminderOffsets) : offsets;
+            const effective = parsed.length > 0 ? parsed : offsets;
             const sentOffsets = new Set(appt.reminderLogs.map((l) => l.offsetMin));
             const minutesLeft = (appt.startAt.getTime() - now.getTime()) / 60000;
 
             for (const offset of effective) {
                 if (sentOffsets.has(offset)) continue;
-                if (minutesLeft > offset || minutesLeft <= offset - POLL_WINDOW_MIN) continue;
+                if (!isReminderOffsetDue(offset, minutesLeft, POLL_WINDOW_MIN)) continue;
                 try {
                     await prisma.appointmentReminderLog.create({ data: { appointmentId: appt.id, offsetMin: offset } });
                 } catch {
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest) {
                         } catch (err) {
                             const statusCode = (err as { statusCode?: number })?.statusCode;
                             if (statusCode === 404 || statusCode === 410) failedEndpoints.push(sub.endpoint);
+                            else logger.warn("appointment reminder push gagal", { endpoint: sub.endpoint, statusCode });
                         }
                     }
                 }
@@ -139,15 +141,5 @@ export async function POST(request: NextRequest) {
     } catch (err) {
         logger.error("Appointment reminder cron gagal", { err });
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-    }
-}
-
-function parseOverride(raw: string): number[] {
-    try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return [];
-        return [...new Set(parsed.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 15))].sort((a, b) => b - a).slice(0, 5);
-    } catch {
-        return [];
     }
 }

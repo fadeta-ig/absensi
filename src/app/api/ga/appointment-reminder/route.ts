@@ -11,6 +11,7 @@ import { reminderOffsetsSetSchema } from "@/lib/validations/validationSchemas";
 export async function GET() {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const offsets = await getReminderOffsets();

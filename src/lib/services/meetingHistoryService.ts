@@ -74,6 +74,7 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
             room: { select: { name: true } },
             participants: {
                 select: {
+                    id: true,
                     employeeId: true,
                     guestName: true,
                     isExternal: true,
@@ -175,11 +176,12 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
         if (prev && typeof prev === "object" && "minutes" in prev) {
             const isDeleted = prev.deleted === true;
             const isFirst = !isDeleted && (prev.minutes === null || prev.minutes === undefined);
+            const action = isDeleted ? "minutes_deleted" : isFirst ? "minutes_created" : "minutes_updated";
             push({
                 id: `rev-${rev.id}`,
                 at: rev.createdAt.toISOString(),
                 scope: "meeting",
-                action: isFirst ? "minutes_created" : "minutes_updated",
+                action,
                 title: isDeleted ? "Notulensi dihapus" : isFirst ? "Notulensi ditulis" : "Notulensi diubah",
                 detail: rev.changeReason,
                 actorName: resolveActor(rev.changedBy),
@@ -188,7 +190,7 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
             });
             continue;
         }
-        if (rev.changeReason === "Meeting diselesaikan lebih awal.") {
+        if (prev && typeof prev === "object" && (prev.kind === "completed_early" || rev.changeReason === "Meeting diselesaikan lebih awal.")) {
             push({
                 id: `rev-${rev.id}`,
                 at: rev.createdAt.toISOString(),
@@ -202,8 +204,9 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
             });
             continue;
         }
-        // Reschedule selalu menyimpan meetingLink di previousData; cancel tidak.
-        if (!prev || typeof prev !== "object" || !("meetingLink" in prev)) {
+        // Reschedule selalu menyimpan meetingLink + kind di previousData; cancel menyimpan kind.
+        // Fallback legacy: baris lama tanpa kind dibedakan via kehadiran kunci meetingLink.
+        if ((prev && typeof prev === "object" && prev.kind === "cancelled") || (!prev || typeof prev !== "object" || !("meetingLink" in prev))) {
             push({
                 id: `rev-${rev.id}`,
                 at: rev.createdAt.toISOString(),
@@ -234,7 +237,7 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
         if (!p.inviteStatus || p.inviteStatus === "PENDING" || !p.inviteRespondedAt) continue;
         const who = p.isExternal ? (p.guestName ?? "Tamu") : (p.employeeId ? (nameOf.get(p.employeeId) ?? p.employeeId) : "Peserta");
         push({
-            id: `rsvp-${p.employeeId ?? p.guestName}-${p.inviteRespondedAt.toISOString()}`,
+            id: `rsvp-${p.id}-${p.inviteRespondedAt.toISOString()}`,
             at: p.inviteRespondedAt.toISOString(),
             scope: "meeting",
             action: p.inviteStatus === "ACCEPTED" ? "rsvp_accepted" : "rsvp_declined",

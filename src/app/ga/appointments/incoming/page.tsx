@@ -63,10 +63,11 @@ export default function GaAppointmentsIncomingPage() {
         date: string;
         startTime: string;
         endTime: string;
+        isFullDay: boolean;
         roomId: string;
         reason: string;
         force: boolean;
-    }>({ title: "", agenda: "", date: "", startTime: "", endTime: "", roomId: "", reason: "", force: false });
+    }>({ title: "", agenda: "", date: "", startTime: "", endTime: "", isFullDay: false, roomId: "", reason: "", force: false });
     const [reschedParticipants, setReschedParticipants] = useState<PickedParticipant[]>([]);
     const [askingResched, setAskingResched] = useState(false);
     const [cancelReason, setCancelReason] = useState("");
@@ -135,6 +136,7 @@ export default function GaAppointmentsIncomingPage() {
             date: toWIBDateString(new Date(item.startAt)),
             startTime: `${pad(startWib.hours)}:${pad(startWib.minutes)}`,
             endTime: `${pad(endWib.hours)}:${pad(endWib.minutes)}`,
+            isFullDay: item.isFullDay,
             roomId: item.room?.id ?? (rooms[0]?.id ?? ""),
             reason: "",
             force: false,
@@ -366,8 +368,21 @@ export default function GaAppointmentsIncomingPage() {
                                                 <input id="rs-date" type="date" className="form-input" value={resched.date} onChange={(e) => setResched({ ...resched, date: e.target.value })} />
                                             </div>
                                             <div className="form-group !mb-0">
+                                                <label className="form-label">Seharian</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setResched({ ...resched, isFullDay: !resched.isFullDay })}
+                                                    aria-pressed={resched.isFullDay}
+                                                    className={`form-input text-left ${resched.isFullDay ? "border-[var(--primary)] text-[var(--primary)] font-semibold" : ""}`}
+                                                >
+                                                    {resched.isFullDay ? "Ya, Seharian Penuh" : "Tidak, Terjadwal per Jam"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="form-group !mb-0 col-span-2">
                                                 <label className="form-label" htmlFor="rs-room">Ruangan *</label>
-                                                <select id="rs-room" className="form-input" value={resched.roomId} onChange={(e) => setResched({ ...resched, roomId: e.target.value })}>
+                                                <select id="rs-room" className="form-input w-full" value={resched.roomId} onChange={(e) => setResched({ ...resched, roomId: e.target.value })}>
                                                     <option value="">— Pilih ruangan —</option>
                                                     {rooms.map((r) => (
                                                         <option key={r.id} value={r.id}>{r.name}{r.capacity ? ` (Kapasitas ${r.capacity} orang)` : ""}</option>
@@ -375,12 +390,14 @@ export default function GaAppointmentsIncomingPage() {
                                                 </select>
                                             </div>
                                         </div>
+                                        {!resched.isFullDay && (
                                         <TimeRangeFields
                                             idPrefix="rs"
                                             startTime={resched.startTime}
                                             endTime={resched.endTime}
                                             onChange={(s, e) => setResched((prev) => ({ ...prev, startTime: s, endTime: e }))}
                                         />
+                                        )}
                                         <div className="form-group !mb-0">
                                             <ParticipantPicker
                                                 value={reschedParticipants}
@@ -408,16 +425,16 @@ export default function GaAppointmentsIncomingPage() {
                                         </label>
                                         <button
                                             type="button"
-                                            disabled={acting || !resched.title.trim() || !resched.date || !resched.startTime || !resched.endTime || resched.endTime <= resched.startTime || !resched.roomId || (resched.reason.trim().length > 0 && resched.reason.trim().length < 5)}
+                                            disabled={acting || !resched.title.trim() || !resched.date || (!resched.isFullDay && (!resched.startTime || !resched.endTime || resched.endTime <= resched.startTime)) || !resched.roomId || (resched.reason.trim().length > 0 && resched.reason.trim().length < 5)}
                                             onClick={() => {
                                                 void postAction(`/api/appointments/${detail.id}`, "PATCH", {
                                                     title: resched.title.trim(),
                                                     agenda: resched.agenda.trim() || null,
                                                     date: resched.date,
-                                                    startTime: resched.startTime,
-                                                    endTime: resched.endTime,
-                                                    isFullDay: detail.isFullDay,
-                                                    roomId: resched.roomId || null,
+                                                    startTime: resched.isFullDay ? undefined : resched.startTime,
+                                                    endTime: resched.isFullDay ? undefined : resched.endTime,
+                                                    isFullDay: resched.isFullDay,
+                                                    roomId: resched.roomId,
                                                     participants: reschedParticipants.map((p) => (p.employeeId ? { employeeId: p.employeeId } : { guestName: p.name })),
                                                     changeReason: resched.reason.trim(),
                                                     force: resched.force,

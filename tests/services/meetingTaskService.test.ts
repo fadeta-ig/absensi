@@ -189,32 +189,13 @@ describe("createMeetingTask", () => {
             )
         ).rejects.toMatchObject({ statusCode: 403 });
     });
-    it("update notulensi di meeting COMPLETED wajib alasan perubahan >= 5 karakter", async () => {
+    it("update notulensi di meeting COMPLETED = 409 (notulensi ditutup)", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "COMPLETED", minutes: "lama" } as never);
-        await expect(updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "" }, actor)).rejects.toMatchObject({
-            statusCode: 400,
-        });
-        mocked.employee.findMany.mockResolvedValue([] as never);
-        const tx = {
-            meetingAppointment: {
-                update: vi.fn().mockResolvedValue({ id: "appt-1", minutes: "baru", minutesUpdatedBy: "ID-001", minutesUpdatedAt: new Date() }),
-            },
-            meetingAppointmentRevision: {
-                count: vi.fn().mockResolvedValue(1),
-                create: vi.fn().mockResolvedValue({}),
-            },
-        };
-        mocked.$transaction.mockImplementation(async (cb: (t: never) => Promise<unknown>) => cb(tx as never));
         await expect(
             updateMeetingMinutes(empSession(), "appt-1", { minutes: "baru", changeReason: "Koreksi isi notulensi pasca rapat" }, actor)
-        ).resolves.toBeDefined();
-        expect(tx.meetingAppointmentRevision.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                data: expect.objectContaining({
-                    changeReason: "Koreksi isi notulensi pasca rapat",
-                }),
-            })
-        );
+        ).rejects.toMatchObject({
+            statusCode: 409,
+        });
     });
     it("update notulensi di meeting CANCELLED = 409", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "CANCELLED", minutes: "lama" } as never);
@@ -249,22 +230,33 @@ describe("updateMyTaskStatus", () => {
         mocked.meetingTaskAssignee.findUnique.mockResolvedValue(null);
         await expect(updateMyTaskStatus(empSession(), "task-1", "SELESAI", actor)).rejects.toMatchObject({ statusCode: 403 });
     });
+    it("meeting COMPLETED = 409 (task ditutup)", async () => {
+        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({
+            task: { id: "task-1", isCancelled: false, appointmentId: "appt-1" },
+            status: "ON_PROGRESS",
+        } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "COMPLETED" } as never);
+        await expect(updateMyTaskStatus(empSession(), "task-1", "SELESAI", actor)).rejects.toMatchObject({ statusCode: 409 });
+    });
 });
 
 describe("extendTaskDeadline", () => {
     it("bukan pemberi/GA = 403", async () => {
-        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002" } as never);
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "SCHEDULED" } as never);
         await expect(extendTaskDeadline(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh data tambahan" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("alasan pendek = 400 (oleh pemberi)", async () => {
-        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-001" } as never);
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "SCHEDULED" } as never);
         await expect(extendTaskDeadline(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "ok" }, actor)).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 
 describe("cancelMeetingTask", () => {
     it("bukan pemberi/GA = 403", async () => {
-        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002" } as never);
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "SCHEDULED" } as never);
         await expect(cancelMeetingTask(empSession(), "task-1", "Alasan batal yang cukup panjang", actor)).rejects.toMatchObject({ statusCode: 403 });
     });
 });
@@ -275,8 +267,16 @@ describe("requestTaskExtension", () => {
         await expect(requestTaskExtension(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh waktu tambahan" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("duplikat pending = 409", async () => {
-        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({ task: { id: "task-1", isCancelled: false }, status: "ON_PROGRESS" } as never);
-        mocked.meetingTaskExtensionRequest.findFirst.mockResolvedValue({ id: "req-1" } as never);
+        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({ task: { id: "task-1", isCancelled: false, appointmentId: "appt-1" }, status: "ON_PROGRESS" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "SCHEDULED" } as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingTaskExtensionRequest: {
+                findFirst: vi.fn().mockResolvedValue({ id: "req-1" }),
+                create: vi.fn(),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
         await expect(requestTaskExtension(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh waktu tambahan" }, actor)).rejects.toMatchObject({ statusCode: 409 });
     });
 });

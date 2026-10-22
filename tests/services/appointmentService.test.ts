@@ -135,6 +135,22 @@ describe("createAppointment", () => {
             createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [] }, false)
         ).rejects.toMatchObject({ statusCode: 409 });
     });
+    it("duplikat insert konkuren (P2002) dipetakan 409", async () => {
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        const tx = {
+            meetingAppointment: {
+                findFirst: vi.fn().mockResolvedValue(null),
+                findMany: vi.fn().mockResolvedValue([]),
+                create: vi.fn().mockRejectedValue({ code: "P2002" }),
+            },
+            employeeUnavailability: { findMany: vi.fn().mockResolvedValue([]) },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        await expect(
+            createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [] }, false)
+        ).rejects.toMatchObject({ statusCode: 409 });
+    });
 });
 
 describe("rescheduleAppointment", () => {
@@ -214,6 +230,27 @@ describe("reminder offsets", () => {
     it("menolak >5 entri 409", async () => {
         await expect(setReminderOffsets([1, 2, 3, 4, 5, 6].map((m) => m * 60), { userId: "u", username: "ID-002" })).rejects.toMatchObject({ statusCode: 409 });
     });
+    it("menolak array kosong 400", async () => {
+        await expect(setReminderOffsets([], { userId: "u", username: "ID-002" })).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("parseReminderOffsets: sort desc, dedup, slice 5, fallback default", async () => {
+        const { parseReminderOffsets, isReminderOffsetDue } = await import("@/lib/services/appointmentService");
+        expect(parseReminderOffsets("[60,1440]")).toEqual([1440, 60]);
+        expect(parseReminderOffsets("[30,30,60]")).toEqual([60, 30]);
+        expect(parseReminderOffsets("[10,5]")).toEqual([]);
+        expect(parseReminderOffsets("bukan-json")).toEqual([1440]);
+        expect(parseReminderOffsets(null)).toEqual([1440]);
+        expect(parseReminderOffsets("[1,2,3,4,5,6,7,8]".replace(/\d+/g, (m) => String(Number(m) * 60)))).toHaveLength(5);
+    });
+    it("isReminderOffsetDue: jendela (offset-15, offset]", async () => {
+        const { isReminderOffsetDue } = await import("@/lib/services/appointmentService");
+        expect(isReminderOffsetDue(60, 60)).toBe(true);
+        expect(isReminderOffsetDue(60, 46)).toBe(true);
+        expect(isReminderOffsetDue(60, 45)).toBe(false);
+        expect(isReminderOffsetDue(60, 61)).toBe(false);
+        expect(isReminderOffsetDue(60, 0)).toBe(false);
+        expect(isReminderOffsetDue(1440, 1430)).toBe(true);
+    });
     it("normalizeRoomName", () => {
         expect(normalizeRoomName("  Ruang  Rapat ")).toBe("ruang rapat");
     });
@@ -240,6 +277,19 @@ describe("respondInvite (RSVP peserta)", () => {
             where: { id: "p1" },
             data: { inviteStatus: "ACCEPTED", inviteRespondedAt: expect.any(Date), inviteNote: null },
         });
+    });
+    it("DECLINE tanpa alasan ditolak 400 (defense-in-depth service)", async () => {
+        const { respondInvite } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1",
+            title: "R",
+            status: "SCHEDULED",
+            endAt: new Date(Date.now() + 3600000),
+            requesterEmployeeId: "ID-009",
+            participants: [{ id: "p1", inviteStatus: "PENDING" }],
+        } as never);
+        await expect(respondInvite(empSession(), "a1", "DECLINE", null, { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 400 });
+        await expect(respondInvite(empSession(), "a1", "DECLINE", "ok", { userId: "u", username: "ID-001" })).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 
@@ -285,7 +335,13 @@ describe("EmployeeUnavailability (blokir sibuk mandiri)", () => {
     });
     it("overlap blokir sendiri ditolak 409", async () => {
         const { createUnavailability } = await import("@/lib/services/appointmentService");
-        mocked.employeeUnavailability.findFirst.mockResolvedValue({ id: "b1" } as never);
+        const tx = {
+            employeeUnavailability: {
+                findFirst: vi.fn().mockResolvedValue({ id: "b1" }),
+                create: vi.fn(),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
         await expect(createUnavailability(empSession(), { startDate: "2026-12-01", endDate: "2026-12-03" })).rejects.toMatchObject({ statusCode: 409 });
     });
     it("hapus milik orang lain 404", async () => {
@@ -418,6 +474,10 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                 ]),
                 deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
                 create: vi.fn().mockResolvedValue({ id: "p-new" }),
+                updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+            },
+            appointmentReminderLog: {
+                deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
             },
             meetingAppointmentRevision: {
                 count: vi.fn().mockResolvedValue(0),
@@ -531,6 +591,9 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                 ]),
                 deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
                 create: vi.fn().mockResolvedValue({ id: "p-added" }),
+            },
+            appointmentReminderLog: {
+                deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
             },
             meetingAppointmentRevision: {
                 count: vi.fn().mockResolvedValue(0),

@@ -10,6 +10,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
 import type { HistoryEvent, MeetingHistory } from "@/lib/services/meetingHistoryService";
+import { formatWIBDateTime } from "@/lib/timezone";
 
 const ACTION_STYLE: Record<string, { icon: typeof Info; chip: string }> = {
     created: { icon: Megaphone, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
@@ -32,11 +33,11 @@ const ACTION_STYLE: Record<string, { icon: typeof Info; chip: string }> = {
 };
 
 function fmtDT(iso: string): string {
-    return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return formatWIBDateTime(new Date(iso), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtDay(iso: string): string {
-    return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return formatWIBDateTime(new Date(iso), { day: "numeric", month: "short", year: "numeric" });
 }
 
 type Filter = "all" | "meeting" | "task";
@@ -58,6 +59,7 @@ function HistoryContent({ id }: { id: string }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [filter, setFilter] = useState<Filter>("all");
+    const [retryKey, setRetryKey] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -80,7 +82,7 @@ function HistoryContent({ id }: { id: string }) {
         return () => {
             cancelled = true;
         };
-    }, [id]);
+    }, [id, retryKey]);
 
     const events = useMemo(
         () => (data?.events ?? []).filter((e) => filter === "all" || e.scope === filter),
@@ -89,6 +91,7 @@ function HistoryContent({ id }: { id: string }) {
 
     useEffect(() => {
         if (!highlight || loading) return;
+        if (!/^[A-Za-z0-9-]{1,120}$/.test(highlight)) return;
         document.getElementById(`hist-${highlight}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, [highlight, loading, events]);
 
@@ -107,7 +110,7 @@ function HistoryContent({ id }: { id: string }) {
                     <ArrowLeft className="w-4 h-4" /> Kembali ke Detail
                 </button>
                 {error ? <FeedbackMessage variant="error">{error}</FeedbackMessage> : <p className="text-sm text-[var(--text-muted)]">Riwayat tidak ditemukan.</p>}
-                {error && <button type="button" onClick={() => window.location.reload()} className="btn btn-secondary w-full">Coba Lagi</button>}
+                {error && <button type="button" onClick={() => setRetryKey((k) => k + 1)} className="btn btn-secondary w-full">Coba Lagi</button>}
             </div>
         );
     }
@@ -144,7 +147,7 @@ function HistoryContent({ id }: { id: string }) {
                         <dt className="text-[var(--text-muted)] w-24 shrink-0">Jadwal</dt>
                         <dd className="text-[var(--text-secondary)]">
                             {a.isFullDay
-                                ? `${new Date(a.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })} · Seharian Penuh`
+                                ? `${formatWIBDateTime(new Date(a.startAt), { day: "numeric", month: "short", year: "numeric" })} · Seharian Penuh`
                                 : `${fmtDay(a.startAt)} – ${fmtDay(a.endAt)}`}
                         </dd>
                     </div>

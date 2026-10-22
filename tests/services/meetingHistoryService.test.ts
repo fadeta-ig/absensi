@@ -72,6 +72,11 @@ describe("getMeetingHistory akses", () => {
     it("tanpa employeeId ditolak 403", async () => {
         await expect(getMeetingHistory(empSession({ employeeId: null }), "appt-1")).rejects.toMatchObject({ statusCode: 403 });
     });
+    it("WIG002 tanpa employeeId diizinkan (operator GA)", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        const out = await getMeetingHistory(empSession({ username: "WIG002", employeeId: null, permissions: ["ga.manage"] }), "appt-1");
+        expect(out.appointment.id).toBe("appt-1");
+    });
     it("meeting tidak ada = 404", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue(null);
         await expect(getMeetingHistory(empSession(), "nope")).rejects.toMatchObject({ statusCode: 404 });

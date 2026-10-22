@@ -8,22 +8,19 @@ import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBad
 import { requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { formatIndonesianDate } from "@/lib/utils";
+import { addCalendarDays, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 
 function fmtTime(iso: string): string {
-    const d = new Date(iso);
-    return `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
+    const { hours, minutes } = getWIBHoursMinutes(new Date(iso));
+    return `${String(hours).padStart(2, "0")}.${String(minutes).padStart(2, "0")}`;
 }
 
 function shiftDate(dateStr: string, delta: number): string {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() + delta);
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    return addCalendarDays(dateStr, delta);
 }
 
 function toLocalToday(): string {
-    const t = new Date();
-    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    return toWIBDateString(new Date());
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,6 +31,7 @@ export default function AppointmentDayDetailPage() {
     const date = params.date;
 
     const [items, setItems] = useState<AppointmentListItem[]>([]);
+    const [total, setTotal] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -50,10 +48,11 @@ export default function AppointmentDayDetailPage() {
         try {
             const res = await fetch(`/api/appointments?from=${date}&to=${date}&limit=100`);
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat jadwal."));
-            const json = (await res.json()) as { data: AppointmentListItem[] };
+            const json = (await res.json()) as { data: AppointmentListItem[]; total?: number };
             const list = Array.isArray(json.data) ? json.data : [];
-            list.sort((a, b) => a.startAt.localeCompare(b.startAt));
+            list.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
             setItems(list);
+            setTotal(typeof json.total === "number" ? json.total : list.length);
         } catch (err) {
             reportClientError("AppointmentDayDetailPage", "Gagal memuat", err);
             setLoadError(err instanceof Error ? err.message : "Gagal memuat jadwal.");
@@ -102,7 +101,7 @@ export default function AppointmentDayDetailPage() {
                 <div className="min-w-0 flex-1">
                     <h1 className="text-base font-extrabold text-[var(--text-primary)] truncate">{formatIndonesianDate(new Date(`${date}T00:00:00+07:00`))}</h1>
                     <p className="text-xs text-[var(--text-muted)]">
-                        {loading ? "Memuat data…" : items.length === 0 ? "Tidak ada meeting" : `${items.length} meeting · Mulai pukul ${first ? fmtTime(first.startAt) : ""}`}
+                        {loading ? "Memuat data…" : items.length === 0 ? "Tidak ada meeting" : `${items.length} meeting${total !== null && total > items.length ? ` dari ${total}` : ""} · Mulai pukul ${first ? fmtTime(first.startAt) : ""}`}
                     </p>
                 </div>
                 <button
@@ -157,6 +156,11 @@ export default function AppointmentDayDetailPage() {
                 </div>
             ) : (
                 <ol className="space-y-3">
+                    {total !== null && total > items.length && (
+                        <p className="text-[11px] text-[var(--text-muted)] text-center" role="note">
+                            Menampilkan {items.length} dari {total} meeting. Persempit dengan filter atau buka tampilan bulanan.
+                        </p>
+                    )}
                     {items.map((a) => {
                         const accepted = a.participants.filter((p) => p.inviteStatus === "ACCEPTED").length;
                         return (

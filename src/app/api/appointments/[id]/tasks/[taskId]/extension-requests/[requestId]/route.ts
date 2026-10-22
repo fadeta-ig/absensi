@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { MeetingTaskError, decideTaskExtension } from "@/lib/services/meetingTaskService";
+import { isWig002 } from "@/lib/services/appointmentService";
 import { meetingTaskExtensionDecideSchema } from "@/lib/validations/validationSchemas";
 import { sendAppointmentPush, collectMeetingTaskUserIds } from "@/lib/services/appointmentNotify";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string; taskId: string; requestId: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { requestId } = await params;

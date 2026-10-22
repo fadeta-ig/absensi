@@ -1,5 +1,6 @@
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
+import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
 
 export interface AppointmentListItem {
     id: string;
@@ -37,9 +38,8 @@ export async function fetchUpcomingAppointments(
     signal: AbortSignal,
     filter: AppointmentListFilter = {}
 ): Promise<{ items: AppointmentListItem[]; error: string | null }> {
-    const t = new Date();
-    const from = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-    const params = new URLSearchParams({ from, limit: "30" });
+    const from = toWIBDateString(new Date());
+    const params = new URLSearchParams({ from, limit: "100" });
     if (filter.q?.trim()) params.set("q", filter.q.trim());
     if (filter.roomId) params.set("roomId", filter.roomId);
     if (filter.status) params.set("status", filter.status);
@@ -63,11 +63,12 @@ export async function fetchPastAppointments(
     signal: AbortSignal,
     filter: AppointmentListFilter = {}
 ): Promise<{ items: AppointmentListItem[]; total: number; error: string | null }> {
-    const t = new Date();
-    const past = new Date(t.getFullYear(), t.getMonth() - 6, t.getDate());
-    const yesterday = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1);
-    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const params = new URLSearchParams({ from: fmt(past), to: fmt(yesterday), limit: "100" });
+    const wibToday = toWIBDateString(new Date());
+    const yesterday = addCalendarDays(wibToday, -1);
+    const [wy, wm, wd] = wibToday.split("-").map(Number);
+    const pastDate = new Date(Date.UTC(wy, wm - 1 - 6, wd, 12, 0, 0));
+    const past = `${pastDate.getUTCFullYear()}-${String(pastDate.getUTCMonth() + 1).padStart(2, "0")}-${String(pastDate.getUTCDate()).padStart(2, "0")}`;
+    const params = new URLSearchParams({ from: past, to: yesterday, limit: "100" });
     if (filter.q?.trim()) params.set("q", filter.q.trim());
     if (filter.roomId) params.set("roomId", filter.roomId);
     if (filter.status) params.set("status", filter.status);

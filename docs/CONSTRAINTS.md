@@ -2,7 +2,7 @@
 
 > **Purpose**: What must or must not be done.  
 > **Source of Truth**: Framework constraints, Edge runtime, security policies, and business rules.  
-> **Last Verified**: 2026-10-11  
+> **Last Verified**: 2026-10-22  
 
 Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, keamanan, dan deployment yang terbukti aktif dalam codebase ini.
 
@@ -37,6 +37,10 @@ Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, 
   - Perhitungan lembur wajib mengacu pada formula Kepmenak / PP No. 35 Tahun 2021.
   - Perhitungan pajak penghasilan wajib mematuhi skema Tarif Efektif Rata-rata (TER) PPh 21 tahun 2024 dan penggolongan status PTKP.
   - Pemotongan BPJS Kesehatan dibatasi plafon upah tertinggi sesuai peraturan perundang-undangan.
+- **Zona Waktu Wajib WIB (+07:00 Asia/Jakarta) — Single Office**:
+  - Seluruh logika tanggal/jam bisnis wajib memakai WIB eksplisit (`Asia/Jakarta`, `+07:00`) via helper `@/lib/timezone` (`wibDateTimeToDate`, `toWIBDateString`, `toDateString`). Dilarang mengandalkan jam lokal perangkat/browser (`getHours()`, `toLocaleString()` tanpa `timeZone`) atau zona host (`getDay()`) untuk keputusan bisnis.
+  - Alasan: kantor hanya 1 (on-premise, tanpa cabang luar negeri); seluruh employee tidak bepergian ke luar negeri (kapabilitas belum ada, horizon ~10 tahun). WIB adalah satu-satunya kunci waktu.
+  - Penyimpanan tetap instant UTC (`DateTime` Prisma); konversi WIB hanya di boundary baca/tulis.
 
 ---
 
@@ -75,3 +79,6 @@ Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, 
   - Tidak ada konfigurasi containerisasi Docker (`Dockerfile` / `docker-compose.yml`) di dalam repositori.
 - **Sinkronisasi Skema Basis Data**:
   - Skema saat ini disinkronkan melalui `prisma db push`. Jika di-deploy ke production dengan migrasi formal, harus diperhatikan bahwa tabel `_prisma_migrations` belum terinisialisasi pada database lokal saat ini.
+- **Zona Produksi On-Premise WIB (terverifikasi 2026-10-22)**:
+  - Server utama hris berjalan on-premise di kantor (Ubuntu 22.04.5 LTS). `timedatectl`: `Local time: Kam 2026-10-22 14:49:19 WIB`, `Universal time: 07:49:19 UTC`, `Time zone: Asia/Jakarta (WIB, +0700)`, `System clock synchronized: yes`, `NTP service: active`.
+  - Jangan ubah zona sistem dari `Asia/Jakarta`. Cron VPS (`crontab root`) berjalan di zona ini. Kode tetap wajib memakai WIB eksplisit, bukan mengandalkan zona host.

@@ -2,7 +2,7 @@
 
 import { Suspense, use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Pencil, StickyNote, Trash2, User, Users, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Settings, StickyNote, Trash2, User, Users, X } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
@@ -16,13 +16,14 @@ import {
     requesterDisplayName,
     type AppointmentListItem,
 } from "@/components/appointments/useAppointments";
+import { formatWIBDateTime } from "@/lib/timezone";
 
 function fmtDT(iso: string): string {
-    return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return formatWIBDateTime(new Date(iso), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtDateOnly(iso: string): string {
-    return new Date(iso).toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    return formatWIBDateTime(new Date(iso), { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
 export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -82,7 +83,11 @@ function DetailContent({ id }: { id: string }) {
     }, [load]);
 
     async function handleRsvp(action: "ACCEPT" | "DECLINE", note?: string) {
-        if (action === "DECLINE" && (!note || note.trim().length < 5)) return;
+        if (action === "DECLINE" && (!note || note.trim().length < 5)) {
+            toast("Alasan penolakan minimal 5 karakter.", "error");
+            setError("Alasan penolakan minimal 5 karakter.");
+            return;
+        }
         setRsvping(true);
         setError("");
         try {
@@ -102,7 +107,11 @@ function DetailContent({ id }: { id: string }) {
     }
 
     async function handleCancel() {
-        if (cancelReason.trim().length < 5) return;
+        if (cancelReason.trim().length < 5) {
+            toast("Alasan pembatalan minimal 5 karakter.", "error");
+            setError("Alasan pembatalan minimal 5 karakter.");
+            return;
+        }
         setActionLoading(true);
         setError("");
         try {
@@ -194,11 +203,12 @@ function DetailContent({ id }: { id: string }) {
 
     const canManage = !!myEmployeeId && item.requesterEmployeeId === myEmployeeId;
     const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
-    const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle !== "COMPLETED" && item.lifecycle !== "CANCELLED";
-    const canCancel = canManage && item.status === "SCHEDULED";
-    const canComplete = canManage && item.lifecycle === "IN_PROGRESS";
+    const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
+    const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
+    const canCancel = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
+    const canComplete = canManage && item.status === "SCHEDULED" && Date.now() >= new Date(item.startAt).getTime();
     const nowMs = Date.now();
-    const canMark = canManage && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
+    const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
     const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
     const myResponse = myParticipant?.inviteStatus ?? "PENDING";
     const rsvpLocked = myResponse === "ACCEPTED" || myResponse === "DECLINED";
@@ -248,6 +258,13 @@ function DetailContent({ id }: { id: string }) {
                         {item.status === "CANCELLED"
                             ? "Meeting ini telah dibatalkan."
                             : "Meeting telah selesai. Revisi notulensi tetap dapat dilakukan dengan mencantumkan alasan perubahan."}
+                    </p>
+                </div>
+            )}
+            {isOverdueStored && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" role="status" aria-label="Meeting lewat jadwal">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
+                        Jadwal sudah lewat. Tekan Selesaikan untuk menutup meeting, atau biarkan sistem menyelesaikannya otomatis. Pengaturan dan pembatalan dikunci; notulensi dan task ikut tertutup.
                     </p>
                 </div>
             )}
@@ -350,9 +367,10 @@ function DetailContent({ id }: { id: string }) {
                             {askingDecline && (
                                 <div className="space-y-2 rounded-xl border border-[var(--border)] p-2.5">
                                     <label className="form-label" htmlFor="decline-note">Alasan Penolakan * (dapat dibaca oleh penyelenggara)</label>
-                                    <input
+                                    <textarea
                                         id="decline-note"
-                                        className="form-input"
+                                        className="form-input min-h-[64px] resize-y"
+                                        rows={3}
                                         value={declineNote}
                                         onChange={(e) => setDeclineNote(e.target.value)}
                                         placeholder="Tuliskan alasan (minimal 5 karakter)"
@@ -394,7 +412,7 @@ function DetailContent({ id }: { id: string }) {
                                     {participantDisplayName(p)}
                                     {p.isExternal && <span className="text-[11px] text-[var(--text-muted)]"> (Tamu Eksternal)</span>}
                                     {p.inviteStatus === "DECLINED" && p.inviteNote && (
-                                        <span className="block text-[11px] text-[var(--text-muted)] truncate">Alasan: {p.inviteNote}</span>
+                                        <span className="block text-[11px] text-[var(--text-muted)] truncate" title={p.inviteNote}>Alasan: {p.inviteNote}</span>
                                     )}
                                 </span>
                                 <span className="flex gap-1 shrink-0 items-center">
@@ -434,8 +452,8 @@ function DetailContent({ id }: { id: string }) {
 
                 <div className="flex gap-2">
                     {canEdit && (
-                        <button type="button" onClick={() => setEditing(true)} disabled={actionLoading} className="btn btn-secondary flex-1">
-                            <Pencil className="w-4 h-4" /> Ubah Jadwal
+                        <button type="button" onClick={() => setEditing(true)} disabled={actionLoading} className="btn btn-secondary flex-1" aria-label="Pengaturan meeting">
+                            <Settings className="w-4 h-4" /> Pengaturan Meeting
                         </button>
                     )}
                     {canComplete && (
@@ -478,9 +496,10 @@ function DetailContent({ id }: { id: string }) {
                 {askingCancel && (
                     <div className="space-y-2 rounded-xl border border-[var(--border)] p-3">
                         <label className="form-label" htmlFor="cancel-reason">Alasan Pembatalan *</label>
-                        <input
+                        <textarea
                             id="cancel-reason"
-                            className="form-input"
+                            className="form-input min-h-[64px] resize-y"
+                            rows={3}
                             value={cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}
                             placeholder="Tuliskan alasan (minimal 5 karakter)"
@@ -517,7 +536,8 @@ function DetailContent({ id }: { id: string }) {
                     appointmentId={item.id}
                     participants={taskParticipants}
                     readOnly={isFrozen}
-                    canCreateTask={hasStarted}
+                    canCreateTask={hasStarted && !isFrozen}
+                    refreshKey={syncKey}
                 />
             </div>
 

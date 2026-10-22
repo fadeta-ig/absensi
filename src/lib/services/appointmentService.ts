@@ -21,6 +21,20 @@ function isPrismaUniqueViolation(err: unknown): boolean {
     return typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002";
 }
 
+function isPrismaSerializationFailure(err: unknown): boolean {
+    return typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2034";
+}
+
+function toConcurrentConflict(err: unknown): unknown {
+    if (isPrismaSerializationFailure(err)) {
+        return new AppointmentError("Data berubah bersamaan. Muat ulang halaman lalu coba lagi.", 409);
+    }
+    if (isPrismaUniqueViolation(err)) {
+        return new AppointmentError("Data duplikat terdeteksi (kemungkinan input ganda bersamaan). Muat ulang halaman lalu coba lagi.", 409);
+    }
+    return err;
+}
+
 // ─── Konstanta ────────────────────────────────────────────────
 
 export const APPOINTMENT_REMINDER_KEY = "appointment.reminder.offsets" as const;
@@ -59,7 +73,7 @@ function requireWig002(session: SessionPayload): void {
 
 // ─── Reminder offsets dinamis (dikelola WIG002) ───
 
-function parseReminderOffsets(raw: string | null | undefined): number[] {
+export function parseReminderOffsets(raw: string | null | undefined): number[] {
     if (!raw) return [...DEFAULT_REMINDER_OFFSETS];
     try {
         const parsed = JSON.parse(raw) as unknown;
@@ -71,6 +85,12 @@ function parseReminderOffsets(raw: string | null | undefined): number[] {
     } catch {
         return [...DEFAULT_REMINDER_OFFSETS];
     }
+}
+
+/** Jendela kirim cron tiap 15 menit: offset jatuh tempo bila 0 < (offset - minutesLeft) <= pollWindow. */
+export function isReminderOffsetDue(offsetMin: number, minutesLeft: number, pollWindowMin = 15): boolean {
+    if (minutesLeft > offsetMin || minutesLeft <= offsetMin - pollWindowMin) return false;
+    return true;
 }
 
 export async function getReminderOffsets(): Promise<number[]> {
@@ -87,6 +107,9 @@ export async function getReminderOffsets(): Promise<number[]> {
 
 export async function setReminderOffsets(raw: number[], actor: { userId?: string | null; username: string }): Promise<number[]> {
     const offsets = [...new Set(raw.filter((v) => Number.isInteger(v) && v >= 15))].sort((a, b) => b - a);
+    if (offsets.length === 0) {
+        throw new AppointmentError("Daftar pengingat tidak boleh kosong (minimal 1 offset ≥ 15 menit).", 400);
+    }
     if (offsets.length > MAX_REMINDER_OFFSETS) {
         throw new AppointmentError(`Jumlah pengingat maksimal ${MAX_REMINDER_OFFSETS} per meeting.`, 409);
     }
@@ -341,8 +364,9 @@ export interface CreateAppointmentInput extends AppointmentSlot {
 }
 
 function parseReminderOverride(raw: number[] | null | undefined): string | null {
-    if (!raw) return null;
+    if (!raw || raw.length === 0) return null;
     const offsets = [...new Set(raw.filter((v) => Number.isInteger(v) && v >= 15))].sort((a, b) => b - a).slice(0, MAX_REMINDER_OFFSETS);
+    if (offsets.length === 0) return null;
     return JSON.stringify(offsets);
 }
 
@@ -370,7 +394,9 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     // tanpa menunggu operator.
     const status = "SCHEDULED";
 
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await prisma
+        .$transaction(
+            async (tx) => {
         if (room) {
             const overlap = await hasRoomOverlap(tx, room.id, startAt, endAt);
             if (overlap && !(asOperator && input.force)) {
@@ -418,7 +444,11 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
             },
         });
         return appt;
-    });
+            },
+            { isolationLevel: "Serializable" }
+        ).catch((err) => {
+            throw toConcurrentConflict(err);
+        });
     return created;
 }
 
@@ -452,14 +482,21 @@ function buildWhere(session: SessionPayload, filters: AppointmentFilters, isPriv
     }
     if (and.length > 0) where.AND = and;
     if (filters.from || filters.to) {
-        const startAt: { gte?: Date; lt?: Date } = {};
-        if (filters.from && isValidCalendarDate(filters.from)) startAt.gte = wibDateTimeToDate(filters.from, "00:00");
+        let fromStart: Date | undefined;
+        let toExclusive: Date | undefined;
+        if (filters.from && isValidCalendarDate(filters.from)) fromStart = wibDateTimeToDate(filters.from, "00:00");
         if (filters.to && isValidCalendarDate(filters.to)) {
             const d = new Date(filters.to + "T00:00:00+07:00");
             d.setDate(d.getDate() + 1);
-            startAt.lt = d;
+            toExclusive = d;
         }
-        where.startAt = startAt;
+        if (fromStart && toExclusive) {
+            and.push({ startAt: { lt: toExclusive } }, { endAt: { gte: fromStart } });
+        } else if (fromStart) {
+            and.push({ endAt: { gte: fromStart } });
+        } else if (toExclusive) {
+            and.push({ startAt: { lt: toExclusive } });
+        }
     }
     return where;
 }
@@ -544,6 +581,9 @@ export async function respondInvite(
         throw new AppointmentError("Respons Anda sudah tercatat dan bersifat final. Hubungi penyelenggara untuk perubahan.", 409);
     }
     const next = action === "ACCEPT" ? "ACCEPTED" : "DECLINED";
+    if (next === "DECLINED" && (!note || note.trim().length < 5)) {
+        throw new AppointmentError("Alasan penolakan minimal 5 karakter.", 400);
+    }
     await prisma.meetingAppointmentParticipant.update({
         where: { id: mine.id },
         data: { inviteStatus: next, inviteRespondedAt: new Date(), inviteNote: note?.trim().slice(0, 500) || null },
@@ -606,7 +646,9 @@ export async function rescheduleAppointment(
         ? await validateParticipants(input.participants)
         : undefined;
 
-    return prisma.$transaction(async (tx) => {
+    return prisma
+        .$transaction(
+            async (tx) => {
         await tx.$queryRaw`SELECT id FROM meeting_appointments WHERE id = ${id} FOR UPDATE`;
         const existing = await tx.meetingAppointment.findUnique({ where: { id } });
         if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
@@ -697,7 +739,11 @@ export async function rescheduleAppointment(
                     changeReason: effectiveReason,
                     changedBy: actor.username,
                     previousData: {
+                        kind: "rescheduled",
                         status: existing.status,
+                        title: existing.title,
+                        agenda: existing.agenda,
+                        isFullDay: existing.isFullDay,
                         roomId: existing.roomId,
                         meetingLink: existing.meetingLink,
                         startAt: existing.startAt,
@@ -717,6 +763,15 @@ export async function rescheduleAppointment(
         } catch (err) {
             if (isPrismaUniqueViolation(err)) throw new AppointmentError("Data berubah bersamaan. Muat ulang halaman lalu coba lagi.", 409);
             throw err;
+        }
+        if (isTimeChanged || isPlaceChanged) {
+            await tx.meetingAppointmentParticipant.updateMany({
+                where: { appointmentId: id },
+                data: { inviteStatus: "PENDING", inviteRespondedAt: null, inviteNote: null },
+            });
+        }
+        if (isTimeChanged) {
+            await tx.appointmentReminderLog.deleteMany({ where: { appointmentId: id } });
         }
         if (normalizedParticipants) {
             const desiredInternal = new Set(
@@ -788,7 +843,12 @@ export async function rescheduleAppointment(
             },
         });
         return updated;
-    });
+            },
+            { isolationLevel: "Serializable" }
+        )
+        .catch((err) => {
+            throw toConcurrentConflict(err);
+        });
 }
 
 // ─── Cancel ───────────────────────────────────────────────────
@@ -801,7 +861,7 @@ export async function cancelAppointment(
 ): Promise<unknown> {
     const operator = isWig002(session);
     if (!reason || reason.trim().length < 5) throw new AppointmentError("Alasan pembatalan minimal 5 karakter.", 400);
-    const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true } });
+    const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true } });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
         throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
@@ -820,7 +880,7 @@ export async function cancelAppointment(
                 revisionNumber: count + 1,
                 changeReason: reason.trim(),
                 changedBy: actor.username,
-                previousData: { status: existing.status, roomId: existing.roomId, startAt: existing.startAt, endAt: existing.endAt },
+                previousData: { kind: "cancelled", status: existing.status, title: existing.title, agenda: existing.agenda, isFullDay: existing.isFullDay, roomId: existing.roomId, startAt: existing.startAt, endAt: existing.endAt },
             },
         });
         await tx.auditLog.create({
@@ -840,7 +900,7 @@ export async function completeAppointment(
     const operator = isWig002(session);
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
-        select: { id: true, title: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true },
+        select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true },
     });
     if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
@@ -850,9 +910,8 @@ export async function completeAppointment(
         throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat menyelesaikan.", 403);
     }
     const now = new Date();
-    const lifecycle = resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt, now);
-    if (lifecycle !== "IN_PROGRESS") {
-        throw new AppointmentError("Hanya meeting yang sedang berjalan yang dapat diselesaikan lebih awal.", 409);
+    if (now < existing.startAt) {
+        throw new AppointmentError("Meeting belum dimulai. Penyelesaian hanya dapat dilakukan setelah jam mulai.", 409);
     }
     return prisma.$transaction(async (tx) => {
         const res = await tx.meetingAppointment.updateMany({
@@ -867,7 +926,7 @@ export async function completeAppointment(
                 revisionNumber: count + 1,
                 changeReason: "Meeting diselesaikan lebih awal.",
                 changedBy: actor.username,
-                previousData: { status: existing.status, roomId: existing.roomId, startAt: existing.startAt, endAt: existing.endAt },
+                previousData: { kind: "completed_early", status: existing.status, title: existing.title, agenda: existing.agenda, isFullDay: existing.isFullDay, roomId: existing.roomId, startAt: existing.startAt, endAt: existing.endAt },
             },
         });
         await tx.auditLog.create({
@@ -908,9 +967,19 @@ export async function markAttendance(
         if (!validIds.has(m.participantId)) throw new AppointmentError("Data peserta tidak valid. Muat ulang daftar peserta.", 400);
         if (m.attendance !== "HADIR" && m.attendance !== "TIDAK_HADIR") throw new AppointmentError("Status kehadiran tidak valid.", 400);
     }
-    await prisma.$transaction(
-        marks.map((m) => prisma.meetingAppointmentParticipant.update({ where: { id: m.participantId }, data: { attendance: m.attendance } }))
-    );
+    try {
+        await prisma.$transaction(
+            async (tx) => {
+                await tx.$queryRaw`SELECT id FROM meeting_appointments WHERE id = ${id} FOR UPDATE`;
+                for (const m of marks) {
+                    await tx.meetingAppointmentParticipant.update({ where: { id: m.participantId }, data: { attendance: m.attendance } });
+                }
+            },
+            { isolationLevel: "Serializable" }
+        );
+    } catch (err) {
+        throw toConcurrentConflict(err);
+    }
     await prisma.auditLog
         .create({
             data: { action: "MARK_APPOINTMENT_ATTENDANCE", entity: "APPOINTMENT", entityId: id, details: JSON.stringify({ marks }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
@@ -947,14 +1016,23 @@ export async function createUnavailability(session: SessionPayload, input: Unava
     if (endAt.getTime() - startAt.getTime() > 31 * 24 * 60 * 60 * 1000) {
         throw new AppointmentError("Rentang penanda sibuk maksimal 31 hari.", 400);
     }
-    const clash = await prisma.employeeUnavailability.findFirst({
-        where: { employeeId: session.employeeId, startAt: { lt: endAt }, endAt: { gt: startAt } },
-        select: { id: true },
+    const ownerId = session.employeeId as string;
+    const clash = await prisma.$transaction(
+        async (tx) => {
+            const existing = await tx.employeeUnavailability.findFirst({
+                where: { employeeId: ownerId, startAt: { lt: endAt }, endAt: { gt: startAt } },
+                select: { id: true },
+            });
+            if (existing) throw new AppointmentError("Sudah ada penanda sibuk pada rentang tersebut.", 409);
+            return tx.employeeUnavailability.create({
+                data: { employeeId: ownerId, startAt, endAt, reason: input.reason?.trim().slice(0, 500) || null },
+            });
+        },
+        { isolationLevel: "Serializable" }
+    ).catch((err) => {
+        throw toConcurrentConflict(err);
     });
-    if (clash) throw new AppointmentError("Sudah ada penanda sibuk pada rentang tersebut.", 409);
-    const created = await prisma.employeeUnavailability.create({
-        data: { employeeId: session.employeeId, startAt, endAt, reason: input.reason?.trim().slice(0, 500) || null },
-    });
+    const created = clash;
     const actor = actorFromSession(session);
     await prisma.auditLog
         .create({

@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, ListChecks, Loader2, Plus, Undo2 } from "lucide-r
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
+import { formatWIBDateTime } from "@/lib/timezone";
 import { useConfirm } from "@/components/ConfirmModal";
 import TaskFormModal, { type TaskFormMode } from "@/components/appointments/TaskFormModal";
 
@@ -61,11 +62,13 @@ export default function MeetingTaskSection({
     participants,
     readOnly = false,
     canCreateTask = true,
+    refreshKey,
 }: {
     appointmentId: string;
     participants: TaskParticipant[];
     readOnly?: boolean;
     canCreateTask?: boolean;
+    refreshKey?: string | number;
 }) {
     const [tasks, setTasks] = useState<MeetingTask[]>([]);
     const [loading, setLoading] = useState(true);
@@ -104,9 +107,10 @@ export default function MeetingTaskSection({
 
     useEffect(() => {
         void load();
-    }, [load]);
+    }, [load, refreshKey]);
 
     async function handleStatus(taskId: string, status: string) {
+        // Status penerima tetap dapat diubah setelah meeting selesai (task berlanjut sampai deadline).
         setBusy(true);
         setError("");
         try {
@@ -127,6 +131,10 @@ export default function MeetingTaskSection({
     }
 
     async function handleRequestExtension(taskId: string) {
+        if (readOnly) {
+            setError("Meeting sudah selesai/dibatalkan, pengajuan perpanjangan dikunci.");
+            return;
+        }
         setBusy(true);
         setError("");
         try {
@@ -150,6 +158,10 @@ export default function MeetingTaskSection({
     }
 
     async function handleDecide(taskId: string, requestId: string, decision: "APPROVED" | "REJECTED") {
+        if (readOnly) {
+            setError("Meeting sudah selesai/dibatalkan, keputusan perpanjangan dikunci.");
+            return;
+        }
         setBusy(true);
         setError("");
         try {
@@ -181,6 +193,11 @@ export default function MeetingTaskSection({
                     </button>
                 )}
             </div>
+            {readOnly && tasks.length > 0 && (
+                <p className="text-[11px] text-[var(--text-muted)] mb-2" role="note">
+                    Task meeting ditutup karena meeting telah selesai/dibatalkan.
+                </p>
+            )}
 
             {taskModal && (
                 <TaskFormModal
@@ -228,7 +245,7 @@ export default function MeetingTaskSection({
                                     {task.activeDeadline ? ` · Deadline ${task.activeDeadline.date}` : ""}
                                     {task.extensionsCount > 0 ? ` · Diperpanjang ${task.extensionsCount}x` : ""}
                                 </p>
-                                {!task.isCancelled && mine && mine.status !== "DIBATALKAN" && (
+                                {!task.isCancelled && !readOnly && mine && mine.status !== "DIBATALKAN" && (
                                     <div className="mt-2 rounded-xl border border-[var(--primary)]/40 bg-[var(--card)] p-2.5" aria-label={`Status saya pada ${task.title}`}>
                                         <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
                                             Status saya · <span className="text-[var(--text-primary)]">{STATUS_LABEL[mine.status] ?? mine.status}</span>
@@ -306,7 +323,7 @@ export default function MeetingTaskSection({
                                     </div>
                                 </div>
 
-                                {!task.isCancelled && (iAmAssigner || mine) && (
+                                {!task.isCancelled && !readOnly && (iAmAssigner || mine) && (
                                     <div className="flex gap-1.5 mt-2">
                                         {iAmAssigner ? (
                                             <>
@@ -340,7 +357,7 @@ export default function MeetingTaskSection({
                                     </div>
                                 )}
 
-                                {reqFor === task.id && !task.isCancelled && !iAmAssigner && (
+                                {reqFor === task.id && !task.isCancelled && !readOnly && !iAmAssigner && (
                                     <div className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-2.5 mt-2">
                                         <label className="form-label" htmlFor={`req-date-${task.id}`}>Tanggal Usulan *</label>
                                         <input id={`req-date-${task.id}`} type="date" className="form-input" value={reqDate} onChange={(e) => setReqDate(e.target.value)} />
@@ -358,10 +375,10 @@ export default function MeetingTaskSection({
                                     </div>
                                 )}
 
-                                {iAmAssigner && task.pendingExtensionRequests.filter((r) => r.status === "PENDING").map((r) => (
+                                {iAmAssigner && !readOnly && task.pendingExtensionRequests.filter((r) => r.status === "PENDING").map((r) => (
                                     <div key={r.id} className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-2 mt-2 text-xs">
                                         <p className="font-semibold text-[var(--text-primary)]">
-                                            {r.requestedBy.name ? stripGelar(r.requestedBy.name) : r.requestedBy.employeeId} meminta ke {new Date(r.proposedDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                            {r.requestedBy.name ? stripGelar(r.requestedBy.name) : r.requestedBy.employeeId} meminta ke {formatWIBDateTime(new Date(r.proposedDate), { day: "numeric", month: "short", year: "numeric" })}
                                         </p>
                                         <p className="text-[var(--text-muted)] mt-0.5">Alasan: {r.reason}</p>
                                         <div className="flex gap-1.5 mt-1.5">

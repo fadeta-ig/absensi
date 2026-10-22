@@ -44,6 +44,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [conflicts, setConflicts] = useState<string[]>([]);
+    const [roomConflict, setRoomConflict] = useState(false);
     const [checkingConflicts, setCheckingConflicts] = useState(false);
 
     const initialEditDate = editing ? toWIBDateString(new Date(editing.startAt)) : initialDate;
@@ -79,19 +80,22 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
 
     useEffect(() => {
         setConflicts([]);
+        setRoomConflict(false);
         const ids = participants.filter((p) => p.employeeId).map((p) => p.employeeId as string);
-        if (!date || isFullDay || !startTime || !endTime || ids.length === 0) return;
+        if (!date || isFullDay || !startTime || !endTime || (ids.length === 0 && !roomId)) return;
         const timer = setTimeout(async () => {
             setCheckingConflicts(true);
             try {
                 const controller = new AbortController();
                 const excludeParam = editingId ? `&excludeId=${encodeURIComponent(editingId)}` : "";
-                const res = await fetch(`/api/appointments/availability?date=${date}&employees=${encodeURIComponent(ids.join(","))}${excludeParam}`, {
+                const roomParam = roomId ? `&roomId=${encodeURIComponent(roomId)}` : "";
+                const res = await fetch(`/api/appointments/availability?date=${date}&employees=${encodeURIComponent(ids.join(","))}${roomParam}${excludeParam}`, {
                     signal: controller.signal,
                 });
                 if (!res.ok) return;
-                const json = (await res.json()) as { data?: { employeeBusy?: Record<string, Array<{ startAt: string; endAt: string; leave?: boolean }>> } };
+                const json = (await res.json()) as { data?: { employeeBusy?: Record<string, Array<{ startAt: string; endAt: string; leave?: boolean }>>; roomBusy?: Array<{ startAt: string; endAt: string }> } };
                 const busy = json.data?.employeeBusy ?? {};
+                const roomBusy = json.data?.roomBusy ?? [];
                 const slotStart = new Date(`${date}T${startTime}:00+07:00`).getTime();
                 const slotEnd = new Date(`${date}T${endTime}:00+07:00`).getTime();
                 if (!(slotEnd > slotStart)) return;
@@ -104,6 +108,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                     }
                 }
                 setConflicts(hit);
+                setRoomConflict(roomId ? roomBusy.some((b) => new Date(b.startAt).getTime() < slotEnd && new Date(b.endAt).getTime() > slotStart) : false);
             } catch {
                 /* abaikan — validasi final tetap di server */
             } finally {
@@ -111,7 +116,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [date, startTime, endTime, isFullDay, participants, editingId]);
+    }, [date, startTime, endTime, isFullDay, participants, editingId, roomId]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -124,7 +129,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 ? {
                     title: title.trim(),
                     agenda: agenda.trim() || null,
-                    roomId: roomId || null,
+                    roomId,
                     date,
                     startTime: isFullDay ? undefined : startTime,
                     endTime: isFullDay ? undefined : endTime,
@@ -135,7 +140,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 : {
                     title: title.trim(),
                     agenda: agenda.trim() || null,
-                    roomId: roomId || null,
+                    roomId,
                     date,
                     startTime: isFullDay ? undefined : startTime,
                     endTime: isFullDay ? undefined : endTime,
@@ -159,9 +164,9 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     }
 
     return (
-        <AccessibleModal ariaLabel={editing ? "Ubah jadwal meeting" : "Buat meeting"} onClose={onClose} className="max-w-lg" disableClose={loading}>
+        <AccessibleModal ariaLabel={editing ? "Pengaturan meeting" : "Buat meeting"} onClose={onClose} className="max-w-lg" disableClose={loading}>
             <div className="modal-header">
-                <h2 className="modal-title">{editing ? "Ubah Jadwal Meeting" : "Buat Meeting"}</h2>
+                <h2 className="modal-title">{editing ? "Pengaturan Meeting" : "Buat Meeting"}</h2>
                 <button className="modal-close" onClick={onClose} disabled={loading} aria-label="Tutup dialog meeting">
                     <X className="w-4 h-4" />
                 </button>
@@ -178,6 +183,11 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             {conflicts.length > 0 && (
                 <FeedbackMessage variant="warning" className="mb-4" title="Peserta Tidak Tersedia">
                     {conflicts.join(", ")} sudah memiliki jadwal meeting, cuti, atau periode sibuk pada jam tersebut. Ruangan tersedia berdasarkan urutan pemesanan — ubah jam meeting atau hubungi penyelenggara apabila mendesak.
+                </FeedbackMessage>
+            )}
+            {roomConflict && (
+                <FeedbackMessage variant="warning" className="mb-4" title="Ruangan Bentrok">
+                    Ruangan sudah terisi pada jam tersebut. Meeting tetap dapat disimpan — ruangan tersedia berdasarkan urutan pemesanan, simpan ulang bila server menolak karena bentrok.
                 </FeedbackMessage>
             )}
 

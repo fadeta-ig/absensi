@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Calendar as CalendarIcon,
     ChevronLeft,
     ChevronRight,
 } from "lucide-react";
+import { getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 
 export interface CalendarAppointment {
     id: string;
@@ -34,8 +35,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function fmtTime(iso: string): string {
-    const d = new Date(iso);
-    return `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
+    const { hours, minutes } = getWIBHoursMinutes(new Date(iso));
+    return `${String(hours).padStart(2, "0")}.${String(minutes).padStart(2, "0")}`;
 }
 
 export default function AppointmentCalendar({ appointmentsByDate, selectedDate, onSelectDate, onMonthChange }: AppointmentCalendarProps) {
@@ -43,6 +44,16 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
         const [y, m] = selectedDate.split("-").map(Number);
         return new Date(y || new Date().getFullYear(), (m || new Date().getMonth() + 1) - 1, 1);
     });
+
+    useEffect(() => {
+        const [y, m] = selectedDate.split("-").map(Number);
+        if (!y || !m) return;
+        setCurrentDate((prev) => {
+            const next = new Date(y, m - 1, 1);
+            if (prev.getFullYear() === next.getFullYear() && prev.getMonth() === next.getMonth()) return prev;
+            return next;
+        });
+    }, [selectedDate]);
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -66,10 +77,7 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
     }
 
     const monthName = currentDate.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-    const todayKey = (() => {
-        const t = new Date();
-        return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-    })();
+    const todayKey = toWIBDateString(new Date());
 
     return (
         <div className="card overflow-hidden">
