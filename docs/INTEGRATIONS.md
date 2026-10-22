@@ -62,7 +62,8 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
   6. `/api/cron/meeting-task-reminder` (satu push per hari jam 07:00 WIB per penerima task terbuka, termasuk overdue; exactly-once via `MeetingTaskReminderLog`).
   7. `/api/cron/daily-recap` (rekap harian gabungan alat+kebersihan jam 23:59 WIB ke Top Reviewer SAJA via email; exactly-once via `daily_recap_email_logs`; pratinjau manual `POST /api/ga/recap/test-email` selalu ke email IT).
 - **Otentikasi Cron**:
-  - Dilindungi menggunakan header `Authorization: Bearer <CRON_SECRET>` untuk pemanggil sistem eksternal (seperti crontab / systemd timer), atau sesi HR Admin yang sah (`canManageHr`).
+  - Dilindungi menggunakan header `Authorization: Bearer <CRON_SECRET>` (dibaca wrapper `hris-cron.sh` dari `/var/www/hris/.env` tiap eksekusi). Tidak ada cabang sesi HR — seluruh route `/api/cron/*` hanya menerima Bearer tersebut.
+  - > **Last Verified**: 2026-10-22 (audit `crontab -l` + `hris-cron.sh` + log `/var/log/hris-cron.log`).
 
 ---
 

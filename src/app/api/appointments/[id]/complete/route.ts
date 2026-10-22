@@ -26,7 +26,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 tag: `meeting-task-${item.taskId}-submitted`,
                 url: `/employee/appointments/tasks?highlight=${item.taskId}`,
             });
-            submitted += item.employeeIds.length;
+            submitted += 1;
         }
 
         return NextResponse.json({ success: true, submitted });

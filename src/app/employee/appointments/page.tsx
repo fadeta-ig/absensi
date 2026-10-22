@@ -12,13 +12,14 @@ import AppointmentFormModal from "@/components/appointments/AppointmentFormModal
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
 import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { toDateString, formatIndonesianDate } from "@/lib/utils";
+import { formatWIBDateTime, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 
 type ViewMode = "upcoming" | "day" | "month";
 type ModalState = { type: "none" } | { type: "create" };
 
 function fmtTime(iso: string): string {
-    const d = new Date(iso);
-    return `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
+    const { hours, minutes } = getWIBHoursMinutes(new Date(iso));
+    return `${String(hours).padStart(2, "0")}.${String(minutes).padStart(2, "0")}`;
 }
 
 export default function EmployeeAppointmentsPage() {
@@ -27,8 +28,8 @@ export default function EmployeeAppointmentsPage() {
     const [view, setView] = useState<ViewMode>("upcoming");
     const [selectedDate, setSelectedDate] = useState(() => toDateString(new Date()));
     const [month, setMonth] = useState(() => {
-        const t = new Date();
-        return { year: t.getFullYear(), month: t.getMonth() };
+        const [y, m] = toWIBDateString(new Date()).split("-").map(Number);
+        return { year: y, month: m - 1 };
     });
     const [items, setItems] = useState<AppointmentListItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -75,18 +76,19 @@ export default function EmployeeAppointmentsPage() {
     }, []);
 
     const loadMonth = useCallback(
-        async (year: number, mon: number) => {
-            const key = `${year}-${mon}`;
+        async (year: number, mon: number, signal?: AbortSignal) => {
+            const key = `${year}-${mon}-${debouncedQ}-${filterRoom}-${filterStatus}`;
             fetchedRef.current = key;
             setLoading(true);
             setLoadError(null);
             const controller = new AbortController();
-            const { items: data, error } = await fetchMonthAppointments(year, mon, controller.signal, {
+            const linkedSignal = signal ?? controller.signal;
+            const { items: data, error } = await fetchMonthAppointments(year, mon, linkedSignal, {
                 q: debouncedQ || undefined,
                 roomId: filterRoom || undefined,
                 status: filterStatus || undefined,
             });
-            if (fetchedRef.current !== key) return;
+            if (signal?.aborted || fetchedRef.current !== key) return;
             setItems(data);
             setLoadError(error);
             setLoading(false);
@@ -101,13 +103,13 @@ export default function EmployeeAppointmentsPage() {
     const [historyTotal, setHistoryTotal] = useState<number | null>(null);
 
     useEffect(() => {
-        if (!myEmployeeId) return;
+        if (!myEmployeeId || scope === "history") return;
         const controller = new AbortController();
         void fetchPastAppointments(controller.signal, {}).then(({ total }) => {
             setHistoryTotal(total);
         });
         return () => controller.abort();
-    }, [myEmployeeId, refreshKey]);
+    }, [myEmployeeId, refreshKey, scope]);
 
     useEffect(() => {
         if (view === "upcoming") {
@@ -121,16 +123,35 @@ export default function EmployeeAppointmentsPage() {
                 q: debouncedQ || undefined,
                 roomId: filterRoom || undefined,
                 status: filterStatus || undefined,
-            }).then(({ items: data, error }) => {
+            }).then((result) => {
                 if (fetchedRef.current !== key) return;
+                const { items: data, error } = result;
                 setItems(data);
                 setLoadError(error);
+                if (scope === "history") {
+                    const total = (result as { total?: unknown }).total;
+                    if (typeof total === "number") setHistoryTotal(total);
+                }
                 setLoading(false);
             });
             return () => controller.abort();
         }
-        void loadMonth(month.year, month.month);
-    }, [view, month, loadMonth, debouncedQ, filterRoom, filterStatus, scope, refreshKey]);
+        if (view === "day") {
+            const [sy, sm] = selectedDate.split("-").map(Number);
+            const targetYear = sy || month.year;
+            const targetMonth = sm ? sm - 1 : month.month;
+            if (targetYear !== month.year || targetMonth !== month.month) {
+                setMonth({ year: targetYear, month: targetMonth });
+                return;
+            }
+            const controller = new AbortController();
+            void loadMonth(targetYear, targetMonth, controller.signal);
+            return () => controller.abort();
+        }
+        const controller = new AbortController();
+        void loadMonth(month.year, month.month, controller.signal);
+        return () => controller.abort();
+    }, [view, month, selectedDate, loadMonth, debouncedQ, filterRoom, filterStatus, scope, refreshKey]);
 
     const hasActiveFilter = debouncedQ !== "" || filterRoom !== "" || filterStatus !== "";
     const clearFilters = useCallback(() => {
@@ -141,7 +162,7 @@ export default function EmployeeAppointmentsPage() {
     }, []);
 
     const scopedItems = useMemo(() => {
-        if (!myEmployeeId) return scope === "all" ? items : [];
+        if (!myEmployeeId) return items;
         if (scope === "all") return items;
         if (scope === "mine") return items.filter((a) => a.requesterEmployeeId === myEmployeeId);
         if (scope === "history") {
@@ -198,15 +219,18 @@ export default function EmployeeAppointmentsPage() {
     const [busyTo, setBusyTo] = useState("");
     const [busyReason, setBusyReason] = useState("");
     const [savingBusy, setSavingBusy] = useState(false);
+    const [blocksError, setBlocksError] = useState<string | null>(null);
 
     const loadBlocks = useCallback(async () => {
         try {
+            setBlocksError(null);
             const res = await fetch("/api/appointments/unavailability");
-            if (!res.ok) return;
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat periode sibuk."));
             const json = (await res.json()) as { data: Array<{ id: string; startAt: string; endAt: string; reason: string | null }> };
             setBlocks(Array.isArray(json.data) ? json.data : []);
-        } catch {
-            /* abaikan */
+        } catch (error) {
+            reportClientError("EmployeeAppointmentsPage", "Gagal memuat sibuk", error);
+            setBlocksError(error instanceof Error ? error.message : "Gagal memuat periode sibuk.");
         }
     }, []);
 
@@ -217,6 +241,15 @@ export default function EmployeeAppointmentsPage() {
     async function handleSaveBusy(e: React.FormEvent) {
         e.preventDefault();
         if (!busyFrom || !busyTo || savingBusy) return;
+        if (busyTo < busyFrom) {
+            toast("Tanggal selesai tidak boleh sebelum tanggal mulai.", "error");
+            return;
+        }
+        const spanDays = Math.round((new Date(`${busyTo}T00:00:00+07:00`).getTime() - new Date(`${busyFrom}T00:00:00+07:00`).getTime()) / 86400000) + 1;
+        if (spanDays > 31) {
+            toast("Rentang periode sibuk maksimal 31 hari.", "error");
+            return;
+        }
         setSavingBusy(true);
         try {
             const res = await fetch("/api/appointments/unavailability", {
@@ -305,12 +338,17 @@ export default function EmployeeAppointmentsPage() {
                 </button>
                 {showBusy && (
                     <div className="px-4 pb-4 space-y-3 border-t border-[var(--border)] pt-3">
+                        {blocksError && (
+                            <FeedbackMessage variant="error" title="Gagal memuat periode sibuk">
+                                {blocksError}
+                            </FeedbackMessage>
+                        )}
                         {blocks.length > 0 && (
                             <ul className="space-y-1.5">
                                 {blocks.map((b) => (
                                     <li key={b.id} className="flex items-center justify-between gap-2 text-xs rounded-lg bg-[var(--secondary)] px-3 py-2">
                                         <span className="min-w-0 truncate">
-                                            {new Date(b.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })} – {new Date(b.endAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                                            {formatWIBDateTime(new Date(b.startAt), { day: "numeric", month: "short" })} – {formatWIBDateTime(new Date(b.endAt), { day: "numeric", month: "short" })}
                                             {b.reason ? ` · ${b.reason}` : ""}
                                         </span>
                                         <button
@@ -345,7 +383,14 @@ export default function EmployeeAppointmentsPage() {
                 )}
             </div>
 
-            <div className="flex gap-1.5 rounded-2xl bg-[var(--secondary)] p-1.5" role="tablist" aria-label="Kategori meeting">
+            <div className="flex gap-1.5 rounded-2xl bg-[var(--secondary)] p-1.5" role="tablist" aria-label="Kategori meeting" onKeyDown={(e) => {
+                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                e.preventDefault();
+                const order = ["all", "mine", "invited", "history"] as const;
+                const idx = order.indexOf(scope);
+                const next = e.key === "ArrowRight" ? (idx + 1) % order.length : (idx - 1 + order.length) % order.length;
+                setScope(order[next]);
+            }}>
                 {(
                     [
                         { key: "all", label: `Semua (${scopeCounts.all})` },
@@ -358,7 +403,10 @@ export default function EmployeeAppointmentsPage() {
                         key={t.key}
                         type="button"
                         role="tab"
+                        id={`tab-scope-${t.key}`}
                         aria-selected={scope === t.key}
+                        aria-controls="panel-appointments"
+                        tabIndex={scope === t.key ? 0 : -1}
                         onClick={() => setScope(t.key)}
                         className={`flex-1 min-h-11 rounded-xl px-2 text-xs font-bold transition-colors ${
                             scope === t.key ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-muted)]"
@@ -369,7 +417,14 @@ export default function EmployeeAppointmentsPage() {
                 ))}
             </div>
 
-            <div className="flex gap-1.5" role="tablist" aria-label="Mode tampilan">
+            <div className="flex gap-1.5" role="tablist" aria-label="Mode tampilan" onKeyDown={(e) => {
+                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                e.preventDefault();
+                const order = ["upcoming", "day", "month"] as const;
+                const idx = order.indexOf(view);
+                const next = e.key === "ArrowRight" ? (idx + 1) % order.length : (idx - 1 + order.length) % order.length;
+                setView(order[next]);
+            }}>
                 {(
                     [
                         { key: "upcoming", label: "Akan Datang", icon: LayoutList },
@@ -381,7 +436,10 @@ export default function EmployeeAppointmentsPage() {
                         key={t.key}
                         type="button"
                         role="tab"
+                        id={`tab-view-${t.key}`}
                         aria-selected={view === t.key}
+                        aria-controls="panel-appointments"
+                        tabIndex={view === t.key ? 0 : -1}
                         onClick={() => setView(t.key)}
                         className={`flex-1 min-h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${
                             view === t.key ? "bg-[var(--primary)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"
@@ -469,6 +527,7 @@ export default function EmployeeAppointmentsPage() {
             </div>
 
             {view === "upcoming" && (
+                <div role="tabpanel" id="panel-appointments" aria-labelledby={`tab-view-${view} tab-scope-${scope}`}>
                 <div className="space-y-3">
                     {loading ? (
                         [0, 1, 2].map((i) => (
@@ -535,9 +594,11 @@ export default function EmployeeAppointmentsPage() {
                         })
                     )}
                 </div>
+                </div>
             )}
 
             {view === "month" && (
+                <div role="tabpanel" id="panel-appointments" aria-labelledby={`tab-view-${view} tab-scope-${scope}`}>
                 <AppointmentCalendar
                     appointmentsByDate={appointmentsByDate}
                     selectedDate={selectedDate}
@@ -546,9 +607,11 @@ export default function EmployeeAppointmentsPage() {
                         router.push(`/employee/appointments/${d}`);
                     }}
                 />
+                </div>
             )}
 
             {view === "day" && (
+                <div role="tabpanel" id="panel-appointments" aria-labelledby={`tab-view-${view} tab-scope-${scope}`}>
                 <div className="space-y-3">
                     <div className="flex items-center gap-2">
                         <input
@@ -614,6 +677,7 @@ export default function EmployeeAppointmentsPage() {
                             </button>
                         ))
                     )}
+                </div>
                 </div>
             )}
 

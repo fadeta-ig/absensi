@@ -5,13 +5,14 @@ import {
     createMeetingTask,
     getTasksForMeeting,
 } from "@/lib/services/meetingTaskService";
+import { isWig002 } from "@/lib/services/appointmentService";
 import { meetingTaskCreateSchema } from "@/lib/validations/validationSchemas";
 import { sendAppointmentPush, collectMeetingTaskUserIds } from "@/lib/services/appointmentNotify";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { id } = await params;
@@ -28,7 +29,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { id } = await params;

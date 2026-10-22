@@ -276,7 +276,14 @@ describe("requestTaskExtension", () => {
     });
     it("duplikat pending = 409", async () => {
         mocked.meetingTaskAssignee.findUnique.mockResolvedValue({ task: { id: "task-1", isCancelled: false }, status: "ON_PROGRESS" } as never);
-        mocked.meetingTaskExtensionRequest.findFirst.mockResolvedValue({ id: "req-1" } as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingTaskExtensionRequest: {
+                findFirst: vi.fn().mockResolvedValue({ id: "req-1" }),
+                create: vi.fn(),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
         await expect(requestTaskExtension(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh waktu tambahan" }, actor)).rejects.toMatchObject({ statusCode: 409 });
     });
 });

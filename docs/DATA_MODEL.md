@@ -140,7 +140,7 @@ RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Ak
 ## 4. Appointment Meeting + Ruangan (2026-10-07)
 
 1. `MeetingRoom` 1 ── * `MeetingAppointment` (`roomId` wajib untuk appointment baru/berubah sejak ADR-015; kolom `meetingLink` hanya warisan historis read-only, tidak lagi diisi jalur baru).
-2. `MeetingAppointment` 1 ── * `MeetingAppointmentParticipant` (unik `[appointmentId, employeeId]`; tamu eksternal `employeeId null + guestName`, tanpa akun/accept).
+2. `MeetingAppointment` 1 ── * `MeetingAppointmentParticipant` (unik `[appointmentId, employeeId]` + unik `[appointmentId, guestName]`; NULL lolos di MySQL sehingga baris employee (`guestName` null) dan tamu (`employeeId` null) saling lepas; tamu eksternal `employeeId null + guestName`, tanpa akun/accept; duplikat tamu juga dicegah di service + transaksi `Serializable`).
 3. `MeetingAppointment` 1 ── * `MeetingAppointmentRevision` (unik `[appointmentId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
 4. `MeetingAppointment` 1 ── * `AppointmentReminderLog` (unik `[appointmentId, offsetMin]`, exactly-once cron).
 5. `Employee` 1 ── * `MeetingAppointment` sebagai pemohon (`requesterEmployeeId`, Restrict) dan 1 ── * `MeetingAppointmentParticipant` (Restrict).
@@ -156,7 +156,7 @@ RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; emp
 3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; kuota `meeting.task.maxExtensions` default 3).
 4. `MeetingTask` 1 ── * `MeetingTaskRevision` (unik `[taskId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
 5. `MeetingTask` 1 ── * `MeetingTaskExtensionRequest` (`PENDING/APPROVED/REJECTED`; penerima mengajukan, pemberi memutuskan).
-6. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `DAILY-YYYY-MM-DD` WIB untuk reminder harian + `SUBMITTED` untuk submit on complete; exactly-once cron).
+6. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `DAILY-YYYY-MM-DD` WIB untuk reminder harian + `SUBMITTED` untuk submit on complete; exactly-once cron; `employeeId` FK Restrict ke `Employee` — orphan ditolak DB).
 
 Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; status diubah sendiri oleh penerima; perpanjang/batalkan oleh pemberi; overdue dihitung, badge kembali normal setelah diperpanjang (riwayat tercatat).
 

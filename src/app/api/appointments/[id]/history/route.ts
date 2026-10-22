@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { getMeetingHistory } from "@/lib/services/meetingHistoryService";
 import { MeetingTaskError } from "@/lib/services/meetingTaskService";
+import { isWig002 } from "@/lib/services/appointmentService";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { id } = await params;

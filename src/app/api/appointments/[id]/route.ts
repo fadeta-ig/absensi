@@ -9,6 +9,7 @@ import {
 } from "@/lib/services/appointmentService";
 import { appointmentCancelSchema, appointmentRescheduleSchema } from "@/lib/validations/validationSchemas";
 import { sendAppointmentPush, collectAppointmentUserIds } from "@/lib/services/appointmentNotify";
+import { formatWIBDateTime } from "@/lib/timezone";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
@@ -43,7 +44,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             room?: { name: string } | null;
             requesterEmployeeId?: string | null;
         } | null;
-        const reasonText = result.data.changeReason?.trim() || "Perubahan daftar peserta meeting";
+        const reasonText = result.data.changeReason?.trim() || "Perubahan meeting";
+        const asOperator = isWig002(session);
         const data = await rescheduleAppointment(
             session,
             id,
@@ -57,13 +59,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 isFullDay: result.data.isFullDay ?? false,
                 participants: result.data.participants,
                 changeReason: result.data.changeReason,
-                force: result.data.force ?? false,
+                force: asOperator ? (result.data.force ?? false) : false,
             },
             { userId: session.userId, username: session.username }
         );
         const isOrganizer = !!before?.requesterEmployeeId && before.requesterEmployeeId === session.employeeId;
         const fmtShort = (v: string | Date | undefined) =>
-            v ? new Date(v).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-";
+            v ? formatWIBDateTime(new Date(v), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-";
         const userIds = await collectAppointmentUserIds(id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
             title: isOrganizer ? "Jadwal Meeting Berubah" : `WIG002 memindahkan meeting "${before?.title ?? "Anda"}"`,
@@ -90,13 +92,21 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     try {
         const { id } = await params;
         const result = await validateBody(request, appointmentCancelSchema);
-        if ("error" in result) return result.error;
+        let reason: string | undefined = !("error" in result) ? result.data.reason : undefined;
+        if (!reason) {
+            const qp = new URL(request.url).searchParams.get("reason")?.trim();
+            if (qp && qp.length >= 5) reason = qp;
+        }
+        if (!reason) {
+            if ("error" in result) return result.error;
+            return NextResponse.json({ error: "Alasan pembatalan minimal 5 karakter." }, { status: 400 });
+        }
 
-        const data = (await cancelAppointment(session, id, result.data.reason, { userId: session.userId, username: session.username })) as { title?: unknown } | null;
+        const data = (await cancelAppointment(session, id, reason, { userId: session.userId, username: session.username })) as { title?: unknown } | null;
         const userIds = await collectAppointmentUserIds(id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
             title: "Meeting Dibatalkan",
-            body: `${typeof data?.title === "string" && data.title ? data.title : "Meeting"} — dibatalkan oleh ${session.name ?? session.username}. Alasan: ${result.data.reason}`,
+            body: `${typeof data?.title === "string" && data.title ? data.title : "Meeting"} — dibatalkan oleh ${session.name ?? session.username}. Alasan: ${reason}`,
             tag: `appointment-${id}-cancelled`,
             url: "/employee/appointments",
         });

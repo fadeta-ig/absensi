@@ -2,7 +2,7 @@
 
 > **Purpose**: Development, build, test, and deployment procedures.  
 > **Source of Truth**: `package.json` scripts, dev environment, and testing tools.  
-> **Last Verified**: 2026-10-11  
+> **Last Verified**: 2026-10-22  
 
 Dokumen ini memuat panduan langkah demi langkah untuk instalasi, pengembangan lokal, sinkronisasi basis data, testing, build, dan deployment.
 
@@ -139,10 +139,11 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    ss -ltnp | grep -E "next-server|node"
    grep -rn "proxy_pass" /etc/nginx/sites-enabled/ | head -n 20
    sudo nginx -t
+   timedatectl
    ```
    Pastikan tree bersih, tahu app apa di port berapa, dan vhost nginx
    mengarah ke mana. Port 3002 harus kosong (atau ditempati hris sendiri
-   yang memang mau di-restart).
+   yang memang mau di-restart). Pastikan `timedatectl` = `Asia/Jakarta (WIB, +0700)`, NTP active (lihat `CONSTRAINTS.md` §5).
 
 2. **Backup (wajib):**
    ```bash

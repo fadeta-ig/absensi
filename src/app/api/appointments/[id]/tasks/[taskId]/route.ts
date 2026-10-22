@@ -6,6 +6,7 @@ import {
     extendTaskDeadline,
     cancelMeetingTask,
 } from "@/lib/services/meetingTaskService";
+import { isWig002 } from "@/lib/services/appointmentService";
 import {
     meetingTaskStatusSchema,
     meetingTaskExtendSchema,
@@ -19,7 +20,7 @@ const actionSchema = z.object({ action: z.enum(["status", "extend", "cancel"]) }
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string; taskId: string }> }) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { taskId } = await params;

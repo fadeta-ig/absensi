@@ -656,7 +656,7 @@ export const appointmentCreateSchema = z
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
         participants: z.array(appointmentParticipantSchema).max(100).default([]),
-        reminderOffsets: z.array(z.number().int().min(15)).max(5).nullable().optional(),
+        reminderOffsets: z.array(z.number().int().min(15)).min(1).max(5).nullable().optional(),
         force: z.boolean().optional(),
     })
     .superRefine((v, ctx) => {
@@ -739,7 +739,7 @@ export const meetingRoomUpdateSchema = z.object({
 });
 
 export const reminderOffsetsSetSchema = z.object({
-    offsets: z.array(z.number().int().min(15)).max(5),
+    offsets: z.array(z.number().int().min(15)).min(1).max(5),
 });
 
 export const unavailabilityCreateSchema = z

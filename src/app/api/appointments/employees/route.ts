@@ -73,14 +73,15 @@ export async function GET(request: NextRequest) {
             take: limit,
         });
 
-        return NextResponse.json(
-            employees.map((emp) => ({
+        return NextResponse.json({
+            success: true,
+            data: employees.map((emp) => ({
                 employeeId: emp.employeeId,
                 name: emp.name,
                 department: emp.departmentRel?.name || "-",
                 position: emp.positionRel?.name || "-",
-            }))
-        );
+            })),
+        });
     } catch (err) {
         return serverErrorResponse("AppointmentEmployeesGET", err);
     }

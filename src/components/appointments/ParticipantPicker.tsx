@@ -24,7 +24,7 @@ async function fetchEmployees(query: string, signal: AbortSignal, excludeEmploye
     const res = await fetch(`/api/appointments/employees?${params.toString()}`, { signal });
     if (!res.ok) return [];
     const data: unknown = await res.json();
-    const list = Array.isArray(data) ? (data as EmployeeOption[]) : [];
+    const list = Array.isArray(data) ? (data as EmployeeOption[]) : Array.isArray((data as { data?: unknown }).data) ? ((data as { data: EmployeeOption[] }).data as EmployeeOption[]) : [];
     // Lapis kedua di client (anti race/paste): jangan tampilkan diri sendiri.
     return excludeEmployeeId ? list.filter((e) => e.employeeId !== excludeEmployeeId) : list;
 }

@@ -8,7 +8,7 @@ import { toWIBDateString } from "@/lib/timezone";
 /**
  * POST /api/cron/meeting-task-reminder
  *
- * Dijadwalkan eksternal (mis. cron-job.org) SETIAP HARI jam 07:00 WIB.
+ * Dijadwalkan crontab root VPS via hris-cron.sh SETIAP HARI jam 07:00 WIB.
  * Mengirim SATU push per hari per penerima untuk setiap task yang masih
  * terbuka (belum SELESAI/DIBATALKAN, meeting tidak dibatalkan) — termasuk
  * yang sudah overdue. Task SELESAI tidak pernah dikirimi.
@@ -38,29 +38,40 @@ export async function POST(request: NextRequest) {
         const todayWib = toWIBDateString(now);
         const kind = `DAILY-${todayWib}`;
 
-        const tasks = await prisma.meetingTask.findMany({
-            where: {
-                isCancelled: false,
-                deadlineHistory: { some: {} },
-                assignees: { some: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } } },
-            },
-            orderBy: { createdAt: "asc" },
-            take: 500,
-            select: {
-                id: true,
-                title: true,
-                deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
-                assignees: {
-                    where: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
-                    select: {
-                        employeeId: true,
-                        status: true,
-                        employee: { select: { userAccount: { select: { id: true } } } },
-                    },
+        const tasks = [];
+        const PAGE = 500;
+        let cursor: string | undefined;
+        for (;;) {
+            const batch = await prisma.meetingTask.findMany({
+                where: {
+                    isCancelled: false,
+                    appointment: { status: { not: "CANCELLED" } },
+                    deadlineHistory: { some: {} },
+                    assignees: { some: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } } },
                 },
-                reminderLogs: { where: { kind }, select: { employeeId: true } },
-            },
-        });
+                orderBy: { createdAt: "asc" },
+                take: PAGE,
+                ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+                select: {
+                    id: true,
+                    title: true,
+                    deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
+                    assignees: {
+                        where: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+                        select: {
+                            employeeId: true,
+                            status: true,
+                            employee: { select: { userAccount: { select: { id: true } } } },
+                        },
+                    },
+                    reminderLogs: { where: { kind }, select: { employeeId: true } },
+                },
+            });
+            if (batch.length === 0) break;
+            tasks.push(...batch);
+            if (batch.length < PAGE) break;
+            cursor = batch[batch.length - 1].id;
+        }
 
         let sent = 0;
         const failedEndpoints: string[] = [];

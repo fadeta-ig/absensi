@@ -16,7 +16,8 @@ async function fetchEmployees(query: string, signal: AbortSignal): Promise<Emplo
     const res = await fetch(`/api/appointments/employees?${params.toString()}`, { signal });
     if (!res.ok) return [];
     const data: unknown = await res.json();
-    return Array.isArray(data) ? (data as EmployeePick[]) : [];
+    const list = Array.isArray(data) ? (data as EmployeePick[]) : Array.isArray((data as { data?: unknown }).data) ? ((data as { data: EmployeePick[] }).data as EmployeePick[]) : [];
+    return list;
 }
 
 export default function EmployeeSearchPicker({
