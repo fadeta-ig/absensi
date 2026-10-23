@@ -143,6 +143,9 @@ describe("getDailyEquipmentRecap actor stats", () => {
             approvedByNameSnapshot: null,
         }));
         mocked.equipmentInspection.findMany.mockImplementation((async (args: { where?: Record<string, unknown> }) => {
+            if (args?.where && "submittedAt" in args.where && "createdAt" in args.where) {
+                return [];
+            }
             if (args?.where && "submittedAt" in args.where) {
                 return [0, 1, 2, 3].map(() => ({
                     startedByEmployeeId: "ST-1",
@@ -189,6 +192,50 @@ describe("getDailyEquipmentRecap actor stats", () => {
         ]);
         expect(out.verificationQueue).toBe(4);
         expect(out.approvalQueue).toBe(0);
+    });
+    it("susulan: diajukan hari ini tapi dibuat sebelumnya ikut lines dengan flag", async () => {
+        const mainRow = {
+            unit: { name: "Toples Kapasitas 5 lt" },
+            startedBy: { employeeId: "ST-1", name: "Aris Sudarisman, S.T." },
+            status: "APPROVED",
+            createdAt: new Date("2026-10-19T01:00:00Z"),
+            submittedAt: new Date("2026-10-19T02:00:00Z"),
+            checkedAt: new Date("2026-10-19T03:00:00Z"),
+            checkedBy: { name: "Fanisa Nur Jasiya Putri" },
+            checkedByNameSnapshot: null,
+            approvedAt: new Date("2026-10-19T04:00:00Z"),
+            approvedBy: { name: "Feri" },
+            approvedByNameSnapshot: null,
+        };
+        const susulanRow = {
+            unit: { name: "Gelas Ukur 100 ml" },
+            startedBy: { employeeId: "ST-1", name: "Aris Sudarisman, S.T." },
+            status: "APPROVED",
+            createdAt: new Date("2026-10-14T04:00:00Z"),
+            submittedAt: new Date("2026-10-19T08:00:00Z"),
+            checkedAt: new Date("2026-10-19T09:00:00Z"),
+            checkedBy: null,
+            checkedByNameSnapshot: "Fanisa Nur Jasiya Putri",
+            approvedAt: new Date("2026-10-19T09:30:00Z"),
+            approvedBy: null,
+            approvedByNameSnapshot: "Feri",
+        };
+        mocked.equipmentInspection.findMany.mockImplementation((async (args: { where?: Record<string, unknown> }) => {
+            if (args?.where && "submittedAt" in args.where && "createdAt" in args.where) return [susulanRow];
+            return [mainRow];
+        }) as never);
+        mocked.equipmentInspection.count.mockResolvedValue(0);
+        mocked.appSetting.findUnique.mockResolvedValue({ value: "[]" } as never);
+        mocked.employee.findMany.mockResolvedValue([]);
+        const out = await getDailyEquipmentRecap("2026-10-19");
+        expect(out.lines).toHaveLength(2);
+        expect(out.lines[0]).toMatchObject({ unitName: "Toples Kapasitas 5 lt", isSusulan: false });
+        expect(out.lines[1]).toMatchObject({
+            unitName: "Gelas Ukur 100 ml",
+            isSusulan: true,
+            checkerName: "Fanisa Nur Jasiya Putri",
+            approverName: "Feri",
+        });
     });
 });
 

@@ -106,6 +106,8 @@ export interface EquipmentRecapLine {
     checkerName: string | null;
     approvedAt: Date | null;
     approverName: string | null;
+    /** true bila diajukan (submittedAt) pada tanggal rekap tetapi draf dibuat sebelumnya. */
+    isSusulan: boolean;
 }
 
 export interface CleaningRecapLine {
@@ -159,6 +161,7 @@ export async function getDailyEquipmentRecap(wibDate: string) {
         checkerName: row.checkedBy ? stripGelar(row.checkedBy.name) : (row.checkedByNameSnapshot ? stripGelar(row.checkedByNameSnapshot) : null),
         approvedAt: row.approvedAt,
         approverName: row.approvedBy ? stripGelar(row.approvedBy.name) : (row.approvedByNameSnapshot ? stripGelar(row.approvedByNameSnapshot) : null),
+        isSusulan: false,
     }));
     // Roster penanggung jawab untuk kolom email: semua verifikator pool + approver tunggal.
     // Yang bertindak naik ke #1 + jam; sisanya (-) — agar pemilik tahu penanggung jawab tiap baris.
@@ -179,6 +182,35 @@ export async function getDailyEquipmentRecap(wibDate: string) {
         }).catch(() => []),
     ]);
     const verifiers = qcMembers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean);
+    // Susulan: diajukan (submittedAt) pada tanggal rekap tetapi draf dibuat
+    // sebelumnya — tidak tertangkap filter createdAt di queryEquipmentRecap.
+    // Saling lepas dengan lines utama (createdAt < dayStart vs >= dayStart).
+    const susulanRows = await prisma.equipmentInspection.findMany({
+        where: {
+            submittedAt: { gte: dayStart, lt: nextStart },
+            createdAt: { lt: dayStart },
+            status: { not: "CANCELLED" },
+        },
+        orderBy: { submittedAt: "desc" },
+        include: {
+            unit: { select: { id: true, name: true, brand: true, location: true } },
+            startedBy: { select: { employeeId: true, name: true } },
+            checkedBy: { select: { employeeId: true, name: true } },
+            approvedBy: { select: { employeeId: true, name: true } },
+        },
+    }).catch(() => []);
+    const susulanLines: EquipmentRecapLine[] = susulanRows.map((row) => ({
+        unitName: row.unit.name,
+        starterName: stripGelar(row.startedBy.name),
+        status: row.status,
+        createdAt: row.createdAt,
+        submittedAt: row.submittedAt,
+        checkedAt: row.checkedAt,
+        checkerName: row.checkedBy ? stripGelar(row.checkedBy.name) : (row.checkedByNameSnapshot ? stripGelar(row.checkedByNameSnapshot) : null),
+        approvedAt: row.approvedAt,
+        approverName: row.approvedBy ? stripGelar(row.approvedBy.name) : (row.approvedByNameSnapshot ? stripGelar(row.approvedByNameSnapshot) : null),
+        isSusulan: true,
+    }));
     // Inspektor: cukup angka diajukan hari itu (basis tanggal-tindakan).
     const inspMap = new Map<string, EquipmentInspectorStat>();
     for (const r of submittedToday) {
@@ -232,7 +264,7 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     );
     return {
         summary: data.summary,
-        lines,
+        lines: [...lines, ...susulanLines],
         verifiers,
         approverNames: approvers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean),
         inspectorStats,
