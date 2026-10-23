@@ -590,11 +590,14 @@ export interface DailyRecapEmailEquipmentLine {
     unitName: string;
     starterName: string;
     status: string;
+    createdAt: Date | null;
     submittedAt: Date | null;
     checkedAt: Date | null;
     checkerName: string | null;
     approvedAt: Date | null;
     approverName: string | null;
+    /** true bila diajukan pada tanggal rekap tetapi draf dibuat sebelumnya. */
+    isSusulan: boolean;
 }
 
 export interface DailyRecapEmailCleaningLine {
@@ -735,6 +738,11 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
     const eqWaitingVerify = eq.filter((l) => l.status === "SUBMITTED");
     const eqWaitingApproval = eq.filter((l) => l.status === "DONE");
     const eqApproved = eq.filter((l) => l.status === "APPROVED");
+    // Susulan dirender di seksi tersendiri agar pembaca paham asalnya,
+    // tetapi tetap dihitung di Ringkasan supaya cocok dengan statistik tindakan.
+    const eqMain = eq.filter((l) => !l.isSusulan);
+    const eqSusulan = eq.filter((l) => l.isSusulan);
+    const eqSusulanNote = eqSusulan.length > 0 ? ` Termasuk ${eqSusulan.length} diajukan susulan (dibuat sebelum hari ini).` : "";
 
     function eqInspector(l: DailyRecapEmailEquipmentLine): string {
         const t = l.submittedAt ? formatShortWib(l.submittedAt) : "";
@@ -780,7 +788,7 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
     const eqSummaryText =
         eq.length === 0
             ? "Tidak ada alat yang diajukan."
-            : `Ringkasan: ${eqWaitingVerify.length} Menunggu Verifikasi, ${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.`;
+            : `Ringkasan: ${eqWaitingVerify.length} Menunggu Verifikasi, ${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.${eqSusulanNote}`;
     const eqInspectors = input.equipment.inspectorStats ?? [];
     const eqVerifierStats = input.equipment.verifierStats ?? [];
     const eqApproverStats = input.equipment.approverStats ?? [];
@@ -800,15 +808,21 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
             : `Approver hari ini:\n${eqApproverStats
                 .map((r) => `- ${r.name}: menyetujui ${r.handled}/${r.total}.`)
                 .join("\n")}\nAntrean approval hari ini: ${input.equipment.approvalQueue ?? 0}.\n`);
-    const eqLinesText = eq
-        .map((l, i) => `${i + 1}. ${l.unitName} — ${eqStatusLabel[l.status] ?? l.status}. Inspektor: ${eqInspector(l)}. Verifikator: ${eqVerifier(l)}. Approval: ${eqApproval(l)}.`)
-        .join("\n");
+    function eqLineText(l: DailyRecapEmailEquipmentLine, i: number): string {
+        const susulan = l.isSusulan && l.createdAt ? ` (susulan, dibuat ${formatShortWib(l.createdAt)})` : "";
+        return `${i + 1}. ${l.unitName}${susulan} — ${eqStatusLabel[l.status] ?? l.status}. Inspektor: ${eqInspector(l)}. Verifikator: ${eqVerifier(l)}. Approval: ${eqApproval(l)}.`;
+    }
+    const eqLinesText =
+        eqMain.map(eqLineText).join("\n") +
+        (eqSusulan.length > 0
+            ? `\nDiajukan susulan (dibuat sebelum hari ini):\n${eqSusulan.map(eqLineText).join("\n")}`
+            : "");
 
     const eqSummaryHtml =
         eq.length === 0
             ? "<p>Tidak ada alat yang diajukan.</p>"
             : `<p><strong>Ringkasan:</strong> ${eqWaitingVerify.length} Menunggu Verifikasi, ` +
-              `${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.</p>`;
+              `${eqWaitingApproval.length} Menunggu Approval, ${eqApproved.length} Selesai.${escapeHtml(eqSusulanNote)}</p>`;
     const eqActorsHtml =
         (eqInspectors.length === 0
             ? ""
@@ -836,23 +850,36 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
                   .join("") +
               `</tbody></table>` +
               `<p>Antrean approval hari ini: ${input.equipment.approvalQueue ?? 0}.</p>`);
-    const eqLinesHtml = eq.length === 0
-        ? ""
-        : EMAIL_TABLE_OPEN +
-          `<thead><tr>` +
-          emailTh("No", "center") +
-          emailTh("Alat") +
-          emailTh("Status") +
-          emailTh("Inspektor") +
-          emailTh("Verifikator") +
-          emailTh("Approval") +
-          `</tr></thead><tbody>${eq
-              .map((l, i) => {
-                  const verifierCell = eqVerifierList(l).map(escapeHtml).join("<br>") || "—";
-                  const approvalCell = eqApprovalList(l).map(escapeHtml).join("<br>") || "—";
-                  return `<tr>${emailTd(String(i + 1), "center")}${emailTd(escapeHtml(l.unitName))}${emailTd(escapeHtml(eqStatusLabel[l.status] ?? l.status))}${emailTd(escapeHtml(eqInspector(l)))}${emailTd(verifierCell)}${emailTd(approvalCell)}</tr>`;
-              })
-              .join("")}</tbody></table>`;
+    function eqTableHtml(rows: DailyRecapEmailEquipmentLine[]): string {
+        return (
+            EMAIL_TABLE_OPEN +
+            `<thead><tr>` +
+            emailTh("No", "center") +
+            emailTh("Alat") +
+            emailTh("Status") +
+            emailTh("Inspektor") +
+            emailTh("Verifikator") +
+            emailTh("Approval") +
+            `</tr></thead><tbody>${rows
+                .map((l, i) => {
+                    const verifierCell = eqVerifierList(l).map(escapeHtml).join("<br>") || "—";
+                    const approvalCell = eqApprovalList(l).map(escapeHtml).join("<br>") || "—";
+                    const unitCell =
+                        l.isSusulan && l.createdAt
+                            ? `${escapeHtml(l.unitName)}<br><span style="font-size:12px;color:#666666;">Susulan — dibuat ${escapeHtml(formatShortWib(l.createdAt))}</span>`
+                            : escapeHtml(l.unitName);
+                    return `<tr>${emailTd(String(i + 1), "center")}${emailTd(unitCell)}${emailTd(escapeHtml(eqStatusLabel[l.status] ?? l.status))}${emailTd(escapeHtml(eqInspector(l)))}${emailTd(verifierCell)}${emailTd(approvalCell)}</tr>`;
+                })
+                .join("")}</tbody></table>`
+        );
+    }
+    const eqLinesHtml =
+        eqMain.length === 0 && eqSusulan.length === 0
+            ? ""
+            : (eqMain.length > 0 ? eqTableHtml(eqMain) : "") +
+              (eqSusulan.length > 0
+                  ? `<p><strong>Diajukan susulan (dibuat sebelum hari ini):</strong></p>` + eqTableHtml(eqSusulan)
+                  : "");
     const cl = input.cleaning.lines;
     const clDone = cl.filter((l) => !l.isFree && l.exists && l.complete);
     const clTodo = cl.filter((l) => !l.isFree && (!l.exists || !l.complete));
