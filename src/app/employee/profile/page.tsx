@@ -126,9 +126,9 @@ export default function ProfilePage() {
     const [saving, setSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
-    // Hub sections (collapsible)
-    const [dataOpen, setDataOpen] = useState(true);
-    const [secOpen, setSecOpen] = useState(true);
+    // Hub sections (collapsible, default tertutup)
+    const [dataOpen, setDataOpen] = useState(false);
+    const [secOpen, setSecOpen] = useState(false);
 
     // ── Fetch Profile ──────────────────────────────────────────────────────────
     useEffect(() => {
