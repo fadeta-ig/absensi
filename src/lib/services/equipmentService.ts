@@ -315,7 +315,7 @@ function isEffectiveOn(today: string, startsOn: string, endsOn: string | null): 
     return startsOn <= today && (endsOn === null || today < endsOn);
 }
 
-/** Mode bebas: siapa pun karyawan internal aktif boleh checklist alat apa pun, kapan pun. */
+/** Syarat dasar karyawan internal aktif; akses checklist per unit dicek terpisah via assertAssignee. */
 export async function requireActiveInternalEmployee(
     session: SessionPayload
 ): Promise<{ employeeId: string; name: string; userId: string }> {

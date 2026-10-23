@@ -39,7 +39,7 @@ Aplikasi melayani 4 kelompok peran utama:
 ### B. General Affairs (GA) Asset Lifecycle
 - **Katalog & Registrasi Aset**: Manajemen barcode/QR aset, serial number, IMEI, vendor, dan tanggal garansi.
 - **BAST Digital**: Unggah dan penyimpanan dokumen serah terima aset dalam bentuk `MediumBlob` database.
-- **Inspeksi Alat Produksi (mode bebas)**: Karyawan aktif mana pun checklist unit alat mana pun kapan pun tanpa jadwal/penugasan (nilai Baik/Rusak, 1 tempat upload foto maks 5 per inspeksi); pool QC yang ditunjuk WIG002 menandai DONE dengan riwayat checked-by; atasan pemantau (topViewer) dan rekap GA melihat hasil tanpa mengubah. Master template/unit dikelola WIG002.
+- **Inspeksi Alat Produksi (berbasis penugasan)**: Karyawan yang ditugaskan (per unit atau global) checklist unitnya kapan pun tanpa jadwal (nilai Baik/Rusak, 1 tempat upload foto maks 5 per inspeksi; tanpa penugasan efektif = tanpa akses); pool QC yang ditunjuk WIG002 menandai DONE dengan riwayat checked-by; atasan pemantau (topViewer) dan rekap GA melihat hasil tanpa mengubah. Master template/unit/penugasan dikelola WIG002.
 - **Maintenance & Vendor Log**: Pelacakan biaya servis, estimasi penyelesaian, dan nota perbaikan.
 - **Manajemen Kartu SIM**: Inventarisasi nomor seluler korporat dan pelacakan masa aktif kuota.
 
