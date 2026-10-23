@@ -60,6 +60,7 @@ export default function EmployeeEquipmentApprovalsPage() {
     const [tasks, setTasks] = useState<ApprovalDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [forbidden, setForbidden] = useState(false);
     const [query, setQuery] = useState("");
     const [qcFilter, setQcFilter] = useState<QcFilter>("ALL");
     const [qcSort, setQcSort] = useState<QcSort>("OLDEST");
@@ -67,8 +68,13 @@ export default function EmployeeEquipmentApprovalsPage() {
     const fetchTasks = useCallback(async () => {
         setLoading(true);
         setError(null);
+        setForbidden(false);
         try {
             const res = await fetch("/api/employee/equipment/approvals");
+            if (res.status === 403) {
+                setForbidden(true);
+                return;
+            }
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat antrean QC."));
             const json = await res.json();
             setTasks(json.data ?? []);
@@ -127,7 +133,16 @@ export default function EmployeeEquipmentApprovalsPage() {
                 </button>
             </div>
 
-            {loading && (
+            {forbidden && (
+                <div className="card p-6 text-center">
+                    <h2 className="text-base font-semibold text-[var(--text-primary)]">Pemeriksaan QC tidak tersedia untuk akun Anda.</h2>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Halaman ini hanya untuk anggota QC yang ditunjuk. Hubungi admin GA bila Anda seharusnya memiliki akses.
+                    </p>
+                </div>
+            )}
+
+            {!forbidden && loading && (
                 <div role="status" aria-live="polite" aria-label="Memuat antrean QC">
                     {[0, 1, 2].map((i) => (
                         <div key={i} className="bg-card border border-border rounded-lg p-4 mb-3">
@@ -139,7 +154,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                 </div>
             )}
 
-            {error && !loading && (
+            {!forbidden && error && !loading && (
                 <div className="mb-6 p-4 bg-[var(--destructive-bg)] text-[var(--destructive)] rounded-xl border border-[var(--destructive-border)] text-center">
                     <AlertTriangle className="h-5 w-5 mx-auto mb-2" />
                     <p className="text-sm">{error}</p>
@@ -149,7 +164,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                 </div>
             )}
 
-            {!loading && !error && tasks.length === 0 && (
+            {!forbidden && !loading && !error && tasks.length === 0 && (
                 <div className="text-center py-16 border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--card)]">
                     <FileCheck2 aria-hidden="true" className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
                     <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">Tidak Ada Antrean QC</h3>
@@ -159,7 +174,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                 </div>
             )}
 
-            {!loading && !error && tasks.length > 0 && (
+            {!forbidden && !loading && !error && tasks.length > 0 && (
                 <>
                     <div className="mb-3">
                         <EquipmentSearchField

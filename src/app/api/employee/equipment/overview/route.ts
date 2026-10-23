@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { EquipmentError, getEquipmentRecap } from "@/lib/services/equipmentService";
 
-const STATUSES = ["OPEN", "SUBMITTED", "DONE"] as const;
+const STATUSES = ["OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
 
 /**
  * GET /api/employee/equipment/overview?unitId=&status=&from=&to=
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         }
         const data = await getEquipmentRecap(session, {
             unitId: searchParams.get("unitId") ?? undefined,
-            status: status as "OPEN" | "SUBMITTED" | "DONE" | undefined,
+            status: status as "OPEN" | "SUBMITTED" | "DONE" | "APPROVED" | undefined,
             from: searchParams.get("from") ?? undefined,
             to: searchParams.get("to") ?? undefined,
         });

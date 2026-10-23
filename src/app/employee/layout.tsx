@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
     Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User,
-    CalendarCheck, CalendarClock, Wrench,
+    CalendarCheck, CalendarClock, CalendarDays, Wrench,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
     { href: "/employee", icon: Home, label: "Beranda" },
     { href: "/employee/attendance", icon: Camera, label: "Presensi" },
     { href: "/employee/attendance-history", icon: ClipboardList, label: "Riwayat" },
+    { href: "/employee/schedule", icon: CalendarDays, label: "Jadwal" },
     { href: "/employee/attendance/correction", icon: FileText, label: "Koreksi" },
     { href: "/employee/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/employee/overtime", icon: Clock4, label: "Lembur" },

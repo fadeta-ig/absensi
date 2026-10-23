@@ -23,6 +23,7 @@ export default function MonitoringPage() {
     const [deptFilter, setDeptFilter] = useState("all");
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
+    const [forbidden, setForbidden] = useState(false);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -32,7 +33,16 @@ export default function MonitoringPage() {
         const loadEmployees = async () => {
             setLoading(true);
             setLoadError("");
+            setForbidden(false);
             try {
+                const meRes = await fetch("/api/auth/me", { credentials: "same-origin" });
+                if (meRes.ok) {
+                    const me = await meRes.json();
+                    if (!Array.isArray(me?.subordinates) || me.subordinates.length === 0) {
+                        setForbidden(true);
+                        return;
+                    }
+                }
                 const res = await fetch("/api/employees");
                 if (!res.ok) {
                     throw new Error(await getResponseErrorMessage(res, "Gagal memuat data monitoring tim."));
@@ -89,6 +99,19 @@ export default function MonitoringPage() {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
                 <div className="spinner" />
+            </div>
+        );
+    }
+
+    if (forbidden) {
+        return (
+            <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+                <div className="card p-6 text-center">
+                    <h1 className="text-base font-semibold text-[var(--text-primary)]">Monitoring Tim tidak tersedia untuk akun Anda.</h1>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Halaman ini hanya untuk atasan yang memiliki bawahan. Hubungi admin HR bila Anda seharusnya memiliki akses.
+                    </p>
+                </div>
             </div>
         );
     }
