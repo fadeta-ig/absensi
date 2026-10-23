@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { webPush } from "@/lib/webPush";
+import { createHash } from "crypto";
 import logger from "@/lib/logger";
+
+/** Hash prefix endpoint untuk log tanpa membocorkan token push rahasia. */
+function endpointRef(endpoint: string): string {
+    return createHash("sha256").update(endpoint).digest("hex").slice(0, 12);
+}
 
 export interface AppointmentPushPayload {
     title: string;
@@ -68,14 +74,14 @@ export async function sendAppointmentPush(userIds: string[], payload: Appointmen
             } catch (err) {
                 const statusCode = (err as { statusCode?: number })?.statusCode;
                 if (statusCode === 404 || statusCode === 410) failed.push(sub.endpoint);
-                else logger.warn("appointment push gagal", { endpoint: sub.endpoint, statusCode });
+                else logger.warn("appointment push gagal", { endpointRef: endpointRef(sub.endpoint), statusCode, message: err instanceof Error ? err.message : String(err) });
             }
         }
         if (failed.length > 0) {
             await prisma.pushSubscription.deleteMany({ where: { endpoint: { in: failed } } }).catch(() => undefined);
         }
     } catch (err) {
-        logger.warn("appointment push dilewati", { err });
+        logger.warn("appointment push dilewati", { err: err instanceof Error ? err.message : String(err) });
     }
 }
 

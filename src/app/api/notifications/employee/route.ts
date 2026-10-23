@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { z } from "zod";
+import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import { toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
 import { stripGelar } from "@/lib/utils/formatters";
+import { getReadKeys, markNotificationsRead } from "@/lib/services/notificationReadService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,13 +20,16 @@ interface EmployeeNotification {
 
 // ─── GET: Notifikasi personal karyawan ───────────────────────────────────────
 
-export async function GET() {
+export async function GET(request: Request) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!session.employeeId) return forbiddenResponse();
 
     try {
         const { employeeId } = session;
+        const url = new URL(request.url);
+        const countOnly = url.searchParams.get("countOnly") === "1";
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const notifications: EmployeeNotification[] = [];
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -36,26 +41,29 @@ export async function GET() {
                 where: {
                     employeeId,
                     status: { in: ["approved", "rejected"] },
+                    OR: [{ updatedAt: { gte: thirtyDaysAgo } }, { updatedAt: null }],
                 },
-                orderBy: { createdAt: "desc" },
+                orderBy: { updatedAt: "desc" },
                 take: 5,
-                select: { id: true, status: true, type: true, createdAt: true, startDate: true },
+                select: { id: true, status: true, type: true, createdAt: true, updatedAt: true, startDate: true },
             }),
             // Pengajuan lembur yang baru diperbarui statusnya
             prisma.overtimeRequest.findMany({
                 where: {
                     employeeId,
                     status: { in: ["approved", "rejected"] },
+                    OR: [{ updatedAt: { gte: thirtyDaysAgo } }, { updatedAt: null }],
                 },
-                orderBy: { createdAt: "desc" },
+                orderBy: { updatedAt: "desc" },
                 take: 5,
-                select: { id: true, status: true, hours: true, createdAt: true, date: true },
+                select: { id: true, status: true, hours: true, createdAt: true, updatedAt: true, date: true },
             }),
             // Koreksi presensi yang sudah diresolved
             prisma.attendanceCorrection.findMany({
                 where: {
                     employeeId,
                     status: { in: ["APPROVED", "REJECTED"] },
+                    updatedAt: { gte: thirtyDaysAgo },
                 },
                 orderBy: { updatedAt: "desc" },
                 take: 5,
@@ -133,25 +141,27 @@ export async function GET() {
             const typeLabel = leave.type === "annual" ? "tahunan" :
                               leave.type === "sick"   ? "sakit" :
                               leave.type === "personal" ? "pribadi" : "melahirkan";
+            const decidedAt = leave.updatedAt ?? leave.createdAt;
             notifications.push({
                 id:      `leave-${leave.id}`,
                 type:    "leave",
                 title:   leave.status === "approved" ? "Cuti Disetujui" : "Cuti Ditolak",
-                message: `Pengajuan cuti ${typeLabel} mulai ${new Date(leave.startDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" })} ${leave.status === "approved" ? "telah disetujui" : "ditolak oleh HR"}`,
+                message: `Pengajuan cuti ${typeLabel} mulai ${new Date(leave.startDate).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })} ${leave.status === "approved" ? "telah disetujui" : "ditolak oleh HR"}`,
                 href:    "/employee/leave",
-                time:    leave.createdAt.toISOString(),
+                time:    decidedAt.toISOString(),
                 isRead:  false,
             });
         }
 
         for (const overtime of overtimes) {
+            const decidedAt = overtime.updatedAt ?? overtime.createdAt;
             notifications.push({
                 id:      `overtime-${overtime.id}`,
                 type:    "overtime",
                 title:   overtime.status === "approved" ? "Lembur Disetujui" : "Lembur Ditolak",
-                message: `Lembur ${overtime.hours}jam pada ${new Date(overtime.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })} ${overtime.status === "approved" ? "telah disetujui" : "ditolak oleh HR"}`,
+                message: `Lembur ${overtime.hours}jam pada ${new Date(overtime.date).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })} ${overtime.status === "approved" ? "telah disetujui" : "ditolak oleh HR"}`,
                 href:    "/employee/overtime",
-                time:    overtime.createdAt.toISOString(),
+                time:    decidedAt.toISOString(),
                 isRead:  false,
             });
         }
@@ -161,7 +171,7 @@ export async function GET() {
                 id:      `correction-${corr.id}`,
                 type:    "correction",
                 title:   corr.status === "APPROVED" ? "Koreksi Presensi Disetujui" : "Koreksi Presensi Ditolak",
-                message: `Koreksi tanggal ${new Date(corr.targetDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" })} ${corr.status === "APPROVED" ? "telah disetujui" : "ditolak oleh HR"}`,
+                message: `Koreksi tanggal ${new Date(corr.targetDate).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })} ${corr.status === "APPROVED" ? "telah disetujui" : "ditolak oleh HR"}`,
                 href:    "/employee/attendance/correction",
                 time:    corr.updatedAt.toISOString(),
                 isRead:  false,
@@ -180,19 +190,46 @@ export async function GET() {
             });
         }
 
+        // Surat keterangan yang sudah diproses (bukan PENDING)
+        const recentLetters = await prisma.letterRequest.findMany({
+            where: {
+                employeeId,
+                status: { in: ["PROCESSING", "READY", "REJECTED"] },
+                updatedAt: { gte: thirtyDaysAgo },
+            },
+            orderBy: { updatedAt: "desc" },
+            take: 3,
+            select: { id: true, type: true, status: true, updatedAt: true },
+        });
+        for (const letter of recentLetters) {
+            const typeLabel = String(letter.type).replace(/_/g, " ");
+            const statusLabel = letter.status === "READY" ? "siap diambil" : letter.status === "REJECTED" ? "ditolak oleh HR" : "sedang diproses HR";
+            notifications.push({
+                id:      `letter-${letter.id}`,
+                type:    "letter",
+                title:   "Surat Keterangan",
+                message: `Permohonan ${typeLabel} ${statusLabel}`,
+                href:    "/employee/documents",
+                time:    letter.updatedAt.toISOString(),
+                isRead:  false,
+            });
+        }
+
         for (const invite of appointmentInvites) {
             notifications.push({
                 id:      `appointment-invite-${invite.id}`,
                 type:    "appointment",
                 title:   "Undangan Meeting",
-                message: `${invite.title} — ${invite.room?.name ?? "Meeting Daring"}, ${new Date(invite.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                message: `${invite.title} — ${invite.room?.name ?? "Meeting Daring"}, ${new Date(invite.startAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments/detail/${invite.id}`,
                 time:    invite.createdAt.toISOString(),
                 isRead:  false,
             });
         }
 
-        // Meeting yang berlangsung hari ini (jadwal WIB hari ini, saya terlibat)
+        // Meeting yang berlangsung hari ini (jadwal WIB hari ini, saya terlibat).
+        // Undangan PENDING hari ini sudah tampil sebagai invite di atas — jangan gandakan.
+        const invitedIds = new Set(appointmentInvites.map((i) => i.id));
         const todayWib = toWIBDateString(new Date());
         const todaysMeetings = await prisma.meetingAppointment.findMany({
             where: {
@@ -214,6 +251,7 @@ export async function GET() {
             },
         });
         for (const appt of todaysMeetings) {
+            if (invitedIds.has(appt.id)) continue;
             const time = new Date(appt.startAt).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }).replace(":", ".");
             const organizer = appt.requester?.name ? stripGelar(appt.requester.name) : "Penyelenggara";
             notifications.push({
@@ -232,7 +270,7 @@ export async function GET() {
                 id:      `appointment-follow-${appt.id}`,
                 type:    "appointment",
                 title:   "Meeting Dibatalkan",
-                message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments/detail/${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
@@ -258,7 +296,7 @@ export async function GET() {
                 id:      `appointment-${appt.id}`,
                 type:    "appointment",
                 title:   "Meeting Anda Dibatalkan",
-                message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                message: `${appt.title} — ${appt.room?.name ?? "Meeting Daring"}, ${new Date(appt.startAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments/detail/${appt.id}`,
                 time:    appt.updatedAt.toISOString(),
                 isRead:  false,
@@ -269,7 +307,14 @@ export async function GET() {
         // Query ringan khusus bell (bukan DTO penuh) + batas 10 baris.
         const threeDaysAhead = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
         const dueSoonRows = await prisma.meetingTaskAssignee.findMany({
-            where: { employeeId, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] }, task: { isCancelled: false } },
+            where: {
+                employeeId,
+                status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] },
+                task: {
+                    isCancelled: false,
+                    deadlineHistory: { some: { deadlineDate: { lte: threeDaysAhead } } },
+                },
+            },
             orderBy: { createdAt: "desc" },
             take: 10,
             select: {
@@ -291,7 +336,7 @@ export async function GET() {
             const dueTime = new Date(due).getTime();
             const isOverdue = Date.now() > dueTime;
             if (dueTime > threeDaysAhead.getTime() && !isOverdue) continue;
-            const dueLabel = new Date(due).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+            const dueLabel = new Date(due).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" });
             notifications.push({
                 id:      `meeting-task-${row.task.id}`,
                 type:    "task",
@@ -359,7 +404,7 @@ export async function GET() {
                 id:      `meeting-task-new-${row.task.id}`,
                 type:    "task",
                 title:   "Task Baru dari Meeting Selesai",
-                message: `${row.task.title} — deadline ${new Date(due).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`,
+                message: `${row.task.title} — deadline ${new Date(due).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })}`,
                 href:    `/employee/appointments/tasks?highlight=${row.task.id}`,
                 time:    row.task.createdAt.toISOString(),
                 isRead:  false,
@@ -370,12 +415,42 @@ export async function GET() {
         notifications.sort((a, b) => b.time.localeCompare(a.time));
         const result = notifications.slice(0, 20);
 
+        const readKeys = await getReadKeys(session.userId, result.map((n) => n.id));
+        const withRead = result.map((n) => ({ ...n, isRead: readKeys.has(n.id) }));
+        const unread = withRead.filter((n) => !n.isRead).length;
+
+        if (countOnly) {
+            return NextResponse.json({ unread });
+        }
+
         return NextResponse.json({
-            notifications: result,
+            notifications: withRead,
             total:  result.length,
-            unread: result.filter((n) => !n.isRead).length,
+            unread,
         });
     } catch (err) {
         return serverErrorResponse("EmployeeNotificationsGET", err);
+    }
+}
+
+const markReadSchema = z.object({
+    ids: z.array(z.string().trim().min(1).max(191)).max(200).optional(),
+    all: z.boolean().optional(),
+    allIds: z.array(z.string().trim().min(1).max(191)).max(200).optional(),
+});
+
+export async function PATCH(request: Request) {
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    if (!session.employeeId) return forbiddenResponse();
+
+    try {
+        const result = await validateBody(request, markReadSchema);
+        if ("error" in result) return result.error;
+        const ids = result.data.all ? (result.data.allIds ?? []) : (result.data.ids ?? []);
+        const { marked } = await markNotificationsRead(session.userId, ids);
+        return NextResponse.json({ success: true, marked });
+    } catch (err) {
+        return serverErrorResponse("EmployeeNotificationsPATCH", err);
     }
 }

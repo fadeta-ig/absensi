@@ -19,6 +19,8 @@ import {
     CalendarCheck,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
+import PushNotificationManager from "@/components/PushNotificationManager";
+import { unsubscribePush } from "@/lib/pushClient";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
@@ -127,6 +129,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setLoggingOut(true);
         toast("Memproses logout...", "info");
         try {
+            void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
             notifyAuthChanged("logout");
@@ -185,6 +188,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             mobileHeaderRight={
                 <div className="flex items-center gap-1">
                     <ThemeToggle />
+                    <PushNotificationManager />
                     <NotificationCenter
                         enabled={Boolean(user.permissions?.includes("hr.manage"))}
                         onAccessDenied={handleNotificationAccessDenied}

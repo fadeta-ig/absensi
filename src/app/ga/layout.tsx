@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck, ClipboardCheck, CalendarClock } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
+import PushNotificationManager from "@/components/PushNotificationManager";
+import { unsubscribePush } from "@/lib/pushClient";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
@@ -125,6 +127,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
         setLoggingOut(true);
         toast("Memproses logout...", "info");
         try {
+            void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
             notifyAuthChanged("logout");
@@ -148,7 +151,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
             storageKey="ga-sidebar-collapsed"
             onLogout={handleLogout}
             logoutLoading={loggingOut}
-            mobileHeaderRight={<ThemeToggle />}
+            mobileHeaderRight={<div className="flex items-center gap-1"><PushNotificationManager /><ThemeToggle /></div>}
         >
             {children}
         </AppShell>

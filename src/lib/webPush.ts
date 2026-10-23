@@ -11,15 +11,18 @@ function getWebPush() {
     if (!initialized) {
         const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         const privateKey = process.env.VAPID_PRIVATE_KEY;
+        // Alamat kontak operasional untuk laporan penyalahgunaan push (RFC 8292).
+        // Dapat dioverride via env VAPID_MAILTO; default ke email IT agar perilaku lama tidak berubah.
+        const subject = process.env.VAPID_MAILTO ?? "mailto:it.wijayainovasigemilang@gmail.com";
 
         if (!publicKey || !privateKey) {
             throw new Error(
-                "VAPID keys are not set. Please configure NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in your environment."
+                "VAPID keys are not set. Push notification dinonaktifkan sampai kunci dikonfigurasi."
             );
         }
 
         webPushLib.setVapidDetails(
-            "mailto:it.wijayainovasigemilang@gmail.com",
+            subject,
             publicKey,
             privateKey
         );

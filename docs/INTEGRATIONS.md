@@ -27,7 +27,10 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
 - **Konfigurasi (`.env`)**:
   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: Kunci publik VAPID yang diakses browser untuk meminta izin notifikasi.
   - `VAPID_PRIVATE_KEY`: Kunci privat VAPID yang digunakan server untuk menandatangani payload push.
-- **Service Worker Handler**: `worker/index.js` meng-intercept event `push`, memunculkan notifikasi sistem dengan getaran `[200, 100, 200]`, dan merutekan klik notifikasi ke `/employee`.
+  - `VAPID_MAILTO` (opsional): Kontak operasional RFC 8292; default `mailto:it.wijayainovasigemilang@gmail.com`.
+  - Dev dan produksi wajib memakai pasangan key berbeda.
+- **Service Worker Handler**: `worker/index.js` meng-intercept event `push` (fallback teks bila non-JSON), memunculkan notifikasi sistem dengan getaran `[200, 100, 200]`, tag unik per pesan, dan merutekan klik notifikasi ke URL payload (default `/employee`). Rotasi kunci browser (`pushsubscriptionchange`) daftar ulang + `POST /api/push/subscribe` otomatis.
+- **Langganan**: Tombol "Aktifkan Notifikasi" (gesture pengguna) di portal employee/HR/GA; unsubscribe otomatis saat logout + tombol nonaktif bila diblokir browser.
 - **Failure Considerations**:
   - Jika subscription endpoint sudah kedaluwarsa atau browser pengguna mencabut izin (error 410 Gone / 404 Not Found), backend secara otomatis menghapus record dari tabel `push_subscriptions`.
 
