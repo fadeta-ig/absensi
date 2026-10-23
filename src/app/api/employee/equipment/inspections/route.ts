@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         const rawStatus = (searchParams.get("status") ?? "").trim();
         if (rawStatus && !ALLOWED_STATUS.has(rawStatus)) {
             return NextResponse.json(
-                { error: "Status harus OPEN, SUBMITTED, atau DONE." },
+                { error: "Status harus OPEN, SUBMITTED, DONE, atau APPROVED." },
                 { status: 400 }
             );
         }

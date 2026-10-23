@@ -606,7 +606,7 @@ export async function endEquipmentAssignment(session: SessionPayload, assignment
 
 export interface EquipmentRecapFilters {
     unitId?: string;
-    status?: "OPEN" | "SUBMITTED" | "DONE";
+    status?: "OPEN" | "SUBMITTED" | "DONE" | "APPROVED";
     from?: string;
     to?: string;
 }
