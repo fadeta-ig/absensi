@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
+import { stripGelar } from "@/lib/utils/formatters";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AllMenusSheet from "./components/AllMenusSheet";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
@@ -150,7 +151,7 @@ export default function EmployeeHomePage() {
                                 : "Menunggu waktu server"}
                         </p>
                         <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] leading-none">
-                            {user?.name?.split(" ")[0] ?? "Sobat"}
+                            {stripGelar(user?.name)?.split(" ")[0] || "Sobat"}
                         </h1>
                         <p className="text-[10px] font-semibold text-[var(--text-secondary)] mt-0.5 leading-tight">
                             {user?.positionRel?.name ?? "Karyawan"} – {user?.departmentRel?.name ?? "Department"}
