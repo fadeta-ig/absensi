@@ -115,15 +115,27 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#FFF5F7] via-white to-[#FFF0F0]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 relative">
-            <Image
-              src="/assets/logo.png"
-              alt="WIG HRIS"
-              fill
-              sizes="64px"
-              className="object-contain"
-              priority
-            />
+          <div className="flex items-center justify-center gap-4">
+            <div className="w-16 h-16 relative">
+              <Image
+                src="/assets/logo.png"
+                alt="WIG HRIS"
+                fill
+                sizes="64px"
+                className="object-contain"
+                priority
+              />
+            </div>
+            <div className="w-16 h-16 relative">
+              <Image
+                src="/assets/logo_mki.png"
+                alt="MKI"
+                fill
+                sizes="64px"
+                className="object-contain"
+                priority
+              />
+            </div>
           </div>
           <div className="flex items-center gap-2 text-sm text-[var(--text-muted)] font-medium">
             <Loader2 className="w-4 h-4 animate-spin text-[var(--primary)]" />
@@ -145,15 +157,27 @@ export default function LoginPage() {
         <div className="bg-[var(--card)] rounded-2xl shadow-lg border border-[var(--border)] p-8 md:p-10">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 relative mb-4">
-              <Image
-                src="/assets/logo.png"
-                alt="WIG HRIS"
-                fill
-                sizes="64px"
-                className="object-contain"
-                priority
-              />
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <div className="w-16 h-16 relative">
+                <Image
+                  src="/assets/logo.png"
+                  alt="WIG HRIS"
+                  fill
+                  sizes="64px"
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <div className="w-16 h-16 relative">
+                <Image
+                  src="/assets/logo_mki.png"
+                  alt="MKI"
+                  fill
+                  sizes="64px"
+                  className="object-contain"
+                  priority
+                />
+              </div>
             </div>
             <h1 className="text-xl font-bold text-[var(--text-primary)]">WIG HRIS</h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">PT Wijaya Inovasi Gemilang</p>
