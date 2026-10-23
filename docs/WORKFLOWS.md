@@ -2,7 +2,7 @@
 
 > **Purpose**: Development, build, test, and deployment procedures.  
 > **Source of Truth**: `package.json` scripts, dev environment, and testing tools.  
-> **Last Verified**: 2026-10-22  
+> **Last Verified**: 2026-10-23  
 
 Dokumen ini memuat panduan langkah demi langkah untuk instalasi, pengembangan lokal, sinkronisasi basis data, testing, build, dan deployment.
 
@@ -178,7 +178,7 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    verifikasi read-only (contoh: `SELECT DISTINCT` kolom yang di-cast; cek
    duplikat via `GROUP BY ... HAVING COUNT(*)>1`). Baru ulangi dan jawab `y`.
 
-5. **Build + start + verifikasi:**
+5. **Build + start + verifikasi (build wajib setiap deploy, termasuk deploy pertama):**
    ```bash
    npm run build
    pm2 delete hris
@@ -188,6 +188,8 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3002
    pm2 logs hris --lines 10 --nostream
    ```
+   > **Catatan perintah awal vs update (terverifikasi 2026-10-23):** perintah `pm2 start ... --name hris ... -p 3002` di atas adalah **perintah awal mula prod dijalankan** (mendaftarkan nama `hris` + port + batas memori ke PM2). Untuk deploy update berikutnya **cukup `pm2 restart hris`** (memakai konfigurasi tersimpan yang sama, kode baru tetap terpakai) lalu `pm2 save`. `delete+start` hanya bila ingin memastikan tidak ada sisa proses lama.
+   > **Catatan build (2026-10-23):** `npm run build` **wajib dijalankan setiap deploy tanpa kecuali** — termasuk deploy pertama maupun update kecil. Tanpa build, PM2 menyajikan bundle `.next/` lama dan perubahan kode tidak tampil walau `git pull` sudah terbaru. Build memakan waktu 1–3 menit; tunggu sampai selesai tanpa error sebelum lanjut `pm2 delete/restart`.
    Pakai `restart`/`delete+start` (bukan `reload`: mode fork + wrapper `npm`
    rawan race EADDRINUSE). Bila `EADDRINUSE`: JANGAN kill membabi buta —
    identifikasi penghuni (`ss -ltnp`, `ps -o pid,ppid,cmd -p <pid>`,
