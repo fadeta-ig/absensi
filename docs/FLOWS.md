@@ -231,7 +231,7 @@ Alur serah terima aset korporat dari GA ke karyawan:
 ```text
 [ Pelaksana (karyawan internal) ]     [ API /api/equipment/* ]              [ equipmentService.ts ]
            │                                       │                                   │
-           │── Mulai inspeksi unit aktif ─────────>│── requireActiveInternalEmployee ──>│── snapshot item template aktif (OPEN)
+           │── Mulai inspeksi unit aktif ─────────>│── assertAssignee               ──>│── snapshot item template aktif (OPEN)
            │── Nilai tiap item (isPass) ──────────>│── tolak bila bukan OPEN (409) ───>│── updateEquipmentInspectionItem
            │── Upload foto (maks 5, ≥1 wajib) ────>│── JPEG kamera + batas ukuran ────>│── saveEquipmentEvidence (OPEN saja)
            │── Submit ───────────────────────────>│── semua item dinilai + foto OK ──>│── OPEN → SUBMITTED + audit log
@@ -244,7 +244,7 @@ Alur serah terima aset korporat dari GA ke karyawan:
 [ WIG002 / topViewer ] ── rekap ──────>│── requireWig002OrTopViewer ───────>│── getEquipmentRecap (ringkasan open/submitted/done/approved)
 ```
 
-1. **Mulai checklist bebas**: Karyawan internal aktif mana pun memilih unit aktif dan memulai inspeksi; sistem membuat snapshot item dari template aktif saat itu (perubahan template berikutnya tidak mengubah inspeksi berjalan). Unit nonaktif, template nonaktif, atau template tanpa item aktif ditolak.
+1. **Mulai checklist (wajib penugasan)**: Karyawan internal aktif yang ditugaskan pada unit itu (atau global `unitId` null) memilih unit aktif dan memulai inspeksi; sistem membuat snapshot item dari template aktif saat itu (perubahan template berikutnya tidak mengubah inspeksi berjalan). Tanpa penugasan efektif pada hari WIB ini = 403. Unit nonaktif, template nonaktif, atau template tanpa item aktif ditolak.
 2. **Penilaian + foto**: Pelaksana menilai tiap item (`isPass` + catatan opsional) dan mengunggah foto dokumentasi ke satu tempat per inspeksi (mewakili semua item, maks 5). Perubahan item/foto ditolak setelah inspeksi dikirim.
 3. **Submit**: Lolos bila semua item aktif sudah dinilai dan (bila ada item `requirePhoto`) minimal 1 foto ada. Status menjadi `SUBMITTED`; tidak ada jalan kembali ke `OPEN`. Pemulai dapat membatalkan yang masih `OPEN` (`CANCELLED`, via konfirmasi).
 4. **Antrean QC pool**: Semua anggota QC melihat antrean `SUBMITTED` yang sama, terbaru di atas. QC boleh menambah foto QC opsional (maks 5) selama menunggu.

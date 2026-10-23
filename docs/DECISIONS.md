@@ -115,6 +115,7 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 - **Consequences**:
   - Positif: Nol administrasi penugasan; QC mana pun yang longgar dapat memproses antrean.
   - Negatif: Duplikasi checklist antar karyawan pada alat yang sama dimungkinkan; tidak ada klaim/lock antrean sehingga dua QC membuka item yang sama (yang kedua mendapat 409 setelah status berubah).
+- **Status: SUPERSEDED (2026-10-23)**: mode bebas tanpa penugasan di atas tidak lagi berlaku. Codebase saat ini mewajibkan penugasan (`EquipmentAssignment`, global via `unitId` null, efektif pada hari WIB ini): `startEquipmentInspection`, `updateEquipmentInspectionItem`, `submitEquipmentInspection`, dan `saveEquipmentEvidence` semuanya memanggil `assertAssignee` (403 bila tidak ditugaskan), dan tanpa penugasan efektif = tanpa menu/akses (DOMAIN.md §H, DATA_MODEL.md §6). Bagian antrean QC pool (tanpa filter per orang, terbaru-di-atas) tetap berlaku.
 
 ---
 
