@@ -27,9 +27,7 @@ import {
     Wrench,
     Eye,
 } from "lucide-react";
-import { notifyAuthChanged } from "@/lib/authEvents";
-import { unsubscribePush } from "@/lib/pushClient";
-import { useToast } from "@/components/Toast";
+import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
 
 interface MenuItem {
     href: string;
@@ -75,7 +73,7 @@ export default function AllMenusSheet({
     canApproveEquipment,
 }: AllMenusSheetProps) {
     const router = useRouter();
-    const toast = useToast();
+    const { logout } = useEmployeeLogout();
 
     // Tutup dengan tombol Escape & kunci scroll latar belakang saat sheet terbuka
     useEffect(() => {
@@ -102,20 +100,8 @@ export default function AllMenusSheet({
 
     const handleLogout = useCallback(async () => {
         onClose();
-        toast("Memproses logout...", "info");
-        try {
-            void unsubscribePush();
-            const res = await fetch("/api/auth/logout", { method: "POST" });
-            if (res.ok) {
-                notifyAuthChanged("logout");
-                router.replace("/");
-            } else {
-                toast("Gagal memproses logout. Coba lagi.", "error");
-            }
-        } catch {
-            toast("Terjadi kesalahan jaringan saat logout.", "error");
-        }
-    }, [onClose, router, toast]);
+        await logout();
+    }, [logout, onClose]);
 
     if (!isOpen) return null;
 

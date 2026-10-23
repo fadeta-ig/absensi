@@ -7,7 +7,7 @@ import { useConfirm } from "@/components/ConfirmModal";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
-import EmployeeSearchPicker, { type EmployeePick } from "@/components/equipment/EmployeeSearchPicker";
+import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface TemplateItem {

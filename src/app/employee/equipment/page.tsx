@@ -8,7 +8,7 @@ import { useConfirm } from "@/components/ConfirmModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
-import { EquipmentSearchField } from "@/components/equipment/EquipmentSearchField";
+import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
