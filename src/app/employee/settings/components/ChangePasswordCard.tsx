@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck, LogIn } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useToast } from "@/components/Toast";
 import { notifyAuthChanged } from "@/lib/authEvents";
 
 export function ChangePasswordCard() {
     const router = useRouter();
+    const toast = useToast();
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -15,6 +17,7 @@ export function ChangePasswordCard() {
     const [isSuccess, setIsSuccess] = useState(false);
     const [countdown, setCountdown] = useState(3);
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isSuccess) return;
@@ -40,13 +43,14 @@ export function ChangePasswordCard() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setMessage(null);
+        setFormError(null);
 
         if (newPassword.length < 8) {
-            setMessage({ type: "error", text: "Password baru minimal 8 karakter" });
+            setFormError("Password baru minimal 8 karakter");
             return;
         }
         if (newPassword !== confirmPassword) {
-            setMessage({ type: "error", text: "Konfirmasi password tidak cocok" });
+            setFormError("Konfirmasi password tidak cocok");
             return;
         }
 
@@ -71,10 +75,7 @@ export function ChangePasswordCard() {
             setConfirmPassword("");
         } catch (error) {
             reportClientError("ChangePasswordCard", "Gagal mengubah password karyawan", error);
-            setMessage({
-                type: "error",
-                text: error instanceof Error ? error.message : "Password belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi.",
-            });
+            toast(error instanceof Error ? error.message : "Password belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setLoading(false);
         }
@@ -128,10 +129,10 @@ export function ChangePasswordCard() {
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                    {message && (
-                        <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${message.type === "success" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                            {message.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                            {message.text}
+                    {formError && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            {formError}
                         </div>
                     )}
 

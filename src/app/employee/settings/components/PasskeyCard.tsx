@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Fingerprint, Loader2, Plus, Trash2 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 
 interface PasskeyDevice {
@@ -20,6 +21,7 @@ function fmtDate(iso: string | null): string {
 
 export default function PasskeyCard() {
     const confirm = useConfirm();
+    const toast = useToast();
     const [devices, setDevices] = useState<PasskeyDevice[]>([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -68,7 +70,6 @@ export default function PasskeyCard() {
 
     async function handleAdd() {
         setBusy(true);
-        setMessage(null);
         try {
             const optRes = await fetch("/api/auth/passkeys/register-options", {
                 method: "POST",
@@ -88,15 +89,15 @@ export default function PasskeyCard() {
                 const msg = err instanceof Error ? err.message : "";
                 reportClientError("PasskeyCard", "startRegistration gagal", err, { errorName: name });
                 if (name === "InvalidStateError") {
-                    setMessage({ kind: "error", text: "Perangkat ini sudah terdaftar untuk akun Anda." });
+                    toast("Perangkat ini sudah terdaftar untuk akun Anda.", "error");
                     return;
                 }
                 if (name === "NotAllowedError") {
-                    setMessage({ kind: "error", text: "Pendaftaran dibatalkan. Coba lagi dan selesaikan verifikasi di perangkat." });
+                    toast("Pendaftaran dibatalkan. Coba lagi dan selesaikan verifikasi di perangkat.", "error");
                     return;
                 }
                 if (name === "SecurityError") {
-                    setMessage({ kind: "error", text: "Domain tidak cocok (rpID). Pastikan buka via domain yang terdaftar." });
+                    toast("Domain tidak cocok (rpID). Pastikan buka via domain yang terdaftar.", "error");
                     return;
                 }
                 void msg;
@@ -112,11 +113,11 @@ export default function PasskeyCard() {
             const data = await verifyRes.json();
             if (!verifyRes.ok) throw new Error(data.error || "Gagal mendaftarkan perangkat.");
             setLabel("");
-            setMessage({ kind: "success", text: "Perangkat berhasil didaftarkan. Login berikutnya bisa pakai sidik jari / Face ID." });
+            toast("Perangkat berhasil didaftarkan. Login berikutnya bisa pakai sidik jari / Face ID.", "success");
             await load();
         } catch (err) {
             reportClientError("PasskeyCard", "Gagal mendaftarkan perangkat", err);
-            setMessage({ kind: "error", text: err instanceof Error ? err.message : "Gagal mendaftarkan perangkat." });
+            toast(err instanceof Error ? err.message : "Gagal mendaftarkan perangkat.", "error");
         } finally {
             setBusy(false);
         }
@@ -135,11 +136,11 @@ export default function PasskeyCard() {
                         const res = await fetch(`/api/auth/passkeys/${id}`, { method: "DELETE", credentials: "same-origin" });
                         const data = await res.json();
                         if (!res.ok) throw new Error(data.error || "Gagal menghapus perangkat.");
-                        setMessage({ kind: "success", text: "Perangkat dihapus." });
+                        toast("Perangkat dihapus.", "success");
                         await load();
                     } catch (err) {
                         reportClientError("PasskeyCard", "Gagal menghapus perangkat", err);
-                        setMessage({ kind: "error", text: err instanceof Error ? err.message : "Gagal menghapus perangkat." });
+                        toast(err instanceof Error ? err.message : "Gagal menghapus perangkat.", "error");
                     } finally {
                         setBusy(false);
                     }

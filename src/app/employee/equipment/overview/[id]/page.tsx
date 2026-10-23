@@ -7,6 +7,7 @@ import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidence
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
+import { EquipmentStatusBadge } from "@/components/equipment/EquipmentStatusBadge";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface DetailItem {
@@ -32,28 +33,6 @@ interface InspectionDetail {
     approvedAt: string | null;
     items: DetailItem[];
     progress: { total: number; decided: number };
-}
-
-const STATUS_LABEL: Record<string, string> = {
-    OPEN: "Berjalan",
-    SUBMITTED: "Menunggu Verifikasi",
-    DONE: "Menunggu Approval",
-    APPROVED: "Selesai",
-};
-
-function statusBadgeClass(status: string): string {
-    switch (status) {
-        case "OPEN":
-            return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
-        case "SUBMITTED":
-            return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
-        case "DONE":
-            return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-        case "APPROVED":
-            return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-        default:
-            return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
-    }
 }
 
 function formatDateTime(value: string | null): string {
@@ -165,7 +144,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
 
     if (forbidden) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6">
+            <div className="mx-auto px-4 py-6">
                 <div className="bg-card border border-border rounded-lg p-6 text-center">
                     <p className="text-foreground font-medium">Detail tidak tersedia untuk akun Anda.</p>
                     <p className="text-sm text-muted-foreground mt-1">Halaman ini hanya untuk atasan yang ditunjuk.</p>
@@ -179,7 +158,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
 
     if (error || !detail) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6">
+            <div className="mx-auto px-4 py-6">
                 <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
                     <AlertTriangle className="h-6 w-6 text-destructive mx-auto mb-2" />
                     <p className="text-sm text-destructive">{error ?? "Detail tidak ditemukan."}</p>
@@ -200,7 +179,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
     const rusak = detail.items.filter((i) => i.isPass === false).length;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <Link
                 href={backHref}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
@@ -216,9 +195,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                             {[detail.unit.brand, detail.unit.location].filter(Boolean).join(" · ") || "—"}
                         </p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${statusBadgeClass(detail.status)}`}>
-                        {STATUS_LABEL[detail.status] ?? detail.status}
-                    </span>
+                    <EquipmentStatusBadge status={detail.status} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
                     {detail.progress.decided}/{detail.progress.total} item dinilai · {baik} baik · {rusak} rusak

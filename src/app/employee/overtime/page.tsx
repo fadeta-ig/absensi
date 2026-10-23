@@ -4,10 +4,14 @@ import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
 
 import { useState, useEffect } from "react";
 import {
-    Clock4, Plus, Loader2, CheckCircle, AlertCircle, X,
+    Clock4, Plus, Loader2, AlertCircle, X,
     Calendar, Clock, FileText, Filter
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import { useToast } from "@/components/Toast";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 interface OvertimeRequest {
     id: string;
@@ -33,11 +37,11 @@ export default function EmployeeOvertimePage() {
     const [loading, setLoading] = useState(false);
     const [loadingList, setLoadingList] = useState(true);
     const [loadError, setLoadError] = useState("");
-    const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("all");
+    const toast = useToast();
 
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 5;
+    const [pageSize, setPageSize] = useState(5);
 
     const [form, setForm] = useState({
         date: new Date().toISOString().split("T")[0],
@@ -79,7 +83,6 @@ export default function EmployeeOvertimePage() {
         e.preventDefault();
         if (!form.date || !form.startTime || !form.endTime || !form.reason) return;
         setLoading(true);
-        setMessage(null);
 
         try {
             const res = await fetch("/api/overtime", {
@@ -92,13 +95,13 @@ export default function EmployeeOvertimePage() {
                 setRequests((prev) => [data, ...prev]);
                 setShowForm(false);
                 resetForm();
-                setMessage({ type: "success", text: "Pengajuan lembur berhasil dikirim!" });
+                toast("Pengajuan lembur berhasil dikirim!", "success");
             } else {
-                setMessage({ type: "error", text: await getResponseErrorMessage(res, "Gagal mengajukan lembur") });
+                toast(await getResponseErrorMessage(res, "Gagal mengajukan lembur"), "error");
             }
         } catch (error) {
             reportClientError("EmployeeOvertimePage", "Gagal mengirim pengajuan lembur", error, { date: form.date, startTime: form.startTime, endTime: form.endTime });
-            setMessage({ type: "error", text: "Pengajuan lembur belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi." });
+            toast("Pengajuan lembur belum terkirim karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         }
         setLoading(false);
     };
@@ -106,8 +109,8 @@ export default function EmployeeOvertimePage() {
     const totalApproved = requests.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.hours, 0);
     const filtered = filterStatus === "all" ? requests : requests.filter((r) => r.status === filterStatus);
 
-    const paginatedRequests = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+    const paginatedRequests = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -125,14 +128,6 @@ export default function EmployeeOvertimePage() {
                     <Plus className="w-4 h-4" /> Ajukan Lembur
                 </button>
             </div>
-
-            {/* Message */}
-            {message && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${message.type === "success" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    {message.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                    {message.text}
-                </div>
-            )}
 
             {/* Filter */}
             <div className="flex items-center gap-2">
@@ -153,8 +148,14 @@ export default function EmployeeOvertimePage() {
 
             {/* Request List */}
             {loadingList ? (
-                <div className="flex justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-50" />
+                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat pengajuan lembur">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="card p-4 space-y-2">
+                            <Skeleton className="h-5 w-2/3" />
+                            <Skeleton className="h-4 w-1/2" />
+                            <Skeleton className="h-3 w-1/3" />
+                        </div>
+                    ))}
                 </div>
             ) : loadError ? (
                 <div className="card p-8 text-center">
@@ -192,20 +193,22 @@ export default function EmployeeOvertimePage() {
                         );
                     })}
 
-                    {filtered.length > ITEMS_PER_PAGE && (
-                        <div className="flex justify-between items-center px-4 py-3 mt-4 border-t border-[var(--border)]">
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Prev</button>
-                            <span className="text-xs font-medium text-[var(--text-muted)]">Halaman {currentPage} dari {totalPages}</span>
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next</button>
-                        </div>
-                    )}
+                    <DataTablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={filtered.length}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                        pageSizeOptions={[5, 10, 20]}
+                        itemLabel="pengajuan"
+                    />
                 </div>
             )}
 
             {/* Form Modal */}
             {showForm && (
-                <div className="modal-overlay" onClick={() => setShowForm(false)}>
-                    <div className="modal-content max-w-md" onClick={(e) => e.stopPropagation()}>
+                <AccessibleModal ariaLabel="Pengajuan lembur" onClose={() => setShowForm(false)} className="max-w-md">
                         <div className="modal-header">
                             <h2 className="modal-title">Pengajuan Lembur</h2>
                             <button className="modal-close" onClick={() => setShowForm(false)}>
@@ -264,8 +267,7 @@ export default function EmployeeOvertimePage() {
                                 Ajukan Lembur
                             </button>
                         </form>
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
         </div>
     );

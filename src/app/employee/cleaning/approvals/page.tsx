@@ -208,8 +208,7 @@ function reviewerNameFor(paraf: DailyParafStatus, role: DailyParafRole): string 
     return `${name} (${dailyRoleLabel(role)})`;
 }
 
-function getWibToday(): string {
-    try {
+function getWibToday(): string {    try {
         const parts = new Intl.DateTimeFormat("en-CA", {
             timeZone: "Asia/Jakarta",
             year: "numeric",
@@ -224,6 +223,29 @@ function getWibToday(): string {
         // abaikan, fallback di bawah
     }
     return new Date().toISOString().slice(0, 10);
+}
+
+const CLEANING_APPROVALS_FILTER_KEY = "employee-cleaning-approvals-filter";
+
+function readCleaningApprovalsFilter(): {
+    selectedDate?: string;
+    activeTab?: "monthly" | "daily";
+    month?: string;
+    statusFilter?: string;
+} {
+    try {
+        const raw = window.sessionStorage.getItem(CLEANING_APPROVALS_FILTER_KEY);
+        if (!raw) return {};
+        const p = JSON.parse(raw) as Record<string, unknown>;
+        const out: { selectedDate?: string; activeTab?: "monthly" | "daily"; month?: string; statusFilter?: string } = {};
+        if (typeof p.selectedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.selectedDate)) out.selectedDate = p.selectedDate;
+        if (p.activeTab === "monthly" || p.activeTab === "daily") out.activeTab = p.activeTab;
+        if (typeof p.month === "string" && /^\d{4}-\d{2}$/.test(p.month)) out.month = p.month;
+        if (typeof p.statusFilter === "string" && p.statusFilter.length > 0) out.statusFilter = p.statusFilter;
+        return out;
+    } catch {
+        return {};
+    }
 }
 
 function shiftWibDate(dateStr: string, delta: number): string {
@@ -270,7 +292,7 @@ function formatTimeWib(iso: string | null): string {
 
 function DailyParafSection() {
     const toast = useToast();
-    const [selectedDate, setSelectedDate] = useState(getWibToday);
+    const [selectedDate, setSelectedDate] = useState(() => readCleaningApprovalsFilter().selectedDate ?? getWibToday());
     const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
     const [rooms, setRooms] = useState<Array<{ roomId: string; roomName: string }>>([]);
     const [roomsLoading, setRoomsLoading] = useState(true);
@@ -290,6 +312,15 @@ function DailyParafSection() {
     const dailyMonth = selectedDate.slice(0, 7);
     const wibToday = getWibToday();
     const canGoNextDay = selectedDate < wibToday;
+
+    useEffect(() => {
+        try {
+            const prev = readCleaningApprovalsFilter();
+            window.sessionStorage.setItem(CLEANING_APPROVALS_FILTER_KEY, JSON.stringify({ ...prev, selectedDate }));
+        } catch {
+            // abaikan (mode privat)
+        }
+    }, [selectedDate]);
 
     const fetchRooms = useCallback(async (monthWib: string) => {
         setRoomsLoading(true);
@@ -864,9 +895,9 @@ function DailyParafSection() {
 
 export default function EmployeeCleaningApprovalsPage() {
     const toast = useToast();
-    const [activeTab, setActiveTab] = useState<"monthly" | "daily">("daily");
-    const [month, setMonth] = useState(getCurrentMonth);
-    const [statusFilter, setStatusFilter] = useState<string>("ALL");
+    const [activeTab, setActiveTab] = useState<"monthly" | "daily">(() => readCleaningApprovalsFilter().activeTab ?? "daily");
+    const [month, setMonth] = useState(() => readCleaningApprovalsFilter().month ?? getCurrentMonth());
+    const [statusFilter, setStatusFilter] = useState<string>(() => readCleaningApprovalsFilter().statusFilter ?? "ALL");
     const [tasks, setTasks] = useState<EmployeeApprovalTask[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -884,6 +915,18 @@ export default function EmployeeCleaningApprovalsPage() {
     const [dayParaf, setDayParaf] = useState<DailyParafStatus | null>(null);
     const [dayChecklist, setDayChecklist] = useState<DailyChecklistDetail | null>(null);
     const [dayLoading, setDayLoading] = useState(false);
+
+    useEffect(() => {
+        try {
+            const prev = readCleaningApprovalsFilter();
+            window.sessionStorage.setItem(
+                CLEANING_APPROVALS_FILTER_KEY,
+                JSON.stringify({ ...prev, activeTab, month, statusFilter })
+            );
+        } catch {
+            // abaikan (mode privat)
+        }
+    }, [activeTab, month, statusFilter]);
 
     const fetchTasks = useCallback(async (targetMonth: string, status: string) => {
         setLoading(true);
@@ -1008,7 +1051,7 @@ export default function EmployeeCleaningApprovalsPage() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <div className="mb-6">
                 <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Inspeksi</h1>
                 <p className="text-sm text-[var(--text-muted)] mt-0.5">

@@ -285,7 +285,7 @@ export default function CleaningOverviewPage() {
     }, [rooms, query, statusFilter, dayParaf, dayChecklist, selectedDate]);
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <div className="flex items-start justify-between gap-2 mb-6">
                 <div>
                     <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Pantau Kebersihan Ruangan</h1>

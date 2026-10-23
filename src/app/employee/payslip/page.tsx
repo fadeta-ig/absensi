@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Download, X, Eye, Loader2, AlertCircle } from "lucide-react";
+import { FileText, Download, X, Eye, AlertCircle } from "lucide-react";
 import { exportPayslipPdf } from "@/lib/export";
+import { formatDisplayDate } from "@/lib/utils";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 
 interface PayslipItem { type: "ALLOWANCE" | "DEDUCTION"; name: string; amount: number; }
 interface Payslip {
@@ -19,7 +23,7 @@ export default function PayslipPage() {
     const [loadError, setLoadError] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 5;
+    const [pageSize, setPageSize] = useState(5);
 
     useEffect(() => {
         const loadPayslips = async () => {
@@ -78,9 +82,14 @@ export default function PayslipPage() {
             </div>
 
             {loading ? (
-                <div className="card p-12 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-60 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Memuat slip gaji...</p>
+                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat slip gaji">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="card p-5 space-y-2">
+                            <Skeleton className="h-5 w-2/3" />
+                            <Skeleton className="h-4 w-1/2" />
+                            <Skeleton className="h-3 w-1/3" />
+                        </div>
+                    ))}
                 </div>
             ) : loadError ? (
                 <div className="card p-12 text-center">
@@ -95,12 +104,12 @@ export default function PayslipPage() {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {payslips.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((p) => (
+                    {payslips.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((p) => (
                         <div key={p.id} className="card p-5">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold text-[var(--text-primary)]">Periode: {p.period}</p>
-                                    <p className="text-xs text-[var(--text-muted)] mt-1">Diterbitkan: {new Date(p.issuedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</p>
+                                    <p className="text-xs text-[var(--text-muted)] mt-1">Diterbitkan: {formatDisplayDate(p.issuedDate)}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-lg font-extrabold text-[var(--primary)]">{fmt(p.netSalary)}</p>
@@ -117,20 +126,22 @@ export default function PayslipPage() {
                         </div>
                     ))}
 
-                    {payslips.length > ITEMS_PER_PAGE && (
-                        <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)] mt-4">
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(c => c - 1)}>Prev</button>
-                            <span className="text-xs font-medium text-[var(--text-muted)]">Halaman {currentPage} dari {Math.ceil(payslips.length / ITEMS_PER_PAGE) || 1}</span>
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === (Math.ceil(payslips.length / ITEMS_PER_PAGE) || 1)} onClick={() => setCurrentPage(c => c + 1)}>Next</button>
-                        </div>
-                    )}
+                    <DataTablePagination
+                        currentPage={currentPage}
+                        totalPages={Math.ceil(payslips.length / pageSize) || 1}
+                        totalItems={payslips.length}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                        pageSizeOptions={[5, 10, 20]}
+                        itemLabel="slip gaji"
+                    />
                 </div>
             )}
 
             {/* Detail Modal */}
             {selected && (
-                <div className="modal-overlay" onClick={() => setSelected(null)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <AccessibleModal ariaLabel={`Slip gaji ${selected.period}`} onClose={() => setSelected(null)}>
                         <div className="modal-header">
                             <h2 className="modal-title">Slip Gaji — {selected.period}</h2>
                             <button className="modal-close" onClick={() => setSelected(null)}><X className="w-4 h-4" /></button>
@@ -209,8 +220,7 @@ export default function PayslipPage() {
                                 <Download className="w-4 h-4" /> Download PDF
                             </button>
                         </div>
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
         </div>
     );

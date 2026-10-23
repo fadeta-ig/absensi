@@ -519,7 +519,7 @@ export default function EmployeeEquipmentPage() {
 
     if (loading) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6" role="status" aria-live="polite" aria-label="Memuat daftar alat">
+            <div className="mx-auto px-4 py-6" role="status" aria-live="polite" aria-label="Memuat daftar alat">
                 <Skeleton className="h-7 w-48 mb-2" />
                 <Skeleton className="h-4 w-72 mb-6" />
                 <Skeleton className="h-12 mb-3" />
@@ -541,7 +541,7 @@ export default function EmployeeEquipmentPage() {
 
     if (isTopOnly) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6">
+            <div className="mx-auto px-4 py-6">
                 <div className="bg-card border border-border rounded-lg p-6 text-center">
                     <p className="text-foreground font-medium">Halaman ini untuk pelaksana pemeriksaan.</p>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -565,7 +565,7 @@ export default function EmployeeEquipmentPage() {
         const canSubmit = !!inspection && inspection.status === "OPEN" && inspection.progress.allDecided && inspection.progress.photoOk;
 
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6">
+            <div className="mx-auto px-4 py-6">
                 <button
                     onClick={backToUnits}
                     disabled={detailLoading || starting || submitting}
@@ -845,7 +845,7 @@ export default function EmployeeEquipmentPage() {
     }
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <h1 className="text-2xl font-semibold text-foreground mb-1">Inspeksi Alat</h1>
             <p className="text-sm text-muted-foreground mb-4">
                 {units.length === 0

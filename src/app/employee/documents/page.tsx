@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import {
     FileText, Send, Clock, CheckCircle, XCircle, Loader2,
-    ChevronLeft, ChevronRight, AlertCircle, Info,
+    AlertCircle, Info,
     Briefcase, DollarSign, UserCheck, Shield, Check,
     type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { StepperTimeline } from "@/components/ui/StepperTimeline";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { formatDisplayDateTime } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,16 +62,7 @@ const TIMELINE_STEPS = [
     { label: "Siap",        key: "READY" },
 ];
 
-const ITEMS_PER_PAGE = 5;
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtDate(isoStr: string): string {
-    return new Date(isoStr).toLocaleDateString("id-ID", {
-        day: "numeric", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-    });
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -79,6 +74,7 @@ export default function DocumentsPage() {
     const [showForm, setShowForm]         = useState(false);
     const [submitting, setSubmitting]     = useState(false);
     const [currentPage, setCurrentPage]   = useState(1);
+    const [pageSize, setPageSize]         = useState(5);
     const [selectedType, setSelectedType] = useState<LetterType>("SK_KERJA");
     const [purpose, setPurpose]           = useState("");
 
@@ -134,8 +130,8 @@ export default function DocumentsPage() {
     };
 
     // ── Pagination ─────────────────────────────────────────────────────────────
-    const totalPages = Math.ceil(requests.length / ITEMS_PER_PAGE) || 1;
-    const paginated  = requests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(requests.length / pageSize) || 1;
+    const paginated  = requests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -304,8 +300,14 @@ export default function DocumentsPage() {
                 </h2>
 
                 {loadingList ? (
-                    <div className="flex justify-center py-10">
-                        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)] opacity-50" />
+                    <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat riwayat permintaan">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className="card p-4 space-y-2">
+                                <Skeleton className="h-5 w-2/3" />
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-3 w-1/3" />
+                            </div>
+                        ))}
                     </div>
                 ) : requests.length === 0 ? (
                     <div className="card p-8 text-center">
@@ -335,7 +337,7 @@ export default function DocumentsPage() {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-bold text-[var(--text-primary)]">{typeCfg.label}</p>
-                                                    <p className="text-[10px] text-[var(--text-muted)]">{fmtDate(req.createdAt)}</p>
+                                                    <p className="text-[10px] text-[var(--text-muted)]">{formatDisplayDateTime(req.createdAt)}</p>
                                                 </div>
                                             </div>
                                             <span className={`badge ${statusCfg.badge} flex items-center gap-1 shrink-0`}>
@@ -351,38 +353,17 @@ export default function DocumentsPage() {
 
                                         {/* Timeline Progress */}
                                         {req.status !== "REJECTED" && (
-                                            <div className="flex items-center gap-1 pt-1 border-t border-[var(--border)]">
-                                                {TIMELINE_STEPS.map((step, idx) => {
-                                                    const isCompleted = currentStep > idx + 1;
-                                                    const isActive    = currentStep === idx + 1;
-                                                    return (
-                                                        <div key={step.key} className="flex items-center flex-1">
-                                                            <div className="flex-1 flex flex-col items-center gap-0.5">
-                                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                                                                    isCompleted ? "bg-green-500 text-white" :
-                                                                    isActive    ? "bg-[var(--primary)] text-white" :
-                                                                                  "bg-[var(--secondary)] text-[var(--text-muted)]"
-                                                                }`}>
-                                                                    {isCompleted
-                                                                        ? <Check className="w-2.5 h-2.5" />
-                                                                        : <span className="text-[9px] font-bold">{idx + 1}</span>
-                                                                    }
-                                                                </div>
-                                                                <p className={`text-[9px] font-semibold text-center leading-tight ${
-                                                                    isCompleted ? "text-green-600" :
-                                                                    isActive    ? "text-[var(--primary)]" :
-                                                                                  "text-[var(--text-muted)]"
-                                                                }`}>
-                                                                    {step.label}
-                                                                </p>
-                                                            </div>
-                                                            {idx < TIMELINE_STEPS.length - 1 && (
-                                                                <div className={`h-px flex-1 mx-1 mb-3 transition-colors ${isCompleted ? "bg-green-300" : "bg-gray-200"}`} />
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                            <StepperTimeline
+                                                steps={TIMELINE_STEPS.map((step, idx) => ({
+                                                    label: step.label,
+                                                    state:
+                                                        currentStep > idx + 1
+                                                            ? "done"
+                                                            : currentStep === idx + 1
+                                                              ? "active"
+                                                              : "todo",
+                                                }))}
+                                            />
                                         )}
 
                                         {/* Status Rejected Banner */}
@@ -407,27 +388,16 @@ export default function DocumentsPage() {
                             })}
                         </div>
 
-                        {requests.length > ITEMS_PER_PAGE && (
-                            <div className="flex items-center justify-between px-2 py-2">
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    disabled={currentPage === 1}
-                                    onClick={() => setCurrentPage((p) => p - 1)}
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
-                                <span className="text-xs font-medium text-[var(--text-muted)]">
-                                    Hal {currentPage} dari {totalPages}
-                                </span>
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    disabled={currentPage === totalPages}
-                                    onClick={() => setCurrentPage((p) => p + 1)}
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
+                        <DataTablePagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={requests.length}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                            pageSizeOptions={[5, 10, 20]}
+                            itemLabel="permintaan"
+                        />
                     </>
                 )}
             </div>
