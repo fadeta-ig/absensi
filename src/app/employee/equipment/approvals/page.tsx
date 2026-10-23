@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, FileCheck2, RefreshCw } from "lucide-react";
-import { EquipmentSearchField } from "@/components/equipment/EquipmentSearchField";
+import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot } from "@/components/equipment/EquipmentStatusBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";

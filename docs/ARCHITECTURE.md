@@ -123,5 +123,5 @@ graph TD
 ## 5. Architectural Boundaries
 
 - **Edge vs Node Runtime**: `src/proxy.ts` berjalan di Edge Runtime. File ini *tidak boleh* mengimpor module bawaan Node seperti `crypto`, `fs`, atau `@/lib/prisma`. Tipe data sesi diduplikasi secara lokal untuk menjamin kompatibilitas Edge.
-- **Client vs Server Components**: Halaman interaktif yang menggunakan state atau peta Leaflet ditandai dengan `"use client"`. Komponen pemanggil data server memuat data secara langsung atau via API routes terproteksi.
+- **Client vs Server Components**: Halaman interaktif yang menggunakan state atau peta Leaflet ditandai dengan `"use client"` (default portal employee). Pengecualian yang diizinkan: halaman detail sensitif read-only boleh menjadi Server Component yang memanggil service langsung dengan `getActiveSession()` (contoh: `/employee/monitoring/[id]` via `getEmployee360Data` + `getVisibleEmployees`) — tanpa fetch client, otorisasi di server.
 - **PWA Service Worker Boundary**: Service worker utama digenerate oleh `@ducanh2912/next-pwa` ke direktori `public/sw.js` dengan menyertakan custom script dari `worker/index.js`.

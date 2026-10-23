@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { isWig002 } from "@/lib/services/appointmentService";
-import { prisma } from "@/lib/prisma";
+import { searchActiveEmployees } from "@/lib/services/employeeSearchService";
 import { z } from "zod";
 
 const employeesQuerySchema = z.object({
@@ -31,57 +31,9 @@ export async function GET(request: NextRequest) {
         // WIG002 tanpa employeeId tidak difilter.
         const exclude = parsed.data.exclude ?? session.employeeId ?? undefined;
 
-        const whereCondition = {
-            isActive: true,
-            ...(exclude ? { employeeId: { not: exclude } } : {}),
-            ...(query
-                ? {
-                    OR: [
-                        { name: { contains: query } },
-                        { employeeId: { contains: query } },
-                    ],
-                }
-                : {}),
-        };
+        const data = await searchActiveEmployees({ q: query, limit, excludeEmployeeId: exclude });
 
-        const employees = await prisma.employee.findMany({
-            where: whereCondition,
-            select: {
-                id: true,
-                employeeId: true,
-                name: true,
-                departmentRel: {
-                    select: {
-                        id: true,
-                        name: true,
-                    },
-                },
-                divisionRel: {
-                    select: {
-                        id: true,
-                        name: true,
-                    },
-                },
-                positionRel: {
-                    select: {
-                        id: true,
-                        name: true,
-                    },
-                },
-            },
-            orderBy: { name: "asc" },
-            take: limit,
-        });
-
-        return NextResponse.json({
-            success: true,
-            data: employees.map((emp) => ({
-                employeeId: emp.employeeId,
-                name: emp.name,
-                department: emp.departmentRel?.name || "-",
-                position: emp.positionRel?.name || "-",
-            })),
-        });
+        return NextResponse.json({ success: true, data });
     } catch (err) {
         return serverErrorResponse("AppointmentEmployeesGET", err);
     }

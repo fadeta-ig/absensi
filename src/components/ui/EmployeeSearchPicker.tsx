@@ -13,7 +13,7 @@ export interface EmployeePick {
 
 async function fetchEmployees(query: string, signal: AbortSignal): Promise<EmployeePick[]> {
     const params = new URLSearchParams({ q: query, limit: "8" });
-    const res = await fetch(`/api/appointments/employees?${params.toString()}`, { signal });
+    const res = await fetch(`/api/employee/employees?${params.toString()}`, { signal });
     if (!res.ok) return [];
     const data: unknown = await res.json();
     const list = Array.isArray(data) ? (data as EmployeePick[]) : Array.isArray((data as { data?: unknown }).data) ? ((data as { data: EmployeePick[] }).data as EmployeePick[]) : [];

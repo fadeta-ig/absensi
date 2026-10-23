@@ -10,12 +10,11 @@ import {
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
 import { EmployeeNotificationPanel } from "@/components/layout/EmployeeNotificationPanel";
-import { unsubscribePush } from "@/lib/pushClient";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
-import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
-import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { subscribeAuthChanged } from "@/lib/authEvents";
+import { reportClientError } from "@/lib/clientErrors";
+import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
 
 
 const navItems: NavItem[] = [
@@ -95,10 +94,9 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const toast = useToast();
     const [user, setUser] = useState<AppShellUser | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
-    const [loggingOut, setLoggingOut] = useState(false);
+    const { logout: handleLogout, loggingOut } = useEmployeeLogout();
     const [equipmentVisible, setEquipmentVisible] = useState(false);
     const fetchedRef = useRef(false);
 
@@ -168,23 +166,6 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
 
         void checkAuth();
     }), [checkAuth, router]);
-
-    const handleLogout = useCallback(async () => {
-        if (loggingOut) return;
-        setLoggingOut(true);
-        toast("Memproses logout...", "info");
-        try {
-            void unsubscribePush();
-            const res = await fetch("/api/auth/logout", { method: "POST" });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
-            notifyAuthChanged("logout");
-            router.replace("/");
-        } catch (error) {
-            reportClientError("EmployeeLayout", "Logout employee gagal", error);
-            toast(error instanceof Error ? error.message : "Gagal logout.", "error");
-            setLoggingOut(false);
-        }
-    }, [loggingOut, router, toast]);
 
     const handleNavigate = useCallback((href: string) => {
         router.push(href);

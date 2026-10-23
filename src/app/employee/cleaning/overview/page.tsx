@@ -5,7 +5,7 @@ import { AlertTriangle, Ban, CalendarDays, CheckCircle2, Clock, Eye, Loader2, Re
 import { useToast } from "@/components/Toast";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
-import { EquipmentSearchField } from "@/components/equipment/EquipmentSearchField";
+import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 
 interface OverviewRoom {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, Eye, Loader2, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
-import { EquipmentSearchField } from "@/components/equipment/EquipmentSearchField";
+import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 
 interface OverviewInspection {

@@ -6,7 +6,7 @@ import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentStatusDot, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
-import { EquipmentSearchField } from "@/components/equipment/EquipmentSearchField";
+import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 
 type QueueStatus = "DONE" | "APPROVED" | "ALL";
 
