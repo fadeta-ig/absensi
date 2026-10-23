@@ -82,3 +82,6 @@ next-env.d.ts
 /task_plan.md
 /findings.md
 /progress.md
+
+# knowledge reports (local research artifacts, never commit)
+/.knowledge/
