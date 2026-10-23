@@ -103,7 +103,7 @@ export default function PasskeyPrompt({ ownerKey }: { ownerKey: string | null })
                     type="button"
                     onClick={() => {
                         snooze();
-                        router.push("/employee/settings");
+                        router.push("/employee/profile#keamanan");
                     }}
                     className="w-full flex items-center justify-center gap-2 py-3 bg-[var(--primary)] text-white font-semibold rounded-lg hover:bg-[var(--primary-light,#9B1B30)] transition-all shadow-md"
                 >

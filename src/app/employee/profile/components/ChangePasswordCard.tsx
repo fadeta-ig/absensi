@@ -5,7 +5,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { notifyAuthChanged } from "@/lib/authEvents";
 
-export function ChangePasswordCard() {
+export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
     const router = useRouter();
     const toast = useToast();
     const [currentPassword, setCurrentPassword] = useState("");
@@ -129,6 +129,12 @@ export function ChangePasswordCard() {
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                    {locked && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg text-sm border bg-amber-50 text-amber-700 border-amber-200">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            Simpan dulu perubahan profil di atas sebelum ganti password.
+                        </div>
+                    )}
                     {formError && (
                         <div className="flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
                             <AlertCircle className="w-4 h-4 shrink-0" />
@@ -201,7 +207,7 @@ export function ChangePasswordCard() {
                         )}
                     </div>
 
-                    <button type="submit" className="btn btn-primary w-full" disabled={loading || !currentPassword || !newPassword || newPassword !== confirmPassword}>
+                    <button type="submit" className="btn btn-primary w-full" disabled={loading || locked || !currentPassword || !newPassword || newPassword !== confirmPassword}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                         Ubah Password
                     </button>
