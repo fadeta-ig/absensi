@@ -5,6 +5,8 @@ import { Fingerprint, Loader2, Plus, Trash2 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
+import { SettingCard } from "@/components/ui/SettingCard";
+import { NoticeBox } from "@/components/ui/NoticeBox";
 
 interface PasskeyDevice {
     id: string;
@@ -150,27 +152,9 @@ export default function PasskeyCard() {
     }
 
     return (
-        <div className="card">
-            <div className="flex items-center gap-2 mb-1">
-                <Fingerprint className="w-4 h-4 text-[var(--primary)]" />
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">Passkey / Login Sidik Jari</h2>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mb-4">
-                Daftarkan perangkat ini agar bisa login dengan sidik jari atau Face ID. Data biometrik tidak pernah keluar dari perangkat ini.
-            </p>
+        <SettingCard icon={Fingerprint} title="Passkey / Login Sidik Jari" subtitle="Daftarkan perangkat ini agar bisa login dengan sidik jari atau Face ID. Data biometrik tidak pernah keluar dari perangkat ini.">
 
-            {message && (
-                <div
-                    className={`mb-4 p-3 rounded-lg border text-sm ${
-                        message.kind === "success"
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900 dark:text-emerald-300"
-                            : "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/40 dark:border-red-900 dark:text-red-300"
-                    }`}
-                    role={message.kind === "error" ? "alert" : "status"}
-                >
-                    {message.text}
-                </div>
-            )}
+            {message && <NoticeBox kind={message.kind}>{message.text}</NoticeBox>}
 
             {supported === false && (
                 <p className="text-xs text-[var(--text-muted)] mb-4">
@@ -185,7 +169,7 @@ export default function PasskeyCard() {
             ) : (
                 <>
                     {devices.length > 0 && (
-                        <ul className="space-y-2 mb-4">
+                        <ul className="space-y-2">
                             {devices.map((d) => (
                                 <li key={d.id} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
                                     <div className="min-w-0">
@@ -200,7 +184,7 @@ export default function PasskeyCard() {
                                         type="button"
                                         disabled={busy}
                                         onClick={() => handleRevoke(d.id, d.label)}
-                                        className="p-2 rounded-lg hover:bg-rose-50 text-rose-600 min-w-9 min-h-9 flex items-center justify-center shrink-0"
+                                        className="p-2 rounded-lg hover:bg-rose-50 text-rose-600 dark:hover:bg-red-950/40 dark:text-red-400 min-w-9 min-h-9 flex items-center justify-center shrink-0"
                                         aria-label={`Hapus ${d.label || "perangkat"}`}
                                     >
                                         <Trash2 className="w-4 h-4" />
@@ -211,7 +195,7 @@ export default function PasskeyCard() {
                     )}
 
                     {supported !== false && (
-                        <div className="space-y-2 rounded-xl border border-[var(--border)] p-3">
+                        <div className="space-y-2">
                             <label className="form-label" htmlFor="passkey-label">Nama Perangkat (opsional)</label>
                             <input
                                 id="passkey-label"
@@ -234,6 +218,6 @@ export default function PasskeyCard() {
                     )}
                 </>
             )}
-        </div>
+        </SettingCard>
     );
 }

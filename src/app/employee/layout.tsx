@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
-    Newspaper, NotebookPen, MapPinned, Clock4, Settings, Users, Monitor, User,
+    Newspaper, NotebookPen, MapPinned, Clock4, Users, Monitor, User,
     CalendarCheck, CalendarClock, CalendarDays, Wrench,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
@@ -35,7 +35,6 @@ const navItems: NavItem[] = [
     { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
     { href: "/employee/profile", icon: User, label: "Profil" },
-    { href: "/employee/settings", icon: Settings, label: "Pengaturan" },
 ];
 
 function MobileBottomNav({ items, pathname, onNavigate }: {
@@ -43,13 +42,13 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
     pathname: string;
     onNavigate: (href: string) => void;
 }) {
-    // Mobile nav items: Beranda, Riwayat, Presensi, Koreksi, Kunjungan
+    // Mobile nav items: Beranda, Riwayat, Presensi, Koreksi, Profil
     const mobileItems = [
         items.find(i => i.href === "/employee"),
         items.find(i => i.href === "/employee/attendance-history"),
         items.find(i => i.href === "/employee/attendance"),
         items.find(i => i.href === "/employee/attendance/correction"),
-        items.find(i => i.href === "/employee/visits"),
+        items.find(i => i.href === "/employee/profile"),
     ];
 
     return (

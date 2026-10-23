@@ -1,25 +1,9 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { Settings } from "lucide-react";
-import { ChangePasswordCard } from "./components/ChangePasswordCard";
-import PasskeyCard from "./components/PasskeyCard";
-
-export default function SettingsPage() {
-    return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-[var(--primary)]" />
-                    Pengaturan
-                </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Kelola akun dan keamanan Anda</p>
-            </div>
-
-            {/* ═══ Change Password Card ═══ */}
-            <ChangePasswordCard />
-
-            {/* ═══ Passkey Card ═══ */}
-            <PasskeyCard />
-        </div>
-    );
+/**
+ * GET /employee/settings → dialihkan permanen ke hub akun /employee/profile.
+ * Kartu keamanan (ganti password + passkey) kini tinggal di profil (#keamanan).
+ */
+export default function EmployeeSettingsRedirectPage() {
+    redirect("/employee/profile");
 }

@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck, LogIn } from "lucide-react";
+import { CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck, LogIn } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { notifyAuthChanged } from "@/lib/authEvents";
+import { SettingCard } from "@/components/ui/SettingCard";
+import { NoticeBox } from "@/components/ui/NoticeBox";
 
-export function ChangePasswordCard() {
+export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
     const router = useRouter();
     const toast = useToast();
     const [currentPassword, setCurrentPassword] = useState("");
@@ -92,22 +94,11 @@ export function ChangePasswordCard() {
     const strength = passwordStrength(newPassword);
 
     return (
-        <div className="card">
-            <div className="p-4 border-b border-[var(--border)]">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center">
-                        <ShieldCheck className="w-4 h-4 text-[var(--primary)]" />
-                    </div>
-                    <div>
-                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">Ubah Password</h2>
-                        <p className="text-xs text-[var(--text-muted)]">Perbarui password akun Anda</p>
-                    </div>
-                </div>
-            </div>
+        <SettingCard icon={ShieldCheck} title="Ubah Password" subtitle="Perbarui password akun Anda">
 
             {isSuccess ? (
                 <div className="p-6 text-center space-y-4">
-                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 mx-auto flex items-center justify-center">
                         <CheckCircle className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
@@ -128,13 +119,13 @@ export function ChangePasswordCard() {
                     </div>
                 </div>
             ) : (
-                <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                    {formError && (
-                        <div className="flex items-center gap-2 p-3 rounded-lg text-sm border bg-red-50 text-red-700 border-red-200">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            {formError}
-                        </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {locked && (
+                        <NoticeBox kind="warning">
+                            Simpan dulu perubahan profil di atas sebelum ganti password.
+                        </NoticeBox>
                     )}
+                    {formError && <NoticeBox kind="error">{formError}</NoticeBox>}
 
                     <div className="form-group !mb-0">
                         <label className="form-label">
@@ -201,12 +192,12 @@ export function ChangePasswordCard() {
                         )}
                     </div>
 
-                    <button type="submit" className="btn btn-primary w-full" disabled={loading || !currentPassword || !newPassword || newPassword !== confirmPassword}>
+                    <button type="submit" className="btn btn-primary w-full" disabled={loading || locked || !currentPassword || !newPassword || newPassword !== confirmPassword}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                         Ubah Password
                     </button>
                 </form>
             )}
-        </div>
+        </SettingCard>
     );
 }
