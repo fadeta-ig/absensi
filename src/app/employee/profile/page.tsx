@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
     User, Phone, Mail, Briefcase, Building2, Calendar,
-    Camera, Save, Loader2, CheckCircle, AlertCircle,
+    Camera, Save, Loader2, AlertCircle,
     Shield, Lock, IdCard, Users, ChevronDown, LogOut, ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
+import { NoticeBox } from "@/components/ui/NoticeBox";
+import { DestructiveButton } from "@/components/ui/DestructiveButton";
 import Image from "next/image";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { ChangePasswordCard } from "./components/ChangePasswordCard";
@@ -400,10 +402,9 @@ export default function ProfilePage() {
                             </div>
 
                             {isDirty && (
-                                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
-                                    <AlertCircle className="w-4 h-4 shrink-0" />
-                                    <span>Ada perubahan yang belum disimpan. Klik <strong>Simpan Perubahan</strong> di atas.</span>
-                                </div>
+                                <NoticeBox kind="warning">
+                                    Ada perubahan yang belum disimpan. Klik <strong>Simpan Perubahan</strong> di atas.
+                                </NoticeBox>
                             )}
                         </div>
 
@@ -464,30 +465,24 @@ export default function ProfilePage() {
             </HubSection>
 
             {/* ── Bantuan ──────────────────────────────────────────────────── */}
-            <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <CheckCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                <div>
-                    <p className="text-sm font-semibold text-blue-800">Perlu mengubah data lainnya?</p>
-                    <p className="text-xs text-blue-600 mt-1">
+            <NoticeBox kind="info">
+                <span>
+                    <span className="block text-sm font-semibold">Perlu mengubah data lainnya?</span>
+                    <span className="block text-xs mt-1">
                         Perubahan pada nama, jabatan, department, email, atau data kepegawaian lainnya
                         harus diajukan melalui HR. Hubungi tim HR untuk proses perubahan data.
-                    </p>
-                </div>
-            </div>
+                    </span>
+                </span>
+            </NoticeBox>
 
             {/* ── Keluar ───────────────────────────────────────────────────── */}
-            <button
-                type="button"
-                onClick={handleLogoutClick}
-                disabled={loggingOut}
-                className="btn w-full min-h-[48px] border border-red-300 text-red-600 font-bold hover:bg-red-50 disabled:opacity-50"
-            >
+            <DestructiveButton onClick={handleLogoutClick} disabled={loggingOut}>
                 {loggingOut
                     ? <Loader2 className="w-4 h-4 animate-spin" />
                     : <LogOut className="w-4 h-4" />
                 }
                 {loggingOut ? "Keluar..." : "Keluar dari Akun"}
-            </button>
+            </DestructiveButton>
         </div>
     );
 }
