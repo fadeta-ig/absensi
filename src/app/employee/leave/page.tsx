@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon, Check } from "lucide-react";
+import { AlertCircle, CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { formatIndonesianDate } from "@/lib/utils";
+import { StepperTimeline } from "@/components/ui/StepperTimeline";
+import { Skeleton } from "@/components/ui/Skeleton";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { formatDisplayDate, formatIndonesianDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface LeaveRequest {
@@ -28,7 +31,7 @@ export default function LeavePage() {
     const [loadError, setLoadError] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 5;
+    const [pageSize, setPageSize] = useState(5);
 
     useEffect(() => {
         const loadLeaves = async () => {
@@ -129,8 +132,8 @@ export default function LeavePage() {
         }
     };
 
-    const paginatedLeaves = leaves.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-    const totalPages = Math.ceil(leaves.length / ITEMS_PER_PAGE) || 1;
+    const paginatedLeaves = leaves.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const totalPages = Math.ceil(leaves.length / pageSize) || 1;
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -255,9 +258,14 @@ export default function LeavePage() {
                     Riwayat Cuti
                 </h2>
                 {initialLoading ? (
-                    <div className="card p-8 text-center text-[var(--text-muted)]">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
-                        <p className="text-sm font-medium">Memuat riwayat cuti...</p>
+                    <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat riwayat cuti">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className="card p-4 space-y-2">
+                                <Skeleton className="h-5 w-2/3" />
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-3 w-1/3" />
+                            </div>
+                        ))}
                     </div>
                 ) : leaves.length === 0 ? (
                     <div className="card p-8 text-center">
@@ -294,53 +302,34 @@ export default function LeavePage() {
                                         <p className="text-xs text-[var(--text-secondary)]">{l.reason}</p>
 
                                         {/* ── Status Timeline ── */}
-                                        <div className="flex items-center gap-1 pt-1 border-t border-[var(--border)]">
-                                            {[
-                                                { label: "Diajukan", done: true },
-                                                { label: "Ditinjau", done: l.status !== "pending" },
-                                                { label: l.status === "approved" ? "Disetujui" : l.status === "rejected" ? "Ditolak" : "Keputusan", done: l.status === "approved" || l.status === "rejected" },
-                                            ].map((step, idx, arr) => (
-                                                <div key={step.label} className="flex items-center flex-1">
-                                                    <div className="flex flex-col items-center gap-0.5 flex-1">
-                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                                                            step.done
-                                                                ? (l.status === "rejected" && idx === 2 ? "bg-red-500 text-white" : "bg-green-500 text-white")
-                                                                : "bg-[var(--secondary)] text-[var(--text-muted)]"
-                                                        }`}>
-                                                            {step.done
-                                                                ? <Check className="w-2.5 h-2.5" />
-                                                                : <span className="text-[8px] font-bold">{idx + 1}</span>
-                                                            }
-                                                        </div>
-                                                        <p className={`text-[9px] font-semibold text-center leading-tight ${
-                                                            step.done
-                                                                ? (l.status === "rejected" && idx === 2 ? "text-red-500" : "text-green-600")
-                                                                : "text-[var(--text-muted)]"
-                                                        }`}>
-                                                            {step.label}
-                                                        </p>
-                                                    </div>
-                                                    {idx < arr.length - 1 && (
-                                                        <div className={`h-px flex-1 mx-0.5 mb-3 ${step.done ? "bg-green-300" : "bg-gray-200"}`} />
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <StepperTimeline
+                                            steps={[
+                                                { label: "Diajukan", state: "done" },
+                                                { label: "Ditinjau", state: l.status !== "pending" ? "done" : "todo" },
+                                                {
+                                                    label: l.status === "approved" ? "Disetujui" : l.status === "rejected" ? "Ditolak" : "Keputusan",
+                                                    state: l.status === "approved" ? "done" : l.status === "rejected" ? "failed" : "todo",
+                                                },
+                                            ]}
+                                        />
                                         <p className="text-[10px] text-[var(--text-muted)]">
-                                            Diajukan: {new Date(l.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                            Diajukan: {formatDisplayDate(l.createdAt)}
                                         </p>
                                     </div>
                                 );
                             })}
                         </div>
 
-                        {leaves.length > ITEMS_PER_PAGE && (
-                            <div className="flex justify-between items-center px-2 py-1 mt-2">
-                                <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Prev</button>
-                                <span className="text-xs font-medium text-[var(--text-muted)]">Halaman {currentPage} dari {totalPages}</span>
-                                <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next</button>
-                            </div>
-                        )}
+                        <DataTablePagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={leaves.length}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                            pageSizeOptions={[5, 10, 20]}
+                            itemLabel="pengajuan"
+                        />
                     </div>
                 )}
             </div>

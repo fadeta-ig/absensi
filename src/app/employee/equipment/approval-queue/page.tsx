@@ -195,7 +195,7 @@ export default function EquipmentApprovalQueuePage() {
                 : `${rows.length} pemeriksaan menunggu approval final.`;
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <div className="flex items-start justify-between gap-2 mb-1">
                 <h1 className="text-2xl font-semibold text-foreground">Persetujuan Final Alat</h1>
                 <button

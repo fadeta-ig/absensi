@@ -57,3 +57,25 @@ export function InviteResponseBadge({ status }: { status: string }) {
         </span>
     );
 }
+
+const TASK_STYLE: Record<string, { icon: typeof CheckCircle2; cls: string; label: string }> = {
+    BELUM_DIKERJAKAN: { icon: HelpCircle, cls: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700", label: "Belum Dikerjakan" },
+    ON_PROGRESS: { icon: PlayCircle, cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900", label: "On Progress" },
+    SELESAI: { icon: CheckCircle2, cls: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900", label: "Selesai" },
+    DIBATALKAN: { icon: Ban, cls: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900", label: "Dibatalkan" },
+};
+
+export function meetingTaskStatusLabel(status: string): string {
+    return TASK_STYLE[status]?.label ?? status;
+}
+
+export function MeetingTaskStatusBadge({ status }: { status: string }) {
+    const s = TASK_STYLE[status] ?? TASK_STYLE.BELUM_DIKERJAKAN;
+    const Icon = s.icon;
+    return (
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${s.cls}`}>
+            <Icon className="w-3 h-3" aria-hidden="true" />
+            {s.label}
+        </span>
+    );
+}

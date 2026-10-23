@@ -6,6 +6,22 @@ import Link from "next/link";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 
+const MONITORING_FILTER_KEY = "employee-monitoring-filter";
+
+function readMonitoringFilter(): { search?: string; dept?: string } {
+    try {
+        const raw = window.sessionStorage.getItem(MONITORING_FILTER_KEY);
+        if (!raw) return {};
+        const p = JSON.parse(raw) as Record<string, unknown>;
+        const out: { search?: string; dept?: string } = {};
+        if (typeof p.search === "string" && p.search.length > 0) out.search = p.search.slice(0, 100);
+        if (typeof p.dept === "string" && p.dept.length > 0) out.dept = p.dept;
+        return out;
+    } catch {
+        return {};
+    }
+}
+
 interface Employee {
     id: string;
     employeeId: string;
@@ -19,8 +35,17 @@ interface Employee {
 
 export default function MonitoringPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [search, setSearch] = useState("");
-    const [deptFilter, setDeptFilter] = useState("all");
+    const [search, setSearch] = useState(() => readMonitoringFilter().search ?? "");
+    const [deptFilter, setDeptFilter] = useState(() => readMonitoringFilter().dept ?? "all");
+
+    useEffect(() => {
+        if (!search && deptFilter === "all") return;
+        try {
+            window.sessionStorage.setItem(MONITORING_FILTER_KEY, JSON.stringify({ search, dept: deptFilter }));
+        } catch {
+            // abaikan (mode privat)
+        }
+    }, [search, deptFilter]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [forbidden, setForbidden] = useState(false);

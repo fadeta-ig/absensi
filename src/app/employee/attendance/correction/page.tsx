@@ -3,9 +3,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
     FileEdit, Send, Clock, CheckCircle, XCircle, Loader2,
-    Calendar, AlertCircle, ClipboardCheck, ChevronLeft, ChevronRight
+    Calendar, AlertCircle, ClipboardCheck
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
@@ -30,8 +32,6 @@ interface FormState {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-
-const ITEMS_PER_PAGE = 6;
 
 const STATUS_CONFIG: Record<CorrectionRequest["status"], { label: string; badge: string; icon: typeof CheckCircle }> = {
     PENDING:  { label: "Menunggu",  badge: "badge-warning", icon: Clock },
@@ -80,6 +80,7 @@ export default function AttendanceCorrectionPage() {
     const [showForm, setShowForm] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(5);
 
     const serverDate = serverContext.context?.serverWibDate ?? "";
     const yesterdayStr = serverDate ? shiftCalendarDate(serverDate, -1) : "";
@@ -250,8 +251,8 @@ export default function AttendanceCorrectionPage() {
     };
 
     // ── Pagination ─────────────────────────────────────────────────────────────
-    const totalPages = Math.ceil(requests.length / ITEMS_PER_PAGE) || 1;
-    const paginated = requests.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    const totalPages = Math.ceil(requests.length / pageSize) || 1;
+    const paginated = requests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
@@ -444,8 +445,14 @@ export default function AttendanceCorrectionPage() {
                 </h2>
 
                 {loadingList ? (
-                    <div className="flex justify-center py-10">
-                        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)] opacity-50" />
+                    <div className="space-y-2" role="status" aria-live="polite" aria-label="Memuat riwayat koreksi">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className="card p-4 space-y-2">
+                                <Skeleton className="h-5 w-2/3" />
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-3 w-1/3" />
+                            </div>
+                        ))}
                     </div>
                 ) : requests.length === 0 ? (
                     <div className="card p-8 text-center">
@@ -502,27 +509,16 @@ export default function AttendanceCorrectionPage() {
                             })}
                         </div>
 
-                        {requests.length > ITEMS_PER_PAGE && (
-                            <div className="flex items-center justify-between px-2 py-2">
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    disabled={currentPage === 1}
-                                    onClick={() => setCurrentPage((p) => p - 1)}
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                </button>
-                                <span className="text-xs font-medium text-[var(--text-muted)]">
-                                    Hal {currentPage} dari {totalPages}
-                                </span>
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    disabled={currentPage === totalPages}
-                                    onClick={() => setCurrentPage((p) => p + 1)}
-                                >
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
+                        <DataTablePagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={requests.length}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                            pageSizeOptions={[5, 10, 20]}
+                            itemLabel="pengajuan"
+                        />
                     </>
                 )}
             </div>

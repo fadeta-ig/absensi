@@ -6,6 +6,7 @@ import { AlertTriangle, Eye, Loader2, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentSearchField } from "@/components/equipment/EquipmentSearchField";
+import { EquipmentStatusBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 
 interface OverviewInspection {
     id: string;
@@ -30,28 +31,6 @@ interface OverviewSummary {
 }
 
 const STATUS_OPTIONS = ["", "OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
-
-const STATUS_LABEL: Record<string, string> = {
-    OPEN: "Berjalan",
-    SUBMITTED: "Menunggu Verifikasi",
-    DONE: "Menunggu Approval",
-    APPROVED: "Selesai",
-};
-
-function statusBadgeClass(status: string): string {
-    switch (status) {
-        case "OPEN":
-            return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400";
-        case "SUBMITTED":
-            return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
-        case "DONE":
-            return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-        case "APPROVED":
-            return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-        default:
-            return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
-    }
-}
 
 function formatDateTime(value: string | null): string {
     if (!value) return "—";
@@ -176,7 +155,7 @@ export default function EmployeeEquipmentOverviewPage() {
     }, [fetchOverview, status]);
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <div className="flex items-start justify-between gap-2 mb-6">
                 <div>
                     <h1 className="text-2xl font-semibold text-foreground">Pantau Inspeksi Alat</h1>
@@ -219,7 +198,7 @@ export default function EmployeeEquipmentOverviewPage() {
                                 <select id="pantau-status" value={status} onChange={(e) => setStatus(e.target.value)} className={`${inputClass} mt-1 min-h-[44px]`}>
                                     {STATUS_OPTIONS.map((s) => (
                                         <option key={s} value={s}>
-                                            {s === "" ? "Semua status" : (STATUS_LABEL[s] ?? s)}
+                                            {s === "" ? "Semua status" : equipmentStatusLabel(s)}
                                         </option>
                                     ))}
                                 </select>
@@ -320,9 +299,7 @@ export default function EmployeeEquipmentOverviewPage() {
                                             )}
                                         </div>
                                         <div className="flex flex-col items-end gap-2 shrink-0">
-                                            <span className={`text-xs px-1.5 py-0.5 rounded ${statusBadgeClass(item.status)}`}>
-                                                {STATUS_LABEL[item.status] ?? item.status}
-                                            </span>
+                                            <EquipmentStatusBadge status={item.status} />
                                             <span className="inline-flex items-center gap-1 text-xs text-primary">
                                                 <Eye className="h-3.5 w-3.5" /> Detail
                                             </span>

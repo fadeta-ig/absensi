@@ -6,7 +6,24 @@ import {
     Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe,
     Download, FileText, Paperclip, Loader2, AlertCircle, Maximize2, ExternalLink, Eye
 } from "lucide-react";
+import { formatDisplayDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import AccessibleModal from "@/components/ui/AccessibleModal";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { Skeleton } from "@/components/ui/Skeleton";
+
+const NEWS_FILTER_KEY = "employee-news-filter";
+const NEWS_FILTERS = ["all", "announcement", "event", "policy", "general"];
+
+function readNewsFilter(): string {
+    try {
+        const v = window.sessionStorage.getItem(NEWS_FILTER_KEY);
+        if (v && NEWS_FILTERS.includes(v)) return v;
+    } catch {
+        // abaikan (mode privat)
+    }
+    return "all";
+}
 
 interface NewsItem {
     id: string;
@@ -29,12 +46,20 @@ function NewsPageContent() {
     const [selected, setSelected] = useState<NewsItem | null>(null);
     const [previewPdf, setPreviewPdf] = useState<{ url: string; name: string } | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const [filter, setFilter] = useState("all");
+    const [filter, setFilter] = useState(() => readNewsFilter());
+
+    useEffect(() => {
+        try {
+            window.sessionStorage.setItem(NEWS_FILTER_KEY, filter);
+        } catch {
+            // abaikan (mode privat)
+        }
+    }, [filter]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 5;
+    const [pageSize, setPageSize] = useState(5);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -89,8 +114,8 @@ function NewsPageContent() {
     };
 
     const filtered = filter === "all" ? news : news.filter((n) => n.category === filter);
-    const paginatedNews = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+    const paginatedNews = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
 
     const getCategoryInfo = (cat: string) => {
         switch (cat) {
@@ -141,9 +166,14 @@ function NewsPageContent() {
 
             {/* News List */}
             {loading ? (
-                <div className="card p-12 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-60 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Memuat berita...</p>
+                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat berita">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="card p-4 space-y-2">
+                            <Skeleton className="h-5 w-2/3" />
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-3 w-1/3" />
+                        </div>
+                    ))}
                 </div>
             ) : loadError ? (
                 <div className="card p-12 text-center">
@@ -181,7 +211,7 @@ function NewsPageContent() {
                                         <div className="flex items-center gap-2 mt-2 text-[10px] text-[var(--text-muted)]">
                                             <span>Oleh {item.author}</span>
                                             <span>·</span>
-                                            <span>{new Date(item.createdAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" })}</span>
+                                            <span>{formatDisplayDate(item.createdAt)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -189,29 +219,32 @@ function NewsPageContent() {
                         );
                     })}
 
-                    {filtered.length > ITEMS_PER_PAGE && (
-                        <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)] mt-4">
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(c => c - 1)}>Prev</button>
-                            <span className="text-xs font-medium text-[var(--text-muted)]">Halaman {currentPage} dari {totalPages}</span>
-                            <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(c => c + 1)}>Next</button>
-                        </div>
-                    )}
+                    <DataTablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={filtered.length}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                        pageSizeOptions={[5, 10, 20]}
+                        itemLabel="berita"
+                    />
                 </div>
             )}
 
             {/* Detail Modal */}
             {selected && (
-                <div className="modal-overlay" onClick={handleCloseModal}>
-                    <div
-                        className={`modal-content transition-all duration-300 ${
-                            selected.mediaUrl && isPdf(selected.mediaUrl, selected.mediaName)
-                                ? "!max-w-3xl"
-                                : selected.mediaUrl && isImage(selected.mediaUrl)
-                                ? "!max-w-2xl"
-                                : ""
-                        }`}
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                <AccessibleModal
+                    ariaLabel={`Berita: ${selected.title}`}
+                    onClose={handleCloseModal}
+                    className={`transition-all duration-300 ${
+                        selected.mediaUrl && isPdf(selected.mediaUrl, selected.mediaName)
+                            ? "!max-w-3xl"
+                            : selected.mediaUrl && isImage(selected.mediaUrl)
+                            ? "!max-w-2xl"
+                            : ""
+                    }`}
+                >
                         <div className="modal-header">
                             <h2 className="modal-title">{selected.title}</h2>
                             <button className="modal-close" onClick={handleCloseModal}><X className="w-4 h-4" /></button>
@@ -368,17 +401,17 @@ function NewsPageContent() {
                                 )}
                             </div>
                         )}
-                    </div>
-                </div>
+                    </AccessibleModal>
             )}
 
             {/* Fullscreen PDF Viewer Modal */}
             {previewPdf && (
-                <div className="modal-overlay !p-2 sm:!p-6 z-[1100]" onClick={() => setPreviewPdf(null)}>
-                    <div
-                        className="modal-content !max-w-5xl !w-full !h-[92vh] flex flex-col !p-0 overflow-hidden shadow-2xl border-2 border-[var(--border)]"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                <AccessibleModal
+                    ariaLabel={`Pratinjau PDF: ${previewPdf.name}`}
+                    onClose={() => setPreviewPdf(null)}
+                    overlayClassName="!p-2 sm:!p-6 z-[1100]"
+                    className="!max-w-5xl !w-full !h-[92vh] flex flex-col !p-0 overflow-hidden shadow-2xl border-2 border-[var(--border)]"
+                >
                         {/* Viewer Top Bar */}
                         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)]">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -432,17 +465,17 @@ function NewsPageContent() {
                                 title={previewPdf.name}
                             />
                         </div>
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
 
             {/* Fullscreen Image Preview Modal */}
             {previewImage && (
-                <div className="modal-overlay !p-2 sm:!p-6 z-[1100]" onClick={() => setPreviewImage(null)}>
-                    <div
-                        className="modal-content !max-w-4xl !w-full !p-4 flex flex-col items-center justify-center relative bg-[var(--card)]"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                <AccessibleModal
+                    ariaLabel="Pratinjau gambar lampiran"
+                    onClose={() => setPreviewImage(null)}
+                    overlayClassName="!p-2 sm:!p-6 z-[1100]"
+                    className="!max-w-4xl !w-full !p-4 flex flex-col items-center justify-center relative bg-[var(--card)]"
+                >
                         <button
                             type="button"
                             onClick={() => setPreviewImage(null)}
@@ -457,8 +490,7 @@ function NewsPageContent() {
                             alt="Pratinjau Foto Lampiran"
                             className="max-h-[82vh] w-auto object-contain rounded-xl"
                         />
-                    </div>
-                </div>
+                </AccessibleModal>
             )}
         </div>
     );

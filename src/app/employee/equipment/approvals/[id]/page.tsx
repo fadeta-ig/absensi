@@ -172,7 +172,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
 
     if (loading) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6" role="status" aria-live="polite" aria-label="Memuat detail QC">
+            <div className="mx-auto px-4 py-6" role="status" aria-live="polite" aria-label="Memuat detail QC">
                 <Skeleton className="h-7 w-2/3 mb-2" />
                 <Skeleton className="h-4 w-1/2 mb-6" />
                 {[0, 1, 2].map((i) => (
@@ -187,7 +187,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
 
     if (error || !detail) {
         return (
-            <div className="max-w-2xl mx-auto px-4 py-6">
+            <div className="mx-auto px-4 py-6">
                 <Link href="/employee/equipment/approvals" className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center min-h-[44px] px-2 -ml-2">
                     ← Kembali ke antrean
                 </Link>
@@ -207,7 +207,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
     const isDone = detail.status === "DONE";
 
     return (
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="mx-auto px-4 py-6">
             <Link href="/employee/equipment/approvals" className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center min-h-[44px] px-2 -ml-2">
                 ← Kembali ke antrean
             </Link>

@@ -9,6 +9,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
 import { formatWIBDateTime } from "@/lib/timezone";
 import { useConfirm } from "@/components/ConfirmModal";
+import { meetingTaskStatusLabel } from "@/components/appointments/AppointmentBadges";
 
 interface MyTaskAssignee {
     employeeId: string;
@@ -31,13 +32,6 @@ interface MyTask {
     allDone: boolean;
     anyOverdue: boolean;
 }
-
-const STATUS_LABEL: Record<string, string> = {
-    BELUM_DIKERJAKAN: "Belum Dikerjakan",
-    ON_PROGRESS: "On Progress",
-    SELESAI: "Selesai",
-    DIBATALKAN: "Dibatalkan",
-};
 
 type Filter = "open" | "overdue" | "done" | "all";
 
@@ -218,7 +212,7 @@ export default function EmployeeMeetingTasksPage() {
                                     ) : mine?.isOverdue ? (
                                         <span className="badge-error shrink-0" title="Overdue untuk Anda">Overdue</span>
                                     ) : (
-                                        <span className="badge-info shrink-0" title={task.anyOverdue ? "Ada penerima lain yang overdue" : undefined}>{mine ? STATUS_LABEL[mine.status] : "Berjalan"}</span>
+                                        <span className="badge-info shrink-0" title={task.anyOverdue ? "Ada penerima lain yang overdue" : undefined}>{mine ? meetingTaskStatusLabel(mine.status) : "Berjalan"}</span>
                                     )}
                                 </div>
                                 {task.detail && <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{task.detail}</p>}
@@ -248,7 +242,7 @@ export default function EmployeeMeetingTasksPage() {
                                         <div className="flex gap-1.5">
                                             <dt className="text-[var(--text-muted)] w-20 shrink-0">Penerima</dt>
                                             <dd className="text-[var(--text-secondary)]">
-                                                {task.assignees.map((a) => `${stripGelar(a.name)}${a.employeeId === myEmployeeId ? " (Anda)" : ""} (${STATUS_LABEL[a.status] ?? a.status})`).join(", ")}
+                                                {task.assignees.map((a) => `${stripGelar(a.name)}${a.employeeId === myEmployeeId ? " (Anda)" : ""} (${meetingTaskStatusLabel(a.status)})`).join(", ")}
                                             </dd>
                                         </div>
                                     )}

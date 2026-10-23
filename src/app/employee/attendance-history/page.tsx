@@ -32,6 +32,31 @@ interface AttendanceRecord {
 
 type FilterMode = "day" | "month" | "year";
 
+const ATTENDANCE_HISTORY_FILTER_KEY = "employee-attendance-history-filter";
+
+interface AttendanceHistoryFilter {
+    mode?: FilterMode;
+    date?: string;
+    month?: number;
+    year?: number;
+}
+
+function readAttendanceHistoryFilter(): AttendanceHistoryFilter {
+    try {
+        const raw = window.sessionStorage.getItem(ATTENDANCE_HISTORY_FILTER_KEY);
+        if (!raw) return {};
+        const p = JSON.parse(raw) as Record<string, unknown>;
+        const out: AttendanceHistoryFilter = {};
+        if (p.mode === "day" || p.mode === "month" || p.mode === "year") out.mode = p.mode;
+        if (typeof p.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.date)) out.date = p.date;
+        if (typeof p.month === "number" && p.month >= 0 && p.month <= 11) out.month = p.month;
+        if (typeof p.year === "number" && p.year >= 2000 && p.year <= 2100) out.year = p.year;
+        return out;
+    } catch {
+        return {};
+    }
+}
+
 const MONTHS = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
@@ -98,10 +123,22 @@ export default function AttendanceHistoryPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
-    const [filterMode, setFilterMode] = useState<FilterMode>("month");
-    const [selectedDate, setSelectedDate] = useState("");
-    const [selectedMonth, setSelectedMonth] = useState(0);
-    const [selectedYear, setSelectedYear] = useState(0);
+    const [filterMode, setFilterMode] = useState<FilterMode>(() => readAttendanceHistoryFilter().mode ?? "month");
+    const [selectedDate, setSelectedDate] = useState(() => readAttendanceHistoryFilter().date ?? "");
+    const [selectedMonth, setSelectedMonth] = useState(() => readAttendanceHistoryFilter().month ?? 0);
+    const [selectedYear, setSelectedYear] = useState(() => readAttendanceHistoryFilter().year ?? 0);
+
+    useEffect(() => {
+        if (!selectedDate && !selectedMonth && !selectedYear && filterMode === "month") return;
+        try {
+            window.sessionStorage.setItem(
+                ATTENDANCE_HISTORY_FILTER_KEY,
+                JSON.stringify({ mode: filterMode, date: selectedDate, month: selectedMonth, year: selectedYear })
+            );
+        } catch {
+            // abaikan (mode privat)
+        }
+    }, [filterMode, selectedDate, selectedMonth, selectedYear]);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);

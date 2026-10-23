@@ -10,8 +10,24 @@ import { ClockInModal } from "./components/ClockInModal";
 import { ClockOutModal } from "./components/ClockOutModal";
 import { VisitDetailModal } from "./components/VisitDetailModal";
 import { useConfirm } from "@/components/ConfirmModal";
+import DataTablePagination from "@/components/ui/DataTablePagination";
+import { Skeleton } from "@/components/ui/Skeleton";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+
+const VISITS_FILTER_KEY = "employee-visits-filter";
+
+type VisitFilter = "all" | "draft" | "clocked_in" | "unchecked" | "checked";
+
+function readVisitsFilter(): VisitFilter {
+    try {
+        const v = window.sessionStorage.getItem(VISITS_FILTER_KEY);
+        if (v === "draft" || v === "clocked_in" || v === "unchecked" || v === "checked" || v === "all") return v;
+    } catch {
+        // abaikan (mode privat)
+    }
+    return "all";
+}
 
 type ModalState =
     | { type: "none" }
@@ -20,20 +36,29 @@ type ModalState =
     | { type: "clock_out"; visit: VisitReport }
     | { type: "detail"; visit: VisitReport };
 
-const ITEMS_PER_PAGE = 6;
-
 export default function VisitsPage() {
     const confirm = useConfirm();
     const [visits, setVisits] = useState<VisitReport[]>([]);
-    const [filterStatus, setFilterStatus] = useState<"all" | "draft" | "clocked_in" | "unchecked" | "checked">("all");
+    const [loading, setLoading] = useState(true);
+    const [filterStatus, setFilterStatus] = useState<VisitFilter>(() => readVisitsFilter());
+
+    useEffect(() => {
+        try {
+            window.sessionStorage.setItem(VISITS_FILTER_KEY, filterStatus);
+        } catch {
+            // abaikan (mode privat)
+        }
+    }, [filterStatus]);
     const [modal, setModal] = useState<ModalState>({ type: "none" });
     const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(5);
 
     useEffect(() => {
         let cancelled = false;
 
         const loadVisits = async () => {
+            setLoading(true);
             try {
                 const response = await fetch("/api/visits");
                 if (!response.ok) {
@@ -52,6 +77,8 @@ export default function VisitsPage() {
                     setVisits([]);
                     setMessage({ type: "error", text: error instanceof Error ? error.message : "Data kunjungan tidak dapat dimuat. Periksa koneksi internet lalu coba lagi." });
                 }
+            } finally {
+                if (!cancelled) setLoading(false);
             }
         };
 
@@ -119,8 +146,8 @@ export default function VisitsPage() {
         return true;
     });
     
-    const paginatedVisits = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+    const paginatedVisits = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
 
     // Status counts
     const statusCounts = {
@@ -181,7 +208,17 @@ export default function VisitsPage() {
             </div>
 
             {/* Visit List */}
-            {filtered.length === 0 ? (
+            {loading ? (
+                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat kunjungan">
+                    {[0, 1, 2].map((i) => (
+                        <div key={i} className="card p-4 space-y-2">
+                            <Skeleton className="h-5 w-2/3" />
+                            <Skeleton className="h-4 w-1/2" />
+                            <Skeleton className="h-3 w-1/3" />
+                        </div>
+                    ))}
+                </div>
+            ) : filtered.length === 0 ? (
                 <div className="card p-12 text-center border-dashed">
                     <MapPinned className="w-12 h-12 text-[var(--border)] mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-[var(--text-primary)]">Belum ada kunjungan</h3>
@@ -204,27 +241,16 @@ export default function VisitsPage() {
                         ))}
                     </div>
 
-                    {filtered.length > ITEMS_PER_PAGE && (
-                        <div className="flex justify-between items-center px-4 py-3 border-t border-[var(--border)]">
-                            <button
-                                className="btn btn-secondary btn-sm"
-                                disabled={currentPage === 1}
-                                onClick={() => setCurrentPage((p) => p - 1)}
-                            >
-                                Prev
-                            </button>
-                            <span className="text-xs font-medium text-[var(--text-muted)]">
-                                Halaman {currentPage} dari {totalPages}
-                            </span>
-                            <button
-                                className="btn btn-secondary btn-sm"
-                                disabled={currentPage === totalPages}
-                                onClick={() => setCurrentPage((p) => p + 1)}
-                            >
-                                Next
-                            </button>
-                        </div>
-                    )}
+                    <DataTablePagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={filtered.length}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(s) => { setPageSize(s); setCurrentPage(1); }}
+                        pageSizeOptions={[5, 10, 20]}
+                        itemLabel="kunjungan"
+                    />
                 </div>
             )}
 
