@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
     Calendar as CalendarIcon,
     ChevronLeft,
@@ -44,16 +44,15 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
         const [y, m] = selectedDate.split("-").map(Number);
         return new Date(y || new Date().getFullYear(), (m || new Date().getMonth() + 1) - 1, 1);
     });
-
-    useEffect(() => {
+    const [lastSelected, setLastSelected] = useState(selectedDate);
+    if (selectedDate !== lastSelected) {
+        setLastSelected(selectedDate);
         const [y, m] = selectedDate.split("-").map(Number);
-        if (!y || !m) return;
-        setCurrentDate((prev) => {
+        if (y && m) {
             const next = new Date(y, m - 1, 1);
-            if (prev.getFullYear() === next.getFullYear() && prev.getMonth() === next.getMonth()) return prev;
-            return next;
-        });
-    }, [selectedDate]);
+            if (next.getTime() !== currentDate.getTime()) setCurrentDate(next);
+        }
+    }
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bell, Loader2 } from "lucide-react";
-import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
+import { reportClientError } from "@/lib/clientErrors";
 import { getPushStatus, subscribePush, toPushErrorMessage, type PushStatus } from "@/lib/pushClient";
 
 export default function PushNotificationManager() {

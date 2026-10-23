@@ -234,7 +234,7 @@ describe("reminder offsets", () => {
         await expect(setReminderOffsets([], { userId: "u", username: "ID-002" })).rejects.toMatchObject({ statusCode: 400 });
     });
     it("parseReminderOffsets: sort desc, dedup, slice 5, fallback default", async () => {
-        const { parseReminderOffsets, isReminderOffsetDue } = await import("@/lib/services/appointmentService");
+        const { parseReminderOffsets } = await import("@/lib/services/appointmentService");
         expect(parseReminderOffsets("[60,1440]")).toEqual([1440, 60]);
         expect(parseReminderOffsets("[30,30,60]")).toEqual([60, 30]);
         expect(parseReminderOffsets("[10,5]")).toEqual([]);

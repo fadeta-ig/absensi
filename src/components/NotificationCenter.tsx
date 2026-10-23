@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarOff, MapPinned, Clock4, UserX, FileText, Loader2, History } from "lucide-react";
+import { Bell, CalendarOff, MapPinned, Clock4, UserX, FileText, Loader2 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 

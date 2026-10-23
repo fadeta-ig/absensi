@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2, CalendarClock, ListChecks, History } from "lucide-react";
+import { AlertCircle, Bell, X, CalendarOff, Clock4, FileEdit, Newspaper, FileText, Loader2, CalendarClock, ListChecks } from "lucide-react";
 import Link from "next/link";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
