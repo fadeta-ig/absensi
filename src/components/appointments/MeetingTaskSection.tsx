@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Circle, ListChecks, Loader2, Plus, UploadCloud, Pencil, FileText } from "lucide-react";
+import { CheckCircle2, Circle, Clock, FileText, ListChecks, Loader2, Plus, UploadCloud, Pencil } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
@@ -242,15 +242,36 @@ export default function MeetingTaskSection({
                                     </div>
                                 )}
                                 {!task.isCancelled && !readOnly && mine?.status === "ON_PROGRESS" && (
-                                    <p className="text-[11px] text-[var(--text-muted)] mt-2 flex items-center gap-1">
-                                        <Loader2 className="w-3 h-3 animate-spin" /> Hasil Anda menunggu verifikasi pemberi task.
-                                    </p>
+                                    <div className="mt-2 rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-2" aria-label={`Menunggu verifikasi untuk ${task.title}`}>
+                                        <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5 shrink-0" /> Hasil sudah terkumpul — menunggu verifikasi pemberi task.
+                                        </p>
+                                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Bukan proses upload. Berkas Anda sudah tersimpan (lihat riwayat di bawah).</p>
+                                    </div>
                                 )}
                                 {!task.isCancelled && mine?.status === "SELESAI" && (
                                     <p className="text-[11px] font-semibold text-emerald-600 mt-2 flex items-center gap-1">
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                         {mine.stickyOverdue ? "Selesai — tercatat overdue (lewat deadline pertama)." : "Anda sudah menyelesaikan bagian Anda."}
                                     </p>
+                                )}
+
+                                {mine && task.submissions.filter((s) => s.employeeId === mine.employeeId).length > 0 && (
+                                    <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-2.5" aria-label={`Riwayat pengumpulan saya pada ${task.title}`}>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">Pengumpulan saya</p>
+                                        <ul className="space-y-1">
+                                            {task.submissions.filter((s) => s.employeeId === (mine as { employeeId: string }).employeeId).map((s) => (
+                                                <li key={s.id} className="flex items-center justify-between gap-2 text-[11px]">
+                                                    <span className="text-[var(--text-secondary)]">
+                                                        Attempt {s.attemptNo} · {new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })} · {s.attachments.length} file{s.verifyNote ? ` · "${s.verifyNote}"` : ""}
+                                                    </span>
+                                                    <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${s.verdict === "DITERIMA" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : s.verdict === "DIREVISI" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" : "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"}`}>
+                                                        {s.verdict === "DITERIMA" ? "Diterima" : s.verdict === "DIREVISI" ? "Revisi" : "Diproses"}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 )}
 
                                 <div className="mt-2">

@@ -433,9 +433,12 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
                         className={`btn flex-1 ${mode === "cancel" ? "bg-rose-600 text-white hover:bg-rose-700" : "btn-primary"}`}
                     >
                         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        {busy ? "Menyimpan…" : meta.submit}
+                        {busy ? (mode === "submit" ? "Mengunggah…" : "Menyimpan…") : meta.submit}
                     </button>
                 </div>
+                {busy && mode === "submit" && (
+                    <p className="text-[11px] text-[var(--text-muted)]" role="status">Mengunggah lampiran ke server, mohon jangan tutup dialog ini…</p>
+                )}
             </form>
         </AccessibleModal>
     );
