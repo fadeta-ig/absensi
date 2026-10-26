@@ -38,6 +38,14 @@ export const ASSIGNEE_FINAL_STATUSES: MeetingTaskAssigneeStatus[] = ["SELESAI", 
 export const ASSIGNEE_OPEN_STATUSES: MeetingTaskAssigneeStatus[] = ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"];
 export type MeetingTaskSubmissionVerdict = "PENDING" | "DIREVISI" | "DITERIMA";
 
+/** Task yang seluruh penerimanya sudah final (SELESAI/DIBATALKAN) tidak bisa diubah lagi. */
+export function assertTaskNotFullyFinal(statuses: string[] | undefined | null): void {
+    const list = statuses ?? [];
+    if (list.length > 0 && list.every((s) => ASSIGNEE_FINAL_STATUSES.includes(s as MeetingTaskAssigneeStatus))) {
+        throw new MeetingTaskError("Task sudah selesai/ditutup. Tidak dapat diubah lagi.", 409);
+    }
+}
+
 let maxExtensionsCache: { value: number; expiresAt: number } | null = null;
 
 export function invalidateMeetingTaskMaxExtensionsCache(): void {
@@ -685,11 +693,12 @@ export async function extendTaskDeadline(
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat memperpanjang deadline.", 403);
     const task = await prisma.meetingTask.findUnique({
         where: { id: taskId },
-        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true },
+        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } },
     });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
     await assertMeetingOpenForTaskMutation(task.appointmentId);
+    await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memperpanjang deadline.", 403);
@@ -728,10 +737,11 @@ export async function cancelMeetingTask(
     actor: { userId?: string | null; username: string }
 ): Promise<MeetingTaskDto> {
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat membatalkan task.", 403);
-    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true } });
+    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } } });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
     await assertMeetingOpenForTaskMutation(task.appointmentId);
+    await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat membatalkan.", 403);
@@ -779,11 +789,12 @@ export async function editMeetingTask(
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat mengubah task.", 403);
     const task = await prisma.meetingTask.findUnique({
         where: { id: taskId },
-        select: { id: true, title: true, detail: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true },
+        select: { id: true, title: true, detail: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } },
     });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
     await assertMeetingOpenForTaskMutation(task.appointmentId);
+    await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat mengubah.", 403);
