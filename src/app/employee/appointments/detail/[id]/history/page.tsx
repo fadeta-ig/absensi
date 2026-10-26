@@ -4,7 +4,7 @@ import { Suspense, use, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     ArrowLeft, Ban, CalendarClock, CheckCircle2, ClipboardList, FileText, Hourglass,
-    Info, Loader2, Megaphone, Pencil, PlayCircle, UserCheck, UserX, XCircle,
+    Info, Loader2, Megaphone, Pencil, PlayCircle, UploadCloud, UserCheck, UserX, XCircle,
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
@@ -25,11 +25,12 @@ const ACTION_STYLE: Record<string, { icon: typeof Info; chip: string }> = {
     task_created: { icon: ClipboardList, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
     task_progress: { icon: PlayCircle, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
     task_done: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
+    task_done_late: { icon: CheckCircle2, chip: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300" },
+    task_submitted: { icon: UploadCloud, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
+    submission_approved: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
+    revision_requested: { icon: Pencil, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
     task_cancelled: { icon: XCircle, chip: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
     deadline_extended: { icon: Hourglass, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-    extension_requested: { icon: Hourglass, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-    extension_approved: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
-    extension_rejected: { icon: XCircle, chip: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
 };
 
 function fmtDT(iso: string): string {

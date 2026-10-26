@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isWig002 } from "@/lib/services/appointmentService";
 import type { SessionPayload } from "@/lib/auth";
-import { MeetingTaskError } from "@/lib/services/meetingTaskService";
+import { MeetingTaskError, isReceiverStickyOverdue } from "@/lib/services/meetingTaskService";
 
 export interface HistoryEvent {
     id: string;
@@ -111,17 +111,19 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
                         },
                     },
                     deadlineHistory: { orderBy: { sequence: "asc" }, select: { sequence: true, deadlineDate: true, reason: true, createdBy: true, createdAt: true } },
-                    extensionRequests: {
-                        orderBy: { createdAt: "asc" },
+                    submissions: {
+                        orderBy: { attemptNo: "asc" },
                         select: {
                             id: true,
-                            proposedDate: true,
-                            reason: true,
-                            status: true,
-                            decidedBy: true,
-                            decidedAt: true,
+                            employeeId: true,
+                            note: true,
+                            attemptNo: true,
+                            verdict: true,
+                            resubmitDueAt: true,
+                            verifiedBy: true,
+                            verifiedAt: true,
+                            verifyNote: true,
                             createdAt: true,
-                            requestedBy: { select: { employeeId: true, name: true } },
                         },
                     },
                 },
@@ -146,9 +148,7 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
     for (const t of appt.tasks) {
         if (t.assigner) nameOf.set(t.assigner.employeeId, t.assigner.name ?? t.assigner.employeeId);
         for (const a of t.assignees) nameOf.set(a.employeeId, a.employee?.name ?? a.employeeId);
-        for (const r of t.extensionRequests) {
-            if (r.requestedBy) nameOf.set(r.requestedBy.employeeId, r.requestedBy.name ?? r.requestedBy.employeeId);
-        }
+        for (const s of t.submissions) nameOf.set(s.employeeId, nameOf.get(s.employeeId) ?? s.employeeId);
     }
     // Username pelaku (changedBy/decidedBy) umumnya = employeeId akun karyawan
     const resolveActor = (username: string | null | undefined): string | null => {
@@ -257,12 +257,21 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
     for (const t of appt.tasks) {
         const assignerName = t.assigner ? (nameOf.get(t.assigner.employeeId) ?? t.assigner.employeeId) : "—";
         const activeDeadline = t.deadlineHistory[t.deadlineHistory.length - 1]?.deadlineDate ?? null;
+        const originalDue = t.deadlineHistory[0]?.deadlineDate ?? null;
         const allDone = !t.isCancelled && t.assignees.length > 0 && t.assignees.every((a) => a.status === "SELESAI");
         if (allDone) tasksDone++;
         const anyOverdue =
             !t.isCancelled &&
-            activeDeadline !== null &&
-            t.assignees.some((a) => a.status !== "SELESAI" && a.status !== "DIBATALKAN" && now.getTime() > activeDeadline.getTime());
+            t.assignees.some((a) => {
+                if (a.status === "SELESAI" || a.status === "DIBATALKAN") return false;
+                if (activeDeadline !== null && now.getTime() > activeDeadline.getTime()) return true;
+                return isReceiverStickyOverdue(
+                    t.submissions.filter((s) => s.employeeId === a.employeeId).map((s) => ({ createdAt: s.createdAt, attemptNo: s.attemptNo, verdict: s.verdict, resubmitDueAt: s.resubmitDueAt })),
+                    originalDue,
+                    now,
+                    { status: a.status, completedAt: a.completedAt }
+                );
+            });
         if (anyOverdue) tasksOverdue++;
         extensions += Math.max(0, t.deadlineHistory.length - 1);
 
@@ -293,29 +302,41 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
             });
         }
 
-        for (const r of t.extensionRequests) {
-            const reqName = r.requestedBy ? (nameOf.get(r.requestedBy.employeeId) ?? r.requestedBy.employeeId) : "Penerima";
+        for (const s of t.submissions) {
+            const who = nameOf.get(s.employeeId) ?? s.employeeId;
             push({
-                id: `task-extreq-${r.id}`,
-                at: r.createdAt.toISOString(),
+                id: `task-sub-${s.id}`,
+                at: s.createdAt.toISOString(),
                 scope: "task",
-                action: "extension_requested",
-                title: `Pengajuan perpanjangan: ${t.title}`,
-                detail: `${reqName} mengusulkan ${fmtDate(r.proposedDate)} — ${r.reason}`,
-                actorName: reqName,
-                reason: r.reason,
+                action: "task_submitted",
+                title: `Hasil dikumpulkan: ${t.title} (attempt ${s.attemptNo})`,
+                detail: `${who}${s.note ? ` — ${s.note}` : ""}`,
+                actorName: who,
+                reason: null,
                 taskId: t.id,
             });
-            if (r.status !== "PENDING" && r.decidedAt) {
+            if (s.verdict === "DITERIMA" && s.verifiedAt) {
                 push({
-                    id: `task-extdec-${r.id}`,
-                    at: r.decidedAt.toISOString(),
+                    id: `task-verify-${s.id}`,
+                    at: s.verifiedAt.toISOString(),
                     scope: "task",
-                    action: r.status === "APPROVED" ? "extension_approved" : "extension_rejected",
-                    title: r.status === "APPROVED" ? `Perpanjangan disetujui: ${t.title}` : `Perpanjangan ditolak: ${t.title}`,
-                    detail: null,
-                    actorName: resolveActor(r.decidedBy),
-                    reason: null,
+                    action: "submission_approved",
+                    title: `Disetujui: ${t.title}`,
+                    detail: `${who}${s.verifyNote ? ` — ${s.verifyNote}` : ""}`,
+                    actorName: resolveActor(s.verifiedBy),
+                    reason: s.verifyNote ?? null,
+                    taskId: t.id,
+                });
+            } else if (s.verdict === "DIREVISI" && s.verifiedAt) {
+                push({
+                    id: `task-rev-${s.id}`,
+                    at: s.verifiedAt.toISOString(),
+                    scope: "task",
+                    action: "revision_requested",
+                    title: `Revisi diminta: ${t.title} (attempt ${s.attemptNo})`,
+                    detail: `${who} · tenggat revisi ${s.resubmitDueAt ? fmtDate(s.resubmitDueAt) : "-"}${s.verifyNote ? ` — ${s.verifyNote}` : ""}`,
+                    actorName: resolveActor(s.verifiedBy),
+                    reason: s.verifyNote ?? null,
                     taskId: t.id,
                 });
             }
@@ -323,13 +344,20 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
 
         for (const a of t.assignees) {
             const who = nameOf.get(a.employeeId) ?? a.employeeId;
+            const subs = t.submissions.filter((s) => s.employeeId === a.employeeId);
+            const sticky = isReceiverStickyOverdue(
+                subs.map((s) => ({ createdAt: s.createdAt, attemptNo: s.attemptNo, verdict: s.verdict, resubmitDueAt: s.resubmitDueAt })),
+                originalDue,
+                now,
+                { status: a.status, completedAt: a.completedAt }
+            );
             if (a.status === "SELESAI" && a.completedAt) {
                 push({
                     id: `task-done-${t.id}-${a.employeeId}`,
                     at: a.completedAt.toISOString(),
                     scope: "task",
-                    action: "task_done",
-                    title: `Selesai: ${t.title}`,
+                    action: sticky ? "task_done_late" : "task_done",
+                    title: sticky ? `Selesai (overdue): ${t.title}` : `Selesai: ${t.title}`,
                     detail: who,
                     actorName: who,
                     reason: null,
@@ -341,7 +369,7 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
                     at: a.updatedAt.toISOString(),
                     scope: "task",
                     action: "task_progress",
-                    title: `Dikerjakan: ${t.title}`,
+                    title: `Menunggu verifikasi: ${t.title}`,
                     detail: `${who} · terakhir diperbarui ${fmtDateTime(a.updatedAt)}`,
                     actorName: who,
                     reason: null,

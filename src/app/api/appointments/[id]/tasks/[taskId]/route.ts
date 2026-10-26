@@ -2,20 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, parseJsonBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import {
     MeetingTaskError,
-    updateMyTaskStatus,
     extendTaskDeadline,
     cancelMeetingTask,
+    editMeetingTask,
 } from "@/lib/services/meetingTaskService";
 import { isWig002 } from "@/lib/services/appointmentService";
 import {
-    meetingTaskStatusSchema,
     meetingTaskExtendSchema,
     meetingTaskCancelSchema,
+    meetingTaskEditSchema,
 } from "@/lib/validations/validationSchemas";
 import { sendAppointmentPush, collectMeetingTaskUserIds } from "@/lib/services/appointmentNotify";
 import { z } from "zod";
 
-const actionSchema = z.object({ action: z.enum(["status", "extend", "cancel"]) });
+const actionSchema = z.object({ action: z.enum(["extend", "cancel", "edit"]) });
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string; taskId: string }> }) {
     const session = await requireAuth();
@@ -31,13 +31,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if ("error" in actionResult) return actionResult.error;
         const action = actionResult.data.action;
 
-        if (action === "status") {
-            const parsed = await validateBody(request, meetingTaskStatusSchema, raw.data);
-            if ("error" in parsed) return parsed.error;
-            const task = await updateMyTaskStatus(session, taskId, parsed.data.status, { userId: session.userId, username: session.username });
-            return NextResponse.json({ success: true, data: task });
-        }
-
         if (action === "extend") {
             const parsed = await validateBody(request, meetingTaskExtendSchema, raw.data);
             if ("error" in parsed) return parsed.error;
@@ -49,6 +42,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 tag: `meeting-task-${task.id}-ext-${task.extensionsCount}`,
                 url: `/employee/appointments/tasks?highlight=${task.id}`,
             });
+            return NextResponse.json({ success: true, data: task });
+        }
+
+        if (action === "edit") {
+            const parsed = await validateBody(request, meetingTaskEditSchema, raw.data);
+            if ("error" in parsed) return parsed.error;
+            const task = await editMeetingTask(session, taskId, parsed.data, { userId: session.userId, username: session.username });
             return NextResponse.json({ success: true, data: task });
         }
 

@@ -150,16 +150,18 @@ RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Ak
 
 RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; employee memakai `employee.self`.
 
-## 5. Task Hasil Meeting + Notulensi (2026-10-08)
+## 5. Task Hasil Meeting + Notulensi + Verifikasi (2026-10-08; verifikasi 2026-10-26)
 
 1. `MeetingAppointment` 1 ── * `MeetingTask` (`appointmentId`, Cascade; notulensi via kolom `notulisEmployeeId/minutes/minutesUpdatedBy/minutesUpdatedAt` + `MeetingAppointmentRevision`).
-2. `MeetingTask` 1 ── * `MeetingTaskAssignee` (unik `[taskId, employeeId]`; status per-orang `BELUM_DIKERJAKAN/ON_PROGRESS/SELESAI/DIBATALKAN`; overdue = hitung `now > dueAt`, bukan kolom).
-3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; kuota `meeting.task.maxExtensions` default 3).
+2. `MeetingTask` 1 ── * `MeetingTaskAssignee` (unik `[taskId, employeeId]`; status per-orang `OPEN/BELUM_DIKERJAKAN(legacy)/ON_PROGRESS(menunggu verifikasi)/SELESAI/DIBATALKAN`; kolom `deadlineTicketsUsed` default 0 maks 2 per penerima; overdue = derived `now > dueAt` ATAU sticky-overdue, bukan kolom).
+3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; maks 2 sekuens: awal + 1 perpanjangan; tiket terkonsumsi penerima idle saat deadline baru ditambah).
 4. `MeetingTask` 1 ── * `MeetingTaskRevision` (unik `[taskId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).
-5. `MeetingTask` 1 ── * `MeetingTaskExtensionRequest` (`PENDING/APPROVED/REJECTED`; penerima mengajukan, pemberi memutuskan).
-6. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `DAILY-YYYY-MM-DD` WIB untuk reminder harian + `SUBMITTED` untuk submit on complete; exactly-once cron; `employeeId` FK Restrict ke `Employee` — orphan ditolak DB).
+5. `MeetingTask` 1 ── * `MeetingTaskSubmission` (unik `[taskId, employeeId, attemptNo]`; verdict `PENDING/DIREVISI/DITERIMA`; `resubmitDueAt` untuk tenggat revisi; tanpa batas jumlah revisi).
+6. `MeetingTaskSubmission` 1 ── * `MeetingTaskAttachment` (`filePath` UNIQUE, `mimeType/size/sha256`, max 5 file per submit, allowlist JPG/PNG/WEBP/PDF, root `storage/task-submissions/`).
+7. `MeetingTask` 1 ── * `MeetingTaskReminderLog` (unik `[taskId, employeeId, kind]`; kind `DAILY-YYYY-MM-DD` WIB + `SUBMITTED` + `VERIFY-YYYY-MM-DD` untuk nudge verifikator; exactly-once cron; `employeeId` FK Restrict — orphan ditolak DB).
+8. Alur pengajuan perpanjangan penerima (`MeetingTaskExtensionRequest`) DIHAPUS total (keputusan pemilik 2026-10-26); tabel di-drop via `db push`.
 
-Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; status diubah sendiri oleh penerima; perpanjang/batalkan oleh pemberi; overdue dihitung, badge kembali normal setelah diperpanjang (riwayat tercatat).
+Aturan: pembuat task = peserta meeting mana pun (opsional, dinamis antar-peserta); penerima harus peserta internal aktif; penerima mengumpulkan hasil + lampiran wajib (submit → `ON_PROGRESS`); verifikasi hanya oleh pemberi/GA (`TERIMA` = `SELESAI`, `REVISI` = balik `OPEN` + tenggat revisi, unlimited); patokan overdue = SUBMIT (sticky bila tanpa submit sebelum tenggat awal, atau submit-ulang revisi lewat tenggatnya); deadline maks 2 sekuens; tiket deadline 2 per penerima; giver CRUD penuh (edit/kansel, tanpa hard delete); overdue derived, badge kembali normal hanya bila submit tepat waktu (riwayat tercatat).
 
 RBAC: tanpa permission baru. Akses meeting = peserta/requester atau WIG002 (`ga.manage`).
 

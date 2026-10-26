@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, ListChecks, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ListChecks, Loader2, UploadCloud } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
 import { formatWIBDateTime } from "@/lib/timezone";
-import { useConfirm } from "@/components/ConfirmModal";
 import { meetingTaskStatusLabel } from "@/components/appointments/AppointmentBadges";
 
 interface MyTaskAssignee {
@@ -16,6 +15,8 @@ interface MyTaskAssignee {
     name: string;
     status: string;
     isOverdue: boolean;
+    stickyOverdue?: boolean;
+    deadlineTicketsLeft?: number;
 }
 
 interface MyTask {
@@ -31,9 +32,10 @@ interface MyTask {
     assignees: MyTaskAssignee[];
     allDone: boolean;
     anyOverdue: boolean;
+    submissions?: Array<{ id: string; employeeId: string; verdict: string; attemptNo: number; createdAt: string }>;
 }
 
-type Filter = "open" | "overdue" | "done" | "all";
+type Filter = "open" | "overdue" | "done" | "verify" | "all";
 
 export default function EmployeeMeetingTasksPage() {
     const router = useRouter();
@@ -44,8 +46,6 @@ export default function EmployeeMeetingTasksPage() {
     const [filter, setFilter] = useState<Filter>("open");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [busyId, setBusyId] = useState<string | null>(null);
-    const confirm = useConfirm();
 
     const load = useCallback(async (f: Filter) => {
         setLoading(true);
@@ -55,9 +55,10 @@ export default function EmployeeMeetingTasksPage() {
             if (f === "overdue") params.set("overdue", "1");
             if (f === "done") params.set("status", "SELESAI");
             const qs = params.toString();
+            const endpoint = f === "verify" ? "/api/employee/meeting-task-verifications" : `/api/employee/meeting-tasks${qs ? `?${qs}` : ""}`;
             const [meRes, res] = await Promise.all([
                 fetch("/api/auth/me", { credentials: "same-origin" }),
-                fetch(`/api/employee/meeting-tasks${qs ? `?${qs}` : ""}`, { credentials: "same-origin" }),
+                fetch(endpoint, { credentials: "same-origin" }),
             ]);
             let currentEmpId: string | null = null;
             if (meRes.ok) {
@@ -74,7 +75,7 @@ export default function EmployeeMeetingTasksPage() {
                     t.assignees.some((a) =>
                         currentEmpId !== null &&
                         a.employeeId === currentEmpId &&
-                        (a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS")
+                        (a.status === "OPEN" || a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS")
                     )
                 );
             }
@@ -109,30 +110,11 @@ export default function EmployeeMeetingTasksPage() {
         };
     }, [load, filter, loading]);
 
-    async function handleStatus(task: MyTask, status: string) {
-        setBusyId(task.id);
-        setError("");
-        try {
-            const res = await fetch(`/api/appointments/${task.appointmentId}/tasks/${task.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                credentials: "same-origin",
-                body: JSON.stringify({ action: "status", status }),
-            });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status."));
-            await load(filter);
-        } catch (err) {
-            reportClientError("EmployeeMeetingTasksPage", "Gagal mengubah status task", err, { taskId: task.id });
-            setError(err instanceof Error ? err.message : "Gagal mengubah status.");
-        } finally {
-            setBusyId(null);
-        }
-    }
-
     const filters: Array<{ key: Filter; label: string }> = [
         { key: "open", label: "Perlu Tindakan" },
         { key: "overdue", label: "Overdue" },
         { key: "done", label: "Selesai" },
+        { key: "verify", label: "Perlu Verifikasi" },
         { key: "all", label: "Semua" },
     ];
 
@@ -153,7 +135,7 @@ export default function EmployeeMeetingTasksPage() {
             <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Filter task" onKeyDown={(e) => {
                 if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
                 e.preventDefault();
-                const order = ["open", "overdue", "done", "all"] as const;
+                const order = ["open", "overdue", "done", "verify", "all"] as const;
                 const idx = order.indexOf(filter);
                 const next = e.key === "ArrowRight" ? (idx + 1) % order.length : (idx - 1 + order.length) % order.length;
                 setFilter(order[next]);
@@ -195,8 +177,8 @@ export default function EmployeeMeetingTasksPage() {
                 <div className="space-y-2.5" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     {tasks.map((task) => {
                         const mine = myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") ?? null : null;
-                        const meetingClosed = task.appointment.status !== "SCHEDULED";
-                        const canAct = !meetingClosed && !task.isCancelled && mine && (mine.status === "BELUM_DIKERJAKAN" || mine.status === "ON_PROGRESS");
+                        const canSubmit = !task.isCancelled && mine && (mine.status === "OPEN" || mine.status === "BELUM_DIKERJAKAN");
+                        const pendingCount = (task.submissions ?? []).filter((s) => s.verdict === "PENDING").length;
                         return (
                             <article
                                 key={task.id}
@@ -207,10 +189,14 @@ export default function EmployeeMeetingTasksPage() {
                                     <p className="text-sm font-semibold text-[var(--text-primary)]">{task.title}</p>
                                     {task.isCancelled ? (
                                         <span className="badge-error shrink-0">Dibatalkan</span>
+                                    ) : filter === "verify" ? (
+                                        <span className="badge-info shrink-0">Menunggu Verifikasi ({pendingCount})</span>
                                     ) : mine?.status === "SELESAI" ? (
-                                        <span className="badge-success shrink-0">Selesai</span>
+                                        <span className={`badge-success shrink-0`}>{mine?.stickyOverdue ? "Overdue (Done)" : "Selesai"}</span>
                                     ) : mine?.isOverdue ? (
-                                        <span className="badge-error shrink-0" title="Overdue untuk Anda">Overdue</span>
+                                        <span className="badge-error shrink-0" title="Overdue untuk Anda">
+                                            Overdue{(task.activeDeadline?.sequence ?? 1) > 1 ? " · Kesempatan ke-2" : ""}
+                                        </span>
                                     ) : (
                                         <span className="badge-info shrink-0" title={task.anyOverdue ? "Ada penerima lain yang overdue" : undefined}>{mine ? meetingTaskStatusLabel(mine.status) : "Berjalan"}</span>
                                     )}
@@ -255,36 +241,25 @@ export default function EmployeeMeetingTasksPage() {
                                     >
                                         Riwayat
                                     </Link>
-                                    {canAct && mine?.status === "BELUM_DIKERJAKAN" && (
-                                        <button
-                                            type="button"
-                                            disabled={busyId === task.id}
-                                            onClick={() => { void handleStatus(task, "ON_PROGRESS"); }}
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex-1 flex items-center justify-center gap-1"
+                                    {filter === "verify" ? (
+                                        <Link
+                                            href={`/employee/appointments/detail/${task.appointmentId}`}
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--primary)] text-white flex-1 flex items-center justify-center gap-1"
+                                            aria-label={`Tinjau submission ${task.title}`}
                                         >
-                                            {busyId === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Circle className="w-3.5 h-3.5" />}
-                                            Mulai Kerjakan
-                                        </button>
-                                    )}
-                                    {canAct && (
-                                        <button
-                                            type="button"
-                                            disabled={busyId === task.id}
-                                            onClick={() =>
-                                                confirm({
-                                                    title: "Tandai Selesai?",
-                                                    message: `Status Anda pada task "${task.title}" akan ditandai selesai. Status penerima lain tidak berubah. Pastikan pekerjaan sudah benar-benar tuntas.`,
-                                                    confirmLabel: "Ya, Selesai",
-                                                    variant: "info",
-                                                    onConfirm: () => { void handleStatus(task, "SELESAI"); },
-                                                })
-                                            }
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-emerald-600 text-white flex-1 flex items-center justify-center gap-1"
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            Tinjau & Verifikasi
+                                        </Link>
+                                    ) : canSubmit ? (
+                                        <Link
+                                            href={`/employee/appointments/detail/${task.appointmentId}`}
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--primary)] text-white flex-1 flex items-center justify-center gap-1"
+                                            aria-label={`Kumpulkan hasil ${task.title}`}
                                         >
-                                            {busyId === task.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                            Tandai Selesai
-                                        </button>
-                                    )}
+                                            <UploadCloud className="w-3.5 h-3.5" />
+                                            Kumpulkan Hasil
+                                        </Link>
+                                    ) : null}
                                 </div>
                             </article>
                         );

@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
                     isCancelled: false,
                     appointment: { status: { not: "CANCELLED" } },
                     deadlineHistory: { some: {} },
-                    assignees: { some: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } } },
+                    assignees: { some: { status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] } } },
                 },
                 orderBy: { createdAt: "asc" },
                 take: PAGE,
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
                     title: true,
                     deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
                     assignees: {
-                        where: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+                        where: { status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
                         select: {
                             employeeId: true,
                             status: true,
@@ -98,8 +98,8 @@ export async function POST(request: NextRequest) {
                 const body = JSON.stringify({
                     title: isOverdue ? `Task Overdue: ${task.title}` : `Pengingat Task: ${task.title}`,
                     body: isOverdue
-                        ? `Deadline ${dueLabel} telah lewat — segera selesaikan atau ajukan perpanjangan.`
-                        : `Deadline ${dueLabel} — status: ${assignee.status === "ON_PROGRESS" ? "On Progress" : "Belum Dikerjakan"}.`,
+                        ? `Deadline ${dueLabel} telah lewat — segera kumpulkan hasil kerja.`
+                        : `Deadline ${dueLabel} — status: ${assignee.status === "ON_PROGRESS" ? "Menunggu Verifikasi" : "Open"}.`,
                     icon: "/icons/android-chrome-192x192.png",
                     badge: "/icons/android-chrome-192x192.png",
                     tag: `meeting-task-${task.id}-${kind}`,
@@ -121,9 +121,58 @@ export async function POST(request: NextRequest) {
         if (failedEndpoints.length > 0) {
             await prisma.pushSubscription.deleteMany({ where: { endpoint: { in: failedEndpoints } } }).catch(() => undefined);
         }
-        await logAction("SEND_MEETING_TASK_REMINDERS", "MEETING_TASK", SYSTEM_ACTOR, undefined, { sent, date: todayWib }).catch(() => undefined);
 
-        return NextResponse.json({ success: true, sent, cleanedUp: failedEndpoints.length });
+        // Nudge verifikator: submission PENDING yang belum diputuskan.
+        const verifyKind = `VERIFY-${todayWib}`;
+        const pendingSubs = await prisma.meetingTaskSubmission.findMany({
+            where: {
+                verdict: "PENDING",
+                task: { isCancelled: false, appointment: { status: { not: "CANCELLED" } } },
+                createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+            },
+            select: { id: true, taskId: true, task: { select: { title: true, assignerEmployeeId: true } } },
+            take: 200,
+        });
+        let verifySent = 0;
+        const seenVerify = new Set<string>();
+        for (const sub of pendingSubs) {
+            const dedupKey = `${sub.taskId}:${sub.task.assignerEmployeeId}`;
+            if (seenVerify.has(dedupKey)) continue;
+            seenVerify.add(dedupKey);
+            try {
+                await prisma.meetingTaskReminderLog.create({
+                    data: { taskId: sub.taskId, employeeId: sub.task.assignerEmployeeId, kind: verifyKind },
+                });
+            } catch {
+                continue; // P2002: sudah diingatkan hari ini
+            }
+            const giverUsers = await prisma.userAccount.findMany({
+                where: { employeeId: sub.task.assignerEmployeeId, isActive: true },
+                select: { id: true },
+            });
+            const giverSubs = giverUsers.length > 0 ? await prisma.pushSubscription.findMany({ where: { userId: { in: giverUsers.map((u) => u.id) } } }) : [];
+            const body = JSON.stringify({
+                title: `Perlu Verifikasi: ${sub.task.title}`,
+                body: "Ada hasil kerja yang menunggu verifikasi Anda.",
+                icon: "/icons/android-chrome-192x192.png",
+                badge: "/icons/android-chrome-192x192.png",
+                tag: `meeting-task-${sub.taskId}-verify-${todayWib}`,
+                url: `/employee/appointments/tasks?highlight=${sub.taskId}`,
+            });
+            for (const ps of giverSubs) {
+                try {
+                    await webPush.sendNotification({ endpoint: ps.endpoint, keys: { p256dh: ps.p256dh, auth: ps.auth } }, body);
+                    verifySent++;
+                } catch (err) {
+                    const statusCode = (err as { statusCode?: number })?.statusCode;
+                    if (statusCode === 404 || statusCode === 410) failedEndpoints.push(ps.endpoint);
+                }
+            }
+        }
+
+        await logAction("SEND_MEETING_TASK_REMINDERS", "MEETING_TASK", SYSTEM_ACTOR, undefined, { sent, verifySent, date: todayWib }).catch(() => undefined);
+
+        return NextResponse.json({ success: true, sent, verifySent, cleanedUp: failedEndpoints.length });
     } catch (err) {
         logger.error("meeting-task-reminder cron gagal", { err });
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });

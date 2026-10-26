@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("node:fs/promises", () => ({
+    mkdir: vi.fn().mockResolvedValue(undefined),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    unlink: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/prisma", () => ({
     prisma: {
         appSetting: { findUnique: vi.fn() },
@@ -8,10 +14,11 @@ vi.mock("@/lib/prisma", () => ({
         meetingAppointmentRevision: { count: vi.fn(), create: vi.fn() },
         meetingTask: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
         meetingTaskReminderLog: { create: vi.fn() },
-        meetingTaskAssignee: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+        meetingTaskAssignee: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
         meetingTaskDeadlineHistory: { findMany: vi.fn(), count: vi.fn(), create: vi.fn() },
         meetingTaskRevision: { count: vi.fn(), create: vi.fn() },
-        meetingTaskExtensionRequest: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+        meetingTaskSubmission: { count: vi.fn(), create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), delete: vi.fn() },
+        meetingTaskAttachment: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
         auditLog: { create: vi.fn() },
         $transaction: vi.fn(),
         $queryRaw: vi.fn(),
@@ -30,14 +37,16 @@ import {
     MeetingTaskError,
     cancelMeetingTask,
     createMeetingTask,
+    editMeetingTask,
     extendTaskDeadline,
     getMeetingTaskMaxExtensions,
     invalidateMeetingTaskMaxExtensionsCache,
     isAssigneeOverdue,
+    isReceiverStickyOverdue,
     meetingTaskDueDateToDate,
-    requestTaskExtension,
+    submitTaskWork,
     updateMeetingMinutes,
-    updateMyTaskStatus,
+    verifyTaskSubmission,
 } from "@/lib/services/meetingTaskService";
 import { toWIBDateString } from "@/lib/timezone";
 
@@ -222,21 +231,33 @@ describe("createMeetingTask", () => {
     });
 });
 
-describe("updateMyTaskStatus", () => {
-    it("status tidak valid = 400", async () => {
-        await expect(updateMyTaskStatus(empSession(), "task-1", "SELESAI_SEMUANYA" as never, actor)).rejects.toMatchObject({ statusCode: 400 });
+describe("submitTaskWork", () => {
+    const file = () => ({ buffer: Buffer.from("%PDF-1.4 test"), originalName: "bukti.pdf", mimeType: "application/pdf", size: 12 });
+    it("tanpa file = 400", async () => {
+        await expect(submitTaskWork(empSession(), "task-1", { note: null, files: [] }, actor)).rejects.toMatchObject({ statusCode: 400 });
     });
-    it("bukan penerima = 403", async () => {
+    it("lebih dari 5 file = 400", async () => {
+        await expect(submitTaskWork(empSession(), "task-1", { note: null, files: [file(), file(), file(), file(), file(), file()] }, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("tipe tak didukung = 400", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-009", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({ id: "a-1", status: "OPEN" } as never);
+        await expect(
+            submitTaskWork(empSession(), "task-1", { note: null, files: [{ ...file(), mimeType: "application/zip", originalName: "a.zip" }] }, actor)
+        ).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("bukan penerima submit = 403", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-009", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
         mocked.meetingTaskAssignee.findUnique.mockResolvedValue(null);
-        await expect(updateMyTaskStatus(empSession(), "task-1", "SELESAI", actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(submitTaskWork(empSession(), "task-1", { note: null, files: [file()] }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
-    it("meeting COMPLETED = 409 (task ditutup)", async () => {
-        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({
-            task: { id: "task-1", isCancelled: false, appointmentId: "appt-1" },
-            status: "ON_PROGRESS",
-        } as never);
-        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "COMPLETED" } as never);
-        await expect(updateMyTaskStatus(empSession(), "task-1", "SELESAI", actor)).rejects.toMatchObject({ statusCode: 409 });
+    it("sudah menunggu verifikasi (ON_PROGRESS) = 409", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-009", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({ id: "a-1", status: "ON_PROGRESS" } as never);
+        await expect(submitTaskWork(empSession(), "task-1", { note: null, files: [file()] }, actor)).rejects.toMatchObject({ statusCode: 409 });
     });
 });
 
@@ -261,23 +282,64 @@ describe("cancelMeetingTask", () => {
     });
 });
 
-describe("requestTaskExtension", () => {
-    it("bukan penerima = 403", async () => {
-        mocked.meetingTaskAssignee.findUnique.mockResolvedValue(null);
-        await expect(requestTaskExtension(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh waktu tambahan" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+describe("verifyTaskSubmission", () => {
+    it("bukan pemberi/GA = 403", async () => {
+        mocked.meetingTaskSubmission.findUnique.mockResolvedValue({
+            id: "sub-1",
+            verdict: "PENDING",
+            task: { id: "task-1", isCancelled: false, assignerEmployeeId: "ID-009", appointmentId: "appt-1" },
+        } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(verifyTaskSubmission(empSession(), "sub-1", { decision: "TERIMA" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
-    it("duplikat pending = 409", async () => {
-        mocked.meetingTaskAssignee.findUnique.mockResolvedValue({ task: { id: "task-1", isCancelled: false, appointmentId: "appt-1" }, status: "ON_PROGRESS" } as never);
-        mocked.meetingAppointment.findUnique.mockResolvedValue({ id: "appt-1", status: "SCHEDULED" } as never);
-        const tx = {
-            $queryRaw: vi.fn().mockResolvedValue([]),
-            meetingTaskExtensionRequest: {
-                findFirst: vi.fn().mockResolvedValue({ id: "req-1" }),
-                create: vi.fn(),
-            },
-        };
-        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
-        await expect(requestTaskExtension(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh waktu tambahan" }, actor)).rejects.toMatchObject({ statusCode: 409 });
+    it("sudah diputuskan = 409", async () => {
+        mocked.meetingTaskSubmission.findUnique.mockResolvedValue({
+            id: "sub-1",
+            verdict: "DITERIMA",
+            task: { id: "task-1", isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" },
+        } as never);
+        await expect(verifyTaskSubmission(empSession(), "sub-1", { decision: "TERIMA" }, actor)).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("REVISI tanpa alasan/tenggat = 400", async () => {
+        mocked.meetingTaskSubmission.findUnique.mockResolvedValue({
+            id: "sub-1",
+            verdict: "PENDING",
+            task: { id: "task-1", isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" },
+        } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(verifyTaskSubmission(empSession(), "sub-1", { decision: "REVISI" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+});
+
+describe("editMeetingTask", () => {
+    it("bukan pemberi/GA = 403", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(editMeetingTask(empSession(), "task-1", { title: "Baru" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("tanpa perubahan = 400", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(editMeetingTask(empSession(), "task-1", {}, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+});
+
+describe("isReceiverStickyOverdue", () => {
+    const due = new Date("2026-10-25T16:59:00Z");
+    it("tanpa submit melewati deadline awal = sticky", () => {
+        expect(isReceiverStickyOverdue([], due, new Date("2026-10-26T00:00:00Z"))).toBe(true);
+    });
+    it("submit tepat waktu = tidak sticky walau verifikasi telat", () => {
+        const subs = [{ createdAt: new Date("2026-10-24T00:00:00Z"), attemptNo: 1, verdict: "PENDING", resubmitDueAt: null }];
+        expect(isReceiverStickyOverdue(subs, due, new Date("2026-11-01T00:00:00Z"))).toBe(false);
+    });
+    it("submit-ulang revisi lewat tenggat revisi = sticky", () => {
+        const subs = [
+            { createdAt: new Date("2026-10-24T00:00:00Z"), attemptNo: 1, verdict: "DIREVISI", resubmitDueAt: new Date("2026-10-27T16:59:00Z") },
+        ];
+        expect(isReceiverStickyOverdue(subs, due, new Date("2026-10-28T00:00:00Z"))).toBe(true);
+        const resub = [...subs, { createdAt: new Date("2026-10-26T00:00:00Z"), attemptNo: 2, verdict: "PENDING", resubmitDueAt: null }];
+        expect(isReceiverStickyOverdue(resub, due, new Date("2026-10-28T00:00:00Z"))).toBe(false);
     });
 });
 

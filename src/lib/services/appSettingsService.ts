@@ -31,6 +31,7 @@ export const UPLOAD_LIMIT_KEYS = [
     "upload.signature.maxMb",
     "upload.cleaningEvidence.maxMb",
     "upload.equipmentEvidence.maxMb",
+    "upload.taskSubmission.maxMb",
 ] as const;
 
 export type UploadLimitKey = (typeof UPLOAD_LIMIT_KEYS)[number];
@@ -91,6 +92,10 @@ export const UPLOAD_LIMIT_META: Record<UploadLimitKey, { label: string; descript
         label: "Foto evidence inspeksi alat",
         description: "Batas per foto evidence inspeksi alat produksi per item.",
     },
+    "upload.taskSubmission.maxMb": {
+        label: "Lampiran submit task meeting",
+        description: "Batas per file lampiran hasil kerja task meeting (dokumen/foto).",
+    },
 };
 
 /**
@@ -110,6 +115,7 @@ export const DEFAULT_UPLOAD_LIMITS_MB: Record<UploadLimitKey, number> = {
     "upload.signature.maxMb": 0.25,
     "upload.cleaningEvidence.maxMb": 10,
     "upload.equipmentEvidence.maxMb": 10,
+    "upload.taskSubmission.maxMb": 5,
 };
 
 /** Pola libur mingguan cleaning (CSV day-of-week 0=Min..6=Sab, dinamis via setting). */

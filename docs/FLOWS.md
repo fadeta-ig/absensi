@@ -253,3 +253,22 @@ Alur serah terima aset korporat dari GA ke karyawan:
 6. **Pantau atasan**: WIG002 dan topViewer (read-only) memantau via rekap berfilter (unit/status/rentang tanggal) dengan ringkasan `open/submitted/done/approved/total`. Menu pelaksana/QC/atasan/tombol approval digerbang via `getEmployeeEquipmentCapabilities` (`canExecute`/`canReview`/`canTopView`/`canApprove`).
 
 Rujukan: `src/lib/services/equipmentService.ts`, `tests/services/equipmentService.test.ts`.
+
+## 9. Flow: Verifikasi Task Meeting (OPEN → Submit → TERIMA/REVISI → DONE)
+
+```text
+[ Penerima B ]                              [ API tasks/*/submissions ]         [ meetingTaskService.ts ]
+            │── Kumpulkan + lampiran 1–5 ──>│── multipart + allowlist ────────>│── submitTaskWork: OPEN → ON_PROGRESS + revisi + audit
+            │                                              (JPG/PNG/WEBP/PDF, magic-byte, AppSetting MB)
+[ Pemberi A ] ── antrean PENDING ──>│── GET meeting-task-verifications ──>│── getTasksAwaitingMyVerification + cron nudge VERIFY-*
+            │── TERIMA ───────────────────>│── PATCH verify TERIMA ──────────>│── ON_PROGRESS → SELESAI + completedAt + audit (push ke B)
+            │── REVISI + tenggat revisi ──>│── PATCH verify REVISI ──────────>│── ON_PROGRESS → OPEN + DIREVISI + resubmitDueAt + audit (push ke B, revisi unlimited)
+```
+
+1. **Submit**: penerima berstatus `OPEN` mengunggah 1–5 file + catatan opsional; status menjadi `ON_PROGRESS` (menunggu verifikasi); push "Perlu Verifikasi" ke pemberi.
+2. **Verifikasi**: hanya pemberi/GA. TERIMA menutup dengan `SELESAI` (cap `OVERDUE (DONE)` bila submit pertama lewat tenggat awal). REVISI wajib alasan ≥5 + tenggat revisi, mengembalikan ke `OPEN`.
+3. **Deadline**: maks 2 sekuens (tiket 2 per penerima, terkonsumsi saat idle lewat deadline); revisi tidak makan tiket. Overdue sticky per penerima, patokan submit.
+4. **Pengajuan perpanjangan penerima**: dihapus (keputusan pemilik 2026-10-26).
+5. **Riwayat & reminder**: event `task_submitted/submission_approved/revision_requested/task_done_late`; cron harian mengingatkan OPEN + nudge verifikator `VERIFY-*`.
+
+Rujukan: `src/lib/services/meetingTaskService.ts`, `tests/services/meetingTaskService.test.ts`.

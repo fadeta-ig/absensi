@@ -82,7 +82,7 @@ model Employee {
   unavailabilities             EmployeeUnavailability[]
   meetingTasksAssigned         MeetingTask[]                      @relation("MeetingTaskAssigner")
   meetingTaskAssignments       MeetingTaskAssignee[]
-  meetingTaskExtensionRequests MeetingTaskExtensionRequest[]
+  meetingTaskSubmissions       MeetingTaskSubmission[]
   meetingTaskReminderLogs      MeetingTaskReminderLog[]
   equipmentInspectionsStarted  EquipmentInspection[] @relation("EquipmentInspectionStartedBy")
   equipmentInspectionsChecked  EquipmentInspection[] @relation("EquipmentInspectionCheckedBy")
@@ -139,6 +139,7 @@ model UserAccount {
   cleaningHolidaysCreated    CleaningHoliday[]
   meetingAppointmentsCreated MeetingAppointment[]
   meetingTasksCreated        MeetingTask[]
+  meetingTaskAttachmentUploads MeetingTaskAttachment[]
   equipmentItemChanges       EquipmentInspectionItem[]
   equipmentAssignments       EquipmentAssignment[]
   passkeyCredentials       PasskeyCredential[]
@@ -1985,16 +1986,17 @@ model EmployeeUnavailability {
 }
 
 enum MeetingTaskAssigneeStatus {
+  OPEN
   BELUM_DIKERJAKAN
   ON_PROGRESS
   SELESAI
   DIBATALKAN
 }
 
-enum MeetingTaskExtensionStatus {
+enum MeetingTaskSubmissionVerdict {
   PENDING
-  APPROVED
-  REJECTED
+  DIREVISI
+  DITERIMA
 }
 
 // ─── Task hasil meeting (dinamis antar-peserta, opsional) ──
@@ -2018,7 +2020,7 @@ model MeetingTask {
   assignees         MeetingTaskAssignee[]
   deadlineHistory   MeetingTaskDeadlineHistory[]
   revisions         MeetingTaskRevision[]
-  extensionRequests MeetingTaskExtensionRequest[]
+  submissions       MeetingTaskSubmission[]
   reminderLogs      MeetingTaskReminderLog[]
 
   @@index([appointmentId], map: "idx_meeting_task_appt")
@@ -2031,8 +2033,9 @@ model MeetingTaskAssignee {
   id          String                    @id @default(uuid())
   taskId      String                    @map("task_id")
   employeeId  String                    @map("employee_id")
-  status      MeetingTaskAssigneeStatus @default(BELUM_DIKERJAKAN)
+  status      MeetingTaskAssigneeStatus @default(OPEN)
   completedAt DateTime?                 @map("completed_at")
+  deadlineTicketsUsed Int                @default(0) @map("deadline_tickets_used")
   createdAt   DateTime                  @default(now()) @map("created_at")
   updatedAt   DateTime                  @updatedAt @map("updated_at")
 
@@ -2077,22 +2080,44 @@ model MeetingTaskRevision {
   @@map("meeting_task_revisions")
 }
 
-model MeetingTaskExtensionRequest {
-  id                    String                     @id @default(uuid())
-  taskId                String                     @map("task_id")
-  requestedByEmployeeId String                     @map("requested_by_employee_id")
-  proposedDate          DateTime                   @map("proposed_date")
-  reason                String                     @map("reason") @db.Text
-  status                MeetingTaskExtensionStatus @default(PENDING)
-  decidedBy             String?                    @map("decided_by") @db.VarChar(100)
-  decidedAt             DateTime?                  @map("decided_at")
-  createdAt             DateTime                   @default(now()) @map("created_at")
+model MeetingTaskSubmission {
+  id           String                        @id @default(uuid())
+  taskId       String                        @map("task_id")
+  employeeId   String                        @map("employee_id")
+  note         String?                       @map("note") @db.Text
+  attemptNo    Int                           @map("attempt_no")
+  verdict      MeetingTaskSubmissionVerdict  @default(PENDING)
+  resubmitDueAt DateTime?                    @map("resubmit_due_at")
+  verifiedBy   String?                       @map("verified_by") @db.VarChar(100)
+  verifiedAt   DateTime?                     @map("verified_at")
+  verifyNote   String?                       @map("verify_note") @db.Text
+  createdAt    DateTime                      @default(now()) @map("created_at")
 
-  task        MeetingTask @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  requestedBy Employee    @relation(fields: [requestedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  task        MeetingTask             @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee    Employee                @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  attachments MeetingTaskAttachment[]
 
-  @@index([taskId, status], map: "idx_meeting_task_ext_task_status")
-  @@map("meeting_task_extension_requests")
+  @@unique([taskId, employeeId, attemptNo], map: "idx_meeting_task_sub_unique")
+  @@index([taskId, verdict], map: "idx_meeting_task_sub_task_verdict")
+  @@map("meeting_task_submissions")
+}
+
+model MeetingTaskAttachment {
+  id               String   @id @default(uuid())
+  submissionId     String   @map("submission_id")
+  filePath         String   @unique @map("file_path") @db.VarChar(500)
+  mimeType         String   @map("mime_type") @db.VarChar(100)
+  size             Int      @map("size")
+  sha256           String   @map("sha256") @db.Char(64)
+  uploadedByUserId String?  @map("uploaded_by_user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  submission MeetingTaskSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  uploadedBy UserAccount?          @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([submissionId], map: "idx_meeting_task_att_sub")
+  @@index([sha256], map: "idx_meeting_task_att_sha")
+  @@map("meeting_task_attachments")
 }
 
 model MeetingTaskReminderLog {

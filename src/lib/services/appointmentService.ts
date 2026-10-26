@@ -903,7 +903,7 @@ export async function cancelAppointment(
                 data: { isCancelled: true, cancelReason: autoReason, cancelledAt: new Date() },
             });
             await tx.meetingTaskAssignee.updateMany({
-                where: { task: { appointmentId: id }, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+                where: { task: { appointmentId: id }, status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
                 data: { status: "DIBATALKAN" },
             });
             for (const t of openTasks) {

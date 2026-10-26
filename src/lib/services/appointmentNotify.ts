@@ -108,7 +108,7 @@ export async function collectMeetingTaskUserIds(taskId: string): Promise<string[
 /** UserId para penerima task yang statusnya masih terbuka (untuk submit on complete). */
 export async function collectOpenMeetingTaskUserIds(taskId: string): Promise<string[]> {
     const rows = await prisma.meetingTaskAssignee.findMany({
-        where: { taskId, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+        where: { taskId, status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
         select: { employeeId: true },
     }).catch(() => [] as Array<{ employeeId: string }>);
     return collectUserIdsForEmployees(rows.map((r) => r.employeeId));

@@ -309,7 +309,7 @@ export async function GET(request: Request) {
         const dueSoonRows = await prisma.meetingTaskAssignee.findMany({
             where: {
                 employeeId,
-                status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] },
+                status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] },
                 task: {
                     isCancelled: false,
                     deadlineHistory: { some: { deadlineDate: { lte: threeDaysAhead } } },
@@ -349,26 +349,26 @@ export async function GET(request: Request) {
             taskNotifCount++;
         }
 
-        // Pengajuan perpanjangan task yang menunggu keputusan saya (pemberi)
-        const pendingExt = await prisma.meetingTaskExtensionRequest.findMany({
-            where: { status: "PENDING", task: { assignerEmployeeId: employeeId, isCancelled: false } },
+        // Submission task yang menunggu verifikasi saya (pemberi)
+        const pendingVerify = await prisma.meetingTaskSubmission.findMany({
+            where: { verdict: "PENDING", task: { assignerEmployeeId: employeeId, isCancelled: false } },
             orderBy: { createdAt: "desc" },
             take: 3,
             select: {
                 id: true,
                 createdAt: true,
-                requestedBy: { select: { name: true } },
+                employee: { select: { name: true } },
                 task: { select: { id: true, title: true } },
             },
         });
-        for (const req of pendingExt) {
+        for (const sub of pendingVerify) {
             notifications.push({
-                id:      `meeting-task-ext-${req.id}`,
+                id:      `meeting-task-verify-${sub.id}`,
                 type:    "task",
-                title:   "Pengajuan Perpanjangan Task",
-                message: `${req.requestedBy?.name ?? "Penerima"} meminta perpanjangan "${req.task.title}"`,
-                href:    `/employee/appointments/tasks?highlight=${req.task.id}`,
-                time:    req.createdAt.toISOString(),
+                title:   "Hasil Task Perlu Verifikasi",
+                message: `${sub.employee?.name ?? "Penerima"} mengumpulkan "${sub.task.title}"`,
+                href:    `/employee/appointments/tasks?highlight=${sub.task.id}`,
+                time:    sub.createdAt.toISOString(),
                 isRead:  false,
             });
         }
@@ -377,7 +377,7 @@ export async function GET(request: Request) {
         const freshTasks = await prisma.meetingTaskAssignee.findMany({
             where: {
                 employeeId,
-                status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] },
+                status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] },
                 task: {
                     isCancelled: false,
                     appointment: { status: "COMPLETED", updatedAt: { gte: sevenDaysAgo } },
