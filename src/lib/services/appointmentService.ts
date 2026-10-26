@@ -359,6 +359,7 @@ export interface CreateAppointmentInput extends AppointmentSlot {
     agenda?: string | null;
     roomId?: string | null;
     participants: ParticipantInput[];
+    notulisEmployeeId?: string | null;
     reminderOffsets?: number[] | null;
     force?: boolean;
 }
@@ -389,6 +390,11 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     const participants = await validateParticipants(input.participants);
     if (session.employeeId && participants.some((p) => p.employeeId === session.employeeId)) {
         throw new AppointmentError("Anda sudah tercatat sebagai penyelenggara meeting ini dan tidak perlu ditambahkan sebagai peserta.", 400);
+    }
+    // PIC notulensi opsional saat buat: harus peserta internal yang sudah ditambahkan.
+    const notulisId = input.notulisEmployeeId?.trim() || null;
+    if (notulisId && !participants.some((p) => p.employeeId === notulisId)) {
+        throw new AppointmentError("Petugas notulensi harus peserta internal meeting ini.", 422);
     }
     // Siapa cepat dia dapat: booking langsung SCHEDULED, meeting tetap jalan
     // tanpa menunggu operator.
@@ -422,6 +428,7 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
                 endAt,
                 requesterEmployeeId: session.employeeId,
                 createdByUserId: session.userId ?? null,
+                notulisEmployeeId: notulisId,
                 reminderOffsets: parseReminderOverride(input.reminderOffsets),
                 participants: {
                     create: participants.map((p) => ({ employeeId: p.employeeId, guestName: p.guestName, isExternal: p.isExternal })),
@@ -435,7 +442,7 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
                 action: "CREATE_APPOINTMENT",
                 entity: "APPOINTMENT",
                 entityId: appt.id,
-                details: JSON.stringify({ title, status, force: asOperator && input.force ? true : false, participantCount: participants.length }),
+                details: JSON.stringify({ title, status, notulisEmployeeId: notulisId, force: asOperator && input.force ? true : false, participantCount: participants.length }),
                 actorType: "USER",
                 actorUserId: actor.userId ?? null,
                 actorIdentifier: actor.identifier,

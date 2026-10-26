@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, CalendarDays, Clock3, X, Loader2, StickyNote } from "lucide-react";
+import { FileText, CalendarDays, Clock3, X, Loader2, StickyNote, UserCheck, Search } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import ParticipantPicker, { type PickedParticipant } from "@/components/appointments/ParticipantPicker";
@@ -41,6 +41,8 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
         }))
     );
     const [changeReason, setChangeReason] = useState("");
+    const [notulisEmployeeId, setNotulisEmployeeId] = useState("");
+    const [notulisQuery, setNotulisQuery] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [conflicts, setConflicts] = useState<string[]>([]);
@@ -77,6 +79,23 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
         !loading;
 
     const editingId = editing?.id;
+
+    // PIC notulensi: hanya peserta internal yang sudah ditambahkan (tamu dikecualikan).
+    const internalParticipants = participants.filter((p) => p.employeeId);
+    const notulisOptions = internalParticipants.filter((p) => {
+        const q = notulisQuery.trim().toLowerCase();
+        if (!q) return true;
+        return p.name.toLowerCase().includes(q) || (p.employeeId ?? "").toLowerCase().includes(q);
+    });
+    const selectedNotulis = internalParticipants.find((p) => p.employeeId === notulisEmployeeId) ?? null;
+
+    // Bila peserta terpilih sebagai notulis dihapus dari daftar, ikut bersihkan pilihan.
+    useEffect(() => {
+        if (notulisEmployeeId && !internalParticipants.some((p) => p.employeeId === notulisEmployeeId)) {
+            setNotulisEmployeeId("");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [participants]);
 
     useEffect(() => {
         setConflicts([]);
@@ -146,6 +165,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                     endTime: isFullDay ? undefined : endTime,
                     isFullDay,
                     participants: mappedParticipants,
+                    notulisEmployeeId: notulisEmployeeId || null,
                 };
             const res = await fetch(editing ? `/api/appointments/${editing.id}` : "/api/appointments", {
                 method: editing ? "PATCH" : "POST",
@@ -247,6 +267,81 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                         excludeEmployeeId={editing ? (editing.requesterEmployeeId ?? myEmployeeId ?? null) : (myEmployeeId ?? null)}
                     />
                 </div>
+
+                {!editing ? (
+                    <div className="form-group !mb-0">
+                        <label className="form-label" htmlFor="appt-notulis-search">
+                            <span className="flex items-center gap-1">
+                                <UserCheck className="w-3 h-3" /> PIC Notulensi (Opsional)
+                            </span>
+                        </label>
+                        {selectedNotulis ? (
+                            <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--primary)] bg-[var(--secondary)] px-3 py-2">
+                                <span className="text-sm font-medium">
+                                    {stripGelar(selectedNotulis.name)} <span className="text-[var(--text-muted)]">({selectedNotulis.employeeId})</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    className="min-h-9 min-w-9 inline-flex items-center justify-center rounded-lg text-[var(--text-muted)]"
+                                    onClick={() => { setNotulisEmployeeId(""); setNotulisQuery(""); }}
+                                    aria-label="Hapus PIC notulensi"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="relative">
+                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
+                                    <input
+                                        id="appt-notulis-search"
+                                        className="form-input !pl-9"
+                                        value={notulisQuery}
+                                        onChange={(e) => setNotulisQuery(e.target.value)}
+                                        placeholder={internalParticipants.length === 0 ? "Tambahkan peserta internal dulu…" : "Cari dari peserta yang ditambahkan…"}
+                                        disabled={internalParticipants.length === 0}
+                                        aria-label="Cari PIC notulensi dari peserta"
+                                    />
+                                </div>
+                                {internalParticipants.length > 0 && (
+                                    <div className="mt-1.5 max-h-36 overflow-y-auto rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]" role="listbox" aria-label="Daftar calon PIC notulensi">
+                                        <button
+                                            type="button"
+                                            role="option"
+                                            aria-selected={false}
+                                            className="w-full text-left px-3 py-2 min-h-9 text-xs text-[var(--text-muted)]"
+                                            onClick={() => { setNotulisEmployeeId(""); setNotulisQuery(""); }}
+                                        >
+                                            Semua Peserta Berhak Input (tidak dibatasi)
+                                        </button>
+                                        {notulisOptions.map((p) => (
+                                            <button
+                                                key={p.key}
+                                                type="button"
+                                                role="option"
+                                                aria-selected={p.employeeId === notulisEmployeeId}
+                                                className="w-full text-left px-3 py-2 min-h-9 text-sm"
+                                                onClick={() => { setNotulisEmployeeId(p.employeeId ?? ""); setNotulisQuery(""); }}
+                                            >
+                                                {stripGelar(p.name)} <span className="text-[var(--text-muted)]">({p.employeeId})</span>
+                                            </button>
+                                        ))}
+                                        {notulisOptions.length === 0 && (
+                                            <p className="px-3 py-2 text-xs text-[var(--text-muted)]">Tidak ada peserta yang cocok dengan pencarian.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                            {selectedNotulis
+                                ? "Hanya PIC terpilih (dan penyelenggara) yang dapat mengisi notulensi setelah meeting dimulai."
+                                : "Kosongkan bila seluruh peserta boleh mengisi notulensi."}
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-[var(--text-muted)]">PIC notulensi diatur di halaman detail meeting.</p>
+                )}
 
                 <div className="form-group !mb-0">
                     <label className="form-label" htmlFor="appt-agenda">

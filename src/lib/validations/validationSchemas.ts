@@ -656,6 +656,7 @@ export const appointmentCreateSchema = z
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
         participants: z.array(appointmentParticipantSchema).max(100).default([]),
+        notulisEmployeeId: z.string().trim().min(1, "PIC notulensi tidak valid.").max(100, "PIC notulensi maksimal 100 karakter.").nullable().optional(),
         reminderOffsets: z.array(z.number().int().min(15)).min(1).max(5).nullable().optional(),
         force: z.boolean().optional(),
     })
