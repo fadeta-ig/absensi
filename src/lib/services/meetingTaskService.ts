@@ -256,6 +256,9 @@ export async function getMyMeetingTasks(
     const rows = await prisma.meetingTaskAssignee.findMany({
         where: {
             employeeId: session.employeeId,
+            // Task milik meeting yang dibatalkan disembunyikan: mutasinya sudah
+            // dikunci (409) dan otomatis ikut batal saat meeting dibatalkan.
+            task: { appointment: { status: { not: "CANCELLED" } } },
             ...(filters.status ? { status: filters.status as MeetingTaskAssigneeStatus } : {}),
         },
         include: { task: { include: taskInclude } },

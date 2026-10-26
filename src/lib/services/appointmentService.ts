@@ -883,6 +883,29 @@ export async function cancelAppointment(
                 previousData: { kind: "cancelled", status: existing.status, title: existing.title, agenda: existing.agenda, isFullDay: existing.isFullDay, roomId: existing.roomId, startAt: existing.startAt, endAt: existing.endAt },
             },
         });
+        // Task open milik meeting ini otomatis ikut batal: tanpa ini task yatim
+        // tertinggal di inbox "Task Meeting Saya" padahal mutasinya sudah dikunci.
+        const openTasks = await tx.meetingTask.findMany({
+            where: { appointmentId: id, isCancelled: false },
+            select: { id: true },
+        });
+        if (openTasks.length > 0) {
+            const autoReason = `Otomatis dibatalkan karena meeting dibatalkan: ${reason.trim()}`;
+            await tx.meetingTask.updateMany({
+                where: { appointmentId: id, isCancelled: false },
+                data: { isCancelled: true, cancelReason: autoReason, cancelledAt: new Date() },
+            });
+            await tx.meetingTaskAssignee.updateMany({
+                where: { task: { appointmentId: id }, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+                data: { status: "DIBATALKAN" },
+            });
+            for (const t of openTasks) {
+                const taskRevCount = await tx.meetingTaskRevision.count({ where: { taskId: t.id } });
+                await tx.meetingTaskRevision.create({
+                    data: { taskId: t.id, revisionNumber: taskRevCount + 1, changeReason: autoReason, changedBy: actor.username, previousData: {} },
+                });
+            }
+        }
         await tx.auditLog.create({
             data: { action: "CANCEL_APPOINTMENT", entity: "APPOINTMENT", entityId: id, details: JSON.stringify({ reason: reason.trim() }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
         });
