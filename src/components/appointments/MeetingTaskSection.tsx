@@ -244,9 +244,8 @@ export default function MeetingTaskSection({
                                 {!task.isCancelled && !readOnly && mine?.status === "ON_PROGRESS" && (
                                     <div className="mt-2 rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-2" aria-label={`Menunggu verifikasi untuk ${task.title}`}>
                                         <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-1.5">
-                                            <Clock className="w-3.5 h-3.5 shrink-0" /> Hasil sudah terkumpul — menunggu verifikasi pemberi task.
+                                            <Clock className="w-3.5 h-3.5 shrink-0" /> Menunggu verifikasi {task.assigner.name ? stripGelar(task.assigner.name) : "pemberi task"}.
                                         </p>
-                                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Bukan proses upload. Berkas Anda sudah tersimpan (lihat riwayat di bawah).</p>
                                     </div>
                                 )}
                                 {!task.isCancelled && mine?.status === "SELESAI" && (
