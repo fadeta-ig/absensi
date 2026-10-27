@@ -265,8 +265,9 @@ Rujukan: `src/lib/services/equipmentService.ts`, `tests/services/equipmentServic
             │── REVISI + tenggat revisi ──>│── PATCH verify REVISI ──────────>│── ON_PROGRESS → OPEN + DIREVISI + resubmitDueAt + audit (push ke B, revisi unlimited)
 ```
 
-1. **Submit**: penerima berstatus `OPEN` mengunggah 1–5 file + catatan opsional; status menjadi `ON_PROGRESS` (menunggu verifikasi); push "Perlu Verifikasi" ke pemberi.
-2. **Verifikasi**: hanya pemberi/GA. TERIMA menutup dengan `SELESAI` (cap `OVERDUE (DONE)` bila submit pertama lewat tenggat awal). REVISI wajib alasan ≥5 + tenggat revisi, mengembalikan ke `OPEN`.
+1. **Buat (pemberi, HANYA selama meeting berjalan)**: meeting `SCHEDULED` + now di dalam `[startAt, endAt)`; belum mulai / sudah lewat jam / `COMPLETED` / `CANCELLED` → 409. Deadline wajib diisi (tanpa default).
+2. **Submit (penerima, HANYA setelah meeting selesai)**: berstatus `OPEN` mengunggah 1–5 file + catatan opsional; status menjadi `ON_PROGRESS` (menunggu verifikasi); push "Perlu Verifikasi" ke pemberi. Submit saat meeting masih berjalan → 409.
+2. **Verifikasi (pemberi/GA, HANYA setelah meeting selesai)**: hanya pemberi/GA. TERIMA menutup dengan `SELESAI` (kunci permanen, cap `OVERDUE (DONE)` bila submit pertama lewat tenggat awal). REVISI wajib alasan ≥5 + tenggat revisi, mengembalikan ke `OPEN`.
 3. **Deadline**: maks 2 sekuens (tiket 2 per penerima, terkonsumsi saat idle lewat deadline); revisi tidak makan tiket. Overdue sticky per penerima, patokan submit.
 4. **Pengajuan perpanjangan penerima**: dihapus (keputusan pemilik 2026-10-26).
 5. **Riwayat & reminder**: event `task_submitted/submission_approved/revision_requested/task_done_late`; cron harian mengingatkan OPEN + nudge verifikator `VERIFY-*`.

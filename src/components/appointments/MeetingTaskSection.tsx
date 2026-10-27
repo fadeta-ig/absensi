@@ -82,12 +82,15 @@ export default function MeetingTaskSection({
     participants,
     readOnly = false,
     canCreateTask = true,
+    canManageTask = true,
     refreshKey,
 }: {
     appointmentId: string;
     participants: TaskParticipant[];
     readOnly?: boolean;
     canCreateTask?: boolean;
+    /** Kelola pemberi (ubah/perpanjang/batalkan): hanya selama meeting berjalan. */
+    canManageTask?: boolean;
     refreshKey?: string | number;
 }) {
     const [tasks, setTasks] = useState<MeetingTask[]>([]);
@@ -130,7 +133,7 @@ export default function MeetingTaskSection({
 
     async function handleVerify(taskId: string, submissionId: string, decision: "TERIMA" | "REVISI") {
         if (readOnly) {
-            setError("Meeting sudah selesai/dibatalkan, verifikasi dikunci.");
+            setError("Meeting belum selesai. Verifikasi dibuka setelah meeting selesai.");
             return;
         }
         if (decision === "REVISI" && (revNote.trim().length < 5 || !revDue)) {
@@ -169,15 +172,15 @@ export default function MeetingTaskSection({
                 <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1">
                     <ListChecks className="w-3.5 h-3.5" /> Task Hasil Meeting ({tasks.length})
                 </p>
-                {!readOnly && canCreateTask && (
+                {canCreateTask && (
                     <button type="button" onClick={() => setTaskModal({ mode: "create" })} className="btn btn-secondary btn-sm">
                         <Plus className="w-3.5 h-3.5" /> Beri Task
                     </button>
                 )}
             </div>
-            {readOnly && tasks.length > 0 && (
+            {readOnly && (
                 <p className="text-[11px] text-[var(--text-muted)] mb-2" role="note">
-                    Task meeting ditutup karena meeting telah selesai/dibatalkan.
+                    Meeting belum selesai. Task dapat dibuat selama meeting berjalan dan dikerjakan setelah meeting selesai.
                 </p>
             )}
 
@@ -451,7 +454,7 @@ export default function MeetingTaskSection({
                                     </div>
                                 )}
 
-                                {!task.isCancelled && !readOnly && iAmAssigner && (
+                                {!task.isCancelled && canManageTask && iAmAssigner && (
                                     <div className="flex gap-1.5 mt-2">
                                         <button
                                             type="button"

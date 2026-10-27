@@ -177,7 +177,9 @@ export default function EmployeeMeetingTasksPage() {
                 <div className="space-y-2.5" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     {tasks.map((task) => {
                         const mine = myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") ?? null : null;
-                        const canSubmit = !task.isCancelled && mine && (mine.status === "OPEN" || mine.status === "BELUM_DIKERJAKAN");
+                        // Pengerjaan dibuka setelah meeting selesai (stored COMPLETED).
+                        const meetingFinished = task.appointment.status === "COMPLETED";
+                        const canSubmit = !task.isCancelled && meetingFinished && mine && (mine.status === "OPEN" || mine.status === "BELUM_DIKERJAKAN");
                         const pendingCount = (task.submissions ?? []).filter((s) => s.verdict === "PENDING").length;
                         return (
                             <article

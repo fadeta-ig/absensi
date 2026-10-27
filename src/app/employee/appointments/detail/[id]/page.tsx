@@ -208,6 +208,11 @@ function DetailContent({ id }: { id: string }) {
     const canCancel = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
     const canComplete = canManage && item.status === "SCHEDULED" && Date.now() >= new Date(item.startAt).getTime();
     const nowMs = Date.now();
+    const meetingStartMs = new Date(item.startAt).getTime();
+    const meetingEndMs = new Date(item.endAt).getTime();
+    // Task: buat HANYA selama meeting berjalan; kerjakan HANYA setelah meeting selesai.
+    const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs;
+    const meetingFinishedForTask = item.status !== "CANCELLED" && (item.status === "COMPLETED" || nowMs >= meetingEndMs);
     const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
     const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
     const myResponse = myParticipant?.inviteStatus ?? "PENDING";
@@ -229,7 +234,6 @@ function DetailContent({ id }: { id: string }) {
             : []),
         ...item.participants,
     ];
-    const hasStarted = nowMs >= new Date(item.startAt).getTime();
 
     return (
         <div className="space-y-4">
@@ -264,7 +268,7 @@ function DetailContent({ id }: { id: string }) {
             {isOverdueStored && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" role="status" aria-label="Meeting lewat jadwal">
                     <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                        Jadwal sudah lewat. Tekan Selesaikan untuk menutup meeting, atau biarkan sistem menyelesaikannya otomatis. Pengaturan dan pembatalan dikunci; notulensi dan task ikut tertutup.
+                        Jadwal sudah lewat. Tekan Selesaikan untuk menutup meeting, atau biarkan sistem menyelesaikannya otomatis. Task baru tidak dapat ditambahkan; pengerjaan task dibuka setelah meeting selesai.
                     </p>
                 </div>
             )}
@@ -535,8 +539,9 @@ function DetailContent({ id }: { id: string }) {
                 <MeetingTaskSection
                     appointmentId={item.id}
                     participants={taskParticipants}
-                    readOnly={isFrozen}
-                    canCreateTask={hasStarted && !isFrozen}
+                    readOnly={!meetingFinishedForTask}
+                    canCreateTask={canCreateMeetingTask}
+                    canManageTask={canCreateMeetingTask}
                     refreshKey={syncKey}
                 />
             </div>

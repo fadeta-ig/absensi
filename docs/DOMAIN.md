@@ -113,7 +113,12 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - Lanjutan: `GET /api/ga/cleaning/unavailable-candidates` + kartu usulan di rekap GA — item yang diklaim ≥ minDays hari diusulkan ke WIG002 untuk dikunci permanen (tindak lanjut manual).
 - Batasan: hanya kolom `is_unavailable` default-false; baris riwayat lama tetap valid tanpa migrasi.
 
-### K. Verifikasi Task Meeting (live 2026-10-26)
+### K. Verifikasi Task Meeting (dirombak 2026-10-27: kerja dibuka setelah meeting selesai)
+- Jendela buat: task baru HANYA selama meeting berjalan (`SCHEDULED` + now di dalam `[startAt, endAt)`). Belum mulai, sudah lewat jam, `COMPLETED`, atau `CANCELLED` → 409.
+- Jendela kerja: submit + verifikasi (`TERIMA`/`REVISI`) HANYA setelah meeting selesai (stored `COMPLETED`, atau jam sudah lewat menunggu flip cron ±15 menit). Meeting masih berjalan → 409.
+- Jendela kelola pemberi: buat, ubah isi/deadline/tambah-hapus penerima, perpanjang, batalkan — HANYA selama meeting berjalan. Setelah meeting diselesaikan, struktur task dikunci; yang tetap berjalan hanya pengumpulan + verifikasi.
+- Deadline wajib diisi tanpa default; tanpa deadline task tidak dapat dibuat.
+- Task selesai = kunci permanen: bila seluruh penerima `SELESAI`/`DIBATALKAN`, perpanjang/ubah/batalkan ditolak 409.
 - Peran: pemberi (assigner = verifikator) mutlak atas deadline & revisi; GA/WIG002 override. Penerima hanya mengerjakan + mengumpulkan.
 - Status per penerima: `OPEN` (baru) → submit+lampiran wajib 1–5 file → `ON_PROGRESS` (menunggu verifikasi) → `TERIMA` = `SELESAI` / `REVISI` = balik `OPEN` + tenggat revisi (unlimited). Self-claim selesai DILARANG.
 - Overdue: patokan SUBMIT, sticky per penerima. Tanpa submit sebelum tenggat awal → OVERDUE permanen (termasuk varian `OVERDUE (DONE)` bila akhirnya disetujui).

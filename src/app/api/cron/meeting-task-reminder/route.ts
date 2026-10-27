@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
             const batch = await prisma.meetingTask.findMany({
                 where: {
                     isCancelled: false,
-                    appointment: { status: { not: "CANCELLED" } },
+                    appointment: { status: "COMPLETED" },
                     deadlineHistory: { some: {} },
                     assignees: { some: { status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] } } },
                 },
@@ -55,6 +55,8 @@ export async function POST(request: NextRequest) {
                 select: {
                     id: true,
                     title: true,
+                    appointment: { select: { title: true } },
+                    assigner: { select: { employeeId: true, name: true } },
                     deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
                     assignees: {
                         where: { status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
@@ -95,11 +97,14 @@ export async function POST(request: NextRequest) {
                 }
 
                 const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+                const daysLeft = Math.max(0, Math.ceil((dueAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+                const meetingTitle = task.appointment?.title ?? "Meeting";
+                const giverName = task.assigner?.name ?? task.assigner?.employeeId ?? "pemberi task";
                 const body = JSON.stringify({
                     title: isOverdue ? `Task Overdue: ${task.title}` : `Pengingat Task: ${task.title}`,
                     body: isOverdue
-                        ? `Deadline ${dueLabel} telah lewat — segera kumpulkan hasil kerja.`
-                        : `Deadline ${dueLabel} — status: ${assignee.status === "ON_PROGRESS" ? "Menunggu Verifikasi" : "Open"}.`,
+                        ? `Kamu masih memiliki task dari "${meetingTitle}" oleh ${giverName}. Deadline ${dueLabel} telah lewat — segera kumpulkan hasil kerja.`
+                        : `Kamu masih memiliki task dari "${meetingTitle}" oleh ${giverName}, deadline sisa ${daysLeft} hari lagi (${dueLabel}).`,
                     icon: "/icons/android-chrome-192x192.png",
                     badge: "/icons/android-chrome-192x192.png",
                     tag: `meeting-task-${task.id}-${kind}`,
@@ -127,7 +132,7 @@ export async function POST(request: NextRequest) {
         const pendingSubs = await prisma.meetingTaskSubmission.findMany({
             where: {
                 verdict: "PENDING",
-                task: { isCancelled: false, appointment: { status: { not: "CANCELLED" } } },
+                task: { isCancelled: false, appointment: { status: "COMPLETED" } },
                 createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
             },
             select: { id: true, taskId: true, task: { select: { title: true, assignerEmployeeId: true } } },
