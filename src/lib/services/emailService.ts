@@ -716,7 +716,6 @@ function cleaningParafSentence(l: DailyRecapEmailCleaningLine): string {
     const done = numberedParafList(l);
     const pending = l.pendingNames.filter(Boolean);
     const late = (l.lateNames ?? []).filter(Boolean);
-    const unavailable = (l.unavailableItems ?? []).filter(Boolean);
     const bits: string[] = [];
     if (done.length > 0) bits.push(`Sudah paraf: ${done.join("; ")}.`);
     if (late.length > 0) bits.push(`Terlambat paraf: ${late.join(", ")}.`);
@@ -724,7 +723,6 @@ function cleaningParafSentence(l: DailyRecapEmailCleaningLine): string {
     else if (l.parafMissing > 0 && done.length === 0) bits.push(`Belum paraf (catatan: belum paraf).`);
     const items = numberedItemList(l.pendingItems);
     if (items.length > 0) bits.push(`Belum dibersihkan: ${items.join("; ")}.`);
-    if (unavailable.length > 0) bits.push(`Tidak ada di ruangan: ${unavailable.join("; ")}.`);
     return bits.join(" ");
 }
 
@@ -953,7 +951,6 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
           emailTh("Status") +
           emailTh("Terlambat") +
           emailTh("Belum dibersihkan") +
-          emailTh("Tidak ada di ruangan") +
           emailTh("Sudah paraf") +
           emailTh("Belum paraf") +
           `</tr></thead><tbody>${cl
@@ -962,14 +959,12 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
                   const pendingCell = l.isFree ? "—" : (l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf (catatan: belum paraf)" : "—"));
                   const itemsCell = l.isFree ? "—" : (numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—");
                   const lateCell = l.isFree ? "—" : ((l.lateNames ?? []).filter(Boolean).map(escapeHtml).join("<br>") || "—");
-                  const taCell = l.isFree ? "—" : ((l.unavailableItems ?? []).filter(Boolean).map(escapeHtml).join("<br>") || "—");
                   return `<tr>` +
                       emailTd(String(i + 1), "center") +
                       emailTd(escapeHtml(l.roomName)) +
                       emailTd(escapeHtml(cleaningLineState(l))) +
                       emailTd(lateCell) +
                       emailTd(itemsCell) +
-                      emailTd(taCell) +
                       emailTd(doneCell) +
                       emailTd(pendingCell) +
                       `</tr>`;
