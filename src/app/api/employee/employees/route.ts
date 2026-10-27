@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { searchActiveEmployees } from "@/lib/services/employeeSearchService";
+import { isWig002 } from "@/lib/services/appointmentService";
 import { z } from "zod";
 
 const employeesQuerySchema = z.object({
@@ -17,7 +18,7 @@ const employeesQuerySchema = z.object({
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    if (!session.employeeId && !isWig002(session)) return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);
