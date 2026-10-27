@@ -414,6 +414,43 @@ export default function MeetingTaskSection({
                                     </div>
                                 )}
 
+                                {iAmAssigner && task.submissions.length > 0 && (
+                                    <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-2.5" aria-label={`Riwayat pengumpulan pada ${task.title}`}>
+                                        <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">Riwayat pengumpulan</p>
+                                        <ul className="space-y-2">
+                                            {task.submissions.map((s) => (
+                                                <li key={s.id} className="text-[11px]">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-[var(--text-secondary)]">
+                                                            {stripGelar(nameOf(task, s.employeeId))} · attempt {s.attemptNo} · {new Date(s.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                                                            {s.verifyNote ? ` · "${s.verifyNote}"` : ""}
+                                                        </span>
+                                                        <span className={`shrink-0 rounded-full px-2 py-0.5 font-semibold ${s.verdict === "DITERIMA" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : s.verdict === "DIREVISI" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" : "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"}`}>
+                                                            {s.verdict === "DITERIMA" ? "Diterima" : s.verdict === "DIREVISI" ? `Revisi${s.resubmitDueAt ? ` · tenggat ${new Date(s.resubmitDueAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}` : ""}` : "Diproses"}
+                                                        </span>
+                                                    </div>
+                                                    {s.note && <p className="text-[var(--text-secondary)] mt-0.5 whitespace-pre-wrap">Catatan penerima: {s.note}</p>}
+                                                    {s.attachments.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1.5 mt-1">
+                                                            {s.attachments.map((att, i) => (
+                                                                <a
+                                                                    key={att.id}
+                                                                    href={`/api/appointments/submissions/attachments/${att.id}`}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-[var(--border)] text-[11px] text-[var(--primary)]"
+                                                                >
+                                                                    <FileText className="w-3 h-3" /> Lampiran {i + 1} ({(att.size / 1024).toFixed(0)} KB)
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
                                 {!task.isCancelled && !readOnly && iAmAssigner && (
                                     <div className="flex gap-1.5 mt-2">
                                         <button
