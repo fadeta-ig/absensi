@@ -609,9 +609,11 @@ export interface DailyRecapEmailCleaningLine {
     unavailableCount: number;
     parafDone: number;
     parafMissing: number;
-    doneParafs: { name: string; signedAt: Date }[];
+    doneParafs: { name: string; signedAt: Date; terlambat: boolean }[];
     pendingNames: string[];
     pendingItems: string[];
+    /** Item aktif bertanda "Tidak Ada di ruangan" (saat ini tidak di-render, tersedia untuk kebutuhan berikutnya). */
+    unavailableItems: string[];
 }
 
 export interface DailyRecapEmailReviewerStat {
@@ -683,10 +685,11 @@ function formatShortWib(value: Date | string): string {
 
 /**
  * Daftar bernomor: ["1. Nama (14 Okt 09.20)", "2. Nama (14 Okt 10.05)"].
- * Tanpa label peran (Diperiksa/Mengetahui) — itu hanya di PDF/dashboard.
+ * Hanya paraf TEPAT WAKTU. Tanpa label peran (Diperiksa/Mengetahui) — itu hanya di PDF/dashboard.
  */
 function numberedParafList(l: DailyRecapEmailCleaningLine): string[] {
     return l.doneParafs
+        .filter((p) => !p.terlambat)
         .map((p) => {
             const t = formatShortWib(p.signedAt);
             return t ? `${p.name} (${t})` : p.name;
@@ -695,20 +698,36 @@ function numberedParafList(l: DailyRecapEmailCleaningLine): string[] {
         .map((s, i) => `${i + 1}. ${s}`);
 }
 
+/** Nama penandatangan yang TERLAMBAT, format "Nama (-)" untuk kolom Belum paraf. */
+function lateParafList(l: DailyRecapEmailCleaningLine): string[] {
+    return l.doneParafs
+        .filter((p) => p.terlambat)
+        .map((p) => `${p.name} (-)`)
+        .filter(Boolean);
+}
+
 function numberedItemList(items: string[]): string[] {
     return items.filter(Boolean).map((s, i) => `${i + 1}. ${s}`);
 }
 
 /**
  * Kalimat paraf per ruangan: nama tanpa gelar + jam WIB.
+ * Aturan tampil (milik email, bukan sekadar teruskan data):
+ * - Ruang libur: kalimat kosong (bebas paraf; status "Libur" sudah cukup).
+ * - Belum paraf: selalu sebutkan NAMA + catatan "belum paraf" (jangan kalimat telanjang).
+ * - Terlambat: sebutkan nama penandatangan yang TERLAMBAT.
+ * - Tidak Ada: sebutkan itemnya agar tak disangka belum dikerjakan.
  */
 function cleaningParafSentence(l: DailyRecapEmailCleaningLine): string {
+    if (l.isFree) return "";
     const done = numberedParafList(l);
     const pending = l.pendingNames.filter(Boolean);
+    const late = lateParafList(l);
     const bits: string[] = [];
     if (done.length > 0) bits.push(`Sudah paraf: ${done.join("; ")}.`);
-    if (pending.length > 0) bits.push(`Belum paraf: ${pending.join(", ")}.`);
-    else if (l.parafMissing > 0 && done.length === 0) bits.push(`Belum paraf.`);
+    if (pending.length > 0) bits.push(`Belum paraf: ${pending.join(", ")} (catatan: belum paraf).`);
+    if (late.length > 0) bits.push(`Belum paraf: ${late.join(", ")}.`);
+    else if (l.parafMissing > 0 && done.length === 0 && pending.length === 0) bits.push(`Belum paraf (catatan: belum paraf).`);
     const items = numberedItemList(l.pendingItems);
     if (items.length > 0) bits.push(`Belum dibersihkan: ${items.join("; ")}.`);
     return bits.join(" ");
@@ -881,14 +900,15 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
                   ? `<p><strong>Diajukan susulan (dibuat sebelum hari ini):</strong></p>` + eqTableHtml(eqSusulan)
                   : "");
     const cl = input.cleaning.lines;
-    const clDone = cl.filter((l) => !l.isFree && l.exists && l.complete);
-    const clTodo = cl.filter((l) => !l.isFree && (!l.exists || !l.complete));
+    const clActive = cl.filter((l) => !l.isFree);
+    const clDone = clActive.filter((l) => l.exists && l.complete);
+    const clTodo = clActive.filter((l) => !l.exists || !l.complete);
     const clParafFull = clDone.filter((l) => l.parafMissing === 0);
     const clReviewers = input.cleaning.reviewerStats ?? [];
     const clSummaryText =
-        cl.length === 0
-            ? "Tidak ada ruangan."
-            : `Ringkasan: ${clDone.length} Pembersihan Selesai, ${clTodo.length} Belum Selesai (total ${cl.length} ruang). Paraf lengkap ${clParafFull.length} ruang.`;
+        clActive.length === 0
+            ? "Tidak ada ruangan aktif (semua libur)."
+            : `Ringkasan: ${clDone.length} Pembersihan Selesai, ${clTodo.length} Belum Selesai (dari ${clActive.length} ruang aktif, di luar libur). Paraf lengkap ${clParafFull.length} dari ${clDone.length} ruang selesai.`;
     const clLinesText = cl.length === 0
         ? "Tidak ada ruangan."
         : cl
@@ -909,11 +929,11 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         `\nKebersihan: ${clSummaryText}\n${clReviewerText}${clLinesText}\n` +
         `\nEmail otomatis Sistem HRIS PT Wijaya Inovasi Gemilang.`;
     const clSummaryHtml =
-        cl.length === 0
-            ? "<p>Tidak ada ruangan.</p>"
+        clActive.length === 0
+            ? "<p>Tidak ada ruangan aktif (semua libur).</p>"
             : `<p><strong>Ringkasan:</strong> ${clDone.length} Pembersihan Selesai, ` +
-              `${clTodo.length} Belum Selesai (total ${cl.length} ruang). ` +
-              `Paraf lengkap ${clParafFull.length} ruang.</p>`;
+              `${clTodo.length} Belum Selesai (dari ${clActive.length} ruang aktif, di luar libur). ` +
+              `Paraf lengkap ${clParafFull.length} dari ${clDone.length} ruang selesai.</p>`;
     const clReviewerHtml = clReviewers.length === 0
         ? ""
         : EMAIL_TABLE_OPEN +
@@ -942,8 +962,13 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
           `</tr></thead><tbody>${cl
               .map((l, i) => {
                   const doneCell = numberedParafList(l).map(escapeHtml).join("<br>") || "—";
-                  const pendingCell = l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf" : "—");
-                  const itemsCell = numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—";
+                  const missingBits = l.pendingNames.filter(Boolean).map(escapeHtml);
+                  const lateBits = lateParafList(l).map(escapeHtml);
+                  const pendingCell = l.isFree
+                      ? "—"
+                      : [...missingBits.map((s) => `${s} (catatan: belum paraf)`), ...lateBits].join("<br>") ||
+                        (l.parafMissing > 0 ? "Belum paraf (catatan: belum paraf)" : "—");
+                  const itemsCell = l.isFree ? "—" : (numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—");
                   return `<tr>` +
                       emailTd(String(i + 1), "center") +
                       emailTd(escapeHtml(l.roomName)) +
