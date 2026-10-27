@@ -201,7 +201,7 @@ export default function MeetingTaskSection({
                     {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
 
                     {tasks.length === 0 && (
-                        <p className="text-xs text-[var(--text-muted)]">Belum ada task dari meeting ini. Task bersifat opsional.</p>
+                        <p className="text-xs text-[var(--text-muted)]">Belum ada task dari meeting ini.</p>
                     )}
 
                     {tasks.map((task) => {
