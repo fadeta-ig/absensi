@@ -767,10 +767,6 @@ export const meetingTaskCreateSchema = z.object({
     dueDate: appointmentDateSchema,
 });
 
-export const meetingTaskStatusSchema = z.object({
-    status: z.enum(["BELUM_DIKERJAKAN", "ON_PROGRESS", "SELESAI"]),
-});
-
 export const meetingTaskExtendSchema = z.object({
     proposedDate: appointmentDateSchema,
     reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),
@@ -780,14 +776,34 @@ export const meetingTaskCancelSchema = z.object({
     reason: z.string().trim().min(5, "Alasan pembatalan minimal 5 karakter.").max(1000),
 });
 
-export const meetingTaskExtensionRequestSchema = z.object({
-    proposedDate: appointmentDateSchema,
-    reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),
-});
+export const meetingTaskEditSchema = z
+    .object({
+        title: z.string().trim().min(1, "Judul task wajib diisi.").max(200, "Judul task maksimal 200 karakter.").optional(),
+        detail: z.string().trim().max(5000).nullable().optional(),
+        dueDate: appointmentDateSchema.optional(),
+        addAssigneeIds: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
+        removeAssigneeIds: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
+    })
+    .refine((v) => v.title !== undefined || v.detail !== undefined || v.dueDate !== undefined || v.addAssigneeIds.length > 0 || v.removeAssigneeIds.length > 0, {
+        message: "Tidak ada perubahan.",
+    });
 
-export const meetingTaskExtensionDecideSchema = z.object({
-    decision: z.enum(["APPROVED", "REJECTED"]),
-});
+export const meetingTaskSubmissionVerifySchema = z
+    .object({
+        decision: z.enum(["TERIMA", "REVISI"]),
+        note: z.string().trim().max(2000).nullable().optional(),
+        resubmitDue: appointmentDateSchema.optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (v.decision === "REVISI") {
+            if (!v.note || v.note.trim().length < 5) {
+                ctx.addIssue({ code: "custom", path: ["note"], message: "Alasan revisi minimal 5 karakter." });
+            }
+            if (!v.resubmitDue) {
+                ctx.addIssue({ code: "custom", path: ["resubmitDue"], message: "Tenggat revisi wajib diisi." });
+            }
+        }
+    });
 
 export const meetingMinutesSchema = z.object({
     minutes: z.string().trim().min(1, "Isi notulensi wajib diisi.").max(20000, "Notulensi maksimal 20000 karakter."),

@@ -22,6 +22,11 @@ function fmtTime(iso: string): string {
     return `${String(hours).padStart(2, "0")}.${String(minutes).padStart(2, "0")}`;
 }
 
+/** Selesai = stored COMPLETED/CANCELLED atau jam sudah lewat (lifecycle). */
+function isMeetingFinished(a: { status: string; lifecycle?: string }): boolean {
+    return a.status === "COMPLETED" || a.status === "CANCELLED" || a.lifecycle === "COMPLETED" || a.lifecycle === "CANCELLED";
+}
+
 export default function EmployeeAppointmentsPage() {
     const toast = useToast();
     const router = useRouter();
@@ -105,8 +110,12 @@ export default function EmployeeAppointmentsPage() {
     useEffect(() => {
         if (!myEmployeeId || scope === "history") return;
         const controller = new AbortController();
-        void fetchPastAppointments(controller.signal, {}).then(({ total }) => {
-            setHistoryTotal(total);
+        void fetchPastAppointments(controller.signal, {}).then(({ items }) => {
+            setHistoryTotal(
+                items.filter(
+                    (a) => isMeetingFinished(a) && (a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId))
+                ).length
+            );
         });
         return () => controller.abort();
     }, [myEmployeeId, refreshKey, scope]);
@@ -129,8 +138,13 @@ export default function EmployeeAppointmentsPage() {
                 setItems(data);
                 setLoadError(error);
                 if (scope === "history") {
-                    const total = (result as { total?: unknown }).total;
-                    if (typeof total === "number") setHistoryTotal(total);
+                    setHistoryTotal(
+                        data.filter(
+                            (a) =>
+                                isMeetingFinished(a) &&
+                                (!myEmployeeId || a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId))
+                        ).length
+                    );
                 }
                 setLoading(false);
             });
@@ -151,7 +165,7 @@ export default function EmployeeAppointmentsPage() {
         const controller = new AbortController();
         void loadMonth(month.year, month.month, controller.signal);
         return () => controller.abort();
-    }, [view, month, selectedDate, loadMonth, debouncedQ, filterRoom, filterStatus, scope, refreshKey]);
+    }, [view, month, selectedDate, loadMonth, debouncedQ, filterRoom, filterStatus, scope, refreshKey, myEmployeeId]);
 
     const hasActiveFilter = debouncedQ !== "" || filterRoom !== "" || filterStatus !== "";
     const clearFilters = useCallback(() => {
@@ -163,25 +177,28 @@ export default function EmployeeAppointmentsPage() {
 
     const scopedItems = useMemo(() => {
         if (!myEmployeeId) return items;
-        if (scope === "all") return items;
-        if (scope === "mine") return items.filter((a) => a.requesterEmployeeId === myEmployeeId);
+        // Tab mendatang (Semua/Milik/Undangan): hanya yang belum + sedang berjalan.
+        // Yang sudah selesai masuk tab Meeting Sebelumnya.
+        if (scope === "all") return items.filter((a) => !isMeetingFinished(a));
+        if (scope === "mine") return items.filter((a) => a.requesterEmployeeId === myEmployeeId && !isMeetingFinished(a));
         if (scope === "history") {
             return items.filter(
-                (a) => a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId)
+                (a) => isMeetingFinished(a) && (a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId))
             );
         }
-        return items.filter((a) => a.requesterEmployeeId !== myEmployeeId && a.participants.some((p) => p.employeeId === myEmployeeId));
+        return items.filter((a) => !isMeetingFinished(a) && a.requesterEmployeeId !== myEmployeeId && a.participants.some((p) => p.employeeId === myEmployeeId));
     }, [items, scope, myEmployeeId]);
 
     const scopeCounts = useMemo(() => {
         if (!myEmployeeId) return { all: items.length, mine: 0, invited: 0 };
+        const active = items.filter((a) => !isMeetingFinished(a));
         let mine = 0;
         let invited = 0;
-        for (const a of items) {
+        for (const a of active) {
             if (a.requesterEmployeeId === myEmployeeId) mine++;
             else if (a.participants.some((p) => p.employeeId === myEmployeeId)) invited++;
         }
-        return { all: items.length, mine, invited };
+        return { all: active.length, mine, invited };
     }, [items, myEmployeeId]);
 
     const appointmentsByDate = useMemo(() => {

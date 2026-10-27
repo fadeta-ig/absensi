@@ -125,7 +125,7 @@ describe("getMeetingHistory event", () => {
                         { sequence: 1, deadlineDate: new Date("2026-10-20T16:59:00Z"), reason: null, createdBy: "ID-001", createdAt: new Date("2026-10-19T03:00:00Z") },
                         { sequence: 2, deadlineDate: new Date("2026-10-21T16:59:00Z"), reason: "Butuh data", createdBy: "ID-001", createdAt: new Date("2026-10-19T04:00:00Z") },
                     ],
-                    extensionRequests: [],
+                    submissions: [],
                 },
             ],
         }) as never);

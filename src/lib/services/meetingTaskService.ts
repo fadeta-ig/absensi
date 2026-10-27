@@ -4,6 +4,12 @@ import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
 import { isWig002, resolveLifecycleStatus } from "@/lib/services/appointmentService";
+import path from "node:path";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import { extensionForMime, hasExpectedSignature } from "@/lib/fileMagic";
+import { getUploadLimit } from "@/lib/services/appSettingsService";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -20,10 +26,25 @@ export class MeetingTaskError extends Error {
 
 export const MEETING_TASK_MAX_EXTENSIONS_KEY = "meeting.task.maxExtensions" as const;
 export const DEFAULT_MEETING_TASK_MAX_EXTENSIONS = 3 as const;
+/** Batas keras jumlah sekuens deadline task verifikasi (awal + 1 perpanjangan). */
+export const MAX_DEADLINE_SEQUENCES = 2 as const;
+/** Batas tiket deadline per penerima (tiket terkonsumsi saat idle melewati deadline). */
+export const MAX_DEADLINE_TICKETS_PER_RECEIVER = 2 as const;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 
-export type MeetingTaskAssigneeStatus = "BELUM_DIKERJAKAN" | "ON_PROGRESS" | "SELESAI" | "DIBATALKAN";
+export type MeetingTaskAssigneeStatus = "OPEN" | "BELUM_DIKERJAKAN" | "ON_PROGRESS" | "SELESAI" | "DIBATALKAN";
 export const ASSIGNEE_FINAL_STATUSES: MeetingTaskAssigneeStatus[] = ["SELESAI", "DIBATALKAN"];
+/** Status yang dihitung "terbuka": nilai baru OPEN + warisan BELUM + ON_PROGRESS (menunggu verifikasi). */
+export const ASSIGNEE_OPEN_STATUSES: MeetingTaskAssigneeStatus[] = ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"];
+export type MeetingTaskSubmissionVerdict = "PENDING" | "DIREVISI" | "DITERIMA";
+
+/** Task yang seluruh penerimanya sudah final (SELESAI/DIBATALKAN) tidak bisa diubah lagi. */
+export function assertTaskNotFullyFinal(statuses: string[] | undefined | null): void {
+    const list = statuses ?? [];
+    if (list.length > 0 && list.every((s) => ASSIGNEE_FINAL_STATUSES.includes(s as MeetingTaskAssigneeStatus))) {
+        throw new MeetingTaskError("Task sudah selesai/ditutup. Tidak dapat diubah lagi.", 409);
+    }
+}
 
 let maxExtensionsCache: { value: number; expiresAt: number } | null = null;
 
@@ -52,6 +73,48 @@ export function meetingTaskDueDateToDate(dueDate: string): Date {
 export function isAssigneeOverdue(dueAt: Date, status: string, now: Date = new Date()): boolean {
     if (status === "SELESAI" || status === "DIBATALKAN") return false;
     return now.getTime() > dueAt.getTime();
+}
+
+export interface StickyOverdueSubmission {
+    createdAt: Date;
+    attemptNo: number;
+    verdict: string;
+    resubmitDueAt: Date | null;
+}
+
+/**
+ * OVERDUE sticky per penerima (patokan SUBMIT, bukan verifikasi):
+ * - tidak ada submission dengan createdAt <= tenggat awal dan now > tenggat awal → sticky.
+ * - submit-ulang revisi lewat tenggat revisinya tanpa submit lebih baru → sticky.
+ * Tanpa kolom baru: fully derived dari tabel submissions + deadlineHistory seq 1.
+ */
+export function isReceiverStickyOverdue(
+    submissions: StickyOverdueSubmission[],
+    originalDueAt: Date | null,
+    now: Date = new Date(),
+    doneInfo?: { status: string; completedAt: Date | null }
+): boolean {
+    if (originalDueAt) {
+        const hasOnTimeSubmit = submissions.some((s) => s.createdAt.getTime() <= originalDueAt.getTime());
+        if (!hasOnTimeSubmit) {
+            // Data legacy tanpa submission: completedAt tepat waktu dianggap submit tepat waktu.
+            const legacyOnTime =
+                submissions.length === 0 &&
+                doneInfo?.status === "SELESAI" &&
+                doneInfo.completedAt &&
+                doneInfo.completedAt.getTime() <= originalDueAt.getTime();
+            if (!legacyOnTime && now.getTime() > originalDueAt.getTime()) return true;
+        }
+    }
+    const revisi = submissions
+        .filter((s) => s.verdict === "DIREVISI" && s.resubmitDueAt)
+        .sort((a, b) => a.attemptNo - b.attemptNo);
+    for (const rev of revisi) {
+        const due = (rev.resubmitDueAt as Date).getTime();
+        const resub = submissions.some((s) => s.attemptNo > rev.attemptNo && s.createdAt.getTime() <= due);
+        if (!resub && now.getTime() > due) return true;
+    }
+    return false;
 }
 
 // ─── Akses ────────────────────────────────────────────────────────
@@ -109,16 +172,10 @@ const taskInclude = {
     appointment: { select: { id: true, title: true, startAt: true, status: true, room: { select: { name: true } } } },
     assignees: { include: { employee: { select: { employeeId: true, name: true } } }, orderBy: { createdAt: "asc" as const } },
     deadlineHistory: { orderBy: { sequence: "asc" as const } },
-    extensionRequests: {
-        where: { status: "PENDING" },
-        orderBy: { createdAt: "desc" as const },
-        select: {
-            id: true,
-            proposedDate: true,
-            reason: true,
-            status: true,
-            createdAt: true,
-            requestedBy: { select: { employeeId: true, name: true } },
+    submissions: {
+        orderBy: { attemptNo: "asc" as const },
+        include: {
+            attachments: { select: { id: true, mimeType: true, size: true, createdAt: true }, orderBy: { createdAt: "asc" as const } },
         },
     },
 } satisfies Prisma.MeetingTaskInclude;
@@ -127,13 +184,25 @@ type TaskRow = Prisma.MeetingTaskGetPayload<{ include: typeof taskInclude }>;
 
 export function toTaskDto(task: TaskRow, now: Date = new Date()) {
     const activeDeadline = task.deadlineHistory[task.deadlineHistory.length - 1] ?? null;
-    const assignees = task.assignees.map((a) => ({
-        employeeId: a.employeeId,
-        name: a.employee?.name ?? a.employeeId,
-        status: a.status,
-        completedAt: a.completedAt,
-        isOverdue: activeDeadline ? isAssigneeOverdue(activeDeadline.deadlineDate, a.status, now) : false,
-    }));
+    const originalDeadline = task.deadlineHistory[0] ?? null;
+    const originalDueAt = originalDeadline ? originalDeadline.deadlineDate : null;
+    const assignees = task.assignees.map((a) => {
+        const subs = task.submissions
+            .filter((s) => s.employeeId === a.employeeId)
+            .map((s) => ({ createdAt: s.createdAt, attemptNo: s.attemptNo, verdict: s.verdict, resubmitDueAt: s.resubmitDueAt }));
+        const stickyOverdue = isReceiverStickyOverdue(subs, originalDueAt, now, { status: a.status, completedAt: a.completedAt });
+        return {
+            employeeId: a.employeeId,
+            name: a.employee?.name ?? a.employeeId,
+            status: a.status,
+            completedAt: a.completedAt,
+            isOverdue: activeDeadline ? isAssigneeOverdue(activeDeadline.deadlineDate, a.status, now) || stickyOverdue : stickyOverdue,
+            stickyOverdue,
+            deadlineTicketsUsed: a.deadlineTicketsUsed,
+            deadlineTicketsLeft: Math.max(0, MAX_DEADLINE_SEQUENCES - a.deadlineTicketsUsed),
+            submissionCount: subs.length,
+        };
+    });
     const open = assignees.filter((a) => !ASSIGNEE_FINAL_STATUSES.includes(a.status as MeetingTaskAssigneeStatus));
     return {
         id: task.id,
@@ -149,13 +218,19 @@ export function toTaskDto(task: TaskRow, now: Date = new Date()) {
             ? { date: toWIBDateString(activeDeadline.deadlineDate), deadlineAt: activeDeadline.deadlineDate, sequence: activeDeadline.sequence }
             : null,
         extensionsCount: Math.max(0, task.deadlineHistory.length - 1),
-        pendingExtensionRequests: task.extensionRequests.map((r) => ({
-            id: r.id,
-            proposedDate: r.proposedDate,
-            reason: r.reason,
-            status: r.status,
-            createdAt: r.createdAt,
-            requestedBy: r.requestedBy,
+        deadlineChancesMax: MAX_DEADLINE_SEQUENCES,
+        submissions: task.submissions.map((s) => ({
+            id: s.id,
+            employeeId: s.employeeId,
+            note: s.note,
+            attemptNo: s.attemptNo,
+            verdict: s.verdict,
+            resubmitDueAt: s.resubmitDueAt,
+            verifiedBy: s.verifiedBy,
+            verifiedAt: s.verifiedAt,
+            verifyNote: s.verifyNote,
+            createdAt: s.createdAt,
+            attachments: s.attachments,
         })),
         assignees,
         allDone: !task.isCancelled && assignees.length > 0 && open.length === 0 && assignees.every((a) => a.status === "SELESAI"),
@@ -183,13 +258,7 @@ export async function createMeetingTask(
 ): Promise<MeetingTaskDto> {
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat membuat task meeting.", 403);
     const appt = await getMeetingOrThrow(appointmentId);
-    if (appt.status === "COMPLETED") throw new MeetingTaskError("Meeting sudah selesai. Task baru tidak dapat ditambahkan.", 409);
-    if (appt.status === "CANCELLED") throw new MeetingTaskError("Meeting yang dibatalkan tidak dapat diberi task.", 409);
-    const now = new Date();
-    const lifecycle = resolveLifecycleStatus(appt.status, appt.startAt, appt.endAt, now);
-    if (lifecycle === "SCHEDULED" && now.getTime() < appt.startAt.getTime()) {
-        throw new MeetingTaskError("Task hanya dapat dibuat ketika meeting sedang berjalan atau sudah terlaksana.", 409);
-    }
+    await assertMeetingRunningForTaskCreate(appt);
     await assertCanAccessMeeting(session, appt);
 
     const assigneeIds = [...new Set(input.assigneeEmployeeIds.map((v) => v.trim()).filter(Boolean))];
@@ -271,42 +340,271 @@ export async function getMyMeetingTasks(
     return dtos;
 }
 
-// ─── Update status (penerima) ─────────────────────────────────────
+// ─── Submit hasil kerja (penerima) ─────────────────────────────────
+// Pengganti updateMyTaskStatus: penerima tidak lagi self-claim SELESAI.
+// Alur baru: kumpulkan hasil + lampiran wajib → ON_PROGRESS (menunggu verifikasi).
 
-const ALLOWED_SELF_STATUS: MeetingTaskAssigneeStatus[] = ["BELUM_DIKERJAKAN", "ON_PROGRESS", "SELESAI"];
+export const TASK_SUBMISSION_MAX_FILES = 5 as const;
+export const TASK_SUBMISSION_ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+const TASK_SUBMISSION_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "task-submissions");
 
-export async function updateMyTaskStatus(
+function assertNoTraversal(relativePath: string): string {
+    if (relativePath.includes("..") || path.isAbsolute(relativePath)) {
+        throw new MeetingTaskError("Path file tidak valid.", 400);
+    }
+    const resolved = path.resolve(TASK_SUBMISSION_STORAGE_ROOT, relativePath);
+    if (!resolved.startsWith(TASK_SUBMISSION_STORAGE_ROOT + path.sep)) {
+        throw new MeetingTaskError("Path file tidak valid.", 400);
+    }
+    return resolved;
+}
+
+export interface TaskWorkFile {
+    buffer: Buffer;
+    originalName: string;
+    mimeType: string;
+    size: number;
+}
+
+export interface SubmitTaskWorkInput {
+    note?: string | null;
+    files: TaskWorkFile[];
+}
+
+function validateWorkFile(file: TaskWorkFile, maxBytes: number): { extension: string; sha256: string } {
+    const mime = (file.mimeType || "").toLowerCase();
+    if (!(TASK_SUBMISSION_ALLOWED_MIME as readonly string[]).includes(mime)) {
+        throw new MeetingTaskError("Format file tidak didukung. Gunakan JPG, PNG, WEBP, atau PDF.", 400);
+    }
+    if (!file.buffer || file.buffer.length === 0) throw new MeetingTaskError("File kosong atau rusak.", 400);
+    if (file.buffer.length > maxBytes) {
+        throw new MeetingTaskError(`Ukuran file melebihi batas ${(maxBytes / 1024 / 1024).toFixed(1)} MB.`, 400);
+    }
+    const extension = extensionForMime(mime);
+    if (!extension || !hasExpectedSignature(mime, file.buffer)) {
+        throw new MeetingTaskError("Isi file tidak sesuai dengan format yang dinyatakan.", 400);
+    }
+    return { extension, sha256: createHash("sha256").update(file.buffer).digest("hex") };
+}
+
+export async function submitTaskWork(
     session: SessionPayload,
     taskId: string,
-    status: MeetingTaskAssigneeStatus,
+    input: SubmitTaskWorkInput,
     actor: { userId?: string | null; username: string }
 ): Promise<MeetingTaskDto> {
-    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat mengubah status task.", 403);
-    if (!ALLOWED_SELF_STATUS.includes(status)) throw new MeetingTaskError("Status tidak valid.", 400);
+    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat mengumpulkan hasil task.", 403);
+    if (!input.files || input.files.length === 0) throw new MeetingTaskError("Lampiran wajib minimal 1 file (dokumen atau foto).", 400);
+    if (input.files.length > TASK_SUBMISSION_MAX_FILES) {
+        throw new MeetingTaskError(`Maksimal ${TASK_SUBMISSION_MAX_FILES} file per pengumpulan.`, 400);
+    }
+    const note = input.note?.trim() || null;
+    if (note && note.length > 2000) throw new MeetingTaskError("Catatan maksimal 2000 karakter.", 400);
+    const task = await prisma.meetingTask.findUnique({
+        where: { id: taskId },
+        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true },
+    });
+    if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
+    if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
+    await assertMeetingFinishedForTaskWork(task.appointmentId);
     const row = await prisma.meetingTaskAssignee.findUnique({
         where: { taskId_employeeId: { taskId, employeeId: session.employeeId } },
-        include: { task: { select: { id: true, isCancelled: true, appointmentId: true } } },
+        select: { id: true, status: true },
     });
     if (!row) throw new MeetingTaskError("Task ini tidak ditugaskan kepada Anda.", 403);
-    if (row.task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingOpenForTaskMutation(row.task.appointmentId);
-    await prisma.meetingTaskAssignee.update({
-        where: { id: row.id },
-        data: { status, completedAt: status === "SELESAI" ? new Date() : null },
+    if (row.status !== "OPEN" && row.status !== "BELUM_DIKERJAKAN") {
+        throw new MeetingTaskError("Hasil sudah dikumpulkan dan menunggu verifikasi.", 409);
+    }
+    const maxMb = await getUploadLimit("upload.taskSubmission.maxMb");
+    const maxBytes = Math.floor(maxMb * 1024 * 1024);
+    const prepared = input.files.map((f) => ({ ...validateWorkFile(f, maxBytes), buffer: f.buffer, mimeType: f.mimeType.toLowerCase() }));
+
+    const created = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM meeting_tasks WHERE id = ${taskId} FOR UPDATE`;
+        const attemptNo = (await tx.meetingTaskSubmission.count({ where: { taskId, employeeId: session.employeeId as string } })) + 1;
+        const submission = await tx.meetingTaskSubmission.create({
+            data: {
+                taskId,
+                employeeId: session.employeeId as string,
+                note,
+                attemptNo,
+                verdict: "PENDING",
+                attachments: {
+                    create: prepared.map((p) => ({
+                        filePath: `pending/${randomUUID()}${p.extension}`,
+                        mimeType: p.mimeType,
+                        size: p.buffer.length,
+                        sha256: p.sha256,
+                        uploadedByUserId: actor.userId ?? null,
+                    })),
+                },
+            },
+            include: { attachments: true },
+        });
+        await tx.meetingTaskAssignee.update({ where: { id: row.id }, data: { status: "ON_PROGRESS" } });
+        const revCount = await tx.meetingTaskRevision.count({ where: { taskId } });
+        await tx.meetingTaskRevision.create({
+            data: { taskId, revisionNumber: revCount + 1, changeReason: `Submit hasil kerja (attempt ${attemptNo})`, changedBy: actor.username, previousData: {} },
+        });
+        return submission;
     });
+
+    // Tulis file ke disk setelah baris DB ter-commit; gagal tulis = hapus baris yatim.
+    const written: string[] = [];
+    try {
+        for (const [i, att] of created.attachments.entries()) {
+            const rel = `${taskId}/${created.id}-${i}-${randomUUID()}${prepared[i].extension}`;
+            const abs = assertNoTraversal(rel);
+            await mkdir(path.dirname(abs), { recursive: true });
+            await writeFile(abs, prepared[i].buffer, { flag: "wx" });
+            written.push(rel);
+            await prisma.meetingTaskAttachment.update({ where: { id: att.id }, data: { filePath: rel } });
+        }
+    } catch (err) {
+        for (const rel of written) {
+            try {
+                await unlink(assertNoTraversal(rel));
+            } catch {
+                /* abaikan */
+            }
+        }
+        await prisma.meetingTaskSubmission.delete({ where: { id: created.id } }).catch(() => undefined);
+        await prisma.meetingTaskAssignee.update({ where: { id: row.id }, data: { status: "OPEN" } }).catch(() => undefined);
+        throw new MeetingTaskError("Gagal menyimpan lampiran. Coba lagi.", 500);
+    }
     await prisma.auditLog.create({
         data: {
-            action: "UPDATE_MEETING_TASK_STATUS",
+            action: "SUBMIT_MEETING_TASK_WORK",
             entity: "MEETING_TASK",
             entityId: taskId,
-            details: JSON.stringify({ employeeId: session.employeeId, status }),
+            details: JSON.stringify({ employeeId: session.employeeId, submissionId: created.id, attemptNo: created.attemptNo, files: created.attachments.length }),
             actorType: "USER",
             actorUserId: actor.userId ?? null,
             actorIdentifier: actor.username,
         },
-    }).catch((err) => logger.error("meetingTask audit STATUS gagal", { err }));
-    const task = await prisma.meetingTask.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
-    return toTaskDto(task);
+    }).catch((err) => logger.error("meetingTask audit SUBMIT gagal", { err }));
+    const refreshed = await prisma.meetingTask.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
+    return toTaskDto(refreshed);
+}
+
+// ─── Verifikasi submission (pemberi/GA) ─────────────────────────────
+
+export interface VerifySubmissionInput {
+    decision: "TERIMA" | "REVISI";
+    note?: string | null;
+    resubmitDue?: string | null; // YYYY-MM-DD, wajib bila REVISI
+}
+
+export async function verifyTaskSubmission(
+    session: SessionPayload,
+    submissionId: string,
+    input: VerifySubmissionInput,
+    actor: { userId?: string | null; username: string }
+): Promise<MeetingTaskDto> {
+    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat memverifikasi.", 403);
+    const sub = await prisma.meetingTaskSubmission.findUnique({
+        where: { id: submissionId },
+        include: { task: { select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true } } },
+    });
+    if (!sub) throw new MeetingTaskError("Pengumpulan tidak ditemukan.", 404);
+    if (sub.verdict !== "PENDING") throw new MeetingTaskError("Pengumpulan sudah diputuskan.", 409);
+    if (sub.task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
+    await assertMeetingFinishedForTaskWork(sub.task.appointmentId);
+    const privileged = await isPrivileged(session);
+    if (sub.task.assignerEmployeeId !== session.employeeId && !privileged) {
+        throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memverifikasi.", 403);
+    }
+    const note = input.note?.trim() || null;
+    if (input.decision === "REVISI") {
+        if (!note || note.length < 5) throw new MeetingTaskError("Alasan revisi minimal 5 karakter.", 400);
+        if (!input.resubmitDue || !isValidCalendarDate(input.resubmitDue)) {
+            throw new MeetingTaskError("Tenggat revisi wajib diisi (YYYY-MM-DD).", 400);
+        }
+        const resubmitDueAt = meetingTaskDueDateToDate(input.resubmitDue);
+        if (resubmitDueAt.getTime() <= Date.now()) throw new MeetingTaskError("Tenggat revisi harus setelah waktu saat ini.", 400);
+        await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM meeting_tasks WHERE id = ${sub.taskId} FOR UPDATE`;
+            await tx.meetingTaskSubmission.update({
+                where: { id: sub.id },
+                data: { verdict: "DIREVISI", verifyNote: note, verifiedBy: actor.username, verifiedAt: new Date(), resubmitDueAt },
+            });
+            await tx.meetingTaskAssignee.updateMany({
+                where: { taskId: sub.taskId, employeeId: sub.employeeId },
+                data: { status: "OPEN" },
+            });
+            const revCount = await tx.meetingTaskRevision.count({ where: { taskId: sub.taskId } });
+            await tx.meetingTaskRevision.create({
+                data: { taskId: sub.taskId, revisionNumber: revCount + 1, changeReason: `Revisi diminta (attempt ${sub.attemptNo}): ${note}`, changedBy: actor.username, previousData: {} },
+            });
+        });
+        await prisma.auditLog.create({
+            data: { action: "REQUEST_MEETING_TASK_REVISION", entity: "MEETING_TASK", entityId: sub.taskId, details: JSON.stringify({ submissionId, resubmitDue: input.resubmitDue }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
+        }).catch((err) => logger.error("meetingTask audit REVISI gagal", { err }));
+    } else {
+        await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM meeting_tasks WHERE id = ${sub.taskId} FOR UPDATE`;
+            await tx.meetingTaskSubmission.update({
+                where: { id: sub.id },
+                data: { verdict: "DITERIMA", verifyNote: note, verifiedBy: actor.username, verifiedAt: new Date() },
+            });
+            await tx.meetingTaskAssignee.updateMany({
+                where: { taskId: sub.taskId, employeeId: sub.employeeId },
+                data: { status: "SELESAI", completedAt: new Date() },
+            });
+            const revCount = await tx.meetingTaskRevision.count({ where: { taskId: sub.taskId } });
+            await tx.meetingTaskRevision.create({
+                data: { taskId: sub.taskId, revisionNumber: revCount + 1, changeReason: `Submission disetujui (attempt ${sub.attemptNo})`, changedBy: actor.username, previousData: {} },
+            });
+        });
+        await prisma.auditLog.create({
+            data: { action: "VERIFY_MEETING_TASK_APPROVED", entity: "MEETING_TASK", entityId: sub.taskId, details: JSON.stringify({ submissionId }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
+        }).catch((err) => logger.error("meetingTask audit VERIFY gagal", { err }));
+    }
+    const refreshed = await prisma.meetingTask.findUniqueOrThrow({ where: { id: sub.taskId }, include: taskInclude });
+    return toTaskDto(refreshed);
+}
+
+// ─── Baca lampiran (pemberi/penerima/GA) ────────────────────────────
+
+export async function getSubmissionAttachment(
+    session: SessionPayload,
+    attachmentId: string
+): Promise<{ filePath: string; mimeType: string; size: number }> {
+    const att = await prisma.meetingTaskAttachment.findUnique({
+        where: { id: attachmentId },
+        include: { submission: { select: { taskId: true, employeeId: true } } },
+    });
+    if (!att) throw new MeetingTaskError("Lampiran tidak ditemukan.", 404);
+    const task = await prisma.meetingTask.findUnique({
+        where: { id: att.submission.taskId },
+        select: { id: true, assignerEmployeeId: true, appointmentId: true },
+    });
+    if (!task) throw new MeetingTaskError("Task tidak ditemukan.", 404);
+    const appt = await getMeetingOrThrow(task.appointmentId);
+    await assertCanAccessMeeting(session, appt);
+    const privileged = await isPrivileged(session);
+    const mine = session.employeeId === att.submission.employeeId;
+    const giver = session.employeeId === task.assignerEmployeeId;
+    if (!mine && !giver && !privileged) throw new MeetingTaskError("Anda tidak memiliki akses ke lampiran ini.", 403);
+    return { filePath: assertNoTraversal(att.filePath), mimeType: att.mimeType, size: att.size };
+}
+
+// ─── Inbox verifikator (task saya yang menunggu verifikasi) ────────
+
+export async function getTasksAwaitingMyVerification(session: SessionPayload): Promise<MeetingTaskDto[]> {
+    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat melihat antrean verifikasi.", 403);
+    const tasks = await prisma.meetingTask.findMany({
+        where: {
+            assignerEmployeeId: session.employeeId,
+            isCancelled: false,
+            submissions: { some: { verdict: "PENDING" } },
+        },
+        include: taskInclude,
+        orderBy: { createdAt: "desc" },
+        take: 200,
+    });
+    const now = new Date();
+    return tasks.map((t) => toTaskDto(t, now));
 }
 
 // ─── Perpanjangan (pemberi/GA) ────────────────────────────────────
@@ -323,10 +621,9 @@ async function applyExtensionTx(
     const history = await tx.meetingTaskDeadlineHistory.findMany({ where: { taskId }, orderBy: { sequence: "desc" }, take: 1 });
     const current = history[0];
     if (!current) throw new MeetingTaskError("Riwayat deadline task tidak ditemukan.", 500);
-    const max = await getMeetingTaskMaxExtensions();
-    if (history.length >= 1) {
-        const count = await tx.meetingTaskDeadlineHistory.count({ where: { taskId } });
-        if (count - 1 >= max) throw new MeetingTaskError(`Kuota perpanjangan habis (maksimal ${max} kali).`, 409);
+    // Kesempatan deadline maks 2 sekuens (awal + 1 perpanjangan), apapun setting lama.
+    if (current.sequence + 1 > MAX_DEADLINE_SEQUENCES) {
+        throw new MeetingTaskError(`Kesempatan deadline maksimal ${MAX_DEADLINE_SEQUENCES} kali (awal + 1 perpanjangan).`, 409);
     }
     if (!isValidCalendarDate(proposedDate)) throw new MeetingTaskError("Tanggal perpanjangan tidak valid. Gunakan format YYYY-MM-DD.", 400);
     const nextDue = meetingTaskDueDateToDate(proposedDate);
@@ -337,6 +634,37 @@ async function applyExtensionTx(
     await tx.meetingTaskDeadlineHistory.create({
         data: { taskId, sequence: seq, deadlineDate: nextDue, reason: reason.trim(), createdBy: actor.username },
     });
+    // Tiket deadline per penerima: yang idle (tanpa submit sejak deadline sebelumnya)
+    // mengonsumsi 1 tiket; yang sudah habis (2) menggagalkan seluruh perpanjangan.
+    const prevDue = current.deadlineDate;
+    const openAssignees = await tx.meetingTaskAssignee.findMany({
+        where: { taskId, status: { in: ASSIGNEE_OPEN_STATUSES } },
+        select: { id: true, employeeId: true, deadlineTicketsUsed: true },
+    });
+    if (openAssignees.length > 0) {
+        const submittedSince = new Set(
+            (
+                await tx.meetingTaskSubmission.findMany({
+                    where: { taskId, createdAt: { gt: prevDue } },
+                    select: { employeeId: true },
+                })
+            ).map((s) => s.employeeId)
+        );
+        const idle = openAssignees.filter((a) => !submittedSince.has(a.employeeId));
+        const exhausted = idle.filter((a) => a.deadlineTicketsUsed >= MAX_DEADLINE_TICKETS_PER_RECEIVER);
+        if (exhausted.length > 0) {
+            throw new MeetingTaskError(
+                `Tiket deadline habis (maks ${MAX_DEADLINE_TICKETS_PER_RECEIVER}) untuk: ${exhausted.map((a) => a.employeeId).join(", ")}. Batalkan task mereka atau biarkan overdue.`,
+                409
+            );
+        }
+        if (idle.length > 0) {
+            await tx.meetingTaskAssignee.updateMany({
+                where: { taskId, id: { in: idle.map((a) => a.id) } },
+                data: { deadlineTicketsUsed: { increment: 1 } },
+            });
+        }
+    }
     const revCount = await tx.meetingTaskRevision.count({ where: { taskId } });
     await tx.meetingTaskRevision.create({
         data: {
@@ -359,11 +687,12 @@ export async function extendTaskDeadline(
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat memperpanjang deadline.", 403);
     const task = await prisma.meetingTask.findUnique({
         where: { id: taskId },
-        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true },
+        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } },
     });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingOpenForTaskMutation(task.appointmentId);
+    await assertMeetingRunningForGiverWork(task.appointmentId);
+    await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memperpanjang deadline.", 403);
@@ -372,10 +701,6 @@ export async function extendTaskDeadline(
 
     await prisma.$transaction(async (tx) => {
         await applyExtensionTx(tx, taskId, input.proposedDate, input.reason, actor);
-        await tx.meetingTaskExtensionRequest.updateMany({
-            where: { taskId, status: "PENDING" },
-            data: { status: "REJECTED", decidedBy: actor.username, decidedAt: new Date() },
-        });
         await tx.auditLog.create({
             data: {
                 action: "EXTEND_MEETING_TASK_DEADLINE",
@@ -406,10 +731,11 @@ export async function cancelMeetingTask(
     actor: { userId?: string | null; username: string }
 ): Promise<MeetingTaskDto> {
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat membatalkan task.", 403);
-    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true } });
+    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } } });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingOpenForTaskMutation(task.appointmentId);
+    await assertMeetingRunningForGiverWork(task.appointmentId);
+    await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat membatalkan.", 403);
@@ -418,7 +744,7 @@ export async function cancelMeetingTask(
     await prisma.$transaction(async (tx) => {
         await tx.meetingTask.update({ where: { id: taskId }, data: { isCancelled: true, cancelReason: reason.trim(), cancelledAt: new Date() } });
         await tx.meetingTaskAssignee.updateMany({
-            where: { taskId, status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+            where: { taskId, status: { in: ASSIGNEE_OPEN_STATUSES } },
             data: { status: "DIBATALKAN" },
         });
         const revCount = await tx.meetingTaskRevision.count({ where: { taskId } });
@@ -438,83 +764,113 @@ export async function cancelMeetingTask(
     return toTaskDto(updated);
 }
 
-// ─── Minta perpanjangan (penerima) ────────────────────────────────
+// ─── Edit konten (pemberi/GA: ralat, tambah info, ubah deadline/penerima) ─
 
-export async function requestTaskExtension(
-    session: SessionPayload,
-    taskId: string,
-    input: { proposedDate: string; reason: string },
-    actor: { userId?: string | null; username: string }
-) {
-    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat meminta perpanjangan.", 403);
-    const row = await prisma.meetingTaskAssignee.findUnique({
-        where: { taskId_employeeId: { taskId, employeeId: session.employeeId } },
-        include: { task: { select: { id: true, isCancelled: true, appointmentId: true } } },
-    });
-    if (!row) throw new MeetingTaskError("Task ini tidak ditugaskan kepada Anda.", 403);
-    if (row.task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingOpenForTaskMutation(row.task.appointmentId);
-    if (row.status === "SELESAI") throw new MeetingTaskError("Task sudah selesai, tidak perlu perpanjangan.", 409);
-    if (!isValidCalendarDate(input.proposedDate)) throw new MeetingTaskError("Tanggal usulan tidak valid. Gunakan format YYYY-MM-DD.", 400);
-    if (!input.reason || input.reason.trim().length < 5) throw new MeetingTaskError("Alasan perpanjangan minimal 5 karakter.", 400);
-    const requesterId = session.employeeId as string;
-    const existing = await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM meeting_tasks WHERE id = ${taskId} FOR UPDATE`;
-        const dup = await tx.meetingTaskExtensionRequest.findFirst({ where: { taskId, requestedByEmployeeId: requesterId, status: "PENDING" } });
-        if (dup) throw new MeetingTaskError("Pengajuan perpanjangan Anda masih menunggu keputusan.", 409);
-        return tx.meetingTaskExtensionRequest.create({
-            data: {
-                taskId,
-                requestedByEmployeeId: requesterId,
-                proposedDate: meetingTaskDueDateToDate(input.proposedDate),
-                reason: input.reason.trim(),
-            },
-            include: { requestedBy: { select: { employeeId: true, name: true } } },
-        });
-    });
-    const created = existing;
-    await prisma.auditLog.create({
-        data: { action: "REQUEST_MEETING_TASK_EXTENSION", entity: "MEETING_TASK", entityId: taskId, details: JSON.stringify({ proposedDate: input.proposedDate }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
-    }).catch((err) => logger.error("meetingTask audit REQUEST_EXT gagal", { err }));
-    return created;
+export interface EditMeetingTaskInput {
+    title?: string;
+    detail?: string | null;
+    dueDate?: string;
+    addAssigneeIds?: string[];
+    removeAssigneeIds?: string[];
 }
 
-export async function decideTaskExtension(
+export async function editMeetingTask(
     session: SessionPayload,
-    requestId: string,
-    decision: "APPROVED" | "REJECTED",
+    taskId: string,
+    input: EditMeetingTaskInput,
     actor: { userId?: string | null; username: string }
 ): Promise<MeetingTaskDto> {
-    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat memutuskan pengajuan.", 403);
-    const req = await prisma.meetingTaskExtensionRequest.findUnique({
-        where: { id: requestId },
-        include: { task: { select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true } } },
+    if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat mengubah task.", 403);
+    const task = await prisma.meetingTask.findUnique({
+        where: { id: taskId },
+        select: { id: true, title: true, detail: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } },
     });
-    if (!req) throw new MeetingTaskError("Pengajuan perpanjangan tidak ditemukan.", 404);
-    if (req.status !== "PENDING") throw new MeetingTaskError("Pengajuan sudah diputuskan.", 409);
-    if (req.task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingOpenForTaskMutation(req.task.appointmentId);
+    if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
+    if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
+    await assertMeetingRunningForGiverWork(task.appointmentId);
+    await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
-    if (req.task.assignerEmployeeId !== session.employeeId && !privileged) {
-        throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memutuskan.", 403);
+    if (task.assignerEmployeeId !== session.employeeId && !privileged) {
+        throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat mengubah.", 403);
     }
-    if (decision === "REJECTED") {
-        await prisma.meetingTaskExtensionRequest.update({ where: { id: requestId }, data: { status: "REJECTED", decidedBy: actor.username, decidedAt: new Date() } });
-    } else {
-        const proposedDate = toWIBDateString(req.proposedDate);
-        await prisma.$transaction(async (tx) => {
-            await applyExtensionTx(tx, req.taskId, proposedDate, req.reason, actor);
-            await tx.meetingTaskExtensionRequest.update({ where: { id: requestId }, data: { status: "APPROVED", decidedBy: actor.username, decidedAt: new Date() } });
-            await tx.meetingTaskExtensionRequest.updateMany({
-                where: { taskId: req.taskId, status: "PENDING", id: { not: requestId } },
-                data: { status: "REJECTED", decidedBy: actor.username, decidedAt: new Date() },
+    const patch: { title?: string; detail?: string | null } = {};
+    if (input.title !== undefined) {
+        const title = input.title.trim();
+        if (!title) throw new MeetingTaskError("Judul task wajib diisi.", 400);
+        patch.title = title.slice(0, 200);
+    }
+    if (input.detail !== undefined) patch.detail = input.detail?.trim().slice(0, 5000) || null;
+    const addIds = [...new Set((input.addAssigneeIds ?? []).map((v) => v.trim()).filter(Boolean))];
+    const removeIds = [...new Set((input.removeAssigneeIds ?? []).map((v) => v.trim()).filter(Boolean))];
+    if (Object.keys(patch).length === 0 && !input.dueDate && addIds.length === 0 && removeIds.length === 0) {
+        throw new MeetingTaskError("Tidak ada perubahan.", 400);
+    }
+    if (addIds.length > 0) {
+        const appt = await getMeetingOrThrow(task.appointmentId);
+        const memberIds = internalParticipantIds(appt);
+        const outsiders = addIds.filter((id) => !memberIds.includes(id));
+        if (outsiders.length > 0) throw new MeetingTaskError("Penerima task harus peserta meeting ini.", 422);
+        await assertActiveEmployees(addIds);
+    }
+    let newDue: Date | null = null;
+    if (input.dueDate) {
+        if (!isValidCalendarDate(input.dueDate)) throw new MeetingTaskError("Tanggal deadline tidak valid. Gunakan format YYYY-MM-DD.", 400);
+        newDue = meetingTaskDueDateToDate(input.dueDate);
+    }
+
+    await prisma.$transaction(async (tx) => {
+        if (Object.keys(patch).length > 0) {
+            await tx.meetingTask.update({ where: { id: taskId }, data: patch });
+        }
+        if (newDue) {
+            const history = await tx.meetingTaskDeadlineHistory.findMany({ where: { taskId }, orderBy: { sequence: "desc" }, take: 1 });
+            const current = history[0];
+            if (current && newDue.getTime() !== current.deadlineDate.getTime()) {
+                await applyExtensionTx(tx, taskId, input.dueDate as string, "Deadline diubah pemberi.", actor);
+            }
+        }
+        if (addIds.length > 0) {
+            await tx.meetingTaskAssignee.createMany({
+                data: addIds.map((employeeId) => ({ taskId, employeeId, status: "OPEN" as const })),
+                skipDuplicates: true,
             });
+        }
+        if (removeIds.length > 0) {
+            const withSubs = await tx.meetingTaskSubmission.findMany({
+                where: { taskId, employeeId: { in: removeIds } },
+                select: { employeeId: true },
+            });
+            if (withSubs.length > 0) {
+                throw new MeetingTaskError(
+                    `Tidak dapat menghapus penerima yang sudah submit: ${[...new Set(withSubs.map((s) => s.employeeId))].join(", ")}. Batalkan task bila perlu.`,
+                    422
+                );
+            }
+            await tx.meetingTaskAssignee.deleteMany({ where: { taskId, employeeId: { in: removeIds } } });
+        }
+        const revCount = await tx.meetingTaskRevision.count({ where: { taskId } });
+        await tx.meetingTaskRevision.create({
+            data: {
+                taskId,
+                revisionNumber: revCount + 1,
+                changeReason: `Task diubah pemberi: ${[
+                    patch.title ? "judul" : "",
+                    patch.detail !== undefined ? "rincian" : "",
+                    newDue ? "deadline" : "",
+                    addIds.length > 0 ? `tambah ${addIds.length} penerima` : "",
+                    removeIds.length > 0 ? `hapus ${removeIds.length} penerima` : "",
+                ]
+                    .filter(Boolean)
+                    .join(", ")}`,
+                changedBy: actor.username,
+                previousData: { title: task.title, detail: task.detail },
+            },
         });
-    }
+    });
     await prisma.auditLog.create({
-        data: { action: `DECIDE_MEETING_TASK_EXTENSION_${decision}`, entity: "MEETING_TASK", entityId: req.taskId, details: JSON.stringify({ requestId, decision }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
-    }).catch((err) => logger.error("meetingTask audit DECIDE_EXT gagal", { err }));
-    const updated = await prisma.meetingTask.findUniqueOrThrow({ where: { id: req.taskId }, include: taskInclude });
+        data: { action: "EDIT_MEETING_TASK", entity: "MEETING_TASK", entityId: taskId, details: JSON.stringify({ title: patch.title ?? task.title }), actorType: "USER", actorUserId: actor.userId ?? null, actorIdentifier: actor.username },
+    }).catch((err) => logger.error("meetingTask audit EDIT gagal", { err }));
+    const updated = await prisma.meetingTask.findUniqueOrThrow({ where: { id: taskId }, include: taskInclude });
     return toTaskDto(updated);
 }
 
@@ -525,28 +881,48 @@ export async function getTaskPushInfo(taskId: string): Promise<{ assignerEmploye
     return { assignerEmployeeId: task.assignerEmployeeId, title: task.title, requestedByName: null };
 }
 
-/** Task dan notulensi dikunci begitu meeting selesai/dibatalkan (keputusan pemilik). */
-async function assertMeetingOpenForTaskMutation(appointmentId: string): Promise<void> {
-    const m = await prisma.meetingAppointment.findUnique({ where: { id: appointmentId }, select: { status: true } });
-    if (!m) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
-    if (m.status === "CANCELLED") throw new MeetingTaskError("Meeting telah dibatalkan. Task dan notulensi sudah ditutup.", 409);
-    if (m.status === "COMPLETED") throw new MeetingTaskError("Meeting telah selesai. Task dan notulensi sudah ditutup.", 409);
+/** Task dibuat HANYA selama meeting berjalan (stored SCHEDULED + now di dalam [startAt, endAt)). */
+async function assertMeetingRunningForTaskCreate(appt: { status: string; startAt: Date; endAt: Date }): Promise<void> {
+    if (appt.status === "CANCELLED") throw new MeetingTaskError("Meeting yang dibatalkan tidak dapat diberi task.", 409);
+    if (appt.status === "COMPLETED") throw new MeetingTaskError("Meeting sudah selesai. Task baru tidak dapat ditambahkan.", 409);
+    const now = new Date();
+    if (now.getTime() < appt.startAt.getTime()) {
+        throw new MeetingTaskError("Meeting belum dimulai. Task baru dapat dibuat setelah meeting berjalan.", 409);
+    }
+    if (now.getTime() >= appt.endAt.getTime()) {
+        throw new MeetingTaskError("Meeting sudah berakhir. Task baru hanya dapat dibuat selama meeting berjalan.", 409);
+    }
 }
 
-export async function getPendingExtensionRequests(session: SessionPayload, taskId: string) {    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, assignerEmployeeId: true } });
-    if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
-    const privileged = await isPrivileged(session);
-    const mineAsAssignee = await prisma.meetingTaskAssignee.findUnique({
-        where: { taskId_employeeId: { taskId, employeeId: session.employeeId ?? "" } },
+/** Kelola struktur task oleh pemberi (buat/ubah/perpanjang/batalkan): HANYA
+ *  selama meeting berjalan (stored SCHEDULED + now di dalam [startAt, endAt)).
+ *  Setelah meeting diselesaikan, struktur dikunci; yang tetap berjalan hanya
+ *  kerja penerima + verifikasi (submit/verifikasi). */
+async function assertMeetingRunningForGiverWork(appointmentId: string): Promise<void> {
+    const m = await prisma.meetingAppointment.findUnique({
+        where: { id: appointmentId },
+        select: { status: true, startAt: true, endAt: true },
     });
-    if (task.assignerEmployeeId !== session.employeeId && !privileged && !mineAsAssignee) {
-        throw new MeetingTaskError("Anda tidak memiliki akses ke task ini.", 403);
-    }
-    return prisma.meetingTaskExtensionRequest.findMany({
-        where: { taskId },
-        orderBy: { createdAt: "desc" },
-        include: { requestedBy: { select: { employeeId: true, name: true } } },
+    if (!m) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
+    if (m.status === "CANCELLED") throw new MeetingTaskError("Meeting telah dibatalkan. Task sudah ditutup.", 409);
+    if (m.status === "COMPLETED") throw new MeetingTaskError("Meeting sudah selesai. Struktur task dikunci; yang berjalan hanya pengumpulan dan verifikasi.", 409);
+    const now = new Date();
+    if (now.getTime() < m.startAt.getTime()) throw new MeetingTaskError("Meeting belum dimulai.", 409);
+    if (now.getTime() >= m.endAt.getTime()) throw new MeetingTaskError("Meeting sudah berakhir. Struktur task hanya dapat diubah selama meeting berjalan.", 409);
+}
+
+/** Kerja penerima + verifikasi (submit/verifikasi) HANYA setelah meeting selesai.
+ *  Selesai = stored COMPLETED, atau jam sudah lewat (lifecycle COMPLETED, cron belum flip). */
+async function assertMeetingFinishedForTaskWork(appointmentId: string): Promise<void> {
+    const m = await prisma.meetingAppointment.findUnique({
+        where: { id: appointmentId },
+        select: { status: true, endAt: true },
     });
+    if (!m) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
+    if (m.status === "CANCELLED") throw new MeetingTaskError("Meeting telah dibatalkan. Task sudah ditutup.", 409);
+    if (m.status === "COMPLETED") return;
+    if (new Date().getTime() >= m.endAt.getTime()) return;
+    throw new MeetingTaskError("Meeting belum selesai. Task dapat dikerjakan setelah meeting selesai.", 409);
 }
 
 // ─── Submit on complete (push sekali per penerima) ─────────────────
@@ -554,7 +930,9 @@ export async function getPendingExtensionRequests(session: SessionPayload, taskI
 export interface UnsubmittedTask {
     taskId: string;
     title: string;
+    meetingTitle: string;
     activeDeadlineDate: string;
+    deadlineAt: Date | null;
     employeeIds: string[];
 }
 
@@ -566,9 +944,10 @@ export async function getUnsubmittedOpenTasks(appointmentIds: string[]): Promise
         select: {
             id: true,
             title: true,
+            appointment: { select: { title: true } },
             deadlineHistory: { orderBy: { sequence: "desc" }, take: 1, select: { deadlineDate: true } },
             assignees: {
-                where: { status: { in: ["BELUM_DIKERJAKAN", "ON_PROGRESS"] } },
+                where: { status: { in: ASSIGNEE_OPEN_STATUSES } },
                 select: { employeeId: true },
             },
             reminderLogs: { where: { kind: "SUBMITTED" }, select: { employeeId: true } },
@@ -583,7 +962,9 @@ export async function getUnsubmittedOpenTasks(appointmentIds: string[]): Promise
         result.push({
             taskId: t.id,
             title: t.title,
+            meetingTitle: t.appointment?.title ?? "Meeting",
             activeDeadlineDate: due ? toWIBDateString(due) : "-",
+            deadlineAt: due ?? null,
             employeeIds: pending,
         });
     }

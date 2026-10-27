@@ -261,7 +261,7 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/cron/generate-payroll` | Bulanan | Otomasi kalkulasi draf rekapitulasi penggajian bulanan periode berjalan. |
 | `/api/cron/reset-leave` | Tahunan | Reset dan alokasi ulang kuota saldo cuti tahunan karyawan setiap awal tahun. |
 | `/api/cron/appointment-reminder` | Tiap 15 menit | Pengingat appointment SCHEDULED per offset dinamis bawaan (diatur WIG002); exactly-once via `AppointmentReminderLog`. |
-| `/api/cron/meeting-task-reminder` | Harian 07:00 WIB | Satu push per hari per penerima untuk task yang masih terbuka (termasuk overdue); task selesai tidak dikirimi; exactly-once via `MeetingTaskReminderLog`. |
+| `/api/cron/meeting-task-reminder` | Harian 07:00 WIB | Satu push per hari per penerima untuk task `OPEN` (termasuk overdue/sticky); `ON_PROGRESS` tidak diingatkan (menunggu verifikator); nudge `VERIFY-YYYY-MM-DD` ke pemberi bila submission `PENDING` >24 jam; task selesai/dibatalkan tidak dikirimi; exactly-once via `MeetingTaskReminderLog`. |
 | `/api/cron/daily-recap` | Harian 23:59 WIB | Rekap gabungan alat+kebersihan (tanpa foto) via email ke Top Reviewer SAJA; exactly-once via `daily_recap_email_logs`. |
 | `/api/ga/recap/test-email` | Manual (WIG002) | Pratinjau rekap harian, SELALU ke email IT (`it.wijayainovasigemilang@gmail.com`), tidak pernah ke employee. |
 
@@ -270,3 +270,15 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 |---|---|---|---|
 | `/api/export` | `GET` | Role `hr` | Penarikan data dan ekspor file laporan (Excel `.xlsx` atau JSON preview). Parameter wajib: `type` (`attendance`, `visits`, `overtime`, `leave`), `startDate` (`YYYY-MM-DD`), `endDate` (`YYYY-MM-DD`). Opsional: `mode=matrix`, `grouped=true`, `format=excel\|preview`, `divisionId`, `departmentId`, `employeeId`. Rentang waktu dihitung presisi menggunakan WIB offset (`+07:00`); sel tanggal matrix attendance mempertahankan jam masuk/pulang dan menambahkan catatan/alasan hari libur bila ada. |
 
+### L. Task Meeting + Verifikasi (`/api/appointments/[id]/tasks`, `/api/employee/meeting-task*`, `/api/appointments/submissions`)
+| Rute | Metode | Akses | Deskripsi |
+|---|---|---|---|
+| `/api/appointments/[id]/tasks` | `GET` | Peserta/WIG002 | Daftar task meeting + DTO (assignee, deadline aktif, submission, sticky-overdue, tiket). |
+| `/api/appointments/[id]/tasks` | `POST` | Peserta/WIG002 | Buat task (`title/detail/assigneeEmployeeIds[1..20]/dueDate`); assignee = peserta internal aktif; penerima awal `OPEN`. |
+| `/api/appointments/[id]/tasks/[taskId]` | `PATCH` | Pemberi/GA | Aksi `extend` (`proposedDate` + `reason≥5`, maks 2 sekuens, tiket per penerima) / `edit` (judul/rincian/deadline/tambah-hapus penerima) / `cancel` (`reason≥5`). |
+| `/api/appointments/[id]/tasks/[taskId]/submissions` | `GET` | Peserta/WIG002 | Daftar submission + lampiran (tanpa path file). |
+| `/api/appointments/[id]/tasks/[taskId]/submissions` | `POST` | Penerima (multipart) | Kumpulkan hasil: `note?` + `files[1..5]` (JPG/PNG/WEBP/PDF, magic-byte, batas AppSetting MB) → status `ON_PROGRESS` + push ke pemberi. |
+| `/api/appointments/submissions/[submissionId]/verify` | `PATCH` | Pemberi/GA | `decision: TERIMA` (→ `SELESAI`) / `REVISI` (`note≥5` + `resubmitDue` wajib → balik `OPEN`, unlimited) + push ke penerima. |
+| `/api/appointments/submissions/attachments/[attachmentId]` | `GET` | Pemberi/penerima ybs/GA | Unduh lampiran (authed, `private, no-store`, nosniff). |
+| `/api/employee/meeting-tasks` | `GET` | Karyawan | Inbox penerima (`status`/`overdue=1`); menyembunyikan meeting CANCELLED. |
+| `/api/employee/meeting-task-verifications` | `GET` | Pemberi | Antrean verifikasi: task yang saya beri + submission `PENDING`. |

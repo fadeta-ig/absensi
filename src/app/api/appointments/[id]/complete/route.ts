@@ -20,9 +20,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         let submitted = 0;
         for (const item of claimed) {
             const userIds = await collectUserIdsForEmployees(item.employeeIds);
+            const daysLeft = item.deadlineAt ? Math.max(0, Math.ceil((item.deadlineAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))) : null;
             await sendAppointmentPush(userIds, {
                 title: "Task Baru dari Meeting Selesai",
-                body: `${item.title} — deadline ${item.activeDeadlineDate}`,
+                body: `Dari hasil "${item.meetingTitle}", kamu ada task "${item.title}"! Deadline ${item.activeDeadlineDate}${daysLeft !== null ? ` (sisa ${daysLeft} hari lagi)` : ""}.`,
                 tag: `meeting-task-${item.taskId}-submitted`,
                 url: `/employee/appointments/tasks?highlight=${item.taskId}`,
             });
