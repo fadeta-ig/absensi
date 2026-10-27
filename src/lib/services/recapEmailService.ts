@@ -289,8 +289,25 @@ export async function getDailyCleaningRecap(wibDate: string) {
     for (const room of rooms) {
         try {
             const st = await getParafStatus(room.id, wibDate);
+            // Cutoff: rekap tanggal D hanya mencerminkan keadaan per akhir hari D (WIB).
+            // Paraf yang ditandatangani SETELAH batas itu (mis. susulan H+1, status TERLAMBAT)
+            // dianggap BELUM TERJADI untuk rekap ini: tak dihitung sudah-paraf.
+            const dayEnd = new Date(`${wibDate}T23:59:59.999+07:00`).getTime();
+            const timelyParafs = (st.parafs ?? []).filter((p) => {
+                const t = p.signedAt ? new Date(p.signedAt).getTime() : NaN;
+                return Number.isNaN(t) || t <= dayEnd;
+            });
+            const lateRoles = new Set(
+                (st.parafs ?? [])
+                    .filter((p) => {
+                        const t = p.signedAt ? new Date(p.signedAt).getTime() : NaN;
+                        return !Number.isNaN(t) && t > dayEnd && typeof p.role === "string";
+                    })
+                    .map((p) => p.role)
+            );
+            const effectiveMissing = [...new Set([...(st.missingRoles ?? []), ...lateRoles])];
             // Agregat per reviewer: hanya ruang non-libur yang punya reviewer
-            // terpasang (penentu paraf = missingRoles, bukan kehadiran baris).
+            // terpasang (penentu paraf = missingRoles efektif, bukan kehadiran baris).
             if (!st.isFree && st.reviewers) {
                 const slots = [
                     { role: "INSPECTED_BY", employeeId: st.reviewers.inspectedByEmployeeId, name: st.reviewers.inspectedByName },
@@ -312,15 +329,15 @@ export async function getDailyCleaningRecap(wibDate: string) {
                         stats.set(key, stat);
                     }
                     stat.total += 1;
-                    if (!st.missingRoles.includes(s.role)) stat.signed += 1;
+                    if (!effectiveMissing.includes(s.role)) stat.signed += 1;
                 }
             }
-            const doneParafs = (st.parafs ?? [])
+            const doneParafs = timelyParafs
                 .map((p) => ({ name: stripGelar(p.signerName ?? p.signerEmployeeId ?? ""), signedAt: p.signedAt, terlambat: (p as { status?: string }).status === "TERLAMBAT" }))
                 .filter((p) => p.name.length > 0);
             const pendingNames = st.isFree
                 ? []
-                : (st.missingRoles ?? [])
+                : effectiveMissing
                     .map((role) => {
                         const raw =
                             role === "INSPECTED_BY"
@@ -351,7 +368,9 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 unavailableItems = [];
             }
             // Ruang libur bebas paraf: tidak ada yang "kurang" paraf.
-            const parafMissing = st.isFree ? 0 : st.missingRoles.length;
+            // Paraf susulan (ditandatangani setelah akhir hari rekap) dihitung BELUM:
+            // parafDone = yang tepat waktu per cutoff; parafMissing mencakup peran susulan.
+            const parafMissing = st.isFree ? 0 : effectiveMissing.length;
             lines.push({
                 roomName: st.roomName,
                 isFree: st.isFree,
@@ -359,7 +378,7 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 percent: st.checklist.percent,
                 complete: st.checklist.isComplete,
                 unavailableCount: st.checklist.unavailableCount,
-                parafDone: st.parafs.length,
+                parafDone: timelyParafs.length,
                 parafMissing,
                 doneParafs: doneParafs.map(({ name, signedAt, terlambat }) => ({ name, signedAt, terlambat })),
                 pendingNames,

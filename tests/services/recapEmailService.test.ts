@@ -86,7 +86,7 @@ describe("getDailyCleaningRecap", () => {
             roomName: "Resepsionis",
             isFree: false,
             checklist: { exists: true, activeCount: 3, completedCount: 3, percent: 100, isComplete: true },
-            parafs: [{ id: "p1", signerName: "H. Aris Sudarisman", signerEmployeeId: "ID-1", signedAt: new Date("2026-10-14T02:20:00Z") }],
+            parafs: [{ id: "p1", role: "INSPECTED_BY", signerName: "H. Aris Sudarisman", signerEmployeeId: "ID-1", signedAt: new Date("2026-10-12T05:20:00Z"), status: "TEPAT" }],
             missingRoles: ["KNOWN_BY"],
             reviewers: { inspectedByEmployeeId: "ID-1", inspectedByName: "H. Aris Sudarisman", knownByEmployeeId: "ID-2", knownByName: "Dicky" },
         } as never);
@@ -106,6 +106,26 @@ describe("getDailyCleaningRecap", () => {
             { employeeId: "ID-1", name: "Aris Sudarisman", role: "INSPECTED_BY", roleLabel: "Diperiksa", signed: 1, total: 1, missing: 0 },
             { employeeId: "ID-2", name: "Dicky", role: "KNOWN_BY", roleLabel: "Mengetahui", signed: 0, total: 1, missing: 1 },
         ]);
+    });
+    it("paraf susulan (ditandatangani setelah akhir hari) tidak dihitung sudah-paraf", async () => {
+        mocked.cleaningRoom.findMany.mockResolvedValue([
+            { id: "r1", name: "Resepsionis" },
+        ] as never);
+        const { getParafStatus } = await import("@/lib/services/cleaningParafService");
+        vi.mocked(getParafStatus).mockResolvedValue({
+            roomName: "Resepsionis",
+            isFree: false,
+            checklist: { exists: true, activeCount: 3, completedCount: 3, percent: 100, isComplete: true },
+            parafs: [{ id: "p1", role: "KNOWN_BY", signerName: "Dicky", signerEmployeeId: "ID-2", signedAt: new Date("2026-10-13T00:22:00Z"), status: "TERLAMBAT" }],
+            missingRoles: [],
+            reviewers: { inspectedByEmployeeId: "ID-1", inspectedByName: "Aris", knownByEmployeeId: "ID-2", knownByName: "Dicky" },
+        } as never);
+        mocked.cleaningDailyChecklist.findUnique.mockResolvedValue({ items: [] } as never);
+        const out = await getDailyCleaningRecap("2026-10-12");
+        expect(out.lines).toHaveLength(1);
+        expect(out.lines[0].doneParafs).toEqual([]);
+        expect(out.lines[0].pendingNames).toEqual(["Dicky"]);
+        expect(out.lines[0].parafMissing).toBe(1);
     });
     it("ruang libur tidak masuk agregat reviewer", async () => {
         mocked.cleaningRoom.findMany.mockResolvedValue([
