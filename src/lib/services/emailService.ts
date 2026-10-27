@@ -609,12 +609,10 @@ export interface DailyRecapEmailCleaningLine {
     unavailableCount: number;
     parafDone: number;
     parafMissing: number;
-    doneParafs: { name: string; signedAt: Date }[];
+    doneParafs: { name: string; signedAt: Date; terlambat: boolean }[];
     pendingNames: string[];
     pendingItems: string[];
-    /** Nama penandatangan yang parafnya TERLAMBAT. */
-    lateNames: string[];
-    /** Item aktif bertanda "Tidak Ada di ruangan". */
+    /** Item aktif bertanda "Tidak Ada di ruangan" (saat ini tidak di-render, tersedia untuk kebutuhan berikutnya). */
     unavailableItems: string[];
 }
 
@@ -687,16 +685,25 @@ function formatShortWib(value: Date | string): string {
 
 /**
  * Daftar bernomor: ["1. Nama (14 Okt 09.20)", "2. Nama (14 Okt 10.05)"].
- * Tanpa label peran (Diperiksa/Mengetahui) — itu hanya di PDF/dashboard.
+ * Hanya paraf TEPAT WAKTU. Tanpa label peran (Diperiksa/Mengetahui) — itu hanya di PDF/dashboard.
  */
 function numberedParafList(l: DailyRecapEmailCleaningLine): string[] {
     return l.doneParafs
+        .filter((p) => !p.terlambat)
         .map((p) => {
             const t = formatShortWib(p.signedAt);
             return t ? `${p.name} (${t})` : p.name;
         })
         .filter(Boolean)
         .map((s, i) => `${i + 1}. ${s}`);
+}
+
+/** Nama penandatangan yang TERLAMBAT, format "Nama (-)" untuk kolom Belum paraf. */
+function lateParafList(l: DailyRecapEmailCleaningLine): string[] {
+    return l.doneParafs
+        .filter((p) => p.terlambat)
+        .map((p) => `${p.name} (-)`)
+        .filter(Boolean);
 }
 
 function numberedItemList(items: string[]): string[] {
@@ -715,12 +722,12 @@ function cleaningParafSentence(l: DailyRecapEmailCleaningLine): string {
     if (l.isFree) return "";
     const done = numberedParafList(l);
     const pending = l.pendingNames.filter(Boolean);
-    const late = (l.lateNames ?? []).filter(Boolean);
+    const late = lateParafList(l);
     const bits: string[] = [];
     if (done.length > 0) bits.push(`Sudah paraf: ${done.join("; ")}.`);
-    if (late.length > 0) bits.push(`Terlambat paraf: ${late.join(", ")}.`);
     if (pending.length > 0) bits.push(`Belum paraf: ${pending.join(", ")} (catatan: belum paraf).`);
-    else if (l.parafMissing > 0 && done.length === 0) bits.push(`Belum paraf (catatan: belum paraf).`);
+    if (late.length > 0) bits.push(`Belum paraf: ${late.join(", ")}.`);
+    else if (l.parafMissing > 0 && done.length === 0 && pending.length === 0) bits.push(`Belum paraf (catatan: belum paraf).`);
     const items = numberedItemList(l.pendingItems);
     if (items.length > 0) bits.push(`Belum dibersihkan: ${items.join("; ")}.`);
     return bits.join(" ");
@@ -949,21 +956,23 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
           emailTh("No", "center") +
           emailTh("Ruangan") +
           emailTh("Status") +
-          emailTh("Terlambat") +
           emailTh("Belum dibersihkan") +
           emailTh("Sudah paraf") +
           emailTh("Belum paraf") +
           `</tr></thead><tbody>${cl
               .map((l, i) => {
                   const doneCell = numberedParafList(l).map(escapeHtml).join("<br>") || "—";
-                  const pendingCell = l.isFree ? "—" : (l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf (catatan: belum paraf)" : "—"));
+                  const missingBits = l.pendingNames.filter(Boolean).map(escapeHtml);
+                  const lateBits = lateParafList(l).map(escapeHtml);
+                  const pendingCell = l.isFree
+                      ? "—"
+                      : [...missingBits.map((s) => `${s} (catatan: belum paraf)`), ...lateBits].join("<br>") ||
+                        (l.parafMissing > 0 ? "Belum paraf (catatan: belum paraf)" : "—");
                   const itemsCell = l.isFree ? "—" : (numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—");
-                  const lateCell = l.isFree ? "—" : ((l.lateNames ?? []).filter(Boolean).map(escapeHtml).join("<br>") || "—");
                   return `<tr>` +
                       emailTd(String(i + 1), "center") +
                       emailTd(escapeHtml(l.roomName)) +
                       emailTd(escapeHtml(cleaningLineState(l))) +
-                      emailTd(lateCell) +
                       emailTd(itemsCell) +
                       emailTd(doneCell) +
                       emailTd(pendingCell) +

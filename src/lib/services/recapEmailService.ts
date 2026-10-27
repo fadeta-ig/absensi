@@ -119,12 +119,10 @@ export interface CleaningRecapLine {
     unavailableCount: number;
     parafDone: number;
     parafMissing: number;
-    doneParafs: { name: string; signedAt: Date }[];
+    doneParafs: { name: string; signedAt: Date; terlambat: boolean }[];
     pendingNames: string[];
     pendingItems: string[];
-    /** Nama penandatangan yang status parafnya TERLAMBAT (sudah termasuk jam di rendering). */
-    lateNames: string[];
-    /** Item aktif yang ditandai "Tidak Ada di ruangan". */
+    /** Item aktif bertanda "Tidak Ada di ruangan" (saat ini tidak di-render, tersedia untuk kebutuhan berikutnya). */
     unavailableItems: string[];
 }
 
@@ -320,7 +318,6 @@ export async function getDailyCleaningRecap(wibDate: string) {
             const doneParafs = (st.parafs ?? [])
                 .map((p) => ({ name: stripGelar(p.signerName ?? p.signerEmployeeId ?? ""), signedAt: p.signedAt, terlambat: (p as { status?: string }).status === "TERLAMBAT" }))
                 .filter((p) => p.name.length > 0);
-            const lateNames = doneParafs.filter((p) => p.terlambat).map((p) => p.name);
             const pendingNames = st.isFree
                 ? []
                 : (st.missingRoles ?? [])
@@ -364,10 +361,9 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 unavailableCount: st.checklist.unavailableCount,
                 parafDone: st.parafs.length,
                 parafMissing,
-                doneParafs: doneParafs.map(({ name, signedAt }) => ({ name, signedAt })),
+                doneParafs: doneParafs.map(({ name, signedAt, terlambat }) => ({ name, signedAt, terlambat })),
                 pendingNames,
                 pendingItems,
-                lateNames,
                 unavailableItems,
             });
         } catch (err) {
