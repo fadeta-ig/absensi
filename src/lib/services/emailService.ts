@@ -612,6 +612,10 @@ export interface DailyRecapEmailCleaningLine {
     doneParafs: { name: string; signedAt: Date }[];
     pendingNames: string[];
     pendingItems: string[];
+    /** Nama penandatangan yang parafnya TERLAMBAT. */
+    lateNames: string[];
+    /** Item aktif bertanda "Tidak Ada di ruangan". */
+    unavailableItems: string[];
 }
 
 export interface DailyRecapEmailReviewerStat {
@@ -701,16 +705,26 @@ function numberedItemList(items: string[]): string[] {
 
 /**
  * Kalimat paraf per ruangan: nama tanpa gelar + jam WIB.
+ * Aturan tampil (milik email, bukan sekadar teruskan data):
+ * - Ruang libur: kalimat kosong (bebas paraf; status "Libur" sudah cukup).
+ * - Belum paraf: selalu sebutkan NAMA + catatan "belum paraf" (jangan kalimat telanjang).
+ * - Terlambat: sebutkan nama penandatangan yang TERLAMBAT.
+ * - Tidak Ada: sebutkan itemnya agar tak disangka belum dikerjakan.
  */
 function cleaningParafSentence(l: DailyRecapEmailCleaningLine): string {
+    if (l.isFree) return "";
     const done = numberedParafList(l);
     const pending = l.pendingNames.filter(Boolean);
+    const late = (l.lateNames ?? []).filter(Boolean);
+    const unavailable = (l.unavailableItems ?? []).filter(Boolean);
     const bits: string[] = [];
     if (done.length > 0) bits.push(`Sudah paraf: ${done.join("; ")}.`);
-    if (pending.length > 0) bits.push(`Belum paraf: ${pending.join(", ")}.`);
-    else if (l.parafMissing > 0 && done.length === 0) bits.push(`Belum paraf.`);
+    if (late.length > 0) bits.push(`Terlambat paraf: ${late.join(", ")}.`);
+    if (pending.length > 0) bits.push(`Belum paraf: ${pending.join(", ")} (catatan: belum paraf).`);
+    else if (l.parafMissing > 0 && done.length === 0) bits.push(`Belum paraf (catatan: belum paraf).`);
     const items = numberedItemList(l.pendingItems);
     if (items.length > 0) bits.push(`Belum dibersihkan: ${items.join("; ")}.`);
+    if (unavailable.length > 0) bits.push(`Tidak ada di ruangan: ${unavailable.join("; ")}.`);
     return bits.join(" ");
 }
 
@@ -881,14 +895,15 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
                   ? `<p><strong>Diajukan susulan (dibuat sebelum hari ini):</strong></p>` + eqTableHtml(eqSusulan)
                   : "");
     const cl = input.cleaning.lines;
-    const clDone = cl.filter((l) => !l.isFree && l.exists && l.complete);
-    const clTodo = cl.filter((l) => !l.isFree && (!l.exists || !l.complete));
+    const clActive = cl.filter((l) => !l.isFree);
+    const clDone = clActive.filter((l) => l.exists && l.complete);
+    const clTodo = clActive.filter((l) => !l.exists || !l.complete);
     const clParafFull = clDone.filter((l) => l.parafMissing === 0);
     const clReviewers = input.cleaning.reviewerStats ?? [];
     const clSummaryText =
-        cl.length === 0
-            ? "Tidak ada ruangan."
-            : `Ringkasan: ${clDone.length} Pembersihan Selesai, ${clTodo.length} Belum Selesai (total ${cl.length} ruang). Paraf lengkap ${clParafFull.length} ruang.`;
+        clActive.length === 0
+            ? "Tidak ada ruangan aktif (semua libur)."
+            : `Ringkasan: ${clDone.length} Pembersihan Selesai, ${clTodo.length} Belum Selesai (dari ${clActive.length} ruang aktif, di luar libur). Paraf lengkap ${clParafFull.length} dari ${clDone.length} ruang selesai.`;
     const clLinesText = cl.length === 0
         ? "Tidak ada ruangan."
         : cl
@@ -909,11 +924,11 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         `\nKebersihan: ${clSummaryText}\n${clReviewerText}${clLinesText}\n` +
         `\nEmail otomatis Sistem HRIS PT Wijaya Inovasi Gemilang.`;
     const clSummaryHtml =
-        cl.length === 0
-            ? "<p>Tidak ada ruangan.</p>"
+        clActive.length === 0
+            ? "<p>Tidak ada ruangan aktif (semua libur).</p>"
             : `<p><strong>Ringkasan:</strong> ${clDone.length} Pembersihan Selesai, ` +
-              `${clTodo.length} Belum Selesai (total ${cl.length} ruang). ` +
-              `Paraf lengkap ${clParafFull.length} ruang.</p>`;
+              `${clTodo.length} Belum Selesai (dari ${clActive.length} ruang aktif, di luar libur). ` +
+              `Paraf lengkap ${clParafFull.length} dari ${clDone.length} ruang selesai.</p>`;
     const clReviewerHtml = clReviewers.length === 0
         ? ""
         : EMAIL_TABLE_OPEN +
@@ -936,19 +951,25 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
           emailTh("No", "center") +
           emailTh("Ruangan") +
           emailTh("Status") +
+          emailTh("Terlambat") +
           emailTh("Belum dibersihkan") +
+          emailTh("Tidak ada di ruangan") +
           emailTh("Sudah paraf") +
           emailTh("Belum paraf") +
           `</tr></thead><tbody>${cl
               .map((l, i) => {
                   const doneCell = numberedParafList(l).map(escapeHtml).join("<br>") || "—";
-                  const pendingCell = l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf" : "—");
-                  const itemsCell = numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—";
+                  const pendingCell = l.isFree ? "—" : (l.pendingNames.filter(Boolean).map(escapeHtml).join("<br>") || (l.parafMissing > 0 ? "Belum paraf (catatan: belum paraf)" : "—"));
+                  const itemsCell = l.isFree ? "—" : (numberedItemList(l.pendingItems).map(escapeHtml).join("<br>") || "—");
+                  const lateCell = l.isFree ? "—" : ((l.lateNames ?? []).filter(Boolean).map(escapeHtml).join("<br>") || "—");
+                  const taCell = l.isFree ? "—" : ((l.unavailableItems ?? []).filter(Boolean).map(escapeHtml).join("<br>") || "—");
                   return `<tr>` +
                       emailTd(String(i + 1), "center") +
                       emailTd(escapeHtml(l.roomName)) +
                       emailTd(escapeHtml(cleaningLineState(l))) +
+                      emailTd(lateCell) +
                       emailTd(itemsCell) +
+                      emailTd(taCell) +
                       emailTd(doneCell) +
                       emailTd(pendingCell) +
                       `</tr>`;

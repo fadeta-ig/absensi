@@ -122,6 +122,10 @@ export interface CleaningRecapLine {
     doneParafs: { name: string; signedAt: Date }[];
     pendingNames: string[];
     pendingItems: string[];
+    /** Nama penandatangan yang status parafnya TERLAMBAT (sudah termasuk jam di rendering). */
+    lateNames: string[];
+    /** Item aktif yang ditandai "Tidak Ada di ruangan". */
+    unavailableItems: string[];
 }
 
 /** Agregat paraf per reviewer untuk satu tanggal: sudah X dari total ruangannya. */
@@ -314,19 +318,24 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 }
             }
             const doneParafs = (st.parafs ?? [])
-                .map((p) => ({ name: stripGelar(p.signerName ?? p.signerEmployeeId ?? ""), signedAt: p.signedAt }))
+                .map((p) => ({ name: stripGelar(p.signerName ?? p.signerEmployeeId ?? ""), signedAt: p.signedAt, terlambat: (p as { status?: string }).status === "TERLAMBAT" }))
                 .filter((p) => p.name.length > 0);
-            const pendingNames = (st.missingRoles ?? [])
-                .map((role) => {
-                    const raw =
-                        role === "INSPECTED_BY"
-                            ? (st.reviewers?.inspectedByName ?? "")
-                            : (st.reviewers?.knownByName ?? "");
-                    return stripGelar(raw);
-                })
-                .filter((n) => n.length > 0);
-            // Item aktif yang belum selesai & tidak dikecualikan (untuk kolom "Belum dibersihkan").
+            const lateNames = doneParafs.filter((p) => p.terlambat).map((p) => p.name);
+            const pendingNames = st.isFree
+                ? []
+                : (st.missingRoles ?? [])
+                    .map((role) => {
+                        const raw =
+                            role === "INSPECTED_BY"
+                                ? (st.reviewers?.inspectedByName ?? "")
+                                : (st.reviewers?.knownByName ?? "");
+                        return stripGelar(raw);
+                    })
+                    .filter((n) => n.length > 0);
+            // Item aktif yang belum selesai & tidak dikecualikan (untuk kolom "Belum dibersihkan"),
+            // plus item "Tidak Ada di ruangan" (untuk kolom sendiri agar tak disangka belum dikerjakan).
             let pendingItems: string[] = [];
+            let unavailableItems: string[] = [];
             try {
                 const checklist = await prisma.cleaningDailyChecklist.findUnique({
                     where: { roomId_wibDate: { roomId: room.id, wibDate } },
@@ -337,12 +346,15 @@ export async function getDailyCleaningRecap(wibDate: string) {
                         },
                     },
                 });
-                pendingItems = (checklist?.items ?? [])
-                    .filter((it) => it.isActive && !it.isComplete && !it.isUnavailable)
-                    .map((it) => it.itemNameSnapshot);
+                const items = checklist?.items ?? [];
+                pendingItems = st.isFree ? [] : items.filter((it) => it.isActive && !it.isComplete && !it.isUnavailable).map((it) => it.itemNameSnapshot);
+                unavailableItems = st.isFree ? [] : items.filter((it) => it.isActive && it.isUnavailable).map((it) => it.itemNameSnapshot);
             } catch {
                 pendingItems = [];
+                unavailableItems = [];
             }
+            // Ruang libur bebas paraf: tidak ada yang "kurang" paraf.
+            const parafMissing = st.isFree ? 0 : st.missingRoles.length;
             lines.push({
                 roomName: st.roomName,
                 isFree: st.isFree,
@@ -351,10 +363,12 @@ export async function getDailyCleaningRecap(wibDate: string) {
                 complete: st.checklist.isComplete,
                 unavailableCount: st.checklist.unavailableCount,
                 parafDone: st.parafs.length,
-                parafMissing: st.missingRoles.length,
-                doneParafs,
+                parafMissing,
+                doneParafs: doneParafs.map(({ name, signedAt }) => ({ name, signedAt })),
                 pendingNames,
                 pendingItems,
+                lateNames,
+                unavailableItems,
             });
         } catch (err) {
             logger.warn("rekap cleaning per ruangan dilewati", { roomId: room.id, wibDate, err });
