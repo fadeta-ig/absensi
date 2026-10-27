@@ -2,7 +2,7 @@
 
 > **Purpose**: Things that are easy to get wrong or surprising.  
 > **Source of Truth**: Verified technical gotchas, Edge runtime peculiarities, and historical migration artifacts.  
-> **Last Verified**: 2026-10-11
+> **Last Verified**: 2026-10-27
 
 Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragile areas*), dan hal-hal yang wajib dihindari oleh developer maupun AI agent saat memodifikasi codebase ini.
 
@@ -92,4 +92,13 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 - **Gotcha**: Antrean QC adalah pool tanpa klaim/lock — anggota QC mana pun dapat menekan DONE pada `SUBMITTED` mana pun; QC kedua mendapat 409 karena status sudah `DONE`.
 - **Gotcha**: Keanggotaan QC/topViewer mensyaratkan karyawan internal aktif berhukum akun aktif (outsource selalu ditolak dengan 422), dan daftar QC di-cache 60 detik (`qcMembersCache`) — perubahan via WIG002 butuh hingga 1 menit untuk terlihat.
 - **Gotcha**: Atasan murni (`canTopView === true`, `canReview !== true`) disembunyikan dari menu pekerja dan diarahkan ke `/employee/equipment/overview`; jangan "memperbaiki" ini sebagai bug.
+
+---
+
+## 10. Database Menyimpan UTC; UI Selalu WIB (Wajib Dikonversi)
+
+- **Kontrak**: semua kolom `DateTime` (`signed_at`, `created_at`, `start_at`, dst.) disimpan dalam **UTC**. Seluruh tampilan ke pengguna memakai **WIB (UTC+7)** via helper `@/lib/timezone` (`formatWIBDateTime`, `toWIBDateString`, `getWIBHoursMinutes`) atau `@/lib/utils` (`toDateDisplay`, `toTimeString`). Jangan pernah mencetak nilai DB mentah sebagai jam lokal.
+- **Bukti nyata (terverifikasi 2026-10-27, `hris_local.cleaning_daily_parafs`, Resepsionis, `wib_date='2026-10-26'`)**: `signed_at` = `11:43:16 UTC` tampil di UI sebagai `26 Okt 2026, 18.43 WIB`; `17:22:28 UTC` tampil sebagai `27 Okt 2026, 00.22 WIB` (lewat tengah malam, sehingga status TERLAMBAT benar).
+- **Pitfall untuk AI agent & query manual**: `SELECT signed_at ...` tanpa konversi menampilkan jam UTC — selisih tepat 7 jam dari UI dan bisa beda tanggal (kasus 17:22 UTC = 00:22 WIB keesokan harinya). Saat membaca DB langsung, konversi secara eksplisit (`CONVERT_TZ(col,'+00:00','+07:00')`) atau labeli jelas sebagai UTC. Jangan menyimpulkan UI salah hanya karena angka mentah berbeda.
+- **Aturan kode**: boundary query Prisma dari string tanggal wajib ber-offset WIB eksplisit (`...T00:00:00+07:00`); baca aturan lengkap di `docs/CONVENTIONS.md` §4.
 

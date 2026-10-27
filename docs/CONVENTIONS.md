@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
 ## 4. Established Implementation Patterns
 
 - **Tanggal/jam di UI**: gunakan `formatDisplayDate`, `formatDisplayTime`, atau `formatDisplayDateTime` dari `@/lib/utils` untuk tampilan tanggal Indonesia dan jam WIB. `formatDisplayTime` menerima instant ISO maupun jam legacy `HH:mm`; timestamp tampil dengan label WIB. Helper transport/storage (`toISOOrNull`, date-key) tetap dipertahankan. Jangan mencetak instant ISO mentah ke antarmuka pengguna.
+- **Kontrak penyimpanan UTC (wajib)**: semua kolom `DateTime` di database disimpan dalam **UTC**; konversi ke WIB hanya terjadi di lapisan tampil via helper `@/lib/timezone` atau `@/lib/utils` di atas. Lihat gotcha + bukti terverifikasi di `docs/GOTCHAS.md` §10 (kasus paraf cleaning: `11:43 UTC` = `18:43 WIB`). Query SQL manual wajib `CONVERT_TZ(col,'+00:00','+07:00')` atau dilabeli UTC.
 
 1. **Pemisahan Antara Akun Pengguna (`UserAccount`) dan Profil Pegawai (`Employee`)**:
    - Akun admin dapat berdiri sendiri di `UserAccount` tanpa keharusan memiliki entitas `Employee`.
