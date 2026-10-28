@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ShiftRosterPage from "@/app/dashboard/shifts/roster/page";
@@ -45,6 +45,36 @@ const shifts = [
     },
 ];
 
+function addDays(dateStr: string, days: number): string {
+    const date = new Date(`${dateStr}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+}
+
+function buildTimeline(
+    from: string,
+    overrides?: {
+        today?: string;
+        cells?: Array<{ date: string; shiftId: string; source: "assignment" | "fallback"; assignmentId: string | null }>;
+        assignments?: Array<{ id: string; employeeId: string; shiftId: string; effectiveFrom: string; effectiveTo: string | null }>;
+    },
+) {
+    const cellByDate = new Map((overrides?.cells ?? []).map((cell) => [cell.date, cell]));
+    const cells = Array.from({ length: 7 }, (_, idx) => {
+        const date = addDays(from, idx);
+        return cellByDate.get(date) ?? { date, shiftId: "shift-day", source: "fallback" as const, assignmentId: null };
+    });
+    return {
+        from,
+        to: addDays(from, 6),
+        today: overrides?.today ?? "2026-09-29",
+        days: 7,
+        defaultShiftId: "shift-day",
+        employees: [{ employeeId: "EMP001", baseShiftId: "shift-day", cells }],
+        assignments: overrides?.assignments ?? [],
+    };
+}
+
 function response(data: unknown, status = 200): Response {
     return {
         ok: status >= 200 && status < 300,
@@ -65,8 +95,9 @@ function baseFetch(handler: (url: string, init?: RequestInit) => Promise<Respons
         const url = String(input);
         if (url === "/api/employees") return response(employees);
         if (url === "/api/shifts") return response(shifts);
-        if (url === "/api/shifts/assignments" && (!init?.method || init.method === "GET")) {
-            return response({ date: "2026-09-29", today: "2026-09-29", roster: [] });
+        if (url.startsWith("/api/shifts/assignments/timeline")) {
+            const fromParam = new URL(url, "http://localhost").searchParams.get("from") ?? "2026-09-29";
+            return response(buildTimeline(fromParam));
         }
         return handler(url, init);
     });
@@ -84,21 +115,53 @@ describe("ShiftRosterPage", () => {
     });
 
     it("uses explicitly inclusive effective-to wording and chip", async () => {
-        vi.stubGlobal("fetch", baseFetch(async () => response({ date: "2026-10-05", today: "2026-09-29", roster: [] })));
+        vi.stubGlobal("fetch", baseFetch(async () => response({})));
         render(<ShiftRosterPage />);
 
         expect(await screen.findByLabelText("Hari terakhir (ikut termasuk, opsional)")).toBeInTheDocument();
-        
+
         // Ensure inclusive days chip is not present initially
         expect(screen.queryByText(/hari\)/)).not.toBeInTheDocument();
     });
 
-    it("ignores a stale roster response that finishes after the latest date", async () => {
+    it("loads today's active timeline on initial mount and displays the active shift", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url === "/api/shifts/assignments/timeline?days=7") {
+                return response(buildTimeline("2026-10-19", {
+                    today: "2026-10-19",
+                    cells: [{ date: "2026-10-19", shiftId: "shift-night", source: "assignment", assignmentId: "asg-active" }],
+                    assignments: [{
+                        id: "asg-active",
+                        employeeId: "EMP001",
+                        shiftId: "shift-night",
+                        effectiveFrom: "2026-10-19",
+                        effectiveTo: "2026-10-25",
+                    }],
+                }));
+            }
+            throw new Error(`Unexpected fetch ${url}`);
+        }));
+
+        render(<ShiftRosterPage />);
+
+        expect(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
+        expect(screen.getByLabelText("Tanggal Lihat Roster")).toHaveValue("2026-10-19");
+        expect(screen.getByText("Jadwal Berjalan")).toBeInTheDocument();
+    });
+
+    it("ignores a stale timeline response that finishes after the latest date", async () => {
         const first = deferred<Response>();
         const second = deferred<Response>();
-        vi.stubGlobal("fetch", baseFetch(async (url) => {
-            if (url.endsWith("date=2026-10-05")) return first.promise;
-            if (url.endsWith("date=2026-10-12")) return second.promise;
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url.includes("from=2026-10-05")) return first.promise;
+            if (url.includes("from=2026-10-12")) return second.promise;
+            if (url.startsWith("/api/shifts/assignments/timeline")) return response(buildTimeline("2026-09-29"));
             throw new Error(`Unexpected fetch ${url}`);
         }));
         render(<ShiftRosterPage />);
@@ -107,100 +170,90 @@ describe("ShiftRosterPage", () => {
         const viewDateInput = screen.getByLabelText("Tanggal Lihat Roster");
         fireEvent.change(viewDateInput, { target: { value: "2026-10-05" } });
         fireEvent.change(viewDateInput, { target: { value: "2026-10-12" } });
-        
-        second.resolve(response({
-            date: "2026-10-12",
-            today: "2026-09-29",
-            roster: [{ employeeId: "EMP001", shiftId: "shift-night", source: "assignment", assignment: null }],
-        }));
-        
+
+        second.resolve(response(buildTimeline("2026-10-12", {
+            cells: [{ date: "2026-10-12", shiftId: "shift-night", source: "assignment", assignmentId: "asg-night" }],
+            assignments: [{
+                id: "asg-night",
+                employeeId: "EMP001",
+                shiftId: "shift-night",
+                effectiveFrom: "2026-10-12",
+                effectiveTo: null,
+            }],
+        })));
+
         expect(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
 
-        first.resolve(response({
-            date: "2026-10-05",
-            today: "2026-09-29",
-            roster: [{ employeeId: "EMP001", shiftId: "shift-day", source: "assignment", assignment: null }],
-        }));
+        first.resolve(response(buildTimeline("2026-10-05")));
         await waitFor(() => {
             expect(screen.getByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
         });
     });
 
-    it("does not reload a submitted date after the selected date changes in flight", async () => {
-        const post = deferred<Response>();
-        const calls: Array<{ url: string; method: string }> = [];
+    it("submits an assignment and reloads the timeline for the active view date", async () => {
+        const calls: Array<{ url: string; method: string; body: unknown }> = [];
         vi.stubGlobal("fetch", baseFetch(async (url, init) => {
             const method = init?.method ?? "GET";
-            calls.push({ url, method });
-            if (method === "POST") return post.promise;
-            if (url.endsWith("date=2026-10-05")) {
+            const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+            calls.push({ url, method, body });
+            if (method === "POST") {
+                if ((body as { dryRun?: boolean } | null)?.dryRun) {
+                    return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
+                }
                 return response({
-                    date: "2026-10-05",
-                    today: "2026-09-29",
-                    roster: [{ employeeId: "EMP001", shiftId: "shift-day", source: "assignment", assignment: null }],
-                });
-            }
-            if (url.endsWith("date=2026-10-12")) {
-                return response({
-                    date: "2026-10-12",
-                    today: "2026-09-29",
-                    roster: [{ employeeId: "EMP001", shiftId: "shift-night", source: "assignment", assignment: null }],
-                });
+                    success: true,
+                    applied: 1,
+                    dryRun: false,
+                    results: [{ employeeId: "EMP001", shiftId: "shift-night", effectiveFrom: "2026-10-05", effectiveTo: null }],
+                    plan: [],
+                    conflicts: [],
+                }, 201);
             }
             throw new Error(`Unexpected fetch ${url}`);
         }));
-        
+
         const user = userEvent.setup();
         render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
 
-        const viewDateInput = screen.getByLabelText("Tanggal Lihat Roster");
-        const startDateInput = screen.getByLabelText("Berlaku Mulai Tanggal");
-        const endDateInput = screen.getByLabelText("Hari terakhir (ikut termasuk, opsional)");
-        const shiftSelect = screen.getByLabelText("Shift Tujuan");
-        const searchInput = screen.getByPlaceholderText("Cari NIP atau nama...");
-        
-        fireEvent.change(viewDateInput, { target: { value: "2026-10-05" } });
-        fireEvent.change(startDateInput, { target: { value: "2026-10-05" } });
-        
-        await waitFor(() => {
-            expect(calls.filter((call) => call.url.endsWith("date=2026-10-05"))).toHaveLength(1);
-        });
-        
-        await user.selectOptions(shiftSelect, "shift-night");
+        fireEvent.change(screen.getByLabelText("Tanggal Lihat Roster"), { target: { value: "2026-10-05" } });
+        fireEvent.change(screen.getByLabelText("Berlaku Mulai Tanggal"), { target: { value: "2026-10-05" } });
+        await user.selectOptions(screen.getByLabelText("Shift Tujuan"), "shift-night");
         await user.click(screen.getByRole("button", { name: /Ayu Roster.*Shift Pagi/i }));
         await user.click(screen.getByRole("button", { name: /Tetapkan Shift Malam untuk 1 orang/i }));
 
-        expect(viewDateInput).toBeDisabled();
-        expect(startDateInput).toBeDisabled();
-        expect(endDateInput).toBeDisabled();
-        expect(shiftSelect).toBeDisabled();
-        expect(searchInput).toBeDisabled();
-        expect(screen.getByRole("button", { name: /Ayu Roster.*Shift Pagi/i })).toBeDisabled();
-
-        // Model a concurrent state change that bypasses the disabled browser control.
-        viewDateInput.removeAttribute("disabled");
-        fireEvent.change(viewDateInput, { target: { value: "2026-10-12" } });
-        expect(viewDateInput).toHaveValue("2026-10-12");
-        expect(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
-
-        post.resolve(response({ applied: 1 }));
         await waitFor(() => {
             expect(clientMocks.toast).toHaveBeenCalledWith("Roster tersimpan: 1 karyawan ke Shift Malam.", "success");
         });
 
-        expect(viewDateInput).toHaveValue("2026-10-12");
-        expect(screen.getByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
-        expect(calls.filter((call) => call.url.endsWith("date=2026-10-05"))).toHaveLength(1);
-        expect(calls.filter((call) => call.url.endsWith("date=2026-10-12"))).toHaveLength(2); // Reloads the new viewDate because the submitted infinite assignment overlaps it
+        const applyCalls = calls.filter((call) => call.url === "/api/shifts/assignments" && call.method === "POST"
+            && !(call.body as { dryRun?: boolean })?.dryRun);
+        expect(applyCalls).toHaveLength(1);
+        expect(applyCalls[0].body).toEqual({
+            assignments: [{
+                employeeId: "EMP001",
+                shiftId: "shift-night",
+                effectiveFrom: "2026-10-05",
+                effectiveTo: null,
+            }],
+            replaceFuture: false,
+        });
+        expect(clientMocks.confirm).toHaveBeenCalled();
     });
 
-    it("aborts an in-flight roster request when the page unmounts", async () => {
+    it("aborts an in-flight timeline request when the page unmounts", async () => {
         const pending = deferred<Response>();
         let signal: AbortSignal | null | undefined;
-        vi.stubGlobal("fetch", baseFetch(async (_url, init) => {
-            signal = init?.signal ?? null;
-            return pending.promise;
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url.includes("from=2026-10-05")) {
+                signal = init?.signal ?? null;
+                return pending.promise;
+            }
+            if (url.startsWith("/api/shifts/assignments/timeline")) return response(buildTimeline("2026-09-29"));
+            throw new Error(`Unexpected fetch ${url}`);
         }));
         const view = render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
@@ -210,44 +263,111 @@ describe("ShiftRosterPage", () => {
         view.unmount();
 
         expect(signal?.aborted).toBe(true);
-        pending.resolve(response({ date: "2026-10-05", today: "2026-09-29", roster: [] }));
+        pending.resolve(response(buildTimeline("2026-10-05")));
     });
 
-    it("confirms and cancels the exact future assignment, then reloads the selected date", async () => {
+    it("confirms and cancels the exact future assignment from the employee detail modal", async () => {
         const calls: Array<{ url: string; method: string; body: unknown }> = [];
-        const fetchMock = baseFetch(async (url, init) => {
-            const method = init?.method ?? "GET";
-            calls.push({
-                url,
-                method,
-                body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
-            });
-            if (method === "DELETE") return response({ success: true });
-            return response({
-                date: "2026-10-06",
-                today: "2026-09-29",
-                roster: [{
-                    employeeId: "EMP001",
-                    shiftId: "shift-night",
-                    source: "assignment",
-                    assignment: {
-                        id: "asg-future",
-                        effectiveFrom: "2026-10-05",
-                        effectiveTo: "2026-10-12",
-                    },
-                }],
-            });
+        const timelineWithFuture = buildTimeline("2026-10-06", {
+            cells: [{ date: "2026-10-06", shiftId: "shift-night", source: "assignment", assignmentId: "asg-future" }],
+            assignments: [{
+                id: "asg-future",
+                employeeId: "EMP001",
+                shiftId: "shift-night",
+                effectiveFrom: "2026-10-05",
+                effectiveTo: "2026-10-12",
+            }],
         });
-        vi.stubGlobal("fetch", fetchMock);
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url.startsWith("/api/shifts/assignments/timeline")) {
+                return response(timelineWithFuture);
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "DELETE") {
+                calls.push({
+                    url,
+                    method: "DELETE",
+                    body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+                });
+                return response({ success: true });
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "POST") {
+                return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
+            }
+            throw new Error(`Unexpected fetch ${url}`);
+        }));
+        const user = userEvent.setup();
+        render(<ShiftRosterPage />);
+        await screen.findByText("Ayu Roster");
+
+        // Wait for the timeline (night assignment) before opening the modal.
+        await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i });
+
+        // Open the detail modal without selecting the employee, so only the modal offers Batalkan.
+        await user.click(await screen.findByRole("button", { name: /Kelola jadwal Ayu Roster/i }));
+        const dialog = await screen.findByRole("dialog");
+        expect(within(dialog).getByText(/Riwayat & Jadwal Roster — Ayu Roster/)).toBeInTheDocument();
+
+        await user.click(within(dialog).getByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
+
+        await waitFor(() => {
+            expect(calls).toEqual([{
+                url: "/api/shifts/assignments",
+                method: "DELETE",
+                body: { employeeId: "EMP001", effectiveFrom: "2026-10-05" },
+            }]);
+        });
+        expect(clientMocks.confirm).toHaveBeenCalled();
+        expect(clientMocks.toast).toHaveBeenCalledWith("Jadwal masa depan Ayu Roster dibatalkan.", "success");
+    });
+
+    it("confirms and cancels via the quick-cancel list, then reloads the selected date", async () => {
+        const calls: Array<{ url: string; method: string; body: unknown }> = [];
+        const timelineWithFuture = buildTimeline("2026-10-06", {
+            cells: [{ date: "2026-10-06", shiftId: "shift-night", source: "assignment", assignmentId: "asg-future" }],
+            assignments: [{
+                id: "asg-future",
+                employeeId: "EMP001",
+                shiftId: "shift-night",
+                effectiveFrom: "2026-10-05",
+                effectiveTo: "2026-10-12",
+            }],
+        });
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url.startsWith("/api/shifts/assignments/timeline")) {
+                calls.push({ url, method: "GET", body: null });
+                // Initial mount (no from param) returns an empty default week so the
+                // subsequent view-date change always triggers a real navigation fetch.
+                if (url.includes("from=2026-10-06")) return response(timelineWithFuture);
+                return response(buildTimeline("2026-09-29"));
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "DELETE") {
+                calls.push({
+                    url,
+                    method: "DELETE",
+                    body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+                });
+                return response({ success: true });
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "POST") {
+                return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
+            }
+            throw new Error(`Unexpected fetch ${url}`);
+        }));
         const user = userEvent.setup();
         render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
 
         fireEvent.change(screen.getByLabelText("Tanggal Lihat Roster"), { target: { value: "2026-10-06" } });
-        
+
         // Have to select the employee first to see the future assignments
         await user.click(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i }));
-        
+
         await user.click(await screen.findByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
 
         await waitFor(() => {
@@ -259,35 +379,46 @@ describe("ShiftRosterPage", () => {
         });
         expect(clientMocks.confirm).toHaveBeenCalled();
         await waitFor(() => {
-            expect(calls.filter((call) => call.url.endsWith("date=2026-10-06"))).toHaveLength(2);
+            expect(calls.filter((call) => call.url.includes("from=2026-10-06"))).toHaveLength(2);
         });
         expect(clientMocks.toast).toHaveBeenCalledWith("Jadwal masa depan Ayu Roster dibatalkan.", "success");
     });
 
     it("keeps a cancellation failure visible and does not report success", async () => {
-        vi.stubGlobal("fetch", baseFetch(async (_url, init) => {
-            if (init?.method === "DELETE") return response({ error: "conflict" }, 409);
-            return response({
-                date: "2026-10-06",
-                today: "2026-09-29",
-                roster: [{
-                    employeeId: "EMP001",
-                    shiftId: "shift-night",
-                    source: "assignment",
-                    assignment: { id: "asg-future", effectiveFrom: "2026-10-05", effectiveTo: null },
-                }],
-            });
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url === "/api/employees") return response(employees);
+            if (url === "/api/shifts") return response(shifts);
+            if (url.startsWith("/api/shifts/assignments/timeline")) {
+                return response(buildTimeline("2026-10-06", {
+                    cells: [{ date: "2026-10-06", shiftId: "shift-night", source: "assignment", assignmentId: "asg-future" }],
+                    assignments: [{
+                        id: "asg-future",
+                        employeeId: "EMP001",
+                        shiftId: "shift-night",
+                        effectiveFrom: "2026-10-05",
+                        effectiveTo: null,
+                    }],
+                }));
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "DELETE") {
+                return response({ error: "conflict" }, 409);
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "POST") {
+                return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
+            }
+            throw new Error(`Unexpected fetch ${url}`);
         }));
-        
+
         const user = userEvent.setup();
         render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
 
         fireEvent.change(screen.getByLabelText("Tanggal Lihat Roster"), { target: { value: "2026-10-06" } });
-        
+
         // Have to select the employee first to see the future assignments
         await user.click(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i }));
-        
+
         await user.click(await screen.findByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
 
         expect(await screen.findByText("Gagal membatalkan jadwal masa depan.")).toBeInTheDocument();
@@ -295,34 +426,122 @@ describe("ShiftRosterPage", () => {
         expect(clientMocks.toast).toHaveBeenCalledWith("Gagal membatalkan jadwal masa depan.", "error");
     });
 
-    it("loads today's active roster on initial mount and displays the active shift and inclusive period", async () => {
-        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    it("updates the inclusive end date of an assignment from the detail modal", async () => {
+        const calls: Array<{ url: string; method: string; body: unknown }> = [];
+        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = String(input);
             if (url === "/api/employees") return response(employees);
             if (url === "/api/shifts") return response(shifts);
-            if (url === "/api/shifts/assignments") {
-                return response({
-                    date: "2026-10-19",
-                    today: "2026-10-19",
-                    roster: [{
+            if (url.startsWith("/api/shifts/assignments/timeline")) {
+                return response(buildTimeline("2026-10-06", {
+                    cells: [{ date: "2026-10-06", shiftId: "shift-night", source: "assignment", assignmentId: "asg-future" }],
+                    assignments: [{
+                        id: "asg-future",
                         employeeId: "EMP001",
                         shiftId: "shift-night",
-                        source: "assignment",
-                        assignment: {
-                            id: "asg-active",
-                            effectiveFrom: "2026-10-19",
-                            effectiveTo: "2026-10-25",
-                        },
+                        effectiveFrom: "2026-10-05",
+                        effectiveTo: "2026-10-12",
                     }],
+                }));
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "PATCH") {
+                calls.push({
+                    url,
+                    method: "PATCH",
+                    body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
                 });
+                return response({ success: true });
+            }
+            if (url === "/api/shifts/assignments" && init?.method === "POST") {
+                return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
             }
             throw new Error(`Unexpected fetch ${url}`);
         }));
 
+        const user = userEvent.setup();
         render(<ShiftRosterPage />);
+        await screen.findByText("Ayu Roster");
 
-        expect(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
-        expect(screen.getByLabelText("Tanggal Lihat Roster")).toHaveValue("2026-10-19");
-        expect(screen.getByText("Jadwal Berjalan")).toBeInTheDocument();
+        // Wait for the timeline (night assignment) before opening the modal.
+        await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i });
+
+        await user.click(await screen.findByRole("button", { name: /Kelola jadwal Ayu Roster/i }));
+        expect(await screen.findByText(/Riwayat & Jadwal Roster — Ayu Roster/)).toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", { name: /Ubah Akhir/i }));
+        const endInput = screen.getByLabelText("Hari terakhir baru (inklusif)");
+        expect(endInput).toHaveValue("2026-10-11");
+        fireEvent.change(endInput, { target: { value: "2026-10-09" } });
+        await user.click(screen.getByRole("button", { name: /Simpan Tanggal Akhir/i }));
+
+        await waitFor(() => {
+            expect(calls).toEqual([{
+                url: "/api/shifts/assignments",
+                method: "PATCH",
+                body: { employeeId: "EMP001", effectiveFrom: "2026-10-05", effectiveTo: "2026-10-10" },
+            }]);
+        });
+        expect(clientMocks.toast).toHaveBeenCalledWith(
+            expect.stringContaining("Tanggal akhir jadwal Ayu Roster diperbarui"),
+            "success",
+        );
+    });
+
+    it("shows the server dry-run conflicts and offers to enable replaceFuture", async () => {
+        const dryRunCalls: Array<unknown> = [];
+        vi.stubGlobal("fetch", baseFetch(async (url, init) => {
+            if (url === "/api/shifts/assignments" && init?.method === "POST") {
+                const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+                dryRunCalls.push(body);
+                if (body?.dryRun) {
+                    return response({
+                        applied: 0,
+                        dryRun: true,
+                        plan: [{
+                            employeeId: "EMP001",
+                            shiftId: "shift-night",
+                            effectiveFrom: "2026-10-05",
+                            effectiveTo: null,
+                            actions: [],
+                            conflicts: [{
+                                employeeId: "EMP001",
+                                assignmentId: "asg-future",
+                                shiftId: "shift-day",
+                                effectiveFrom: "2026-10-06",
+                                effectiveTo: null,
+                                reason: "FUTURE",
+                            }],
+                            after: null,
+                        }],
+                        conflicts: [{
+                            employeeId: "EMP001",
+                            assignmentId: "asg-future",
+                            shiftId: "shift-day",
+                            effectiveFrom: "2026-10-06",
+                            effectiveTo: null,
+                            reason: "FUTURE",
+                        }],
+                    });
+                }
+                return response({ success: true, applied: 1 }, 201);
+            }
+            throw new Error(`Unexpected fetch ${url}`);
+        }));
+
+        const user = userEvent.setup();
+        render(<ShiftRosterPage />);
+        await screen.findByText("Ayu Roster");
+
+        fireEvent.change(screen.getByLabelText("Berlaku Mulai Tanggal"), { target: { value: "2026-10-05" } });
+        await user.selectOptions(screen.getByLabelText("Shift Tujuan"), "shift-night");
+        await user.click(screen.getByRole("button", { name: /Ayu Roster.*Shift Pagi/i }));
+
+        expect(await screen.findByText("1 bentrok", {}, { timeout: 5000 })).toBeInTheDocument();
+        expect(screen.getByText(/jadwal masa depan\/hari ini/)).toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", { name: /Aktifkan Timpa Jadwal Masa Depan/i }));
+        await waitFor(() => {
+            expect(dryRunCalls.some((body) => (body as { replaceFuture?: boolean })?.replaceFuture === true)).toBe(true);
+        }, { timeout: 5000 });
     });
 });

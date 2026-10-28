@@ -6,7 +6,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import EmployeeSchedulePage from "@/app/employee/schedule/page";
 
-// Mock matchMedia for jsdom
 Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: vi.fn().mockImplementation(query => ({
@@ -45,7 +44,7 @@ describe("EmployeeSchedulePage", () => {
                     endTime: "16:00",
                     isOff: false,
                     isOvernight: false,
-                    source: "assignment"
+                    source: "assignment",
                 },
                 {
                     date: "2026-09-30",
@@ -56,24 +55,35 @@ describe("EmployeeSchedulePage", () => {
                     endTime: "07:00",
                     isOff: false,
                     isOvernight: true,
-                    source: "fallback"
+                    source: "fallback",
                 },
                 {
                     date: "2026-10-01",
                     weekday: 4,
+                    shiftId: "shift-3",
+                    shiftName: "Shift Sore",
+                    startTime: "14:00",
+                    endTime: "22:00",
+                    isOff: false,
+                    isOvernight: false,
+                    source: "default",
+                },
+                {
+                    date: "2026-10-02",
+                    weekday: 5,
                     shiftId: null,
                     shiftName: null,
                     startTime: null,
                     endTime: null,
                     isOff: true,
                     isOvernight: false,
-                    source: "default"
-                }
+                    source: "default",
+                },
             ],
         });
     });
 
-    it("renders the loading state initially and then shows schedule", async () => {
+    it("renders the loading state initially and distinguishes Pagi, Siang, Malam, Roster, Dasar, and Default", async () => {
         render(<EmployeeSchedulePage />);
 
         expect(screen.getByText("Memuat jadwal kerja...")).not.toBeNull();
@@ -84,13 +94,18 @@ describe("EmployeeSchedulePage", () => {
 
         expect(screen.getByText("Shift Pagi")).not.toBeNull();
         expect(screen.getByText("08:00 - 16:00 WIB")).not.toBeNull();
-        expect(screen.getByText("Roster")).not.toBeNull(); // source = assignment
-        
+        expect(screen.getByText("Pagi")).not.toBeNull();
+        expect(screen.getByText("Roster")).not.toBeNull();
+
         expect(screen.getByText("Shift Malam")).not.toBeNull();
-        expect(screen.getByText("Malam")).not.toBeNull(); // isOvernight = true
-        expect(screen.getByText("Dasar")).not.toBeNull(); // source = fallback
-        
-        expect(screen.getByText("Libur")).not.toBeNull(); // isOff = true
+        expect(screen.getByText("Malam")).not.toBeNull();
+        expect(screen.getByText("Dasar")).not.toBeNull();
+
+        expect(screen.getByText("Shift Sore")).not.toBeNull();
+        expect(screen.getByText("Siang")).not.toBeNull();
+        expect(screen.getByText("Default")).not.toBeNull();
+
+        expect(screen.getByText("Libur")).not.toBeNull();
     });
 
     it("shows error when API fails", async () => {

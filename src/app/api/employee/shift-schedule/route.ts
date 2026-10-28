@@ -3,7 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { prisma } from "@/lib/prisma";
 import { toWIBDateString, addCalendarDays, toUTCDateKey } from "@/lib/timezone";
 import { isOvernightSchedule } from "@/lib/services/attendanceShiftHelper";
-import { resolveShiftForDate } from "@/lib/services/shiftAssignmentService";
+import { resolveShiftsForRange } from "@/lib/services/shiftAssignmentService";
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     try {
         const daysParam = request.nextUrl.searchParams.get("days") ?? "14";
         const days = parseInt(daysParam, 10);
-        
+
         if (isNaN(days) || days < 1 || days > 31) {
             return NextResponse.json({ error: "Parameter days harus berada di antara 1 dan 31." }, { status: 400 });
         }
@@ -27,31 +27,25 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Data karyawan tidak ditemukan." }, { status: 404 });
         }
 
-        const serverWibDate = toWIBDateString(new Date());
-        const schedule = [];
-        let currentDate = serverWibDate;
+        const startDate = toWIBDateString(new Date());
+        const endDate = addCalendarDays(startDate, days - 1);
+        const resolvedRange = await resolveShiftsForRange(prisma, session.employeeId, startDate, endDate);
 
-        for (let i = 0; i < days; i++) {
-            const resolved = await resolveShiftForDate(prisma, session.employeeId, currentDate);
-            const utcDateKey = toUTCDateKey(currentDate);
-            const weekday = utcDateKey.getUTCDay();
-            
-            const scheduleDay = resolved?.days.find((day) => day.dayOfWeek === weekday) ?? null;
-
-            schedule.push({
-                date: currentDate,
+        const schedule = resolvedRange.map(({ date, shift }) => {
+            const weekday = toUTCDateKey(date).getUTCDay();
+            const scheduleDay = shift?.days.find((day) => day.dayOfWeek === weekday) ?? null;
+            return {
+                date,
                 weekday,
-                shiftId: resolved?.shiftId ?? null,
-                shiftName: resolved?.shiftName ?? null,
+                shiftId: shift?.shiftId ?? null,
+                shiftName: shift?.shiftName ?? null,
                 startTime: scheduleDay?.startTime ?? null,
                 endTime: scheduleDay?.endTime ?? null,
                 isOff: scheduleDay?.isOff ?? true,
                 isOvernight: scheduleDay ? isOvernightSchedule(scheduleDay.startTime, scheduleDay.endTime) : false,
-                source: resolved?.source ?? "none"
-            });
-
-            currentDate = addCalendarDays(currentDate, 1);
-        }
+                source: shift?.source ?? "none",
+            };
+        });
 
         return NextResponse.json(schedule, { headers: { "Cache-Control": "no-store" } });
     } catch (err) {

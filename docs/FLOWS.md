@@ -273,3 +273,26 @@ Rujukan: `src/lib/services/equipmentService.ts`, `tests/services/equipmentServic
 5. **Riwayat & reminder**: event `task_submitted/submission_approved/revision_requested/task_done_late`; cron harian mengingatkan OPEN + nudge verifikator `VERIFY-*`.
 
 Rujukan: `src/lib/services/meetingTaskService.ts`, `tests/services/meetingTaskService.test.ts`.
+
+---
+
+## 10. Flow: Penetapan Roster Shift (Bulk + Dry-Run + Kelola)
+
+```text
+[ HR roster page ]                        [ API shifts/assignments ]              [ shiftAssignmentService.ts ]
+              │── pilih karyawan + periode ──>│                                         │
+              │   + shift + replaceFuture     │                                         │
+              │── POST dryRun (debounced) ───>│── lock karyawan ──────────────────────>│── hitung plan truncate/split/
+              │<── plan + konflik + after ────│<── rollback sentinel ───────────────────│   replace/trim per item
+              │── konfirmasi useConfirm       │                                         │
+              │── POST apply ────────────────>│── lock + tulis atomik + audit ────────>│── 409 kolektif bila ada konflik
+              │<── applied + toast ───────────│                                         │
+[ Modal Kelola ]── PATCH akhir / DELETE ──>│── guard ≥ hari ini + audit ────────────>│── merge penerus se-shift
+```
+
+1. **Pratinjau server dulu**: setiap perubahan pilihan karyawan/periode/shift memicu `POST {dryRun: true}` (debounced 180ms). Service menjalankan logika transaksi yang sama, menghitung rencana per item (`truncate`/`split`/`replace`/`trimStart`/`conflict` + shift `after` periode), lalu rollback via sentinel error — pratinjau dijamin identik dengan hasil apply.
+2. **Apply atomik**: `POST` tanpa `dryRun` mengunci baris karyawan berurutan (`FOR UPDATE`), menerapkan rencana per item berurutan tanggal, dan menolak seluruh batch (`409 OVERLAP` + `details` berisi semua konflik) bila ada satu konflik — tidak pernah tersimpan sebagian. Sukses → `201` + audit `ROSTER_ASSIGN_BULK`.
+3. **Kelola per karyawan**: modal Kelola memanggil `PATCH` (ubah akhir, guard tidak < hari ini dan tidak melewati awal penerus) atau `DELETE` (batalkan jadwal ≥ hari ini; baris sebelumnya dibuka kembali dan penerus se-shift yang bersambung digabung). Keduanya beraudit (`ROSTER_UPDATE_END`/`ROSTER_CANCEL`).
+4. **Riwayat dilindungi**: baris yang dimulai < hari ini tidak pernah dihapus/digeser oleh operasi apa pun — konflik `HISTORY` memaksa HR memajukan tanggal mulai.
+
+Rujukan: `src/lib/services/shiftAssignmentService.ts`, `src/app/dashboard/shifts/roster/page.tsx`, `tests/services/shiftAssignmentService.test.ts`, `tests/components/ShiftRosterPage.test.tsx`.

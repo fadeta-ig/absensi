@@ -68,9 +68,19 @@ export default function EmployeeSchedulePage() {
         switch (source) {
             case "assignment": return "Roster";
             case "fallback": return "Dasar";
-            case "default": return "Dasar";
+            case "default": return "Default";
             default: return "";
         }
+    };
+
+    const getTimeBand = (item: ScheduleItem): "pagi" | "siang" | "malam" | null => {
+        if (item.isOff || !item.shiftName) return null;
+        if (item.isOvernight) return "malam";
+        const hour = Number.parseInt((item.startTime ?? "").slice(0, 2), 10);
+        if (Number.isNaN(hour)) return "siang";
+        if (hour >= 18 || hour < 5) return "malam";
+        if (hour >= 12) return "siang";
+        return "pagi";
     };
 
     return (
@@ -131,16 +141,31 @@ export default function EmployeeSchedulePage() {
                                         Libur
                                     </span>
                                 )}
-                                {!item.isOff && item.isOvernight && (
-                                    <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
-                                        <Moon className="w-3 h-3" /> Malam
-                                    </span>
-                                )}
-                                {!item.isOff && !item.isOvernight && item.shiftName && (
-                                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
-                                        <Sun className="w-3 h-3" /> Siang
-                                    </span>
-                                )}
+                                {(() => {
+                                    const band = getTimeBand(item);
+                                    if (band === "malam") {
+                                        return (
+                                            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
+                                                <Moon className="w-3 h-3" /> Malam
+                                            </span>
+                                        );
+                                    }
+                                    if (band === "siang") {
+                                        return (
+                                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
+                                                <Sun className="w-3 h-3" /> Siang
+                                            </span>
+                                        );
+                                    }
+                                    if (band === "pagi") {
+                                        return (
+                                            <span className="text-[10px] font-semibold text-sky-600 bg-sky-100 dark:bg-sky-500/20 dark:text-sky-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
+                                                <Sun className="w-3 h-3" /> Pagi
+                                            </span>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                                 {!item.isOff && item.source !== "none" && (
                                     <span className="text-[10px] font-semibold text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full whitespace-nowrap">
                                         {getSourceLabel(item.source)}
