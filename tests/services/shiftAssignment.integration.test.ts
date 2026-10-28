@@ -6,6 +6,7 @@ import {
     getRosterForDate,
     resolveShiftForDate,
     ShiftAssignmentError,
+    updateAssignmentEnd,
 } from "@/lib/services/shiftAssignmentService";
 
 const describeWithDatabase = process.env.RUN_DB_INTEGRATION === "1" ? describe : describe.skip;
@@ -72,7 +73,11 @@ describeWithDatabase("shift roster database integration", () => {
         const roster = await getRosterForDate("2035-02-10");
         expect(roster.find((r) => r.employeeId === employeeId)?.shiftId).toBe(shiftNightId);
 
-        await cancelAssignment(employeeId, "2035-02-09");
+        const cancelled = await cancelAssignment(employeeId, "2035-02-09");
+        expect(cancelled.extendedPreviousId).not.toBeNull();
+        // Head (Pagi) dipotong tepat pada 02-09, lalu disambung ulang ke penerus (Pagi):
+        // karena shiftnya sama, penerus digabung dan head menjadi terbuka.
+        expect(cancelled.mergedSuccessorId).not.toBeNull();
         const predecessor = await prisma.shiftAssignment.findUnique({
             where: {
                 employeeId_effectiveFrom: {
@@ -82,17 +87,53 @@ describeWithDatabase("shift roster database integration", () => {
             },
             select: { effectiveTo: true },
         });
-        expect(predecessor?.effectiveTo).toEqual(new Date("2035-02-16T00:00:00.000Z"));
+        expect(predecessor?.effectiveTo).toBeNull();
         expect((await resolveShiftForDate(prisma, employeeId, "2035-02-10"))?.shiftId).toBe(shiftDayId);
     });
 
-    it("rejects overlapping assignments", async () => {
+    it("rejects a new range that swallows an existing future assignment start", async () => {
+        // Head 2035-02-01 (open) dimulai di dalam [2035-01-15, 2035-02-10):
+        // konflik FUTURE karena replaceFuture tidak diminta.
         await expect(assignShiftsBulk([{
+            employeeId,
+            shiftId: shiftNightId,
+            effectiveFrom: "2035-01-15",
+            effectiveTo: "2035-02-10",
+        }])).rejects.toMatchObject({ code: "OVERLAP", statusCode: 409 });
+    });
+
+    it("splits an open assignment when a bounded range is inserted in the middle", async () => {
+        const outcome = await assignShiftsBulk([{
+            employeeId,
+            shiftId: shiftNightId,
+            effectiveFrom: "2035-02-05",
+            effectiveTo: "2035-02-15",
+        }]);
+        expect(outcome.applied).toBe(1);
+        expect(outcome.plan[0].actions.map((action) => action.type).sort()).toEqual(["split", "truncate"]);
+
+        expect((await resolveShiftForDate(prisma, employeeId, "2035-02-04"))?.shiftId).toBe(shiftDayId);
+        expect((await resolveShiftForDate(prisma, employeeId, "2035-02-10"))?.shiftId).toBe(shiftNightId);
+        expect((await resolveShiftForDate(prisma, employeeId, "2035-02-20"))?.shiftId).toBe(shiftDayId);
+    });
+
+    it("shortens an assignment end date and rejects extension past the next assignment", async () => {
+        const updated = await updateAssignmentEnd(employeeId, "2035-02-05", "2035-02-12");
+        expect(updated.changed).toBe(true);
+        expect((await resolveShiftForDate(prisma, employeeId, "2035-02-13"))?.shiftId).toBe(shiftDayId);
+
+        await expect(updateAssignmentEnd(employeeId, "2035-02-05", "2035-02-20"))
+            .rejects.toMatchObject({ code: "OVERLAP", statusCode: 409 });
+
+        const dryRun = await assignShiftsBulk([{
             employeeId,
             shiftId: shiftDayId,
             effectiveFrom: "2035-02-05",
-            effectiveTo: "2035-02-15",
-        }])).rejects.toMatchObject({ code: "OVERLAP", statusCode: 409 });
+            effectiveTo: "2035-02-12",
+        }], null, { dryRun: true, replaceFuture: true });
+        expect(dryRun.dryRun).toBe(true);
+        expect(dryRun.plan[0].actions.map((action) => action.type)).toEqual(["replace"]);
+        expect(dryRun.plan[0].after?.shiftId).toBe(shiftDayId);
     });
 
     it("rejects unknown employees and shifts", async () => {

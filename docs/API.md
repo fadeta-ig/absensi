@@ -96,11 +96,12 @@ export const POST = apiGuard(
 | `/api/attendance/network` | `GET` | Autentikasi | Konteks server WIB: `serverWibNow`, `serverWibDate`, `timeZone`, `shiftDate`, `activeMode`, `isOvernight`, `todaySchedule`, status Wi-Fi/bypass/shift. Selalu fresh (`NetworkOnly`, `no-store`). |
 | `/api/attendance/photos/[id]?phase=clockIn\|clockOut` | `GET` | `hr.manage` | Mengambil satu foto presensi sebagai binary (`image/jpeg|png|webp`, `private, no-store`). ID tidak valid/fase salah → `404`/`400`. |
 | `/api/attendance/shift-schedule?date=YYYY-MM-DD` | `GET` | Employee terkait | Jadwal shift milik sendiri pada tanggal tertentu (nama, jam, libur, overnight). Dipakai form koreksi untuk H+1 otomatis. |
-| `/api/shifts/assignments?date=YYYY-MM-DD` | `GET` | `hr.manage` | Roster shift efektif per karyawan pada tanggal tertentu. |
-| `/api/shifts/assignments` | `POST` | `hr.manage` | Bulk roster (maks 200): `{assignments: [{employeeId, shiftId, effectiveFrom, effectiveTo?}]}`. Auto-chaining + tolak overlap (`409 OVERLAP`). |
-| `/api/shifts/assignments` | `DELETE` | `hr.manage` | Batalkan satu assignment masa depan:
-`{employeeId, effectiveFrom}`. Assignment sebelumnya yang terpotong oleh chaining dibuka kembali; assignment hari
-ini/masa lalu tidak dapat dihapus. |
+| `/api/shifts/assignments?date=YYYY-MM-DD` | `GET` | `hr.manage` | Roster shift efektif per karyawan pada tanggal tertentu. Error membawa `code` (`INVALID_RANGE`). |
+| `/api/shifts/assignments/timeline?from=YYYY-MM-DD&days=N` | `GET` | `hr.manage` | Timeline roster N hari (1–31, default 7): sel shift per karyawan per tanggal + daftar assignment berjalan/mendatang. |
+| `/api/shifts/assignments` | `POST` | `hr.manage` | Bulk roster (maks 200): `{assignments: [{employeeId, shiftId, effectiveFrom, effectiveTo?}], replaceFuture?, dryRun?}`. Baris lama yang mencakup awal periode dipotong (truncate); sisa ekornya disambung ulang (split). Baris yang dimulai di dalam periode: riwayat (< hari ini) selalu konflik, masa depan konflik kecuali `replaceFuture: true` (diganti/dipangkas awalnya). Semua konflik dikumpulkan lalu ditolak sekaligus `409 OVERLAP` + `details`. `dryRun: true` mengembalikan rencana (`plan` per item + shift `after` periode) tanpa menyimpan (`200`). Sukses apply → `201` + audit `ROSTER_ASSIGN_BULK`. |
+| `/api/shifts/assignments` | `PATCH` | `hr.manage` | Ubah tanggal akhir (eksklusif) satu assignment: `{employeeId, effectiveFrom, effectiveTo \| null}`. Akhir lama/baru tidak boleh < hari ini dan tidak boleh melewati awal assignment berikutnya (`409 OVERLAP`). Audit `ROSTER_UPDATE_END`. |
+| `/api/shifts/assignments` | `DELETE` | `hr.manage` | Batalkan satu assignment yang dimulai hari ini atau setelahnya:
+`{employeeId, effectiveFrom}`. Assignment sebelumnya yang terpotong tepat pada tanggal mulai dibuka kembali hingga akhir assignment yang dibatalkan; bila penerus bershift sama dan bersambung, keduanya digabung (merge). Audit `ROSTER_CANCEL`. |
 | `/api/employee/shift-schedule?days=14` | `GET` | `employee.self` | Jadwal shift N hari ke depan (1-31, default 14) untuk employee yang login: tanggal, hari, nama/jam shift, libur, lintas-hari, sumber. |
 
 ### C. Manajemen Karyawan (`/api/employees`)

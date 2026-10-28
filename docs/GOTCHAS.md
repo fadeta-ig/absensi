@@ -102,3 +102,11 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 - **Pitfall untuk AI agent & query manual**: `SELECT signed_at ...` tanpa konversi menampilkan jam UTC — selisih tepat 7 jam dari UI dan bisa beda tanggal (kasus 17:22 UTC = 00:22 WIB keesokan harinya). Saat membaca DB langsung, konversi secara eksplisit (`CONVERT_TZ(col,'+00:00','+07:00')`) atau labeli jelas sebagai UTC. Jangan menyimpulkan UI salah hanya karena angka mentah berbeda.
 - **Aturan kode**: boundary query Prisma dari string tanggal wajib ber-offset WIB eksplisit (`...T00:00:00+07:00`); baca aturan lengkap di `docs/CONVENTIONS.md` §4.
 
+---
+
+## 11. Roster: `effectiveTo` Eksklusif di DB/API, Inklusif di UI
+
+- **Kontrak**: `shift_assignments.effective_to` adalah batas **eksklusif** (`[effectiveFrom, effectiveTo)`), dan seluruh API roster (`GET`/`POST`/`PATCH`/`DELETE`, timeline) memakai konvensi yang sama. UI roster (`/dashboard/shifts/roster`) menampilkan dan meminta **"Hari terakhir (ikut termasuk)"**, lalu mengonversi ±1 hari kalender (`addCalendarDays`) di batas client.
+- **Pitfall**: membandingkan `effectiveTo` API langsung dengan tanggal kalender hari terakhir tanpa mengurangi 1 hari menghasilkan off-by-one (jadwal terlihat "bocor" sehari). Pratinjau dry-run dan modal Kelola selalu menampilkan interval inklusif agar HR tidak salah baca.
+- **Pitfall**: `cancelAssignment`/`updateAssignmentEnd` memakai kunci unik `(employeeId, effectiveFrom)` — kirim `effectiveFrom` persis (bukan tanggal di tengah interval), atau API menjawab `404 NOT_FOUND`.
+

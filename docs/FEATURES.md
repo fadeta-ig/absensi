@@ -53,12 +53,14 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 
 ### D. Manajemen Shift & Operasional 24 Jam (Format 07:00)
 - **Roster / Rotasi Mingguan**: HR memindahkan banyak karyawan sekaligus dengan rentang berlaku
-opsional (`/dashboard/shifts/roster`): pilih karyawan, shift tujuan (nama + jam), preview berdasarkan shift efektif,
-konfirmasi, dan audit. Penugasan diproses deterministik dan terkunci per karyawan; overlap ditolak 409. Assignment
-masa depan dapat dibatalkan dengan membuka kembali jadwal sebelumnya. Daftar dan filter karyawan menampilkan shift
-efektif hari ini beserta sumber roster/fallback.
-- **UX roster (2026-09-29)**: tanggal lihat vs tanggal berlaku dipisah; tanggal akhir inklusif ("Hari terakhir, ikut termasuk") dengan chip hitung `12 Okt – 19 Okt (8 hari) • N orang`; tombol menyebut dampak; konfirmasi `useConfirm` bahasa keadaan-akhir; potensi bentrok tampil sebelum simpan; hasil pasca-simpan persisten inline; badge sumber (Roster/Dasar/Default) + jam + nama hari di daftar.
-- **Jadwal Saya (2026-09-29)**: employee melihat jadwal 14 hari ke depan (`/employee/schedule`): tanggal + hari, nama shift + jam, badge Malam/Libur/Roster/Dasar, teks "tanggal X shift Y".
+opsional (`/dashboard/shifts/roster`): pilih karyawan, shift tujuan (nama + jam), pratinjau server (dry-run) berisi
+jadwal yang dipotong/dibelah/diganti/bentrok plus shift yang berlaku setelah periode, konfirmasi, dan audit
+(`ROSTER_ASSIGN_BULK`/`ROSTER_UPDATE_END`/`ROSTER_CANCEL`). Penugasan diproses deterministik dan terkunci per
+karyawan; semua bentrok dikumpulkan lalu ditolak sekaligus 409. Assignment hari ini/masa depan dapat dibatalkan
+dengan membuka kembali (dan menggabungkan bila shift sama) jadwal sebelumnya; tanggal akhir assignment dapat diubah
+via PATCH. Daftar dan filter karyawan menampilkan shift efektif beserta sumber roster/fallback.
+- **UX roster (2026-10-28)**: satu layar matriks timeline 7/14 hari (baris karyawan, kolom tanggal, sel warna per shift: solid = roster, garis putus = dasar/default, badge Jadwal Berjalan, kolom hari ini disorot); satu baris filter (cari, departemen, sumber) + legenda shift yang sekaligus filter; bulk bar mengambang berisi satu-satunya tombol aksi massal. Seluruh alur penetapan tinggal di modal **Tetapkan Roster** (periode inklusif + preset 1/6/7/14 hari, pola mingguan shift tujuan, toggle timpa jadwal masa depan, pratinjau dry-run server debounced, konfirmasi keadaan-akhir); ubah tanggal akhir dan batalkan (termasuk jadwal hari ini) hanya ada di modal **Kelola** per karyawan — tiap info dan aksi hanya muncul di satu tempat.
+- **Jadwal Saya (2026-10-28)**: employee melihat jadwal 14 hari ke depan (`/employee/schedule`): tanggal + hari, nama shift + jam, badge waktu Pagi/Siang/Malam berdasar jam mulai (overnight = Malam), badge sumber Roster/Dasar/Default, teks "tanggal X shift Y". API memakai resolver rentang batch (satu query assignment untuk seluruh rentang, bukan per hari).
 - **Validasi Ketat**: Jadwal shift wajib tepat 7 hari unik (`0–6`), format `HH:mm`, toleransi integer non-negatif; create/update/default atomik dalam transaksi; shift default/terpakai tidak dapat dihapus.
 - **Clock-Out Selalu Diterima**: Absen pulang tidak pernah ditolak sistem (termasuk lewat 14:00 untuk shift malam) dan selalu menutup record H-1 yang tepat; setelah jendela shift berikutnya dimulai, request menjadi clock-in baru. Tanpa overtime otomatis.
 - **Template Cepat 3-Shift 24 Jam**: Tombol preset satu-klik pada formulir shift HR (`/dashboard/shifts`) untuk mengonfigurasi jadwal standar:

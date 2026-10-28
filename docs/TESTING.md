@@ -69,8 +69,8 @@ tests/
 │   ├── attendanceLegacySnapshot.integration.test.ts # GATED `RUN_ATTENDANCE_SNAPSHOT_CHECK=1`: SELECT-only, baseline 424/59/6/86/1/5
 │   ├── shiftService.test.ts # Transaksi + konflik hapus shift (termasuk roster)
 │   ├── shiftValidation.test.ts # Schema 7 hari unik + HH:mm + toleransi
-│   ├── shiftAssignmentService.test.ts # Resolver ber-tanggal, bulk chaining/overlap, dan batas hitung cuti 366 hari kalender
-│   ├── shiftAssignment.integration.test.ts # GATED: roster chaining + resolve per tanggal pada clone
+│   ├── shiftAssignmentService.test.ts # Resolver ber-tanggal + rentang batch, bulk truncate/split/replace/dryRun, cancel-today + merge, update-end, timeline, dan batas hitung cuti 366 hari kalender
+│   ├── shiftAssignment.integration.test.ts # GATED: chaining + split tengah + update-end + dryRun + merge-cancel pada clone
 │   ├── pii.test.ts
 │   ├── userManagement.integration.test.ts
 │   └── visitPhotoService.test.ts
