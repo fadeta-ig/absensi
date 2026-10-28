@@ -114,14 +114,25 @@ describe("ShiftRosterPage", () => {
         vi.unstubAllGlobals();
     });
 
-    it("uses explicitly inclusive effective-to wording and chip", async () => {
-        vi.stubGlobal("fetch", baseFetch(async () => response({})));
+    it("opens the assign modal with explicitly inclusive effective-to wording", async () => {
+        vi.stubGlobal("fetch", baseFetch(async (url, init) => {
+            if (url === "/api/shifts/assignments" && init?.method === "POST") {
+                return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
+            }
+            throw new Error(`Unexpected fetch ${url}`);
+        }));
+        const user = userEvent.setup();
         render(<ShiftRosterPage />);
+        await screen.findByText("Ayu Roster");
 
-        expect(await screen.findByLabelText("Hari terakhir (ikut termasuk, opsional)")).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /Ayu Roster.*Shift Pagi/i }));
+        await user.click(await screen.findByRole("button", { name: "Tetapkan Roster" }));
 
-        // Ensure inclusive days chip is not present initially
-        expect(screen.queryByText(/hari\)/)).not.toBeInTheDocument();
+        const dialog = await screen.findByRole("dialog", { name: "Tetapkan Roster Shift" });
+        expect(within(dialog).getByLabelText("Hari terakhir (ikut termasuk, opsional)")).toBeInTheDocument();
+
+        // Ensure inclusive days chip is not present before an end date is chosen
+        expect(within(dialog).queryByText(/hari, inklusif/)).not.toBeInTheDocument();
     });
 
     it("loads today's active timeline on initial mount and displays the active shift", async () => {
@@ -150,6 +161,21 @@ describe("ShiftRosterPage", () => {
         expect(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i })).toBeInTheDocument();
         expect(screen.getByLabelText("Tanggal Lihat Roster")).toHaveValue("2026-10-19");
         expect(screen.getByText("Jadwal Berjalan")).toBeInTheDocument();
+    });
+
+    it("filters by shift legend chip and resets back", async () => {
+        vi.stubGlobal("fetch", baseFetch(async () => response({})));
+        const user = userEvent.setup();
+        render(<ShiftRosterPage />);
+        await screen.findByText("Ayu Roster");
+
+        await user.click(screen.getByRole("button", { name: /Shift Malam/ }));
+        expect(await screen.findByText("Tidak ada karyawan yang cocok dengan filter.")).toBeInTheDocument();
+        expect(screen.queryByText("Ayu Roster")).not.toBeInTheDocument();
+
+        const resets = screen.getAllByRole("button", { name: "Reset filter" });
+        await user.click(resets[0]);
+        expect(await screen.findByText("Ayu Roster")).toBeInTheDocument();
     });
 
     it("ignores a stale timeline response that finishes after the latest date", async () => {
@@ -190,7 +216,7 @@ describe("ShiftRosterPage", () => {
         });
     });
 
-    it("submits an assignment and reloads the timeline for the active view date", async () => {
+    it("submits an assignment from the modal, then closes it and clears the selection", async () => {
         const calls: Array<{ url: string; method: string; body: unknown }> = [];
         vi.stubGlobal("fetch", baseFetch(async (url, init) => {
             const method = init?.method ?? "GET";
@@ -217,10 +243,12 @@ describe("ShiftRosterPage", () => {
         await screen.findByText("Ayu Roster");
 
         fireEvent.change(screen.getByLabelText("Tanggal Lihat Roster"), { target: { value: "2026-10-05" } });
-        fireEvent.change(screen.getByLabelText("Berlaku Mulai Tanggal"), { target: { value: "2026-10-05" } });
-        await user.selectOptions(screen.getByLabelText("Shift Tujuan"), "shift-night");
-        await user.click(screen.getByRole("button", { name: /Ayu Roster.*Shift Pagi/i }));
-        await user.click(screen.getByRole("button", { name: /Tetapkan Shift Malam untuk 1 orang/i }));
+        await user.click(await screen.findByRole("button", { name: /Ayu Roster.*Shift Pagi/i }));
+        await user.click(await screen.findByRole("button", { name: "Tetapkan Roster" }));
+
+        const dialog = await screen.findByRole("dialog", { name: "Tetapkan Roster Shift" });
+        await user.selectOptions(within(dialog).getByLabelText("Shift Tujuan"), "shift-night");
+        await user.click(within(dialog).getByRole("button", { name: /Tetapkan Shift Malam untuk 1 orang/i }));
 
         await waitFor(() => {
             expect(clientMocks.toast).toHaveBeenCalledWith("Roster tersimpan: 1 karyawan ke Shift Malam.", "success");
@@ -239,6 +267,8 @@ describe("ShiftRosterPage", () => {
             replaceFuture: false,
         });
         expect(clientMocks.confirm).toHaveBeenCalled();
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Tetapkan Roster" })).not.toBeInTheDocument();
     });
 
     it("aborts an in-flight timeline request when the page unmounts", async () => {
@@ -266,7 +296,7 @@ describe("ShiftRosterPage", () => {
         pending.resolve(response(buildTimeline("2026-10-05")));
     });
 
-    it("confirms and cancels the exact future assignment from the employee detail modal", async () => {
+    it("confirms and cancels the exact future assignment from the manage modal, then reloads", async () => {
         const calls: Array<{ url: string; method: string; body: unknown }> = [];
         const timelineWithFuture = buildTimeline("2026-10-06", {
             cells: [{ date: "2026-10-06", shiftId: "shift-night", source: "assignment", assignmentId: "asg-future" }],
@@ -283,6 +313,7 @@ describe("ShiftRosterPage", () => {
             if (url === "/api/employees") return response(employees);
             if (url === "/api/shifts") return response(shifts);
             if (url.startsWith("/api/shifts/assignments/timeline")) {
+                calls.push({ url, method: "GET", body: null });
                 return response(timelineWithFuture);
             }
             if (url === "/api/shifts/assignments" && init?.method === "DELETE") {
@@ -305,70 +336,10 @@ describe("ShiftRosterPage", () => {
         // Wait for the timeline (night assignment) before opening the modal.
         await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i });
 
-        // Open the detail modal without selecting the employee, so only the modal offers Batalkan.
         await user.click(await screen.findByRole("button", { name: /Kelola jadwal Ayu Roster/i }));
-        const dialog = await screen.findByRole("dialog");
-        expect(within(dialog).getByText(/Riwayat & Jadwal Roster — Ayu Roster/)).toBeInTheDocument();
+        const dialog = await screen.findByRole("dialog", { name: "Kelola Jadwal Roster Ayu Roster" });
 
         await user.click(within(dialog).getByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
-
-        await waitFor(() => {
-            expect(calls).toEqual([{
-                url: "/api/shifts/assignments",
-                method: "DELETE",
-                body: { employeeId: "EMP001", effectiveFrom: "2026-10-05" },
-            }]);
-        });
-        expect(clientMocks.confirm).toHaveBeenCalled();
-        expect(clientMocks.toast).toHaveBeenCalledWith("Jadwal masa depan Ayu Roster dibatalkan.", "success");
-    });
-
-    it("confirms and cancels via the quick-cancel list, then reloads the selected date", async () => {
-        const calls: Array<{ url: string; method: string; body: unknown }> = [];
-        const timelineWithFuture = buildTimeline("2026-10-06", {
-            cells: [{ date: "2026-10-06", shiftId: "shift-night", source: "assignment", assignmentId: "asg-future" }],
-            assignments: [{
-                id: "asg-future",
-                employeeId: "EMP001",
-                shiftId: "shift-night",
-                effectiveFrom: "2026-10-05",
-                effectiveTo: "2026-10-12",
-            }],
-        });
-        vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-            const url = String(input);
-            if (url === "/api/employees") return response(employees);
-            if (url === "/api/shifts") return response(shifts);
-            if (url.startsWith("/api/shifts/assignments/timeline")) {
-                calls.push({ url, method: "GET", body: null });
-                // Initial mount (no from param) returns an empty default week so the
-                // subsequent view-date change always triggers a real navigation fetch.
-                if (url.includes("from=2026-10-06")) return response(timelineWithFuture);
-                return response(buildTimeline("2026-09-29"));
-            }
-            if (url === "/api/shifts/assignments" && init?.method === "DELETE") {
-                calls.push({
-                    url,
-                    method: "DELETE",
-                    body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
-                });
-                return response({ success: true });
-            }
-            if (url === "/api/shifts/assignments" && init?.method === "POST") {
-                return response({ applied: 0, dryRun: true, plan: [], conflicts: [] });
-            }
-            throw new Error(`Unexpected fetch ${url}`);
-        }));
-        const user = userEvent.setup();
-        render(<ShiftRosterPage />);
-        await screen.findByText("Ayu Roster");
-
-        fireEvent.change(screen.getByLabelText("Tanggal Lihat Roster"), { target: { value: "2026-10-06" } });
-
-        // Have to select the employee first to see the future assignments
-        await user.click(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i }));
-
-        await user.click(await screen.findByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
 
         await waitFor(() => {
             expect(calls.filter((call) => call.url === "/api/shifts/assignments" && call.method === "DELETE")).toEqual([{
@@ -378,10 +349,10 @@ describe("ShiftRosterPage", () => {
             }]);
         });
         expect(clientMocks.confirm).toHaveBeenCalled();
-        await waitFor(() => {
-            expect(calls.filter((call) => call.url.includes("from=2026-10-06"))).toHaveLength(2);
-        });
         expect(clientMocks.toast).toHaveBeenCalledWith("Jadwal masa depan Ayu Roster dibatalkan.", "success");
+        await waitFor(() => {
+            expect(calls.filter((call) => call.url.startsWith("/api/shifts/assignments/timeline"))).toHaveLength(2);
+        });
     });
 
     it("keeps a cancellation failure visible and does not report success", async () => {
@@ -413,20 +384,19 @@ describe("ShiftRosterPage", () => {
         const user = userEvent.setup();
         render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
+        await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i });
 
-        fireEvent.change(screen.getByLabelText("Tanggal Lihat Roster"), { target: { value: "2026-10-06" } });
+        await user.click(await screen.findByRole("button", { name: /Kelola jadwal Ayu Roster/i }));
+        const dialog = await screen.findByRole("dialog", { name: "Kelola Jadwal Roster Ayu Roster" });
 
-        // Have to select the employee first to see the future assignments
-        await user.click(await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i }));
+        await user.click(within(dialog).getByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
 
-        await user.click(await screen.findByRole("button", { name: /Batalkan jadwal masa depan Ayu Roster/i }));
-
-        expect(await screen.findByText("Gagal membatalkan jadwal masa depan.")).toBeInTheDocument();
+        expect(await within(dialog).findByText("Gagal membatalkan jadwal masa depan.")).toBeInTheDocument();
         expect(clientMocks.reportClientError).toHaveBeenCalled();
         expect(clientMocks.toast).toHaveBeenCalledWith("Gagal membatalkan jadwal masa depan.", "error");
     });
 
-    it("updates the inclusive end date of an assignment from the detail modal", async () => {
+    it("updates the inclusive end date of an assignment from the manage modal", async () => {
         const calls: Array<{ url: string; method: string; body: unknown }> = [];
         vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = String(input);
@@ -461,18 +431,16 @@ describe("ShiftRosterPage", () => {
         const user = userEvent.setup();
         render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
-
-        // Wait for the timeline (night assignment) before opening the modal.
         await screen.findByRole("button", { name: /Ayu Roster.*Shift Malam/i });
 
         await user.click(await screen.findByRole("button", { name: /Kelola jadwal Ayu Roster/i }));
-        expect(await screen.findByText(/Riwayat & Jadwal Roster — Ayu Roster/)).toBeInTheDocument();
+        const dialog = await screen.findByRole("dialog", { name: "Kelola Jadwal Roster Ayu Roster" });
 
-        await user.click(screen.getByRole("button", { name: /Ubah Akhir/i }));
-        const endInput = screen.getByLabelText("Hari terakhir baru (inklusif)");
+        await user.click(within(dialog).getByRole("button", { name: /Ubah Akhir/i }));
+        const endInput = within(dialog).getByLabelText("Hari terakhir baru (inklusif)");
         expect(endInput).toHaveValue("2026-10-11");
         fireEvent.change(endInput, { target: { value: "2026-10-09" } });
-        await user.click(screen.getByRole("button", { name: /Simpan Tanggal Akhir/i }));
+        await user.click(within(dialog).getByRole("button", { name: /Simpan Tanggal Akhir/i }));
 
         await waitFor(() => {
             expect(calls).toEqual([{
@@ -487,7 +455,7 @@ describe("ShiftRosterPage", () => {
         );
     });
 
-    it("shows the server dry-run conflicts and offers to enable replaceFuture", async () => {
+    it("shows the server dry-run conflicts in the assign modal and offers to enable replaceFuture", async () => {
         const dryRunCalls: Array<unknown> = [];
         vi.stubGlobal("fetch", baseFetch(async (url, init) => {
             if (url === "/api/shifts/assignments" && init?.method === "POST") {
@@ -532,14 +500,17 @@ describe("ShiftRosterPage", () => {
         render(<ShiftRosterPage />);
         await screen.findByText("Ayu Roster");
 
-        fireEvent.change(screen.getByLabelText("Berlaku Mulai Tanggal"), { target: { value: "2026-10-05" } });
-        await user.selectOptions(screen.getByLabelText("Shift Tujuan"), "shift-night");
         await user.click(screen.getByRole("button", { name: /Ayu Roster.*Shift Pagi/i }));
+        await user.click(await screen.findByRole("button", { name: "Tetapkan Roster" }));
+        const dialog = await screen.findByRole("dialog", { name: "Tetapkan Roster Shift" });
 
-        expect(await screen.findByText("1 bentrok", {}, { timeout: 5000 })).toBeInTheDocument();
-        expect(screen.getByText(/jadwal masa depan\/hari ini/)).toBeInTheDocument();
+        fireEvent.change(within(dialog).getByLabelText("Berlaku Mulai Tanggal"), { target: { value: "2026-10-05" } });
+        await user.selectOptions(within(dialog).getByLabelText("Shift Tujuan"), "shift-night");
 
-        await user.click(screen.getByRole("button", { name: /Aktifkan Timpa Jadwal Masa Depan/i }));
+        expect(await within(dialog).findByText("1 bentrok", {}, { timeout: 5000 })).toBeInTheDocument();
+        expect(within(dialog).getByText(/jadwal masa depan\/hari ini/)).toBeInTheDocument();
+
+        await user.click(within(dialog).getByRole("button", { name: /Aktifkan Timpa Jadwal Masa Depan/i }));
         await waitFor(() => {
             expect(dryRunCalls.some((body) => (body as { replaceFuture?: boolean })?.replaceFuture === true)).toBe(true);
         }, { timeout: 5000 });
