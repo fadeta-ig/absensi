@@ -8,7 +8,9 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
-type Tab = "rooms" | "reminder";
+import MeetingMonitorCard from "./MeetingMonitorCard";
+
+type Tab = "rooms" | "reminder" | "monitor";
 
 interface Room {
     id: string;
@@ -186,7 +188,7 @@ export default function GaAppointmentSettingsPage() {
             )}
 
             <div className="flex gap-1.5 border-b border-[var(--border)]">
-                {([["rooms", "Ruang Meeting"], ["reminder", "Pengingat Otomatis"]] as [Tab, string][]).map(([key, label]) => (
+                {([["rooms", "Ruang Meeting"], ["reminder", "Pengingat Otomatis"], ["monitor", "Pemantau"]] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         type="button"
@@ -315,6 +317,16 @@ export default function GaAppointmentSettingsPage() {
                         {savingOffsets ? "Menyimpan…" : "Simpan Pengingat"}
                     </button>
                 </form>
+            )}
+            {tab === "monitor" && (
+                <div className="card p-4 space-y-3">
+                    <h2 className="text-sm font-bold text-[var(--text-primary)]">Pemantau E-Meeting</h2>
+                    <p className="text-xs text-[var(--text-muted)]">
+                        Daftar karyawan yang dapat membuka halaman Pantau E-Meeting (dapat melihat seluruh meeting, task, dan lampiran tanpa dapat melakukan perubahan).
+                        Menu pantau hanya muncul untuk karyawan yang terdaftar di sini.
+                    </p>
+                    <MeetingMonitorCard />
+                </div>
             )}
         </div>
     );

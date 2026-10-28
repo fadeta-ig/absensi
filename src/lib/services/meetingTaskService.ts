@@ -3,7 +3,7 @@ import { isValidCalendarDate, toWIBDateString, wibDateTimeToDate } from "@/lib/t
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
-import { isWig002, resolveLifecycleStatus } from "@/lib/services/appointmentService";
+import { isWig002, resolveLifecycleStatus, isMeetingMonitor } from "@/lib/services/appointmentService";
 import path from "node:path";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -307,7 +307,10 @@ export async function createMeetingTask(
 
 export async function getTasksForMeeting(session: SessionPayload, appointmentId: string): Promise<MeetingTaskDto[]> {
     const appt = await getMeetingOrThrow(appointmentId);
-    await assertCanAccessMeeting(session, appt);
+    // Pemantau e-meeting boleh membaca semua meeting (mutasi tetap digate peran + jendela).
+    if (!(await isMeetingMonitor(session))) {
+        await assertCanAccessMeeting(session, appt);
+    }
     const tasks = await prisma.meetingTask.findMany({
         where: { appointmentId },
         orderBy: { createdAt: "asc" },
@@ -587,6 +590,263 @@ export async function getSubmissionAttachment(
     const giver = session.employeeId === task.assignerEmployeeId;
     if (!mine && !giver && !privileged) throw new MeetingTaskError("Anda tidak memiliki akses ke lampiran ini.", 403);
     return { filePath: assertNoTraversal(att.filePath), mimeType: att.mimeType, size: att.size };
+}
+
+// ─── Pantau penyelesaian task (pemantau WIG002, baca saja) ────────────
+// Kosakata tampilan resmi (pemilik): Tepat Waktu / Overdue / Tunggakan.
+// Tanpa SELESAI dalam hitungan: yang dinilai hanya perilaku mengumpulkan
+// dibanding tenggat (awal + tiap tenggat revisi).
+
+/** Kosakata tampilan resmi (pemilik): Tepat Waktu / Overdue / Tunggakan.
+ *  Overdue = satu task spesifik yang lewat deadline tanpa pengumpulan yang sah.
+ *  Tunggakan = tumpukan task yang belum dikerjakan sampai tuntas (termasuk
+ *  yang Overdue dan yang masih antre). Satu task bisa di dua kolom sekaligus. */
+export type PantauTaskStatus = "Tepat Waktu" | "Overdue" | "Tunggakan";
+
+export interface PantauTaskItem {
+    taskId: string;
+    title: string;
+    meetingId: string;
+    meetingTitle: string;
+    assignerEmployeeId: string;
+    assignerName: string;
+    deadline: string;
+    submittedAt: string | null;
+    status: PantauTaskStatus;
+    /** Selisih hari (deadline awal − kumpul pertama). Positif = maju, negatif = telat. */
+    selisihHari: number | null;
+    /** Masih dalam tenggat (belum jatuh tempo / menunggu resubmit). */
+    masihBerjalan: boolean;
+    /** Masih menumpuk (belum ada pengumpulan, atau revisi belum dikerjakan ulang). */
+    belumTuntas: boolean;
+}
+
+export interface PantauKinerjaRow {
+    employeeId: string;
+    name: string;
+    division: string;
+    department: string;
+    total: number;
+    tepat: number;
+    overdue: number;
+    tunggakan: number;
+    /** Masih dalam tenggat (belum jatuh tempo / menunggu resubmit). Tanpa hitungan, hanya terlihat jumlahnya. */
+    onProgress: number;
+    /** Tepat ÷ (Tepat + Overdue) × 100. Null bila belum bisa dinilai. */
+    tingkatKetepatan: number | null;
+    /** Rata-rata selisih hari pengumpulan pertama. Null bila belum ada pengumpulan. */
+    rataPengumpulan: number | null;
+    tasks: PantauTaskItem[];
+}
+
+export interface PantauTunggakanBulan {
+    month: string;
+    label: string;
+    taskCount: number;
+    employeeCount: number;
+}
+
+/** Karyawan sistem yang tidak ikut dinilai. */
+const PANTAU_EXCLUDED_EMPLOYEE_IDS = ["WIG001", "WIG002"] as const;
+
+function classifyPantauTask(
+    mine: Array<{ attemptNo: number; verdict: string; createdAt: Date; resubmitDueAt: Date | null }>,
+    originalDueAt: Date,
+    now: Date
+): { status: PantauTaskStatus; firstSubmitAt: Date | null; belumTuntas: boolean; masihBerjalan: boolean } {
+    const first = mine.length > 0 ? new Date(Math.min(...mine.map((s) => s.createdAt.getTime()))) : null;
+    if (!first) {
+        if (now.getTime() > originalDueAt.getTime()) return { status: "Overdue", firstSubmitAt: null, belumTuntas: true, masihBerjalan: false };
+        return { status: "Tunggakan", firstSubmitAt: null, belumTuntas: true, masihBerjalan: true };
+    }
+    const revisions = mine.filter((s) => s.verdict === "DIREVISI").sort((a, b) => a.attemptNo - b.attemptNo);
+    const lastRevision = revisions[revisions.length - 1];
+    const resubmitted = !lastRevision || mine.some((s) => s.attemptNo > lastRevision.attemptNo);
+    if (!resubmitted && lastRevision) {
+        const due = lastRevision.resubmitDueAt ? lastRevision.resubmitDueAt.getTime() : null;
+        if (due === null || now.getTime() > due) return { status: "Overdue", firstSubmitAt: first, belumTuntas: true, masihBerjalan: false };
+        return { status: "Tunggakan", firstSubmitAt: first, belumTuntas: true, masihBerjalan: true };
+    }
+    if (first.getTime() > originalDueAt.getTime()) return { status: "Overdue", firstSubmitAt: first, belumTuntas: false, masihBerjalan: false };
+    const sticky = isReceiverStickyOverdue(
+        mine.map((s) => ({ createdAt: s.createdAt, attemptNo: s.attemptNo, verdict: s.verdict, resubmitDueAt: s.resubmitDueAt })),
+        originalDueAt,
+        now
+    );
+    return { status: sticky ? "Overdue" : "Tepat Waktu", firstSubmitAt: first, belumTuntas: false, masihBerjalan: false };
+}
+
+/** Kinerja penyelesaian task per karyawan untuk pemantau (baca saja). */
+export async function getKinerjaPantau(
+    session: SessionPayload,
+    filters: { from?: string; to?: string }
+): Promise<{ data: PantauKinerjaRow[]; tunggakanLalu: PantauTunggakanBulan[]; period: { from: string; to: string } }> {
+    if (!session.employeeId && !isWig002(session)) {
+        throw new MeetingTaskError("Hanya karyawan yang dapat memantau penyelesaian task.", 403);
+    }
+    if (!(await isMeetingMonitor(session))) {
+        throw new MeetingTaskError("Halaman ini hanya untuk pemantau yang ditunjuk WIG002.", 403);
+    }
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    const defaultFrom = `${monthStart.getFullYear()}-${pad2(monthStart.getMonth() + 1)}-01`;
+    const defaultTo = `${monthEnd.getFullYear()}-${pad2(monthEnd.getMonth() + 1)}-${pad2(monthEnd.getDate())}`;
+    const fromStr = filters.from && isValidCalendarDate(filters.from) ? filters.from : defaultFrom;
+    const toStr = filters.to && isValidCalendarDate(filters.to) ? filters.to : defaultTo;
+    const fromStart = wibDateTimeToDate(fromStr, "00:00");
+    const toEnd = wibDateTimeToDate(toStr, "23:59");
+
+    const taskRows = await prisma.meetingTask.findMany({
+        where: {
+            isCancelled: false,
+            appointment: { status: { not: "CANCELLED" } },
+            deadlineHistory: { some: { sequence: 1, deadlineDate: { gte: fromStart, lte: toEnd } } },
+        },
+        orderBy: { createdAt: "asc" },
+        take: 1000,
+        select: {
+            id: true,
+            title: true,
+            appointmentId: true,
+            assignerEmployeeId: true,
+            assigner: { select: { name: true } },
+            appointment: { select: { title: true } },
+            assignees: {
+                where: { status: { not: "DIBATALKAN" } },
+                select: {
+                    employeeId: true,
+                    status: true,
+                    employee: {
+                        select: {
+                            name: true,
+                            isActive: true,
+                            departmentRel: { select: { name: true, division: { select: { name: true } } } },
+                            divisionRel: { select: { name: true } },
+                        },
+                    },
+                },
+            },
+            deadlineHistory: { orderBy: { sequence: "asc" as const }, select: { sequence: true, deadlineDate: true } },
+            submissions: {
+                orderBy: { attemptNo: "asc" as const },
+                select: { employeeId: true, attemptNo: true, verdict: true, createdAt: true, resubmitDueAt: true },
+            },
+        },
+    });
+
+    const byEmployee = new Map<string, { name: string; division: string; department: string; items: PantauTaskItem[] }>();
+    for (const t of taskRows) {
+        const originalDue = t.deadlineHistory[0]?.deadlineDate ?? null;
+        if (!originalDue) continue;
+        for (const a of t.assignees) {
+            const emp = a.employee;
+            if (!emp || !emp.isActive) continue;
+            if ((PANTAU_EXCLUDED_EMPLOYEE_IDS as readonly string[]).includes(a.employeeId)) continue;
+            const mine = t.submissions.filter((s) => s.employeeId === a.employeeId);
+            const { status, firstSubmitAt, belumTuntas, masihBerjalan } = classifyPantauTask(mine, originalDue, now);
+            const selisihHari = firstSubmitAt ? Math.round((originalDue.getTime() - firstSubmitAt.getTime()) / 86_400_000) : null;
+            let slot = byEmployee.get(a.employeeId);
+            if (!slot) {
+                slot = {
+                    name: emp.name ?? a.employeeId,
+                    division: emp.divisionRel?.name ?? emp.departmentRel?.division?.name ?? "-",
+                    department: emp.departmentRel?.name ?? "-",
+                    items: [],
+                };
+                byEmployee.set(a.employeeId, slot);
+            }
+            slot.items.push({
+                taskId: t.id,
+                title: t.title,
+                meetingId: t.appointmentId,
+                meetingTitle: t.appointment?.title ?? "Meeting",
+                assignerEmployeeId: t.assignerEmployeeId,
+                assignerName: t.assigner?.name ?? t.assignerEmployeeId,
+                deadline: toWIBDateString(originalDue),
+                submittedAt: firstSubmitAt ? firstSubmitAt.toISOString() : null,
+                status,
+                selisihHari,
+                masihBerjalan,
+                belumTuntas,
+            });
+        }
+    }
+
+    const data: PantauKinerjaRow[] = [...byEmployee.entries()].map(([employeeId, slot]) => {
+        const tepat = slot.items.filter((i) => i.status === "Tepat Waktu").length;
+        const overdue = slot.items.filter((i) => i.status === "Overdue").length;
+        const tunggakan = slot.items.filter((i) => i.belumTuntas).length;
+        const onProgress = slot.items.filter((i) => i.masihBerjalan).length;
+        const dinilai = tepat + overdue;
+        const diffs = slot.items.map((i) => i.selisihHari).filter((v): v is number => v !== null);
+        return {
+            employeeId,
+            name: slot.name,
+            division: slot.division,
+            department: slot.department,
+            total: slot.items.length,
+            tepat,
+            overdue,
+            tunggakan,
+            onProgress,
+            tingkatKetepatan: dinilai > 0 ? Math.round((tepat / dinilai) * 1000) / 10 : null,
+            rataPengumpulan: diffs.length > 0 ? Math.round(diffs.reduce((s, v) => s + v, 0) / diffs.length) : null,
+            tasks: slot.items,
+        };
+    });
+    data.sort((a, b) => (a.tingkatKetepatan ?? 101) - (b.tingkatKetepatan ?? 101));
+
+    // Strip tunggakan bulan lalu: tumpukan yang belum tuntas
+    // dan deadline awalnya sebelum periode berjalan.
+    const pastRows = await prisma.meetingTask.findMany({
+        where: {
+            isCancelled: false,
+            appointment: { status: { not: "CANCELLED" } },
+            deadlineHistory: { some: { sequence: 1, deadlineDate: { lt: fromStart } } },
+        },
+        take: 1000,
+        select: {
+            id: true,
+            assignees: { select: { employeeId: true } },
+            deadlineHistory: { orderBy: { sequence: "asc" as const }, select: { sequence: true, deadlineDate: true } },
+            submissions: { select: { employeeId: true, attemptNo: true, verdict: true, createdAt: true, resubmitDueAt: true } },
+        },
+    });
+    const byMonth = new Map<string, { taskIds: Set<string>; employeeIds: Set<string> }>();
+    for (const t of pastRows) {
+        const originalDue = t.deadlineHistory[0]?.deadlineDate ?? null;
+        if (!originalDue) continue;
+        const monthKey = `${originalDue.getFullYear()}-${String(originalDue.getMonth() + 1).padStart(2, "0")}`;
+        for (const a of t.assignees) {
+            if ((PANTAU_EXCLUDED_EMPLOYEE_IDS as readonly string[]).includes(a.employeeId)) continue;
+            const mine = t.submissions.filter((s) => s.employeeId === a.employeeId);
+            const { belumTuntas } = classifyPantauTask(mine, originalDue, now);
+            if (!belumTuntas) continue;
+            let slot = byMonth.get(monthKey);
+            if (!slot) {
+                slot = { taskIds: new Set(), employeeIds: new Set() };
+                byMonth.set(monthKey, slot);
+            }
+            slot.taskIds.add(t.id);
+            slot.employeeIds.add(a.employeeId);
+        }
+    }
+    const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+    const tunggakanLalu: PantauTunggakanBulan[] = [...byMonth.entries()]
+        .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+        .map(([month, slot]) => {
+            const [y, m] = month.split("-").map(Number);
+            return {
+                month,
+                label: `${monthNames[m - 1]} ${y}`,
+                taskCount: slot.taskIds.size,
+                employeeCount: slot.employeeIds.size,
+            };
+        });
+
+    return { data, tunggakanLalu, period: { from: fromStr, to: toStr } };
 }
 
 // ─── Inbox verifikator (task saya yang menunggu verifikasi) ────────
@@ -1068,6 +1328,7 @@ export async function getMeetingMinutes(session: SessionPayload, appointmentId: 
     const privileged = await isPrivileged(session);
     const allowed =
         privileged ||
+        (await isMeetingMonitor(session)) ||
         appt.requesterEmployeeId === session.employeeId ||
         appt.participants.some((p) => p.employeeId === session.employeeId);
     if (!allowed) throw new MeetingTaskError("Anda bukan peserta meeting ini.", 403);

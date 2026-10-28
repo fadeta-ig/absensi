@@ -908,6 +908,10 @@ export const equipmentTopViewersSchema = z.object({
     employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
 });
 
+export const meetingTopViewersSchema = z.object({
+    employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
+});
+
 export const equipmentApproverSchema = z.object({
     employeeId: z.string().trim().min(1).max(100),
 });

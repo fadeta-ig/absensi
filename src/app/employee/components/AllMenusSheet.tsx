@@ -57,6 +57,8 @@ interface AllMenusSheetProps {
     canTopViewEquipment?: boolean | null;
     /** Approver Equipment: memberi approval final (tanpa perlu assignment/QC/topViewer). */
     canApproveEquipment?: boolean | null;
+    /** Pemantau e-meeting WIG002. null = belum dimuat → sembunyikan dulu. */
+    canMonitorMeeting?: boolean | null;
 }
 
 export default function AllMenusSheet({
@@ -70,6 +72,7 @@ export default function AllMenusSheet({
     canReviewEquipment,
     canTopViewEquipment,
     canApproveEquipment,
+    canMonitorMeeting,
 }: AllMenusSheetProps) {
     const router = useRouter();
     const { logout } = useEmployeeLogout();
@@ -274,6 +277,14 @@ export default function AllMenusSheet({
                     bg: "bg-cyan-50 dark:bg-cyan-950/40",
                     color: "text-cyan-600 dark:text-cyan-400",
                 },
+                ...(canMonitorMeeting ? [{
+                    href: "/employee/appointments/monitor",
+                    label: "Pantau E-Meeting",
+                    description: "Tingkat ketepatan penyelesaian task seluruh karyawan",
+                    icon: Eye,
+                    bg: "bg-cyan-50 dark:bg-cyan-950/40",
+                    color: "text-cyan-600 dark:text-cyan-400",
+                }] : []),
                 {
                     href: "/employee/green-meeting",
                     label: "Green Meeting",

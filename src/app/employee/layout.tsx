@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
     Newspaper, NotebookPen, MapPinned, Clock4, Users, Monitor, User,
-    CalendarCheck, CalendarClock, CalendarDays, Wrench,
+    CalendarCheck, CalendarClock, CalendarDays, Wrench, Eye,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
     { href: "/employee/equipment", icon: Wrench, label: "Inspeksi Alat" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting" },
+    { href: "/employee/appointments/monitor", icon: Eye, label: "Pantau E-Meeting" },
     { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
     { href: "/employee/profile", icon: User, label: "Profil" },
@@ -97,6 +98,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     const [authChecked, setAuthChecked] = useState(false);
     const { logout: handleLogout, loggingOut } = useEmployeeLogout();
     const [equipmentVisible, setEquipmentVisible] = useState(false);
+    const [monitorVisible, setMonitorVisible] = useState(false);
     const fetchedRef = useRef(false);
 
     const checkAuth = useCallback(async () => {
@@ -135,9 +137,24 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         void checkAuth();
     }, [checkAuth]);
 
+    // Pantau E-Meeting tampil bila terdaftar sebagai pemantau (WIG002).
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        fetch("/api/employee/meeting-capabilities", { credentials: "same-origin" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json: unknown) => {
+                if (cancelled || !json || typeof json !== "object") return;
+                const data = (json as { data?: { canMonitor?: boolean } }).data;
+                if (data?.canMonitor === true) setMonitorVisible(true);
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
     // Inspeksi Alat tampil bila ditugaskan WIG002 (canExecute) atau QC (canReview) —
     // kecuali atasan murni (topViewer tanpa peran QC).
-    // Pantau atasan hanya via sheet menu.
     useEffect(() => {
         if (!user) return;
         let cancelled = false;
@@ -200,7 +217,13 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     return (
         <AppShell
             user={user}
-            navItems={equipmentVisible ? navItems : navItems.filter((i) => i.href !== "/employee/equipment")}
+            navItems={
+                navItems.filter(
+                    (i) =>
+                        (i.href !== "/employee/equipment" || equipmentVisible) &&
+                        (i.href !== "/employee/appointments/monitor" || monitorVisible)
+                )
+            }
             brandTitle="WIG Portal"
             brandSubtitle="Employee"
             mobileTitle="WIG"
