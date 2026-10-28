@@ -35,6 +35,7 @@ export default function EmployeeHomePage() {
     const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
     const [cleaningCaps, setCleaningCaps] = useState<{ isReviewer: boolean; isTopViewer: boolean } | null>(null);
     const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean; canApprove: boolean } | null>(null);
+    const [canMonitorMeeting, setCanMonitorMeeting] = useState<boolean | null>(null);
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
@@ -44,12 +45,13 @@ export default function EmployeeHomePage() {
             setLoadingData(true);
             setLoadError("");
             try {
-                const [userRes, newsRes, attendanceRes, capsRes, equipCapsRes] = await Promise.all([
+                const [userRes, newsRes, attendanceRes, capsRes, equipCapsRes, monitorCapsRes] = await Promise.all([
                     fetch("/api/auth/me"),
                     fetch("/api/news"),
                     fetch("/api/attendance"),
                     fetch("/api/employee/cleaning/capabilities").catch(() => null),
                     fetch("/api/employee/equipment/capabilities").catch(() => null),
+                    fetch("/api/employee/meeting-capabilities").catch(() => null),
                 ]);
 
                 if (!userRes.ok) throw new Error(await getResponseErrorMessage(userRes, "Gagal memuat data profil."));
@@ -84,6 +86,13 @@ export default function EmployeeHomePage() {
                     );
                 } catch {
                     setEquipmentCaps(null);
+                }
+                try {
+                    const monitorJson = monitorCapsRes && monitorCapsRes.ok ? await monitorCapsRes.json() : null;
+                    const canMonitor = monitorJson?.data;
+                    setCanMonitorMeeting(canMonitor && typeof canMonitor.canMonitor === "boolean" ? canMonitor.canMonitor : false);
+                } catch {
+                    setCanMonitorMeeting(false);
                 }
                 if (userData?.totalLeave !== undefined && userData?.usedLeave !== undefined) {
                     setLeaveBalance({ total: userData.totalLeave, used: userData.usedLeave });
@@ -333,6 +342,7 @@ export default function EmployeeHomePage() {
                 canReviewEquipment={equipmentCaps ? equipmentCaps.canReview : null}
                 canTopViewEquipment={equipmentCaps ? equipmentCaps.canTopView : null}
                 canApproveEquipment={equipmentCaps ? equipmentCaps.canApprove : null}
+                canMonitorMeeting={canMonitorMeeting}
             />
 
         </div>

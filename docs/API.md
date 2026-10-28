@@ -282,3 +282,6 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/appointments/submissions/attachments/[attachmentId]` | `GET` | Pemberi/penerima ybs/GA | Unduh lampiran (authed, `private, no-store`, nosniff). |
 | `/api/employee/meeting-tasks` | `GET` | Karyawan | Inbox penerima (`status`/`overdue=1`); menyembunyikan meeting CANCELLED. |
 | `/api/employee/meeting-task-verifications` | `GET` | Pemberi | Antrean verifikasi: task yang saya beri + submission `PENDING`. |
+| `/api/employee/meeting-capabilities` | `GET` | Karyawan | Kapabilitas ringan `{ canMonitor }` untuk gating menu Pantau E-Meeting. |
+| `/api/employee/pantau-kinerja` | `GET` | Pemantau/WIG002 | Tingkat ketepatan per karyawan per periode (`from/to` YYYY-MM-DD) + strip tunggakan bulan lalu (baca saja). |
+| `/api/ga/meeting-settings/top-viewers` | `GET/POST/DELETE` | WIG002 | Kelola daftar pemantau e-meeting (max 5, AppSetting `meeting.topViewers`). |

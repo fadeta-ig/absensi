@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isWig002 } from "@/lib/services/appointmentService";
+import { isMeetingMonitor } from "@/lib/services/appointmentService";
 import type { SessionPayload } from "@/lib/auth";
 import { MeetingTaskError, isReceiverStickyOverdue } from "@/lib/services/meetingTaskService";
 
@@ -135,6 +136,7 @@ export async function getMeetingHistory(session: SessionPayload, appointmentId: 
     const me = session.employeeId;
     const allowed =
         isWig002(session) ||
+        (await isMeetingMonitor(session)) ||
         appt.requesterEmployeeId === me ||
         appt.participants.some((p) => p.employeeId !== null && p.employeeId === me);
     if (!allowed) throw new MeetingTaskError("Anda bukan peserta meeting ini.", 403);

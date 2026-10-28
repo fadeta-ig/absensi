@@ -211,7 +211,10 @@ function DetailContent({ id }: { id: string }) {
     const meetingStartMs = new Date(item.startAt).getTime();
     const meetingEndMs = new Date(item.endAt).getTime();
     // Task: buat HANYA selama meeting berjalan; kerjakan HANYA setelah meeting selesai.
-    const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs;
+    // Pemantau (bukan penyelenggara/peserta) hanya membaca: tanpa Beri Task,
+    // tanpa kelola, tanpa tulis notulensi. WIG002 tanpa employeeId tetap bisa.
+    const isInvolved = !myEmployeeId || item.requesterEmployeeId === myEmployeeId || item.participants.some((p) => p.employeeId === myEmployeeId);
+    const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs && isInvolved;
     const meetingFinishedForTask = item.status !== "CANCELLED" && (item.status === "COMPLETED" || nowMs >= meetingEndMs);
     const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
     const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
@@ -532,7 +535,7 @@ function DetailContent({ id }: { id: string }) {
             </div>
 
             <div className="card p-4">
-                <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED"} refreshKey={syncKey} />
+                <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED" || !isInvolved} refreshKey={syncKey} />
             </div>
 
             <div className="card p-4">

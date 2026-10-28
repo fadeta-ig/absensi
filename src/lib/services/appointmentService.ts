@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidCalendarDate, toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
+import { isMeetingTopViewer } from "@/lib/services/appSettingsService";
 import { PERMISSIONS } from "@/lib/permissions";
 import { actorFromSession } from "@/lib/services/auditService";
 import type { SessionPayload } from "@/lib/auth";
@@ -57,6 +58,18 @@ export function resolveLifecycleStatus(stored: string, startAt: Date, endAt: Dat
 
 export function isWig002(session: SessionPayload): boolean {
     return session.username === "WIG002" && session.permissions.includes(PERMISSIONS.GA_MANAGE);
+}
+
+/** Pemantau e-meeting dinamis (daftar WIG002, max 5) atau operator WIG002. */
+export async function isMeetingMonitor(session: SessionPayload): Promise<boolean> {
+    if (isWig002(session)) return true;
+    return isMeetingTopViewer(session).catch(() => false);
+}
+
+/** Kapabilitas ringan untuk gating menu employee (tanpa fetch berat). */
+export async function getEmployeeMeetingCapabilities(session: SessionPayload): Promise<{ canMonitor: boolean }> {
+    if (!session.employeeId || !session.userId) return { canMonitor: false };
+    return { canMonitor: await isMeetingMonitor(session) };
 }
 
 let reminderOffsetsCache: { value: number[]; expiresAt: number } | null = null;
@@ -469,7 +482,7 @@ export interface AppointmentFilters {
     limit?: number;
 }
 
-function buildWhere(session: SessionPayload, filters: AppointmentFilters, isPrivileged: boolean): Prisma.MeetingAppointmentWhereInput {
+export function buildMeetingWhere(session: SessionPayload, filters: AppointmentFilters, isPrivileged: boolean): Prisma.MeetingAppointmentWhereInput {
     const where: Prisma.MeetingAppointmentWhereInput = {};
     if (filters.roomId) {
         where.roomId = filters.roomId;
@@ -514,7 +527,7 @@ function withLifecycle<T extends { status: string; startAt: Date; endAt: Date }>
 
 export async function getAppointments(session: SessionPayload, filters: AppointmentFilters): Promise<{ data: unknown[]; total: number }> {
     const privileged = isWig002(session);
-    const where = buildWhere(session, filters, privileged);
+    const where = buildMeetingWhere(session, filters, privileged);
     const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
     const page = Math.max(filters.page ?? 1, 1);
     const [rows, total] = await Promise.all([
@@ -549,7 +562,9 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
     const privileged = isWig002(session);
     if (!privileged) {
         const mine = appt.requesterEmployeeId === session.employeeId || appt.participants.some((p) => p.employeeId === session.employeeId);
-        if (!mine) throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
+        if (!mine && !(await isMeetingMonitor(session))) {
+            throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
+        }
     }
     return withLifecycle(appt);
 }

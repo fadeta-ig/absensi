@@ -667,6 +667,131 @@ export interface CleaningTopViewerInfo {
     email: string | null;
 }
 
+// ─── Pemantau e-meeting (dinamis, milik WIG002, max 5) ───────────────
+// Pola sama seperti cleaning topViewers: AppSetting JSON array + cache
+// 60 detik + validasi aktif+internal saat tulis. Guard baca (isActive)
+// di isMeetingTopViewer agar penunjukan basi langsung mati.
+
+export const MEETING_TOP_VIEWERS_KEY = "meeting.topViewers" as const;
+export const MAX_MEETING_TOP_VIEWERS = 5 as const;
+
+let meetingTopViewersCache: { value: string[]; expiresAt: number } | null = null;
+
+export function invalidateMeetingTopViewersCache(): void {
+    meetingTopViewersCache = null;
+}
+
+function parseMeetingTopViewerIds(raw: string | null | undefined): string[] {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((v): v is string => typeof v === "string")
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .slice(0, MAX_MEETING_TOP_VIEWERS);
+    } catch {
+        return [];
+    }
+}
+
+/** Daftar employeeId pemantau e-meeting (max 5). */
+export async function getMeetingTopViewerEmployeeIds(): Promise<string[]> {
+    const cached = meetingTopViewersCache;
+    if (cached && Date.now() <= cached.expiresAt) return [...cached.value];
+    try {
+        const row = await prisma.appSetting.findUnique({ where: { key: MEETING_TOP_VIEWERS_KEY } });
+        const ids = parseMeetingTopViewerIds(row?.value);
+        meetingTopViewersCache = { value: ids, expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [...ids];
+    } catch {
+        meetingTopViewersCache = { value: [], expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [];
+    }
+}
+
+export interface MeetingTopViewerInfo {
+    employeeId: string;
+    name: string | null;
+    isActive: boolean;
+    email: string | null;
+}
+
+/** Info penunjukan untuk UI settings (nama + status aktif). */
+export async function getMeetingTopViewerInfos(): Promise<MeetingTopViewerInfo[]> {
+    const ids = await getMeetingTopViewerEmployeeIds();
+    if (ids.length === 0) return [];
+    const employees = await prisma.employee.findMany({
+        where: { employeeId: { in: ids } },
+        select: { employeeId: true, name: true, isActive: true, email: true },
+    });
+    const byId = new Map(employees.map((e) => [e.employeeId, e]));
+    return ids.map((id) => {
+        const e = byId.get(id);
+        if (!e) return { employeeId: id, name: null, isActive: false, email: null };
+        return { employeeId: e.employeeId, name: e.name, isActive: e.isActive, email: e.email };
+    });
+}
+
+/** True bila sesi adalah salah satu pemantau e-meeting DAN employee-nya masih aktif. */
+export async function isMeetingTopViewer(session: Pick<SessionPayload, "employeeId"> | null): Promise<boolean> {
+    if (!session?.employeeId) return false;
+    const ids = await getMeetingTopViewerEmployeeIds().catch(() => [] as string[]);
+    if (!ids.includes(session.employeeId)) return false;
+    try {
+        const employee = await prisma.employee.findUnique({
+            where: { employeeId: session.employeeId },
+            select: { isActive: true },
+        });
+        return employee?.isActive === true;
+    } catch {
+        return false;
+    }
+}
+
+/** Set penuh daftar pemantau (max 5, dedup, validasi aktif+internal tiap ID). */
+export async function setMeetingTopViewers(
+    rawIds: string[],
+    actorUserId?: string | null
+): Promise<{ key: typeof MEETING_TOP_VIEWERS_KEY; employeeIds: string[] }> {
+    const ids = [...new Set(rawIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length > MAX_MEETING_TOP_VIEWERS) {
+        throw new AppSettingsError(`Maksimal ${MAX_MEETING_TOP_VIEWERS} pemantau e-meeting.`, 409);
+    }
+    for (const id of ids) {
+        if (id.length > 100) throw new AppSettingsError("ID karyawan pemantau terlalu panjang.", 400);
+    }
+    const validated: string[] = [];
+    for (const id of ids) {
+        validated.push(await assertActiveInternalEmployee(id, "Pemantau e-meeting"));
+    }
+    await prisma.appSetting.upsert({
+        where: { key: MEETING_TOP_VIEWERS_KEY },
+        update: { value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+        create: { key: MEETING_TOP_VIEWERS_KEY, value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateMeetingTopViewersCache();
+    return { key: MEETING_TOP_VIEWERS_KEY, employeeIds: validated };
+}
+
+/** Hapus satu pemantau dari daftar. */
+export async function removeMeetingTopViewer(
+    rawId: string,
+    actorUserId?: string | null
+): Promise<{ key: typeof MEETING_TOP_VIEWERS_KEY; employeeIds: string[] }> {
+    const id = rawId.trim();
+    const current = await getMeetingTopViewerEmployeeIds();
+    const next = current.filter((v) => v !== id);
+    await prisma.appSetting.upsert({
+        where: { key: MEETING_TOP_VIEWERS_KEY },
+        update: { value: JSON.stringify(next), updatedByUserId: actorUserId ?? null },
+        create: { key: MEETING_TOP_VIEWERS_KEY, value: JSON.stringify(next), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateMeetingTopViewersCache();
+    return { key: MEETING_TOP_VIEWERS_KEY, employeeIds: next };
+}
+
 /** Info penunjukan saat ini untuk UI settings (nama + status aktif employee). */
 export async function getCleaningTopViewerInfo(): Promise<CleaningTopViewerInfo> {
     const employeeId = await getCleaningTopViewerEmployeeId();
