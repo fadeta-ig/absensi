@@ -78,14 +78,21 @@ export default function ManageRosterModal({
         });
     };
 
-    const handleUpdateEnd = async (asg: RosterTimelineAssignment) => {
+    const handleUpdateEnd = (asg: RosterTimelineAssignment) => {
         const exclusiveNewEnd = editOpenEnded ? null : editUiEndDate ? addCalendarDays(editUiEndDate, 1) : null;
         if (!editOpenEnded && !isValidCalendarDate(editUiEndDate)) {
             toast("Pilih tanggal hari terakhir yang valid atau centang Tanpa Batas Akhir.", "error");
             return;
         }
-        setUpdatingEndId(asg.id);
-        setActionError("");
+        const endLabel = editOpenEnded ? "tanpa batas akhir" : `s.d. ${formatWIBShort(editUiEndDate)} (inklusif)`;
+        confirm({
+            title: "Ubah Tanggal Akhir Roster",
+            message: `Ubah akhir jadwal ${employee.name} (${shiftNameOf(asg.shiftId)}, mulai ${formatWIBShort(asg.effectiveFrom)}) menjadi ${endLabel}? Jadwal sesudahnya akan disambungkan ulang bila bersambung.`,
+            variant: "warning",
+            confirmLabel: "Ya, Simpan Tanggal Akhir",
+            onConfirm: async () => {
+                setUpdatingEndId(asg.id);
+                setActionError("");
         try {
             const res = await fetch("/api/shifts/assignments", {
                 method: "PATCH",
@@ -99,7 +106,6 @@ export default function ManageRosterModal({
             if (!res.ok) {
                 throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui tanggal akhir jadwal."));
             }
-            const endLabel = editOpenEnded ? "tanpa batas akhir" : `s.d. ${formatWIBShort(editUiEndDate)} (inklusif)`;
             toast(`Tanggal akhir jadwal ${employee.name} diperbarui (${endLabel}).`, "success");
             setEditingAssignmentId(null);
             onChanged();
@@ -111,6 +117,8 @@ export default function ManageRosterModal({
         } finally {
             setUpdatingEndId("");
         }
+            },
+        });
     };
 
     return (

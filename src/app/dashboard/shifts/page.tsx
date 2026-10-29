@@ -147,10 +147,16 @@ export default function ShiftsPage() {
         });
     };
 
-    const handleSetDefault = async (shift: WorkShift) => {
-        setActionId(shift.id);
-        setActionError("");
-        try {
+    const handleSetDefault = (shift: WorkShift) => {
+        confirm({
+            title: "Jadikan Shift Default",
+            message: `"${shift.name}" akan dijadikan shift default global. Karyawan tanpa jadwal roster dan tanpa shift dasar akan ikut shift ini, termasuk penilaian presensi dan cuti. Lanjutkan?`,
+            variant: "warning",
+            confirmLabel: "Ya, Jadikan Default",
+            onConfirm: async () => {
+                setActionId(shift.id);
+                setActionError("");
+                try {
             const res = await fetch("/api/shifts", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -171,6 +177,8 @@ export default function ShiftsPage() {
         } finally {
             setActionId(null);
         }
+            },
+        });
     };
 
     const handleInitializePackage = () => {
