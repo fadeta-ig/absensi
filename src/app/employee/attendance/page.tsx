@@ -427,25 +427,22 @@ export default function AttendancePage() {
             }
 
             const data = await res.json();
+            void data;
             keepLockedForNavigation = true;
-            setStatus("success");
-            setTodayRecord(data);
-            if (data.clockOut) {
-                toast("Clock Out berhasil! Selamat beristirahat.", "success");
-            } else {
-                toast("Clock In berhasil! Selamat bekerja.", "success");
+            const doneAction = serverContext.context.activeMode;
+            const doneShiftDate = serverContext.context.shiftDate;
+            try {
+                router.push(
+                    `/employee/attendance/success?action=${doneAction}&shiftDate=${encodeURIComponent(doneShiftDate)}`,
+                );
+            } catch (err) {
+                // Navigasi gagal: buka kunci agar user bisa submit ulang/refresh manual.
+                reportClientError("AttendancePage", "Navigasi pasca-presensi gagal", err);
+                submitLockRef.current = false;
+                setStatus("idle");
+                setMessage("Presensi tersimpan, tetapi halaman gagal berpindah. Muat ulang halaman.");
             }
-            redirectTimerRef.current = window.setTimeout(() => {
-                try {
-                    router.push("/employee");
-                } catch (err) {
-                    // Navigasi gagal: buka kunci agar user bisa submit ulang/refresh manual.
-                    reportClientError("AttendancePage", "Navigasi pasca-presensi gagal", err);
-                    submitLockRef.current = false;
-                    setStatus("idle");
-                    setMessage("Presensi tersimpan, tetapi halaman gagal berpindah. Muat ulang halaman.");
-                }
-            }, 1500);
+            return;
         } catch (err) {
             reportClientError("AttendancePage", "Koneksi error saat submit presensi", err);
             setStatus("error");
