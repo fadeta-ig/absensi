@@ -177,14 +177,16 @@ export function resolveAttendanceTargetFromRecords(
                 ? isOvernightSchedule(yesterdaySchedule.startTime, yesterdaySchedule.endTime)
                 : isEveningWIBClockIn(yesterdayRecord.clockIn);
 
-        if (isYesterdayOvernight && !hasTodayClockInWindowStarted) {
+        if (!hasTodayClockInWindowStarted) {
             return {
                 mode: "CLOCK_OUT",
                 existingRecord: yesterdayRecord,
                 shiftDate: yesterdayStr,
                 scheduleDay: yesterdaySchedule,
-                isOvernight: true,
-                relativeClockMinutes: (nowH + 24) * 60 + nowM, // +24h offset for day H+1
+                isOvernight: isYesterdayOvernight,
+                relativeClockMinutes: isYesterdayOvernight
+                    ? (nowH + 24) * 60 + nowM // +24h offset for day H+1
+                    : currentClockMinutes,
             };
         }
     }
