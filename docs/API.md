@@ -286,6 +286,8 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/employee/meeting-capabilities` | `GET` | Karyawan | Kapabilitas ringan `{ canMonitor }` untuk gating menu Pantau E-Meeting. |
 | `/api/employee/pantau-kinerja` | `GET` | Pemantau/WIG002 | Tingkat ketepatan per karyawan per periode (`from/to` YYYY-MM-DD) + strip tunggakan bulan lalu (baca saja). |
 | `/api/ga/meeting-settings/top-viewers` | `GET/POST/DELETE` | WIG002 | Kelola daftar pemantau e-meeting (max 5, AppSetting `meeting.topViewers`). |
+| `/api/appointments` | `GET` | Karyawan/WIG002 | Daftar meeting ter-pagination (`page`, `limit` maks 100, halaman dijepit ke rentang yang ada; respons menyertakan `total`, `page`, `limit`, `totalPages`). Bawaan urutan terdekat dulu; `sort=newest` untuk terbaru dulu (riwayat); `history=1` hanya meeting yang sudah berakhir (selesai/batal/lewat jam selesai). Urutan deterministik `startAt`, `createdAt`, `id`. |
+| `/api/appointments/[id]/leader` | `PATCH` | Penyelenggara/pimpinan rapat/WIG002 | Tetapkan/ganti pimpinan rapat (`leaderEmployeeId`, wajib peserta internal) setelah meeting terjadwal/berjalan, selama belum selesai; tercatat di audit `SET_MEETING_LEADER`. |
 
 ### M. Tugas Saya (`/api/my-tasks`)
 Endpoint kanonik pengelolaan task lintas sumber (tahap pertama sumber `APPOINTMENTS`). Endpoint task lama di bagian L tetap tersedia sebagai shim pada service yang sama selama masa transisi; route UI lama `/employee/appointments/tasks` dan `/employee/appointments/monitor` mengarah ke route baru.

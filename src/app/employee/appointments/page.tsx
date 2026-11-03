@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus, Loader2, AlertCircle, CalendarDays, LayoutList, Search, X } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { useToast } from "@/components/Toast";
@@ -106,16 +105,16 @@ export default function EmployeeAppointmentsPage() {
 
     const [refreshKey, setRefreshKey] = useState(0);
     const [historyTotal, setHistoryTotal] = useState<number | null>(null);
+    const [historyPage, setHistoryPage] = useState(1);
+    const [historyServerTotal, setHistoryServerTotal] = useState(0);
+    const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
 
     useEffect(() => {
         if (!myEmployeeId || scope === "history") return;
         const controller = new AbortController();
-        void fetchPastAppointments(controller.signal, {}).then(({ items }) => {
-            setHistoryTotal(
-                items.filter(
-                    (a) => isMeetingFinished(a) && (a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId))
-                ).length
-            );
+        // Badge memakai total riwayat dari server (cukup minta 1 baris).
+        void fetchPastAppointments(controller.signal, {}, 1, 1).then(({ total }) => {
+            setHistoryTotal(total);
         });
         return () => controller.abort();
     }, [myEmployeeId, refreshKey, scope]);
@@ -138,13 +137,11 @@ export default function EmployeeAppointmentsPage() {
                 setItems(data);
                 setLoadError(error);
                 if (scope === "history") {
-                    setHistoryTotal(
-                        data.filter(
-                            (a) =>
-                                isMeetingFinished(a) &&
-                                (!myEmployeeId || a.requesterEmployeeId === myEmployeeId || a.participants.some((p) => p.employeeId === myEmployeeId))
-                        ).length
-                    );
+                    const rawTotal = (result as { total?: unknown }).total;
+                    const serverTotal = typeof rawTotal === "number" ? rawTotal : data.length;
+                    setHistoryPage(1);
+                    setHistoryServerTotal(serverTotal);
+                    setHistoryTotal(serverTotal);
                 }
                 setLoading(false);
             });
@@ -229,6 +226,30 @@ export default function EmployeeAppointmentsPage() {
         },
         [router]
     );
+
+    const canLoadMoreHistory = scope === "history" && view === "upcoming" && !loading && items.length < historyServerTotal;
+    const loadMoreHistory = useCallback(async () => {
+        if (loadingMoreHistory || items.length >= historyServerTotal) return;
+        setLoadingMoreHistory(true);
+        const controller = new AbortController();
+        const result = await fetchPastAppointments(controller.signal, {
+            q: debouncedQ || undefined,
+            roomId: filterRoom || undefined,
+            status: filterStatus || undefined,
+        }, historyPage + 1, 20);
+        if (result.error) {
+            setLoadError(result.error);
+        } else {
+            setItems((prev) => {
+                const seen = new Set(prev.map((a) => a.id));
+                return [...prev, ...result.items.filter((a) => !seen.has(a.id))];
+            });
+            setHistoryPage(result.page);
+            setHistoryServerTotal(result.total);
+            setHistoryTotal(result.total);
+        }
+        setLoadingMoreHistory(false);
+    }, [loadingMoreHistory, items.length, historyServerTotal, debouncedQ, filterRoom, filterStatus, historyPage]);
 
     const [showBusy, setShowBusy] = useState(false);
     const [blocks, setBlocks] = useState<Array<{ id: string; startAt: string; endAt: string; reason: string | null }>>([]);
@@ -331,14 +352,6 @@ export default function EmployeeAppointmentsPage() {
                     <Plus className="w-4 h-4" /> Buat Meeting
                 </button>
             </div>
-
-            <Link href="/employee/my-tasks" className="card p-4 flex items-center justify-between gap-2">
-                <span>
-                    <span className="block text-sm font-bold text-[var(--text-primary)]">Tugas Saya</span>
-                    <span className="block text-[11px] text-[var(--text-muted)]">Semua tugas yang ditugaskan kepada Anda dari berbagai sumber</span>
-                </span>
-                <span className="text-[11px] font-bold text-[var(--primary)] shrink-0">Lihat</span>
-            </Link>
 
             <div className="card overflow-hidden">
                 <button
@@ -609,6 +622,16 @@ export default function EmployeeAppointmentsPage() {
                                 </button>
                             );
                         })
+                    )}
+                    {canLoadMoreHistory && (
+                        <button
+                            type="button"
+                            onClick={() => { void loadMoreHistory(); }}
+                            disabled={loadingMoreHistory}
+                            className="btn btn-secondary w-full min-h-11"
+                        >
+                            {loadingMoreHistory ? "Memuat…" : `Muat Lebih Banyak (${items.length} dari ${historyServerTotal} meeting)`}
+                        </button>
                     )}
                 </div>
                 </div>

@@ -41,9 +41,9 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
         }))
     );
     const [changeReason, setChangeReason] = useState("");
-    const [notulisEmployeeId, setNotulisEmployeeId] = useState("");
+    const [notulisEmployeeId, setNotulisEmployeeId] = useState(editing?.notulisEmployeeId ?? "");
     const [notulisQuery, setNotulisQuery] = useState("");
-    const [leaderEmployeeId, setLeaderEmployeeId] = useState("");
+    const [leaderEmployeeId, setLeaderEmployeeId] = useState(editing?.leaderEmployeeId ?? "");
     const [leaderQuery, setLeaderQuery] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -74,7 +74,8 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
 
     const canSubmit =
         (editing || title.trim()) &&
-        (editing || (notulisEmployeeId && leaderEmployeeId)) &&
+        notulisEmployeeId &&
+        leaderEmployeeId &&
         date &&
         (isFullDay || (startTime && endTime && endTime > startTime)) &&
         roomId &&
@@ -166,6 +167,8 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                     endTime: isFullDay ? undefined : endTime,
                     isFullDay,
                     participants: mappedParticipants,
+                    notulisEmployeeId,
+                    leaderEmployeeId,
                     changeReason,
                 }
                 : {
@@ -274,15 +277,6 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 </div>
 
                 <div className="form-group !mb-0">
-                    <ParticipantPicker
-                        value={participants}
-                        onChange={setParticipants}
-                        excludeEmployeeId={editing ? (editing.requesterEmployeeId ?? myEmployeeId ?? null) : (myEmployeeId ?? null)}
-                    />
-                </div>
-
-                {!editing ? (
-                    <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="appt-notulis-search">
                             <span className="flex items-center gap-1">
                                 <UserCheck className="w-3 h-3" /> PIC Notulensi *
@@ -341,11 +335,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                             PIC notulensi wajib dipilih dari peserta internal. PIC mencatat notulensi; PIC dan pimpinan rapat dapat memberi tugas hasil meeting.
                         </p>
                     </div>
-                ) : (
-                    <p className="text-[11px] text-[var(--text-muted)]">PIC notulensi diatur di halaman detail meeting.</p>
-                )}
 
-                {!editing && (
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="appt-leader-search">
                             <span className="flex items-center gap-1">
@@ -405,7 +395,14 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                             Pimpinan rapat wajib dipilih dari peserta internal. Ia memimpin rapat di lapangan dan berwenang setara penyelenggara, termasuk mengganti PIC notulensi dan memberi tugas.
                         </p>
                     </div>
-                )}
+
+                <div className="form-group !mb-0">
+                    <ParticipantPicker
+                        value={participants}
+                        onChange={setParticipants}
+                        excludeEmployeeId={editing ? (editing.requesterEmployeeId ?? myEmployeeId ?? null) : (myEmployeeId ?? null)}
+                    />
+                </div>
 
                 <div className="form-group !mb-0">
                     <label className="form-label" htmlFor="appt-agenda">

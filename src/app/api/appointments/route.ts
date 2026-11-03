@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
             to: searchParams.get("to") ?? undefined,
             status: searchParams.get("status") ?? undefined,
             q: searchParams.get("q") ?? undefined,
+            sort: searchParams.get("sort") ?? undefined,
+            history: searchParams.get("history") === "1",
             page: Number.isFinite(page) ? page : 1,
             limit: Number.isFinite(limit) ? limit : 20,
         });

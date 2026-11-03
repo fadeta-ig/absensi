@@ -507,6 +507,10 @@ export interface AppointmentFilters {
     q?: string;
     page?: number;
     limit?: number;
+    /** "newest" = terbaru dulu (riwayat); bawaan terdekat dulu (mendatang). */
+    sort?: string;
+    /** Hanya meeting yang sudah berakhir (selesai/batal/lewat jam selesai). */
+    history?: boolean;
 }
 
 export function buildMeetingWhere(session: SessionPayload, filters: AppointmentFilters, isPrivileged: boolean): Prisma.MeetingAppointmentWhereInput {
@@ -516,6 +520,9 @@ export function buildMeetingWhere(session: SessionPayload, filters: AppointmentF
     }
     if (filters.q?.trim()) where.title = { contains: filters.q.trim() };
     const and: Prisma.MeetingAppointmentWhereInput[] = [];
+    if (filters.history) {
+        and.push({ OR: [{ status: "COMPLETED" }, { status: "CANCELLED" }, { status: "SCHEDULED", endAt: { lte: new Date() } }] });
+    }
     if (filters.status === "IN_PROGRESS") {
         const now = new Date();
         and.push({ status: "SCHEDULED", startAt: { lte: now }, endAt: { gt: now } });
@@ -552,28 +559,37 @@ function withLifecycle<T extends { status: string; startAt: Date; endAt: Date }>
     return { ...row, lifecycle: resolveLifecycleStatus(row.status, row.startAt, row.endAt, now) };
 }
 
-export async function getAppointments(session: SessionPayload, filters: AppointmentFilters): Promise<{ data: unknown[]; total: number }> {
+export async function getAppointments(
+    session: SessionPayload,
+    filters: AppointmentFilters
+): Promise<{ data: unknown[]; total: number; page: number; limit: number; totalPages: number }> {
     const privileged = isWig002(session);
     const where = buildMeetingWhere(session, filters, privileged);
+    // Pagination aman: ukuran halaman dibatasi dan nomor halaman dijepit
+    // ke rentang yang ada agar client tidak meminta lompatan kosong raksasa.
     const limit = Math.min(Math.max(filters.limit ?? 20, 1), 100);
-    const page = Math.max(filters.page ?? 1, 1);
-    const [rows, total] = await Promise.all([
-        prisma.meetingAppointment.findMany({
-            where,
-            orderBy: { startAt: "asc" },
-            skip: (page - 1) * limit,
-            take: limit,
-            select: {
-                id: true, title: true, agenda: true, status: true, startAt: true, endAt: true, isFullDay: true,
-                meetingLink: true, requesterEmployeeId: true,
-                requester: { select: { name: true } },
-                room: { select: { id: true, name: true } },
-                participants: { select: { id: true, employeeId: true, guestName: true, isExternal: true, attendance: true, inviteStatus: true, inviteRespondedAt: true, inviteNote: true, employee: { select: { name: true } } } },
-            },
-        }),
-        prisma.meetingAppointment.count({ where }),
-    ]);
-    return { data: rows.map((r) => withLifecycle(r)), total };
+    const total = await prisma.meetingAppointment.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(filters.page ?? 1, 1), totalPages);
+    const newestFirst = filters.sort === "newest";
+    const rows = await prisma.meetingAppointment.findMany({
+        where,
+        // Urutan deterministik agar pagination stabil: jam mulai, lalu
+        // waktu dibuat, lalu id sebagai penentu akhir.
+        orderBy: newestFirst
+            ? [{ startAt: "desc" }, { createdAt: "desc" }, { id: "desc" }]
+            : [{ startAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+            id: true, title: true, agenda: true, status: true, startAt: true, endAt: true, isFullDay: true,
+            meetingLink: true, requesterEmployeeId: true,
+            requester: { select: { name: true } },
+            room: { select: { id: true, name: true } },
+            participants: { select: { id: true, employeeId: true, guestName: true, isExternal: true, attendance: true, inviteStatus: true, inviteRespondedAt: true, inviteNote: true, employee: { select: { name: true } } } },
+        },
+    });
+    return { data: rows.map((r) => withLifecycle(r)), total, page, limit, totalPages };
 }
 
 export async function getAppointmentDetail(session: SessionPayload, id: string): Promise<unknown> {
@@ -594,6 +610,58 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
         }
     }
     return withLifecycle(appt);
+}
+
+/**
+ * Tetapkan/ganti pimpinan rapat setelah meeting dibuat (terjadwal/berjalan).
+ * Hanya penyelenggara, pimpinan rapat saat ini, atau WIG002. Pimpinan rapat
+ * wajib peserta internal meeting.
+ */
+export async function setMeetingLeader(
+    session: SessionPayload,
+    id: string,
+    leaderEmployeeId: string | null,
+    actor: { userId?: string | null; username: string }
+): Promise<unknown> {
+    if (!session.employeeId && !isWig002(session)) {
+        throw new AppointmentError("Hanya karyawan yang dapat mengatur pimpinan rapat.", 403);
+    }
+    const existing = await prisma.meetingAppointment.findUnique({
+        where: { id },
+        select: {
+            id: true, status: true, startAt: true, endAt: true,
+            requesterEmployeeId: true, leaderEmployeeId: true,
+            participants: { select: { employeeId: true } },
+        },
+    });
+    if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
+    if (existing.status === "CANCELLED" || existing.status === "COMPLETED") {
+        throw new AppointmentError("Meeting sudah selesai atau dibatalkan. Pimpinan rapat tidak dapat diubah.", 409);
+    }
+    if (resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt) === "COMPLETED") {
+        throw new AppointmentError("Meeting sudah berakhir. Pimpinan rapat tidak dapat diubah.", 409);
+    }
+    if (!isWig002(session) && !isMeetingOrganizer(session, existing)) {
+        throw new AppointmentError("Hanya penyelenggara atau pimpinan rapat yang dapat mengatur pimpinan rapat.", 403);
+    }
+    const leaderId = leaderEmployeeId?.trim() || null;
+    if (!leaderId) throw new AppointmentError("Pimpinan rapat wajib dipilih dan tidak dapat dikosongkan.", 400);
+    if (!existing.participants.some((p) => p.employeeId === leaderId)) {
+        throw new AppointmentError("Pimpinan rapat harus peserta internal meeting ini.", 422);
+    }
+    await prisma.meetingAppointment.update({ where: { id }, data: { leaderEmployeeId: leaderId } });
+    await prisma.auditLog.create({
+        data: {
+            action: "SET_MEETING_LEADER",
+            entity: "APPOINTMENT",
+            entityId: id,
+            details: JSON.stringify({ previousLeaderEmployeeId: existing.leaderEmployeeId, leaderEmployeeId: leaderId }),
+            actorType: "USER",
+            actorUserId: actor.userId ?? null,
+            actorIdentifier: actor.username,
+        },
+    }).catch(() => undefined);
+    return getAppointmentDetail(session, id);
 }
 
 // ─── RSVP peserta (terima/tolak, sekali dan final) ────────────────────
@@ -660,6 +728,8 @@ export interface RescheduleInput extends AppointmentSlot {
     agenda?: string | null;
     roomId?: string | null;
     participants?: ParticipantInput[];
+    notulisEmployeeId?: string | null;
+    leaderEmployeeId?: string | null;
     changeReason?: string;
     force?: boolean;
 }
@@ -764,6 +834,23 @@ export async function rescheduleAppointment(
         const participantEmployeeIds = normalizedParticipants
             ? normalizedParticipants.map((p) => p.employeeId).filter((v): v is string => Boolean(v))
             : existingParticipants.map((p) => p.employeeId).filter((v): v is string => Boolean(v));
+        // Pimpinan rapat & PIC notulensi dari Pengaturan Meeting: wajib
+        // peserta internal pada daftar peserta hasil edit.
+        const nextLeaderId = input.leaderEmployeeId === undefined ? (existing.leaderEmployeeId ?? null) : (input.leaderEmployeeId?.trim() || null);
+        if (input.leaderEmployeeId !== undefined && !nextLeaderId) {
+            throw new AppointmentError("Pimpinan rapat wajib dipilih dan tidak dapat dikosongkan.", 400);
+        }
+        if (nextLeaderId && !participantEmployeeIds.includes(nextLeaderId)) {
+            throw new AppointmentError("Pimpinan rapat harus peserta internal meeting ini.", 422);
+        }
+        const nextNotulisId = input.notulisEmployeeId === undefined ? (existing.notulisEmployeeId ?? null) : (input.notulisEmployeeId?.trim() || null);
+        if (input.notulisEmployeeId !== undefined && !nextNotulisId) {
+            throw new AppointmentError("PIC notulensi wajib dipilih dan tidak dapat dikosongkan.", 400);
+        }
+        if (nextNotulisId && !participantEmployeeIds.includes(nextNotulisId)) {
+            throw new AppointmentError("Petugas notulensi harus peserta internal meeting ini.", 422);
+        }
+        const isRoleChanged = nextLeaderId !== (existing.leaderEmployeeId ?? null) || nextNotulisId !== (existing.notulisEmployeeId ?? null);
         const addedEmployeeIds = normalizedParticipants
             ? participantEmployeeIds.filter((empId) => !existingInternalSet.has(empId))
             : [];
@@ -778,7 +865,7 @@ export async function rescheduleAppointment(
                 throw new AppointmentError(`Peserta berikut berhalangan (jadwal bertabrakan/cuti/sibuk): ${busyNames.join(", ")}.`, 409);
             }
         }
-        const effectiveReason = rawReason || "Perubahan daftar peserta";
+        const effectiveReason = rawReason || (isRoleChanged ? "Perubahan pimpinan rapat/PIC notulensi" : "Perubahan daftar peserta");
         const count = await tx.meetingAppointmentRevision.count({ where: { appointmentId: id } });
         try {
             await tx.meetingAppointmentRevision.create({
@@ -795,6 +882,8 @@ export async function rescheduleAppointment(
                         isFullDay: existing.isFullDay,
                         roomId: existing.roomId,
                         meetingLink: existing.meetingLink,
+                        leaderEmployeeId: existing.leaderEmployeeId,
+                        notulisEmployeeId: existing.notulisEmployeeId,
                         startAt: existing.startAt,
                         endAt: existing.endAt,
                         ...(normalizedParticipants
@@ -875,6 +964,8 @@ export async function rescheduleAppointment(
                 startAt,
                 endAt,
                 isFullDay: nextFullDay,
+                leaderEmployeeId: nextLeaderId,
+                notulisEmployeeId: nextNotulisId,
             },
         });
         const actorInfo = actorFromSession(session);
@@ -883,7 +974,7 @@ export async function rescheduleAppointment(
                 action: input.roomId !== undefined && input.roomId !== existing.roomId ? "MOVE_APPOINTMENT_ROOM" : "RESCHEDULE_APPOINTMENT",
                 entity: "APPOINTMENT",
                 entityId: id,
-                details: JSON.stringify({ changeReason: effectiveReason, force: operator && input.force ? true : false }),
+                details: JSON.stringify({ changeReason: effectiveReason, leaderEmployeeId: nextLeaderId, notulisEmployeeId: nextNotulisId, force: operator && input.force ? true : false }),
                 actorType: "USER",
                 actorUserId: actorInfo.userId ?? null,
                 actorIdentifier: actorInfo.identifier,

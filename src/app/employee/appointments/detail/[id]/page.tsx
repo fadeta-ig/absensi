@@ -204,7 +204,9 @@ function DetailContent({ id }: { id: string }) {
     const canManage = !!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId);
     const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
     const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
-    const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
+    // Pengaturan Meeting (termasuk pimpinan rapat & PIC) juga dibuka saat
+    // meeting berjalan; perubahan jadwal/ruang tetap ditolak service.
+    const canMeetingSettings = canManage && item.status === "SCHEDULED" && (item.lifecycle === "SCHEDULED" || item.lifecycle === "IN_PROGRESS");
     const canCancel = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
     const canComplete = canManage && item.status === "SCHEDULED" && Date.now() >= new Date(item.startAt).getTime();
     const nowMs = Date.now();
@@ -468,7 +470,7 @@ function DetailContent({ id }: { id: string }) {
                 )}
 
                 <div className="flex gap-2">
-                    {canEdit && (
+                    {canMeetingSettings && (
                         <button type="button" onClick={() => setEditing(true)} disabled={actionLoading} className="btn btn-secondary flex-1" aria-label="Pengaturan meeting">
                             <Settings className="w-4 h-4" /> Pengaturan Meeting
                         </button>

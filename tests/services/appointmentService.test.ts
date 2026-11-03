@@ -42,6 +42,7 @@ import {
     invalidateReminderOffsetsCache,
     normalizeRoomName,
     rescheduleAppointment,
+    setMeetingLeader,
     setReminderOffsets,
     slotToDates,
 } from "@/lib/services/appointmentService";
@@ -160,6 +161,38 @@ describe("createAppointment", () => {
         await expect(
             createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }] }, false)
         ).rejects.toMatchObject({ statusCode: 400 });
+    });
+});
+
+describe("setMeetingLeader", () => {
+    const leaderRow = () => {
+        const now = Date.now();
+        return {
+            id: "a1", status: "SCHEDULED",
+            startAt: new Date(now + 3600_000), endAt: new Date(now + 7200_000),
+            requesterEmployeeId: "ID-001", leaderEmployeeId: null,
+            participants: [{ employeeId: "ID-002" }, { employeeId: "ID-003" }],
+        };
+    };
+    it("penyelenggara dapat menunjuk pimpinan rapat dari peserta", async () => {
+        mocked.meetingAppointment.findUnique
+            .mockResolvedValueOnce(leaderRow() as never)
+            .mockResolvedValueOnce({ ...leaderRow(), leaderEmployeeId: "ID-002", room: null, requester: null } as never);
+        mocked.meetingAppointment.update.mockResolvedValue({ id: "a1" } as never);
+        await setMeetingLeader(empSession(), "a1", "ID-002", { userId: "u-1", username: "ID-001" });
+        expect(mocked.meetingAppointment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { leaderEmployeeId: "ID-002" } }));
+    });
+    it("bukan penyelenggara/pimpinan rapat ditolak 403", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(leaderRow() as never);
+        await expect(setMeetingLeader(empSession({ employeeId: "ID-003", username: "ID-003" }), "a1", "ID-002", { userId: "u-3", username: "ID-003" })).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("pimpinan rapat di luar peserta ditolak 422", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(leaderRow() as never);
+        await expect(setMeetingLeader(empSession(), "a1", "ID-999", { userId: "u-1", username: "ID-001" })).rejects.toMatchObject({ statusCode: 422 });
+    });
+    it("pimpinan rapat tidak dapat dikosongkan = 400", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(leaderRow() as never);
+        await expect(setMeetingLeader(empSession(), "a1", "", { userId: "u-1", username: "ID-001" })).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 
@@ -390,6 +423,61 @@ describe("rescheduleAppointment saat berjalan", () => {
         await expect(
             rescheduleAppointment(empSession(), "a1", { date: "2026-12-02", startTime: "10:00", endTime: "11:00", roomId: "r1", changeReason: "perubahan mendesak" }, { userId: "u", username: "ID-001" })
         ).rejects.toMatchObject({ statusCode: 409 });
+    });
+});
+
+describe("getAppointments urutan & pagination riwayat", () => {
+    it("riwayat terbaru dulu, deterministik, dan halaman dijepit ke rentang yang ada", async () => {
+        const { getAppointments } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.count.mockResolvedValue(3 as never);
+        mocked.meetingAppointment.findMany.mockResolvedValue([] as never);
+        const result = await getAppointments(empSession(), { history: true, sort: "newest", page: 99, limit: 2 });
+        expect(result).toMatchObject({ total: 3, page: 2, limit: 2, totalPages: 2 });
+        expect(mocked.meetingAppointment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            orderBy: [{ startAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+            skip: 2,
+            take: 2,
+        }));
+        const call = mocked.meetingAppointment.findMany.mock.calls.at(-1)?.[0] as { where: { AND: unknown[] } };
+        expect(JSON.stringify(call.where.AND)).toContain("CANCELLED");
+    });
+    it("bawaan tetap terdekat dulu untuk meeting mendatang", async () => {
+        const { getAppointments } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.count.mockResolvedValue(0 as never);
+        mocked.meetingAppointment.findMany.mockResolvedValue([] as never);
+        await getAppointments(empSession(), {});
+        expect(mocked.meetingAppointment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            orderBy: [{ startAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+        }));
+    });
+});
+
+describe("rescheduleAppointment pimpinan rapat/PIC", () => {
+    it("pimpinan rapat di luar peserta hasil edit ditolak 422", async () => {
+        const { rescheduleAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([{ id: "a1" }]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1", title: "T", agenda: null, isFullDay: false, status: "SCHEDULED",
+                    requesterEmployeeId: "ID-001", leaderEmployeeId: null, notulisEmployeeId: null,
+                    roomId: "r1", meetingLink: null,
+                    startAt: new Date("2027-01-01T03:00:00.000Z"), endAt: new Date("2027-01-01T04:00:00.000Z"),
+                }),
+            },
+            meetingAppointmentParticipant: {
+                findMany: vi.fn().mockResolvedValue([{ id: "p1", employeeId: "ID-002", guestName: null, isExternal: false }]),
+            },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        await expect(
+            rescheduleAppointment(empSession(), "a1", {
+                date: "2027-01-01", startTime: "10:00", endTime: "11:00", roomId: "r1",
+                participants: [{ employeeId: "ID-002" }], leaderEmployeeId: "ID-999", notulisEmployeeId: "ID-002",
+            }, { userId: "u", username: "ID-001" })
+        ).rejects.toMatchObject({ statusCode: 422 });
     });
 });
 

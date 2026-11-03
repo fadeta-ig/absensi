@@ -680,6 +680,8 @@ export const appointmentRescheduleSchema = z
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
         participants: z.array(appointmentParticipantSchema).max(100).optional(),
+        notulisEmployeeId: z.string().trim().min(1, "PIC notulensi wajib dipilih.").max(100).optional(),
+        leaderEmployeeId: z.string().trim().min(1, "Pimpinan rapat wajib dipilih.").max(100).optional(),
         changeReason: z
             .string()
             .trim()
@@ -820,6 +822,10 @@ export const meetingMinutesSchema = z.object({
 
 export const meetingNotulisSchema = z.object({
     notulisEmployeeId: z.string().trim().min(1, "PIC notulensi wajib dipilih.").max(100),
+});
+
+export const meetingLeaderSchema = z.object({
+    leaderEmployeeId: z.string().trim().min(1, "Pimpinan rapat wajib dipilih.").max(100),
 });
 
 export const meetingMinutesDeleteSchema = z.object({
