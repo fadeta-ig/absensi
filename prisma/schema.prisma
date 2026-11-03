@@ -2003,6 +2003,10 @@ enum MeetingTaskSubmissionVerdict {
 model MeetingTask {
   id                 String    @id @default(uuid())
   appointmentId      String    @map("appointment_id")
+  /// Sumber task untuk modul My Task: APPOINTMENTS (nanti sumber lain via adapter).
+  sourceType         String    @default("APPOINTMENTS") @map("source_type") @db.VarChar(50)
+  /// ID konteks di modul sumber; untuk APPOINTMENTS sama dengan appointmentId.
+  sourceId           String?   @map("source_id")
   title              String    @db.VarChar(200)
   detail             String?   @map("detail") @db.Text
   assignerEmployeeId String    @map("assigner_employee_id")
@@ -2024,6 +2028,7 @@ model MeetingTask {
   reminderLogs      MeetingTaskReminderLog[]
 
   @@index([appointmentId], map: "idx_meeting_task_appt")
+  @@index([sourceType, sourceId], map: "idx_meeting_task_source")
   @@index([assignerEmployeeId], map: "idx_meeting_task_assigner")
   @@index([isCancelled], map: "idx_meeting_task_cancelled")
   @@map("meeting_tasks")

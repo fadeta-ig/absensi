@@ -8,7 +8,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
 import AppointmentFormModal from "@/components/appointments/AppointmentFormModal";
 import MeetingMinutesSection from "@/components/appointments/MeetingMinutesSection";
-import MeetingTaskSection from "@/components/appointments/MeetingTaskSection";
+import MeetingTaskSummary from "@/components/appointments/MeetingTaskSummary";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import {
@@ -215,7 +215,6 @@ function DetailContent({ id }: { id: string }) {
     // tanpa kelola, tanpa tulis notulensi. WIG002 tanpa employeeId tetap bisa.
     const isInvolved = !myEmployeeId || item.requesterEmployeeId === myEmployeeId || item.participants.some((p) => p.employeeId === myEmployeeId);
     const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs && isInvolved;
-    const meetingFinishedForTask = item.status !== "CANCELLED" && (item.status === "COMPLETED" || nowMs >= meetingEndMs);
     const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
     const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
     const myResponse = myParticipant?.inviteStatus ?? "PENDING";
@@ -539,12 +538,11 @@ function DetailContent({ id }: { id: string }) {
             </div>
 
             <div className="card p-4">
-                <MeetingTaskSection
+                <MeetingTaskSummary
                     appointmentId={item.id}
                     participants={taskParticipants}
-                    readOnly={!meetingFinishedForTask}
                     canCreateTask={canCreateMeetingTask}
-                    canManageTask={canCreateMeetingTask}
+                    myEmployeeId={myEmployeeId}
                     refreshKey={syncKey}
                 />
             </div>

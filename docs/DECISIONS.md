@@ -203,3 +203,16 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Satu sumber kebenaran tempat (ruangan) sehingga cek bentrok ruangan selalu berjalan; form lebih sederhana tanpa pertanyaan mode.
   - Negatif: Kolom `roomId` di skema tetap nullable demi arsip; penegakan wajib berada di Zod + service. Edit/jadwal ulang appointment daring warisan akan mewajibkan pemilihan ruangan dan membersihkan tautannya.
   - Status: live lokal 2026-10-20 (UI + Zod + service + filter; suite `appointmentService` hijau, `tsc` bersih).
+
+---
+
+## ADR-016: Task Meeting Menjadi Modul Tugas Saya dengan Evolusi Data di Tempat
+
+- **Decision**: Pengelolaan task hasil meeting (pengumpulan, revisi, verifikasi, perpanjangan, pembatalan, daftar agregat, monitoring) pindah ke modul employee **Tugas Saya** (`/employee/my-tasks`, detail `/employee/my-tasks/[id]`, Pantau Tugas di `/employee/my-tasks/monitoring`). Pembuatan task tetap di detail meeting mengikuti aturan sumbernya; task manual tidak disediakan (keputusan pemilik).
+- **Context**: Task perlu menjadi modul yang dapat menerima sumber lain di masa depan (mis. Green Meeting) tanpa kehilangan data production yang berjalan. Audit data lokal (salinan backup production) menemukan task menempel pada riwayat meeting, reminder log exactly-once, dan status legacy yang harus berperilaku sama persis.
+- **Chosen Approach**: Evolusi di tempat, bukan penyalinan data. (1) Tabel fisik `meeting_tasks` dan sub-tabelnya tetap menjadi penyimpanan; hanya ditambah penanda `sourceType`/`sourceId` yang di-backfill dari `appointmentId`. (2) Lapisan `workTaskService` menyediakan akses generik My Task di atas adapter Appointments (`meetingTaskService`); endpoint dan UI lama menjadi shim/redirect selama transisi. (3) Key/tag notifikasi lama dipertahankan agar status baca dan exactly-once tidak reset; tautan push/notifikasi diarahkan ke detail Tugas Saya. (4) Deadline, verifikasi, overdue, dan pembatalan mengikuti policy sumber (Appointments: maks 2 sekuens/2 tiket; meeting batal membatalkan task belum final).
+- **Alternatives**: Membuat tabel generik baru lalu menyalin seluruh data lama (ditolak — risiko terbesar justru pada penyalinan FK, riwayat, lampiran, dan reminder log); mempertahankan pengelolaan penuh di detail meeting (ditolak pemilik — pengelolaan harus terpusat di Tugas Saya).
+- **Consequences**:
+  - Positif: Tidak ada baris data yang berpindah sehingga kehilangan/duplikasi dapat dibuktikan tidak terjadi (rekonsiliasi ID identik); rollback cukup mengembalikan UI/route; sumber baru cukup menambah adapter dan nilai `sourceType`.
+  - Negatif: Nama fisik tabel tetap `meeting_task*` untuk sementara; fungsi notulensi tetap di service lama dan pemecahan fisik tabel ditunda.
+  - Status: live lokal 2026-11-02 (skema + backfill `hris_local`, API/UI Tugas Saya, build + suite task/appointment hijau; kegagalan `AppointmentDayDetail` 1 test bersifat pre-existing pada file yang tidak diubah).

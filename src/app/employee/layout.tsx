@@ -32,7 +32,8 @@ const navItems: NavItem[] = [
     { href: "/employee/equipment", icon: Wrench, label: "Inspeksi Alat" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting" },
-    { href: "/employee/appointments/monitor", icon: Eye, label: "Pantau E-Meeting" },
+    { href: "/employee/my-tasks", icon: ClipboardList, label: "Tugas Saya" },
+    { href: "/employee/my-tasks/monitoring", icon: Eye, label: "Pantau Tugas" },
     { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
     { href: "/employee/profile", icon: User, label: "Profil" },
@@ -137,11 +138,11 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
         void checkAuth();
     }, [checkAuth]);
 
-    // Pantau E-Meeting tampil bila terdaftar sebagai pemantau (WIG002).
+    // Pantau Tugas tampil bila terdaftar sebagai pemantau (WIG002).
     useEffect(() => {
         if (!user) return;
         let cancelled = false;
-        fetch("/api/employee/meeting-capabilities", { credentials: "same-origin" })
+        fetch("/api/my-tasks/capabilities", { credentials: "same-origin" })
             .then((res) => (res.ok ? res.json() : null))
             .then((json: unknown) => {
                 if (cancelled || !json || typeof json !== "object") return;
@@ -221,7 +222,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 navItems.filter(
                     (i) =>
                         (i.href !== "/employee/equipment" || equipmentVisible) &&
-                        (i.href !== "/employee/appointments/monitor" || monitorVisible)
+                        (i.href !== "/employee/my-tasks/monitoring" || monitorVisible)
                 )
             }
             brandTitle="WIG Portal"

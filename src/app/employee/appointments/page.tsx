@@ -332,10 +332,10 @@ export default function EmployeeAppointmentsPage() {
                 </button>
             </div>
 
-            <Link href="/employee/appointments/tasks" className="card p-4 flex items-center justify-between gap-2">
+            <Link href="/employee/my-tasks" className="card p-4 flex items-center justify-between gap-2">
                 <span>
-                    <span className="block text-sm font-bold text-[var(--text-primary)]">Task Meeting Saya</span>
-                    <span className="block text-[11px] text-[var(--text-muted)]">Kumpulan semua task dari hasil meeting untuk Anda</span>
+                    <span className="block text-sm font-bold text-[var(--text-primary)]">Tugas Saya</span>
+                    <span className="block text-[11px] text-[var(--text-muted)]">Semua tugas yang ditugaskan kepada Anda dari berbagai sumber</span>
                 </span>
                 <span className="text-[11px] font-bold text-[var(--primary)] shrink-0">Lihat</span>
             </Link>

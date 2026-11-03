@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             title: approved ? "Task Disetujui Verifikator" : "Task Diminta Revisi",
             body: `${task.title} — ${approved ? "sudah diverifikasi" : "perlu diperbaiki, lihat catatan revisi"}`,
             tag: `meeting-task-${task.id}-verdict`,
-            url: `/employee/appointments/tasks?highlight=${task.id}`,
+            url: `/employee/my-tasks/${task.id}`,
         });
         return NextResponse.json({ success: true, data: task });
     } catch (err) {

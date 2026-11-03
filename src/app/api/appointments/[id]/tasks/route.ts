@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             title: "Task Meeting Baru",
             body: `${task.title} — deadline ${task.activeDeadline?.date ?? "-"}`,
             tag: `meeting-task-${task.id}`,
-            url: `/employee/appointments/tasks?highlight=${task.id}`,
+            url: `/employee/my-tasks/${task.id}`,
         });
 
         return NextResponse.json({ success: true, data: task }, { status: 201 });

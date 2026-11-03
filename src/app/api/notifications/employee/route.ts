@@ -342,7 +342,7 @@ export async function GET(request: Request) {
                 type:    "task",
                 title:   isOverdue ? "Task Overdue" : "Task Mendekati Deadline",
                 message: `${row.task.title} — deadline ${dueLabel}`,
-                href:    `/employee/appointments/tasks?highlight=${row.task.id}`,
+                href:    `/employee/my-tasks/${row.task.id}`,
                 time:    new Date(due).toISOString(),
                 isRead:  false,
             });
@@ -367,7 +367,7 @@ export async function GET(request: Request) {
                 type:    "task",
                 title:   "Hasil Task Perlu Verifikasi",
                 message: `${sub.employee?.name ?? "Penerima"} mengumpulkan "${sub.task.title}"`,
-                href:    `/employee/appointments/tasks?highlight=${sub.task.id}`,
+                href:    `/employee/my-tasks/${sub.task.id}`,
                 time:    sub.createdAt.toISOString(),
                 isRead:  false,
             });
@@ -405,7 +405,7 @@ export async function GET(request: Request) {
                 type:    "task",
                 title:   "Task Baru dari Meeting Selesai",
                 message: `${row.task.title} — deadline ${new Date(due).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" })}`,
-                href:    `/employee/appointments/tasks?highlight=${row.task.id}`,
+                href:    `/employee/my-tasks/${row.task.id}`,
                 time:    row.task.createdAt.toISOString(),
                 isRead:  false,
             });

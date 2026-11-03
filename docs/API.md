@@ -286,3 +286,17 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/employee/meeting-capabilities` | `GET` | Karyawan | Kapabilitas ringan `{ canMonitor }` untuk gating menu Pantau E-Meeting. |
 | `/api/employee/pantau-kinerja` | `GET` | Pemantau/WIG002 | Tingkat ketepatan per karyawan per periode (`from/to` YYYY-MM-DD) + strip tunggakan bulan lalu (baca saja). |
 | `/api/ga/meeting-settings/top-viewers` | `GET/POST/DELETE` | WIG002 | Kelola daftar pemantau e-meeting (max 5, AppSetting `meeting.topViewers`). |
+
+### M. Tugas Saya (`/api/my-tasks`)
+Endpoint kanonik pengelolaan task lintas sumber (tahap pertama sumber `APPOINTMENTS`). Endpoint task lama di bagian L tetap tersedia sebagai shim pada service yang sama selama masa transisi; route UI lama `/employee/appointments/tasks` dan `/employee/appointments/monitor` mengarah ke route baru.
+| Rute | Metode | Akses | Deskripsi |
+|---|---|---|---|
+| `/api/my-tasks` | `GET` | Karyawan | Daftar tugas saya (`status`/`overdue=1`/`source`); menyembunyikan task milik meeting CANCELLED. |
+| `/api/my-tasks/[id]` | `GET` | Pemberi/peserta/monitor/WIG002 | Detail ruang kerja tugas (konteks sumber, penerima, deadline, submission). |
+| `/api/my-tasks/[id]` | `PATCH` | Pemberi/GA | Aksi `extend`/`edit`/`cancel` dengan skema yang sama seperti task meeting. |
+| `/api/my-tasks/[id]/submissions` | `POST` | Penerima (multipart) | Kumpulkan hasil: `note?` + `files[1..5]` → `ON_PROGRESS` + push ke pemberi (tautan ke detail Tugas Saya). |
+| `/api/my-tasks/submissions/[submissionId]/verify` | `PATCH` | Pemberi/GA | `TERIMA`/`REVISI` sama seperti verifikasi task meeting. |
+| `/api/my-tasks/submissions/attachments/[attachmentId]` | `GET` | Pengumpul/pemberi/WIG002 | Unduh lampiran (monitor tidak termasuk). |
+| `/api/my-tasks/verifications` | `GET` | Pemberi | Antrean tugas menunggu verifikasi saya. |
+| `/api/my-tasks/monitoring` | `GET` | Pemantau/WIG002 | Pantau Tugas: ketepatan per karyawan (`from/to`, `source` opsional). |
+| `/api/my-tasks/capabilities` | `GET` | Karyawan | `{ canMonitor }` untuk gating menu Pantau Tugas. |

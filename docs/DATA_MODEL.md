@@ -152,7 +152,7 @@ RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; emp
 
 ## 5. Task Hasil Meeting + Notulensi + Verifikasi (2026-10-08; verifikasi 2026-10-26)
 
-1. `MeetingAppointment` 1 ── * `MeetingTask` (`appointmentId`, Cascade; notulensi via kolom `notulisEmployeeId/minutes/minutesUpdatedBy/minutesUpdatedAt` + `MeetingAppointmentRevision`).
+1. `MeetingAppointment` 1 ── * `MeetingTask` (`appointmentId`, Cascade; notulensi via kolom `notulisEmployeeId/minutes/minutesUpdatedBy/minutesUpdatedAt` + `MeetingAppointmentRevision`). Untuk modul Tugas Saya, `MeetingTask` juga memiliki penanda sumber `sourceType` (default `APPOINTMENTS`) + `sourceId` (= `appointmentId` untuk sumber E-Meeting, terindeks `[sourceType, sourceId]`); tabel fisik task tidak dipindah/diubah namanya agar data historis, reminder log, dan riwayat tetap utuh — sumber lain di masa depan masuk lewat penanda ini tanpa menyalin data lama.
 2. `MeetingTask` 1 ── * `MeetingTaskAssignee` (unik `[taskId, employeeId]`; status per-orang `OPEN/BELUM_DIKERJAKAN(legacy)/ON_PROGRESS(menunggu verifikasi)/SELESAI/DIBATALKAN`; kolom `deadlineTicketsUsed` default 0 maks 2 per penerima; overdue = derived `now > dueAt` ATAU sticky-overdue, bukan kolom).
 3. `MeetingTask` 1 ── * `MeetingTaskDeadlineHistory` (unik `[taskId, sequence]`; deadline aktif = sequence max; maks 2 sekuens: awal + 1 perpanjangan; tiket terkonsumsi penerima idle saat deadline baru ditambah).
 4. `MeetingTask` 1 ── * `MeetingTaskRevision` (unik `[taskId, revisionNumber]`, snapshot `previousData` + `changeReason` wajib).

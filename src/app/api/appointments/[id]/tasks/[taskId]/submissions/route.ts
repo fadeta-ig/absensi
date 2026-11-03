@@ -65,7 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 title: "Hasil Task Perlu Verifikasi",
                 body: `${info.title} — menunggu verifikasi Anda`,
                 tag: `meeting-task-${taskId}-verify`,
-                url: `/employee/appointments/detail/${task.appointmentId}`,
+                url: `/employee/my-tasks/${taskId}`,
             });
         }
         return NextResponse.json({ success: true, data: task }, { status: 201 });

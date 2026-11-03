@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 title: "Deadline Task Diperpanjang",
                 body: `${task.title} — deadline baru ${task.activeDeadline?.date ?? "-"}`,
                 tag: `meeting-task-${task.id}-ext-${task.extensionsCount}`,
-                url: `/employee/appointments/tasks?highlight=${task.id}`,
+                url: `/employee/my-tasks/${task.id}`,
             });
             return NextResponse.json({ success: true, data: task });
         }

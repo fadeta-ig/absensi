@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
                     icon: "/icons/android-chrome-192x192.png",
                     badge: "/icons/android-chrome-192x192.png",
                     tag: `meeting-task-${task.id}-${kind}`,
-                    url: `/employee/appointments/tasks?highlight=${task.id}`,
+                    url: `/employee/my-tasks/${task.id}`,
                 });
                 for (const sub of subs) {
                     try {
@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
                 icon: "/icons/android-chrome-192x192.png",
                 badge: "/icons/android-chrome-192x192.png",
                 tag: `meeting-task-${sub.taskId}-verify-${todayWib}`,
-                url: `/employee/appointments/tasks?highlight=${sub.taskId}`,
+                url: `/employee/my-tasks/${sub.taskId}`,
             });
             for (const ps of giverSubs) {
                 try {

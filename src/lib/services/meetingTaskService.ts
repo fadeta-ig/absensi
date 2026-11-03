@@ -169,7 +169,7 @@ async function assertActiveEmployees(employeeIds: string[]): Promise<void> {
 
 const taskInclude = {
     assigner: { select: { employeeId: true, name: true } },
-    appointment: { select: { id: true, title: true, startAt: true, status: true, room: { select: { name: true } } } },
+    appointment: { select: { id: true, title: true, startAt: true, endAt: true, status: true, room: { select: { name: true } } } },
     assignees: { include: { employee: { select: { employeeId: true, name: true } } }, orderBy: { createdAt: "asc" as const } },
     deadlineHistory: { orderBy: { sequence: "asc" as const } },
     submissions: {
@@ -207,6 +207,8 @@ export function toTaskDto(task: TaskRow, now: Date = new Date()) {
     return {
         id: task.id,
         appointmentId: task.appointmentId,
+        sourceType: task.sourceType ?? "APPOINTMENTS",
+        sourceId: task.sourceId ?? task.appointmentId,
         title: task.title,
         detail: task.detail,
         isCancelled: task.isCancelled,
@@ -277,6 +279,8 @@ export async function createMeetingTask(
         const task = await tx.meetingTask.create({
             data: {
                 appointmentId,
+                sourceType: "APPOINTMENTS",
+                sourceId: appointmentId,
                 title: title.slice(0, 200),
                 detail: input.detail?.trim().slice(0, 5000) || null,
                 assignerEmployeeId: session.employeeId as string,

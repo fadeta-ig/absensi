@@ -25,7 +25,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
                 title: "Task Baru dari Meeting Selesai",
                 body: `Dari hasil "${item.meetingTitle}", kamu ada task "${item.title}"! Deadline ${item.activeDeadlineDate}${daysLeft !== null ? ` (sisa ${daysLeft} hari lagi)` : ""}.`,
                 tag: `meeting-task-${item.taskId}-submitted`,
-                url: `/employee/appointments/tasks?highlight=${item.taskId}`,
+                url: `/employee/my-tasks/${item.taskId}`,
             });
             submitted += 1;
         }
