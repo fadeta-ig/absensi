@@ -60,6 +60,19 @@ export function isWig002(session: SessionPayload): boolean {
     return session.username === "WIG002" && session.permissions.includes(PERMISSIONS.GA_MANAGE);
 }
 
+/**
+ * Penyelenggara lapangan: pembuat meeting ATAU pimpinan rapat.
+ * Penyelenggara belum tentu hadir (mis. resepsionis membuatkan meeting),
+ * sehingga pimpinan rapat berwenang setara penyelenggara.
+ */
+export function isMeetingOrganizer(
+    session: SessionPayload,
+    appt: { requesterEmployeeId: string | null; leaderEmployeeId?: string | null }
+): boolean {
+    if (!session.employeeId) return false;
+    return appt.requesterEmployeeId === session.employeeId || (appt.leaderEmployeeId != null && appt.leaderEmployeeId === session.employeeId);
+}
+
 /** Pemantau e-meeting dinamis (daftar WIG002, max 5) atau operator WIG002. */
 export async function isMeetingMonitor(session: SessionPayload): Promise<boolean> {
     if (isWig002(session)) return true;
@@ -373,6 +386,7 @@ export interface CreateAppointmentInput extends AppointmentSlot {
     roomId?: string | null;
     participants: ParticipantInput[];
     notulisEmployeeId?: string | null;
+    leaderEmployeeId?: string | null;
     reminderOffsets?: number[] | null;
     force?: boolean;
 }
@@ -404,10 +418,22 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     if (session.employeeId && participants.some((p) => p.employeeId === session.employeeId)) {
         throw new AppointmentError("Anda sudah tercatat sebagai penyelenggara meeting ini dan tidak perlu ditambahkan sebagai peserta.", 400);
     }
-    // PIC notulensi opsional saat buat: harus peserta internal yang sudah ditambahkan.
+    // PIC notulensi WAJIB saat buat meeting: harus peserta internal yang sudah ditambahkan.
     const notulisId = input.notulisEmployeeId?.trim() || null;
-    if (notulisId && !participants.some((p) => p.employeeId === notulisId)) {
+    if (!notulisId) {
+        throw new AppointmentError("PIC notulensi wajib dipilih dari peserta internal meeting.", 400);
+    }
+    if (!participants.some((p) => p.employeeId === notulisId)) {
         throw new AppointmentError("Petugas notulensi harus peserta internal meeting ini.", 422);
+    }
+    // Pimpinan rapat WAJIB saat buat meeting: peserta internal yang memimpin
+    // rapat di lapangan dan berwenang setara penyelenggara.
+    const leaderId = input.leaderEmployeeId?.trim() || null;
+    if (!leaderId) {
+        throw new AppointmentError("Pimpinan rapat wajib dipilih dari peserta internal meeting.", 400);
+    }
+    if (!participants.some((p) => p.employeeId === leaderId)) {
+        throw new AppointmentError("Pimpinan rapat harus peserta internal meeting ini.", 422);
     }
     // Siapa cepat dia dapat: booking langsung SCHEDULED, meeting tetap jalan
     // tanpa menunggu operator.
@@ -442,6 +468,7 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
                 requesterEmployeeId: session.employeeId,
                 createdByUserId: session.userId ?? null,
                 notulisEmployeeId: notulisId,
+                leaderEmployeeId: leaderId,
                 reminderOffsets: parseReminderOverride(input.reminderOffsets),
                 participants: {
                     create: participants.map((p) => ({ employeeId: p.employeeId, guestName: p.guestName, isExternal: p.isExternal })),
@@ -455,7 +482,7 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
                 action: "CREATE_APPOINTMENT",
                 entity: "APPOINTMENT",
                 entityId: appt.id,
-                details: JSON.stringify({ title, status, notulisEmployeeId: notulisId, force: asOperator && input.force ? true : false, participantCount: participants.length }),
+                details: JSON.stringify({ title, status, notulisEmployeeId: notulisId, leaderEmployeeId: leaderId, force: asOperator && input.force ? true : false, participantCount: participants.length }),
                 actorType: "USER",
                 actorUserId: actor.userId ?? null,
                 actorIdentifier: actor.identifier,
@@ -677,7 +704,7 @@ export async function rescheduleAppointment(
         if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
             throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
         }
-        const isOwner = session.employeeId !== null && session.employeeId !== undefined && existing.requesterEmployeeId === session.employeeId;
+        const isOwner = isMeetingOrganizer(session, existing);
         if (!operator) {
             if (!isOwner) throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat mengubah.", 403);
             if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah pemilik.", 400);
@@ -883,13 +910,13 @@ export async function cancelAppointment(
 ): Promise<unknown> {
     const operator = isWig002(session);
     if (!reason || reason.trim().length < 5) throw new AppointmentError("Alasan pembatalan minimal 5 karakter.", 400);
-    const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true } });
+    const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, roomId: true, startAt: true, endAt: true } });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
         throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
     }
     if (!operator) {
-        if (existing.requesterEmployeeId !== session.employeeId) throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat membatalkan.", 403);
+        if (!isMeetingOrganizer(session, existing)) throw new AppointmentError("Hanya pembuat meeting, pimpinan rapat, atau GA yang dapat membatalkan.", 403);
         if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan pemilik.", 400);
     }
     return prisma.$transaction(async (tx) => {
@@ -945,14 +972,14 @@ export async function completeAppointment(
     const operator = isWig002(session);
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
-        select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, roomId: true, startAt: true, endAt: true },
+        select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, roomId: true, startAt: true, endAt: true },
     });
     if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
         throw new AppointmentError("Meeting sudah selesai atau dibatalkan.", 409);
     }
-    if (!operator && existing.requesterEmployeeId !== session.employeeId) {
-        throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat menyelesaikan.", 403);
+    if (!operator && !isMeetingOrganizer(session, existing)) {
+        throw new AppointmentError("Hanya pembuat meeting, pimpinan rapat, atau GA yang dapat menyelesaikan.", 403);
     }
     const now = new Date();
     if (now < existing.startAt) {
@@ -992,11 +1019,11 @@ export async function markAttendance(
     const operator = isWig002(session);
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
-        select: { id: true, requesterEmployeeId: true, startAt: true, endAt: true, status: true, participants: { select: { id: true } } },
+        select: { id: true, requesterEmployeeId: true, leaderEmployeeId: true, startAt: true, endAt: true, status: true, participants: { select: { id: true } } },
     });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
-    if (!operator && !(session.employeeId && existing.requesterEmployeeId === session.employeeId)) {
-        throw new AppointmentError("Hanya GA atau pembuat meeting yang dapat menandai kehadiran.", 403);
+    if (!operator && !isMeetingOrganizer(session, existing)) {
+        throw new AppointmentError("Hanya GA, pembuat meeting, atau pimpinan rapat yang dapat menandai kehadiran.", 403);
     }
     if (existing.status !== "SCHEDULED" && existing.status !== "COMPLETED") {
         throw new AppointmentError("Kehadiran hanya dapat ditandai untuk meeting yang sedang berlangsung.", 400);

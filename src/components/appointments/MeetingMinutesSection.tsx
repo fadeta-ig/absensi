@@ -83,7 +83,7 @@ export default function MeetingMinutesSection({
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 credentials: "same-origin",
-                body: JSON.stringify({ notulisEmployeeId: nextNotulisId || null }),
+                body: JSON.stringify({ notulisEmployeeId: nextNotulisId }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengatur petugas notulensi."));
             const json = await res.json();
@@ -203,18 +203,17 @@ export default function MeetingMinutesSection({
                                     disabled={savingNotulis}
                                     onChange={(e) => {
                                         const next = e.target.value;
+                                        if (!next) return;
                                         confirm({
                                             title: "Ubah Petugas Notulis?",
-                                            message: next
-                                                ? "Hanya petugas terpilih (dan penyelenggara) yang dapat mengisi notulensi setelah ini."
-                                                : "Semua peserta kembali berhak mengisi notulensi.",
+                                            message: "Hanya petugas terpilih (dan penyelenggara/pimpinan rapat) yang dapat mengisi notulensi setelah ini.",
                                             confirmLabel: "Ya, Ubah",
                                             variant: "info",
                                             onConfirm: () => { void handleNotulisChange(next); },
                                         });
                                     }}
                                 >
-                                    <option value="">Semua Peserta Berhak Input (Tidak Dibatasi)</option>
+                                    <option value="" disabled>Pilih PIC Notulensi</option>
                                     {data.eligibleMembers.map((m) => (
                                         <option key={m.employeeId} value={m.employeeId}>
                                             {stripGelar(m.name)} ({m.employeeId}){m.isOrganizer ? " — Penyelenggara" : ""}
@@ -225,8 +224,8 @@ export default function MeetingMinutesSection({
                             </div>
                             <p className="text-[11px] text-[var(--text-muted)]">
                                 {data.notulisEmployeeId
-                                    ? "Hanya petugas notulis terpilih (dan penyelenggara) yang dapat mengisi atau mengubah notulensi."
-                                    : "Belum ditentukan petugas khusus — seluruh peserta meeting di ruangan dapat mengisi notulensi."}
+                                    ? "Hanya petugas notulis terpilih (dan penyelenggara/pimpinan rapat) yang dapat mengisi atau mengubah notulensi."
+                                    : "PIC notulensi wajib ditunjuk oleh penyelenggara atau pimpinan rapat sebelum notulensi dan tugas dikelola."}
                             </p>
                         </div>
                     )}

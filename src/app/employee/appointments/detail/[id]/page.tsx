@@ -201,7 +201,7 @@ function DetailContent({ id }: { id: string }) {
         );
     }
 
-    const canManage = !!myEmployeeId && item.requesterEmployeeId === myEmployeeId;
+    const canManage = !!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId);
     const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
     const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
     const canEdit = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
@@ -214,7 +214,8 @@ function DetailContent({ id }: { id: string }) {
     // Pemantau (bukan penyelenggara/peserta) hanya membaca: tanpa Beri Task,
     // tanpa kelola, tanpa tulis notulensi. WIG002 tanpa employeeId tetap bisa.
     const isInvolved = !myEmployeeId || item.requesterEmployeeId === myEmployeeId || item.participants.some((p) => p.employeeId === myEmployeeId);
-    const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs && isInvolved;
+    // Beri task hanya oleh PIC notulensi atau pimpinan rapat (bukan semua peserta), selama meeting berjalan.
+    const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs && Boolean(myEmployeeId) && (myEmployeeId === item.notulisEmployeeId || myEmployeeId === item.leaderEmployeeId);
     const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
     const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
     const myResponse = myParticipant?.inviteStatus ?? "PENDING";
@@ -292,7 +293,17 @@ function DetailContent({ id }: { id: string }) {
                         <User className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
                         <span>
                             Penyelenggara: <strong className="font-semibold text-[var(--text-primary)]">{requesterDisplayName(item)}</strong>
-                            {canManage ? " (Anda)" : ""}
+                            {item.requesterEmployeeId === myEmployeeId ? " (Anda)" : ""}
+                        </span>
+                    </p>
+                )}
+
+                {item.leaderEmployeeId && (
+                    <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
+                        <span>
+                            Pimpinan Rapat: <strong className="font-semibold text-[var(--text-primary)]">{participantDisplayName(item.participants.find((p) => p.employeeId === item.leaderEmployeeId) ?? { employeeId: item.leaderEmployeeId, guestName: null })}</strong>
+                            {item.leaderEmployeeId === myEmployeeId ? " (Anda)" : ""}
                         </span>
                     </p>
                 )}

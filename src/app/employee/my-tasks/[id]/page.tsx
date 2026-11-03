@@ -39,7 +39,7 @@ interface WorkTask {
     cancelReason: string | null;
     assigner: { employeeId: string; name: string | null };
     appointment: { id: string; title: string; startAt: string; endAt: string; status: string; room: { name: string } | null };
-    activeDeadline: { date: string; sequence: number } | null;
+    activeDeadline: { date: string; deadlineAt: string; sequence: number } | null;
     extensionsCount: number;
     assignees: Assignee[];
     submissions: Submission[];
@@ -220,7 +220,7 @@ export default function MyTaskDetailPage() {
                 <dl className="space-y-1.5 text-xs">
                     <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Meeting asal</dt><dd><Link className="text-[var(--primary)] font-semibold hover:underline" href={`/employee/appointments/detail/${task.appointmentId}`}>{task.appointment.title}</Link> · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short", year: "numeric" })}{task.appointment.room ? ` · ${task.appointment.room.name}` : ""}</dd></div>
                     <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Pemberi tugas</dt><dd className="text-[var(--text-secondary)]">{task.assigner.name ? stripGelar(task.assigner.name) : task.assigner.employeeId}</dd></div>
-                    <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Deadline</dt><dd className={`font-semibold ${mine?.isOverdue ? "text-red-600" : "text-[var(--text-secondary)]"}`}>{task.activeDeadline?.date ?? "-"}{task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}</dd></div>
+                    <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Deadline</dt><dd className={`font-semibold ${mine?.isOverdue ? "text-red-600" : "text-[var(--text-secondary)]"}`}>{task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}{task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}</dd></div>
                     {mine && <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Status Anda</dt><dd className="text-[var(--text-secondary)]">{meetingTaskStatusLabel(mine.status)}{mine.stickyOverdue && mine.status === "SELESAI" ? " · Overdue (Done)" : ""}</dd></div>}
                 </dl>
                 {task.detail && <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap border-t border-[var(--border)] pt-2">{task.detail}</p>}

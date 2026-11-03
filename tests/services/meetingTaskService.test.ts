@@ -44,6 +44,7 @@ import {
     isAssigneeOverdue,
     isReceiverStickyOverdue,
     meetingTaskDueDateToDate,
+    meetingTaskDueDateTimeToDate,
     submitTaskWork,
     updateMeetingMinutes,
     verifyTaskSubmission,
@@ -76,6 +77,8 @@ function meetingRow() {
         startAt: new Date(now - 60_000),
         endAt: new Date(now + 60_000),
         requesterEmployeeId: "ID-001",
+        notulisEmployeeId: "ID-001",
+        leaderEmployeeId: "ID-002",
         participants: [{ employeeId: "ID-001" }, { employeeId: "ID-002" }],
     };
 }
@@ -112,15 +115,15 @@ describe("isAssigneeOverdue", () => {
 
 describe("createMeetingTask", () => {
     it("tanpa employeeId ditolak 403", async () => {
-        await expect(createMeetingTask(empSession({ employeeId: null }), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(createMeetingTask(empSession({ employeeId: null }), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("meeting tidak ada = 404", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue(null);
-        await expect(createMeetingTask(empSession(), "nope", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 404 });
+        await expect(createMeetingTask(empSession(), "nope", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 404 });
     });
     it("meeting dibatalkan = 409", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "CANCELLED" } as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 409 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 409 });
     });
     it("meeting belum mulai (SCHEDULED future) = 409", async () => {
         const now = Date.now();
@@ -130,7 +133,7 @@ describe("createMeetingTask", () => {
             startAt: new Date(now + 60 * 60 * 1000),
             endAt: new Date(now + 2 * 60 * 60 * 1000),
         } as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({
             statusCode: 409,
             message: "Meeting belum dimulai. Task baru dapat dibuat setelah meeting berjalan.",
         });
@@ -143,14 +146,14 @@ describe("createMeetingTask", () => {
             startAt: new Date(now - 2 * 60 * 60 * 1000),
             endAt: new Date(now - 60 * 60 * 1000),
         } as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({
             statusCode: 409,
             message: "Meeting sudah berakhir. Task baru hanya dapat dibuat selama meeting berjalan.",
         });
     });
     it("meeting sedang berjalan (IN_PROGRESS) lolos validasi status", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: [], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: [], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 400 });
     });
     it("meeting sudah selesai (COMPLETED) = 409 read-only", async () => {
         const now = Date.now();
@@ -160,8 +163,8 @@ describe("createMeetingTask", () => {
             startAt: new Date(now - 2 * 60 * 60 * 1000),
             endAt: new Date(now - 60 * 60 * 1000),
         } as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 409 });
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12" }, actor)).rejects.toThrow(
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 409 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toThrow(
             "Meeting sudah selesai. Task baru tidak dapat ditambahkan."
         );
     });
@@ -179,7 +182,7 @@ describe("createMeetingTask", () => {
         });
     });
     it("update notulensi saat sedang berjalan (IN_PROGRESS) berhasil tanpa alasan perubahan", async () => {
-        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "SCHEDULED", minutes: null } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "SCHEDULED", notulisEmployeeId: "ID-002", minutes: null } as never);
         mocked.employee.findMany.mockResolvedValue([] as never);
         const tx = {
             meetingAppointment: {
@@ -227,20 +230,40 @@ describe("createMeetingTask", () => {
     });
     it("bukan peserta = 403", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), requesterEmployeeId: "ID-009", participants: [{ employeeId: "ID-009" }] } as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-009"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-009"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("peserta yang bukan PIC notulensi/pimpinan rapat tidak dapat memberi task = 403", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), leaderEmployeeId: null } as never);
+        await expect(createMeetingTask(empSession({ employeeId: "ID-002", username: "ID-002" }), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("pimpinan rapat dapat memberi task (lolos gate pemberi, berhenti di validasi penerima)", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(createMeetingTask(empSession({ employeeId: "ID-002", username: "ID-002" }), "appt-1", { title: "T", assigneeEmployeeIds: [], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("pemberi task terpilih di luar peserta = 422", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assignerEmployeeId: "ID-999", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 422 });
     });
     it("tanpa penerima = 400", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: [], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: [], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 400 });
     });
     it("penerima di luar peserta = 422", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-999"], dueDate: "2026-10-12" }, actor)).rejects.toMatchObject({ statusCode: 422 });
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-999"], dueDate: "2026-10-12", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 422 });
+    });
+    it("jam deadline kosong = 400 (tanggal + jam wajib)", async () => {
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-001", isActive: true }, { employeeId: "ID-002", isActive: true }] as never);
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-10-12", dueTime: "" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("deadline memakai jam yang dipilih, bukan bawaan 23:59", async () => {
+        expect(meetingTaskDueDateTimeToDate("2026-10-12", "17:00").toISOString()).toBe("2026-10-12T10:00:00.000Z");
     });
     it("tanggal tidak valid = 400", async () => {
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
-        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-13-99" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-001", isActive: true }, { employeeId: "ID-002", isActive: true }] as never);
+        await expect(createMeetingTask(empSession(), "appt-1", { title: "T", assigneeEmployeeIds: ["ID-002"], dueDate: "2026-13-99", dueTime: "17:00" }, actor)).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 

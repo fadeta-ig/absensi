@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
             endTime: result.data.endTime ?? "23:59",
             isFullDay: result.data.isFullDay ?? false,
             participants: result.data.participants,
-            notulisEmployeeId: result.data.notulisEmployeeId ?? null,
+            notulisEmployeeId: result.data.notulisEmployeeId,
+            leaderEmployeeId: result.data.leaderEmployeeId,
             reminderOffsets: result.data.reminderOffsets ?? null,
             force: asOperator ? (result.data.force ?? false) : false,
         }, asOperator)) as { id: string };

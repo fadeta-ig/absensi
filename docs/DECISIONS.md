@@ -216,3 +216,16 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Tidak ada baris data yang berpindah sehingga kehilangan/duplikasi dapat dibuktikan tidak terjadi (rekonsiliasi ID identik); rollback cukup mengembalikan UI/route; sumber baru cukup menambah adapter dan nilai `sourceType`.
   - Negatif: Nama fisik tabel tetap `meeting_task*` untuk sementara; fungsi notulensi tetap di service lama dan pemecahan fisik tabel ditunda.
   - Status: live lokal 2026-11-02 (skema + backfill `hris_local`, API/UI Tugas Saya, build + suite task/appointment hijau; kegagalan `AppointmentDayDetail` 1 test bersifat pre-existing pada file yang tidak diubah).
+
+---
+
+## ADR-017: PIC Notulensi Wajib, Pemberi Task PIC/Pimpinan Rapat, dan Pimpinan Rapat Setara Penyelenggara
+
+- **Decision**: (1) PIC notulensi wajib dipilih dari peserta internal saat membuat meeting dan tidak dapat dikosongkan (dapat diganti saat meeting berjalan). (2) Task hasil meeting hanya dapat dibuat oleh PIC notulensi atau pimpinan rapat; form buat task mewajibkan pilihan Pemberi Tugas (dapat dicari, verifikator) dan Penerima Tugas. (3) Meeting memiliki pimpinan rapat (`leaderEmployeeId`, wajib untuk meeting baru dari peserta internal) yang berwenang setara penyelenggara: mengubah/menyelesaikan/membatalkan meeting, menandai kehadiran, menulis notulensi, mengganti PIC, dan memberi task.
+- **Context**: Di lapangan penyelenggara sering hanya membuatkan meeting untuk orang lain (mis. resepsionis) dan tidak hadir, sehingga meeting membutuhkan pemimpin yang benar-benar berada di ruangan. Sebelumnya PIC bersifat opsional dan task dapat dibuat peserta mana pun, sehingga tanggung jawab notulensi dan pemberian task tidak jelas pemiliknya.
+- **Chosen Approach**: Penegakan berlapis UI + Zod + service untuk PIC dan pimpinan rapat (peserta internal aktif dari daftar peserta); guard `createMeetingTask` menolak selain PIC/pimpinan rapat dan pemberi terpilih disimpan sebagai `assignerEmployeeId`; helper `isMeetingOrganizer` (pembuat ATAU pimpinan rapat) dipakai pada ubah/batalkan/selesaikan/tandai hadir serta kewenangan notulensi. Kolom pimpinan rapat nullable di skema agar meeting historis tetap terbaca; meeting lama tanpa PIC/pimpinan tidak dapat diberi task sebelum PIC ditunjuk.
+- **Alternatives**: PIC tetap opsional dengan bawaan semua peserta (ditolak — tidak ada pemilik notulensi/task yang jelas); pemberi task bebas dari semua peserta (ditolak pemilik); pimpinan rapat sebagai peran permission baru (ditolak — cukup relasi per-meeting, tanpa permission code baru, konsisten pola yang ada).
+- **Consequences**:
+  - Positif: Tanggung jawab notulensi, pemberian task, dan kepemimpinan rapat jelas per meeting; penyelenggara yang tidak hadir tidak lagi menjadi hambatan operasional.
+  - Negatif: Form buat meeting menambah dua pilihan wajib (PIC + pimpinan rapat) yang keduanya harus peserta internal; meeting historis tanpa keduanya perlu ditunjuk PIC-nya sebelum dapat diberi task.
+  - Status: live lokal 2026-11-03 (skema `leader_employee_id` di `hris_local`, guard service + form, suite meeting task/appointment hijau).

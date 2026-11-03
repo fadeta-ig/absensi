@@ -656,7 +656,8 @@ export const appointmentCreateSchema = z
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
         participants: z.array(appointmentParticipantSchema).max(100).default([]),
-        notulisEmployeeId: z.string().trim().min(1, "PIC notulensi tidak valid.").max(100, "PIC notulensi maksimal 100 karakter.").nullable().optional(),
+        notulisEmployeeId: z.string().trim().min(1, "PIC notulensi wajib dipilih.").max(100, "PIC notulensi maksimal 100 karakter."),
+        leaderEmployeeId: z.string().trim().min(1, "Pimpinan rapat wajib dipilih.").max(100, "Pimpinan rapat maksimal 100 karakter."),
         reminderOffsets: z.array(z.number().int().min(15)).min(1).max(5).nullable().optional(),
         force: z.boolean().optional(),
     })
@@ -760,11 +761,13 @@ export const unavailabilityCreateSchema = z
 export const meetingTaskCreateSchema = z.object({
     title: z.string().trim().min(1, "Judul task wajib diisi.").max(200, "Judul task maksimal 200 karakter."),
     detail: z.string().trim().max(5000).nullable().optional(),
+    assignerEmployeeId: z.string().trim().min(1, "Pemberi task wajib dipilih.").max(100).nullable().optional(),
     assigneeEmployeeIds: z
         .array(z.string().trim().min(1).max(100))
         .min(1, "Pilih minimal satu penerima task.")
         .max(20, "Penerima task maksimal 20 orang."),
     dueDate: appointmentDateSchema,
+    dueTime: appointmentTimeSchema,
 });
 
 export const meetingTaskExtendSchema = z.object({
@@ -816,7 +819,7 @@ export const meetingMinutesSchema = z.object({
 });
 
 export const meetingNotulisSchema = z.object({
-    notulisEmployeeId: z.string().trim().min(1).max(100).nullable(),
+    notulisEmployeeId: z.string().trim().min(1, "PIC notulensi wajib dipilih.").max(100),
 });
 
 export const meetingMinutesDeleteSchema = z.object({

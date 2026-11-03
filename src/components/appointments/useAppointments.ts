@@ -13,6 +13,9 @@ export interface AppointmentListItem {
     isFullDay: boolean;
     meetingLink: string | null;
     requesterEmployeeId: string | null;
+    notulisEmployeeId?: string | null;
+    leaderEmployeeId?: string | null;
+    leader?: { name: string | null } | null;
     requester?: { name: string | null } | null;
     room: { id: string; name: string; capacity?: number | null; location?: string | null } | null;
     participants: Array<{ id: string; employeeId: string | null; guestName: string | null; isExternal: boolean; attendance: string; inviteStatus?: string; inviteRespondedAt?: string | null; inviteNote?: string | null; employee?: { name: string } | null }>;

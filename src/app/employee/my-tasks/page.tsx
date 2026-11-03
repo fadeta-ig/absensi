@@ -223,7 +223,7 @@ export default function EmployeeMyTasksPage() {
                                     <div className="flex gap-1.5">
                                         <dt className="text-[var(--text-muted)] w-20 shrink-0">Deadline</dt>
                                         <dd className={`font-semibold ${mine?.isOverdue ? "text-red-600" : "text-[var(--text-secondary)]"}`}>
-                                            {task.activeDeadline?.date ?? "-"}
+                                            {task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}
                                             {task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}
                                         </dd>
                                     </div>

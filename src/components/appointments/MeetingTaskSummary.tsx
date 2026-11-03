@@ -6,6 +6,7 @@ import { ListChecks, Loader2, Plus } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
+import { formatWIBDateTime } from "@/lib/timezone";
 import TaskFormModal from "@/components/appointments/TaskFormModal";
 import type { TaskParticipant } from "@/components/appointments/MeetingTaskSection";
 import { meetingTaskStatusLabel } from "@/components/appointments/AppointmentBadges";
@@ -15,7 +16,7 @@ interface SummaryTask {
     title: string;
     isCancelled: boolean;
     assigner: { employeeId: string; name: string | null };
-    activeDeadline: { date: string; sequence: number } | null;
+    activeDeadline: { date: string; deadlineAt: string; sequence: number } | null;
     assignees: Array<{ employeeId: string; name: string; status: string; isOverdue: boolean }>;
     allDone: boolean;
     anyOverdue: boolean;
@@ -93,7 +94,7 @@ export default function MeetingTaskSummary({
                                     : <span className="badge-info shrink-0">Berjalan</span>}
                             </div>
                             <p className="text-xs text-[var(--text-secondary)]">
-                                Deadline {task.activeDeadline?.date ?? "-"} · Penerima: {task.assignees.map((a) => `${stripGelar(a.name)} (${meetingTaskStatusLabel(a.status)})`).join(", ") || "-"}
+                                Deadline {task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"} · Penerima: {task.assignees.map((a) => `${stripGelar(a.name)} (${meetingTaskStatusLabel(a.status)})`).join(", ") || "-"}
                             </p>
                             {myEmployeeId !== null && task.assignees.some((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") && (
                                 <Link href={`/employee/my-tasks/${task.id}`} className="inline-flex px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] items-center" aria-label={`Kelola tugas ${task.title} di Tugas Saya`}>
@@ -109,6 +110,7 @@ export default function MeetingTaskSummary({
                     mode="create"
                     appointmentId={appointmentId}
                     participants={participants}
+                    defaultAssignerEmployeeId={myEmployeeId}
                     onClose={() => setCreating(false)}
                     onSaved={() => { setCreating(false); void load(); }}
                 />

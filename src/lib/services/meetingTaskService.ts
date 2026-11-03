@@ -70,6 +70,11 @@ export function meetingTaskDueDateToDate(dueDate: string): Date {
     return wibDateTimeToDate(dueDate, "23:59");
 }
 
+/** Deadline buat task: tanggal + jam WIB yang wajib dipilih pemberi (bukan bawaan 23:59). */
+export function meetingTaskDueDateTimeToDate(dueDate: string, dueTime: string): Date {
+    return wibDateTimeToDate(dueDate, dueTime);
+}
+
 export function isAssigneeOverdue(dueAt: Date, status: string, now: Date = new Date()): boolean {
     if (status === "SELESAI" || status === "DIBATALKAN") return false;
     return now.getTime() > dueAt.getTime();
@@ -129,6 +134,8 @@ async function getMeetingOrThrow(appointmentId: string) {
             startAt: true,
             endAt: true,
             requesterEmployeeId: true,
+            notulisEmployeeId: true,
+            leaderEmployeeId: true,
             participants: { select: { employeeId: true } },
         },
     });
@@ -248,8 +255,11 @@ export type MeetingTaskDto = ReturnType<typeof toTaskDto>;
 export interface CreateMeetingTaskInput {
     title: string;
     detail?: string | null;
+    /** Pemberi tugas terpilih (verifikator). Bawaan: PIC notulensi meeting. */
+    assignerEmployeeId?: string | null;
     assigneeEmployeeIds: string[];
     dueDate: string; // YYYY-MM-DD
+    dueTime: string; // HH:mm WIB, wajib saat buat task
 }
 
 export async function createMeetingTask(
@@ -262,6 +272,19 @@ export async function createMeetingTask(
     const appt = await getMeetingOrThrow(appointmentId);
     await assertMeetingRunningForTaskCreate(appt);
     await assertCanAccessMeeting(session, appt);
+    // Pemberi task hanya PIC notulensi atau pimpinan rapat (bukan semua peserta).
+    if (!appt.notulisEmployeeId && !appt.leaderEmployeeId) {
+        throw new MeetingTaskError("PIC notulensi/pimpinan rapat belum ditunjuk untuk meeting ini. Tunjuk terlebih dahulu sebelum memberi task.", 409);
+    }
+    if (session.employeeId !== appt.notulisEmployeeId && session.employeeId !== appt.leaderEmployeeId) {
+        throw new MeetingTaskError("Hanya PIC notulensi atau pimpinan rapat yang dapat memberi task dari meeting ini.", 403);
+    }
+
+    const memberIdsForGiver = internalParticipantIds(appt);
+    const giverId = input.assignerEmployeeId?.trim() || session.employeeId;
+    if (!memberIdsForGiver.includes(giverId)) {
+        throw new MeetingTaskError("Pemberi task harus peserta internal meeting ini.", 422);
+    }
 
     const assigneeIds = [...new Set(input.assigneeEmployeeIds.map((v) => v.trim()).filter(Boolean))];
     if (assigneeIds.length === 0) throw new MeetingTaskError("Pilih minimal satu penerima task.", 400);
@@ -269,11 +292,12 @@ export async function createMeetingTask(
     const memberIds = internalParticipantIds(appt);
     const outsiders = assigneeIds.filter((id) => !memberIds.includes(id));
     if (outsiders.length > 0) throw new MeetingTaskError("Penerima task harus peserta meeting ini.", 422);
-    await assertActiveEmployees(assigneeIds);
+    await assertActiveEmployees([...new Set([giverId, ...assigneeIds])]);
     if (!isValidCalendarDate(input.dueDate)) throw new MeetingTaskError("Tanggal deadline tidak valid. Gunakan format YYYY-MM-DD.", 400);
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.dueTime ?? "")) throw new MeetingTaskError("Jam deadline wajib diisi dengan format HH:mm (00:00–23:59).", 400);
     const title = input.title.trim();
     if (!title) throw new MeetingTaskError("Judul task wajib diisi.", 400);
-    const dueAt = meetingTaskDueDateToDate(input.dueDate);
+    const dueAt = meetingTaskDueDateTimeToDate(input.dueDate, input.dueTime);
 
     const created = await prisma.$transaction(async (tx) => {
         const task = await tx.meetingTask.create({
@@ -283,7 +307,7 @@ export async function createMeetingTask(
                 sourceId: appointmentId,
                 title: title.slice(0, 200),
                 detail: input.detail?.trim().slice(0, 5000) || null,
-                assignerEmployeeId: session.employeeId as string,
+                assignerEmployeeId: giverId,
                 createdByUserId: actor.userId ?? null,
                 assignees: { create: assigneeIds.map((employeeId) => ({ employeeId })) },
                 deadlineHistory: { create: { sequence: 1, deadlineDate: dueAt, createdBy: actor.username } },
@@ -296,7 +320,7 @@ export async function createMeetingTask(
                 action: "CREATE_MEETING_TASK",
                 entity: "MEETING_TASK",
                 entityId: task.id,
-                details: JSON.stringify({ appointmentId, title: task.title, assignees: assigneeIds, dueDate: input.dueDate }),
+                details: JSON.stringify({ appointmentId, title: task.title, assignerEmployeeId: giverId, createdByPic: session.employeeId, assignees: assigneeIds, dueDate: input.dueDate }),
                 actorType: "USER",
                 actorUserId: actor.userId ?? null,
                 actorIdentifier: actor.username,
@@ -1283,6 +1307,7 @@ async function assertCanWriteMinutes(
         endAt: Date;
         requesterEmployeeId: string | null;
         notulisEmployeeId?: string | null;
+        leaderEmployeeId?: string | null;
         participants: Array<{ employeeId: string | null }>;
     },
     now: Date
@@ -1301,7 +1326,7 @@ async function assertCanWriteMinutes(
     }
     const notulisEmployeeId = await readNotulisEmployeeId(appt);
     const privileged = await isPrivileged(session);
-    const isOrganizer = Boolean(session.employeeId && appt.requesterEmployeeId === session.employeeId) || privileged;
+    const isOrganizer = Boolean(session.employeeId && (appt.requesterEmployeeId === session.employeeId || appt.leaderEmployeeId === session.employeeId)) || privileged;
     if (notulisEmployeeId && session.employeeId !== notulisEmployeeId && !isOrganizer) {
         throw new MeetingTaskError("Penyelenggara telah menunjuk petugas notulensi khusus untuk meeting ini.", 403);
     }
@@ -1325,6 +1350,7 @@ export async function getMeetingMinutes(session: SessionPayload, appointmentId: 
             minutesUpdatedAt: true,
             notulisEmployeeId: true,
             requesterEmployeeId: true,
+            leaderEmployeeId: true,
             participants: { select: { employeeId: true, employee: { select: { name: true } } } },
         },
     });
@@ -1357,7 +1383,7 @@ export async function getMeetingMinutes(session: SessionPayload, appointmentId: 
 
     const now = new Date();
     const lifecycle = resolveLifecycleStatus(appt.status, appt.startAt, appt.endAt, now);
-    const isOrganizer = Boolean(session.employeeId && appt.requesterEmployeeId === session.employeeId) || privileged;
+    const isOrganizer = Boolean(session.employeeId && (appt.requesterEmployeeId === session.employeeId || appt.leaderEmployeeId === session.employeeId)) || privileged;
     const isStarted = lifecycle !== "SCHEDULED" || now.getTime() >= appt.startAt.getTime();
     const isMeetingFinished = appt.status === "COMPLETED" || lifecycle === "COMPLETED";
     const canConfigureNotulis = isOrganizer && appt.status !== "CANCELLED" && isStarted && !isMeetingFinished;
@@ -1375,6 +1401,8 @@ export async function getMeetingMinutes(session: SessionPayload, appointmentId: 
         startAt: appt.startAt,
         endAt: appt.endAt,
         requesterEmployeeId: appt.requesterEmployeeId,
+        leaderEmployeeId: appt.leaderEmployeeId ?? null,
+        leaderName: appt.leaderEmployeeId ? (nameMap.get(appt.leaderEmployeeId) ?? appt.leaderEmployeeId) : null,
         notulisEmployeeId,
         notulisName: notulisEmployeeId ? (nameMap.get(notulisEmployeeId) ?? notulisEmployeeId) : null,
         minutes: appt.minutes,
@@ -1411,14 +1439,15 @@ export async function setMeetingNotulis(
             startAt: true,
             endAt: true,
             requesterEmployeeId: true,
+            leaderEmployeeId: true,
             participants: { select: { employeeId: true } },
         },
     });
     if (!appt) throw new MeetingTaskError("Jadwal meeting tidak ditemukan.", 404);
     const privileged = await isPrivileged(session);
-    const isOrganizer = Boolean(session.employeeId && appt.requesterEmployeeId === session.employeeId) || privileged;
+    const isOrganizer = Boolean(session.employeeId && (appt.requesterEmployeeId === session.employeeId || appt.leaderEmployeeId === session.employeeId)) || privileged;
     if (!isOrganizer) {
-        throw new MeetingTaskError("Hanya penyelenggara meeting yang dapat mengatur petugas notulensi.", 403);
+        throw new MeetingTaskError("Hanya penyelenggara atau pimpinan rapat yang dapat mengatur petugas notulensi.", 403);
     }
     if (appt.status === "CANCELLED") {
         throw new MeetingTaskError("Meeting telah dibatalkan.", 409);
@@ -1433,11 +1462,12 @@ export async function setMeetingNotulis(
     }
 
     const nextNotulisId = notulisEmployeeId?.trim() || null;
-    if (nextNotulisId) {
-        const members = internalParticipantIds(appt);
-        if (!members.includes(nextNotulisId)) {
-            throw new MeetingTaskError("Petugas notulensi harus peserta internal meeting ini.", 422);
-        }
+    if (!nextNotulisId) {
+        throw new MeetingTaskError("PIC notulensi wajib dipilih dan tidak dapat dikosongkan.", 400);
+    }
+    const members = internalParticipantIds(appt);
+    if (!members.includes(nextNotulisId)) {
+        throw new MeetingTaskError("Petugas notulensi harus peserta internal meeting ini.", 422);
     }
 
     await prisma.meetingAppointment.update({
@@ -1480,6 +1510,7 @@ export async function updateMeetingMinutes(
             minutes: true,
             notulisEmployeeId: true,
             requesterEmployeeId: true,
+            leaderEmployeeId: true,
             participants: { select: { employeeId: true } },
         },
     });
@@ -1560,6 +1591,7 @@ export async function deleteMeetingMinutes(
             minutes: true,
             notulisEmployeeId: true,
             requesterEmployeeId: true,
+            leaderEmployeeId: true,
             participants: { select: { employeeId: true } },
         },
     });

@@ -78,6 +78,7 @@ model Employee {
   cleaningParafs               CleaningDailyParaf[]
   meetingAppointmentsRequested MeetingAppointment[]
   meetingAppointmentsAsNotulis MeetingAppointment[]               @relation("MeetingAppointmentNotulis")
+  meetingAppointmentsLed       MeetingAppointment[]               @relation("MeetingAppointmentLeader")
   meetingParticipations        MeetingAppointmentParticipant[]
   unavailabilities             EmployeeUnavailability[]
   meetingTasksAssigned         MeetingTask[]                      @relation("MeetingTaskAssigner")
@@ -1910,11 +1911,17 @@ model MeetingAppointment {
 
   notulis Employee? @relation("MeetingAppointmentNotulis", fields: [notulisEmployeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
 
+  /// Pimpinan rapat: employee peserta yang memimpin rapat dan berwenang
+  /// setara penyelenggara di lapangan (penyelenggara belum tentu hadir).
+  leaderEmployeeId String? @map("leader_employee_id")
+  leader           Employee? @relation("MeetingAppointmentLeader", fields: [leaderEmployeeId], references: [employeeId], onDelete: SetNull, onUpdate: Cascade)
+
   @@index([roomId, startAt], map: "idx_meeting_appt_room_start")
   @@index([status], map: "idx_meeting_appt_status")
   @@index([startAt], map: "idx_meeting_appt_start")
   @@index([requesterEmployeeId], map: "idx_meeting_appt_requester")
   @@index([notulisEmployeeId], map: "idx_meeting_appt_notulis")
+  @@index([leaderEmployeeId], map: "idx_meeting_appt_leader")
   @@map("meeting_appointments")
 }
 

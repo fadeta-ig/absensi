@@ -86,6 +86,7 @@ describe("slotToDates", () => {
 describe("createAppointment langsung SCHEDULED", () => {
     it("status selalu SCHEDULED + audit mencatatnya", async () => {
         mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
         const tx = {
             meetingAppointment: {
                 findFirst: vi.fn().mockResolvedValue(null),
@@ -98,7 +99,7 @@ describe("createAppointment langsung SCHEDULED", () => {
         vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
         const out = (await createAppointment(
             empSession(),
-            { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [] },
+            { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" },
             false
         )) as { status: string };
         expect(out.status).toBe("SCHEDULED");
@@ -127,16 +128,18 @@ describe("createAppointment", () => {
     });
     it("overlap ruangan ditolak 409 untuk employee", async () => {
         mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
         mocked.meetingAppointment.findFirst.mockResolvedValue({ id: "bentrok" } as never);
         vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) =>
             callback({ meetingAppointment: mocked.meetingAppointment, auditLog: mocked.auditLog } as never)
         );
         await expect(
-            createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [] }, false)
+            createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" }, false)
         ).rejects.toMatchObject({ statusCode: 409 });
     });
     it("duplikat insert konkuren (P2002) dipetakan 409", async () => {
         mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
         const tx = {
             meetingAppointment: {
                 findFirst: vi.fn().mockResolvedValue(null),
@@ -148,8 +151,15 @@ describe("createAppointment", () => {
         };
         vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
         await expect(
-            createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [] }, false)
+            createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" }, false)
         ).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("tanpa PIC notulensi ditolak 400", async () => {
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
+        await expect(
+            createAppointment(empSession(), { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }] }, false)
+        ).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 

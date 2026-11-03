@@ -23,6 +23,8 @@ interface TaskFormModalProps {
     appointmentId: string;
     task?: TaskFormTask;
     participants: TaskParticipant[];
+    /** Pemberi tugas bawaan saat buat task: PIC notulensi meeting. */
+    defaultAssignerEmployeeId?: string | null;
     onClose: () => void;
     onSaved: () => void;
 }
@@ -38,18 +40,21 @@ const MODE_META: Record<TaskFormMode, { title: string; aria: string; submit: str
 const ACCEPTED_UPLOAD = ".jpg,.jpeg,.png,.webp,.pdf";
 const MAX_SUBMIT_FILES = 5;
 
-export default function TaskFormModal({ mode, appointmentId, task, participants, onClose, onSaved }: TaskFormModalProps) {
+export default function TaskFormModal({ mode, appointmentId, task, participants, defaultAssignerEmployeeId = null, onClose, onSaved }: TaskFormModalProps) {
     const meta = MODE_META[mode];
     const [title, setTitle] = useState(task?.title ?? "");
     const [detail, setDetail] = useState(task?.detail ?? "");
     const [picked, setPicked] = useState<string[]>(task?.assigneeIds ?? []);
     const [date, setDate] = useState(task?.dueDate ?? "");
+    const [dueTime, setDueTime] = useState("");
     const [reason, setReason] = useState("");
     const [note, setNote] = useState("");
     const [files, setFiles] = useState<File[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [assigneeQuery, setAssigneeQuery] = useState("");
+    const [giverId, setGiverId] = useState(defaultAssignerEmployeeId ?? "");
+    const [giverQuery, setGiverQuery] = useState("");
 
     const internalParticipants = useMemo(
         () => participants.filter((p) => !p.isExternal && p.employeeId),
@@ -66,6 +71,17 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
         });
     }, [assigneeQuery, internalParticipants]);
 
+    const filteredGivers = useMemo(() => {
+        const q = giverQuery.trim().toLowerCase();
+        if (!q) return internalParticipants;
+        return internalParticipants.filter((p) => {
+            const name = p.employee?.name ? stripGelar(p.employee.name).toLowerCase() : "";
+            const id = (p.employeeId ?? "").toLowerCase();
+            return name.includes(q) || id.includes(q);
+        });
+    }, [giverQuery, internalParticipants]);
+    const selectedGiver = internalParticipants.find((p) => p.employeeId === giverId) ?? null;
+
     const originalPicked = useMemo(() => task?.assigneeIds ?? [], [task]);
     const editChanged =
         mode !== "edit" ||
@@ -78,7 +94,7 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
     const canSubmit =
         !busy &&
         (mode === "create"
-            ? title.trim().length > 0 && picked.length > 0 && date.length > 0
+            ? title.trim().length > 0 && giverId.length > 0 && picked.length > 0 && date.length > 0 && /^([01]\d|2[0-3]):[0-5]\d$/.test(dueTime)
             : mode === "extend"
               ? date.length > 0 && reason.trim().length >= 5
               : mode === "cancel"
@@ -131,7 +147,7 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     credentials: "same-origin",
-                    body: JSON.stringify({ title, detail: detail || null, assigneeEmployeeIds: picked, dueDate: date }),
+                    body: JSON.stringify({ title, detail: detail || null, assignerEmployeeId: giverId, assigneeEmployeeIds: picked, dueDate: date, dueTime }),
                 });
             } else {
                 if (!task) throw new Error("Task tidak ditemukan.");
@@ -201,7 +217,45 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
                             />
                         </div>
                         <div>
-                            <span className="form-label">Penerima * (peserta meeting)</span>
+                            <label className="form-label" htmlFor="task-form-giver-search">Pemberi Tugas *</label>
+                            <div className="relative mb-2">
+                                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                                <input
+                                    id="task-form-giver-search"
+                                    className="form-input pl-10"
+                                    value={giverQuery}
+                                    onChange={(e) => setGiverQuery(e.target.value)}
+                                    placeholder="Cari nama pemberi tugas…"
+                                    aria-label="Cari pemberi tugas"
+                                />
+                            </div>
+                            {selectedGiver && !giverQuery && (
+                                <p className="text-[11px] text-[var(--text-muted)] mb-1.5" aria-live="polite">
+                                    Terpilih: {selectedGiver.employee?.name ? stripGelar(selectedGiver.employee.name) : selectedGiver.employeeId} — pemberi bertugas memverifikasi hasil.
+                                </p>
+                            )}
+                            <div className="max-h-36 overflow-y-auto rounded-lg border border-[var(--border)] p-2 space-y-1" role="radiogroup" aria-label="Pilih pemberi tugas">
+                                {filteredGivers.length === 0 && (
+                                    <p className="text-xs text-[var(--text-muted)]">Tidak ada peserta yang cocok dengan pencarian.</p>
+                                )}
+                                {filteredGivers.map((p) => (
+                                    <label key={p.employeeId as string} className="flex items-center gap-2 text-sm cursor-pointer min-h-9">
+                                        <input
+                                            type="radio"
+                                            name="task-giver"
+                                            checked={giverId === p.employeeId}
+                                            onChange={() => setGiverId(p.employeeId as string)}
+                                            className="w-4 h-4 text-[var(--primary)]"
+                                        />
+                                        <span className="text-[var(--text-primary)]">
+                                            {p.employee?.name ? stripGelar(p.employee.name) : p.employeeId}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <span className="form-label">Ditujukan Kepada / Penerima Tugas * (peserta meeting)</span>
                             <div className="relative mb-2">
                                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                                 <input
@@ -278,10 +332,17 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
                                 ))}
                             </div>
                         </div>
-                        <div>
-                            <label className="form-label" htmlFor="task-form-due">Deadline *</label>
-                            <input id="task-form-due" type="date" className="form-input" value={date} onChange={(e) => setDate(e.target.value)} />
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="form-label" htmlFor="task-form-due">Tanggal Deadline *</label>
+                                <input id="task-form-due" type="date" className="form-input" value={date} onChange={(e) => setDate(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="form-label" htmlFor="task-form-due-time">Jam Deadline * (WIB)</label>
+                                <input id="task-form-due-time" type="time" className="form-input" value={dueTime} onChange={(e) => setDueTime(e.target.value)} />
+                            </div>
                         </div>
+                        <p className="text-[11px] text-[var(--text-muted)] -mt-2">Tugas wajib memiliki tanggal dan jam deadline. Contoh: deadline 3 November pukul 17:00 berarti berakhir 3 November 17:00 WIB.</p>
                     </>
                 )}
 
