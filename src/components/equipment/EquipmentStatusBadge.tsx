@@ -74,3 +74,12 @@ export function EquipmentCompanyBadge({ company }: { company: string | null | un
         </span>
     );
 }
+
+/** Badge penugasan global (semua unit WIG+MKI). */
+export function EquipmentGlobalBadge() {
+    return (
+        <span className="inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+            GLOBAL
+        </span>
+    );
+}

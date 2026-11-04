@@ -923,6 +923,25 @@ export const equipmentEndAssignSchema = z.object({
     endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
 });
 
+export const equipmentAssignBulkSchema = z.object({
+    unitIds: z.array(z.string().trim().min(1).max(191)).min(1).max(200),
+    employeeId: z.string().trim().min(1).max(100),
+    startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
+    endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
+});
+
+export const equipmentUpdateAssignSchema = z.object({
+    assignmentId: z.string().trim().min(1),
+    unitId: z.string().trim().min(1).max(191).nullable().optional(),
+    employeeId: z.string().trim().min(1).max(100).optional(),
+    startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
+    endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
+});
+
+export const equipmentEndAssignBulkSchema = z.object({
+    assignmentIds: z.array(z.string().trim().min(1).max(191)).min(1).max(200),
+});
+
 export const equipmentItemUpdateSchema = z.object({
     isPass: z.boolean(),
     note: z.string().trim().max(2000).nullable().optional(),

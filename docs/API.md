@@ -157,7 +157,7 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/equipment/templates` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Template inspeksi alat + item (flag foto wajib per item). |
 | `/api/ga/equipment/template-items` | `POST`, `PATCH`, `DELETE` | WIG002 + `ga.manage` | Kelola item template (hapus aman: snapshot riwayat dipertahankan). |
 | `/api/ga/equipment/units` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` (`GET` boleh atasan) | Master alat/mesin (tanpa reviewer per unit). |
-| `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | List + penugasan employee internal (gerbang modul); `unitId` null = global; akhiri via tombol. |
+| `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | List + penugasan employee internal (gerbang modul); `unitId` null = global; `POST {unitIds[]}` bulk parsial (`created` + `skipped` beralasan, semua-skip → `409`); `PATCH` akhiri satu / `{assignmentIds[]}` akhiri massal parsial / edit baris aktif (unit/karyawan/tanggal, riwayat berakhir terkunci). |
 | `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar employee QC (maks 20); semua anggota melihat semua antrean. |
 | `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 + `ga.manage` | Atasan tertinggi maks 5 (baca rekap/monitor, pola cleaning). |
 | `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar approver final maks 5 (`equipment.approvers`, dinamis; terima `{employeeIds}`; kunci lama tunggal tetap dibaca). |

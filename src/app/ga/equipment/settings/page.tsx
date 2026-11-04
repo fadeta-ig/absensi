@@ -10,7 +10,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentCompanyBadge, EquipmentGlobalBadge } from "@/components/equipment/EquipmentStatusBadge";
 
 interface TemplateItem {
     id: string;
@@ -143,13 +143,37 @@ export default function EquipmentSettingsPage() {
     const [savingUnit, setSavingUnit] = useState(false);
 
     // ─── Assignment form (WIG002 menentukan siapa dapat modul Inspeksi Alat) ───
-    const [assignUnitId, setAssignUnitId] = useState("");
-    const [assignAllUnits, setAssignAllUnits] = useState(false);
+    type AssignMode = "units" | "company" | "product" | "global";
+    const [assignMode, setAssignMode] = useState<AssignMode>("units");
+    const [assignUnitIds, setAssignUnitIds] = useState<string[]>([]);
+    const [assignUnitQuery, setAssignUnitQuery] = useState("");
+    const [assignCompany, setAssignCompany] = useState<"WIG" | "MKI">("WIG");
+    const [assignProducts, setAssignProducts] = useState<EquipmentProduct[]>([]);
+    const [assignProductsLoading, setAssignProductsLoading] = useState(false);
+    const [assignProductId, setAssignProductId] = useState("");
+    const [assignProductTools, setAssignProductTools] = useState<ProductToolRow[]>([]);
+    const [assignProductLoading, setAssignProductLoading] = useState(false);
     const [assignEmployee, setAssignEmployee] = useState<EmployeePick | null>(null);
     const [assignStartsOn, setAssignStartsOn] = useState("");
     const [assignEndsOn, setAssignEndsOn] = useState("");
     const [savingAssign, setSavingAssign] = useState(false);
+    const [assignBulkResult, setAssignBulkResult] = useState<{ created: number; skipped: Array<{ unitName: string; reason: string }> } | null>(null);
     const [assignments, setAssignments] = useState<EquipmentAssignment[]>([]);
+    // ─── Edit penugasan ───
+    const [editingAssignment, setEditingAssignment] = useState<EquipmentAssignment | null>(null);
+    const [editIsGlobal, setEditIsGlobal] = useState(false);
+    const [editUnitIds, setEditUnitIds] = useState<string[]>([]);
+    const [editUnitQuery, setEditUnitQuery] = useState("");
+    const [editEmployee, setEditEmployee] = useState<EmployeePick | null>(null);
+    const [editStartsOn, setEditStartsOn] = useState("");
+    const [editEndsOn, setEditEndsOn] = useState("");
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editBulkResult, setEditBulkResult] = useState<{ created: number; skipped: Array<{ unitName: string; reason: string }> } | null>(null);
+    // ─── Daftar penugasan (filter + akhiri massal) ───
+    const [assignmentQuery, setAssignmentQuery] = useState("");
+    const [endSelected, setEndSelected] = useState<string[]>([]);
+    const [endingBulk, setEndingBulk] = useState(false);
+    const [endBulkResult, setEndBulkResult] = useState<{ ended: number; skipped: Array<{ assignmentId: string; reason: string }> } | null>(null);
 
     // ─── Anggota QC ───
     const [qcCompany, setQcCompany] = useState<"WIG" | "MKI">("WIG");
@@ -181,6 +205,7 @@ export default function EquipmentSettingsPage() {
     const [checklistLoading, setChecklistLoading] = useState(false);
     const [checklistError, setChecklistError] = useState<string | null>(null);
     const [toolQuery, setToolQuery] = useState("");
+    const [uncategorizedQuery, setUncategorizedQuery] = useState("");
     const [savingChecklist, setSavingChecklist] = useState(false);
     const [bulkSelected, setBulkSelected] = useState<string[]>([]);
     const [bulkSaving, setBulkSaving] = useState(false);
@@ -321,6 +346,39 @@ export default function EquipmentSettingsPage() {
         }
     }, []);
 
+    const fetchAssignProducts = useCallback(async (company: EquipmentCompanyFilter) => {
+        setAssignProductsLoading(true);
+        try {
+            const res = await fetch(`/api/ga/equipment/products?company=${company}`);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat produk."));
+            const json = await res.json();
+            setAssignProducts(json.data ?? []);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat produk.";
+            toast(msg, "error");
+            reportClientError("EquipmentSettings", msg, err);
+        } finally {
+            setAssignProductsLoading(false);
+        }
+    }, [toast]);
+
+    const fetchAssignProductTools = useCallback(async (productId: string) => {
+        setAssignProductLoading(true);
+        try {
+            const res = await fetch(`/api/ga/equipment/products/${productId}/tools`);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat alat produk."));
+            const json = await res.json();
+            setAssignProductTools(json.data.tools ?? []);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat alat produk.";
+            setAssignProductTools([]);
+            toast(msg, "error");
+            reportClientError("EquipmentSettings", msg, err);
+        } finally {
+            setAssignProductLoading(false);
+        }
+    }, [toast]);
+
     const fetchAll = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -367,6 +425,13 @@ export default function EquipmentSettingsPage() {
         setToolQuery("");
         void fetchProducts(productCompany);
     }, [activeTab, productCompany, fetchProducts]);
+
+    useEffect(() => {
+        if (assignMode !== "product") return;
+        setAssignProductId("");
+        setAssignProductTools([]);
+        void fetchAssignProducts(assignCompany);
+    }, [assignMode, assignCompany, fetchAssignProducts]);
 
     // ─── Template CRUD ───
 
@@ -583,37 +648,164 @@ export default function EquipmentSettingsPage() {
     // ─── Assignment (siapa dapat modul Inspeksi Alat) ───
 
     const saveAssignment = useCallback(async () => {
-        if (savingAssign || (!assignAllUnits && !assignUnitId) || !assignEmployee) {
-            if ((!assignAllUnits && !assignUnitId) || !assignEmployee)
-                toast("Pilih unit (atau centang Semua unit) dan pilih karyawan.", "warning");
+        if (savingAssign) return;
+        if (!assignEmployee) {
+            toast("Pilih karyawan terlebih dahulu.", "warning");
+            return;
+        }
+        const previewIds =
+            assignMode === "units"
+                ? assignUnitIds
+                : assignMode === "company"
+                  ? units.filter((u) => u.isActive && u.company === assignCompany).map((u) => u.id)
+                  : assignMode === "product"
+                    ? assignProductTools.filter((t) => t.checked).map((t) => t.id)
+                    : [];
+        if (assignMode !== "global" && previewIds.length === 0) {
+            toast(
+                assignMode === "units"
+                    ? "Centang minimal satu alat."
+                    : assignMode === "company"
+                      ? `Tidak ada alat aktif berkategori ${assignCompany}.`
+                      : "Pilih produk yang sudah dipetakan ke alat.",
+                "warning"
+            );
             return;
         }
         setSavingAssign(true);
+        setAssignBulkResult(null);
         try {
-            const res = await fetch("/api/ga/equipment/assignments", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    unitId: assignAllUnits ? null : assignUnitId,
-                    employeeId: assignEmployee.employeeId,
-                    ...(assignStartsOn ? { startsOnWibDate: assignStartsOn } : {}),
-                    ...(assignEndsOn ? { endsOnWibDate: assignEndsOn } : {}),
-                }),
-            });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan penugasan."));
-            toast(assignAllUnits ? "Penugasan global dibuat (berlaku semua unit)." : "Penugasan dibuat.", "success");
-            setAssignUnitId("");
-            setAssignAllUnits(false);
-            setAssignEmployee(null);
+            const base = {
+                employeeId: assignEmployee.employeeId,
+                ...(assignStartsOn ? { startsOnWibDate: assignStartsOn } : {}),
+                ...(assignEndsOn ? { endsOnWibDate: assignEndsOn } : {}),
+            };
+            if (assignMode === "global") {
+                const res = await fetch("/api/ga/equipment/assignments", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...base, unitId: null }),
+                });
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan penugasan."));
+                toast("Penugasan global dibuat (berlaku semua unit).", "success");
+            } else {
+                const res = await fetch("/api/ga/equipment/assignments", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...base, unitIds: previewIds }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (res.status === 409 && Array.isArray(json.details)) {
+                    setAssignBulkResult({ created: 0, skipped: json.details });
+                    toast("Semua alat di-skip (sudah ditugaskan).", "warning");
+                } else {
+                    if (!res.ok) throw new Error(json.error ?? "Gagal menyimpan penugasan.");
+                    const data = json.data as { created: unknown[]; skipped: Array<{ unitName: string; reason: string }> };
+                    setAssignBulkResult({ created: data.created.length, skipped: data.skipped });
+                    toast(
+                        data.skipped.length === 0
+                            ? `${data.created.length} penugasan dibuat.`
+                            : `${data.created.length} dibuat, ${data.skipped.length} di-skip.`,
+                        data.skipped.length === 0 ? "success" : "warning"
+                    );
+                }
+            }
+            setAssignUnitIds([]);
+            setAssignUnitQuery("");
+            // Karyawan dipertahankan agar panel "Penugasan aktif" langsung memverifikasi hasil.
             setAssignStartsOn("");
             setAssignEndsOn("");
+            setAssignProductId("");
+            setAssignProductTools([]);
             await fetchAll();
         } catch (err) {
             toast(err instanceof Error ? err.message : "Gagal.", "error");
         } finally {
             setSavingAssign(false);
         }
-    }, [savingAssign, assignAllUnits, assignUnitId, assignEmployee, assignStartsOn, assignEndsOn, toast, fetchAll]);
+    }, [savingAssign, assignMode, assignUnitIds, assignCompany, assignProductTools, units, assignEmployee, assignStartsOn, assignEndsOn, toast, fetchAll]);
+
+    const openEditAssignment = useCallback((assignment: EquipmentAssignment) => {
+        setEditingAssignment(assignment);
+        setEditIsGlobal(!assignment.unitId);
+        setEditUnitIds(assignment.unitId ? [assignment.unitId] : []);
+        setEditUnitQuery("");
+        setEditBulkResult(null);
+        setEditEmployee(
+            assignment.user.employeeId
+                ? { employeeId: assignment.user.employeeId, name: assignment.user.displayName }
+                : null
+        );
+        setEditStartsOn(assignment.startsOnWibDate);
+        setEditEndsOn(assignment.endsOnWibDate ?? "");
+        setSavingEdit(false);
+    }, []);
+
+    const saveEditAssignment = useCallback(async () => {
+        if (!editingAssignment || savingEdit) return;
+        if (!editEmployee) {
+            toast("Pilih karyawan terlebih dahulu.", "warning");
+            return;
+        }
+        if (!editIsGlobal && editUnitIds.length === 0) {
+            toast("Centang minimal satu alat atau pilih Semua unit.", "warning");
+            return;
+        }
+        setSavingEdit(true);
+        setEditBulkResult(null);
+        try {
+            const patchRes = await fetch("/api/ga/equipment/assignments", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    assignmentId: editingAssignment.id,
+                    unitId: editIsGlobal ? null : editUnitIds[0],
+                    employeeId: editEmployee.employeeId,
+                    startsOnWibDate: editStartsOn,
+                    endsOnWibDate: editEndsOn || null,
+                }),
+            });
+            if (!patchRes.ok) throw new Error(await getResponseErrorMessage(patchRes, "Gagal menyimpan perubahan."));
+            // Baris ini memakai alat pertama; sisanya dibuatkan via bulk (karyawan + periode sama).
+            const extra = editIsGlobal ? [] : editUnitIds.slice(1);
+            if (extra.length === 0) {
+                toast("Penugasan diperbarui.", "success");
+                setEditingAssignment(null);
+                await fetchAll();
+                return;
+            }
+            const bulkRes = await fetch("/api/ga/equipment/assignments", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    employeeId: editEmployee.employeeId,
+                    ...(editStartsOn ? { startsOnWibDate: editStartsOn } : {}),
+                    ...(editEndsOn ? { endsOnWibDate: editEndsOn } : {}),
+                    unitIds: extra,
+                }),
+            });
+            const json = await bulkRes.json().catch(() => ({}));
+            if (bulkRes.status === 409 && Array.isArray(json.details)) {
+                setEditBulkResult({ created: 0, skipped: json.details });
+                toast("Baris ini diperbarui; alat tambahan semuanya di-skip.", "warning");
+            } else {
+                if (!bulkRes.ok) throw new Error(json.error ?? "Gagal menambah penugasan.");
+                const data = json.data as { created: unknown[]; skipped: Array<{ unitName: string; reason: string }> };
+                setEditBulkResult({ created: data.created.length, skipped: data.skipped });
+                if (data.skipped.length === 0) {
+                    toast(`Penugasan diperbarui + ${data.created.length} baris tambahan dibuat.`, "success");
+                    setEditingAssignment(null);
+                } else {
+                    toast(`Baris diperbarui; ${data.created.length} tambahan dibuat, ${data.skipped.length} di-skip.`, "warning");
+                }
+            }
+            await fetchAll();
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal.", "error");
+        } finally {
+            setSavingEdit(false);
+        }
+    }, [editingAssignment, savingEdit, editIsGlobal, editUnitIds, editEmployee, editStartsOn, editEndsOn, toast, fetchAll]);
 
     const endAssignment = useCallback(
         (assignment: EquipmentAssignment) => {
@@ -644,6 +836,59 @@ export default function EquipmentSettingsPage() {
             });
         },
         [confirm, toast, fetchAll]
+    );
+
+    const endAssignmentsBulk = useCallback(
+        (ids: string[]) => {
+            if (ids.length === 0 || endingBulk) return;
+            const targets = assignments.filter((a) => ids.includes(a.id));
+            const preview = targets
+                .slice(0, 5)
+                .map((a) => `• ${a.user.displayName ?? a.user.employeeId} — ${a.unit ? a.unit.name : "Semua unit"}`)
+                .join("\n");
+            confirm({
+                title: `Akhiri ${targets.length} penugasan?`,
+                message: `Penugasan berikut akan diakhiri hari ini:\n${preview}${targets.length > 5 ? `\n…dan ${targets.length - 5} lainnya.` : ""}`,
+                confirmLabel: "Ya, akhiri semua",
+                cancelLabel: "Batal",
+                variant: "warning",
+                onConfirm: () => {
+                    void (async () => {
+                        setEndingBulk(true);
+                        setEndBulkResult(null);
+                        try {
+                            const res = await fetch("/api/ga/equipment/assignments", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ assignmentIds: ids }),
+                            });
+                            const json = await res.json().catch(() => ({}));
+                            if (res.status === 409 && Array.isArray(json.details)) {
+                                setEndBulkResult({ ended: 0, skipped: json.details });
+                                toast("Semua di-skip (tidak ada yang diakhiri).", "warning");
+                            } else {
+                                if (!res.ok) throw new Error(json.error ?? "Gagal mengakhiri penugasan.");
+                                const data = json.data as { ended: string[]; skipped: Array<{ assignmentId: string; reason: string }> };
+                                setEndBulkResult({ ended: data.ended.length, skipped: data.skipped });
+                                setEndSelected((prev) => prev.filter((id) => !data.ended.includes(id)));
+                                toast(
+                                    data.skipped.length === 0
+                                        ? `${data.ended.length} penugasan diakhiri.`
+                                        : `${data.ended.length} diakhiri, ${data.skipped.length} di-skip.`,
+                                    data.skipped.length === 0 ? "success" : "warning"
+                                );
+                            }
+                            await fetchAll();
+                        } catch (err) {
+                            toast(err instanceof Error ? err.message : "Gagal.", "error");
+                        } finally {
+                            setEndingBulk(false);
+                        }
+                    })();
+                },
+            });
+        },
+        [assignments, confirm, endingBulk, toast, fetchAll]
     );
 
     // ─── Anggota QC ───
@@ -962,6 +1207,81 @@ export default function EquipmentSettingsPage() {
 
     const activeTemplates = templates.filter((t) => t.isActive);
     const uncategorizedUnits = units.filter((u) => u.isActive && !u.company);
+    const filteredUncategorizedUnits = uncategorizedUnits.filter((u) => {
+        const q = uncategorizedQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""}`.toLowerCase().includes(q);
+    });
+    const assignableUnits = units.filter((u) => u.isActive && u.company);
+    const filteredAssignUnits = assignableUnits.filter((u) => {
+        const q = assignUnitQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${u.company ?? ""}`.toLowerCase().includes(q);
+    });
+    const assignCompanyUnits = assignableUnits.filter((u) => u.company === assignCompany);
+    const assignProductChecked = assignProductTools.filter((t) => t.checked);
+    const assignPreviewCount =
+        assignMode === "units"
+            ? assignUnitIds.length
+            : assignMode === "company"
+              ? assignCompanyUnits.length
+              : assignMode === "product"
+                ? assignProductChecked.length
+                : 0;
+    const assignEmployeeActive = assignEmployee
+        ? assignments.filter((a) => a.user.employeeId === assignEmployee.employeeId && isAssignmentActive(a))
+        : [];
+    // Daftar alat di modal edit = alat assignable + alat baris ini bila tak termasuk (mis. sudah nonaktif).
+    const editListUnits = (() => {
+        const currentId = editingAssignment?.unitId;
+        if (!currentId || assignableUnits.some((u) => u.id === currentId)) return assignableUnits;
+        const cur = units.find((u) => u.id === currentId);
+        return cur ? [...assignableUnits, cur] : assignableUnits;
+    })();
+    const filteredEditUnits = editListUnits.filter((u) => {
+        const q = editUnitQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${u.company ?? ""}`.toLowerCase().includes(q);
+    });
+    // Daftar penugasan dikelompokkan per karyawan (grup ber-isi aktif diurut aktif-dulu).
+    type AssignmentGroup = {
+        userId: string;
+        employeeId: string | null;
+        displayName: string;
+        items: EquipmentAssignment[];
+        activeItems: EquipmentAssignment[];
+    };
+    const assignmentGroups: AssignmentGroup[] = (() => {
+        const q = assignmentQuery.trim().toLowerCase();
+        const rows = assignments.filter((a) => {
+            if (!q) return true;
+            const hay = `${a.user.displayName ?? ""} ${a.user.employeeId ?? ""} ${a.unit ? a.unit.name : "semua unit"}`.toLowerCase();
+            return hay.includes(q);
+        });
+        const map = new Map<string, AssignmentGroup>();
+        for (const a of rows) {
+            const g =
+                map.get(a.user.id) ??
+                {
+                    userId: a.user.id,
+                    employeeId: a.user.employeeId,
+                    displayName: a.user.displayName ?? a.user.employeeId ?? "—",
+                    items: [],
+                    activeItems: [],
+                };
+            g.items.push(a);
+            if (isAssignmentActive(a)) g.activeItems.push(a);
+            map.set(a.user.id, g);
+        }
+        return [...map.values()]
+            .map((g) => ({
+                ...g,
+                items: [...g.items].sort((x, y) => Number(isAssignmentActive(y)) - Number(isAssignmentActive(x))),
+            }))
+            .sort((x, y) => y.activeItems.length - x.activeItems.length || x.displayName.localeCompare(y.displayName));
+    })();
+    const visibleActiveIds = assignmentGroups.flatMap((g) => g.activeItems.map((a) => a.id));
+    const endSelectedVisibleCount = endSelected.filter((id) => visibleActiveIds.includes(id)).length;
     const checkedIds = checklist?.tools.filter((t) => t.checked).map((t) => t.id) ?? [];
     const checklistDirty =
         checkedIds.length !== initialChecked.length || checkedIds.some((id) => !initialChecked.includes(id));
@@ -1279,39 +1599,217 @@ export default function EquipmentSettingsPage() {
                     <div className="bg-card border border-border rounded-lg p-4">
                         <h2 className="text-base font-medium mb-1">Penugasan Baru</h2>
                         <p className="text-xs text-muted-foreground mb-3">
-                            Hanya karyawan yang ditugaskan yang melihat modul Inspeksi Alat. Tugaskan satu
-                            unit ke satu karyawan internal, atau centang Semua unit agar berlaku global.
-                            Kosongkan tanggal mulai untuk berlaku hari ini.
+                            Hanya karyawan yang ditugaskan yang melihat modul Inspeksi Alat. Pilih alat
+                            tertentu, semua alat satu perusahaan, semua alat satu produk, atau semua unit
+                            (global). Kosongkan tanggal mulai untuk berlaku hari ini.
                         </p>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer mb-3">
-                            <input
-                                type="checkbox"
-                                checked={assignAllUnits}
-                                onChange={(e) => setAssignAllUnits(e.target.checked)}
-                                className="rounded border-border"
-                            />
-                            Semua unit (berlaku global)
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label htmlFor="assign-unit" className="text-xs font-medium">Unit alat</label>
-                                <select
-                                    id="assign-unit"
-                                    value={assignUnitId}
-                                    onChange={(e) => setAssignUnitId(e.target.value)}
-                                    disabled={assignAllUnits}
-                                    className={`${inputClass} mt-1 disabled:opacity-50 min-h-[44px]`}
+                        <div className="flex flex-wrap gap-1 mb-3 border-b border-border" role="tablist" aria-label="Mode penugasan">
+                            {([["units", "Alat tertentu"], ["company", "Per Perusahaan"], ["product", "Per Produk"], ["global", "Semua unit"]] as const).map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={assignMode === key}
+                                    onClick={() => setAssignMode(key)}
+                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
+                                        assignMode === key
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                    }`}
                                 >
-                                    <option value="">{assignAllUnits ? "Semua unit" : "Pilih unit"}</option>
-                                    {units
-                                        .filter((u) => u.isActive)
-                                        .map((u) => (
-                                            <option key={u.id} value={u.id}>
-                                                {u.name}{u.company ? ` (${u.company})` : ""}
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        {assignMode === "units" && (
+                            <div className="mb-3">
+                                <div className="mb-2">
+                                    <EquipmentSearchField
+                                        id="cari-alat-penugasan"
+                                        label="Cari alat untuk ditugaskan"
+                                        value={assignUnitQuery}
+                                        onChange={setAssignUnitQuery}
+                                        placeholder="Cari nama, merek, atau lokasi…"
+                                    />
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const ids = filteredAssignUnits.map((u) => u.id);
+                                            const allVisible = ids.length > 0 && ids.every((id) => assignUnitIds.includes(id));
+                                            setAssignUnitIds((prev) =>
+                                                allVisible ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]
+                                            );
+                                        }}
+                                        className="text-xs font-medium text-primary hover:underline min-h-[44px] px-2"
+                                    >
+                                        {(() => {
+                                            const allVisible =
+                                                filteredAssignUnits.length > 0 &&
+                                                filteredAssignUnits.every((u) => assignUnitIds.includes(u.id));
+                                            return allVisible ? "Batalkan hasil" : `Pilih hasil (${filteredAssignUnits.length})`;
+                                        })()}
+                                    </button>
+                                    <span className="text-xs text-muted-foreground" aria-live="polite">
+                                        {assignUnitIds.length} dipilih
+                                    </span>
+                                </div>
+                                {filteredAssignUnits.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        {assignableUnits.length === 0
+                                            ? "Belum ada alat aktif berkategori WIG/MKI."
+                                            : "Tidak ada alat yang cocok dengan pencarian."}
+                                    </p>
+                                ) : (
+                                    <ul className="space-y-1 max-h-[280px] overflow-y-auto">
+                                        {filteredAssignUnits.map((u) => (
+                                            <li key={u.id}>
+                                                <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer hover:bg-accent/50 min-h-[48px]">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={assignUnitIds.includes(u.id)}
+                                                        onChange={(e) =>
+                                                            setAssignUnitIds((prev) =>
+                                                                e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)
+                                                            )
+                                                        }
+                                                        className="rounded border-border shrink-0"
+                                                    />
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="block text-sm font-medium truncate">{u.name}</span>
+                                                        <span className="block text-xs text-muted-foreground truncate">
+                                                            {[u.brand, u.location].filter(Boolean).join(" · ") || "—"}
+                                                        </span>
+                                                    </span>
+                                                    <EquipmentCompanyBadge company={u.company} />
+                                                </label>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {units.some((u) => u.isActive && !u.company) && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        Alat yang belum berkategori tidak tampil di sini — kategorikan dulu di tab Produk.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {assignMode === "company" && (
+                            <div className="mb-3">
+                                <div className="flex gap-1 mb-2 border-b border-border">
+                                    {(["WIG", "MKI"] as const).map((c) => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setAssignCompany(c)}
+                                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
+                                                assignCompany === c
+                                                    ? "border-primary text-primary"
+                                                    : "border-transparent text-muted-foreground hover:text-foreground"
+                                            }`}
+                                        >
+                                            {c}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground" aria-live="polite">
+                                    {assignCompanyUnits.length} alat aktif {assignCompany} akan ditugaskan
+                                    (satu baris per alat).
+                                </p>
+                                {assignCompanyUnits.length > 0 && (
+                                    <ul className="mt-2 space-y-1 max-h-[200px] overflow-y-auto">
+                                        {assignCompanyUnits.map((u) => (
+                                            <li
+                                                key={u.id}
+                                                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-1.5"
+                                            >
+                                                <span className="text-sm truncate">{u.name}</span>
+                                                <EquipmentCompanyBadge company={u.company} />
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+
+                        {assignMode === "product" && (
+                            <div className="mb-3 space-y-2">
+                                <div className="flex gap-1 border-b border-border">
+                                    {(["WIG", "MKI"] as const).map((c) => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setAssignCompany(c)}
+                                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
+                                                assignCompany === c
+                                                    ? "border-primary text-primary"
+                                                    : "border-transparent text-muted-foreground hover:text-foreground"
+                                            }`}
+                                        >
+                                            {c}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div>
+                                    <label htmlFor="assign-product" className="text-xs font-medium">Produk {assignCompany}</label>
+                                    <select
+                                        id="assign-product"
+                                        value={assignProductId}
+                                        onChange={(e) => {
+                                            setAssignProductId(e.target.value);
+                                            if (e.target.value) void fetchAssignProductTools(e.target.value);
+                                            else setAssignProductTools([]);
+                                        }}
+                                        disabled={assignProductsLoading}
+                                        className={`${inputClass} mt-1 disabled:opacity-50 min-h-[44px]`}
+                                    >
+                                        <option value="">{assignProductsLoading ? "Memuat…" : "Pilih produk"}</option>
+                                        {assignProducts.map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name} ({p._count.tools} alat)
                                             </option>
                                         ))}
-                                </select>
+                                    </select>
+                                </div>
+                                {assignProductLoading ? (
+                                    <div className="flex items-center justify-center py-4">
+                                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                    </div>
+                                ) : (
+                                    assignProductId && (
+                                        <>
+                                            <p className="text-xs text-muted-foreground" aria-live="polite">
+                                                {assignProductChecked.length} alat terpetakan akan ditugaskan
+                                                (satu baris per alat).
+                                            </p>
+                                            {assignProductChecked.length > 0 && (
+                                                <ul className="space-y-1 max-h-[200px] overflow-y-auto">
+                                                    {assignProductChecked.map((t) => (
+                                                        <li
+                                                            key={t.id}
+                                                            className="rounded-lg border border-border px-3 py-1.5 text-sm truncate"
+                                                        >
+                                                            {t.name}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </>
+                                    )
+                                )}
                             </div>
+                        )}
+
+                        {assignMode === "global" && (
+                            <FeedbackMessage variant="info" className="mb-3">
+                                Penugasan global mencakup semua unit aktif WIG dan MKI sekaligus, termasuk unit
+                                yang dibuat kemudian.
+                            </FeedbackMessage>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <EmployeeSearchPicker
                                 label="Karyawan"
                                 value={assignEmployee}
@@ -1343,8 +1841,76 @@ export default function EquipmentSettingsPage() {
                             disabled={savingAssign}
                             className="btn btn-primary mt-3 min-h-[48px]"
                         >
-                            {savingAssign ? "Menyimpan..." : "Simpan Penugasan"}
+                            {savingAssign
+                                ? "Menyimpan..."
+                                : assignMode === "global"
+                                  ? "Simpan Penugasan Global"
+                                  : `Simpan ${assignPreviewCount} Penugasan`}
                         </button>
+                        {assignBulkResult && (
+                            <FeedbackMessage
+                                variant={assignBulkResult.skipped.length === 0 ? "success" : "warning"}
+                                className="mt-3"
+                            >
+                                {assignBulkResult.created} penugasan dibuat
+                                {assignBulkResult.skipped.length > 0 && (
+                                    <>
+                                        {`, ${assignBulkResult.skipped.length} di-skip:`}
+                                        <ul className="mt-1 list-disc pl-5">
+                                            {assignBulkResult.skipped.slice(0, 5).map((s) => (
+                                                <li key={s.unitName}>
+                                                    {s.unitName} — {s.reason}
+                                                </li>
+                                            ))}
+                                            {assignBulkResult.skipped.length > 5 && (
+                                                <li>…dan {assignBulkResult.skipped.length - 5} lainnya.</li>
+                                            )}
+                                        </ul>
+                                    </>
+                                )}
+                            </FeedbackMessage>
+                        )}
+                        {assignEmployee && (
+                            <div className="mt-3 rounded-lg border border-border p-3">
+                                <h3 className="text-sm font-medium mb-1">
+                                    Penugasan aktif {assignEmployee.name} ({assignEmployee.employeeId})
+                                </h3>
+                                {assignEmployeeActive.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground">Belum ada penugasan aktif.</p>
+                                ) : (
+                                    <ul className="space-y-1">
+                                        {assignEmployeeActive.map((a) => (
+                                            <li
+                                                key={a.id}
+                                                className="flex items-center justify-between gap-2 text-xs"
+                                            >
+                                                <span className="min-w-0 truncate">
+                                                    {a.unit ? a.unit.name : "Semua unit"}{" "}
+                                                    {a.unit ? (
+                                                        a.unit.company ? (
+                                                            <EquipmentCompanyBadge company={a.unit.company} />
+                                                        ) : null
+                                                    ) : (
+                                                        <EquipmentGlobalBadge />
+                                                    )}{" "}
+                                                    <span className="text-muted-foreground">
+                                                        · {a.startsOnWibDate}
+                                                        {a.endsOnWibDate ? ` → ${a.endsOnWibDate}` : " → berjalan"}
+                                                    </span>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => endAssignment(a)}
+                                                    className="shrink-0 text-rose-600 hover:underline min-h-[36px] px-1"
+                                                >
+                                                    Akhiri
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-card border border-border rounded-lg p-4">
@@ -1352,43 +1918,160 @@ export default function EquipmentSettingsPage() {
                         <p className="text-xs text-muted-foreground mb-3">
                             {assignments.length === 0
                                 ? "Belum ada penugasan."
-                                : "Penugasan aktif bisa diakhiri; yang sudah berakhir tercatat sebagai riwayat."}
+                                : "Dikelompokkan per karyawan. Penugasan aktif bisa diedit/diakhiri satuan atau massal; yang sudah berakhir tercatat sebagai riwayat."}
                         </p>
                         {assignments.length > 0 && (
-                            <ul className="space-y-2">
-                                {[...assignments]
-                                    .sort((a, b) => Number(isAssignmentActive(b)) - Number(isAssignmentActive(a)))
-                                    .map((a) => (
+                            <div className="mb-3">
+                                <EquipmentSearchField
+                                    id="cari-penugasan"
+                                    label="Cari penugasan"
+                                    value={assignmentQuery}
+                                    onChange={setAssignmentQuery}
+                                    placeholder="Cari karyawan atau alat…"
+                                />
+                            </div>
+                        )}
+                        {endSelected.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-3 rounded-lg border border-border bg-accent/30 px-3 py-2">
+                                <span className="text-xs font-medium" aria-live="polite">
+                                    {endSelected.length} dipilih
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => endAssignmentsBulk(endSelected)}
+                                    disabled={endingBulk}
+                                    className="px-3 py-1.5 text-xs font-medium text-rose-600 border border-border rounded-md bg-card hover:bg-rose-50 disabled:opacity-50 min-h-[44px] dark:hover:bg-rose-950/30"
+                                >
+                                    {endingBulk ? "Mengakhiri..." : `Akhiri ${endSelected.length} terpilih`}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEndSelected([])}
+                                    className="text-xs text-muted-foreground hover:text-foreground min-h-[44px] px-2"
+                                >
+                                    Batalkan
+                                </button>
+                            </div>
+                        )}
+                        {endBulkResult && endBulkResult.skipped.length > 0 && (
+                            <FeedbackMessage variant="warning" className="mb-3">
+                                {endBulkResult.ended} diakhiri, {endBulkResult.skipped.length} di-skip
+                                (sudah berakhir / belum mulai).
+                            </FeedbackMessage>
+                        )}
+                        {assignments.length > 0 &&
+                            (assignmentGroups.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Tidak ada penugasan yang cocok dengan pencarian.
+                                </p>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const allVisible = visibleActiveIds.length > 0 && visibleActiveIds.every((id) => endSelected.includes(id));
+                                                setEndSelected((prev) =>
+                                                    allVisible
+                                                        ? prev.filter((id) => !visibleActiveIds.includes(id))
+                                                        : [...new Set([...prev, ...visibleActiveIds])]
+                                                );
+                                            }}
+                                            className="text-xs font-medium text-primary hover:underline min-h-[44px] px-2"
+                                        >
+                                            {visibleActiveIds.length > 0 && visibleActiveIds.every((id) => endSelected.includes(id))
+                                                ? "Batalkan hasil"
+                                                : `Pilih hasil (${visibleActiveIds.length})`}
+                                        </button>
+                                        <span className="text-xs text-muted-foreground" aria-live="polite">
+                                            {endSelectedVisibleCount} dari {visibleActiveIds.length} hasil dipilih
+                                        </span>
+                                    </div>
+                                    {assignmentGroups.map((g) => (
+                                        <section key={g.userId} className="rounded-lg border border-border overflow-hidden">
+                                            <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-accent/20">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-semibold truncate">{g.displayName}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {g.employeeId ?? ""} · {g.activeItems.length} aktif ·{" "}
+                                                        {g.items.length - g.activeItems.length} berakhir{" "}
+                                                        {g.activeItems.some((a) => !a.unit) && <EquipmentGlobalBadge />}
+                                                    </p>
+                                                </div>
+                                                {g.activeItems.length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => endAssignmentsBulk(g.activeItems.map((a) => a.id))}
+                                                        className="shrink-0 px-3 min-h-[44px] inline-flex items-center text-xs font-medium text-rose-600 hover:underline"
+                                                    >
+                                                        Akhiri semua ({g.activeItems.length})
+                                                    </button>
+                                                )}
+                                            </header>
+                                            <ul className="divide-y divide-border">
+                                                {g.items.map((a) => (
                                     <li
                                         key={a.id}
-                                        className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                                        className="flex items-center justify-between gap-2 px-3 py-2"
                                     >
-                                        <span className="min-w-0">
-                                            <span className="block text-sm font-semibold truncate">
-                                                {a.user.displayName ?? a.user.employeeId ?? "—"}
-                                            </span>
-                                            <span className="block text-xs text-muted-foreground truncate">
-                                                {a.unit ? a.unit.name : "Semua unit"}{" "}
-                                                {a.unit?.company ? <EquipmentCompanyBadge company={a.unit.company} /> : null}{" "}
-                                                · {a.user.employeeId ?? ""} · {a.startsOnWibDate}
-                                                {a.endsOnWibDate ? ` → ${a.endsOnWibDate}` : " → berjalan"}
+                                        <span className="flex items-center gap-2 min-w-0">
+                                            {isAssignmentActive(a) && (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={endSelected.includes(a.id)}
+                                                    onChange={(e) =>
+                                                        setEndSelected((prev) =>
+                                                            e.target.checked ? [...prev, a.id] : prev.filter((id) => id !== a.id)
+                                                        )
+                                                    }
+                                                    aria-label={`Pilih ${a.unit ? a.unit.name : "Semua unit"}`}
+                                                    className="rounded border-border shrink-0"
+                                                />
+                                            )}
+                                            <span className="min-w-0">
+                                                <span className="block text-sm font-semibold truncate">
+                                                    {a.unit ? a.unit.name : "Semua unit"}{" "}
+                                                    {a.unit ? (
+                                                        a.unit.company ? (
+                                                            <EquipmentCompanyBadge company={a.unit.company} />
+                                                        ) : null
+                                                    ) : (
+                                                        <EquipmentGlobalBadge />
+                                                    )}
+                                                </span>
+                                                <span className="block text-xs text-muted-foreground truncate">
+                                                    {a.startsOnWibDate}
+                                                    {a.endsOnWibDate ? ` → ${a.endsOnWibDate}` : " → berjalan"}
+                                                </span>
                                             </span>
                                         </span>
                                         {isAssignmentActive(a) ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => endAssignment(a)}
-                                                className="shrink-0 px-3 min-h-[44px] inline-flex items-center text-xs font-medium text-rose-600 border border-border rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                                            >
-                                                Akhiri
-                                            </button>
+                                            <span className="flex gap-1 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openEditAssignment(a)}
+                                                    className="px-3 min-h-[44px] inline-flex items-center text-xs font-medium text-primary border border-border rounded-md hover:bg-accent/50"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => endAssignment(a)}
+                                                    className="px-3 min-h-[44px] inline-flex items-center text-xs font-medium text-rose-600 border border-border rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                                                >
+                                                    Akhiri
+                                                </button>
+                                            </span>
                                         ) : (
                                             <span className="shrink-0 text-xs text-muted-foreground">Berakhir</span>
                                         )}
                                     </li>
-                                ))}
-                            </ul>
-                        )}
+                                                ))}
+                                            </ul>
+                                        </section>
+                                    ))}
+                                </div>
+                            ))}
                     </div>
 
                 </div>
@@ -1673,19 +2356,41 @@ export default function EquipmentSettingsPage() {
                             </FeedbackMessage>
                         ) : (
                             <>
+                                <div className="mb-3">
+                                    <EquipmentSearchField
+                                        id="cari-alat-belum-berkategori"
+                                        label="Cari alat belum berkategori"
+                                        value={uncategorizedQuery}
+                                        onChange={setUncategorizedQuery}
+                                        placeholder="Cari nama, merek, atau lokasi…"
+                                    />
+                                </div>
                                 <div className="flex flex-wrap items-center gap-2 mb-3">
                                     <button
                                         type="button"
-                                        onClick={() =>
-                                            setBulkSelected(
-                                                bulkSelected.length === uncategorizedUnits.length
-                                                    ? []
-                                                    : uncategorizedUnits.map((u) => u.id)
-                                            )
-                                        }
+                                        onClick={() => {
+                                            const ids = filteredUncategorizedUnits.map((u) => u.id);
+                                            const allVisibleSelected =
+                                                ids.length > 0 && ids.every((id) => bulkSelected.includes(id));
+                                            setBulkSelected((prev) =>
+                                                allVisibleSelected
+                                                    ? prev.filter((id) => !ids.includes(id))
+                                                    : [...new Set([...prev, ...ids])]
+                                            );
+                                        }}
                                         className="text-xs font-medium text-primary hover:underline min-h-[44px] px-2"
                                     >
-                                        {bulkSelected.length === uncategorizedUnits.length ? "Batalkan semua" : `Pilih semua (${uncategorizedUnits.length})`}
+                                        {(() => {
+                                            const visible = filteredUncategorizedUnits.length;
+                                            const allVisibleSelected =
+                                                visible > 0 &&
+                                                filteredUncategorizedUnits.every((u) => bulkSelected.includes(u.id));
+                                            const isFiltering = uncategorizedQuery.trim().length > 0;
+                                            if (allVisibleSelected) return isFiltering ? "Batalkan hasil" : "Batalkan semua";
+                                            return isFiltering
+                                                ? `Pilih hasil (${visible})`
+                                                : `Pilih semua (${uncategorizedUnits.length})`;
+                                        })()}
                                     </button>
                                     <button
                                         type="button"
@@ -1704,8 +2409,13 @@ export default function EquipmentSettingsPage() {
                                         {bulkSaving ? "Menyimpan..." : `Jadikan MKI (${bulkSelected.length})`}
                                     </button>
                                 </div>
+                                {filteredUncategorizedUnits.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        Tidak ada alat yang cocok dengan pencarian.
+                                    </p>
+                                ) : (
                                 <ul className="space-y-1 max-h-[320px] overflow-y-auto">
-                                    {uncategorizedUnits.map((u) => (
+                                    {filteredUncategorizedUnits.map((u) => (
                                         <li
                                             key={u.id}
                                             className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
@@ -1751,6 +2461,7 @@ export default function EquipmentSettingsPage() {
                                         </li>
                                     ))}
                                 </ul>
+                                )}
                             </>
                         )}
                     </div>
@@ -1913,6 +2624,161 @@ export default function EquipmentSettingsPage() {
                         </div>
                     )}
                 </div>
+            )}
+
+            {editingAssignment && (
+                <AccessibleModal ariaLabel="Edit Penugasan" onClose={() => setEditingAssignment(null)}>
+                    <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
+                        <div>
+                            <h2 className="modal-title">Edit Penugasan</h2>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Centang satu alat untuk mengganti, atau beberapa alat sekaligus — baris ini
+                                memakai alat pertama, sisanya jadi baris penugasan baru.
+                            </p>
+                        </div>
+                        <button type="button" className="modal-close" onClick={() => setEditingAssignment(null)} aria-label="Tutup modal">
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="flex items-center gap-2 text-sm cursor-pointer mb-2">
+                                <input
+                                    type="checkbox"
+                                    checked={editIsGlobal}
+                                    onChange={(e) => {
+                                        setEditIsGlobal(e.target.checked);
+                                        if (e.target.checked) setEditUnitIds([]);
+                                    }}
+                                    className="rounded border-border"
+                                />
+                                Semua unit (global)
+                            </label>
+                            {!editIsGlobal && (
+                                <>
+                                    <EquipmentSearchField
+                                        id="cari-alat-edit-penugasan"
+                                        label="Cari alat"
+                                        value={editUnitQuery}
+                                        onChange={setEditUnitQuery}
+                                        placeholder="Cari nama, merek, atau lokasi…"
+                                    />
+                                    <div className="flex flex-wrap items-center gap-2 mt-1 mb-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const ids = filteredEditUnits.map((u) => u.id);
+                                                const allVisible = ids.length > 0 && ids.every((id) => editUnitIds.includes(id));
+                                                setEditUnitIds((prev) =>
+                                                    allVisible ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]
+                                                );
+                                            }}
+                                            className="text-xs font-medium text-primary hover:underline min-h-[44px] px-2"
+                                        >
+                                            {filteredEditUnits.length > 0 &&
+                                            filteredEditUnits.every((u) => editUnitIds.includes(u.id))
+                                                ? "Batalkan hasil"
+                                                : `Pilih hasil (${filteredEditUnits.length})`}
+                                        </button>
+                                        <span className="text-xs text-muted-foreground" aria-live="polite">
+                                            {editUnitIds.length} dipilih
+                                        </span>
+                                    </div>
+                                    {filteredEditUnits.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            Tidak ada alat yang cocok dengan pencarian.
+                                        </p>
+                                    ) : (
+                                        <ul className="space-y-1 max-h-[240px] overflow-y-auto">
+                                            {filteredEditUnits.map((u) => (
+                                                <li key={u.id}>
+                                                    <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer hover:bg-accent/50 min-h-[48px]">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={editUnitIds.includes(u.id)}
+                                                            onChange={(e) =>
+                                                                setEditUnitIds((prev) =>
+                                                                    e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)
+                                                                )
+                                                            }
+                                                            className="rounded border-border shrink-0"
+                                                        />
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block text-sm font-medium truncate">{u.name}</span>
+                                                            <span className="block text-xs text-muted-foreground truncate">
+                                                                {[u.brand, u.location].filter(Boolean).join(" · ") || "—"}
+                                                            </span>
+                                                        </span>
+                                                        <EquipmentCompanyBadge company={u.company} />
+                                                    </label>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                        <EmployeeSearchPicker
+                            label="Karyawan"
+                            value={editEmployee}
+                            onChange={setEditEmployee}
+                        />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label htmlFor="edit-assign-starts" className="text-xs font-medium">Mulai</label>
+                                <input
+                                    id="edit-assign-starts"
+                                    type="date"
+                                    value={editStartsOn}
+                                    onChange={(e) => setEditStartsOn(e.target.value)}
+                                    className={`${inputClass} mt-1 min-h-[44px]`}
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="edit-assign-ends" className="text-xs font-medium">Selesai (opsional)</label>
+                                <input
+                                    id="edit-assign-ends"
+                                    type="date"
+                                    value={editEndsOn}
+                                    onChange={(e) => setEditEndsOn(e.target.value)}
+                                    className={`${inputClass} mt-1 min-h-[44px]`}
+                                />
+                            </div>
+                        </div>
+                        {editBulkResult && editBulkResult.skipped.length > 0 && (
+                            <FeedbackMessage variant="warning">
+                                {editBulkResult.created} baris tambahan dibuat, {editBulkResult.skipped.length} di-skip:
+                                <ul className="mt-1 list-disc pl-5">
+                                    {editBulkResult.skipped.slice(0, 5).map((s) => (
+                                        <li key={s.unitName}>
+                                            {s.unitName} — {s.reason}
+                                        </li>
+                                    ))}
+                                    {editBulkResult.skipped.length > 5 && (
+                                        <li>…dan {editBulkResult.skipped.length - 5} lainnya.</li>
+                                    )}
+                                </ul>
+                            </FeedbackMessage>
+                        )}
+                        <div className="flex gap-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => void saveEditAssignment()}
+                                disabled={savingEdit}
+                                className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[48px]"
+                            >
+                                {savingEdit ? "Menyimpan..." : !editIsGlobal && editUnitIds.length > 1 ? `Simpan (1 diubah + ${editUnitIds.length - 1} baru)` : "Simpan Perubahan"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setEditingAssignment(null)}
+                                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground min-h-[48px]"
+                            >
+                                Batal
+                            </button>
+                        </div>
+                    </div>
+                </AccessibleModal>
             )}
 
             {showUnitModal && (

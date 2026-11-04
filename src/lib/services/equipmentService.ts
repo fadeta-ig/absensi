@@ -637,37 +637,102 @@ export async function getMyEquipmentUnits(session: SessionPayload, filters: { pr
 
 // ─── Assignment: WIG002 menentukan siapa dapat modul Inspeksi Alat ───
 
+/** Validasi periode WIB; kembalikan startsOn final (default hari ini). */
+function resolveAssignmentPeriod(today: string, startsOnInput?: string, endsOnInput?: string | null): { startsOn: string; endsOn: string | null } {
+    const startsOn = startsOnInput ?? today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn)) throw new EquipmentError("Tanggal mulai tidak valid (YYYY-MM-DD).", 400);
+    if (endsOnInput && !/^\d{4}-\d{2}-\d{2}$/.test(endsOnInput)) {
+        throw new EquipmentError("Tanggal selesai tidak valid (YYYY-MM-DD).", 400);
+    }
+    if (endsOnInput && endsOnInput <= startsOn) {
+        throw new EquipmentError("Tanggal selesai harus setelah tanggal mulai.", 400);
+    }
+    return { startsOn, endsOn: endsOnInput ?? null };
+}
+
+/** Unit harus aktif + sudah berkategori WIG/MKI sebelum bisa ditugaskan. */
+async function assertAssignableUnit(unitId: string) {
+    const unit = await prisma.equipmentUnit.findUnique({ where: { id: unitId } });
+    if (!unit || !unit.isActive) throw new EquipmentError("Unit alat tidak ditemukan atau nonaktif.", 422);
+    if (!unit.company) throw new EquipmentError("Kategorikan dulu alat ke WIG/MKI sebelum menugaskan.", 422);
+    return unit;
+}
+
+/** Baris penugasan yang bertabrakan periode + cakupan unit (global menabrak semua). */
+async function findOverlappingAssignment(
+    userId: string,
+    unitId: string | null,
+    startsOn: string,
+    endsOn: string | null,
+    excludeId?: string
+) {
+    const periodOr = [{ endsOnWibDate: null }, { endsOnWibDate: { gt: startsOn } }];
+    const periodAnd = { startsOnWibDate: { lte: endsOn ?? "9999-12-31" } };
+    const notSelf = excludeId ? { id: { not: excludeId } } : {};
+    if (unitId) {
+        return prisma.equipmentAssignment.findFirst({
+            where: { userId, ...notSelf, ...periodAnd, AND: [{ OR: [{ unitId: null }, { unitId }] }, { OR: periodOr }] },
+        });
+    }
+    return prisma.equipmentAssignment.findFirst({ where: { userId, ...notSelf, ...periodAnd, OR: periodOr } });
+}
+
 export async function assignEquipmentUnit(
     session: SessionPayload,
     input: { unitId?: string | null; employeeId: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ) {
     requireWig002(session);
-    if (input.unitId) {
-        const unit = await prisma.equipmentUnit.findUnique({ where: { id: input.unitId } });
-        if (!unit || !unit.isActive) throw new EquipmentError("Unit alat tidak ditemukan atau nonaktif.", 422);
-        if (!unit.company) throw new EquipmentError("Kategorikan dulu alat ke WIG/MKI sebelum menugaskan.", 422);
-    }
+    if (input.unitId) await assertAssignableUnit(input.unitId);
     const today = toWIBDateString();
     const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
-    const startsOn = input.startsOnWibDate ?? today;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startsOn)) throw new EquipmentError("Tanggal mulai tidak valid (YYYY-MM-DD).", 400);
-    if (input.endsOnWibDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.endsOnWibDate)) {
-        throw new EquipmentError("Tanggal selesai tidak valid (YYYY-MM-DD).", 400);
-    }
-    if (input.endsOnWibDate && input.endsOnWibDate <= startsOn) {
-        throw new EquipmentError("Tanggal selesai harus setelah tanggal mulai.", 400);
-    }
-    const periodOr = [{ endsOnWibDate: null }, { endsOnWibDate: { gt: startsOn } }];
-    const periodAnd = { startsOnWibDate: { lte: input.endsOnWibDate ?? "9999-12-31" } };
-    const overlap = input.unitId
-        ? await prisma.equipmentAssignment.findFirst({
-            where: { userId: emp.userId, ...periodAnd, AND: [{ OR: [{ unitId: null }, { unitId: input.unitId }] }, { OR: periodOr }] },
-        })
-        : await prisma.equipmentAssignment.findFirst({ where: { userId: emp.userId, ...periodAnd, OR: periodOr } });
+    const { startsOn, endsOn } = resolveAssignmentPeriod(today, input.startsOnWibDate, input.endsOnWibDate);
+    const overlap = await findOverlappingAssignment(emp.userId, input.unitId ?? null, startsOn, endsOn);
     if (overlap) throw new EquipmentError("Penugasan bertabrakan dengan periode yang sudah ada.", 409);
     return prisma.equipmentAssignment.create({
-        data: { unitId: input.unitId ?? null, userId: emp.userId, startsOnWibDate: startsOn, endsOnWibDate: input.endsOnWibDate ?? null },
+        data: { unitId: input.unitId ?? null, userId: emp.userId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
     });
+}
+
+export interface EquipmentAssignBulkResult {
+    created: Array<{ id: string; unitId: string | null }>;
+    skipped: Array<{ unitId: string; unitName: string; reason: string }>;
+}
+
+/** Penugasan bulk: satu karyawan × banyak alat. Per item divalidasi; yang gagal di-skip dengan alasan (bukan gagal semua). */
+export async function assignEquipmentUnitsBulk(
+    session: SessionPayload,
+    input: { unitIds: string[]; employeeId: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
+): Promise<EquipmentAssignBulkResult> {
+    requireWig002(session);
+    const ids = [...new Set(input.unitIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length === 0) throw new EquipmentError("Pilih minimal satu alat.", 400);
+    if (ids.length > 200) throw new EquipmentError("Maksimal 200 alat per penugasan bulk.", 400);
+    const today = toWIBDateString();
+    const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
+    const { startsOn, endsOn } = resolveAssignmentPeriod(today, input.startsOnWibDate, input.endsOnWibDate);
+    const created: EquipmentAssignBulkResult["created"] = [];
+    const skipped: EquipmentAssignBulkResult["skipped"] = [];
+    for (const unitId of ids) {
+        const unit = await prisma.equipmentUnit.findUnique({ where: { id: unitId } });
+        if (!unit || !unit.isActive) {
+            skipped.push({ unitId, unitName: unit?.name ?? unitId, reason: "Alat tidak ditemukan atau nonaktif." });
+            continue;
+        }
+        if (!unit.company) {
+            skipped.push({ unitId, unitName: unit.name, reason: "Belum berkategori WIG/MKI." });
+            continue;
+        }
+        const overlap = await findOverlappingAssignment(emp.userId, unitId, startsOn, endsOn);
+        if (overlap) {
+            skipped.push({ unitId, unitName: unit.name, reason: "Bertabrakan dengan periode yang sudah ada." });
+            continue;
+        }
+        const row = await prisma.equipmentAssignment.create({
+            data: { unitId, userId: emp.userId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
+        });
+        created.push({ id: row.id, unitId });
+    }
+    return { created, skipped };
 }
 
 export async function getEquipmentAssignments(session: SessionPayload) {
@@ -691,6 +756,72 @@ export async function endEquipmentAssignment(session: SessionPayload, assignment
     const endsOn = endsOnWibDate ?? today;
     if (endsOn <= existing.startsOnWibDate) throw new EquipmentError("Tanggal selesai harus setelah tanggal mulai.", 400);
     return prisma.equipmentAssignment.update({ where: { id: assignmentId }, data: { endsOnWibDate: endsOn } });
+}
+
+/** Akhiri banyak penugasan sekaligus (hari ini). Parsial: yang gagal di-skip dengan alasan. */
+export interface EquipmentEndBulkResult {
+    ended: string[];
+    skipped: Array<{ assignmentId: string; reason: string }>;
+}
+
+export async function endEquipmentAssignmentsBulk(session: SessionPayload, assignmentIds: string[]): Promise<EquipmentEndBulkResult> {
+    requireWig002(session);
+    const ids = [...new Set(assignmentIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length === 0) throw new EquipmentError("Pilih minimal satu penugasan.", 400);
+    if (ids.length > 200) throw new EquipmentError("Maksimal 200 penugasan per aksi bulk.", 400);
+    const today = toWIBDateString();
+    const ended: string[] = [];
+    const skipped: EquipmentEndBulkResult["skipped"] = [];
+    for (const id of ids) {
+        const existing = await prisma.equipmentAssignment.findUnique({ where: { id } });
+        if (!existing) {
+            skipped.push({ assignmentId: id, reason: "Penugasan tidak ditemukan." });
+            continue;
+        }
+        if (existing.endsOnWibDate) {
+            skipped.push({ assignmentId: id, reason: "Penugasan sudah berakhir." });
+            continue;
+        }
+        if (today <= existing.startsOnWibDate) {
+            skipped.push({ assignmentId: id, reason: "Belum mulai (akhir harus setelah mulai)." });
+            continue;
+        }
+        await prisma.equipmentAssignment.update({ where: { id }, data: { endsOnWibDate: today } });
+        ended.push(id);
+    }
+    return { ended, skipped };
+}
+
+/** Ubah baris penugasan aktif (unit/karyawan/tanggal). Riwayat yang sudah berakhir terkunci. */
+export async function updateEquipmentAssignment(
+    session: SessionPayload,
+    assignmentId: string,
+    input: { unitId?: string | null; employeeId?: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
+) {
+    requireWig002(session);
+    const existing = await prisma.equipmentAssignment.findUnique({ where: { id: assignmentId } });
+    if (!existing) throw new EquipmentError("Penugasan tidak ditemukan.", 404);
+    const today = toWIBDateString();
+    if (existing.endsOnWibDate && existing.endsOnWibDate <= today) {
+        throw new EquipmentError("Penugasan yang sudah berakhir tidak dapat diubah (riwayat terkunci).", 409);
+    }
+    // unitId: undefined = tidak berubah; null = jadikan global.
+    const nextUnitId = input.unitId === undefined ? existing.unitId : input.unitId;
+    if (nextUnitId) await assertAssignableUnit(nextUnitId);
+    let nextUserId = existing.userId;
+    if (input.employeeId !== undefined) {
+        const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
+        nextUserId = emp.userId;
+    }
+    const nextStartsOn = input.startsOnWibDate ?? existing.startsOnWibDate;
+    const nextEndsOn = input.endsOnWibDate === undefined ? existing.endsOnWibDate : input.endsOnWibDate;
+    const { startsOn, endsOn } = resolveAssignmentPeriod(today, nextStartsOn, nextEndsOn);
+    const overlap = await findOverlappingAssignment(nextUserId, nextUnitId, startsOn, endsOn, assignmentId);
+    if (overlap) throw new EquipmentError("Penugasan bertabrakan dengan periode yang sudah ada.", 409);
+    return prisma.equipmentAssignment.update({
+        where: { id: assignmentId },
+        data: { unitId: nextUnitId, userId: nextUserId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
+    });
 }
 
 export interface EquipmentRecapFilters {
