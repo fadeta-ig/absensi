@@ -891,11 +891,14 @@ export const equipmentTemplateItemDeleteSchema = z.object({
     id: z.string().trim().min(1),
 });
 
+export const equipmentCompanySchema = z.enum(["WIG", "MKI"]);
+
 export const equipmentUnitCreateSchema = z.object({
     name: z.string().trim().min(1, "Nama alat wajib diisi.").max(200),
     brand: z.string().trim().max(200).nullable().optional(),
     location: z.string().trim().max(200).nullable().optional(),
     templateId: z.string().trim().min(1),
+    company: equipmentCompanySchema.optional(),
 });
 
 export const equipmentUnitUpdateSchema = z.object({
@@ -905,6 +908,7 @@ export const equipmentUnitUpdateSchema = z.object({
     location: z.string().trim().max(200).nullable().optional(),
     templateId: z.string().trim().min(1).optional(),
     isActive: z.boolean().optional(),
+    company: equipmentCompanySchema.nullable().optional(),
 });
 
 export const equipmentAssignSchema = z.object({
@@ -951,5 +955,14 @@ export const equipmentApproverSchema = z.object({
 
 export const equipmentApproversSchema = z.object({
     employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
+});
+
+export const equipmentProductCreateSchema = z.object({
+    company: equipmentCompanySchema,
+    name: z.string().trim().min(1, "Nama produk wajib diisi.").max(200),
+});
+
+export const equipmentProductToolsSchema = z.object({
+    equipmentUnitIds: z.array(z.string().trim().min(1).max(191)).max(200),
 });
 

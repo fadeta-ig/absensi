@@ -311,12 +311,19 @@ model EquipmentTemplateItem {
   @@map("equipment_template_items")
 }
 
+enum EquipmentCompany {
+  WIG
+  MKI
+}
+
 model EquipmentUnit {
   id             String   @id @default(uuid())
   name           String   @db.VarChar(200)
   nameNormalized String   @unique(map: "idx_equipment_unit_name_unique") @map("name_normalized") @db.VarChar(200)
   brand          String?  @db.VarChar(200)
   location       String?  @db.VarChar(200)
+  /// Perusahaan pemilik alat (WIG/MKI). NULL = belum dikategorikan WIG002.
+  company        EquipmentCompany?
   templateId     String   @map("template_id")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -325,10 +332,43 @@ model EquipmentUnit {
   template    EquipmentTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   assignments EquipmentAssignment[]
   inspections EquipmentInspection[]
+  productTools EquipmentProductTool[]
 
   @@index([templateId], map: "idx_equipment_unit_template")
   @@index([isActive], map: "idx_equipment_unit_active")
+  @@index([company], map: "idx_equipment_unit_company")
   @@map("equipment_units")
+}
+
+// ─── Produk per perusahaan + pemetaan alat (WIG002, manual) ──
+model EquipmentProduct {
+  id             String           @id @default(uuid())
+  company        EquipmentCompany
+  name           String           @db.VarChar(200)
+  nameNormalized String           @map("name_normalized") @db.VarChar(200)
+  isActive       Boolean          @default(true) @map("is_active")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  tools EquipmentProductTool[]
+
+  @@unique([company, nameNormalized], map: "idx_equipment_product_company_name_unique")
+  @@index([company], map: "idx_equipment_product_company")
+  @@map("equipment_products")
+}
+
+model EquipmentProductTool {
+  id              String   @id @default(uuid())
+  productId       String   @map("product_id")
+  equipmentUnitId String   @map("equipment_unit_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  product EquipmentProduct @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  unit    EquipmentUnit    @relation(fields: [equipmentUnitId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([productId, equipmentUnitId], map: "idx_equipment_product_tool_unique")
+  @@index([equipmentUnitId], map: "idx_equipment_product_tool_unit")
+  @@map("equipment_product_tools")
 }
 
 model EquipmentAssignment {

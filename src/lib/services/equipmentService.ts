@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import logger from "@/lib/logger";
 import { toWIBDateString, isValidCalendarDate, addCalendarDays } from "@/lib/timezone";
 import type { SessionPayload } from "@/lib/auth";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, EquipmentCompany } from "@prisma/client";
 import { actorFromSession } from "@/lib/services/auditService";
 import { isWig002, normalizeName } from "@/lib/services/cleaningService";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
@@ -121,7 +121,7 @@ export async function requireQcMember(session: SessionPayload): Promise<void> {
 
 // ─── Guard internal ───────────────────────────────────────────────
 
-function requireWig002(session: SessionPayload): void {
+export function requireWig002(session: SessionPayload): void {
     if (!isWig002(session)) throw new EquipmentError("Hanya WIG002 yang dapat mengelola master inspeksi alat.", 403);
 }
 
@@ -450,6 +450,7 @@ export interface EquipmentUnitInput {
     brand?: string | null;
     location?: string | null;
     templateId: string;
+    company?: EquipmentCompany | null;
 }
 
 export async function createEquipmentUnit(session: SessionPayload, input: EquipmentUnitInput) {
@@ -466,6 +467,7 @@ export async function createEquipmentUnit(session: SessionPayload, input: Equipm
                 brand: input.brand?.trim() || null,
                 location: input.location?.trim() || null,
                 templateId: input.templateId,
+                company: input.company ?? null,
             },
         });
         await logCreated("CREATE_EQUIPMENT_UNIT", "EQUIPMENT_UNIT", created.id, session, { name: created.name });
@@ -488,6 +490,24 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
         const template = await prisma.equipmentTemplate.findUnique({ where: { id: input.templateId } });
         if (!template || !template.isActive) throw new EquipmentError("Template tidak ditemukan atau nonaktif.", 422);
     }
+    if (input.company !== undefined && input.company !== existing.company) {
+        // Ganti/kosongkan perusahaan hanya bila tidak terpetakan ke produk lain perusahaan.
+        const nextCompany = input.company;
+        const conflict = nextCompany === null
+            ? await prisma.equipmentProductTool.findFirst({ where: { equipmentUnitId: id }, select: { id: true } })
+            : await prisma.equipmentProductTool.findFirst({
+                where: { equipmentUnitId: id, product: { company: { not: nextCompany } } },
+                select: { id: true },
+            });
+        if (conflict) {
+            throw new EquipmentError(
+                nextCompany === null
+                    ? "Alat masih terpetakan ke produk. Lepas dulu pemetaannya sebelum mengosongkan perusahaan."
+                    : `Alat masih terpetakan ke produk perusahaan lain. Lepas dulu pemetaannya sebelum pindah ke ${nextCompany}.`,
+                409
+            );
+        }
+    }
     const data: Prisma.EquipmentUnitUpdateInput = {};
     if (input.name !== undefined) {
         const clean = normalizeName(input.name);
@@ -499,6 +519,7 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
     if (input.location !== undefined) data.location = input.location?.trim() || null;
     if (input.templateId !== undefined) data.template = { connect: { id: input.templateId } };
     if (input.isActive !== undefined) data.isActive = input.isActive;
+    if (input.company !== undefined) data.company = input.company;
     try {
         return await prisma.equipmentUnit.update({ where: { id }, data });
     } catch (err) {
@@ -1355,11 +1376,11 @@ export async function readQcEvidenceFile(session: SessionPayload, evidenceId: st
 
 // ─── Util ─────────────────────────────────────────────────────────
 
-function isPrismaUniqueViolation(err: unknown): boolean {
+export function isPrismaUniqueViolation(err: unknown): boolean {
     return typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002";
 }
 
-async function logCreated(
+export async function logCreated(
     action: string,
     entity: string,
     entityId: string,
