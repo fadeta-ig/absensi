@@ -3,11 +3,12 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, par
 import { WorkTaskError, getWorkTaskById } from "@/lib/services/workTaskService";
 import { MeetingTaskError, extendTaskDeadline, cancelMeetingTask, editMeetingTask } from "@/lib/services/meetingTaskService";
 import { isWig002 } from "@/lib/services/appointmentService";
-import { meetingTaskExtendSchema, meetingTaskCancelSchema, meetingTaskEditSchema } from "@/lib/validations/validationSchemas";
-import { sendAppointmentPush, collectMeetingTaskUserIds } from "@/lib/services/appointmentNotify";
+import { meetingTaskExtendSchema, meetingTaskCancelSchema, meetingTaskEditSchema, operationalTaskRespondSchema } from "@/lib/validations/validationSchemas";
+import { respondToOperationalTask } from "@/lib/services/operationalTaskService";
+import { sendAppointmentPush, collectMeetingTaskUserIds, collectUserIdsForEmployees } from "@/lib/services/appointmentNotify";
 import { z } from "zod";
 
-const actionSchema = z.object({ action: z.enum(["extend", "cancel", "edit"]) });
+const actionSchema = z.object({ action: z.enum(["extend", "cancel", "edit", "accept", "reject"]) });
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await requireAuth();
@@ -35,6 +36,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if ("error" in actionResult) return actionResult.error;
         const action = actionResult.data.action;
 
+        if (action === "accept" || action === "reject") {
+            const rawReason = (raw.data as { reason?: unknown }).reason;
+            const parsed = await validateBody(request, operationalTaskRespondSchema, {
+                decision: action === "accept" ? "TERIMA" : "TOLAK",
+                reason: typeof rawReason === "string" ? rawReason : null,
+            });
+            if ("error" in parsed) return parsed.error;
+            const task = await respondToOperationalTask(session, taskId, parsed.data, { userId: session.userId, username: session.username });
+            const giverUserIds = await collectUserIdsForEmployees([task.assigner.employeeId]).catch(() => [] as string[]);
+            await sendAppointmentPush(giverUserIds, {
+                title: action === "accept" ? "Penerima menerima tugas Anda" : "Penerima menolak tugas Anda",
+                body: `${task.title} — ${action === "accept" ? "penerima sudah menyetujui dan mulai mengerjakan" : "penerima menolak tugas ini"}`,
+                tag: `operational-task-${task.id}-respond`,
+                url: `/employee/my-tasks/${task.id}`,
+            });
+            return NextResponse.json({ success: true, data: task });
+        }
         if (action === "extend") {
             const parsed = await validateBody(request, meetingTaskExtendSchema, raw.data);
             if ("error" in parsed) return parsed.error;

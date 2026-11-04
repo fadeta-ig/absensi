@@ -309,7 +309,7 @@ export async function GET(request: Request) {
         const dueSoonRows = await prisma.meetingTaskAssignee.findMany({
             where: {
                 employeeId,
-                status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"] },
+                status: { in: ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS", "MENUNGGU_PERSETUJUAN"] },
                 task: {
                     isCancelled: false,
                     deadlineHistory: { some: { deadlineDate: { lte: threeDaysAhead } } },

@@ -17,6 +17,7 @@ interface Assignee {
     status: string;
     isOverdue: boolean;
     stickyOverdue: boolean;
+    rejectionReason?: string | null;
 }
 interface Submission {
     id: string;
@@ -31,14 +32,14 @@ interface Submission {
 }
 interface WorkTask {
     id: string;
-    appointmentId: string;
+    appointmentId: string | null;
     sourceType: string;
     title: string;
     detail: string | null;
     isCancelled: boolean;
     cancelReason: string | null;
     assigner: { employeeId: string; name: string | null };
-    appointment: { id: string; title: string; startAt: string; endAt: string; status: string; room: { name: string } | null };
+    appointment: { id: string; title: string; startAt: string; endAt: string; status: string; room: { name: string } | null } | null;
     activeDeadline: { date: string; deadlineAt: string; sequence: number } | null;
     extensionsCount: number;
     assignees: Assignee[];
@@ -69,6 +70,7 @@ export default function MyTaskDetailPage() {
     const [editTitle, setEditTitle] = useState("");
     const [editDetail, setEditDetail] = useState("");
     const [editDue, setEditDue] = useState("");
+    const [rejectReason, setRejectReason] = useState("");
     const [memberOptions, setMemberOptions] = useState<Array<{ employeeId: string; name: string }>>([]);
     const [editAssigneeIds, setEditAssigneeIds] = useState<string[]>([]);
 
@@ -84,24 +86,34 @@ export default function MyTaskDetailPage() {
                 const me = await meRes.json();
                 setMyEmployeeId(me.employeeId ?? null);
             }
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat detail tugas."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat detail tugas. Periksa koneksi Anda, lalu coba lagi."));
             const json = await res.json();
             setTask(json.data);
             setEditTitle(json.data.title ?? "");
             setEditDetail(json.data.detail ?? "");
             setEditAssigneeIds((json.data.assignees ?? []).map((a: Assignee) => a.employeeId));
-            // Daftar peserta internal meeting untuk ubah penerima (sumber Appointments).
+            // Opsi ubah penerima: peserta internal meeting (Appointments) atau
+            // seluruh karyawan aktif (Operasional).
             try {
-                const apptRes = await fetch(`/api/appointments/${json.data.appointmentId}`, { credentials: "same-origin" });
-                if (apptRes.ok) {
-                    const apptJson = await apptRes.json();
-                    const parts = (apptJson.data?.participants ?? []) as Array<{ employeeId: string | null; employee?: { name: string | null } | null }>;
-                    setMemberOptions(parts.filter((p) => p.employeeId).map((p) => ({ employeeId: p.employeeId as string, name: p.employee?.name ?? (p.employeeId as string) })));
+                if (json.data.sourceType === "OPERASIONAL") {
+                    const recRes = await fetch("/api/my-tasks/recipients", { credentials: "same-origin" });
+                    if (recRes.ok) {
+                        const recJson = await recRes.json();
+                        const recs = (recJson.data ?? []) as Array<{ employeeId: string; name: string }>;
+                        setMemberOptions(recs.map((r) => ({ employeeId: r.employeeId, name: r.name })));
+                    }
+                } else if (json.data.appointmentId) {
+                    const apptRes = await fetch(`/api/appointments/${json.data.appointmentId}`, { credentials: "same-origin" });
+                    if (apptRes.ok) {
+                        const apptJson = await apptRes.json();
+                        const parts = (apptJson.data?.participants ?? []) as Array<{ employeeId: string | null; employee?: { name: string | null } | null }>;
+                        setMemberOptions(parts.filter((p) => p.employeeId).map((p) => ({ employeeId: p.employeeId as string, name: p.employee?.name ?? (p.employeeId as string) })));
+                    }
                 }
             } catch { /* daftar penerima tetap dapat memakai penerima saat ini */ }
         } catch (err) {
             reportClientError("MyTaskDetailPage", "Gagal memuat detail tugas", err);
-            setError(err instanceof Error ? err.message : "Gagal memuat detail tugas.");
+            setError(err instanceof Error ? err.message : "Gagal memuat detail tugas. Periksa koneksi Anda, lalu coba lagi.");
         } finally {
             setLoading(false);
         }
@@ -111,12 +123,36 @@ export default function MyTaskDetailPage() {
 
     const mine = task && myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId) ?? null : null;
     const iAmAssigner = Boolean(task && myEmployeeId && task.assigner.employeeId === myEmployeeId);
-    const meetingFinished = task ? task.appointment.status === "COMPLETED" || new Date(task.appointment.endAt).getTime() <= Date.now() : false;
+    const isOperational = task?.sourceType === "OPERASIONAL";
+    // Tugas terkunci permanen bila seluruh penerima sudah final
+    // (SELESAI terverifikasi / DIBATALKAN / DITOLAK): kelola ditutup.
+    const isFullyFinal = task
+        ? task.allDone || (task.assignees.length > 0 && task.assignees.every((a) => a.status === "SELESAI" || a.status === "DIBATALKAN" || a.status === "DITOLAK"))
+        : false;
+    const meetingFinished = task ? isOperational || !task.appointment || task.appointment.status === "COMPLETED" || new Date(task.appointment.endAt).getTime() <= Date.now() : false;
     const canSubmit = Boolean(task && !task.isCancelled && meetingFinished && mine && (mine.status === "OPEN" || mine.status === "BELUM_DIKERJAKAN"));
     const nameOf = (employeeId: string) => {
         const a = task?.assignees.find((x) => x.employeeId === employeeId);
         return a ? stripGelar(a.name) : employeeId;
     };
+
+    async function handleRespond(decision: "TERIMA" | "TOLAK") {
+        if (!task) return;
+        if (decision === "TOLAK" && rejectReason.trim().length < 5) { setError("Alasan penolakan wajib diisi minimal 5 karakter."); return; }
+        setBusy(true); setError(""); setSuccess("");
+        try {
+            const res = await fetch(`/api/my-tasks/${task.id}`, {
+                method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(decision === "TERIMA" ? { action: "accept" } : { action: "reject", reason: rejectReason.trim() }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan persetujuan tugas."));
+            setRejectReason("");
+            setSuccess(decision === "TERIMA" ? "Tugas diterima. Kerjakan dan kumpulkan hasilnya sebelum deadline." : "Tugas ditolak. Pemberi tugas sudah menerima pemberitahuan.");
+            await load();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Gagal menyimpan persetujuan tugas.");
+        } finally { setBusy(false); }
+    }
 
     async function handleSubmit() {
         if (!task) return;
@@ -127,12 +163,12 @@ export default function MyTaskDetailPage() {
             if (note.trim()) form.set("note", note.trim());
             for (const f of files.slice(0, 5)) form.append("files", f);
             const res = await fetch(`/api/my-tasks/${task.id}/submissions`, { method: "POST", credentials: "same-origin", body: form });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengumpulkan hasil pekerjaan."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengirim hasil. Periksa lampiran Anda, lalu coba lagi."));
             setNote(""); setFiles([]);
-            setSuccess("Hasil pekerjaan berhasil dikumpulkan dan menunggu verifikasi pemberi tugas.");
+            setSuccess("Hasil terkirim. Menunggu verifikasi dari pemberi tugas.");
             await load();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Gagal mengumpulkan hasil pekerjaan.");
+            setError(err instanceof Error ? err.message : "Gagal mengirim hasil. Periksa lampiran Anda, lalu coba lagi.");
         } finally { setBusy(false); }
     }
 
@@ -157,11 +193,11 @@ export default function MyTaskDetailPage() {
                 method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(decision === "TERIMA" ? { decision } : { decision, note: revNote[submissionId].trim(), resubmitDue: revDue[submissionId] }),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan hasil verifikasi."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan verifikasi. Periksa isian Anda, lalu coba lagi."));
             setSuccess(decision === "TERIMA" ? "Hasil pekerjaan diterima. Tugas penerima dinyatakan selesai." : "Revisi berhasil dikirim. Penerima dapat mengumpulkan ulang hasil pekerjaannya.");
             await load();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Gagal menyimpan hasil verifikasi.");
+            setError(err instanceof Error ? err.message : "Gagal menyimpan verifikasi. Periksa isian Anda, lalu coba lagi.");
         } finally { setBusy(false); }
     }
 
@@ -190,12 +226,12 @@ export default function MyTaskDetailPage() {
             const res = await fetch(`/api/my-tasks/${task.id}`, {
                 method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan perubahan tugas."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan perubahan. Periksa isian Anda, lalu coba lagi."));
             setSuccess(action === "extend" ? "Deadline tugas berhasil diperpanjang." : action === "cancel" ? "Tugas berhasil dibatalkan." : "Tugas berhasil diperbarui.");
             setExtendDate(""); setExtendReason(""); setCancelReason(""); setEditDue("");
             await load();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Gagal menyimpan perubahan tugas.");
+            setError(err instanceof Error ? err.message : "Gagal menyimpan perubahan. Periksa isian Anda, lalu coba lagi.");
         } finally { setBusy(false); }
     }
 
@@ -208,17 +244,21 @@ export default function MyTaskDetailPage() {
                 <button type="button" onClick={() => router.push("/employee/my-tasks")} className="btn btn-secondary btn-sm" aria-label="Kembali ke Tugas Saya"><ArrowLeft className="w-4 h-4" /></button>
                 <div className="min-w-0">
                     <h1 className="text-lg font-bold text-[var(--text-primary)]">{task.title}</h1>
-                    <p className="text-xs text-[var(--text-muted)]">Sumber: E-Meeting · {task.appointment.title}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{isOperational ? "Sumber: Operasional · Tugas di luar meeting" : `Sumber: E-Meeting · ${task.appointment?.title ?? ""}`}</p>
                 </div>
             </div>
 
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
             {success && <FeedbackMessage variant="success">{success}</FeedbackMessage>}
-            {task.isCancelled && <FeedbackMessage variant="warning">Tugas ini telah dibatalkan{task.cancelReason ? `: ${task.cancelReason}` : "."} Pengumpulan dan verifikasi sudah ditutup.</FeedbackMessage>}
+            {task.isCancelled && <FeedbackMessage variant="warning">Tugas dibatalkan{task.cancelReason ? `: ${task.cancelReason}` : "."} Anda tidak bisa lagi mengumpulkan atau memverifikasi hasil.</FeedbackMessage>}
 
             <section className="card p-4 space-y-2" aria-label="Informasi tugas">
                 <dl className="space-y-1.5 text-xs">
-                    <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Meeting asal</dt><dd><Link className="text-[var(--primary)] font-semibold hover:underline" href={`/employee/appointments/detail/${task.appointmentId}`}>{task.appointment.title}</Link> · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short", year: "numeric" })}{task.appointment.room ? ` · ${task.appointment.room.name}` : ""}</dd></div>
+                    {isOperational ? (
+                        <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Sumber</dt><dd className="text-[var(--text-secondary)]">Operasional — tugas di luar meeting</dd></div>
+                    ) : task.appointment && task.appointmentId ? (
+                        <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Meeting asal</dt><dd><Link className="text-[var(--primary)] font-semibold hover:underline" href={`/employee/appointments/detail/${task.appointmentId}`}>{task.appointment.title}</Link> · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short", year: "numeric" })}{task.appointment.room ? ` · ${task.appointment.room.name}` : ""}</dd></div>
+                    ) : null}
                     <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Pemberi tugas</dt><dd className="text-[var(--text-secondary)]">{task.assigner.name ? stripGelar(task.assigner.name) : task.assigner.employeeId}</dd></div>
                     <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Deadline</dt><dd className={`font-semibold ${mine?.isOverdue ? "text-red-600" : "text-[var(--text-secondary)]"}`}>{task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}{task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}</dd></div>
                     {mine && <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Status Anda</dt><dd className="text-[var(--text-secondary)]">{meetingTaskStatusLabel(mine.status)}{mine.stickyOverdue && mine.status === "SELESAI" ? " · Overdue (Done)" : ""}</dd></div>}
@@ -227,10 +267,20 @@ export default function MyTaskDetailPage() {
                 <div className="border-t border-[var(--border)] pt-2">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Penerima tugas</p>
                     <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
-                        {task.assignees.map((a) => <li key={a.employeeId} className="flex justify-between gap-2"><span>{stripGelar(a.name)}{a.employeeId === myEmployeeId ? " (Anda)" : ""}</span><span>{meetingTaskStatusLabel(a.status)}</span></li>)}
+                        {task.assignees.map((a) => <li key={a.employeeId} className="flex justify-between gap-2"><span>{stripGelar(a.name)}{a.employeeId === myEmployeeId ? " (Anda)" : ""}{a.status === "DITOLAK" && a.rejectionReason ? <span className="block text-[11px] text-[var(--text-muted)]">Alasan: {a.rejectionReason}</span> : null}</span><span>{meetingTaskStatusLabel(a.status)}</span></li>)}
                     </ul>
                 </div>
             </section>
+
+            {mine?.status === "MENUNGGU_PERSETUJUAN" && !task.isCancelled && (
+                <section className="card p-4 space-y-3" aria-label="Persetujuan tugas">
+                    <h2 className="text-sm font-bold text-[var(--text-primary)]">Persetujuan Tugas</h2>
+                    <p className="text-xs text-[var(--text-secondary)]">Tugas ini menunggu persetujuan Anda. Terima tugas untuk mulai mengerjakan sebelum deadline.</p>
+                    <button type="button" disabled={busy} onClick={() => confirm({ title: "Terima tugas ini?", message: "Setelah diterima, Anda perlu mengumpulkan hasil sebelum deadline.", confirmLabel: "Ya, Terima Tugas", variant: "info", onConfirm: () => { void handleRespond("TERIMA"); } })} className="btn btn-primary w-full min-h-11 text-sm">Terima Tugas</button>
+                    <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} maxLength={1000} placeholder="Alasan penolakan (wajib, min. 5 karakter)" className="input w-full text-sm" aria-label="Alasan penolakan tugas" />
+                    <button type="button" disabled={busy} onClick={() => void handleRespond("TOLAK")} className="btn btn-secondary w-full min-h-10 text-sm text-red-600">Tolak Tugas</button>
+                </section>
+            )}
 
             {mine && !task.isCancelled && (
                 <section className="card p-4 space-y-3" aria-label="Pengumpulan hasil">
@@ -243,14 +293,18 @@ export default function MyTaskDetailPage() {
                             {files.length > 0 && <p className="text-xs text-[var(--text-muted)]">{files.length} file dipilih: {files.map((f) => f.name).join(", ")}</p>}
                             <button type="button" disabled={busy} onClick={() => void handleSubmit()} className="btn btn-primary w-full min-h-11 text-sm">{busy ? "Mengirim…" : "Kumpulkan Hasil"}</button>
                         </>
+                    ) : mine.status === "MENUNGGU_PERSETUJUAN" ? (
+                        <p className="text-xs text-[var(--text-secondary)]">Terima dulu tugas ini di bagian Persetujuan Tugas, lalu kumpulkan hasilnya di sini.</p>
+                    ) : mine.status === "DITOLAK" ? (
+                        <p className="text-xs text-[var(--text-secondary)]">Anda menolak tugas ini{mine.rejectionReason ? `: ${mine.rejectionReason}` : "."} Anda tidak bisa lagi mengumpulkan hasil.</p>
                     ) : mine.status === "ON_PROGRESS" ? (
-                        <p className="text-xs text-[var(--text-secondary)]">Hasil pekerjaan Anda sudah dikumpulkan dan sedang menunggu verifikasi pemberi tugas.</p>
+                        <p className="text-xs text-[var(--text-secondary)]">Hasil terkirim. Menunggu verifikasi dari pemberi tugas.</p>
                     ) : mine.status === "SELESAI" ? (
                         <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Tugas Anda sudah selesai dan terverifikasi.</p>
                     ) : !meetingFinished ? (
-                        <p className="text-xs text-[var(--text-secondary)]">Pengumpulan dibuka setelah meeting selesai. Anda akan dapat mengumpulkan hasil pekerjaan di halaman ini.</p>
+                        <p className="text-xs text-[var(--text-secondary)]">Anda bisa mengumpulkan hasil setelah meeting selesai.</p>
                     ) : (
-                        <p className="text-xs text-[var(--text-secondary)]">Pengumpulan belum tersedia untuk status Anda saat ini.</p>
+                        <p className="text-xs text-[var(--text-secondary)]">Status tugas Anda belum memungkinkan pengumpulan hasil.</p>
                     )}
                 </section>
             )}
@@ -290,7 +344,11 @@ export default function MyTaskDetailPage() {
                 ))}
             </section>
 
-            {iAmAssigner && !task.isCancelled && (
+            {iAmAssigner && isFullyFinal && !task.isCancelled && !success && (
+                <FeedbackMessage variant="success">Tugas selesai. Semua penerima sudah tuntas, sehingga pengelolaan tugas ditutup.</FeedbackMessage>
+            )}
+
+            {iAmAssigner && !task.isCancelled && !isFullyFinal && (
                 <section className="card p-4 space-y-4" aria-label="Kelola tugas">
                     <h2 className="text-sm font-bold text-[var(--text-primary)]">Kelola Tugas</h2>
                     <div className="space-y-2">
@@ -300,7 +358,7 @@ export default function MyTaskDetailPage() {
                             <input value={extendReason} onChange={(e) => setExtendReason(e.target.value)} maxLength={1000} placeholder="Alasan perpanjangan (min. 5 karakter)" className="input w-full text-sm" aria-label="Alasan perpanjangan" />
                         </div>
                         <button type="button" disabled={busy} onClick={() => void handleManage("extend")} className="btn btn-secondary btn-sm w-full min-h-10">Perpanjang Deadline</button>
-                        <p className="text-[11px] text-[var(--text-muted)]">Perpanjangan mengikuti batas kesempatan deadline yang berlaku untuk tugas dari meeting.</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{isOperational ? "Perpanjangan mengikuti batas kesempatan deadline yang berlaku (awal + 1 perpanjangan)." : "Perpanjangan mengikuti batas kesempatan deadline yang berlaku untuk tugas dari meeting."}</p>
                     </div>
                     <div className="space-y-2 border-t border-[var(--border)] pt-3">
                         <p className="text-xs font-semibold text-[var(--text-secondary)]">Ubah tugas</p>

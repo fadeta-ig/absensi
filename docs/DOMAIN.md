@@ -126,6 +126,13 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
 - Pengajuan perpanjangan penerima DIHAPUS (keputusan pemilik 2026-10-26).
 - Giver CRUD: ubah judul/rincian/deadline/tambah-hapus penerima (hapus hanya bila belum ada submit); tanpa hard delete.
 
+### L. Task Operasional (submodul Tambah Task, di luar meeting)
+- Pembuatan: semua karyawan aktif dapat membuat task Operasional dari `/employee/my-tasks/create`; pemberi tugas (verifikator) otomatis karyawan yang login (tanpa pilihan pemberi), penerima bebas dari seluruh karyawan AKTIF master HR (1–20 orang, tidak termasuk diri sendiri), deadline wajib tanggal + jam WIB.
+- Gate persetujuan: penerima mulai `MENUNGGU_PERSETUJUAN` dan menerima push; `TERIMA` → `OPEN` (dapat mengumpulkan), `TOLAK` (alasan wajib ≥5) → `DITOLAK` final per penerima. Persetujuan bersifat per-penerima pada task multi-penerima.
+- Kerja & verifikasi: sama seperti task meeting (submit 1–5 lampiran → `ON_PROGRESS`; pemberi/WIG002 `TERIMA`/`REVISI` unlimited; overdue sticky patokan submit; maks 2 sekuens deadline/2 tiket), tetapi tanpa jendela meeting — kelola pemberi berlaku selama task belum final, bukan selama meeting berjalan.
+- Monitoring: Pantau Tugas menghitung task Operasional bersama task E-Meeting (dapat difilter per sumber); penerima berstatus `DITOLAK`/`DIBATALKAN` tidak dinilai, dan status `MENUNGGU_PERSETUJUAN` dinilai sebagai antre/overdue menurut deadline awal seperti task meeting.
+- Kategori CAPA Internal/Eksternal hanya tampil sebagai penanda "Menyusul" di pemilih kategori; belum ada parameter, penyimpanan, maupun alur untuk keduanya.
+
 ---
 
 ## 2. Important Business Relationships & Cardinality

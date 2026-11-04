@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, ListChecks, Loader2, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ListChecks, Loader2, Plus, UploadCloud } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { stripGelar } from "@/lib/utils/formatters";
@@ -21,12 +21,13 @@ interface MyTaskAssignee {
 
 interface MyTask {
     id: string;
-    appointmentId: string;
+    appointmentId: string | null;
+    sourceType?: string;
     title: string;
     detail: string | null;
     isCancelled: boolean;
     assigner: { employeeId: string; name: string | null };
-    appointment: { id: string; title: string; startAt: string; status: string; room: { name: string } | null };
+    appointment: { id: string; title: string; startAt: string; status: string; room: { name: string } | null } | null;
     activeDeadline: { date: string; deadlineAt: string; sequence: number } | null;
     extensionsCount: number;
     assignees: MyTaskAssignee[];
@@ -66,7 +67,7 @@ export default function EmployeeMyTasksPage() {
                 currentEmpId = me.employeeId ?? null;
                 setMyEmployeeId(currentEmpId);
             }
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat task."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat tugas. Periksa koneksi Anda, lalu coba lagi."));
             const json = await res.json();
             let list: MyTask[] = json.data ?? [];
             if (f === "open") {
@@ -75,14 +76,14 @@ export default function EmployeeMyTasksPage() {
                     t.assignees.some((a) =>
                         currentEmpId !== null &&
                         a.employeeId === currentEmpId &&
-                        (a.status === "OPEN" || a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS")
+                        (a.status === "OPEN" || a.status === "BELUM_DIKERJAKAN" || a.status === "ON_PROGRESS" || a.status === "MENUNGGU_PERSETUJUAN")
                     )
                 );
             }
             setTasks(list);
         } catch (err) {
             reportClientError("EmployeeMyTasksPage", "Gagal memuat tugas", err);
-            setError(err instanceof Error ? err.message : "Gagal memuat task.");
+            setError(err instanceof Error ? err.message : "Gagal memuat tugas. Periksa koneksi Anda, lalu coba lagi.");
         } finally {
             setLoading(false);
         }
@@ -124,15 +125,18 @@ export default function EmployeeMyTasksPage() {
                 <button type="button" onClick={() => router.push("/employee")} className="btn btn-secondary btn-sm" aria-label="Kembali ke beranda">
                     <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div>
+                <div className="min-w-0 flex-1">
                     <h1 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                         <ListChecks className="w-5 h-5 text-[var(--primary)]" /> Tugas Saya
                     </h1>
-                    <p className="text-xs text-[var(--text-muted)]">Semua tugas yang ditugaskan kepada Anda dari berbagai sumber</p>
+                    <p className="text-xs text-[var(--text-muted)]">Semua tugas untuk Anda, dari berbagai sumber</p>
                 </div>
+                <Link href="/employee/my-tasks/create" className="btn btn-primary btn-sm shrink-0 min-h-10" aria-label="Tambah tugas baru">
+                    <Plus className="w-4 h-4" /> Tambah Task
+                </Link>
             </div>
 
-            <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Filter task" onKeyDown={(e) => {
+            <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Filter tugas" onKeyDown={(e) => {
                 if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
                 e.preventDefault();
                 const order = ["open", "overdue", "done", "verify", "all"] as const;
@@ -164,21 +168,24 @@ export default function EmployeeMyTasksPage() {
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
 
             {loading ? (
-                <p className="text-sm text-[var(--text-muted)] flex items-center gap-2" aria-label="Memuat task">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Memuat task…
+                <p className="text-sm text-[var(--text-muted)] flex items-center gap-2" aria-label="Memuat tugas">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Memuat tugas…
                 </p>
             ) : tasks.length === 0 ? (
                 <div className="card p-6 text-center" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     <ListChecks className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
-                    <p className="text-sm font-medium text-[var(--text-primary)]">Belum ada tugas</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Tugas yang ditugaskan kepada Anda akan muncul di sini.</p>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">Belum ada tugas di sini</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">Tugas baru untuk Anda akan muncul di halaman ini. Anda juga bisa memberi tugas lewat Tambah Task.</p>
+                    <Link href="/employee/my-tasks/create" className="btn btn-primary btn-sm min-h-10 mt-3 inline-flex">Tambah Task</Link>
                 </div>
             ) : (
                 <div className="space-y-2.5" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
                     {tasks.map((task) => {
                         const mine = myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId && a.status !== "DIBATALKAN") ?? null : null;
-                        // Pengerjaan dibuka setelah meeting selesai (stored COMPLETED).
-                        const meetingFinished = task.appointment.status === "COMPLETED";
+                        const isOperational = task.sourceType === "OPERASIONAL";
+                        // Pengerjaan task meeting dibuka setelah meeting selesai
+                        // (stored COMPLETED); task Operasional langsung berjalan.
+                        const meetingFinished = isOperational || task.appointment?.status === "COMPLETED";
                         const canSubmit = !task.isCancelled && meetingFinished && mine && (mine.status === "OPEN" || mine.status === "BELUM_DIKERJAKAN");
                         const pendingCount = (task.submissions ?? []).filter((s) => s.verdict === "PENDING").length;
                         return (
@@ -208,12 +215,20 @@ export default function EmployeeMyTasksPage() {
                                     <div className="flex gap-1.5">
                                         <dt className="text-[var(--text-muted)] w-20 shrink-0">Sumber</dt>
                                         <dd className="text-[var(--text-secondary)]">
-                                            <span className="font-semibold">E-Meeting</span> ·{" "}
-                                            <Link href={`/employee/appointments/detail/${task.appointmentId}`} className="text-[var(--primary)] font-semibold hover:underline">
-                                                {task.appointment.title}
-                                            </Link>{" "}
-                                            · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short" })}
-                                            {task.appointment.room ? ` · ${task.appointment.room.name}` : ""}
+                                            {isOperational ? (
+                                                <><span className="font-semibold">Operasional</span> · Tugas di luar meeting</>
+                                            ) : task.appointment ? (
+                                                <>
+                                                    <span className="font-semibold">E-Meeting</span> ·{" "}
+                                                    <Link href={`/employee/appointments/detail/${task.appointmentId}`} className="text-[var(--primary)] font-semibold hover:underline">
+                                                        {task.appointment.title}
+                                                    </Link>{" "}
+                                                    · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short" })}
+                                                    {task.appointment.room ? ` · ${task.appointment.room.name}` : ""}
+                                                </>
+                                            ) : (
+                                                <span className="font-semibold">E-Meeting</span>
+                                            )}
                                         </dd>
                                     </div>
                                     <div className="flex gap-1.5">
@@ -237,13 +252,15 @@ export default function EmployeeMyTasksPage() {
                                     )}
                                 </dl>
                                 <div className="flex gap-1.5 mt-2.5">
-                                    <Link
-                                        href={`/employee/appointments/detail/${task.appointmentId}/history?highlight=${encodeURIComponent(`task-created-${task.id}`)}`}
-                                        className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex items-center justify-center gap-1"
-                                        aria-label={`Lihat riwayat ${task.title}`}
-                                    >
-                                        Riwayat
-                                    </Link>
+                                    {!isOperational && task.appointmentId && (
+                                        <Link
+                                            href={`/employee/appointments/detail/${task.appointmentId}/history?highlight=${encodeURIComponent(`task-created-${task.id}`)}`}
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex items-center justify-center gap-1"
+                                            aria-label={`Lihat riwayat ${task.title}`}
+                                        >
+                                            Riwayat
+                                        </Link>
+                                    )}
                                     {filter === "verify" ? (
                                         <Link
                                             href={`/employee/my-tasks/${task.id}`}
@@ -252,6 +269,15 @@ export default function EmployeeMyTasksPage() {
                                         >
                                             <CheckCircle2 className="w-3.5 h-3.5" />
                                             Tinjau & Verifikasi
+                                        </Link>
+                                    ) : mine?.status === "MENUNGGU_PERSETUJUAN" ? (
+                                        <Link
+                                            href={`/employee/my-tasks/${task.id}`}
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--primary)] text-white flex-1 flex items-center justify-center gap-1"
+                                            aria-label={`Tinjau dan setujui ${task.title}`}
+                                        >
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            Tinjau & Setujui
                                         </Link>
                                     ) : canSubmit ? (
                                         <Link

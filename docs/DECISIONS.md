@@ -229,3 +229,16 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Tanggung jawab notulensi, pemberian task, dan kepemimpinan rapat jelas per meeting; penyelenggara yang tidak hadir tidak lagi menjadi hambatan operasional.
   - Negatif: Form buat meeting menambah dua pilihan wajib (PIC + pimpinan rapat) yang keduanya harus peserta internal; meeting historis tanpa keduanya perlu ditunjuk PIC-nya sebelum dapat diberi task.
   - Status: live lokal 2026-11-03 (skema `leader_employee_id` di `hris_local`, guard service + form, suite meeting task/appointment hijau).
+
+---
+
+## ADR-018: Submodul Tambah Task — Sumber Operasional dengan Gate Persetujuan Penerima
+
+- **Decision**: (1) Tugas di luar meeting dibuat lewat submodul **Tambah Task** di dalam Tugas Saya (`/employee/my-tasks/create`), bukan modul terpisah; kategori pertama yang aktif adalah **Operasional**, sedangkan CAPA Internal/Eksternal hanya penanda "Menyusul" (future dev). (2) Pemberi tugas otomatis karyawan yang login; penerima bebas dari seluruh karyawan AKTIF master HR (endpoint direktori khusus berfield minimal, karena `/api/employees` untuk karyawan biasa hanya menampilkan hierarki bawahannya). (3) Setiap penerima melewati gate persetujuan: `MENUNGGU_PERSETUJUAN` → terima menjadi `OPEN`, tolak beralasan menjadi `DITOLAK`; setelah itu mesin submit/verifikasi/deadline task meeting berlaku sama, tanpa jendela meeting untuk kelola pemberi.
+- **Context**: Pemilik website membutuhkan tempat memberi tugas di luar E-Meeting/Green Meeting; ADR-016 sebelumnya menyatakan task manual tidak disediakan, keputusan pemilik terbaru menggantikan batasan tersebut khusus sumber Operasional dengan persetujuan penerima sebagai pembeda utama dari task meeting.
+- **Chosen Approach**: Evolusi di tempat lanjutan ADR-016 — tabel `meeting_tasks*` tetap dipakai, `appointmentId` dibuat nullable, `sourceType=OPERASIONAL` dengan `sourceId` = id task, adapter baru `operationalTaskService` (buat/direktori/persetujuan), dan `meetingTaskService` membedakan guard jendela berdasarkan `sourceType` sehingga tidak ada duplikasi mesin lampiran/verifikasi/deadline. Push persetujuan dikirim setelah commit; query daftar tetap terindeks dan terbatasi.
+- **Alternatives**: Tabel generik baru khusus tugas lepas (ditolak — menduplikasi submission/lampiran/revisi/reminder); memakai `/api/employees` apa adanya (ditolak — karyawan biasa tidak melihat semua karyawan); task langsung `OPEN` tanpa persetujuan (ditolak pemilik — penerima harus acc dulu).
+- **Consequences**:
+  - Positif: Satu inbox/detail/monitoring konseptual untuk semua sumber; penerima mengendalikan penerimaan tugas di luar meeting; CAPA tinggal menambah adapter + format tanpa mengubah wadah.
+  - Negatif: `meetingTaskService` kini melayani dua sumber dengan percabangan jendela berdasarkan `sourceType`; Pantau Tugas menilai kedua sumber (filter sumber tersedia) dengan penerima `DITOLAK`/`DIBATALKAN` dikecualikan dari penilaian.
+  - Status: live lokal 2026-11-03 di branch `feat/task-sources-operasional-capa` (skema di-`db push` ke `hris_local` dengan rekonsiliasi jumlah baris tidak berubah, suite Operasional/Tugas Saya hijau).

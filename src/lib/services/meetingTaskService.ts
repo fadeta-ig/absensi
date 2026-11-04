@@ -32,10 +32,10 @@ export const MAX_DEADLINE_SEQUENCES = 2 as const;
 export const MAX_DEADLINE_TICKETS_PER_RECEIVER = 2 as const;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 
-export type MeetingTaskAssigneeStatus = "OPEN" | "BELUM_DIKERJAKAN" | "ON_PROGRESS" | "SELESAI" | "DIBATALKAN";
-export const ASSIGNEE_FINAL_STATUSES: MeetingTaskAssigneeStatus[] = ["SELESAI", "DIBATALKAN"];
-/** Status yang dihitung "terbuka": nilai baru OPEN + warisan BELUM + ON_PROGRESS (menunggu verifikasi). */
-export const ASSIGNEE_OPEN_STATUSES: MeetingTaskAssigneeStatus[] = ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS"];
+export type MeetingTaskAssigneeStatus = "OPEN" | "BELUM_DIKERJAKAN" | "ON_PROGRESS" | "SELESAI" | "DIBATALKAN" | "MENUNGGU_PERSETUJUAN" | "DITOLAK";
+export const ASSIGNEE_FINAL_STATUSES: MeetingTaskAssigneeStatus[] = ["SELESAI", "DIBATALKAN", "DITOLAK"];
+/** Status yang dihitung "terbuka": nilai baru OPEN + warisan BELUM + ON_PROGRESS (menunggu verifikasi) + MENUNGGU_PERSETUJUAN (Operasional, belum di-acc). */
+export const ASSIGNEE_OPEN_STATUSES: MeetingTaskAssigneeStatus[] = ["OPEN", "BELUM_DIKERJAKAN", "ON_PROGRESS", "MENUNGGU_PERSETUJUAN"];
 export type MeetingTaskSubmissionVerdict = "PENDING" | "DIREVISI" | "DITERIMA";
 
 /** Task yang seluruh penerimanya sudah final (SELESAI/DIBATALKAN) tidak bisa diubah lagi. */
@@ -76,7 +76,7 @@ export function meetingTaskDueDateTimeToDate(dueDate: string, dueTime: string): 
 }
 
 export function isAssigneeOverdue(dueAt: Date, status: string, now: Date = new Date()): boolean {
-    if (status === "SELESAI" || status === "DIBATALKAN") return false;
+    if (status === "SELESAI" || status === "DIBATALKAN" || status === "DITOLAK") return false;
     return now.getTime() > dueAt.getTime();
 }
 
@@ -174,7 +174,7 @@ async function assertActiveEmployees(employeeIds: string[]): Promise<void> {
 
 // ─── DTO ──────────────────────────────────────────────────────────
 
-const taskInclude = {
+export const taskInclude = {
     assigner: { select: { employeeId: true, name: true } },
     appointment: { select: { id: true, title: true, startAt: true, endAt: true, status: true, room: { select: { name: true } } } },
     assignees: { include: { employee: { select: { employeeId: true, name: true } } }, orderBy: { createdAt: "asc" as const } },
@@ -207,6 +207,8 @@ export function toTaskDto(task: TaskRow, now: Date = new Date()) {
             stickyOverdue,
             deadlineTicketsUsed: a.deadlineTicketsUsed,
             deadlineTicketsLeft: Math.max(0, MAX_DEADLINE_SEQUENCES - a.deadlineTicketsUsed),
+            acceptanceRespondedAt: a.acceptanceRespondedAt,
+            rejectionReason: a.rejectionReason,
             submissionCount: subs.length,
         };
     });
@@ -215,7 +217,7 @@ export function toTaskDto(task: TaskRow, now: Date = new Date()) {
         id: task.id,
         appointmentId: task.appointmentId,
         sourceType: task.sourceType ?? "APPOINTMENTS",
-        sourceId: task.sourceId ?? task.appointmentId,
+        sourceId: task.sourceId ?? task.appointmentId ?? task.id,
         title: task.title,
         detail: task.detail,
         isCancelled: task.isCancelled,
@@ -358,7 +360,8 @@ export async function getMyMeetingTasks(
             employeeId: session.employeeId,
             // Task milik meeting yang dibatalkan disembunyikan: mutasinya sudah
             // dikunci (409) dan otomatis ikut batal saat meeting dibatalkan.
-            task: { appointment: { status: { not: "CANCELLED" } } },
+            // Task Operasional (tanpa meeting) selalu termasuk.
+            task: { OR: [{ sourceType: "OPERASIONAL" }, { appointment: { status: { not: "CANCELLED" } } }] },
             ...(filters.status ? { status: filters.status as MeetingTaskAssigneeStatus } : {}),
         },
         include: { task: { include: taskInclude } },
@@ -433,11 +436,15 @@ export async function submitTaskWork(
     if (note && note.length > 2000) throw new MeetingTaskError("Catatan maksimal 2000 karakter.", 400);
     const task = await prisma.meetingTask.findUnique({
         where: { id: taskId },
-        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true },
+        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, sourceType: true },
     });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingFinishedForTaskWork(task.appointmentId);
+    // Task Operasional tidak terikat jendela meeting; gate persetujuannya
+    // ditegakkan lewat status penerima (hanya OPEN/BELUM yang lolos di bawah).
+    if (task.sourceType !== "OPERASIONAL" && task.appointmentId) {
+        await assertMeetingFinishedForTaskWork(task.appointmentId);
+    }
     const row = await prisma.meetingTaskAssignee.findUnique({
         where: { taskId_employeeId: { taskId, employeeId: session.employeeId } },
         select: { id: true, status: true },
@@ -535,12 +542,14 @@ export async function verifyTaskSubmission(
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat memverifikasi.", 403);
     const sub = await prisma.meetingTaskSubmission.findUnique({
         where: { id: submissionId },
-        include: { task: { select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true } } },
+        include: { task: { select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, sourceType: true } } },
     });
     if (!sub) throw new MeetingTaskError("Pengumpulan tidak ditemukan.", 404);
     if (sub.verdict !== "PENDING") throw new MeetingTaskError("Pengumpulan sudah diputuskan.", 409);
     if (sub.task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingFinishedForTaskWork(sub.task.appointmentId);
+    if (sub.task.sourceType !== "OPERASIONAL" && sub.task.appointmentId) {
+        await assertMeetingFinishedForTaskWork(sub.task.appointmentId);
+    }
     const privileged = await isPrivileged(session);
     if (sub.task.assignerEmployeeId !== session.employeeId && !privileged) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memverifikasi.", 403);
@@ -608,11 +617,15 @@ export async function getSubmissionAttachment(
     if (!att) throw new MeetingTaskError("Lampiran tidak ditemukan.", 404);
     const task = await prisma.meetingTask.findUnique({
         where: { id: att.submission.taskId },
-        select: { id: true, assignerEmployeeId: true, appointmentId: true },
+        select: { id: true, assignerEmployeeId: true, appointmentId: true, sourceType: true },
     });
     if (!task) throw new MeetingTaskError("Task tidak ditemukan.", 404);
-    const appt = await getMeetingOrThrow(task.appointmentId);
-    await assertCanAccessMeeting(session, appt);
+    if (task.sourceType !== "OPERASIONAL" && task.appointmentId) {
+        const appt = await getMeetingOrThrow(task.appointmentId);
+        await assertCanAccessMeeting(session, appt);
+    } else if (!session.employeeId) {
+        throw new MeetingTaskError("Hanya karyawan yang dapat mengakses lampiran task.", 403);
+    }
     const privileged = await isPrivileged(session);
     const mine = session.employeeId === att.submission.employeeId;
     const giver = session.employeeId === task.assignerEmployeeId;
@@ -634,7 +647,9 @@ export type PantauTaskStatus = "Tepat Waktu" | "Overdue" | "Tunggakan";
 export interface PantauTaskItem {
     taskId: string;
     title: string;
-    meetingId: string;
+    /** Sumber task: APPOINTMENTS (E-Meeting) atau OPERASIONAL. */
+    sourceType: string;
+    meetingId: string | null;
     meetingTitle: string;
     assignerEmployeeId: string;
     assignerName: string;
@@ -707,8 +722,17 @@ function classifyPantauTask(
 /** Kinerja penyelesaian task per karyawan untuk pemantau (baca saja). */
 export async function getKinerjaPantau(
     session: SessionPayload,
-    filters: { from?: string; to?: string }
-): Promise<{ data: PantauKinerjaRow[]; tunggakanLalu: PantauTunggakanBulan[]; period: { from: string; to: string } }> {
+    filters: { from?: string; to?: string; sourceType?: string; q?: string; division?: string; page?: number; limit?: number }
+): Promise<{
+    data: PantauKinerjaRow[];
+    tunggakanLalu: PantauTunggakanBulan[];
+    period: { from: string; to: string };
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    divisions: string[];
+}> {
     if (!session.employeeId && !isWig002(session)) {
         throw new MeetingTaskError("Hanya karyawan yang dapat memantau penyelesaian task.", 403);
     }
@@ -716,20 +740,26 @@ export async function getKinerjaPantau(
         throw new MeetingTaskError("Halaman ini hanya untuk pemantau yang ditunjuk WIG002.", 403);
     }
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // Periode bawaan mengikuti bulan WIB, bukan zona waktu server.
+    const [wibYear, wibMonth] = toWIBDateString(now).split("-").map(Number);
     const pad2 = (n: number) => String(n).padStart(2, "0");
-    const defaultFrom = `${monthStart.getFullYear()}-${pad2(monthStart.getMonth() + 1)}-01`;
-    const defaultTo = `${monthEnd.getFullYear()}-${pad2(monthEnd.getMonth() + 1)}-${pad2(monthEnd.getDate())}`;
+    const lastDay = new Date(Date.UTC(wibYear, wibMonth, 0)).getUTCDate();
+    const defaultFrom = `${wibYear}-${pad2(wibMonth)}-01`;
+    const defaultTo = `${wibYear}-${pad2(wibMonth)}-${pad2(lastDay)}`;
     const fromStr = filters.from && isValidCalendarDate(filters.from) ? filters.from : defaultFrom;
     const toStr = filters.to && isValidCalendarDate(filters.to) ? filters.to : defaultTo;
     const fromStart = wibDateTimeToDate(fromStr, "00:00");
     const toEnd = wibDateTimeToDate(toStr, "23:59");
 
+    const sourceFilter: Prisma.MeetingTaskWhereInput = filters.sourceType === "OPERASIONAL"
+        ? { sourceType: "OPERASIONAL" }
+        : filters.sourceType === "APPOINTMENTS"
+            ? { sourceType: "APPOINTMENTS", appointment: { status: { not: "CANCELLED" } } }
+            : { OR: [{ sourceType: "OPERASIONAL" }, { appointment: { status: { not: "CANCELLED" } } }] };
     const taskRows = await prisma.meetingTask.findMany({
         where: {
             isCancelled: false,
-            appointment: { status: { not: "CANCELLED" } },
+            ...sourceFilter,
             deadlineHistory: { some: { sequence: 1, deadlineDate: { gte: fromStart, lte: toEnd } } },
         },
         orderBy: { createdAt: "asc" },
@@ -737,12 +767,13 @@ export async function getKinerjaPantau(
         select: {
             id: true,
             title: true,
+            sourceType: true,
             appointmentId: true,
             assignerEmployeeId: true,
             assigner: { select: { name: true } },
             appointment: { select: { title: true } },
             assignees: {
-                where: { status: { not: "DIBATALKAN" } },
+                where: { status: { notIn: ["DIBATALKAN", "DITOLAK"] } },
                 select: {
                     employeeId: true,
                     status: true,
@@ -769,6 +800,7 @@ export async function getKinerjaPantau(
         const originalDue = t.deadlineHistory[0]?.deadlineDate ?? null;
         if (!originalDue) continue;
         for (const a of t.assignees) {
+            if (a.status === "DIBATALKAN" || a.status === "DITOLAK") continue;
             const emp = a.employee;
             if (!emp || !emp.isActive) continue;
             if ((PANTAU_EXCLUDED_EMPLOYEE_IDS as readonly string[]).includes(a.employeeId)) continue;
@@ -788,8 +820,9 @@ export async function getKinerjaPantau(
             slot.items.push({
                 taskId: t.id,
                 title: t.title,
-                meetingId: t.appointmentId,
-                meetingTitle: t.appointment?.title ?? "Meeting",
+                sourceType: t.sourceType ?? "APPOINTMENTS",
+                meetingId: t.appointmentId ?? null,
+                meetingTitle: t.sourceType === "OPERASIONAL" ? "Operasional" : (t.appointment?.title ?? "Meeting"),
                 assignerEmployeeId: t.assignerEmployeeId,
                 assignerName: t.assigner?.name ?? t.assignerEmployeeId,
                 deadline: toWIBDateString(originalDue),
@@ -824,20 +857,40 @@ export async function getKinerjaPantau(
             tasks: slot.items,
         };
     });
-    data.sort((a, b) => (a.tingkatKetepatan ?? 101) - (b.tingkatKetepatan ?? 101));
+    // Urutan deterministik agar pagination stabil: ketepatan terendah dulu,
+    // lalu nama, lalu employeeId sebagai penentu akhir.
+    data.sort((a, b) =>
+        (a.tingkatKetepatan ?? 101) - (b.tingkatKetepatan ?? 101) ||
+        a.name.localeCompare(b.name) ||
+        a.employeeId.localeCompare(b.employeeId)
+    );
+    // Filter pencarian/divisi dilakukan di server agar pagination benar;
+    // daftar divisi adalah faset dari seluruh baris periode ini.
+    const divisions = [...new Set(data.map((r) => r.division).filter((d) => d && d !== "-"))].sort();
+    const q = filters.q?.trim().toLowerCase() ?? "";
+    const filteredRows = data.filter((r) => {
+        if (filters.division && r.division !== filters.division) return false;
+        if (q && !(r.name.toLowerCase().includes(q) || r.employeeId.toLowerCase().includes(q))) return false;
+        return true;
+    });
+    const total = filteredRows.length;
+    const limit = Math.min(Math.max(filters.limit ?? 10, 1), 50);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(filters.page ?? 1, 1), totalPages);
+    const pageData = filteredRows.slice((page - 1) * limit, page * limit);
 
     // Strip tunggakan bulan lalu: tumpukan yang belum tuntas
     // dan deadline awalnya sebelum periode berjalan.
     const pastRows = await prisma.meetingTask.findMany({
         where: {
             isCancelled: false,
-            appointment: { status: { not: "CANCELLED" } },
+            ...sourceFilter,
             deadlineHistory: { some: { sequence: 1, deadlineDate: { lt: fromStart } } },
         },
         take: 1000,
         select: {
             id: true,
-            assignees: { select: { employeeId: true } },
+            assignees: { select: { employeeId: true, status: true } },
             deadlineHistory: { orderBy: { sequence: "asc" as const }, select: { sequence: true, deadlineDate: true } },
             submissions: { select: { employeeId: true, attemptNo: true, verdict: true, createdAt: true, resubmitDueAt: true } },
         },
@@ -846,8 +899,9 @@ export async function getKinerjaPantau(
     for (const t of pastRows) {
         const originalDue = t.deadlineHistory[0]?.deadlineDate ?? null;
         if (!originalDue) continue;
-        const monthKey = `${originalDue.getFullYear()}-${String(originalDue.getMonth() + 1).padStart(2, "0")}`;
+        const monthKey = toWIBDateString(originalDue).slice(0, 7);
         for (const a of t.assignees) {
+            if (a.status === "DIBATALKAN" || a.status === "DITOLAK") continue;
             if ((PANTAU_EXCLUDED_EMPLOYEE_IDS as readonly string[]).includes(a.employeeId)) continue;
             const mine = t.submissions.filter((s) => s.employeeId === a.employeeId);
             const { belumTuntas } = classifyPantauTask(mine, originalDue, now);
@@ -874,7 +928,7 @@ export async function getKinerjaPantau(
             };
         });
 
-    return { data, tunggakanLalu, period: { from: fromStr, to: toStr } };
+    return { data: pageData, tunggakanLalu, period: { from: fromStr, to: toStr }, total, page, limit, totalPages, divisions };
 }
 
 // ─── Inbox verifikator (task saya yang menunggu verifikasi) ────────
@@ -975,11 +1029,14 @@ export async function extendTaskDeadline(
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat memperpanjang deadline.", 403);
     const task = await prisma.meetingTask.findUnique({
         where: { id: taskId },
-        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } },
+        select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, sourceType: true, assignees: { select: { status: true } } },
     });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingRunningForGiverWork(task.appointmentId);
+    // Operasional: kelola berlaku selama task belum final (tanpa jendela meeting).
+    if (task.sourceType !== "OPERASIONAL" && task.appointmentId) {
+        await assertMeetingRunningForGiverWork(task.appointmentId);
+    }
     await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
@@ -1019,10 +1076,12 @@ export async function cancelMeetingTask(
     actor: { userId?: string | null; username: string }
 ): Promise<MeetingTaskDto> {
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat membatalkan task.", 403);
-    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } } });
+    const task = await prisma.meetingTask.findUnique({ where: { id: taskId }, select: { id: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, sourceType: true, assignees: { select: { status: true } } } });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingRunningForGiverWork(task.appointmentId);
+    if (task.sourceType !== "OPERASIONAL" && task.appointmentId) {
+        await assertMeetingRunningForGiverWork(task.appointmentId);
+    }
     await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
@@ -1071,11 +1130,13 @@ export async function editMeetingTask(
     if (!session.employeeId) throw new MeetingTaskError("Hanya karyawan yang dapat mengubah task.", 403);
     const task = await prisma.meetingTask.findUnique({
         where: { id: taskId },
-        select: { id: true, title: true, detail: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, assignees: { select: { status: true } } },
+        select: { id: true, title: true, detail: true, isCancelled: true, assignerEmployeeId: true, appointmentId: true, sourceType: true, assignees: { select: { status: true } } },
     });
     if (!task) throw new MeetingTaskError("Task meeting tidak ditemukan.", 404);
     if (task.isCancelled) throw new MeetingTaskError("Task sudah dibatalkan.", 409);
-    await assertMeetingRunningForGiverWork(task.appointmentId);
+    if (task.sourceType !== "OPERASIONAL" && task.appointmentId) {
+        await assertMeetingRunningForGiverWork(task.appointmentId);
+    }
     await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
     if (task.assignerEmployeeId !== session.employeeId && !privileged) {
@@ -1094,10 +1155,12 @@ export async function editMeetingTask(
         throw new MeetingTaskError("Tidak ada perubahan.", 400);
     }
     if (addIds.length > 0) {
-        const appt = await getMeetingOrThrow(task.appointmentId);
-        const memberIds = internalParticipantIds(appt);
-        const outsiders = addIds.filter((id) => !memberIds.includes(id));
-        if (outsiders.length > 0) throw new MeetingTaskError("Penerima task harus peserta meeting ini.", 422);
+        if (task.sourceType !== "OPERASIONAL" && task.appointmentId) {
+            const appt = await getMeetingOrThrow(task.appointmentId);
+            const memberIds = internalParticipantIds(appt);
+            const outsiders = addIds.filter((id) => !memberIds.includes(id));
+            if (outsiders.length > 0) throw new MeetingTaskError("Penerima task harus peserta meeting ini.", 422);
+        }
         await assertActiveEmployees(addIds);
     }
     let newDue: Date | null = null;
@@ -1119,7 +1182,8 @@ export async function editMeetingTask(
         }
         if (addIds.length > 0) {
             await tx.meetingTaskAssignee.createMany({
-                data: addIds.map((employeeId) => ({ taskId, employeeId, status: "OPEN" as const })),
+                // Penerima baru task Operasional kembali melewati gate persetujuan.
+                data: addIds.map((employeeId) => ({ taskId, employeeId, status: task.sourceType === "OPERASIONAL" ? ("MENUNGGU_PERSETUJUAN" as const) : ("OPEN" as const) })),
                 skipDuplicates: true,
             });
         }

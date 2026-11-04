@@ -20,15 +20,18 @@ import {
     isPrivileged,
     type MeetingTaskDto,
 } from "@/lib/services/meetingTaskService";
+import { getOperationalTaskDtoById, OPERATIONAL_TASK_SOURCE } from "@/lib/services/operationalTaskService";
 
 export { MeetingTaskError as WorkTaskError };
 export type WorkTaskDto = MeetingTaskDto & { sourceType: string; sourceId: string };
 
 export const WORK_TASK_SOURCE_APPOINTMENTS = "APPOINTMENTS" as const;
+export const WORK_TASK_SOURCE_OPERATIONAL = OPERATIONAL_TASK_SOURCE;
 
 /** Label sumber untuk UI. Sumber baru ditambahkan di sini lewat adapternya. */
 export const WORK_TASK_SOURCE_LABELS: Record<string, string> = {
     APPOINTMENTS: "E-Meeting",
+    OPERASIONAL: "Operasional",
 };
 
 export function getWorkTaskSourceLabel(sourceType: string | null | undefined): string {
@@ -88,7 +91,7 @@ export async function getWorkTaskById(session: SessionPayload, taskId: string): 
     if (!row) throw new MeetingTaskError("Task tidak ditemukan.", 404);
 
     const sourceType = row.sourceType ?? WORK_TASK_SOURCE_APPOINTMENTS;
-    if (sourceType !== WORK_TASK_SOURCE_APPOINTMENTS) {
+    if (sourceType !== WORK_TASK_SOURCE_APPOINTMENTS && sourceType !== WORK_TASK_SOURCE_OPERATIONAL) {
         throw new MeetingTaskError("Sumber task ini belum didukung.", 400);
     }
     const isAssigner = Boolean(session.employeeId) && row.assignerEmployeeId === session.employeeId;
@@ -96,8 +99,14 @@ export async function getWorkTaskById(session: SessionPayload, taskId: string): 
     if (!isAssigner && !isAssignee && !(await isPrivileged(session))) {
         throw new MeetingTaskError("Tugas ini bukan milik Anda.", 403);
     }
-    const tasks = await getTasksForMeeting(session, row.appointmentId);
-    const task = tasks.find((t) => t.id === taskId);
+    let task: MeetingTaskDto | null;
+    if (sourceType === WORK_TASK_SOURCE_OPERATIONAL) {
+        task = await getOperationalTaskDtoById(taskId);
+    } else {
+        if (!row.appointmentId) throw new MeetingTaskError("Task tidak ditemukan.", 404);
+        const tasks = await getTasksForMeeting(session, row.appointmentId);
+        task = tasks.find((t) => t.id === taskId) ?? null;
+    }
     if (!task) throw new MeetingTaskError("Task tidak ditemukan.", 404);
     // Penerima multi-penerima hanya melihat submission miliknya sendiri,
     // kecuali ia juga pemberi tugas atau WIG002.
@@ -108,10 +117,11 @@ export async function getWorkTaskById(session: SessionPayload, taskId: string): 
 /** Pantau Tugas: agregasi monitoring per sumber (tahap ini Appointments). */
 export async function getWorkTaskMonitoring(
     session: SessionPayload,
-    filters: { from?: string; to?: string; sourceType?: string }
+    filters: { from?: string; to?: string; sourceType?: string; q?: string; division?: string; page?: number; limit?: number }
 ) {
-    if (filters.sourceType && filters.sourceType !== WORK_TASK_SOURCE_APPOINTMENTS) {
-        return { data: [], tunggakanLalu: [], period: { from: filters.from ?? "", to: filters.to ?? "" } };
+    if (filters.sourceType && filters.sourceType !== WORK_TASK_SOURCE_APPOINTMENTS && filters.sourceType !== WORK_TASK_SOURCE_OPERATIONAL) {
+        const limit = Math.min(Math.max(filters.limit ?? 10, 1), 50);
+        return { data: [], tunggakanLalu: [], period: { from: filters.from ?? "", to: filters.to ?? "" }, total: 0, page: 1, limit, totalPages: 1, divisions: [] as string[] };
     }
     return getKinerjaPantau(session, filters);
 }

@@ -220,6 +220,55 @@ describe("getKinerjaPantau", () => {
         expect(out.data).toHaveLength(0);
     });
 
+    it("task Operasional terhitung dan penerima yang menolak tidak dinilai", async () => {
+        monitorIds(["ID-007"]);
+        const now = Date.now();
+        const operational = taskRow({
+            id: "t-ops",
+            sourceType: "OPERASIONAL",
+            appointmentId: null,
+            appointment: null,
+            assignees: [
+                { employeeId: "ID-007", status: "MENUNGGU_PERSETUJUAN", employee: emp() },
+                { employeeId: "ID-008", status: "DITOLAK", employee: emp("Delapan") },
+            ],
+            deadlineHistory: [{ sequence: 1, deadlineDate: new Date(now - 3 * DAY) }],
+            submissions: [],
+        });
+        mocked.meetingTask.findMany.mockResolvedValueOnce([operational] as never).mockResolvedValueOnce([] as never);
+        const out = await getKinerjaPantau(empSession(), { sourceType: "OPERASIONAL" });
+        expect(out.data).toHaveLength(1);
+        expect(out.data[0].employeeId).toBe("ID-007");
+        expect(out.data[0].total).toBe(1);
+        expect(out.data[0].overdue).toBe(1);
+        expect(out.data[0].tasks[0]).toMatchObject({ sourceType: "OPERASIONAL", meetingId: null, meetingTitle: "Operasional" });
+        // Query dibatasi ke sumber Operasional + meeting tidak batal untuk sumber lain.
+        const where = mocked.meetingTask.findMany.mock.calls[0][0].where as Record<string, unknown>;
+        expect(where.sourceType).toBe("OPERASIONAL");
+    });
+
+    it("pagination baris karyawan + filter server + faset divisi", async () => {
+        monitorIds(["ID-007"]);
+        const rows = [
+            taskRow({ id: "t-a", assignees: [{ employeeId: "ID-007", status: "OPEN", employee: emp("Tujuh") }] }),
+            taskRow({ id: "t-b", assignees: [{ employeeId: "ID-008", status: "OPEN", employee: emp("Delapan") }] }),
+        ];
+        mocked.meetingTask.findMany.mockResolvedValueOnce(rows as never).mockResolvedValueOnce([] as never);
+        const page1 = await getKinerjaPantau(empSession(), { limit: 1, page: 1 });
+        expect(page1.total).toBe(2);
+        expect(page1.totalPages).toBe(2);
+        expect(page1.data).toHaveLength(1);
+        expect(page1.divisions).toEqual(["Operasional"]);
+        mocked.meetingTask.findMany.mockResolvedValueOnce(rows as never).mockResolvedValueOnce([] as never);
+        const page2 = await getKinerjaPantau(empSession(), { limit: 1, page: 99 });
+        expect(page2.page).toBe(2);
+        expect(page2.data[0].employeeId).not.toBe(page1.data[0].employeeId);
+        mocked.meetingTask.findMany.mockResolvedValueOnce(rows as never).mockResolvedValueOnce([] as never);
+        const searched = await getKinerjaPantau(empSession(), { q: "delapan" });
+        expect(searched.total).toBe(1);
+        expect(searched.data[0].employeeId).toBe("ID-008");
+    });
+
     it("tanggal tidak valid memakai bulan berjalan", async () => {
         monitorIds(["ID-007"]);
         mocked.meetingTask.findMany.mockResolvedValueOnce([] as never).mockResolvedValueOnce([] as never);

@@ -64,6 +64,8 @@ const TASK_STYLE: Record<string, { icon: typeof CheckCircle2; cls: string; label
     ON_PROGRESS: { icon: PlayCircle, cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900", label: "Menunggu Verifikasi" },
     SELESAI: { icon: CheckCircle2, cls: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900", label: "Selesai" },
     DIBATALKAN: { icon: Ban, cls: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900", label: "Dibatalkan" },
+    MENUNGGU_PERSETUJUAN: { icon: MailQuestion, cls: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900", label: "Menunggu Persetujuan" },
+    DITOLAK: { icon: XCircle, cls: "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900", label: "Ditolak" },
 };
 
 export function meetingTaskStatusLabel(status: string): string {

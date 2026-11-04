@@ -772,6 +772,30 @@ export const meetingTaskCreateSchema = z.object({
     dueTime: appointmentTimeSchema,
 });
 
+/* Task Operasional (submodul Tambah Task): pemberi otomatis dari sesi login,
+ * jadi skema tidak menerima assignerEmployeeId. */
+export const operationalTaskCreateSchema = z.object({
+    title: z.string().trim().min(1, "Judul task wajib diisi.").max(200, "Judul task maksimal 200 karakter."),
+    detail: z.string().trim().max(5000).nullable().optional(),
+    assigneeEmployeeIds: z
+        .array(z.string().trim().min(1).max(100))
+        .min(1, "Pilih minimal satu penerima task.")
+        .max(20, "Penerima task maksimal 20 orang."),
+    dueDate: appointmentDateSchema,
+    dueTime: appointmentTimeSchema,
+});
+
+export const operationalTaskRespondSchema = z
+    .object({
+        decision: z.enum(["TERIMA", "TOLAK"]),
+        reason: z.string().trim().max(1000).nullable().optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (v.decision === "TOLAK" && (!v.reason || v.reason.trim().length < 5)) {
+            ctx.addIssue({ code: "custom", path: ["reason"], message: "Alasan penolakan minimal 5 karakter." });
+        }
+    });
+
 export const meetingTaskExtendSchema = z.object({
     proposedDate: appointmentDateSchema,
     reason: z.string().trim().min(5, "Alasan perpanjangan minimal 5 karakter.").max(1000),

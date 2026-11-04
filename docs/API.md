@@ -290,15 +290,17 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/appointments/[id]/leader` | `PATCH` | Penyelenggara/pimpinan rapat/WIG002 | Tetapkan/ganti pimpinan rapat (`leaderEmployeeId`, wajib peserta internal) setelah meeting terjadwal/berjalan, selama belum selesai; tercatat di audit `SET_MEETING_LEADER`. |
 
 ### M. Tugas Saya (`/api/my-tasks`)
-Endpoint kanonik pengelolaan task lintas sumber (tahap pertama sumber `APPOINTMENTS`). Endpoint task lama di bagian L tetap tersedia sebagai shim pada service yang sama selama masa transisi; route UI lama `/employee/appointments/tasks` dan `/employee/appointments/monitor` mengarah ke route baru.
+Endpoint kanonik pengelolaan task lintas sumber (`APPOINTMENTS` E-Meeting dan `OPERASIONAL` dari submodul Tambah Task). Endpoint task lama di bagian L tetap tersedia sebagai shim pada service yang sama selama masa transisi; route UI lama `/employee/appointments/tasks` dan `/employee/appointments/monitor` mengarah ke route baru.
 | Rute | Metode | Akses | Deskripsi |
 |---|---|---|---|
 | `/api/my-tasks` | `GET` | Karyawan | Daftar tugas saya (`status`/`overdue=1`/`source`); menyembunyikan task milik meeting CANCELLED. |
-| `/api/my-tasks/[id]` | `GET` | Pemberi/peserta/monitor/WIG002 | Detail ruang kerja tugas (konteks sumber, penerima, deadline, submission). |
-| `/api/my-tasks/[id]` | `PATCH` | Pemberi/GA | Aksi `extend`/`edit`/`cancel` dengan skema yang sama seperti task meeting. |
+| `/api/my-tasks` | `POST` | Karyawan | Buat task **Operasional** (pemberi otomatis dari sesi; penerima karyawan aktif 1–20, bukan diri sendiri; deadline tanggal+jam WIB) → penerima `MENUNGGU_PERSETUJUAN` + push persetujuan. |
+| `/api/my-tasks/recipients` | `GET` | Karyawan | Direktori penerima Operasional: seluruh karyawan AKTIF, field minimal (tanpa data HR sensitif). |
+| `/api/my-tasks/[id]` | `GET` | Pemberi/penerima/WIG002 | Detail ruang kerja tugas (konteks sumber, penerima, deadline, submission). |
+| `/api/my-tasks/[id]` | `PATCH` | Pemberi/GA/penerima | Aksi pemberi `extend`/`edit`/`cancel`; aksi penerima Operasional `accept`/`reject` (tolak wajib alasan ≥5) dengan push balasan ke pemberi. |
 | `/api/my-tasks/[id]/submissions` | `POST` | Penerima (multipart) | Kumpulkan hasil: `note?` + `files[1..5]` → `ON_PROGRESS` + push ke pemberi (tautan ke detail Tugas Saya). |
 | `/api/my-tasks/submissions/[submissionId]/verify` | `PATCH` | Pemberi/GA | `TERIMA`/`REVISI` sama seperti verifikasi task meeting. |
 | `/api/my-tasks/submissions/attachments/[attachmentId]` | `GET` | Pengumpul/pemberi/WIG002 | Unduh lampiran (monitor tidak termasuk). |
 | `/api/my-tasks/verifications` | `GET` | Pemberi | Antrean tugas menunggu verifikasi saya. |
-| `/api/my-tasks/monitoring` | `GET` | Pemantau/WIG002 | Pantau Tugas: ketepatan per karyawan (`from/to`, `source` opsional). |
+| `/api/my-tasks/monitoring` | `GET` | Pemantau/WIG002 | Pantau Tugas: ketepatan per karyawan ter-pagination (`from/to`, `source`, filter server `q`/`division`, `page`/`limit` maks 50 bawaan 10; respons `total/page/limit/totalPages/divisions`). |
 | `/api/my-tasks/capabilities` | `GET` | Karyawan | `{ canMonitor }` untuk gating menu Pantau Tugas. |
