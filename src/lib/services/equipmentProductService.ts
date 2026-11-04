@@ -7,6 +7,9 @@ import {
     requireWig002,
     isPrismaUniqueViolation,
     logCreated,
+    requireWig002OrTopViewer,
+    getEmployeeEquipmentCompanies,
+    EQUIPMENT_COMPANIES,
 } from "@/lib/services/equipmentService";
 
 // ─── Produk per perusahaan (master WIG002) ───────────────────────────
@@ -114,4 +117,22 @@ export async function setProductTools(session: SessionPayload, productId: string
     });
     await logCreated("SET_EQUIPMENT_PRODUCT_TOOLS", "EQUIPMENT_PRODUCT", productId, session, { toolCount: ids.length });
     return getProductToolChecklist(session, productId);
+}
+
+// ─── Produk dalam cakupan sesi (dropdown employee) ────────────────────
+
+export async function listScopedEquipmentProducts(session: SessionPayload, company?: EquipmentCompany) {
+    const isSuper = await requireWig002OrTopViewer(session)
+        .then(() => true)
+        .catch(() => false);
+    const scope = isSuper ? [...EQUIPMENT_COMPANIES] : await getEmployeeEquipmentCompanies(session);
+    if (company && !scope.includes(company)) {
+        throw new EquipmentError("Di luar cakupan perusahaan Anda.", 403);
+    }
+    if (scope.length === 0) return [];
+    return prisma.equipmentProduct.findMany({
+        where: { isActive: true, ...(company ? { company } : { company: { in: scope } }) },
+        orderBy: [{ company: "asc" }, { name: "asc" }],
+        select: { id: true, company: true, name: true },
+    });
 }

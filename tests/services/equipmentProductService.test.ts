@@ -5,6 +5,7 @@ vi.mock("@/lib/prisma", () => ({
         equipmentProduct: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
         equipmentProductTool: { findMany: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
         equipmentUnit: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+        equipmentInspection: { count: vi.fn() },
         auditLog: { create: vi.fn() },
         $transaction: vi.fn(),
     },

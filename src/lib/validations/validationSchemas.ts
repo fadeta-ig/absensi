@@ -938,6 +938,7 @@ export const equipmentApproveSchema = z.object({
 });
 
 export const equipmentQcMembersSchema = z.object({
+    company: equipmentCompanySchema,
     employeeIds: z.array(z.string().trim().min(1).max(100)).max(20),
 });
 
@@ -954,6 +955,7 @@ export const equipmentApproverSchema = z.object({
 });
 
 export const equipmentApproversSchema = z.object({
+    company: equipmentCompanySchema,
     employeeIds: z.array(z.string().trim().min(1).max(100)).max(5),
 });
 

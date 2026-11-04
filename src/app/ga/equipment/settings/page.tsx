@@ -151,6 +151,7 @@ export default function EquipmentSettingsPage() {
     const [assignments, setAssignments] = useState<EquipmentAssignment[]>([]);
 
     // ─── Anggota QC ───
+    const [qcCompany, setQcCompany] = useState<"WIG" | "MKI">("WIG");
     const [newQc, setNewQc] = useState<EmployeePick | null>(null);
     const [savingQc, setSavingQc] = useState(false);
 
@@ -160,7 +161,8 @@ export default function EquipmentSettingsPage() {
     const [newTopViewer, setNewTopViewer] = useState<EmployeePick | null>(null);
     const [savingTopViewers, setSavingTopViewers] = useState(false);
 
-    // ─── Approver final (maks 5, dinamis) ───
+    // ─── Approver final (maks 5 per perusahaan, dinamis) ───
+    const [approverCompany, setApproverCompany] = useState<"WIG" | "MKI">("WIG");
     const [approvers, setApprovers] = useState<Array<{ employeeId: string; name: string | null; isActive: boolean }>>([]);
     const [approverError, setApproverError] = useState<string | null>(null);
     const [newApprover, setNewApprover] = useState<EmployeePick | null>(null);
@@ -199,9 +201,10 @@ export default function EquipmentSettingsPage() {
         }
     }, []);
 
-    const fetchQcMembers = useCallback(async () => {        setQcError(null);
+    const fetchQcMembers = useCallback(async () => {
+        setQcError(null);
         try {
-            const res = await fetch("/api/ga/equipment/qc-members");
+            const res = await fetch(`/api/ga/equipment/qc-members?company=${qcCompany}`);
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat anggota QC."));
             const json = await res.json();
             setQcMembers(json.data ?? []);
@@ -210,12 +213,12 @@ export default function EquipmentSettingsPage() {
             setQcError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
-    }, []);
+    }, [qcCompany]);
 
     const fetchApprovers = useCallback(async () => {
         setApproverError(null);
         try {
-            const res = await fetch("/api/ga/equipment/settings/approver");
+            const res = await fetch(`/api/ga/equipment/settings/approver?company=${approverCompany}`);
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat approver."));
             const json = await res.json();
             setApprovers(json.data ?? []);
@@ -224,7 +227,7 @@ export default function EquipmentSettingsPage() {
             setApproverError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
-    }, []);
+    }, [approverCompany]);
 
     const persistApprovers = useCallback(
         async (employeeIds: string[], successMessage: string) => {
@@ -233,7 +236,7 @@ export default function EquipmentSettingsPage() {
                 const res = await fetch("/api/ga/equipment/settings/approver", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ employeeIds }),
+                    body: JSON.stringify({ company: approverCompany, employeeIds }),
                 });
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan approver."));
                 toast(successMessage, "success");
@@ -246,7 +249,7 @@ export default function EquipmentSettingsPage() {
                 setSavingApprover(false);
             }
         },
-        [toast, fetchApprovers]
+        [toast, fetchApprovers, approverCompany]
     );
 
     const addApprover = useCallback(() => {
@@ -260,17 +263,17 @@ export default function EquipmentSettingsPage() {
             return;
         }
         if (approvers.length >= 5) {
-            toast("Approver maksimal 5 orang.", "warning");
+            toast(`Approver ${approverCompany} maksimal 5 orang.`, "warning");
             return;
         }
-        void persistApprovers([...approvers.map((v) => v.employeeId), id], "Approver ditambahkan.");
-    }, [newApprover, approvers, toast, persistApprovers]);
+        void persistApprovers([...approvers.map((v) => v.employeeId), id], `Approver ${approverCompany} ditambahkan.`);
+    }, [newApprover, approvers, approverCompany, toast, persistApprovers]);
 
     const removeApprover = useCallback(
         (member: { employeeId: string; name: string | null }) => {
             confirm({
-                title: `Hapus "${member.name ?? member.employeeId}" dari approver?`,
-                message: "Karyawan tersebut tidak lagi bisa memberi approval final.",
+                title: `Hapus "${member.name ?? member.employeeId}" dari approver ${approverCompany}?`,
+                message: `Karyawan tersebut tidak lagi bisa memberi approval final untuk ${approverCompany}.`,
                 confirmLabel: "Ya, hapus",
                 cancelLabel: "Batal",
                 variant: "danger",
@@ -282,7 +285,7 @@ export default function EquipmentSettingsPage() {
                 },
             });
         },
-        [confirm, approvers, persistApprovers]
+        [confirm, approvers, approverCompany, persistApprovers]
     );
 
     const fetchProducts = useCallback(async (company: EquipmentCompanyFilter) => {
@@ -345,9 +348,15 @@ export default function EquipmentSettingsPage() {
     useEffect(() => {
         void fetchAll();
         void fetchTopViewers();
+    }, [fetchAll, fetchTopViewers]);
+
+    useEffect(() => {
         void fetchQcMembers();
+    }, [fetchQcMembers]);
+
+    useEffect(() => {
         void fetchApprovers();
-    }, [fetchAll, fetchTopViewers, fetchQcMembers, fetchApprovers]);
+    }, [fetchApprovers]);
 
     useEffect(() => {
         if (activeTab !== "produk") return;
@@ -645,7 +654,7 @@ export default function EquipmentSettingsPage() {
                 const res = await fetch("/api/ga/equipment/qc-members", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ employeeIds }),
+                    body: JSON.stringify({ company: qcCompany, employeeIds }),
                 });
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan anggota QC."));
                 toast(successMessage, "success");
@@ -658,7 +667,7 @@ export default function EquipmentSettingsPage() {
                 setSavingQc(false);
             }
         },
-        [toast, fetchQcMembers]
+        [toast, fetchQcMembers, qcCompany]
     );
 
     const addQcMember = useCallback(() => {
@@ -672,18 +681,18 @@ export default function EquipmentSettingsPage() {
             return;
         }
         if (qcMembers.length >= 20) {
-            toast("Anggota QC maksimal 20 orang.", "warning");
+            toast(`Anggota QC ${qcCompany} maksimal 20 orang.`, "warning");
             return;
         }
         setNewQc(null);
-        void persistQcMembers([...qcMembers.map((v) => v.employeeId), id], "Anggota QC ditambahkan.");
-    }, [newQc, qcMembers, toast, persistQcMembers]);
+        void persistQcMembers([...qcMembers.map((v) => v.employeeId), id], `Anggota QC ${qcCompany} ditambahkan.`);
+    }, [newQc, qcMembers, qcCompany, toast, persistQcMembers]);
 
     const removeQcMember = useCallback(
         (member: QcMember) => {
             confirm({
-                title: `Hapus "${member.name}" dari QC?`,
-                message: "Karyawan tersebut tidak lagi melihat antrean pemeriksaan QC.",
+                title: `Hapus "${member.name}" dari QC ${qcCompany}?`,
+                message: `Karyawan tersebut tidak lagi melihat antrean pemeriksaan QC ${qcCompany}.`,
                 confirmLabel: "Ya, hapus",
                 cancelLabel: "Batal",
                 variant: "danger",
@@ -695,7 +704,7 @@ export default function EquipmentSettingsPage() {
                 },
             });
         },
-        [confirm, qcMembers, persistQcMembers]
+        [confirm, qcMembers, qcCompany, persistQcMembers]
     );
 
     // ─── Top reviewers ───
@@ -1471,9 +1480,26 @@ export default function EquipmentSettingsPage() {
 
                     <div className="bg-card border border-border rounded-lg p-4">
                         <h2 className="text-base font-medium mb-1">Approver Final</h2>
-                        <p className="text-xs text-muted-foreground mb-3">
-                            Atasan yang memberi approval final (DONE → Selesai). Maksimal 5 orang, dinamis dan bisa diganti kapan saja.
+                        <p className="text-xs text-muted-foreground mb-2">
+                            Atasan yang memberi approval final (DONE → Selesai) per perusahaan. Maksimal 5 orang
+                            per perusahaan, dinamis dan bisa diganti kapan saja.
                         </p>
+                        <div className="flex gap-1 mb-3 border-b border-border">
+                            {(["WIG", "MKI"] as const).map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setApproverCompany(c)}
+                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
+                                        approverCompany === c
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
                         {approverError && (
                             <FeedbackMessage variant="error" className="mb-3">
                                 {approverError}{" "}
@@ -1527,17 +1553,34 @@ export default function EquipmentSettingsPage() {
                         </div>
                         {approvers.length >= 5 && (
                             <p className="text-xs text-muted-foreground mt-2">
-                                Batas 5 approver tercapai. Hapus salah satu untuk menambah.
+                                Batas 5 approver {approverCompany} tercapai. Hapus salah satu untuk menambah.
                             </p>
                         )}
                     </div>
 
                     <div className="bg-card border border-border rounded-lg p-4">
                         <h2 className="text-base font-medium mb-1">Anggota QC</h2>
-                        <p className="text-xs text-muted-foreground mb-3">
-                            Karyawan QC yang memeriksa hasil inspeksi produksi. Semua anggota melihat semua
-                            yang disubmit, terbaru di atas. Maksimal 20 orang.
+                        <p className="text-xs text-muted-foreground mb-2">
+                            Karyawan QC yang memeriksa hasil inspeksi produksi per perusahaan. Semua anggota
+                            melihat semua yang disubmit perusahaannya, terbaru di atas. Maksimal 20 orang
+                            per perusahaan.
                         </p>
+                        <div className="flex gap-1 mb-3 border-b border-border">
+                            {(["WIG", "MKI"] as const).map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setQcCompany(c)}
+                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
+                                        qcCompany === c
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
                         {qcError && (
                             <FeedbackMessage variant="error" className="mb-3">
                                 {qcError}{" "}
@@ -1606,7 +1649,7 @@ export default function EquipmentSettingsPage() {
                         </div>
                         {qcMembers.length >= 20 && (
                             <p className="text-xs text-muted-foreground mt-2">
-                                Batas 20 anggota QC tercapai. Hapus salah satu untuk menambah.
+                                Batas 20 anggota QC {qcCompany} tercapai. Hapus salah satu untuk menambah.
                             </p>
                         )}
                     </div>

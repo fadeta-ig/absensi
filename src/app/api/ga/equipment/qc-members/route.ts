@@ -5,16 +5,22 @@ import { isWig002 } from "@/lib/services/cleaningService";
 import { equipmentQcMembersSchema } from "@/lib/validations/validationSchemas";
 
 /**
- * GET/POST /api/ga/equipment/qc-members
- * Daftar employee QC (di-set WIG002 dari data HR). Semua anggota melihat semua antrean.
+ * GET/POST /api/ga/equipment/qc-members?company=WIG|MKI
+ * Daftar employee QC per perusahaan (di-set WIG002 dari data HR).
+ * Semua anggota melihat semua antrean perusahaannya.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
     if (!isWig002(session)) return forbiddenResponse();
 
     try {
-        const ids = await getEquipmentQcMembers();
+        const { searchParams } = new URL(request.url);
+        const company = searchParams.get("company");
+        if (company !== "WIG" && company !== "MKI") {
+            return NextResponse.json({ error: "Parameter company wajib WIG atau MKI." }, { status: 400 });
+        }
+        const ids = await getEquipmentQcMembers(company);
         return NextResponse.json({ success: true, data: ids });
     } catch (err) {
         if (err instanceof EquipmentError) {
@@ -33,7 +39,7 @@ export async function POST(request: NextRequest) {
         const result = await validateBody(request, equipmentQcMembersSchema);
         if ("error" in result) return result.error;
 
-        const ids = await setEquipmentQcMembers(session, result.data.employeeIds, {
+        const ids = await setEquipmentQcMembers(session, result.data.company, result.data.employeeIds, {
             userId: session.userId,
             username: session.username,
         });

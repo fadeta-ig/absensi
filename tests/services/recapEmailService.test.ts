@@ -187,8 +187,8 @@ describe("getDailyEquipmentRecap actor stats", () => {
             (args?.where?.status === "SUBMITTED" ? 4 : 0)
         ) as never);
         mocked.appSetting.findUnique.mockImplementation((async (args: { where: { key: string } }) => {
-            if (args.where.key === "equipment.qcMembers") return { value: JSON.stringify(["QC-1", "QC-2"]) };
-            if (args.where.key === "equipment.approvers") return { value: JSON.stringify(["AP-1"]) };
+            if (args.where.key === "equipment.qcMembers.WIG") return { value: JSON.stringify(["QC-1", "QC-2"]) };
+            if (args.where.key === "equipment.approvers.WIG") return { value: JSON.stringify(["AP-1"]) };
             return { value: "[]" };
         }) as never);
         mocked.employee.findMany.mockImplementation((async (args: { where?: { employeeId?: { in?: string[] } } }) => {
@@ -279,8 +279,8 @@ describe("runDailyRecap exactly-once", () => {
         }) as never) as never);
         mocked.appSetting.findUnique.mockImplementation((((args: { where: { key: string } }) => {
             const key = args.where.key;
-            if (key === "equipment.qcMembers") return Promise.resolve({ value: JSON.stringify(["QC-001"]) });
-            if (key === "equipment.approvers") return Promise.resolve({ value: JSON.stringify(["AP-001"]) });
+            if (key === "equipment.qcMembers.WIG") return Promise.resolve({ value: JSON.stringify(["QC-001"]) });
+            if (key === "equipment.approvers.WIG") return Promise.resolve({ value: JSON.stringify(["AP-001"]) });
             if (key === "equipment.approverId") return Promise.resolve(null);
             return Promise.resolve({ value: "[]" });
         }) as never) as never);

@@ -3,7 +3,7 @@ import logger from "@/lib/logger";
 import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
 import { stripGelar } from "@/lib/utils/formatters";
 import { webPush } from "@/lib/webPush";
-import { EQUIPMENT_TOP_VIEWERS_KEY, getEquipmentApprovers, getEquipmentQcMembers, queryEquipmentRecap } from "@/lib/services/equipmentService";
+import { EQUIPMENT_TOP_VIEWERS_KEY, getAllEquipmentApprovers, getAllEquipmentQcMembers, queryEquipmentRecap } from "@/lib/services/equipmentService";
 import { getCleaningTopViewerEmployeeIds } from "@/lib/services/appSettingsService";
 import { getParafStatus } from "@/lib/services/cleaningParafService";
 import { sendDailyRecapEmail } from "@/lib/services/emailService";
@@ -168,8 +168,8 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     // Roster penanggung jawab untuk kolom email: semua verifikator pool + approver tunggal.
     // Yang bertindak naik ke #1 + jam; sisanya (-) — agar pemilik tahu penanggung jawab tiap baris.
     const [qcMembers, approvers, submittedToday, checkedToday, approvedToday] = await Promise.all([
-        getEquipmentQcMembers().catch(() => []),
-        getEquipmentApprovers().catch(() => []),
+        getAllEquipmentQcMembers().catch(() => []),
+        getAllEquipmentApprovers().catch(() => []),
         prisma.equipmentInspection.findMany({
             where: { submittedAt: { gte: dayStart, lt: nextStart } },
             select: { startedByEmployeeId: true, startedBy: { select: { name: true } } },
