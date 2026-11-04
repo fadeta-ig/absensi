@@ -8,6 +8,7 @@ import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
+import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface TemplateItem {
@@ -31,6 +32,7 @@ interface EquipmentUnit {
     name: string;
     brand: string | null;
     location: string | null;
+    company: "WIG" | "MKI" | null;
     isActive: boolean;
     templateId: string;
     template: { id: string; name: string };
@@ -60,7 +62,32 @@ interface EquipmentAssignment {
     user: { id: string; employeeId: string | null; displayName: string };
 }
 
-type Tab = "templates" | "units" | "assignments" | "atasan";
+interface EquipmentProduct {
+    id: string;
+    company: "WIG" | "MKI";
+    name: string;
+    isActive: boolean;
+    _count: { tools: number };
+}
+
+interface ProductToolRow {
+    id: string;
+    name: string;
+    brand: string | null;
+    location: string | null;
+    checked: boolean;
+}
+
+interface ProductChecklist {
+    product: { id: string; company: "WIG" | "MKI"; name: string };
+    tools: ProductToolRow[];
+    checkedCount: number;
+    totalCount: number;
+}
+
+type EquipmentCompanyFilter = "WIG" | "MKI";
+
+type Tab = "templates" | "units" | "assignments" | "atasan" | "produk";
 
 const inputClass =
     "w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm";
@@ -138,6 +165,25 @@ export default function EquipmentSettingsPage() {
     const [approverError, setApproverError] = useState<string | null>(null);
     const [newApprover, setNewApprover] = useState<EmployeePick | null>(null);
     const [savingApprover, setSavingApprover] = useState(false);
+
+    // ─── Produk & pemetaan alat (per perusahaan) ───
+    const [productCompany, setProductCompany] = useState<EquipmentCompanyFilter>("WIG");
+    const [products, setProducts] = useState<EquipmentProduct[]>([]);
+    const [productError, setProductError] = useState<string | null>(null);
+    const [newProductName, setNewProductName] = useState("");
+    const [savingProduct, setSavingProduct] = useState(false);
+    const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+    const [checklist, setChecklist] = useState<ProductChecklist | null>(null);
+    const [initialChecked, setInitialChecked] = useState<string[]>([]);
+    const [checklistLoading, setChecklistLoading] = useState(false);
+    const [checklistError, setChecklistError] = useState<string | null>(null);
+    const [toolQuery, setToolQuery] = useState("");
+    const [savingChecklist, setSavingChecklist] = useState(false);
+    const [bulkSelected, setBulkSelected] = useState<string[]>([]);
+    const [bulkSaving, setBulkSaving] = useState(false);
+
+    // ─── Kategori perusahaan unit (modal unit) ───
+    const [unitCompany, setUnitCompany] = useState("");
 
     const fetchTopViewers = useCallback(async () => {
         setTopViewerError(null);
@@ -239,6 +285,38 @@ export default function EquipmentSettingsPage() {
         [confirm, approvers, persistApprovers]
     );
 
+    const fetchProducts = useCallback(async (company: EquipmentCompanyFilter) => {
+        setProductError(null);
+        try {
+            const res = await fetch(`/api/ga/equipment/products?company=${company}`);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat produk."));
+            const json = await res.json();
+            setProducts(json.data ?? []);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat produk.";
+            setProductError(msg);
+            reportClientError("EquipmentSettings", msg, err);
+        }
+    }, []);
+
+    const fetchChecklist = useCallback(async (productId: string) => {
+        setChecklistLoading(true);
+        setChecklistError(null);
+        try {
+            const res = await fetch(`/api/ga/equipment/products/${productId}/tools`);
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat checklist alat."));
+            const json = await res.json();
+            setChecklist(json.data);
+            setInitialChecked((json.data.tools ?? []).filter((t: ProductToolRow) => t.checked).map((t: ProductToolRow) => t.id));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat checklist.";
+            setChecklistError(msg);
+            reportClientError("EquipmentSettings", msg, err);
+        } finally {
+            setChecklistLoading(false);
+        }
+    }, []);
+
     const fetchAll = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -270,6 +348,15 @@ export default function EquipmentSettingsPage() {
         void fetchQcMembers();
         void fetchApprovers();
     }, [fetchAll, fetchTopViewers, fetchQcMembers, fetchApprovers]);
+
+    useEffect(() => {
+        if (activeTab !== "produk") return;
+        setSelectedProductId(null);
+        setChecklist(null);
+        setInitialChecked([]);
+        setToolQuery("");
+        void fetchProducts(productCompany);
+    }, [activeTab, productCompany, fetchProducts]);
 
     // ─── Template CRUD ───
 
@@ -417,6 +504,7 @@ export default function EquipmentSettingsPage() {
             setUnitBrand(unit?.brand ?? "");
             setUnitLocation(unit?.location ?? "");
             setUnitTemplateId(unit?.templateId ?? templates.find((t) => t.isActive)?.id ?? "");
+            setUnitCompany(unit?.company ?? "");
             setShowUnitModal(true);
         },
         [templates]
@@ -437,12 +525,14 @@ export default function EquipmentSettingsPage() {
                       brand: unitBrand.trim() || null,
                       location: unitLocation.trim() || null,
                       templateId: unitTemplateId,
+                      company: unitCompany || null,
                   }
                 : {
                       name: unitName.trim(),
                       brand: unitBrand.trim() || null,
                       location: unitLocation.trim() || null,
                       templateId: unitTemplateId,
+                      ...(unitCompany ? { company: unitCompany } : {}),
                   };
             const res = await fetch("/api/ga/equipment/units", {
                 method: isEdit ? "PATCH" : "POST",
@@ -460,7 +550,7 @@ export default function EquipmentSettingsPage() {
         } finally {
             setSavingUnit(false);
         }
-    }, [savingUnit, unitName, unitTemplateId, unitBrand, unitLocation, editingUnit, toast, fetchAll]);
+    }, [savingUnit, unitName, unitTemplateId, unitBrand, unitLocation, unitCompany, editingUnit, toast, fetchAll]);
 
     const toggleUnitActive = useCallback(
         async (unit: EquipmentUnit) => {
@@ -670,6 +760,172 @@ export default function EquipmentSettingsPage() {
         [confirm, topViewers, persistTopViewers]
     );
 
+    // ─── Produk & pemetaan alat ───
+
+    const createProduct = useCallback(async () => {
+        if (savingProduct || !newProductName.trim()) {
+            if (!newProductName.trim()) toast("Nama produk wajib diisi.", "warning");
+            return;
+        }
+        setSavingProduct(true);
+        try {
+            const res = await fetch("/api/ga/equipment/products", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ company: productCompany, name: newProductName.trim() }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menambah produk."));
+            toast("Produk ditambahkan.", "success");
+            setNewProductName("");
+            await fetchProducts(productCompany);
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal.", "error");
+            reportClientError("EquipmentSettings", "Product create failed", err);
+        } finally {
+            setSavingProduct(false);
+        }
+    }, [savingProduct, newProductName, productCompany, toast, fetchProducts]);
+
+    const deleteProduct = useCallback(
+        (product: EquipmentProduct) => {
+            confirm({
+                title: `Hapus produk "${product.name}"?`,
+                message: "Pemetaan alatnya ikut terhapus. Master alat tidak berubah.",
+                confirmLabel: "Ya, hapus",
+                cancelLabel: "Batal",
+                variant: "danger",
+                onConfirm: () => {
+                    void (async () => {
+                        try {
+                            const res = await fetch(`/api/ga/equipment/products/${product.id}`, { method: "DELETE" });
+                            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus produk."));
+                            toast("Produk dihapus.", "success");
+                            if (selectedProductId === product.id) {
+                                setSelectedProductId(null);
+                                setChecklist(null);
+                                setInitialChecked([]);
+                            }
+                            await fetchProducts(productCompany);
+                        } catch (err) {
+                            toast(err instanceof Error ? err.message : "Gagal menghapus.", "error");
+                        }
+                    })();
+                },
+            });
+        },
+        [confirm, toast, fetchProducts, productCompany, selectedProductId]
+    );
+
+    const toggleToolCheck = useCallback((toolId: string) => {
+        setChecklist((prev) =>
+            prev ? { ...prev, tools: prev.tools.map((t) => (t.id === toolId ? { ...t, checked: !t.checked } : t)) } : prev
+        );
+    }, []);
+
+    const saveChecklist = useCallback(async () => {
+        if (savingChecklist || !checklist) return;
+        setSavingChecklist(true);
+        try {
+            const res = await fetch(`/api/ga/equipment/products/${checklist.product.id}/tools`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ equipmentUnitIds: checklist.tools.filter((t) => t.checked).map((t) => t.id) }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan pemetaan."));
+            const json = await res.json();
+            setChecklist(json.data);
+            setInitialChecked((json.data.tools ?? []).filter((t: ProductToolRow) => t.checked).map((t: ProductToolRow) => t.id));
+            toast("Pemetaan alat disimpan.", "success");
+            await fetchProducts(productCompany);
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+            reportClientError("EquipmentSettings", "Checklist save failed", err);
+        } finally {
+            setSavingChecklist(false);
+        }
+    }, [savingChecklist, checklist, toast, fetchProducts, productCompany]);
+
+    const setUnitCompanyQuick = useCallback(
+        async (unitId: string, company: EquipmentCompanyFilter) => {
+            const unit = units.find((u) => u.id === unitId);
+            try {
+                const res = await fetch("/api/ga/equipment/units", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: unitId, company }),
+                });
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menetapkan perusahaan."));
+                toast(`Alat dikategorikan ke ${company}.`, "success");
+                await fetchAll();
+                if (unit) {
+                    setChecklist((prev) =>
+                        prev && prev.product.company === company && !prev.tools.some((t) => t.id === unitId)
+                            ? {
+                                  ...prev,
+                                  tools: [
+                                      ...prev.tools,
+                                      { id: unit.id, name: unit.name, brand: unit.brand, location: unit.location, checked: false },
+                                  ].sort((a, b) => a.name.localeCompare(b.name)),
+                                  totalCount: prev.totalCount + 1,
+                              }
+                            : prev
+                    );
+                }
+            } catch (err) {
+                toast(err instanceof Error ? err.message : "Gagal.", "error");
+            }
+        },
+        [units, toast, fetchAll]
+    );
+
+    const bulkSetCompany = useCallback(
+        async (company: EquipmentCompanyFilter) => {
+            if (bulkSelected.length === 0) {
+                toast("Pilih dulu alat yang akan dikategorikan.", "warning");
+                return;
+            }
+            setBulkSaving(true);
+            try {
+                const results = await Promise.all(
+                    bulkSelected.map(async (id) => {
+                        try {
+                            const res = await fetch("/api/ga/equipment/units", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id, company }),
+                            });
+                            return res.ok;
+                        } catch {
+                            return false;
+                        }
+                    })
+                );
+                const ok = results.filter(Boolean).length;
+                const fail = results.length - ok;
+                toast(
+                    fail === 0 ? `${ok} alat dikategorikan ke ${company}.` : `${ok} berhasil, ${fail} gagal.`,
+                    fail === 0 ? "success" : "warning"
+                );
+                const doneIds = new Set(bulkSelected.filter((_, i) => results[i]));
+                setBulkSelected([]);
+                await fetchAll();
+                setChecklist((prev) => {
+                    if (!prev || prev.product.company !== company) return prev;
+                    const existingIds = new Set(prev.tools.map((t) => t.id));
+                    const added = units
+                        .filter((u) => doneIds.has(u.id) && !existingIds.has(u.id))
+                        .map((u) => ({ id: u.id, name: u.name, brand: u.brand, location: u.location, checked: false }));
+                    if (added.length === 0) return prev;
+                    const tools = [...prev.tools, ...added].sort((a, b) => a.name.localeCompare(b.name));
+                    return { ...prev, tools, totalCount: tools.length };
+                });
+            } finally {
+                setBulkSaving(false);
+            }
+        },
+        [bulkSelected, units, toast, fetchAll]
+    );
+
     // ─── Render ───
 
     if (loading) {
@@ -695,16 +951,25 @@ export default function EquipmentSettingsPage() {
     }
 
     const activeTemplates = templates.filter((t) => t.isActive);
+    const uncategorizedUnits = units.filter((u) => u.isActive && !u.company);
+    const checkedIds = checklist?.tools.filter((t) => t.checked).map((t) => t.id) ?? [];
+    const checklistDirty =
+        checkedIds.length !== initialChecked.length || checkedIds.some((id) => !initialChecked.includes(id));
+    const filteredTools = (checklist?.tools ?? []).filter((t) => {
+        const q = toolQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${t.name} ${t.brand ?? ""} ${t.location ?? ""}`.toLowerCase().includes(q);
+    });
 
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
             <h1 className="text-2xl font-semibold text-foreground mb-1">Pengaturan Peralatan</h1>
             <p className="text-sm text-muted-foreground mb-6">
-                Kelola template checklist, unit alat, penugasan, dan anggota QC.
+                Kelola template checklist, unit alat, produk, penugasan, dan anggota QC.
             </p>
 
             <div className="flex gap-1 mb-6 border-b border-border">
-                {([["templates", "Template & Item"], ["units", "Alat / Unit"], ["assignments", "Penugasan"], ["atasan", "Atasan"]] as [Tab, string][]).map(([key, label]) => (
+                {([["templates", "Template & Item"], ["units", "Alat / Unit"], ["produk", "Produk"], ["assignments", "Penugasan"], ["atasan", "Atasan"]] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         onClick={() => setActiveTab(key)}
@@ -935,6 +1200,7 @@ export default function EquipmentSettingsPage() {
                                 <TableRow>
                                     <TableHead>Nama</TableHead>
                                     <TableHead>Template</TableHead>
+                                    <TableHead>Perusahaan</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Aksi</TableHead>
                                 </TableRow>
@@ -952,6 +1218,17 @@ export default function EquipmentSettingsPage() {
                                             </p>
                                         </TableCell>
                                         <TableCell>{unit.template.name}</TableCell>
+                                        <TableCell>
+                                            {unit.company ? (
+                                                <span
+                                                    className={`text-xs px-1.5 py-0.5 rounded font-medium ${unit.company === "WIG" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"}`}
+                                                >
+                                                    {unit.company}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">—</span>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <span
                                                 className={`text-xs px-1.5 py-0.5 rounded ${unit.isActive ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}
@@ -1336,6 +1613,262 @@ export default function EquipmentSettingsPage() {
                 </div>
             )}
 
+            {activeTab === "produk" && (
+                <div className="space-y-6">
+                    <div className="bg-card border border-border rounded-lg p-4">
+                        <h2 className="text-base font-medium mb-1">Alat Belum Berkategori</h2>
+                        <p className="text-xs text-muted-foreground mb-3">
+                            Alat aktif yang belum dikategorikan tidak tampil di checklist produk maupun
+                            portal employee. Kategorikan dulu sebelum memetakan.
+                        </p>
+                        {uncategorizedUnits.length === 0 ? (
+                            <FeedbackMessage variant="success">
+                                Semua alat aktif sudah berkategori perusahaan.
+                            </FeedbackMessage>
+                        ) : (
+                            <>
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setBulkSelected(
+                                                bulkSelected.length === uncategorizedUnits.length
+                                                    ? []
+                                                    : uncategorizedUnits.map((u) => u.id)
+                                            )
+                                        }
+                                        className="text-xs font-medium text-primary hover:underline min-h-[44px] px-2"
+                                    >
+                                        {bulkSelected.length === uncategorizedUnits.length ? "Batalkan semua" : `Pilih semua (${uncategorizedUnits.length})`}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void bulkSetCompany("WIG")}
+                                        disabled={bulkSaving || bulkSelected.length === 0}
+                                        className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
+                                    >
+                                        {bulkSaving ? "Menyimpan..." : `Jadikan WIG (${bulkSelected.length})`}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void bulkSetCompany("MKI")}
+                                        disabled={bulkSaving || bulkSelected.length === 0}
+                                        className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
+                                    >
+                                        {bulkSaving ? "Menyimpan..." : `Jadikan MKI (${bulkSelected.length})`}
+                                    </button>
+                                </div>
+                                <ul className="space-y-1 max-h-[320px] overflow-y-auto">
+                                    {uncategorizedUnits.map((u) => (
+                                        <li
+                                            key={u.id}
+                                            className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                                        >
+                                            <label className="flex items-center gap-2 min-w-0 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={bulkSelected.includes(u.id)}
+                                                    onChange={(e) =>
+                                                        setBulkSelected((prev) =>
+                                                            e.target.checked
+                                                                ? [...prev, u.id]
+                                                                : prev.filter((id) => id !== u.id)
+                                                        )
+                                                    }
+                                                    className="rounded border-border shrink-0"
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block text-sm font-medium truncate">{u.name}</span>
+                                                    <span className="block text-xs text-muted-foreground truncate">
+                                                        {[u.brand, u.location].filter(Boolean).join(" · ") || "—"}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            <span className="flex gap-1 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void setUnitCompanyQuick(u.id, "WIG")}
+                                                    disabled={bulkSaving}
+                                                    className="px-2 py-1 text-[11px] font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[36px]"
+                                                >
+                                                    WIG
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void setUnitCompanyQuick(u.id, "MKI")}
+                                                    disabled={bulkSaving}
+                                                    className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 min-h-[36px]"
+                                                >
+                                                    MKI
+                                                </button>
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="bg-card border border-border rounded-lg p-4">
+                        <h2 className="text-base font-medium mb-1">Produk per Perusahaan</h2>
+                        <p className="text-xs text-muted-foreground mb-3">
+                            Kelola nama produk tiap perusahaan, lalu petakan alat yang dipakai masing-masing produk.
+                        </p>
+                        <div className="flex gap-1 mb-3 border-b border-border">
+                            {(["WIG", "MKI"] as EquipmentCompanyFilter[]).map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setProductCompany(c)}
+                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
+                                        productCompany === c
+                                            ? "border-primary text-primary"
+                                            : "border-transparent text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                            <input
+                                type="text"
+                                value={newProductName}
+                                onChange={(e) => setNewProductName(e.target.value)}
+                                placeholder={`Nama produk ${productCompany} baru`}
+                                maxLength={200}
+                                className={`${inputClass} flex-1`}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => void createProduct()}
+                                disabled={savingProduct}
+                                className="shrink-0 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
+                            >
+                                {savingProduct ? "Menyimpan..." : "Tambah"}
+                            </button>
+                        </div>
+                        {productError && (
+                            <FeedbackMessage variant="error" className="mb-3">
+                                {productError}{" "}
+                                <button onClick={() => void fetchProducts(productCompany)} className="underline">
+                                    Coba lagi
+                                </button>
+                            </FeedbackMessage>
+                        )}
+                        {products.length === 0 && !productError ? (
+                            <p className="text-sm text-muted-foreground">
+                                Belum ada produk {productCompany}. Tambahkan produk pertama.
+                            </p>
+                        ) : (
+                            <ul className="space-y-2">
+                                {products.map((p) => (
+                                    <li
+                                        key={p.id}
+                                        className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                                            selectedProductId === p.id ? "border-primary" : "border-border"
+                                        }`}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedProductId(p.id);
+                                                setToolQuery("");
+                                                void fetchChecklist(p.id);
+                                            }}
+                                            className="min-w-0 text-left flex-1 min-h-[44px]"
+                                        >
+                                            <span className="block text-sm font-medium truncate">{p.name}</span>
+                                            <span className="block text-xs text-muted-foreground">
+                                                {p._count.tools} alat terpetakan
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteProduct(p)}
+                                            className="shrink-0 text-xs text-destructive hover:text-destructive/80 min-h-[44px] px-2"
+                                        >
+                                            Hapus
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+
+                    {selectedProductId && checklist && (
+                        <div className="bg-card border border-border rounded-lg p-4">
+                            <h2 className="text-base font-medium mb-1">Checklist Alat — {checklist.product.name}</h2>
+                            <p className="text-xs text-muted-foreground mb-3" aria-live="polite">
+                                {checklist.tools.filter((t) => t.checked).length} dari {checklist.totalCount} alat tercentang
+                                {checklistDirty ? " · ada perubahan belum disimpan" : ""}
+                            </p>
+                            <div className="mb-3">
+                                <EquipmentSearchField
+                                    id="cari-alat-produk"
+                                    label="Cari alat"
+                                    value={toolQuery}
+                                    onChange={setToolQuery}
+                                    placeholder="Cari nama, merek, atau lokasi…"
+                                />
+                            </div>
+                            {checklistLoading ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : checklistError ? (
+                                <FeedbackMessage variant="error">
+                                    {checklistError}{" "}
+                                    <button onClick={() => void fetchChecklist(selectedProductId)} className="underline">
+                                        Coba lagi
+                                    </button>
+                                </FeedbackMessage>
+                            ) : checklist.totalCount === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Belum ada alat berkategori {checklist.product.company}. Kategorikan alat dulu di
+                                    bagian atas atau tab Alat / Unit.
+                                </p>
+                            ) : filteredTools.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Tidak ada alat yang cocok dengan pencarian.
+                                </p>
+                            ) : (
+                                <ul className="space-y-1 max-h-[360px] overflow-y-auto mb-3">
+                                    {filteredTools.map((t) => (
+                                        <li key={t.id}>
+                                            <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer hover:bg-accent/50 min-h-[48px]">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={t.checked}
+                                                    onChange={() => toggleToolCheck(t.id)}
+                                                    className="rounded border-border shrink-0"
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block text-sm font-medium truncate">{t.name}</span>
+                                                    <span className="block text-xs text-muted-foreground truncate">
+                                                        {[t.brand, t.location].filter(Boolean).join(" · ") || "—"}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {!checklistLoading && !checklistError && checklist.totalCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => void saveChecklist()}
+                                    disabled={savingChecklist || !checklistDirty}
+                                    className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[48px]"
+                                >
+                                    {savingChecklist ? "Menyimpan..." : "Simpan Pemetaan"}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {showUnitModal && (
                 <AccessibleModal ariaLabel={editingUnit ? "Edit Unit Alat" : "Tambah Unit Alat"} onClose={() => setShowUnitModal(false)}>
                     <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
@@ -1378,6 +1911,18 @@ export default function EquipmentSettingsPage() {
                                     className={`${inputClass} mt-1`}
                                 />
                             </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium">Perusahaan</label>
+                            <select
+                                value={unitCompany}
+                                onChange={(e) => setUnitCompany(e.target.value)}
+                                className={`${inputClass} mt-1`}
+                            >
+                                <option value="">Belum dikategorikan</option>
+                                <option value="WIG">WIG</option>
+                                <option value="MKI">MKI</option>
+                            </select>
                         </div>
                         <div>
                             <label className="text-xs font-medium">Template</label>
