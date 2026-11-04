@@ -7,7 +7,7 @@ import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidence
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { EquipmentStatusBadge } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusBadge, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface DetailItem {
@@ -19,7 +19,7 @@ interface DetailItem {
 
 interface InspectionDetail {
     id: string;
-    unit: { id: string; name: string; brand: string | null; location: string | null };
+    unit: { id: string; name: string; brand: string | null; location: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     status: string;
     createdAt: string;
@@ -190,7 +190,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
             <div className="bg-card border border-border rounded-lg p-4 mb-4">
                 <div className="flex items-start justify-between gap-2">
                     <div>
-                        <h1 className="text-xl font-semibold text-foreground">{detail.unit.name}</h1>
+                        <h1 className="text-xl font-semibold text-foreground">{detail.unit.name} <EquipmentCompanyBadge company={detail.unit.company} /></h1>
                         <p className="text-sm text-muted-foreground mt-1">
                             {[detail.unit.brand, detail.unit.location].filter(Boolean).join(" · ") || "—"}
                         </p>

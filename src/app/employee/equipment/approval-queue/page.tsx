@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
-import { EquipmentStatusDot, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 
 type QueueStatus = "DONE" | "APPROVED" | "ALL";
@@ -13,7 +13,7 @@ type QueueStatus = "DONE" | "APPROVED" | "ALL";
 interface QueueRow {
     id: string;
     status: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     checkedByNameSnapshot: string | null;
     checkedAt: string | null;
@@ -366,7 +366,7 @@ export default function EquipmentApprovalQueuePage() {
                                 <div className="flex items-start gap-2.5">
                                     <EquipmentStatusDot status={row.status} />
                                     <div className="min-w-0 flex-1">
-                                        <p className="font-medium text-foreground truncate">{row.unit.name}</p>
+                                        <p className="font-medium text-foreground truncate">{row.unit.name} <EquipmentCompanyBadge company={row.unit.company} /></p>
                                         {row.unit.brand && <p className="text-xs text-muted-foreground truncate">{row.unit.brand}</p>}
                                         <p className="text-xs text-muted-foreground mt-1 truncate">
                                             Diajukan {stripGelar(row.startedBy.name)} · Diperiksa QC {stripGelar(row.checkedByNameSnapshot ?? "")} · {formatDateTime(row.checkedAt)}

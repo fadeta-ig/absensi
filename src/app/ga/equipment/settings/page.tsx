@@ -10,6 +10,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
 
 interface TemplateItem {
     id: string;
@@ -58,7 +59,7 @@ interface EquipmentAssignment {
     unitId: string | null;
     startsOnWibDate: string;
     endsOnWibDate: string | null;
-    unit: { id: string; name: string } | null;
+    unit: { id: string; name: string; company: "WIG" | "MKI" | null } | null;
     user: { id: string; employeeId: string | null; displayName: string };
 }
 
@@ -1306,7 +1307,7 @@ export default function EquipmentSettingsPage() {
                                         .filter((u) => u.isActive)
                                         .map((u) => (
                                             <option key={u.id} value={u.id}>
-                                                {u.name}
+                                                {u.name}{u.company ? ` (${u.company})` : ""}
                                             </option>
                                         ))}
                                 </select>
@@ -1367,7 +1368,9 @@ export default function EquipmentSettingsPage() {
                                                 {a.user.displayName ?? a.user.employeeId ?? "—"}
                                             </span>
                                             <span className="block text-xs text-muted-foreground truncate">
-                                                {a.unit ? a.unit.name : "Semua unit"} · {a.user.employeeId ?? ""} · {a.startsOnWibDate}
+                                                {a.unit ? a.unit.name : "Semua unit"}{" "}
+                                                {a.unit?.company ? <EquipmentCompanyBadge company={a.unit.company} /> : null}{" "}
+                                                · {a.user.employeeId ?? ""} · {a.startsOnWibDate}
                                                 {a.endsOnWibDate ? ` → ${a.endsOnWibDate}` : " → berjalan"}
                                             </span>
                                         </span>

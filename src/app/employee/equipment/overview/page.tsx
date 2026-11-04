@@ -6,11 +6,11 @@ import { AlertTriangle, Eye, Loader2, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
-import { EquipmentStatusBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusBadge, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 
 interface OverviewInspection {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     checkedBy: { employeeId: string; name: string } | null;
     checkedByNameSnapshot: string | null;
@@ -58,25 +58,27 @@ function isWibDateStr(v: unknown): v is string {
 }
 
 /** Filter terakhir yang dipakai (agar kembali dari detail tidak me-reset ke hari ini). */
-function loadSavedFilter(): { status: string; from: string; to: string } {
+function loadSavedFilter(): { status: string; from: string; to: string; company: string; productId: string } {
     const today = toInputDate(new Date());
-    const fallback = { status: "", from: today, to: today };
+    const fallback = { status: "", from: today, to: today, company: "", productId: "" };
     if (typeof window === "undefined") return fallback;
     try {
         const raw = window.sessionStorage.getItem(OVERVIEW_FILTER_KEY);
         if (!raw) return fallback;
-        const parsed = JSON.parse(raw) as { status?: unknown; from?: unknown; to?: unknown };
+        const parsed = JSON.parse(raw) as { status?: unknown; from?: unknown; to?: unknown; company?: unknown; productId?: unknown };
         return {
             status: typeof parsed.status === "string" ? parsed.status : "",
             from: isWibDateStr(parsed.from) ? parsed.from : today,
             to: isWibDateStr(parsed.to) ? parsed.to : today,
+            company: parsed.company === "WIG" || parsed.company === "MKI" ? parsed.company : "",
+            productId: typeof parsed.productId === "string" ? parsed.productId : "",
         };
     } catch {
         return fallback;
     }
 }
 
-function saveFilter(f: { status: string; from: string; to: string }) {
+function saveFilter(f: { status: string; from: string; to: string; company: string; productId: string }) {
     try {
         window.sessionStorage.setItem(OVERVIEW_FILTER_KEY, JSON.stringify(f));
     } catch {
@@ -90,6 +92,9 @@ export default function EmployeeEquipmentOverviewPage() {
     const [status, setStatus] = useState<string>(() => loadSavedFilter().status);
     const [from, setFrom] = useState<string>(() => loadSavedFilter().from);
     const [to, setTo] = useState<string>(() => loadSavedFilter().to);
+    const [company, setCompany] = useState<string>(() => loadSavedFilter().company);
+    const [productId, setProductId] = useState<string>(() => loadSavedFilter().productId);
+    const [products, setProducts] = useState<Array<{ id: string; name: string; company: string }>>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [forbidden, setForbidden] = useState(false);
@@ -105,15 +110,17 @@ export default function EmployeeEquipmentOverviewPage() {
     }, [inspections, query]);
 
     const fetchOverview = useCallback(
-        async (filters?: { status?: string; from?: string; to?: string }) => {
+        async (filters?: { status?: string; from?: string; to?: string; company?: string; productId?: string }) => {
             setLoading(true);
             setError(null);
             setForbidden(false);
             try {
                 const params = new URLSearchParams();
-                const f = filters ?? { status, from, to };
-                saveFilter({ status: f.status ?? "", from: f.from ?? "", to: f.to ?? "" });
+                const f = filters ?? { status, from, to, company, productId };
+                saveFilter({ status: f.status ?? "", from: f.from ?? "", to: f.to ?? "", company: f.company ?? "", productId: f.productId ?? "" });
                 if (f.status) params.set("status", f.status);
+                if (f.company) params.set("company", f.company);
+                if (f.productId) params.set("productId", f.productId);
                 if (f.from) params.set("from", f.from);
                 if (f.to) {
                     // Sampai tanggal inklusif: API memakai batas atas eksklusif.
@@ -139,7 +146,7 @@ export default function EmployeeEquipmentOverviewPage() {
                 setLoading(false);
             }
         },
-        [status, from, to]
+        [status, from, to, company, productId]
     );
 
     useEffect(() => {
@@ -147,12 +154,22 @@ export default function EmployeeEquipmentOverviewPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => {
+        void fetch("/api/employee/equipment/products")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json: unknown) => {
+                const data = (json as { data?: Array<{ id: string; name: string; company: string }> }).data;
+                if (Array.isArray(data)) setProducts(data);
+            })
+            .catch(() => undefined);
+    }, []);
+
     const showToday = useCallback(() => {
         const today = toInputDate(new Date());
         setFrom(today);
         setTo(today);
-        void fetchOverview({ status, from: today, to: today });
-    }, [fetchOverview, status]);
+        void fetchOverview({ status, from: today, to: today, company, productId });
+    }, [fetchOverview, status, company, productId]);
 
     return (
         <div className="mx-auto px-4 py-6">
@@ -201,6 +218,41 @@ export default function EmployeeEquipmentOverviewPage() {
                                             {s === "" ? "Semua status" : equipmentStatusLabel(s)}
                                         </option>
                                     ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="pantau-perusahaan" className="text-xs font-medium">Perusahaan</label>
+                                <select
+                                    id="pantau-perusahaan"
+                                    value={company}
+                                    onChange={(e) => {
+                                        setCompany(e.target.value);
+                                        setProductId("");
+                                    }}
+                                    className={`${inputClass} mt-1 min-h-[44px]`}
+                                >
+                                    <option value="">Semua perusahaan</option>
+                                    <option value="WIG">WIG</option>
+                                    <option value="MKI">MKI</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="pantau-produk" className="text-xs font-medium">Produk</label>
+                                <select
+                                    id="pantau-produk"
+                                    value={productId}
+                                    onChange={(e) => setProductId(e.target.value)}
+                                    className={`${inputClass} mt-1 min-h-[44px]`}
+                                >
+                                    <option value="">Semua produk</option>
+                                    {products
+                                        .filter((p) => !company || p.company === company)
+                                        .map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name}
+                                                {company ? "" : ` (${p.company})`}
+                                            </option>
+                                        ))}
                                 </select>
                             </div>
                             <div>
@@ -275,7 +327,7 @@ export default function EmployeeEquipmentOverviewPage() {
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
-                                            <p className="font-medium text-foreground truncate">{item.unit.name}</p>
+                                            <p className="font-medium text-foreground truncate">{item.unit.name} <EquipmentCompanyBadge company={item.unit.company} /></p>
                                             {item.unit.brand && (
                                                 <p className="text-xs text-muted-foreground">{item.unit.brand}</p>
                                             )}

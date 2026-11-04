@@ -9,7 +9,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
-import { EquipmentStatusDot, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 
@@ -28,8 +28,10 @@ interface MyUnit {
         name: string;
         brand: string | null;
         location: string | null;
+        company: "WIG" | "MKI" | null;
         template: { name: string };
         inspections: LastCheck[];
+        productTools: Array<{ product: { id: string; name: string; company: string } }>;
     };
 }
 
@@ -44,7 +46,7 @@ interface InspectionItem {
 
 interface InspectionDto {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     status: string;
     createdAt: string;
     submittedAt: string | null;
@@ -65,7 +67,7 @@ interface UnitHistoryRow {
     submittedAt: string | null;
     checkedAt: string | null;
     approvedAt: string | null;
-    unit: { id: string; name: string; brand: string | null; location: string | null };
+    unit: { id: string; name: string; brand: string | null; location: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     checkedByNameSnapshot: string | null;
     approvedByNameSnapshot: string | null;
@@ -132,6 +134,8 @@ export default function EmployeeEquipmentPage() {
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
     const [sortMode, setSortMode] = useState<SortMode>("NEVER_FIRST");
+    const [products, setProducts] = useState<Array<{ id: string; name: string; company: string }>>([]);
+    const [productFilter, setProductFilter] = useState("");
 
     // Tab Alat vs Riwayat Saya + mode lihat read-only (anti klik-diam-diam-jalan).
     const [mainTab, setMainTab] = useState<"alat" | "riwayat">("alat");
@@ -149,7 +153,9 @@ export default function EmployeeEquipmentPage() {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch("/api/employee/equipment/units");
+            const res = await fetch(
+                `/api/employee/equipment/units${productFilter ? `?productId=${encodeURIComponent(productFilter)}` : ""}`
+            );
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat unit alat."));
             const json = await res.json();
             setUnits(json.data ?? []);
@@ -160,10 +166,13 @@ export default function EmployeeEquipmentPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [productFilter]);
 
     useEffect(() => {
         void fetchUnits();
+    }, [fetchUnits]);
+
+    useEffect(() => {
         // Atasan murni (topViewer tanpa peran QC) tidak checklist — arahkan ke Pantau.
         void fetch("/api/employee/equipment/capabilities")
             .then((res) => (res.ok ? res.json() : null))
@@ -173,7 +182,15 @@ export default function EmployeeEquipmentPage() {
                 if (data?.canTopView === true && data?.canReview !== true) setIsTopOnly(true);
             })
             .catch(() => undefined);
-    }, [fetchUnits]);
+        // Daftar produk se-cakupan untuk filter (sekali saat mount).
+        void fetch("/api/employee/equipment/products")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json: unknown) => {
+                const data = (json as { data?: Array<{ id: string; name: string; company: string }> }).data;
+                if (Array.isArray(data)) setProducts(data);
+            })
+            .catch(() => undefined);
+    }, []);
 
     const checkedTodayCount = useMemo(() => {
         const today = wibToday();
@@ -190,7 +207,15 @@ export default function EmployeeEquipmentPage() {
             const u = entry.unit;
             const last = u.inspections[0];
             if (q) {
-                const hay = [u.name, u.brand ?? "", u.location ?? "", u.template.name].join(" ").toLowerCase();
+                const hay = [
+                    u.name,
+                    u.brand ?? "",
+                    u.location ?? "",
+                    u.template.name,
+                    ...u.productTools.map((t) => t.product.name),
+                ]
+                    .join(" ")
+                    .toLowerCase();
                 if (!hay.includes(q)) return false;
             }
             switch (statusFilter) {
@@ -437,8 +462,10 @@ export default function EmployeeEquipmentPage() {
                     name: row.unit.name,
                     brand: row.unit.brand ?? null,
                     location: (row.unit as { location?: string | null }).location ?? null,
+                    company: row.unit.company,
                     template: { name: "" },
                     inspections: [],
+                    productTools: [],
                 },
             });
             setInspection(null);
@@ -575,7 +602,9 @@ export default function EmployeeEquipmentPage() {
                 </button>
 
                 <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                    <h1 className="text-xl font-semibold text-foreground">{selectedUnit.unit.name}</h1>
+                    <h1 className="text-xl font-semibold text-foreground">
+                        {selectedUnit.unit.name} <EquipmentCompanyBadge company={selectedUnit.unit.company} />
+                    </h1>
                     <p className="text-sm text-muted-foreground mt-1">
                         {selectedUnit.unit.template.name}
                         {[selectedUnit.unit.brand, selectedUnit.unit.location].filter(Boolean).length > 0 &&
@@ -1000,8 +1029,28 @@ export default function EmployeeEquipmentPage() {
                         label="Cari alat"
                         value={query}
                         onChange={setQuery}
-                        placeholder="Cari nama, merek, lokasi, template..."
+                        placeholder="Cari nama, merek, lokasi, template, produk..."
                     />
+                    {products.length > 0 && (
+                        <div className="mt-2">
+                            <label htmlFor="filter-produk" className="sr-only">
+                                Filter produk
+                            </label>
+                            <select
+                                id="filter-produk"
+                                value={productFilter}
+                                onChange={(e) => setProductFilter(e.target.value)}
+                                className="w-full px-3 min-h-[44px] text-sm border border-border rounded-md bg-background text-foreground"
+                            >
+                                <option value="">Semua produk</option>
+                                {products.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name} ({p.company})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <div className="flex gap-2 mt-2 overflow-x-auto pb-1" role="group" aria-label="Filter status cek">
                         {STATUS_CHIPS.map((chip) => {
                             const active = statusFilter === chip.key;
@@ -1037,7 +1086,8 @@ export default function EmployeeEquipmentPage() {
 
             {mainTab === "alat" && units.length === 0 && !error && (
                 <div className="text-center py-12">
-                    <p className="text-muted-foreground">Anda belum ditugaskan ke alat mana pun.</p>
+                    <p className="text-muted-foreground">Anda belum ditugaskan ke alat mana pun, atau alat Anda belum dikategorikan.</p>
+                    <p className="text-sm text-muted-foreground mt-1">Hubungi admin GA bila Anda seharusnya memiliki akses.</p>
                 </div>
             )}
 
@@ -1050,6 +1100,7 @@ export default function EmployeeEquipmentPage() {
                         onClick={() => {
                             setQuery("");
                             setStatusFilter("ALL");
+                            setProductFilter("");
                         }}
                         className="mt-3 px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-primary border border-primary/40 rounded-md hover:bg-primary/10"
                     >
@@ -1071,8 +1122,16 @@ export default function EmployeeEquipmentPage() {
                         >
                             <EquipmentStatusDot status={last?.status ?? null} />
                             <div className="min-w-0 flex-1">
-                                <p className="font-medium text-foreground truncate">{entry.unit.name}</p>
+                                <p className="font-medium text-foreground truncate">
+                                    {entry.unit.name} <EquipmentCompanyBadge company={entry.unit.company} />
+                                </p>
                                 {meta && <p className="text-sm text-muted-foreground truncate">{meta}</p>}
+                                {entry.unit.productTools.length > 0 && (
+                                    <p className="text-xs text-muted-foreground truncate">
+                                        Produk: {entry.unit.productTools.slice(0, 2).map((t) => t.product.name).join(", ")}
+                                        {entry.unit.productTools.length > 2 ? ` +${entry.unit.productTools.length - 2}` : ""}
+                                    </p>
+                                )}
                                 <p className={`text-xs mt-0.5 truncate ${last ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}`}>
                                     {last
                                         ? `Terakhir diperiksa ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`

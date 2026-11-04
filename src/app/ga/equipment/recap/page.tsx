@@ -7,11 +7,13 @@ import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
+import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface RecapUnitOption {
     id: string;
     name: string;
+    company: "WIG" | "MKI" | null;
 }
 
 interface RecapSummary {
@@ -24,7 +26,7 @@ interface RecapSummary {
 
 interface RecapInspection {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     status: string;
     createdAt: string;
@@ -39,7 +41,7 @@ interface RecapDetailItem {
 
 interface RecapDetail {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     status: string;
     createdAt: string;
@@ -96,6 +98,9 @@ export default function EquipmentRecapPage() {
     const [status, setStatus] = useState<string>("");
     const [from, setFrom] = useState("");
     const [to, setTo] = useState("");
+    const [company, setCompany] = useState("");
+    const [productId, setProductId] = useState("");
+    const [products, setProducts] = useState<Array<{ id: string; name: string; company: string }>>([]);
     const [summary, setSummary] = useState<RecapSummary | null>(null);
     const [inspections, setInspections] = useState<RecapInspection[]>([]);
     const [loading, setLoading] = useState(true);
@@ -103,15 +108,17 @@ export default function EquipmentRecapPage() {
     const [forbidden, setForbidden] = useState(false);
 
     const fetchRecap = useCallback(
-        async (filters?: { unitId?: string; status?: string; from?: string; to?: string }) => {
+        async (filters?: { unitId?: string; status?: string; from?: string; to?: string; company?: string; productId?: string }) => {
             setLoading(true);
             setError(null);
             setForbidden(false);
             try {
                 const params = new URLSearchParams();
-                const f = filters ?? { unitId, status, from, to };
+                const f = filters ?? { unitId, status, from, to, company, productId };
                 if (f.unitId) params.set("unitId", f.unitId);
                 if (f.status) params.set("status", f.status);
+                if (f.company) params.set("company", f.company);
+                if (f.productId) params.set("productId", f.productId);
                 if (f.from) params.set("from", f.from);
                 if (f.to) params.set("to", f.to);
                 const query = params.toString();
@@ -132,7 +139,7 @@ export default function EquipmentRecapPage() {
                 setLoading(false);
             }
         },
-        [unitId, status, from, to]
+        [unitId, status, from, to, company, productId]
     );
 
     useEffect(() => {
@@ -141,12 +148,33 @@ export default function EquipmentRecapPage() {
                 const res = await fetch("/api/ga/equipment/units");
                 if (res.ok) {
                     const json = await res.json();
-                    setUnitOptions((json.data ?? []).map((u: { id: string; name: string }) => ({ id: u.id, name: u.name })));
+                    setUnitOptions(
+                        (json.data ?? []).map((u: { id: string; name: string; company?: string | null }) => ({
+                            id: u.id,
+                            name: u.name,
+                            company: u.company ?? null,
+                        }))
+                    );
                 }
             } catch (err) {
                 reportClientError("EquipmentRecap", "Unit options load failed", err);
             }
-            await fetchRecap({ unitId: "", status: "", from: "", to: "" });
+            try {
+                const [wigRes, mkiRes] = await Promise.all([
+                    fetch("/api/ga/equipment/products?company=WIG"),
+                    fetch("/api/ga/equipment/products?company=MKI"),
+                ]);
+                const list: Array<{ id: string; name: string; company: string }> = [];
+                for (const res of [wigRes, mkiRes]) {
+                    if (!res.ok) continue;
+                    const json = await res.json();
+                    if (Array.isArray(json.data)) list.push(...json.data);
+                }
+                setProducts(list);
+            } catch (err) {
+                reportClientError("EquipmentRecap", "Product options load failed", err);
+            }
+            await fetchRecap({ unitId: "", status: "", from: "", to: "", company: "", productId: "" });
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -160,7 +188,9 @@ export default function EquipmentRecapPage() {
         setStatus("");
         setFrom("");
         setTo("");
-        void fetchRecap({ unitId: "", status: "", from: "", to: "" });
+        setCompany("");
+        setProductId("");
+        void fetchRecap({ unitId: "", status: "", from: "", to: "", company: "", productId: "" });
     }, [fetchRecap]);
 
     const [detailId, setDetailId] = useState<string | null>(null);
@@ -206,8 +236,8 @@ export default function EquipmentRecapPage() {
         const { from: f, to: t } = todayRange();
         setFrom(f);
         setTo(t);
-        void fetchRecap({ unitId, status, from: f, to: t });
-    }, [fetchRecap, unitId, status]);
+        void fetchRecap({ unitId, status, from: f, to: t, company, productId });
+    }, [fetchRecap, unitId, status, company, productId]);
 
     return (
         <div className="max-w-4xl mx-auto px-4 py-6">
@@ -243,7 +273,7 @@ export default function EquipmentRecapPage() {
                                     <option value="">Semua unit</option>
                                     {unitOptions.map((u) => (
                                         <option key={u.id} value={u.id}>
-                                            {u.name}
+                                            {u.name}{u.company ? ` (${u.company})` : ""}
                                         </option>
                                     ))}
                                 </select>
@@ -256,6 +286,35 @@ export default function EquipmentRecapPage() {
                                             {s === "" ? "Semua status" : (STATUS_LABEL[s] ?? s)}
                                         </option>
                                     ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium">Perusahaan</label>
+                                <select
+                                    value={company}
+                                    onChange={(e) => {
+                                        setCompany(e.target.value);
+                                        setProductId("");
+                                    }}
+                                    className={`${inputClass} mt-1`}
+                                >
+                                    <option value="">Semua perusahaan</option>
+                                    <option value="WIG">WIG</option>
+                                    <option value="MKI">MKI</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium">Produk</label>
+                                <select value={productId} onChange={(e) => setProductId(e.target.value)} className={`${inputClass} mt-1`}>
+                                    <option value="">Semua produk</option>
+                                    {products
+                                        .filter((p) => !company || p.company === company)
+                                        .map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name}
+                                                {company ? "" : ` (${p.company})`}
+                                            </option>
+                                        ))}
                                 </select>
                             </div>
                             <div>
@@ -353,7 +412,7 @@ export default function EquipmentRecapPage() {
                                     {inspections.map((item) => (
                                         <TableRow key={item.id}>
                                             <TableCell>
-                                                <p className="font-medium text-foreground">{item.unit.name}</p>
+                                                <p className="font-medium text-foreground">{item.unit.name} <EquipmentCompanyBadge company={item.unit.company} /></p>
                                                 {item.unit.brand && (
                                                     <p className="text-xs text-muted-foreground">{item.unit.brand}</p>
                                                 )}
@@ -399,7 +458,7 @@ export default function EquipmentRecapPage() {
                 <AccessibleModal ariaLabel="Detail inspeksi peralatan" onClose={closeDetail} className="!max-w-2xl !p-6">
                     <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
                         <div>
-                            <h2 className="modal-title">{detail ? detail.unit.name : "Memuat..."}</h2>
+                            <h2 className="modal-title">{detail ? <>{detail.unit.name} <EquipmentCompanyBadge company={detail.unit.company} /></> : "Memuat..."}</h2>
                             {detail && (
                                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
                                     {detail.startedBy.name} ·{" "}

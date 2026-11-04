@@ -58,3 +58,19 @@ export function EquipmentStatusDot({ status }: { status: string | null }) {
         />
     );
 }
+
+/** Badge perusahaan pemilik alat (WIG/MKI). Null = belum dikategorikan (tak tampil). */
+export function EquipmentCompanyBadge({ company }: { company: string | null | undefined }) {
+    if (!company) return null;
+    return (
+        <span
+            className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                company === "WIG"
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                    : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+            }`}
+        >
+            {company}
+        </span>
+    );
+}

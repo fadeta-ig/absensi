@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, FileCheck2, RefreshCw } from "lucide-react";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
-import { EquipmentStatusDot } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusDot, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
@@ -21,7 +21,7 @@ interface ApprovalItem {
 
 interface ApprovalDto {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     status: string;
     submittedAt: string | null;
@@ -240,7 +240,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                                     <div className="flex items-start gap-2">
                                         <EquipmentStatusDot status={stats.attention ? "OPEN" : "SUBMITTED"} />
                                         <div className="min-w-0 flex-1">
-                                            <h3 className="text-base font-bold text-[var(--text-primary)] truncate">{task.unit.name}</h3>
+                                            <h3 className="text-base font-bold text-[var(--text-primary)] truncate">{task.unit.name} <EquipmentCompanyBadge company={task.unit.company} /></h3>
                                             {task.unit.brand && (
                                                 <p className="text-xs text-[var(--text-muted)]">{task.unit.brand}</p>
                                             )}
