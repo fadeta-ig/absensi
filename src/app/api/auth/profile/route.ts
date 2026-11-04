@@ -2,21 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, serverErrorResponse, validateBody } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import { unlink } from "fs/promises";
-import {
-    AvatarUploadError,
-    parseAvatarDataUrl,
-    resolveAvatarLimitBytes,
-    resolveAvatarPath,
-    saveAvatarBuffer,
-} from "@/lib/services/avatarService";
-import { avatarUrlSchema } from "@/lib/validations/validationSchemas";
 
-/** Schema validasi untuk update profil mandiri karyawan */
-const profileUpdateSchema = z.object({
-    phone: z.string().min(6, "Nomor HP minimal 6 digit").max(20, "Nomor HP terlalu panjang").optional(),
-    avatarUrl: avatarUrlSchema.nullable().optional(),
-});
+/**
+ * Schema validasi untuk update profil mandiri karyawan.
+ * Hanya phone — foto avatar dikelola HR (WIG001) via PUT /api/employees/[id]/avatar.
+ * Strict: pengiriman field lain (mis. avatarUrl) ditolak 400.
+ */
+const profileUpdateSchema = z
+    .object({
+        phone: z.string().min(6, "Nomor HP minimal 6 digit").max(20, "Nomor HP terlalu panjang").optional(),
+    })
+    .strict();
 
 export type ProfileUpdateBody = z.infer<typeof profileUpdateSchema>;
 
@@ -91,44 +87,13 @@ export async function PUT(request: NextRequest) {
         const result = await validateBody(request, profileUpdateSchema);
         if ("error" in result) return result.error;
 
-        const { phone, avatarUrl: avatarInput } = result.data;
+        const { phone } = result.data;
 
-        // Guard: Karyawan hanya bisa update data dirinya sendiri
-        // Tidak ada field yang bisa diubah di luar phone dan avatarUrl
-        let avatarUrl: string | null | undefined;
-        let avatarPath: string | null | undefined;
-        if (avatarInput !== undefined) {
-            if (avatarInput === null) {
-                avatarUrl = null;
-                avatarPath = null;
-            } else if (avatarInput.startsWith("data:")) {
-                // Base64 valid → simpan ke storage/avatars/{employeeId}/{uuid}.ext,
-                // balas URL serve privat; klien render opaque via avatarUrl.
-                const maxBytes = await resolveAvatarLimitBytes();
-                const parsed = parseAvatarDataUrl(avatarInput, maxBytes);
-                const saved = await saveAvatarBuffer(session.employeeId, parsed.buffer, parsed.mime, maxBytes);
-                avatarUrl = saved.serveUrl;
-                avatarPath = saved.relativePath;
-            } else {
-                // URL https:// eksternal tetap disimpan apa adanya; path dikosongkan.
-                avatarUrl = avatarInput;
-                avatarPath = null;
-            }
-        }
-
-        const previous = avatarPath !== undefined
-            ? await prisma.employee.findUnique({
-                where: { employeeId: session.employeeId },
-                select: { avatarPath: true },
-            })
-            : null;
-
+        // Guard: Karyawan hanya bisa update data dirinya sendiri (phone saja).
         const updated = await prisma.employee.update({
             where: { employeeId: session.employeeId },
             data: {
                 ...(phone !== undefined && { phone }),
-                ...(avatarUrl !== undefined && { avatarUrl }),
-                ...(avatarPath !== undefined && { avatarPath }),
             },
             select: {
                 employeeId: true,
@@ -137,26 +102,12 @@ export async function PUT(request: NextRequest) {
             },
         });
 
-        // Best-effort: hapus berkas avatar lama yang sudah diganti/dikosongkan.
-        const stalePath = previous?.avatarPath;
-        if (stalePath && stalePath !== avatarPath) {
-            const [staleOwner, ...rest] = stalePath.split("/");
-            const staleFile = rest.join("/");
-            const staleAbsolute = staleOwner && staleFile ? resolveAvatarPath(staleOwner, staleFile) : null;
-            if (staleAbsolute) {
-                await unlink(staleAbsolute).catch(() => undefined);
-            }
-        }
-
         return NextResponse.json({
             success: true,
             message: "Profil berhasil diperbarui",
             data: updated,
         });
     } catch (err) {
-        if (err instanceof AvatarUploadError) {
-            return NextResponse.json({ error: err.message }, { status: 400 });
-        }
         return serverErrorResponse("ProfilePUT", err);
     }
 }

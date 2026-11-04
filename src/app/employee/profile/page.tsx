@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
     User, Phone, Mail, Briefcase, Building2, Calendar,
-    Camera, Save, Loader2, AlertCircle,
+    Save, Loader2, AlertCircle,
     Shield, Lock, IdCard, Users, ChevronDown, LogOut, ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
@@ -115,15 +115,14 @@ export default function ProfilePage() {
     const toast = useToast();
     const confirm = useConfirm();
     const { logout, loggingOut } = useEmployeeLogout();
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Editable fields
     const [phone, setPhone] = useState("");
+    // Foto tampil read-only (diatur HR); avatarPreview hanya cerminan server.
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-    const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
 
     const [saving, setSaving] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
@@ -173,30 +172,6 @@ export default function ProfilePage() {
         setIsDirty(true);
     };
 
-    // ── Avatar Upload Handler ──────────────────────────────────────────────────
-    const handleAvatarChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (file.size > 1 * 1024 * 1024) {
-            toast("Ukuran foto maksimal 1MB", "warning");
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setAvatarPreview(base64);
-            setAvatarBase64(base64);
-            setIsDirty(true);
-        };
-        reader.onerror = () => {
-            reportClientError("EmployeeProfilePage", "Gagal membaca file foto profil", reader.error ?? "FileReader error");
-            toast("Gagal membaca file foto", "error");
-        };
-        reader.readAsDataURL(file);
-    }, [toast]);
-
     // ── Save Handler ───────────────────────────────────────────────────────────
     const handleSave = async () => {
         if (!isDirty) return;
@@ -208,7 +183,6 @@ export default function ProfilePage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     phone: phone || undefined,
-                    avatarUrl: avatarBase64 ?? undefined,
                 }),
             });
 
@@ -220,11 +194,10 @@ export default function ProfilePage() {
 
             if (data.success) {
                 setIsDirty(false);
-                setAvatarBase64(null);
                 toast("Profil berhasil disimpan!", "success");
                 // Update local state tanpa refetch
                 if (profile) {
-                    setProfile({ ...profile, phone, avatarUrl: avatarPreview });
+                    setProfile({ ...profile, phone });
                 }
             } else {
                 toast(data.error ?? "Gagal menyimpan profil", "error");
@@ -304,7 +277,7 @@ export default function ProfilePage() {
                     {/* ── Avatar + Nama ──────────────────────────────────────────── */}
                     <div className="card p-5">
                         <div className="flex items-start gap-5">
-                            {/* Avatar with upload trigger */}
+                            {/* Avatar read-only (diatur HR) */}
                             <div className="relative shrink-0">
                                 <div className="w-20 h-20 rounded-2xl bg-[var(--primary)]/10 overflow-hidden flex items-center justify-center">
                                     {avatarPreview
@@ -314,21 +287,6 @@ export default function ProfilePage() {
                                         </span>
                                     }
                                 </div>
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-[var(--primary)] text-white rounded-full flex items-center justify-center shadow-md hover:bg-[var(--primary)]/90 transition-colors"
-                                    title="Ganti foto profil"
-                                    aria-label="Ganti foto profil"
-                                >
-                                    <Camera className="w-3.5 h-3.5" />
-                                </button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp"
-                                    className="hidden"
-                                    onChange={handleAvatarChange}
-                                />
                             </div>
 
                             {/* Info */}
@@ -349,7 +307,7 @@ export default function ProfilePage() {
                                     </span>
                                 </div>
                                 <p className="text-xs text-[var(--text-muted)] mt-1.5">
-                                    Foto maks 1MB (JPG/PNG/WebP)
+                                    Foto profil resmi diatur oleh HR.
                                 </p>
                             </div>
                         </div>

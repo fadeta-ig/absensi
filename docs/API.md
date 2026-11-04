@@ -77,7 +77,7 @@ export const POST = apiGuard(
 | `/api/auth/login` | `POST` | Publik | Otentikasi username/password, menyetel cookie `session`. |
 | `/api/auth/logout` | `POST` | Publik / Auth | Menghapus cookie `session` dan mengakhiri sesi. |
 | `/api/auth/me` | `GET` | Autentikasi | Mengambil identitas sesi, daftar role, dan daftar permissions aktif. |
-| `/api/auth/profile` | `GET`, `PUT` | Autentikasi | Membaca dan memperbarui profil pribadi pengguna yang sedang login. |
+| `/api/auth/profile` | `GET`, `PUT` | Autentikasi | Membaca profil pribadi; `PUT` hanya `phone` (foto avatar dikelola HR, kirim field lain → `400`). |
 | `/api/auth/change-password` | `POST` | Autentikasi | Mengganti kata sandi dan menaikkan nilai `session_version`. |
 | `/api/auth/send-password` | `POST` | `users:manage` | Mengirimkan kredensial akun baru via email SMTP ke pegawai terkait. |
 | `/api/auth/passkeys/register-options` | `POST` | Autentikasi | Menerbitkan tantangan pendaftaran perangkat passkey. |
@@ -111,6 +111,7 @@ export const POST = apiGuard(
 | `/api/employees/[id]` | `GET`, `PUT`, `DELETE`| `employees:manage` | Detail data lengkap, pembaruan biodata, dan arsip data karyawan. |
 | `/api/employees/[id]/documents`| `GET`, `POST` | `employees:documents` | Pengelolaan dokumen arsip kepegawaian (KTP, Ijazah, CV). |
 | `/api/employees/[id]/status` | `PUT` | `employees:status` | Mengubah status kerja pegawai (Permanen, Probation, Resign) & riwayat. |
+| `/api/employees/[id]/avatar` | `PUT` | WIG001 + `hr.manage` | Unggah/hapus PAS foto karyawan (`{avatarUrl: data-URL JPG/PNG/WebP \| null}`); berkas lama tidak dihapus; audit `UPDATE_AVATAR`. |
 | `/api/employees/import` | `POST` | `employees:import` | Batch import data pegawai dari file lembar kerja Excel. |
 | `/api/employees/import/template`| `GET` | `employees:import` | Mengunduh template spreadsheet resmi untuk import data massal. |
 

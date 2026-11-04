@@ -21,6 +21,10 @@ Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **P
 - **Atomic Permissions**: Otorisasi internal didasarkan pada kumpulan izin aktif (`hr.manage`, `ga.manage`, `employee.self`, `asset.read`, dll.); endpoint attendance menggabungkan permission HR dan relasi employee aktif.
 - **Manajemen Akun HR**: HR Admin dapat membuat akun pengguna baru, mengatur role, dan memicu pengiriman kredensial awal secara otomatis melalui email SMTP.
 
+### C. Profil & Foto Karyawan
+- **Foto Formal milik HR**: Hanya WIG001 yang dapat mengunggah/menghapus PAS foto karyawan via form create/edit employee (`PUT /api/employees/[id]/avatar`, data-URL JPG/PNG/WebP ±2MB atau `null`); berkas lama tidak dihapus otomatis. Upload WIG001 melewati crop 1:1 + zoom (512px JPEG) di klien lalu normalisasi Sharp di server (orientasi EXIF, ≤1024px, JPEG q85, metadata dibuang).
+- **Profil mandiri read-only foto**: Karyawan melihat fotonya di portal tetapi tidak dapat mengubahnya (`PUT /api/auth/profile` hanya menerima `phone`; field lain ditolak `400`).
+
 ---
 
 ## 2. Modul Kehadiran (Attendance)

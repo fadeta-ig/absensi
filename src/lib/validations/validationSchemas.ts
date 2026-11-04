@@ -77,6 +77,16 @@ export const avatarUrlSchema = z
     .max(AVATAR_DATA_URL_MAX_LENGTH, "URL avatar terlalu panjang.")
     .refine(isAllowedAvatarUrl, "URL avatar tidak valid. Gunakan URL https:// atau gambar jpeg/png/webp.");
 
+/**
+ * Upload avatar oleh HR (WIG001): hanya file gambar (data-URL) atau null untuk hapus.
+ * URL https:// eksternal tidak diterima — foto karyawan wajib berkas PAS foto.
+ */
+export const hrAvatarUploadSchema = z.object({
+    avatarUrl: avatarUrlSchema
+        .refine((v) => v.startsWith("data:"), "HR wajib mengunggah file gambar (JPG/PNG/WebP).")
+        .nullable(),
+});
+
 /* ───────────────────── Attendance ───────────────────── */
 
 const locationSchema = z.object({
@@ -176,7 +186,7 @@ export const employeeCreateSchema = z.object({
         componentId: z.string().min(1, "Component ID wajib diisi"),
         amount: z.number().min(0, "Amount tidak boleh negatif"),
     })).optional().default([]),
-    avatarUrl: z.string().nullable().optional(),
+    // Foto profil dikelola hanya via PUT /api/employees/[id]/avatar (WIG001).
     ...employeeExtendedFields,
     employmentType: z.enum(["PERMANENT", "CONTRACT", "PROBATION", "INTERN"]).optional().default("PERMANENT"),
 }).superRefine(validateEmployeeDates);
@@ -206,8 +216,7 @@ export const employeeUpdateSchema = z.object({
         componentId: z.string().min(1),
         amount: z.number().min(0),
     })).optional(),
-    // Foto profil
-    avatarUrl: z.string().nullable().optional(),
+    // Foto profil dikelola hanya via PUT /api/employees/[id]/avatar (WIG001).
     ...employeeExtendedFields,
     employmentType: z.enum(["PERMANENT", "CONTRACT", "PROBATION", "INTERN"]).optional(),
     // ⛔ DILARANG via schema ini: role akun, password, faceDescriptor, employeeId

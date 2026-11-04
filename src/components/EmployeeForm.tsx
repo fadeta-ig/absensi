@@ -13,6 +13,7 @@ import { PayrollSection } from "./employee-form/PayrollSection";
 import { LocationSection } from "./employee-form/LocationSection";
 import { PrivateDataSection } from "./employee-form/PrivateDataSection";
 import { EmployeeDocumentManager } from "./employee-form/EmployeeDocumentManager";
+import { AvatarSection } from "./employee-form/AvatarSection";
 
 
 import { useFormDraft } from "@/hooks/useFormDraft";
@@ -33,6 +34,10 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const toast = useToast();
+
+    // Foto formal HR — di luar draft (hindari base64 besar di localStorage).
+    const [avatarPending, setAvatarPending] = useState<string | null>(null);
+    const [avatarCleared, setAvatarCleared] = useState(false);
 
     // Master data states
     const [shifts, setShifts] = useState<WorkShift[]>([]);
@@ -181,6 +186,26 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
             if (res.ok) {
                 clearDraft();
                 const data = await res.json();
+                // Foto formal HR (opsional): diunggah setelah employee tersimpan.
+                const savedId: string | undefined = isEdit ? initialData?.id : data?.id;
+                if ((avatarPending || avatarCleared) && savedId) {
+                    try {
+                        const avatarRes = await fetch(`/api/employees/${savedId}/avatar`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ avatarUrl: avatarPending ?? null }),
+                        });
+                        if (!avatarRes.ok) throw new Error(await getResponseErrorMessage(avatarRes, "Gagal menyimpan foto."));
+                        setAvatarPending(null);
+                        setAvatarCleared(false);
+                        toast("Foto karyawan tersimpan.", "success");
+                    } catch (avatarErr) {
+                        reportClientError("EmployeeForm", "Gagal menyimpan foto karyawan", avatarErr, { isEdit });
+                        toast(`Data karyawan tersimpan, tetapi foto gagal: ${avatarErr instanceof Error ? avatarErr.message : "coba lagi via Edit."}`, "warning");
+                    }
+                } else if ((avatarPending || avatarCleared) && !savedId) {
+                    toast("Data karyawan tersimpan, tetapi foto tidak dapat diunggah (ID tidak ditemukan).", "warning");
+                }
                 if (data._emailWarning) {
                     toast("Karyawan ditambahkan, namun gagal mengirim email password. Silakan kirim manual.", "warning");
                 } else {
@@ -305,6 +330,17 @@ export default function EmployeeForm({ initialData, isEdit }: Props) {
             </div>
 
             <PrivateDataSection form={form} setForm={setForm} />
+
+            <AvatarSection
+                employeeName={form.name}
+                currentUrl={initialData?.avatarUrl ?? null}
+                pendingDataUrl={avatarPending}
+                cleared={avatarCleared}
+                disabled={loading}
+                onSelect={(dataUrl) => { setAvatarPending(dataUrl); setAvatarCleared(false); }}
+                onClearRequest={() => { setAvatarCleared(true); setAvatarPending(null); }}
+                onCancelPending={() => { setAvatarPending(null); setAvatarCleared(false); }}
+            />
 
             {isEdit && initialData?.id && (
                 <EmployeeDocumentManager employeeDatabaseId={initialData.id} employeeIsActive={Boolean(initialData.isActive)} />

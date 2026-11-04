@@ -1,12 +1,14 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import sharp from "sharp";
 import { assertAllowedFile, extensionForMime } from "@/lib/fileMagic";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
+import { prisma } from "@/lib/prisma";
 
 // ─── Avatar: transport JSON-base64 dipertahankan, server pindah ke disk ───
-// Dipakai oleh PUT /api/auth/profile dan serve privat /api/auth/avatar/[filename].
-// Klien render opaque via avatarUrl (URL serve atau https:// eksternal).
+// Upload oleh HR via PUT /api/employees/[id]/avatar; serve privat /api/auth/avatar/[filename].
+// Klien render opaque via avatarUrl (URL serve atau https:// eksternal lama).
 
 /** Root privat avatar (di luar public/ agar wajib lewat route ber-auth). */
 export const AVATAR_STORAGE_ROOT = path.resolve(process.cwd(), "storage", "avatars");
@@ -24,9 +26,11 @@ const AVATAR_FILENAME_PATTERN = /^[A-Za-z0-9-]+\.(jpg|jpeg|png|webp)$/i;
 const AVATAR_EMPLOYEE_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export class AvatarUploadError extends Error {
-    constructor(message: string) {
+    statusCode: number;
+    constructor(message: string, statusCode = 400) {
         super(message);
         this.name = "AvatarUploadError";
+        this.statusCode = statusCode;
     }
 }
 
@@ -121,4 +125,55 @@ export async function saveAvatarBuffer(
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, buffer, { flag: "wx" });
     return { relativePath: `${employeeId}/${filename}`, serveUrl: avatarServeUrl(filename), size: buffer.length };
+}
+
+/**
+ * Normalisasi server untuk foto HR: orientasi EXIF diterapkan, dimensi dibatasi,
+ * keluaran selalu JPEG (metadata termasuk GPS dibuang oleh Sharp).
+ */
+const HR_AVATAR_MAX_DIMENSION = 1024;
+
+export async function normalizeAvatarBuffer(buffer: Buffer): Promise<{ buffer: Buffer; mime: string }> {
+    try {
+        const out = await sharp(buffer)
+            .rotate()
+            .resize(HR_AVATAR_MAX_DIMENSION, HR_AVATAR_MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
+            .jpeg({ quality: 85 })
+            .toBuffer();
+        return { buffer: out, mime: "image/jpeg" };
+    } catch {
+        throw new AvatarUploadError("Gagal memproses gambar. Gunakan berkas JPG, PNG, atau WEBP yang valid.");
+    }
+}
+
+/**
+ * Tetapkan foto avatar karyawan oleh HR (WIG001). Guard sesi ada di route.
+ * `null` mengosongkan kedua kolom. Berkas lama sengaja TIDAK dihapus
+ * (pembersihan file yatim = jobdesk IT operasional).
+ */
+export async function setEmployeeAvatarByHr(
+    employeeUuid: string,
+    avatarInput: string | null
+): Promise<{ id: string; employeeId: string; avatarUrl: string | null }> {
+    const employee = await prisma.employee.findUnique({
+        where: { id: employeeUuid },
+        select: { id: true, employeeId: true },
+    });
+    if (!employee) throw new AvatarUploadError("Data karyawan tidak ditemukan.", 404);
+    if (avatarInput === null) {
+        return prisma.employee.update({
+            where: { id: employee.id },
+            data: { avatarUrl: null, avatarPath: null },
+            select: { id: true, employeeId: true, avatarUrl: true },
+        });
+    }
+    const maxBytes = await resolveAvatarLimitBytes();
+    const parsed = parseAvatarDataUrl(avatarInput, maxBytes);
+    const normalized = await normalizeAvatarBuffer(parsed.buffer);
+    const saved = await saveAvatarBuffer(employee.employeeId, normalized.buffer, normalized.mime, maxBytes);
+    return prisma.employee.update({
+        where: { id: employee.id },
+        data: { avatarUrl: saved.serveUrl, avatarPath: saved.relativePath },
+        select: { id: true, employeeId: true, avatarUrl: true },
+    });
 }
