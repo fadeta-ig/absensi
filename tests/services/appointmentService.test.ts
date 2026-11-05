@@ -450,6 +450,55 @@ describe("getAppointments urutan & pagination riwayat", () => {
             orderBy: [{ startAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
         }));
     });
+    it("jadwal non-history menyertakan meeting SCHEDULED aktif karyawan lain + detail dapat dibuka read-only", async () => {
+        const { buildMeetingWhere, getAppointmentDetail } = await import("@/lib/services/appointmentService");
+        const activeWhere = buildMeetingWhere(empSession({ employeeId: "ID-009" }), {}, false);
+        expect(activeWhere.AND).toEqual([
+            {
+                OR: [
+                    { status: "SCHEDULED", endAt: { gt: expect.any(Date) } },
+                    { requesterEmployeeId: "ID-009" },
+                    { participants: { some: { employeeId: "ID-009" } } },
+                ],
+            },
+        ]);
+        const historyWhere = buildMeetingWhere(empSession({ employeeId: "ID-009" }), { history: true }, false);
+        expect(historyWhere.AND).toContainEqual({
+            OR: [
+                { requesterEmployeeId: "ID-009" },
+                { participants: { some: { employeeId: "ID-009" } } },
+            ],
+        });
+
+        const now = Date.now();
+        mocked.meetingAppointment.findUnique.mockResolvedValueOnce({
+            id: "a-other",
+            title: "Meeting Divisi Lain",
+            status: "SCHEDULED",
+            startAt: new Date(now + 3600_000),
+            endAt: new Date(now + 7200_000),
+            requesterEmployeeId: "ID-001",
+            requester: { name: "Employee A" },
+            room: { id: "r1", name: "Ruang A", capacity: 10, location: "Lt 2" },
+            participants: [{ id: "p1", employeeId: "ID-002", guestName: null, isExternal: false, attendance: "BELUM", inviteStatus: "ACCEPTED", inviteRespondedAt: null, inviteNote: null, employee: { name: "Employee C" } }],
+        } as never);
+        const detail = (await getAppointmentDetail(empSession({ employeeId: "ID-009" }), "a-other")) as { id: string; canAccessWorkspace: boolean };
+        expect(detail.id).toBe("a-other");
+        expect(detail.canAccessWorkspace).toBe(false);
+
+        mocked.meetingAppointment.findUnique.mockResolvedValueOnce({
+            id: "a-past-other",
+            title: "Meeting Selesai",
+            status: "COMPLETED",
+            startAt: new Date(now - 7200_000),
+            endAt: new Date(now - 3600_000),
+            requesterEmployeeId: "ID-001",
+            requester: { name: "Employee A" },
+            room: { id: "r1", name: "Ruang A", capacity: 10, location: "Lt 2" },
+            participants: [],
+        } as never);
+        await expect(getAppointmentDetail(empSession({ employeeId: "ID-009" }), "a-past-other")).rejects.toMatchObject({ statusCode: 403 });
+    });
 });
 
 describe("rescheduleAppointment pimpinan rapat/PIC", () => {

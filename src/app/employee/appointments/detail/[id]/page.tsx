@@ -216,6 +216,7 @@ function DetailContent({ id }: { id: string }) {
     // Pemantau (bukan penyelenggara/peserta) hanya membaca: tanpa Beri Task,
     // tanpa kelola, tanpa tulis notulensi. WIG002 tanpa employeeId tetap bisa.
     const isInvolved = !myEmployeeId || item.requesterEmployeeId === myEmployeeId || item.participants.some((p) => p.employeeId === myEmployeeId);
+    const canAccessWorkspace = item.canAccessWorkspace ?? isInvolved;
     // Beri task hanya oleh PIC notulensi atau pimpinan rapat (bukan semua peserta), selama meeting berjalan.
     const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs && Boolean(myEmployeeId) && (myEmployeeId === item.notulisEmployeeId || myEmployeeId === item.leaderEmployeeId);
     const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
@@ -281,13 +282,15 @@ function DetailContent({ id }: { id: string }) {
             <div className="card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                     <AppointmentStatusBadge status={item.status} lifecycle={item.lifecycle} />
-                    <button
-                        type="button"
-                        onClick={() => router.push(`/employee/appointments/detail/${item.id}/history`)}
-                        className="btn btn-secondary btn-sm shrink-0"
-                    >
-                        <History className="w-3.5 h-3.5" /> Riwayat
-                    </button>
+                    {canAccessWorkspace && (
+                        <button
+                            type="button"
+                            onClick={() => router.push(`/employee/appointments/detail/${item.id}/history`)}
+                            className="btn btn-secondary btn-sm shrink-0"
+                        >
+                            <History className="w-3.5 h-3.5" /> Riwayat
+                        </button>
+                    )}
                 </div>
 
                 {item.requesterEmployeeId && (
@@ -430,7 +433,7 @@ function DetailContent({ id }: { id: string }) {
                                 <span className="min-w-0 truncate text-[var(--text-primary)]">
                                     {participantDisplayName(p)}
                                     {p.isExternal && <span className="text-[11px] text-[var(--text-muted)]"> (Tamu Eksternal)</span>}
-                                    {p.inviteStatus === "DECLINED" && p.inviteNote && (
+                                    {canAccessWorkspace && p.inviteStatus === "DECLINED" && p.inviteNote && (
                                         <span className="block text-[11px] text-[var(--text-muted)] truncate" title={p.inviteNote}>Alasan: {p.inviteNote}</span>
                                     )}
                                 </span>
@@ -546,19 +549,23 @@ function DetailContent({ id }: { id: string }) {
                 )}
             </div>
 
-            <div className="card p-4">
-                <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED" || !isInvolved} refreshKey={syncKey} />
-            </div>
+            {canAccessWorkspace && (
+                <>
+                    <div className="card p-4">
+                        <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED" || !isInvolved} refreshKey={syncKey} />
+                    </div>
 
-            <div className="card p-4">
-                <MeetingTaskSummary
-                    appointmentId={item.id}
-                    participants={taskParticipants}
-                    canCreateTask={canCreateMeetingTask}
-                    myEmployeeId={myEmployeeId}
-                    refreshKey={syncKey}
-                />
-            </div>
+                    <div className="card p-4">
+                        <MeetingTaskSummary
+                            appointmentId={item.id}
+                            participants={taskParticipants}
+                            canCreateTask={canCreateMeetingTask}
+                            myEmployeeId={myEmployeeId}
+                            refreshKey={syncKey}
+                        />
+                    </div>
+                </>
+            )}
 
             {editing && (
                 <AppointmentFormModal

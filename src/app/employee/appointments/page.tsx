@@ -9,7 +9,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AppointmentCalendar, { type CalendarAppointment } from "@/components/appointments/AppointmentCalendar";
 import AppointmentFormModal from "@/components/appointments/AppointmentFormModal";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
-import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
+import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, participantDisplayName, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { toDateString, formatIndonesianDate } from "@/lib/utils";
 import { formatWIBDateTime, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 
@@ -211,9 +211,10 @@ export default function EmployeeAppointmentsPage() {
     }, [scopedItems]);
 
     const dayItems = useMemo(() => {
-        const list = appointmentsByDate.get(selectedDate) || [];
-        return [...list].sort((x, y) => x.startAt.localeCompare(y.startAt));
-    }, [appointmentsByDate, selectedDate]);
+        return scopedItems
+            .filter((a) => toDateString(a.startAt) === selectedDate)
+            .sort((x, y) => x.startAt.localeCompare(y.startAt));
+    }, [scopedItems, selectedDate]);
 
     const handleSaved = useCallback(() => {
         toast("Meeting berhasil disimpan.", "success");
@@ -594,6 +595,7 @@ export default function EmployeeAppointmentsPage() {
                         scopedItems.map((a) => {
                             const accepted = a.participants.filter((p) => p.inviteStatus === "ACCEPTED").length;
                             const isMine = myEmployeeId !== null && a.requesterEmployeeId === myEmployeeId;
+                            const participantNames = a.participants.map((p) => participantDisplayName(p)).join(", ");
                             return (
                                 <button
                                     key={a.id}
@@ -616,6 +618,11 @@ export default function EmployeeAppointmentsPage() {
                                                 ? ` · Penyelenggara: ${requesterDisplayName(a)}`
                                                 : ""}
                                     </p>
+                                    {participantNames && (
+                                        <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
+                                            Peserta: {participantNames}
+                                        </p>
+                                    )}
                                     <span className="mt-1.5 inline-block">
                                         <AppointmentStatusBadge status={a.status} lifecycle={a.lifecycle} />
                                     </span>
@@ -697,25 +704,39 @@ export default function EmployeeAppointmentsPage() {
                             )}
                         </div>
                     ) : (
-                        dayItems.map((a) => (
-                            <button
-                                key={a.id}
-                                type="button"
-                                onClick={() => { void openDetail(a.id); }}
-                                className="card w-full text-left p-4 hover:border-[var(--primary)]/40 transition-colors"
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-bold text-[var(--text-primary)] truncate">{a.title}</p>
-                                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                            {a.isFullDay ? "Seharian Penuh" : `${fmtTime(a.startAt)} – ${fmtTime(a.endAt)}`}
-                                            {a.room ? ` · ${a.room.name}` : " · Daring"}
-                                        </p>
+                        dayItems.map((a) => {
+                            const isMine = myEmployeeId !== null && a.requesterEmployeeId === myEmployeeId;
+                            const participantNames = a.participants.map((p) => participantDisplayName(p)).join(", ");
+                            return (
+                                <button
+                                    key={a.id}
+                                    type="button"
+                                    onClick={() => { void openDetail(a.id); }}
+                                    className="card w-full text-left p-4 hover:border-[var(--primary)]/40 transition-colors"
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold text-[var(--text-primary)] truncate">{a.title}</p>
+                                            <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
+                                                {a.isFullDay ? "Seharian Penuh" : `${fmtTime(a.startAt)} – ${fmtTime(a.endAt)}`}
+                                                {a.room ? ` · ${a.room.name}` : " · Daring"}
+                                                {isMine
+                                                    ? " · Diselenggarakan oleh Anda"
+                                                    : a.requesterEmployeeId
+                                                        ? ` · Penyelenggara: ${requesterDisplayName(a)}`
+                                                        : ""}
+                                            </p>
+                                            {participantNames && (
+                                                <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
+                                                    Peserta: {participantNames}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <AppointmentStatusBadge status={a.status} lifecycle={a.lifecycle} />
                                     </div>
-                                    <AppointmentStatusBadge status={a.status} lifecycle={a.lifecycle} />
-                                </div>
-                            </button>
-                        ))
+                                </button>
+                            );
+                        })
                     )}
                 </div>
                 </div>

@@ -532,9 +532,18 @@ export function buildMeetingWhere(session: SessionPayload, filters: AppointmentF
         and.push({ status: filters.status as Prisma.EnumMeetingAppointmentStatusFilter["equals"] });
     }
     if (!isPrivileged) {
-        and.push({ OR: [{ requesterEmployeeId: session.employeeId }, { participants: { some: { employeeId: session.employeeId } } }] });
+        if (filters.history) {
+            and.push({ OR: [{ requesterEmployeeId: session.employeeId }, { participants: { some: { employeeId: session.employeeId } } }] });
+        } else {
+            and.push({
+                OR: [
+                    { status: "SCHEDULED", endAt: { gt: new Date() } },
+                    { requesterEmployeeId: session.employeeId },
+                    { participants: { some: { employeeId: session.employeeId } } },
+                ],
+            });
+        }
     }
-    if (and.length > 0) where.AND = and;
     if (filters.from || filters.to) {
         let fromStart: Date | undefined;
         let toExclusive: Date | undefined;
@@ -552,6 +561,7 @@ export function buildMeetingWhere(session: SessionPayload, filters: AppointmentF
             and.push({ startAt: { lt: toExclusive } });
         }
     }
+    if (and.length > 0) where.AND = and;
     return where;
 }
 
@@ -603,13 +613,16 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
     });
     if (!appt) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     const privileged = isWig002(session);
-    if (!privileged) {
-        const mine = appt.requesterEmployeeId === session.employeeId || appt.participants.some((p) => p.employeeId === session.employeeId);
-        if (!mine && !(await isMeetingMonitor(session))) {
-            throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
-        }
+    const mine = Boolean(session.employeeId) && (appt.requesterEmployeeId === session.employeeId || appt.participants.some((p) => p.employeeId === session.employeeId));
+    const monitor = !privileged && !mine ? await isMeetingMonitor(session) : false;
+    const isActiveSchedule = appt.status === "SCHEDULED" && appt.endAt.getTime() > Date.now();
+    if (!privileged && !mine && !monitor && !(Boolean(session.employeeId) && isActiveSchedule)) {
+        throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
     }
-    return withLifecycle(appt);
+    return {
+        ...withLifecycle(appt),
+        canAccessWorkspace: privileged || mine || monitor,
+    };
 }
 
 /**

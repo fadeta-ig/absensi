@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, MapPin, Link2, Clock3 } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
-import { requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
+import { participantDisplayName, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { formatIndonesianDate } from "@/lib/utils";
 import { addCalendarDays, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
@@ -163,6 +163,7 @@ export default function AppointmentDayDetailPage() {
                     )}
                     {items.map((a) => {
                         const accepted = a.participants.filter((p) => p.inviteStatus === "ACCEPTED").length;
+                        const participantNames = a.participants.map((p) => participantDisplayName(p)).join(", ");
                         return (
                             <li key={a.id}>
                                 <button
@@ -183,11 +184,11 @@ export default function AppointmentDayDetailPage() {
                                             <p className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center gap-1 truncate">
                                                 {a.room ? (
                                                     <>
-                                                        <MapPin className="w-3 h-3 shrink-0" /> {a.room.name}
+                                                        <MapPin className="w-3 h-3 shrink-0" /> <span>{a.room.name}</span>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <Link2 className="w-3 h-3 shrink-0" /> Daring
+                                                        <Link2 className="w-3 h-3 shrink-0" /> <span>Daring</span>
                                                     </>
                                                 )}
                                                 {a.requesterEmployeeId ? ` · Penyelenggara: ${requesterDisplayName(a)}` : ""}
@@ -196,6 +197,11 @@ export default function AppointmentDayDetailPage() {
                                                 <Clock3 className="w-3 h-3 shrink-0" />
                                                 {a.participants.length} peserta · {accepted} menerima
                                             </p>
+                                            {participantNames && (
+                                                <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">
+                                                    Peserta: {participantNames}
+                                                </p>
+                                            )}
                                         </div>
                                         <AppointmentStatusBadge status={a.status} lifecycle={a.lifecycle} />
                                     </div>
