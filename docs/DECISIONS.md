@@ -242,3 +242,29 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Satu inbox/detail/monitoring konseptual untuk semua sumber; penerima mengendalikan penerimaan tugas di luar meeting; CAPA tinggal menambah adapter + format tanpa mengubah wadah.
   - Negatif: `meetingTaskService` kini melayani dua sumber dengan percabangan jendela berdasarkan `sourceType`; Pantau Tugas menilai kedua sumber (filter sumber tersedia) dengan penerima `DITOLAK`/`DIBATALKAN` dikecualikan dari penilaian.
   - Status: live lokal 2026-11-03 di branch `feat/task-sources-operasional-capa` (skema di-`db push` ke `hris_local` dengan rekonsiliasi jumlah baris tidak berubah, suite Operasional/Tugas Saya hijau).
+
+---
+
+## ADR-019: Resepsionis E-Meeting sebagai Penyelenggara Semua Meeting via Modul Employee
+
+- **Decision**: (1) WIG002 menunjuk max 5 resepsionis (`AppSetting` `meeting.receptionists`, karyawan internal aktif) via tab Resepsionis di pengaturan appointment GA. (2) Resepsionis bertindak sebagai penyelenggara untuk SEMUA meeting dari modul E-Meeting employee: buat, ubah jadwal/ruangan/peserta, batalkan, selesaikan, tandai hadir, ganti pimpinan rapat/PIC, tulis notulensi, baca riwayat + workspace penuh. (3) Tanpa hak `force` paksa-bentrok (tetap WIG002-only, di-strip di route) dan tanpa kelola master ruangan/pengingat/daftar peran. (4) Gate "beri task hanya PIC/pimpinan rapat" tetap per-meeting (resepsionis pun tidak bypass, sama seperti penyelenggara biasa). (5) Kata "resepsionis" hanya muncul di UI WIG002; di UI employee/push ia tampil sebagai Penyelenggara biasa.
+- **Context**: Di lapangan resepsionis (mis. ID-25020044) membuatkan dan mengatur meeting untuk orang lain, tetapi guard organizer (`requesterEmployeeId`/`leaderEmployeeId`) menolaknya mengelola meeting yang bukan miliknya. ADR-017 menyebut kasus ini sebagai motivasi pimpinan rapat, namun pimpinan rapat bersifat per-meeting dan tidak menyelesaikan kebutuhan pengatur global.
+- **Chosen Approach**: Tanpa permission/role/tabel baru (konsisten CONSTRAINTS): daftar `AppSetting` + guard service meniru pola `meeting.topViewers` (cache 60 detik, validasi aktif+internal saat tulis, mati sendiri bila nonaktif). Helper `isMeetingReceptionist`/`canManageAnyMeeting` di `appointmentService`; guard mutasi memakai `managerAll` (= WIG002 ATAU resepsionis) khusus izin, sedangkan cek `force` tetap `operator` (= WIG002 saja); `isPrivileged` di `meetingTaskService` dan `allowed` di `meetingHistoryService` mencakup resepsionis; kapabilitas employee diperluas `{ canMonitor, canManageAll }` untuk gating tombol kelola di detail meeting.
+- **Alternatives**: Permission code baru (mis. `meeting.manage`) + role baru (ditolak — menambah permukaan RBAC untuk kebutuhan daftar dinamis yang sudah terbukti polanya); resepsionis diberi akses portal GA (ditolak pemilik — kerjanya dari modul employee); resepsionis boleh force-bentrok seperti WIG002 (ditolak pemilik — tetap ikut antrean ruangan).
+- **Consequences**:
+  - Positif: Satu pola AppSetting untuk tiga peran dinamis (pemantau read-only, resepsionis kelola); audit tetap mencatat aktor asli; push reschedule memakai rumusan netral ber-nama.
+  - Negatif: Dua konsep "penyelenggara" (per-meeting vs global) hanya dibedakan di log audit dan daftar WIG002 — karyawan biasa tidak bisa membedakan dari UI (disengaja).
+  - Status: live lokal 2026-11-06 (setting + guard + UI GA/employee + suite hijau).
+
+---
+
+## ADR-020: Resepsionis sebagai Penyelenggara Tidak Dihitung Sibuk (Bebas Cek Bentrok Diri)
+
+- **Decision**: (1) ID resepsionis aktif yang tercatat sebagai requester/pembuat meeting dikeluarkan dari cek bentrok orang + penanda sibuk saat buat (`involvedIds`) dan reschedule (`checkOverlapIds`). (2) Hit jalur-requester di `hasEmployeeOverlap` diabaikan khusus ID resepsionis aktif; hit jalur-peserta tetap memblokir siapa pun termasuk resepsionis yang benar-benar diundang. (3) Cek bentrok ruangan, cek bentrok peserta lain, dan larangan `force` tetap berlaku penuh untuk resepsionis. (4) Tampilan `getAvailability` diselaraskan agar tidak merah palsu. (5) Resepsionis nonaktif atau gagal baca daftar kembali ke perilaku normal (fail-closed).
+- **Context**: Di lapangan resepsionis (verifikasi `hris_local`: `meeting.receptionists = ["ID-25020044"]`, Daffa aktif, 4 meeting sebagai requester) adalah admin ruangan yang wajib bisa booking banyak ruangan di jam yang sama untuk meeting orang lain. Logika lama memasukkan `session.employeeId` pembuat ke `involvedIds` dan lengan-requester `hasEmployeeOverlap`, sehingga meeting keduanya mental 409 atas namanya sendiri. ADR-019 memberi izin kelola tanpa menyentuh cek bentrok.
+- **Chosen Approach**: Helper `receptionistRequesterDropIds` di `appointmentService` (daftar AppSetting cache 60 detik + cek aktif 1 query, fail-closed); filter di call-site create/reschedule + pisah lengan peserta/requester di `hasEmployeeOverlap`/`getAvailability`. Tanpa skema, permission, atau role baru.
+- **Alternatives**: Kecualikan SEMUA requester dari cek orang (ditolak pemilik — maunya khusus resepsionis, perilaku penyelenggara biasa tidak berubah); bebas semua cek termasuk ruangan/peserta (ditolak — chaos antrean ruangan, setara memberi `force` yang sudah ditolak di ADR-019); flag "saya hadir" di form (ditolak untuk sekarang — butuh ubah skema/form/validasi, overkill).
+- **Consequences**:
+  - Positif: Resepsionis bisa booking tak terbatas di jam yang sama (beda ruangan); peserta/pimpinan rapat/PIC tetap diproteksi bentrok; ruangan tetap first-come-first-served.
+  - Negatif: Dua perilaku requester (resepsionis vs biasa) — didokumentasikan di ADR ini dan FEATURES; karyawan biasa yang "membuatkan meeting untuk orang lain" tetap kena cek diri.
+  - Status: live lokal 2026-11-06 (service + 9 test D1 + suite 71 hijau + `tsc` bersih).

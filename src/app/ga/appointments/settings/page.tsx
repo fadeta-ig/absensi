@@ -9,8 +9,9 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 import MeetingMonitorCard from "./MeetingMonitorCard";
+import MeetingReceptionistCard from "./MeetingReceptionistCard";
 
-type Tab = "rooms" | "reminder" | "monitor";
+type Tab = "rooms" | "reminder" | "monitor" | "receptionist";
 
 interface Room {
     id: string;
@@ -188,7 +189,7 @@ export default function GaAppointmentSettingsPage() {
             )}
 
             <div className="flex gap-1.5 border-b border-[var(--border)]">
-                {([["rooms", "Ruang Meeting"], ["reminder", "Pengingat Otomatis"], ["monitor", "Pemantau"]] as [Tab, string][]).map(([key, label]) => (
+                {([["rooms", "Ruang Meeting"], ["reminder", "Pengingat Otomatis"], ["monitor", "Pemantau"], ["receptionist", "Resepsionis"]] as [Tab, string][]).map(([key, label]) => (
                     <button
                         key={key}
                         type="button"
@@ -326,6 +327,17 @@ export default function GaAppointmentSettingsPage() {
                         Menu pantau hanya muncul untuk karyawan yang terdaftar di sini.
                     </p>
                     <MeetingMonitorCard />
+                </div>
+            )}
+            {tab === "receptionist" && (
+                <div className="card p-4 space-y-3">
+                    <h2 className="text-sm font-bold text-[var(--text-primary)]">Resepsionis E-Meeting</h2>
+                    <p className="text-xs text-[var(--text-muted)]">
+                        Daftar karyawan yang bertindak sebagai penyelenggara untuk seluruh meeting dari modul E-Meeting employee
+                        (membuat, mengubah jadwal/ruangan/peserta, membatalkan, menyelesaikan, menandai kehadiran, dan menulis notulensi).
+                        Tanpa hak paksa-bentrok dan tanpa kelola master.
+                    </p>
+                    <MeetingReceptionistCard />
                 </div>
             )}
         </div>

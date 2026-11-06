@@ -4,6 +4,7 @@ import {
     AppointmentError,
     cancelAppointment,
     getAppointmentDetail,
+    isMeetingReceptionist,
     isWig002,
     rescheduleAppointment,
 } from "@/lib/services/appointmentService";
@@ -66,14 +67,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             { userId: session.userId, username: session.username }
         );
         const isOrganizer = !!before?.requesterEmployeeId && before.requesterEmployeeId === session.employeeId;
+        const byReceptionist = !isOrganizer && !asOperator && (await isMeetingReceptionist(session).catch(() => false));
         const fmtShort = (v: string | Date | undefined) =>
             v ? formatWIBDateTime(new Date(v), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-";
         const userIds = await collectAppointmentUserIds(id).catch(() => [] as string[]);
         await sendAppointmentPush(userIds, {
-            title: isOrganizer ? "Jadwal Meeting Berubah" : `WIG002 memindahkan meeting "${before?.title ?? "Anda"}"`,
+            title: isOrganizer || byReceptionist ? "Jadwal Meeting Berubah" : `WIG002 memindahkan meeting "${before?.title ?? "Anda"}"`,
             body: isOrganizer
                 ? reasonText
-                : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Meeting Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${reasonText}`,
+                : byReceptionist
+                    ? `${session.name ?? session.username} mengubah jadwal: ${reasonText}`
+                    : `${session.name ?? session.username} memindahkan ${fmtShort(before?.startAt)} (${before?.room?.name ?? "Meeting Daring"}) → ${result.data.date} ${result.data.isFullDay ? "seharian penuh" : `${result.data.startTime}-${result.data.endTime}`} WIB. Alasan: ${reasonText}`,
             tag: `appointment-${id}-rescheduled`,
             url: `/employee/appointments/detail/${id}`,
         });

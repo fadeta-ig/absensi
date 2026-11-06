@@ -284,9 +284,10 @@ Seluruh endpoint cron wajib menyertakan header otorisasi rahasia: `Authorization
 | `/api/appointments/submissions/attachments/[attachmentId]` | `GET` | Pemberi/penerima ybs/GA | Unduh lampiran (authed, `private, no-store`, nosniff). |
 | `/api/employee/meeting-tasks` | `GET` | Karyawan | Inbox penerima (`status`/`overdue=1`); menyembunyikan meeting CANCELLED. |
 | `/api/employee/meeting-task-verifications` | `GET` | Pemberi | Antrean verifikasi: task yang saya beri + submission `PENDING`. |
-| `/api/employee/meeting-capabilities` | `GET` | Karyawan | Kapabilitas ringan `{ canMonitor }` untuk gating menu Pantau E-Meeting. |
+| `/api/employee/meeting-capabilities` | `GET` | Karyawan | Kapabilitas ringan `{ canMonitor, canManageAll }` untuk gating menu Pantau E-Meeting dan tombol kelola resepsionis. |
 | `/api/employee/pantau-kinerja` | `GET` | Pemantau/WIG002 | Tingkat ketepatan per karyawan per periode (`from/to` YYYY-MM-DD) + strip tunggakan bulan lalu (baca saja). |
 | `/api/ga/meeting-settings/top-viewers` | `GET/POST/DELETE` | WIG002 | Kelola daftar pemantau e-meeting (max 5, AppSetting `meeting.topViewers`). |
+| `/api/ga/meeting-settings/receptionists` | `GET/POST/DELETE` | WIG002 | Kelola daftar resepsionis e-meeting (max 5, AppSetting `meeting.receptionists`; set penuh `employeeIds`, hapus via `?id=`). |
 | `/api/appointments` | `GET` | Karyawan/WIG002 | Daftar meeting ter-pagination (`page`, `limit` maks 100, halaman dijepit ke rentang yang ada; respons menyertakan `total`, `page`, `limit`, `totalPages`). Bawaan urutan terdekat dulu; `sort=newest` untuk terbaru dulu (riwayat); `history=1` hanya meeting yang sudah berakhir (selesai/batal/lewat jam selesai). Urutan deterministik `startAt`, `createdAt`, `id`. |
 | `/api/appointments/[id]/leader` | `PATCH` | Penyelenggara/pimpinan rapat/WIG002 | Tetapkan/ganti pimpinan rapat (`leaderEmployeeId`, wajib peserta internal) setelah meeting terjadwal/berjalan, selama belum selesai; tercatat di audit `SET_MEETING_LEADER`. |
 

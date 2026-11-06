@@ -41,6 +41,7 @@ function DetailContent({ id }: { id: string }) {
     const toast = useToast();
     const [item, setItem] = useState<AppointmentListItem | null>(null);
     const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+    const [canManageAll, setCanManageAll] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [actionLoading, setActionLoading] = useState(false);
@@ -58,13 +59,20 @@ function DetailContent({ id }: { id: string }) {
         setLoading(true);
         setError("");
         try {
-            const [meRes, detailRes] = await Promise.all([
+            const [meRes, detailRes, capsRes] = await Promise.all([
                 fetch("/api/auth/me", { credentials: "same-origin" }),
                 fetch(`/api/appointments/${id}`, { credentials: "same-origin" }),
+                fetch("/api/employee/meeting-capabilities", { credentials: "same-origin" }).catch(() => null),
             ]);
             if (meRes.ok) {
                 const me = await meRes.json();
                 setMyEmployeeId(me.employeeId ?? null);
+            }
+            if (capsRes && capsRes.ok) {
+                const caps = await capsRes.json().catch(() => null);
+                setCanManageAll(caps?.data?.canManageAll === true);
+            } else {
+                setCanManageAll(false);
             }
             if (!detailRes.ok) throw new Error(await getResponseErrorMessage(detailRes, "Gagal memuat detail meeting."));
             const json = await detailRes.json();
@@ -201,7 +209,7 @@ function DetailContent({ id }: { id: string }) {
         );
     }
 
-    const canManage = !!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId);
+    const canManage = canManageAll || (!!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId));
     const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
     const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
     // Pengaturan Meeting (termasuk pimpinan rapat & PIC) juga dibuka saat
@@ -552,7 +560,7 @@ function DetailContent({ id }: { id: string }) {
             {canAccessWorkspace && (
                 <>
                     <div className="card p-4">
-                        <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED" || !isInvolved} refreshKey={syncKey} />
+                        <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED" || (!isInvolved && !canManageAll)} refreshKey={syncKey} />
                     </div>
 
                     <div className="card p-4">

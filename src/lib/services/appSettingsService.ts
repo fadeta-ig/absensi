@@ -792,6 +792,134 @@ export async function removeMeetingTopViewer(
     return { key: MEETING_TOP_VIEWERS_KEY, employeeIds: next };
 }
 
+// ─── Resepsionis e-meeting (dinamis, milik WIG002, max 5) ─────────────
+// Pola sama seperti meeting topViewers: AppSetting JSON array + cache
+// 60 detik + validasi aktif+internal saat tulis. Guard baca (isActive)
+// di isMeetingReceptionist agar penunjukan basi langsung mati.
+// Resepsionis = penyelenggara untuk SEMUA meeting via modul employee
+// (kelola jadwal/ruangan/peserta, batalkan, selesaikan, hadir,
+// notulensi, riwayat). Tanpa force-bentrok, tanpa kelola master.
+
+export const MEETING_RECEPTIONISTS_KEY = "meeting.receptionists" as const;
+export const MAX_MEETING_RECEPTIONISTS = 5 as const;
+
+let meetingReceptionistsCache: { value: string[]; expiresAt: number } | null = null;
+
+export function invalidateMeetingReceptionistsCache(): void {
+    meetingReceptionistsCache = null;
+}
+
+function parseMeetingReceptionistIds(raw: string | null | undefined): string[] {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+            .filter((v): v is string => typeof v === "string")
+            .map((v) => v.trim())
+            .filter(Boolean)
+            .slice(0, MAX_MEETING_RECEPTIONISTS);
+    } catch {
+        return [];
+    }
+}
+
+/** Daftar employeeId resepsionis e-meeting (max 5). */
+export async function getMeetingReceptionistEmployeeIds(): Promise<string[]> {
+    const cached = meetingReceptionistsCache;
+    if (cached && Date.now() <= cached.expiresAt) return [...cached.value];
+    try {
+        const row = await prisma.appSetting.findUnique({ where: { key: MEETING_RECEPTIONISTS_KEY } });
+        const ids = parseMeetingReceptionistIds(row?.value);
+        meetingReceptionistsCache = { value: ids, expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [...ids];
+    } catch {
+        meetingReceptionistsCache = { value: [], expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [];
+    }
+}
+
+export interface MeetingReceptionistInfo {
+    employeeId: string;
+    name: string | null;
+    isActive: boolean;
+    email: string | null;
+}
+
+/** Info penunjukan untuk UI settings (nama + status aktif). */
+export async function getMeetingReceptionistInfos(): Promise<MeetingReceptionistInfo[]> {
+    const ids = await getMeetingReceptionistEmployeeIds();
+    if (ids.length === 0) return [];
+    const employees = await prisma.employee.findMany({
+        where: { employeeId: { in: ids } },
+        select: { employeeId: true, name: true, isActive: true, email: true },
+    });
+    const byId = new Map(employees.map((e) => [e.employeeId, e]));
+    return ids.map((id) => {
+        const e = byId.get(id);
+        if (!e) return { employeeId: id, name: null, isActive: false, email: null };
+        return { employeeId: e.employeeId, name: e.name, isActive: e.isActive, email: e.email };
+    });
+}
+
+/** True bila sesi adalah salah satu resepsionis e-meeting DAN employee-nya masih aktif. */
+export async function isMeetingReceptionist(session: Pick<SessionPayload, "employeeId"> | null): Promise<boolean> {
+    if (!session?.employeeId) return false;
+    const ids = await getMeetingReceptionistEmployeeIds().catch(() => [] as string[]);
+    if (!ids.includes(session.employeeId)) return false;
+    try {
+        const employee = await prisma.employee.findUnique({
+            where: { employeeId: session.employeeId },
+            select: { isActive: true },
+        });
+        return employee?.isActive === true;
+    } catch {
+        return false;
+    }
+}
+
+/** Set penuh daftar resepsionis (max 5, dedup, validasi aktif+internal tiap ID). */
+export async function setMeetingReceptionists(
+    rawIds: string[],
+    actorUserId?: string | null
+): Promise<{ key: typeof MEETING_RECEPTIONISTS_KEY; employeeIds: string[] }> {
+    const ids = [...new Set(rawIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length > MAX_MEETING_RECEPTIONISTS) {
+        throw new AppSettingsError(`Maksimal ${MAX_MEETING_RECEPTIONISTS} resepsionis e-meeting.`, 409);
+    }
+    for (const id of ids) {
+        if (id.length > 100) throw new AppSettingsError("ID karyawan resepsionis terlalu panjang.", 400);
+    }
+    const validated: string[] = [];
+    for (const id of ids) {
+        validated.push(await assertActiveInternalEmployee(id, "Resepsionis e-meeting"));
+    }
+    await prisma.appSetting.upsert({
+        where: { key: MEETING_RECEPTIONISTS_KEY },
+        update: { value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+        create: { key: MEETING_RECEPTIONISTS_KEY, value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateMeetingReceptionistsCache();
+    return { key: MEETING_RECEPTIONISTS_KEY, employeeIds: validated };
+}
+
+/** Hapus satu resepsionis dari daftar. */
+export async function removeMeetingReceptionist(
+    rawId: string,
+    actorUserId?: string | null
+): Promise<{ key: typeof MEETING_RECEPTIONISTS_KEY; employeeIds: string[] }> {
+    const id = rawId.trim();
+    const current = await getMeetingReceptionistEmployeeIds();
+    const next = current.filter((v) => v !== id);
+    await prisma.appSetting.upsert({
+        where: { key: MEETING_RECEPTIONISTS_KEY },
+        update: { value: JSON.stringify(next), updatedByUserId: actorUserId ?? null },
+        create: { key: MEETING_RECEPTIONISTS_KEY, value: JSON.stringify(next), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateMeetingReceptionistsCache();
+    return { key: MEETING_RECEPTIONISTS_KEY, employeeIds: next };
+}
+
 /** Info penunjukan saat ini untuk UI settings (nama + status aktif employee). */
 export async function getCleaningTopViewerInfo(): Promise<CleaningTopViewerInfo> {
     const employeeId = await getCleaningTopViewerEmployeeId();

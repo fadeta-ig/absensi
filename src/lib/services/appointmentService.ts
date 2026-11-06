@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidCalendarDate, toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
-import { isMeetingTopViewer } from "@/lib/services/appSettingsService";
+import { isMeetingTopViewer, isMeetingReceptionist as isListedMeetingReceptionist, getMeetingReceptionistEmployeeIds } from "@/lib/services/appSettingsService";
 import { PERMISSIONS } from "@/lib/permissions";
 import { actorFromSession } from "@/lib/services/auditService";
 import type { SessionPayload } from "@/lib/auth";
@@ -79,10 +79,27 @@ export async function isMeetingMonitor(session: SessionPayload): Promise<boolean
     return isMeetingTopViewer(session).catch(() => false);
 }
 
+/**
+ * Resepsionis E-Meeting dinamis (daftar WIG002, max 5): karyawan yang
+ * bertindak sebagai penyelenggara untuk SEMUA meeting via modul employee.
+ * Tanpa hak force-bentrok dan tanpa kelola master (tetap WIG002).
+ */
+export async function isMeetingReceptionist(session: SessionPayload): Promise<boolean> {
+    if (!session.employeeId) return false;
+    return isListedMeetingReceptionist(session).catch(() => false);
+}
+
+/** WIG002 atau resepsionis: boleh mengelola meeting mana pun. */
+export async function canManageAnyMeeting(session: SessionPayload): Promise<boolean> {
+    if (isWig002(session)) return true;
+    return isMeetingReceptionist(session);
+}
+
 /** Kapabilitas ringan untuk gating menu employee (tanpa fetch berat). */
-export async function getEmployeeMeetingCapabilities(session: SessionPayload): Promise<{ canMonitor: boolean }> {
-    if (!session.employeeId || !session.userId) return { canMonitor: false };
-    return { canMonitor: await isMeetingMonitor(session) };
+export async function getEmployeeMeetingCapabilities(session: SessionPayload): Promise<{ canMonitor: boolean; canManageAll: boolean }> {
+    if (!session.employeeId || !session.userId) return { canMonitor: false, canManageAll: isWig002(session) };
+    const [canMonitor, canManageAll] = await Promise.all([isMeetingMonitor(session), canManageAnyMeeting(session)]);
+    return { canMonitor, canManageAll };
 }
 
 let reminderOffsetsCache: { value: number[]; expiresAt: number } | null = null;
@@ -325,14 +342,52 @@ export async function hasEmployeeOverlap(
             participants: { where: { employeeId: { in: ids } }, select: { employeeId: true } },
         },
     });
-    const out: Array<{ appointmentId: string; employeeId: string }> = [];
+    // Hit jalur peserta vs jalur requester dipisah: resepsionis yang tercatat
+    // sebagai requester adalah admin ruangan (bukan peserta), sehingga hit
+    // jalur requester untuk ID resepsionis aktif diabaikan (ADR-020). Hit
+    // jalur peserta tetap memblokir siapa pun, termasuk resepsionis yang
+    // benar-benar diundang sebagai peserta.
+    const participantHits = new Map<string, Set<string>>();
+    const requesterHits = new Map<string, string>();
     for (const r of rows) {
         const hit = new Set<string>();
-        if (r.requesterEmployeeId && ids.includes(r.requesterEmployeeId)) hit.add(r.requesterEmployeeId);
         for (const p of r.participants) if (p.employeeId) hit.add(p.employeeId);
-        for (const e of hit) out.push({ appointmentId: r.id, employeeId: e });
+        if (hit.size > 0) participantHits.set(r.id, hit);
+        if (r.requesterEmployeeId && ids.includes(r.requesterEmployeeId)) requesterHits.set(r.id, r.requesterEmployeeId);
+    }
+    const requesterIds = [...new Set(requesterHits.values())];
+    const dropped = requesterIds.length > 0 ? await receptionistRequesterDropIds(requesterIds) : new Set<string>();
+    const out: Array<{ appointmentId: string; employeeId: string }> = [];
+    for (const [appointmentId, hit] of participantHits) {
+        for (const employeeId of hit) out.push({ appointmentId, employeeId });
+    }
+    for (const [appointmentId, requesterId] of requesterHits) {
+        if (dropped.has(requesterId)) continue;
+        if (participantHits.get(appointmentId)?.has(requesterId)) continue;
+        out.push({ appointmentId, employeeId: requesterId });
     }
     return out;
+}
+
+/**
+ * ID requester yang hit-jalur-requester-nya boleh diabaikan: terdaftar di
+ * `meeting.receptionists` DAN employee-nya masih aktif. Gagal baca = himpunan
+ * kosong (fail-closed ke perilaku lama: tetap memblokir).
+ */
+async function receptionistRequesterDropIds(candidateIds: string[]): Promise<Set<string>> {
+    const empty = new Set<string>();
+    try {
+        const listed = await getMeetingReceptionistEmployeeIds().catch(() => [] as string[]);
+        const inList = [...new Set(candidateIds.filter(Boolean))].filter((id) => listed.includes(id));
+        if (inList.length === 0) return empty;
+        const actives = await prisma.employee.findMany({
+            where: { employeeId: { in: inList }, isActive: true },
+            select: { employeeId: true },
+        });
+        return new Set(actives.map((e) => e.employeeId));
+    } catch {
+        return empty;
+    }
 }
 
 export interface ParticipantInput {
@@ -439,6 +494,11 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     // tanpa menunggu operator.
     const status = "SCHEDULED";
 
+    // Resepsionis yang membuat meeting bertindak sebagai admin ruangan, bukan
+    // peserta: ID-nya dikeluarkan dari cek bentrok orang + penanda sibuk
+    // (ADR-020). Cek ruangan dan cek peserta tetap jalan penuh.
+    const creatorDrop = await receptionistRequesterDropIds(session.employeeId ? [session.employeeId] : []);
+
     const created = await prisma
         .$transaction(
             async (tx) => {
@@ -448,7 +508,8 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
                 throw new AppointmentError("Ruangan sudah terisi pada waktu tersebut. Pilih waktu lain atau hubungi GA.", 409);
             }
         }
-        const involvedIds = [...(session.employeeId ? [session.employeeId] : []), ...participants.filter((p) => p.employeeId).map((p) => p.employeeId as string)];
+        const creatorIds = session.employeeId && !creatorDrop.has(session.employeeId) ? [session.employeeId] : [];
+        const involvedIds = [...creatorIds, ...participants.filter((p) => p.employeeId).map((p) => p.employeeId as string)];
         const personOverlap = await hasEmployeeOverlap(tx, involvedIds, startAt, endAt);
         const blockedIds = await busyBlockEmployeeIds(tx, involvedIds, startAt, endAt);
         const busyNames = [...new Set([...personOverlap.map((o) => o.employeeId), ...blockedIds])];
@@ -573,7 +634,7 @@ export async function getAppointments(
     session: SessionPayload,
     filters: AppointmentFilters
 ): Promise<{ data: unknown[]; total: number; page: number; limit: number; totalPages: number }> {
-    const privileged = isWig002(session);
+    const privileged = isWig002(session) || (await isMeetingReceptionist(session).catch(() => false));
     const where = buildMeetingWhere(session, filters, privileged);
     // Pagination aman: ukuran halaman dibatasi dan nomor halaman dijepit
     // ke rentang yang ada agar client tidak meminta lompatan kosong raksasa.
@@ -613,22 +674,24 @@ export async function getAppointmentDetail(session: SessionPayload, id: string):
     });
     if (!appt) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     const privileged = isWig002(session);
+    const receptionist = !privileged ? await isMeetingReceptionist(session).catch(() => false) : false;
+    const elevated = privileged || receptionist;
     const mine = Boolean(session.employeeId) && (appt.requesterEmployeeId === session.employeeId || appt.participants.some((p) => p.employeeId === session.employeeId));
-    const monitor = !privileged && !mine ? await isMeetingMonitor(session) : false;
+    const monitor = !elevated && !mine ? await isMeetingMonitor(session) : false;
     const isActiveSchedule = appt.status === "SCHEDULED" && appt.endAt.getTime() > Date.now();
-    if (!privileged && !mine && !monitor && !(Boolean(session.employeeId) && isActiveSchedule)) {
+    if (!elevated && !mine && !monitor && !(Boolean(session.employeeId) && isActiveSchedule)) {
         throw new AppointmentError("Anda tidak memiliki akses ke jadwal meeting ini.", 403);
     }
     return {
         ...withLifecycle(appt),
-        canAccessWorkspace: privileged || mine || monitor,
+        canAccessWorkspace: elevated || mine || monitor,
     };
 }
 
 /**
  * Tetapkan/ganti pimpinan rapat setelah meeting dibuat (terjadwal/berjalan).
- * Hanya penyelenggara, pimpinan rapat saat ini, atau WIG002. Pimpinan rapat
- * wajib peserta internal meeting.
+ * Hanya penyelenggara, pimpinan rapat saat ini, resepsionis, atau WIG002.
+ * Pimpinan rapat wajib peserta internal meeting.
  */
 export async function setMeetingLeader(
     session: SessionPayload,
@@ -654,7 +717,8 @@ export async function setMeetingLeader(
     if (resolveLifecycleStatus(existing.status, existing.startAt, existing.endAt) === "COMPLETED") {
         throw new AppointmentError("Meeting sudah berakhir. Pimpinan rapat tidak dapat diubah.", 409);
     }
-    if (!isWig002(session) && !isMeetingOrganizer(session, existing)) {
+    const managerAll = isWig002(session) || (await isMeetingReceptionist(session).catch(() => false));
+    if (!managerAll && !isMeetingOrganizer(session, existing)) {
         throw new AppointmentError("Hanya penyelenggara atau pimpinan rapat yang dapat mengatur pimpinan rapat.", 403);
     }
     const leaderId = leaderEmployeeId?.trim() || null;
@@ -754,6 +818,7 @@ export async function rescheduleAppointment(
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
     const operator = isWig002(session);
+    const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     if (!session.employeeId && !operator) throw new AppointmentError("Hanya karyawan yang dapat mengubah jadwal meeting.", 403);
     const rawReason = input.changeReason?.trim() ?? "";
     if (rawReason.length > 0 && rawReason.length < 5) {
@@ -788,7 +853,7 @@ export async function rescheduleAppointment(
             throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah.", 400);
         }
         const isOwner = isMeetingOrganizer(session, existing);
-        if (!operator) {
+        if (!managerAll) {
             if (!isOwner) throw new AppointmentError("Hanya pembuat meeting atau GA yang dapat mengubah.", 403);
             if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat diubah pemilik.", 400);
         }
@@ -867,8 +932,12 @@ export async function rescheduleAppointment(
         const addedEmployeeIds = normalizedParticipants
             ? participantEmployeeIds.filter((empId) => !existingInternalSet.has(empId))
             : [];
+        // Requester resepsionis = admin ruangan, bukan peserta: dikeluarkan dari
+        // cek bentrok orang saat jadwal berubah (ADR-020). Cek ruangan dan
+        // cek peserta tetap jalan penuh.
+        const requesterDrop = await receptionistRequesterDropIds(existing.requesterEmployeeId ? [existing.requesterEmployeeId] : []);
         const checkOverlapIds = isTimeChanged
-            ? [...(existing.requesterEmployeeId ? [existing.requesterEmployeeId] : []), ...participantEmployeeIds]
+            ? [...(existing.requesterEmployeeId && !requesterDrop.has(existing.requesterEmployeeId) ? [existing.requesterEmployeeId] : []), ...participantEmployeeIds]
             : addedEmployeeIds;
         if (checkOverlapIds.length > 0) {
             const personOverlap = await hasEmployeeOverlap(tx, checkOverlapIds, startAt, endAt, id);
@@ -1013,13 +1082,14 @@ export async function cancelAppointment(
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
     const operator = isWig002(session);
+    const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     if (!reason || reason.trim().length < 5) throw new AppointmentError("Alasan pembatalan minimal 5 karakter.", 400);
     const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, roomId: true, startAt: true, endAt: true } });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
         throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
     }
-    if (!operator) {
+    if (!managerAll) {
         if (!isMeetingOrganizer(session, existing)) throw new AppointmentError("Hanya pembuat meeting, pimpinan rapat, atau GA yang dapat membatalkan.", 403);
         if (existing.status !== "SCHEDULED") throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan pemilik.", 400);
     }
@@ -1066,7 +1136,7 @@ export async function cancelAppointment(
     });
 }
 
-// ─── Selesaikan lebih awal (pembuat + WIG002, saat berjalan) ───
+// ─── Selesaikan lebih awal (penyelenggara + resepsionis + WIG002, saat berjalan) ───
 
 export async function completeAppointment(
     session: SessionPayload,
@@ -1074,6 +1144,7 @@ export async function completeAppointment(
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
     const operator = isWig002(session);
+    const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
         select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, roomId: true, startAt: true, endAt: true },
@@ -1082,7 +1153,7 @@ export async function completeAppointment(
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
         throw new AppointmentError("Meeting sudah selesai atau dibatalkan.", 409);
     }
-    if (!operator && !isMeetingOrganizer(session, existing)) {
+    if (!managerAll && !isMeetingOrganizer(session, existing)) {
         throw new AppointmentError("Hanya pembuat meeting, pimpinan rapat, atau GA yang dapat menyelesaikan.", 403);
     }
     const now = new Date();
@@ -1112,7 +1183,7 @@ export async function completeAppointment(
     });
 }
 
-// ─── Tandai hadir (WIG002 + pembuat, s/d H+1) ────────────────────
+// ─── Tandai hadir (WIG002 + resepsionis + penyelenggara, s/d H+1) ───
 
 export async function markAttendance(
     session: SessionPayload,
@@ -1121,12 +1192,13 @@ export async function markAttendance(
     actor: { userId?: string | null; username: string }
 ): Promise<unknown> {
     const operator = isWig002(session);
+    const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
         select: { id: true, requesterEmployeeId: true, leaderEmployeeId: true, startAt: true, endAt: true, status: true, participants: { select: { id: true } } },
     });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
-    if (!operator && !isMeetingOrganizer(session, existing)) {
+    if (!managerAll && !isMeetingOrganizer(session, existing)) {
         throw new AppointmentError("Hanya GA, pembuat meeting, atau pimpinan rapat yang dapat menandai kehadiran.", 403);
     }
     if (existing.status !== "SCHEDULED" && existing.status !== "COMPLETED") {
@@ -1283,12 +1355,16 @@ export async function getAvailability(query: AvailabilityQuery): Promise<unknown
         });
         const byEmployee: Record<string, Array<{ startAt: Date; endAt: Date }>> = {};
         for (const id of ids) byEmployee[id] = [];
+        // Samakan tampilan dengan penegakan booking: meeting yang requester-nya
+        // resepsionis aktif tidak dihitung sibuk untuk ID tersebut (ADR-020).
+        const availRequesterIds = [...new Set(rows.map((r) => r.requesterEmployeeId).filter((v): v is string => Boolean(v)))];
+        const availDrop = availRequesterIds.length > 0 ? await receptionistRequesterDropIds(availRequesterIds) : new Set<string>();
         for (const r of rows) {
             const hit = new Set<string>();
             for (const p of r.participants) {
                 if (p.employeeId) hit.add(p.employeeId);
             }
-            if (r.requesterEmployeeId && ids.includes(r.requesterEmployeeId)) hit.add(r.requesterEmployeeId);
+            if (r.requesterEmployeeId && ids.includes(r.requesterEmployeeId) && !availDrop.has(r.requesterEmployeeId)) hit.add(r.requesterEmployeeId);
             for (const e of hit) byEmployee[e]?.push({ startAt: r.startAt, endAt: r.endAt });
         }
         const leaves = await prisma.leaveRequest.findMany({

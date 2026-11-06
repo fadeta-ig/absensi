@@ -146,9 +146,9 @@ RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Ak
 4. `MeetingAppointment` 1 ── * `AppointmentReminderLog` (unik `[appointmentId, offsetMin]`, exactly-once cron).
 5. `Employee` 1 ── * `MeetingAppointment` sebagai pemohon (`requesterEmployeeId`, Restrict) dan 1 ── * `MeetingAppointmentParticipant` (Restrict).
 6. Enum: `MeetingAppointmentStatus` (`SCHEDULED`, `COMPLETED`, `CANCELLED` — tanpa approval; lifecycle tampil `IN_PROGRESS` dihitung dari jam: mulai ≤ kini < selesai), `MeetingAttendanceMark` (`BELUM`, `HADIR`, `TIDAK_HADIR`), `MeetingInviteResponse` (`PENDING`, `ACCEPTED`, `DECLINED`; `TENTATIVE` legacy di DB, API/UI hanya ACCEPT/DECLINE + alasan tolak wajib min 5 dan dibaca penyelenggara via select/bell).
-7. Config: `AppSetting` `appointment.reminder.offsets` (JSON menit, default `[1440]`, pengaturan bawaan yang diatur WIG002).
+7. Config: `AppSetting` `appointment.reminder.offsets` (JSON menit, default `[1440]`, pengaturan bawaan yang diatur WIG002), `meeting.topViewers` (JSON array max 5 employeeId pemantau), `meeting.receptionists` (JSON array max 5 employeeId resepsionis = penyelenggara semua meeting via modul employee, tanpa force/master).
 
-RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; employee memakai `employee.self`.
+RBAC: tanpa permission baru. Master memakai `ga.manage` + `username WIG002`; employee memakai `employee.self`; resepsionis/pemantau via daftar `AppSetting` + guard service.
 
 ## 5. Task Hasil Meeting + Notulensi + Verifikasi (2026-10-08; verifikasi 2026-10-26)
 

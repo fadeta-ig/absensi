@@ -3,7 +3,7 @@ import { isValidCalendarDate, toWIBDateString, wibDateTimeToDate } from "@/lib/t
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
-import { isWig002, resolveLifecycleStatus, isMeetingMonitor } from "@/lib/services/appointmentService";
+import { isWig002, resolveLifecycleStatus, isMeetingMonitor, isMeetingReceptionist } from "@/lib/services/appointmentService";
 import path from "node:path";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -151,7 +151,8 @@ function internalParticipantIds(appt: { requesterEmployeeId: string | null; part
 }
 
 export async function isPrivileged(session: SessionPayload): Promise<boolean> {
-    return isWig002(session);
+    if (isWig002(session)) return true;
+    return isMeetingReceptionist(session).catch(() => false);
 }
 
 async function assertCanAccessMeeting(session: SessionPayload, appt: { requesterEmployeeId: string | null; participants: Array<{ employeeId: string | null }> }): Promise<void> {

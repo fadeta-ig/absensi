@@ -61,9 +61,11 @@ function empSession(over: Record<string, unknown> = {}) {    return {
     } as never;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
     vi.resetAllMocks();
     invalidateReminderOffsetsCache();
+    const { invalidateMeetingReceptionistsCache } = await import("@/lib/services/appSettingsService");
+    invalidateMeetingReceptionistsCache();
     mocked.appSetting.findUnique.mockResolvedValue(null);
     mocked.auditLog.create.mockResolvedValue({} as never);
     mocked.meetingAppointmentRevision.count.mockResolvedValue(0);
@@ -790,5 +792,270 @@ describe("rescheduleAppointment dengan tambah/hapus peserta", () => {
                 }),
             })
         );
+    });
+});
+
+describe("resepsionis e-meeting (penyelenggara untuk semua meeting)", () => {
+    async function resetReceptionistCache(): Promise<void> {
+        const { invalidateMeetingReceptionistsCache } = await import("@/lib/services/appSettingsService");
+        invalidateMeetingReceptionistsCache();
+    }
+
+    function mockReceptionistListed(employeeId: string) {
+        mocked.appSetting.findUnique.mockImplementation((async (args: { where?: { key?: string } }) => {
+            if (args?.where?.key === "meeting.receptionists") return { value: JSON.stringify([employeeId]) };
+            return null;
+        }) as never);
+        mocked.employee.findUnique.mockResolvedValue({ isActive: true } as never);
+    }
+
+    it("capabilities: resepsionis mendapat canManageAll", async () => {
+        await resetReceptionistCache();
+        mockReceptionistListed("ID-009");
+        const { getEmployeeMeetingCapabilities } = await import("@/lib/services/appointmentService");
+        await expect(getEmployeeMeetingCapabilities(empSession({ employeeId: "ID-009", username: "ID-009" }))).resolves.toEqual({
+            canMonitor: false,
+            canManageAll: true,
+        });
+    });
+
+    it("getAppointments: resepsionis tanpa filter kepemilikan (termasuk history)", async () => {
+        await resetReceptionistCache();
+        mockReceptionistListed("ID-009");
+        const { getAppointments } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.count.mockResolvedValue(0 as never);
+        mocked.meetingAppointment.findMany.mockResolvedValue([] as never);
+        await getAppointments(empSession({ employeeId: "ID-009", username: "ID-009" }), { history: true });
+        const call = mocked.meetingAppointment.findMany.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> };
+        expect(JSON.stringify(call.where)).not.toContain("requesterEmployeeId");
+    });
+
+    it("cancelAppointment: resepsionis boleh membatalkan meeting orang lain", async () => {
+        await resetReceptionistCache();
+        mockReceptionistListed("ID-009");
+        const { cancelAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", agenda: null, isFullDay: false, status: "SCHEDULED",
+            requesterEmployeeId: "ID-001", leaderEmployeeId: null, roomId: "r1",
+            startAt: new Date(Date.now() + 3600000), endAt: new Date(Date.now() + 7200000),
+        } as never);
+        const tx = {
+            meetingAppointment: {
+                updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+                findUnique: vi.fn().mockResolvedValue({ id: "a1", status: "CANCELLED" }),
+            },
+            meetingAppointmentRevision: { count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({}) },
+            meetingTask: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn() },
+            meetingTaskAssignee: { updateMany: vi.fn() },
+            meetingTaskRevision: { count: vi.fn(), create: vi.fn() },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        const out = (await cancelAppointment(empSession({ employeeId: "ID-009", username: "ID-009" }), "a1", "Dibatalkan atas permintaan atasan", { userId: "u-9", username: "ID-009" })) as { status: string };
+        expect(out.status).toBe("CANCELLED");
+    });
+
+    it("cancelAppointment: bukan resepsionis/pemilik tetap 403", async () => {
+        await resetReceptionistCache();
+        mocked.appSetting.findUnique.mockResolvedValue(null);
+        const { cancelAppointment } = await import("@/lib/services/appointmentService");
+        mocked.meetingAppointment.findUnique.mockResolvedValue({
+            id: "a1", title: "T", agenda: null, isFullDay: false, status: "SCHEDULED",
+            requesterEmployeeId: "ID-001", leaderEmployeeId: null, roomId: "r1",
+            startAt: new Date(Date.now() + 3600000), endAt: new Date(Date.now() + 7200000),
+        } as never);
+        await expect(
+            cancelAppointment(empSession({ employeeId: "ID-009", username: "ID-009" }), "a1", "Coba batalkan meeting orang", { userId: "u-9", username: "ID-009" })
+        ).rejects.toMatchObject({ statusCode: 403 });
+    });
+});
+
+describe("D1: resepsionis bebas cek bentrok diri (ADR-020)", () => {
+    function mockReceptionistListed(employeeId: string, active = true) {
+        mocked.appSetting.findUnique.mockImplementation((async (args: { where?: { key?: string } }) => {
+            if (args?.where?.key === "meeting.receptionists") return { value: JSON.stringify([employeeId]) };
+            return null;
+        }) as never);
+        // findMany dipakai ganda: validasi peserta (tanpa isActive) + cek aktif drop (isActive: true).
+        mocked.employee.findMany.mockImplementation((async (args: { where?: { isActive?: boolean } }) => {
+            if (args?.where?.isActive === true) return active ? [{ employeeId }] : [];
+            return [
+                { employeeId: "ID-002", isActive: true },
+                { employeeId, isActive: active },
+            ];
+        }) as never);
+    }
+
+    function mockCreateTx(over: Record<string, unknown> = {}) {
+        const tx = {
+            meetingAppointment: {
+                findFirst: vi.fn().mockResolvedValue(null),
+                findMany: vi.fn().mockResolvedValue([]),
+                create: vi.fn().mockResolvedValue({ id: "a9", status: "SCHEDULED" }),
+                ...((over.meetingAppointment ?? {}) as Record<string, unknown>),
+            },
+            employeeUnavailability: { findMany: vi.fn().mockResolvedValue([]) },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        return tx;
+    }
+
+    it("hasEmployeeOverlap: hit jalur requester resepsionis aktif diabaikan", async () => {
+        mockReceptionistListed("ID-009");
+        const { hasEmployeeOverlap } = await import("@/lib/services/appointmentService");
+        const tx = {
+            meetingAppointment: {
+                findMany: vi.fn().mockResolvedValue([{ id: "b1", requesterEmployeeId: "ID-009", participants: [] }]),
+            },
+        };
+        await expect(
+            hasEmployeeOverlap(tx as never, ["ID-009"], new Date("2026-12-01T10:00:00+07:00"), new Date("2026-12-01T11:00:00+07:00"))
+        ).resolves.toEqual([]);
+    });
+
+    it("hasEmployeeOverlap: hit jalur peserta resepsionis tetap memblokir", async () => {
+        mockReceptionistListed("ID-009");
+        const { hasEmployeeOverlap } = await import("@/lib/services/appointmentService");
+        const tx = {
+            meetingAppointment: {
+                findMany: vi.fn().mockResolvedValue([{ id: "b1", requesterEmployeeId: "ID-001", participants: [{ employeeId: "ID-009" }] }]),
+            },
+        };
+        await expect(
+            hasEmployeeOverlap(tx as never, ["ID-009"], new Date("2026-12-01T10:00:00+07:00"), new Date("2026-12-01T11:00:00+07:00"))
+        ).resolves.toEqual([{ appointmentId: "b1", employeeId: "ID-009" }]);
+    });
+
+    it("hasEmployeeOverlap: requester non-resepsionis tetap memblokir", async () => {
+        mockReceptionistListed("ID-009");
+        const { hasEmployeeOverlap } = await import("@/lib/services/appointmentService");
+        const tx = {
+            meetingAppointment: {
+                findMany: vi.fn().mockResolvedValue([{ id: "b1", requesterEmployeeId: "ID-001", participants: [] }]),
+            },
+        };
+        await expect(
+            hasEmployeeOverlap(tx as never, ["ID-001"], new Date("2026-12-01T10:00:00+07:00"), new Date("2026-12-01T11:00:00+07:00"))
+        ).resolves.toEqual([{ appointmentId: "b1", employeeId: "ID-001" }]);
+    });
+
+    it("hasEmployeeOverlap: resepsionis nonaktif tetap memblokir (mati sendiri)", async () => {
+        mockReceptionistListed("ID-009", false);
+        const { hasEmployeeOverlap } = await import("@/lib/services/appointmentService");
+        const tx = {
+            meetingAppointment: {
+                findMany: vi.fn().mockResolvedValue([{ id: "b1", requesterEmployeeId: "ID-009", participants: [] }]),
+            },
+        };
+        await expect(
+            hasEmployeeOverlap(tx as never, ["ID-009"], new Date("2026-12-01T10:00:00+07:00"), new Date("2026-12-01T11:00:00+07:00"))
+        ).resolves.toEqual([{ appointmentId: "b1", employeeId: "ID-009" }]);
+    });
+
+    it("createAppointment: ID pembuat resepsionis dikeluarkan dari cek orang", async () => {
+        mockReceptionistListed("ID-009");
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        const tx = mockCreateTx();
+        const out = (await createAppointment(
+            empSession({ employeeId: "ID-009", username: "ID-009" }),
+            { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" },
+            false
+        )) as { status: string };
+        expect(out.status).toBe("SCHEDULED");
+        const personCall = tx.meetingAppointment.findMany.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> };
+        expect(JSON.stringify(personCall.where)).not.toContain("ID-009");
+        expect(JSON.stringify(personCall.where)).toContain("ID-002");
+        const busyCall = tx.employeeUnavailability.findMany.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> };
+        expect(JSON.stringify(busyCall.where)).not.toContain("ID-009");
+    });
+
+    it("createAppointment: ID pembuat biasa tetap dicek (tidak berubah)", async () => {
+        mocked.appSetting.findUnique.mockResolvedValue(null);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        const tx = mockCreateTx();
+        const out = (await createAppointment(
+            empSession(),
+            { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" },
+            false
+        )) as { status: string };
+        expect(out.status).toBe("SCHEDULED");
+        const personCall = tx.meetingAppointment.findMany.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> };
+        expect(JSON.stringify(personCall.where)).toContain("ID-001");
+    });
+
+    it("createAppointment: resepsionis tetap ditolak bila ruangan bentrok", async () => {
+        mockReceptionistListed("ID-009");
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mockCreateTx({ meetingAppointment: { findFirst: vi.fn().mockResolvedValue({ id: "x" }) } });
+        await expect(
+            createAppointment(
+                empSession({ employeeId: "ID-009", username: "ID-009" }),
+                { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" },
+                false
+            )
+        ).rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    it("createAppointment: resepsionis tetap ditolak bila peserta bentrok", async () => {
+        mockReceptionistListed("ID-009");
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mockCreateTx({
+            meetingAppointment: {
+                findMany: vi.fn().mockResolvedValue([{ id: "b1", requesterEmployeeId: "ID-007", participants: [{ employeeId: "ID-002" }] }]),
+            },
+        });
+        await expect(
+            createAppointment(
+                empSession({ employeeId: "ID-009", username: "ID-009" }),
+                { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-002", leaderEmployeeId: "ID-002" },
+                false
+            )
+        ).rejects.toMatchObject({ statusCode: 409, message: expect.stringContaining("ID-002") as string });
+    });
+
+    it("rescheduleAppointment: requester resepsionis dikeluarkan dari cek saat jadwal berubah", async () => {
+        mockReceptionistListed("ID-009");
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1",
+                    title: "Rapat",
+                    status: "SCHEDULED",
+                    requesterEmployeeId: "ID-009",
+                    leaderEmployeeId: null,
+                    notulisEmployeeId: null,
+                    roomId: "r1",
+                    meetingLink: null,
+                    isFullDay: false,
+                    startAt: new Date(Date.now() + 7200000),
+                    endAt: new Date(Date.now() + 10800000),
+                }),
+                findFirst: vi.fn().mockResolvedValue(null),
+                findMany: vi.fn().mockResolvedValue([]),
+                update: vi.fn().mockResolvedValue({ id: "a1", status: "SCHEDULED" }),
+            },
+            meetingAppointmentParticipant: {
+                findMany: vi.fn().mockResolvedValue([{ id: "p1", employeeId: "ID-002", guestName: null, isExternal: false }]),
+                updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+            },
+            meetingAppointmentRevision: { count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({}) },
+            appointmentReminderLog: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+            employeeUnavailability: { findMany: vi.fn().mockResolvedValue([]) },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        await rescheduleAppointment(
+            empSession({ employeeId: "ID-009", username: "ID-009" }),
+            "a1",
+            { date: "2026-12-10", startTime: "10:00", endTime: "11:00", roomId: "r1", changeReason: "Pindah jadwal atas permintaan atasan" },
+            { userId: "u-9", username: "ID-009" }
+        );
+        const personCall = tx.meetingAppointment.findMany.mock.calls.at(-1)?.[0] as { where: Record<string, unknown> };
+        expect(JSON.stringify(personCall.where)).not.toContain("ID-009");
+        expect(JSON.stringify(personCall.where)).toContain("ID-002");
     });
 });
