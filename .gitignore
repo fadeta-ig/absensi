@@ -85,3 +85,6 @@ next-env.d.ts
 
 # knowledge reports (local research artifacts, never commit)
 /.knowledge/
+
+# antislop/skills local install (never commit)
+/.opencode/
