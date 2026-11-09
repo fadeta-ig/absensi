@@ -983,6 +983,10 @@ export const equipmentProductCreateSchema = z.object({
     name: z.string().trim().min(1, "Nama produk wajib diisi.").max(200),
 });
 
+export const equipmentProductUpdateSchema = z.object({
+    name: z.string().trim().min(1, "Nama produk wajib diisi.").max(200),
+});
+
 export const equipmentProductToolsSchema = z.object({
     equipmentUnitIds: z.array(z.string().trim().min(1).max(191)).max(200),
 });

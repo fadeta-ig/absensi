@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
     prisma: {
-        equipmentProduct: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), delete: vi.fn() },
+        equipmentProduct: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
         equipmentProductTool: { findMany: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
+        equipmentAssignment: { findMany: vi.fn() },
         equipmentUnit: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+        appSetting: { findUnique: vi.fn() },
+        employee: { findUnique: vi.fn() },
         equipmentInspection: { count: vi.fn() },
         auditLog: { create: vi.fn() },
         $transaction: vi.fn(),
@@ -22,9 +25,11 @@ import { prisma } from "@/lib/prisma";
 import {
     listEquipmentProducts,
     createEquipmentProduct,
+    updateEquipmentProduct,
     deleteEquipmentProduct,
     getProductToolChecklist,
     setProductTools,
+    listProductUnitsForEmployee,
 } from "@/lib/services/equipmentProductService";
 import { updateEquipmentUnit } from "@/lib/services/equipmentService";
 
@@ -164,5 +169,63 @@ describe("kategori perusahaan unit (via update unit existing)", () => {
         mocked.equipmentUnit.update.mockResolvedValue({ id: "u1" } as never);
         await updateEquipmentUnit(wigSession(), "u1", { company: "WIG", location: "Gudang" });
         expect(mocked.equipmentProductTool.findFirst).not.toHaveBeenCalled();
+    });
+});
+
+describe("ubah nama produk (WIG002)", () => {
+    it("non-WIG002 ditolak 403; produk hilang 404", async () => {
+        await expect(updateEquipmentProduct(empSession(), "p1", { name: "Baru" })).rejects.toMatchObject({ statusCode: 403 });
+        mocked.equipmentProduct.findUnique.mockResolvedValue(null);
+        await expect(updateEquipmentProduct(wigSession(), "p9", { name: "Baru" })).rejects.toMatchObject({ statusCode: 404 });
+    });
+    it("nama kosong 400; duplikat per perusahaan 409", async () => {
+        mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "WIG" } as never);
+        await expect(updateEquipmentProduct(wigSession(), "p1", { name: "   " })).rejects.toMatchObject({ statusCode: 400 });
+        mocked.equipmentProduct.update.mockRejectedValue({ code: "P2002" });
+        await expect(updateEquipmentProduct(wigSession(), "p1", { name: "Sama" })).rejects.toMatchObject({ statusCode: 409 });
+    });
+    it("rename sukses menulis nama + audit", async () => {
+        mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "WIG" } as never);
+        mocked.equipmentProduct.update.mockResolvedValue({ id: "p1", name: "Bumbu" } as never);
+        const out = await updateEquipmentProduct(wigSession(), "p1", { name: "Bumbu" });
+        expect(out).toMatchObject({ id: "p1", name: "Bumbu" });
+        expect(mocked.equipmentProduct.update).toHaveBeenCalledWith({
+            where: { id: "p1" },
+            data: { name: "Bumbu", nameNormalized: "bumbu" },
+        });
+        expect(mocked.auditLog.create).toHaveBeenCalled();
+    });
+});
+
+describe("daftar alat produk untuk employee", () => {
+    it("tanpa sesi employee 403; produk hilang 404", async () => {
+        const noEmp = { userId: "u-1", username: "ID-001", name: "Pegawai", primaryRole: "EMPLOYEE_USER", roles: ["EMPLOYEE_USER"], permissions: ["employee.self"], employeeId: null } as never;
+        await expect(listProductUnitsForEmployee(noEmp, "p1")).rejects.toMatchObject({ statusCode: 403 });
+        mocked.equipmentProduct.findUnique.mockResolvedValue(null);
+        await expect(listProductUnitsForEmployee(empSession(), "p9")).rejects.toMatchObject({ statusCode: 404 });
+    });
+    it("di luar cakupan perusahaan 403", async () => {
+        mocked.appSetting.findUnique.mockResolvedValue(null);
+        mocked.equipmentAssignment.findMany.mockResolvedValue([] as never);
+        mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "MKI", name: "Teh", isActive: true } as never);
+        await expect(listProductUnitsForEmployee(empSession(), "p1")).rejects.toMatchObject({ statusCode: 403 });
+    });
+    it("semua alat tampil + flag assigned ikut penugasan efektif", async () => {
+        mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "WIG", name: "Bumbu", isActive: true } as never);
+        mocked.appSetting.findUnique.mockResolvedValue({ value: JSON.stringify(["ID-001"]) } as never);
+        mocked.employee.findUnique.mockResolvedValue({ isActive: true } as never);
+        mocked.equipmentAssignment.findMany.mockResolvedValue([
+            { unitId: "u1", startsOnWibDate: "2026-01-01", endsOnWibDate: null },
+        ] as never);
+        mocked.equipmentUnit.findMany.mockResolvedValue([
+            { id: "u1", name: "Baskom", brand: null, location: null },
+            { id: "u2", name: "Sendok", brand: null, location: "Dapur" },
+        ] as never);
+        const out = await listProductUnitsForEmployee(empSession(), "p1");
+        expect(out.product).toMatchObject({ id: "p1", company: "WIG", name: "Bumbu" });
+        expect(out.tools).toEqual([
+            { id: "u1", name: "Baskom", brand: null, location: null, assigned: true },
+            { id: "u2", name: "Sendok", brand: null, location: "Dapur", assigned: false },
+        ]);
     });
 });

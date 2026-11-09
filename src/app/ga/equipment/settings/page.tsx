@@ -199,6 +199,9 @@ export default function EquipmentSettingsPage() {
     const [productError, setProductError] = useState<string | null>(null);
     const [newProductName, setNewProductName] = useState("");
     const [savingProduct, setSavingProduct] = useState(false);
+    const [editingProductId, setEditingProductId] = useState<string | null>(null);
+    const [editProductName, setEditProductName] = useState("");
+    const [savingProductRename, setSavingProductRename] = useState(false);
     const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
     const [checklist, setChecklist] = useState<ProductChecklist | null>(null);
     const [initialChecked, setInitialChecked] = useState<string[]>([]);
@@ -1040,6 +1043,38 @@ export default function EquipmentSettingsPage() {
             setSavingProduct(false);
         }
     }, [savingProduct, newProductName, productCompany, toast, fetchProducts]);
+
+    const saveProductRename = useCallback(async () => {
+        if (!editingProductId || savingProductRename) return;
+        const trimmed = editProductName.trim();
+        if (!trimmed) {
+            toast("Nama produk wajib diisi.", "warning");
+            return;
+        }
+        setSavingProductRename(true);
+        try {
+            const res = await fetch(`/api/ga/equipment/products/${editingProductId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: trimmed }),
+            });
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah nama produk."));
+            toast("Nama produk diperbarui.", "success");
+            setEditingProductId(null);
+            setEditProductName("");
+            await fetchProducts(productCompany);
+            if (selectedProductId === editingProductId) {
+                setChecklist((prev) =>
+                    prev ? { ...prev, product: { ...prev.product, name: trimmed } } : prev
+                );
+            }
+        } catch (err) {
+            toast(err instanceof Error ? err.message : "Gagal.", "error");
+            reportClientError("EquipmentSettings", "Product rename failed", err);
+        } finally {
+            setSavingProductRename(false);
+        }
+    }, [editingProductId, savingProductRename, editProductName, toast, fetchProducts, productCompany, selectedProductId]);
 
     const deleteProduct = useCallback(
         (product: EquipmentProduct) => {
@@ -2526,27 +2561,84 @@ export default function EquipmentSettingsPage() {
                                             selectedProductId === p.id ? "border-primary" : "border-border"
                                         }`}
                                     >
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedProductId(p.id);
-                                                setToolQuery("");
-                                                void fetchChecklist(p.id);
-                                            }}
-                                            className="min-w-0 text-left flex-1 min-h-[44px]"
-                                        >
-                                            <span className="block text-sm font-medium truncate">{p.name}</span>
-                                            <span className="block text-xs text-muted-foreground">
-                                                {p._count.tools} alat terpetakan
-                                            </span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => deleteProduct(p)}
-                                            className="shrink-0 text-xs text-destructive hover:text-destructive/80 min-h-[44px] px-2"
-                                        >
-                                            Hapus
-                                        </button>
+                                        {editingProductId === p.id ? (
+                                            <div className="min-w-0 flex-1 flex flex-col sm:flex-row gap-2 sm:items-center">
+                                                <input
+                                                    type="text"
+                                                    value={editProductName}
+                                                    onChange={(e) => setEditProductName(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") void saveProductRename();
+                                                        if (e.key === "Escape") {
+                                                            setEditingProductId(null);
+                                                            setEditProductName("");
+                                                        }
+                                                    }}
+                                                    maxLength={200}
+                                                    placeholder="Nama produk"
+                                                    autoFocus
+                                                    className={`${inputClass} flex-1`}
+                                                />
+                                                <div className="flex gap-1 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void saveProductRename()}
+                                                        disabled={savingProductRename}
+                                                        className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
+                                                    >
+                                                        {savingProductRename ? "Menyimpan..." : "Simpan"}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditingProductId(null);
+                                                            setEditProductName("");
+                                                        }}
+                                                        className="text-xs text-muted-foreground hover:text-foreground min-h-[44px] px-2"
+                                                    >
+                                                        Batal
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedProductId(p.id);
+                                                        setToolQuery("");
+                                                        void fetchChecklist(p.id);
+                                                    }}
+                                                    className="min-w-0 text-left flex-1 min-h-[44px]"
+                                                >
+                                                    <span className="block text-sm font-medium truncate">{p.name}</span>
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {p._count.tools} alat terpetakan
+                                                    </span>
+                                                </button>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditingProductId(p.id);
+                                                            setEditProductName(p.name);
+                                                        }}
+                                                        className="p-1 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[36px] inline-flex items-center justify-center"
+                                                        title="Ubah nama produk"
+                                                        aria-label={`Ubah nama produk ${p.name}`}
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => deleteProduct(p)}
+                                                        className="shrink-0 text-xs text-destructive hover:text-destructive/80 min-h-[44px] px-2"
+                                                    >
+                                                        Hapus
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
                                     </li>
                                 ))}
                             </ul>

@@ -353,7 +353,7 @@ async function assertAssignee(
     if (!ok) throw new EquipmentError("Anda tidak ditugaskan pada unit ini.", 403);
 }
 
-function isEffectiveOn(today: string, startsOn: string, endsOn: string | null): boolean {
+export function isEffectiveOn(today: string, startsOn: string, endsOn: string | null): boolean {
     return startsOn <= today && (endsOn === null || today < endsOn);
 }
 
