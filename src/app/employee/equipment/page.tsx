@@ -84,7 +84,7 @@ interface UnitHistoryRow {
 }
 
 function formatDateTime(value: string | null): string {
-    if (!value) return "—";
+    if (!value) return "-";
     return new Date(value).toLocaleString("id-ID", {
         day: "numeric",
         month: "short",
@@ -189,7 +189,7 @@ export default function EmployeeEquipmentPage() {
     }, [fetchUnits]);
 
     useEffect(() => {
-        // Atasan murni (topViewer tanpa peran QC) tidak checklist — arahkan ke Pantau.
+        // Atasan murni (topViewer tanpa peran QC) tidak checklist, arahkan ke Pantau.
         void fetch("/api/employee/equipment/capabilities")
             .then((res) => (res.ok ? res.json() : null))
             .then((json: unknown) => {
@@ -537,7 +537,7 @@ export default function EmployeeEquipmentPage() {
             const total = row.progress?.total ?? 0;
             confirm({
                 title: "Batalkan pemeriksaan ini?",
-                message: `${row.unit.name} — ${decided}/${total} item sudah dinilai. Pemeriksaan yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
+                message: `${row.unit.name}: ${decided}/${total} item sudah dinilai. Pemeriksaan yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
                 confirmLabel: "Ya, batalkan",
                 cancelLabel: "Jangan batalkan",
                 variant: "danger",
@@ -717,7 +717,7 @@ export default function EmployeeEquipmentPage() {
         const needsPhoto = active.some((i) => i.requirePhoto);
         confirm({
             title: "Kirim inspeksi?",
-            message: `Ringkasan: ${active.length} item — ${baik} baik, ${rusak} rusak, ${belum} belum dinilai, ${fotoCount}/5 foto.${needsPhoto && fotoCount === 0 ? " Minimal 1 foto wajib." : ""} Inspeksi yang dikirim tidak dapat diubah lagi.`,
+            message: `Ringkasan: ${active.length} item (${baik} baik, ${rusak} rusak, ${belum} belum dinilai, ${fotoCount}/5 foto).${needsPhoto && fotoCount === 0 ? " Minimal 1 foto wajib." : ""} Inspeksi yang dikirim tidak dapat diubah lagi.`,
             confirmLabel: "Ya, kirim",
             cancelLabel: "Periksa lagi",
             variant: "info",
@@ -823,12 +823,12 @@ export default function EmployeeEquipmentPage() {
                     )}
                     {readOnly && inspection && (
                         <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
-                            Tampilan baca — data tidak dapat diubah di sini.
+                            Tampilan baca. Data tidak dapat diubah di sini.
                         </p>
                     )}
                     {noExecute && !inspection && (
                         <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
-                            Lihat saja — alat ini tidak ditugaskan kepada Anda. Anda hanya dapat melihat riwayatnya.
+                            Lihat saja. Alat ini tidak ditugaskan kepada Anda. Anda hanya dapat melihat riwayatnya.
                         </p>
                     )}
                     {readOnly && inspection && inspection.status === "OPEN" && !noExecute && (
@@ -960,7 +960,7 @@ export default function EmployeeEquipmentPage() {
                                 } ${updatingItem === item.id ? "opacity-60" : ""}`}
                             >
                                 <p className="text-sm font-medium text-foreground">
-                                    {item.isPass === true ? "Baik ✓ " : item.isPass === false ? "Rusak ! " : ""}
+                                    {item.isPass === true ? "Baik ✓ " : item.isPass === false ? "Rusak " : ""}
                                     {item.itemNameSnapshot}
                                 </p>
                                 <div className="flex gap-3 mt-2">
@@ -1361,7 +1361,7 @@ export default function EmployeeEquipmentPage() {
                                 <span className="min-w-0 flex-1">
                                     <span className="block font-medium text-foreground truncate">{p.name}</span>
                                     <span className="block text-sm text-muted-foreground">
-                                        {count !== undefined ? `${count} alat` : toolsLoading ? "Memuat…" : "—"}
+                                        {count !== undefined ? `${count} alat` : toolsLoading ? "Memuat…" : "-"}
                                     </span>
                                 </span>
                                 <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1458,8 +1458,8 @@ export default function EmployeeEquipmentPage() {
                                     {entry && last
                                         ? `Terakhir diperiksa ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`
                                         : tool.assigned
-                                          ? "Belum pernah diperiksa — ketuk untuk melihat"
-                                          : "Tidak ditugaskan — ketuk untuk melihat riwayat"}
+                                          ? "Belum pernah diperiksa. Ketuk untuk melihat."
+                                          : "Tidak ditugaskan. Ketuk untuk melihat riwayat."}
                                 </p>
                                 <span
                                     className={`mt-1.5 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${
