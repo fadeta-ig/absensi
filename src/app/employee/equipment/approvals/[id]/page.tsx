@@ -6,6 +6,7 @@ import { AlertTriangle, Camera, CheckCircle2, Loader2, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
+import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
@@ -22,7 +23,7 @@ interface ApprovalItem {
 
 interface ApprovalDto {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     status: string;
     submittedAt: string | null;
@@ -213,7 +214,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
             </Link>
 
             <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                <h1 className="text-xl font-semibold text-foreground">{detail.unit.name}</h1>
+                <h1 className="text-xl font-semibold text-foreground">{detail.unit.name} <EquipmentCompanyBadge company={detail.unit.company} /></h1>
                 {detail.unit.brand && <p className="text-sm text-muted-foreground">{detail.unit.brand}</p>}
                 <p className="text-sm text-muted-foreground mt-1">
                     Dari {stripGelar(detail.startedBy.name)} · Dikirim {formatDateTime(detail.submittedAt)}

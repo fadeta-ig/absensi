@@ -5,7 +5,7 @@ import { EquipmentError, getEquipmentRecap } from "@/lib/services/equipmentServi
 const STATUSES = ["OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
 
 /**
- * GET /api/employee/equipment/overview?unitId=&status=&from=&to=
+ * GET /api/employee/equipment/overview?unitId=&status=&from=&to=&company=&productId=
  * Rekap pantauan untuk Top Viewer Equipment (WIG002/atasan).
  * Otorisasi penuh di service (requireWig002OrTopViewer).
  */
@@ -20,11 +20,18 @@ export async function GET(request: NextRequest) {
         if (status && !(STATUSES as readonly string[]).includes(status)) {
             return NextResponse.json({ error: "Status tidak valid." }, { status: 400 });
         }
+        const company = searchParams.get("company") ?? undefined;
+        if (company && company !== "WIG" && company !== "MKI") {
+            return NextResponse.json({ error: "Parameter company wajib WIG atau MKI." }, { status: 400 });
+        }
+        const productId = searchParams.get("productId")?.trim() || undefined;
         const data = await getEquipmentRecap(session, {
             unitId: searchParams.get("unitId") ?? undefined,
             status: status as "OPEN" | "SUBMITTED" | "DONE" | "APPROVED" | undefined,
             from: searchParams.get("from") ?? undefined,
             to: searchParams.get("to") ?? undefined,
+            company: company as "WIG" | "MKI" | undefined,
+            productId,
         });
         return NextResponse.json({ success: true, data });
     } catch (err) {

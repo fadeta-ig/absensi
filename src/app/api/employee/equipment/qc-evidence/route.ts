@@ -10,7 +10,7 @@ import { sanitizeString } from "@/lib/middleware/sanitize";
 import {
     EquipmentError,
     listQcEvidenceFor,
-    requireQcMember,
+    requireQcMemberForInspection,
     saveQcEvidence,
 } from "@/lib/services/equipmentService";
 import {
@@ -25,7 +25,7 @@ function qcEvidenceServeUrl(id: string): string {
 /**
  * POST /api/employee/equipment/qc-evidence
  * Multipart: inspectionId (string) + photo (File JPEG) + note? (opsional).
- * Hanya anggota QC, hanya saat inspeksi SUBMITTED.
+ * Hanya anggota QC perusahaan inspeksi, hanya saat inspeksi SUBMITTED.
  */
 export async function POST(request: NextRequest) {
     const session = await requireAuth();
@@ -33,8 +33,6 @@ export async function POST(request: NextRequest) {
     if (!session.employeeId) return forbiddenResponse();
 
     try {
-        await requireQcMember(session);
-
         const contentLength = Number(request.headers.get("content-length") ?? "0");
         if (Number.isFinite(contentLength) && contentLength > 0) {
             const limitMb = await getUploadLimit("upload.equipmentEvidence.maxMb").catch(
@@ -57,6 +55,7 @@ export async function POST(request: NextRequest) {
         if (!inspectionId) {
             return NextResponse.json({ error: "inspectionId wajib diisi." }, { status: 400 });
         }
+        await requireQcMemberForInspection(session, inspectionId);
 
         const file = form.get("photo");
         if (!(file instanceof File) || file.size === 0) {

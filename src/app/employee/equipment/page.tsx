@@ -9,9 +9,19 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
-import { EquipmentStatusDot, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
+
+interface ProductToolsData {
+    product: { id: string; company: string; name: string };
+    tools: Array<{ id: string; name: string; brand: string | null; location: string | null; assigned: boolean }>;
+}
+
+type AlatNav =
+    | { level: 1 }
+    | { level: 2; company: "WIG" | "MKI" }
+    | { level: 3; company: "WIG" | "MKI"; productId: string };
 
 interface LastCheck {
     id: string;
@@ -28,8 +38,10 @@ interface MyUnit {
         name: string;
         brand: string | null;
         location: string | null;
+        company: "WIG" | "MKI" | null;
         template: { name: string };
         inspections: LastCheck[];
+        productTools: Array<{ product: { id: string; name: string; company: string } }>;
     };
 }
 
@@ -44,7 +56,7 @@ interface InspectionItem {
 
 interface InspectionDto {
     id: string;
-    unit: { id: string; name: string; brand: string | null };
+    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
     status: string;
     createdAt: string;
     submittedAt: string | null;
@@ -65,14 +77,14 @@ interface UnitHistoryRow {
     submittedAt: string | null;
     checkedAt: string | null;
     approvedAt: string | null;
-    unit: { id: string; name: string; brand: string | null; location: string | null };
+    unit: { id: string; name: string; brand: string | null; location: string | null; company: "WIG" | "MKI" | null };
     startedBy: { employeeId: string; name: string };
     checkedByNameSnapshot: string | null;
     approvedByNameSnapshot: string | null;
 }
 
 function formatDateTime(value: string | null): string {
-    if (!value) return "—";
+    if (!value) return "-";
     return new Date(value).toLocaleString("id-ID", {
         day: "numeric",
         month: "short",
@@ -132,6 +144,16 @@ export default function EmployeeEquipmentPage() {
     const [query, setQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
     const [sortMode, setSortMode] = useState<SortMode>("NEVER_FIRST");
+    const [products, setProducts] = useState<Array<{ id: string; name: string; company: string }>>([]);
+    const [productsLoading, setProductsLoading] = useState(true);
+    // Navigasi 3 level tab Alat: 1 = perusahaan, 2 = jenis produk, 3 = daftar alat.
+    const [nav, setNav] = useState<AlatNav>({ level: 1 });
+    const [productSearch, setProductSearch] = useState("");
+    const [toolsCache, setToolsCache] = useState<Record<string, ProductToolsData>>({});
+    const [toolsLoading, setToolsLoading] = useState(false);
+    const [toolsError, setToolsError] = useState<string | null>(null);
+    // Alat read-only (assigned=false): boleh lihat riwayat unit saja, tanpa aksi eksekusi.
+    const [noExecute, setNoExecute] = useState(false);
 
     // Tab Alat vs Riwayat Saya + mode lihat read-only (anti klik-diam-diam-jalan).
     const [mainTab, setMainTab] = useState<"alat" | "riwayat">("alat");
@@ -164,7 +186,10 @@ export default function EmployeeEquipmentPage() {
 
     useEffect(() => {
         void fetchUnits();
-        // Atasan murni (topViewer tanpa peran QC) tidak checklist — arahkan ke Pantau.
+    }, [fetchUnits]);
+
+    useEffect(() => {
+        // Atasan murni (topViewer tanpa peran QC) tidak checklist, arahkan ke Pantau.
         void fetch("/api/employee/equipment/capabilities")
             .then((res) => (res.ok ? res.json() : null))
             .then((json: unknown) => {
@@ -173,7 +198,28 @@ export default function EmployeeEquipmentPage() {
                 if (data?.canTopView === true && data?.canReview !== true) setIsTopOnly(true);
             })
             .catch(() => undefined);
-    }, [fetchUnits]);
+        // Jenis produk se-cakupan per perusahaan untuk navigasi level 1–2.
+        // Di luar cakupan → 403 → dianggap kosong untuk perusahaan itu.
+        setProductsLoading(true);
+        void (async () => {
+            const results = await Promise.all(
+                (["WIG", "MKI"] as const).map(async (company) => {
+                    try {
+                        const res = await fetch(`/api/employee/equipment/products?company=${company}`);
+                        if (!res.ok) return [];
+                        const json = (await res.json()) as {
+                            data?: Array<{ id: string; name: string; company: string }>;
+                        };
+                        return Array.isArray(json.data) ? json.data : [];
+                    } catch {
+                        return [];
+                    }
+                })
+            );
+            setProducts([...results[0], ...results[1]]);
+            setProductsLoading(false);
+        })();
+    }, []);
 
     const checkedTodayCount = useMemo(() => {
         const today = wibToday();
@@ -183,14 +229,103 @@ export default function EmployeeEquipmentPage() {
         }).length;
     }, [units]);
 
-    const visibleUnits = useMemo(() => {
+    const unitById = useMemo(() => new Map(units.map((e) => [e.unit.id, e])), [units]);
+
+    // Helper bertipe untuk JSX tanpa narrowing manual.
+    const navCompany: "WIG" | "MKI" | null = nav.level === 1 ? null : nav.company;
+    const navProductId: string | null = nav.level === 3 ? nav.productId : null;
+
+    // Level 1: perusahaan yang relevan = gabungan cakupan dari produk scoped + unit ditugaskan.
+    // Satu perusahaan pun tetap tampil sebagai 1 kartu (tanpa auto-loncat).
+    const companies = useMemo(() => {
+        const set = new Set<"WIG" | "MKI">();
+        for (const p of products) {
+            if (p.company === "WIG" || p.company === "MKI") set.add(p.company);
+        }
+        for (const u of units) {
+            const c = u.unit.company;
+            if (c === "WIG" || c === "MKI") set.add(c);
+        }
+        return (["WIG", "MKI"] as const).filter((c) => set.has(c));
+    }, [products, units]);
+
+    const productCountByCompany = useMemo(() => {
+        const map: Record<"WIG" | "MKI", number> = { WIG: 0, MKI: 0 };
+        for (const p of products) {
+            if (p.company === "WIG" || p.company === "MKI") map[p.company] += 1;
+        }
+        return map;
+    }, [products]);
+
+    const assignedCountByCompany = useMemo(() => {
+        const map: Record<"WIG" | "MKI", number> = { WIG: 0, MKI: 0 };
+        for (const e of units) {
+            const c = e.unit.company;
+            if (c === "WIG" || c === "MKI") map[c] += 1;
+        }
+        return map;
+    }, [units]);
+
+    // Level 2: jenis produk satu perusahaan. Fallback dari productTools unit
+    // bila produk scoped kosong (mis. fetch parsial gagal).
+    const companyProducts = useMemo(() => {
+        if (nav.level !== 2 && nav.level !== 3) return [];
+        const company = nav.company;
+        const scoped = products.filter((p) => p.company === company);
+        if (scoped.length > 0) return [...scoped].sort((a, b) => a.name.localeCompare(b.name, "id"));
+        const seen = new Map<string, { id: string; name: string; company: string }>();
+        for (const e of units) {
+            for (const t of e.unit.productTools) {
+                if (t.product.company === company && !seen.has(t.product.id)) {
+                    seen.set(t.product.id, { id: t.product.id, name: t.product.name, company: t.product.company });
+                }
+            }
+        }
+        return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
+    }, [nav, products, units]);
+
+    const filteredCompanyProducts = useMemo(() => {
+        const q = productSearch.trim().toLowerCase();
+        if (!q) return companyProducts;
+        return companyProducts.filter((p) => p.name.toLowerCase().includes(q));
+    }, [companyProducts, productSearch]);
+
+    // Level 3: alat satu produk (assigned + read-only). Fallback ke unit
+    // ditugaskan bila cache tools belum termuat.
+    const level3Tools = useMemo<ProductToolsData["tools"]>(() => {
+        if (nav.level !== 3) return [];
+        const cached = toolsCache[nav.productId];
+        if (cached) return cached.tools;
+        const productId = nav.productId;
+        return units
+            .filter((e) => e.unit.productTools.some((t) => t.product.id === productId))
+            .map((e) => ({
+                id: e.unit.id,
+                name: e.unit.name,
+                brand: e.unit.brand,
+                location: e.unit.location,
+                assigned: true,
+            }));
+    }, [nav, toolsCache, units]);
+
+    const level3ProductName = useMemo(() => {
+        if (nav.level !== 3) return "";
+        const cached = toolsCache[nav.productId];
+        if (cached) return cached.product.name;
+        return products.find((p) => p.id === nav.productId)?.name ?? "Jenis produk";
+    }, [nav, products, toolsCache]);
+
+    const visibleLevel3Tools = useMemo(() => {
         const q = query.trim().toLowerCase();
         const today = wibToday();
-        const filtered = units.filter((entry) => {
-            const u = entry.unit;
-            const last = u.inspections[0];
+        const rows = level3Tools.map((tool) => {
+            const entry = unitById.get(tool.id);
+            const last = entry?.unit.inspections[0] ?? null;
+            return { tool, entry, last };
+        });
+        const filtered = rows.filter(({ tool, last }) => {
             if (q) {
-                const hay = [u.name, u.brand ?? "", u.location ?? "", u.template.name].join(" ").toLowerCase();
+                const hay = [tool.name, tool.brand ?? "", tool.location ?? ""].join(" ").toLowerCase();
                 if (!hay.includes(q)) return false;
             }
             switch (statusFilter) {
@@ -205,21 +340,19 @@ export default function EmployeeEquipmentPage() {
                     return true;
             }
         });
-        const checkedToday = (entry: MyUnit) => {
-            const last = entry.unit.inspections[0];
-            return !!last && wibDateOf(last.createdAt) === today;
-        };
+        const checkedToday = (row: { last: LastCheck | null }) =>
+            !!row.last && wibDateOf(row.last.createdAt) === today;
         return [...filtered].sort((a, b) => {
-            if (sortMode === "AZ") return a.unit.name.localeCompare(b.unit.name, "id");
+            if (sortMode === "AZ") return a.tool.name.localeCompare(b.tool.name, "id");
             const ac = checkedToday(a) ? 1 : 0;
             const bc = checkedToday(b) ? 1 : 0;
             if (ac !== bc) return ac - bc;
-            const an = a.unit.inspections.length === 0 ? 0 : 1;
-            const bn = b.unit.inspections.length === 0 ? 0 : 1;
+            const an = a.last ? 1 : 0;
+            const bn = b.last ? 1 : 0;
             if (an !== bn) return an - bn;
-            return a.unit.name.localeCompare(b.unit.name, "id");
+            return a.tool.name.localeCompare(b.tool.name, "id");
         });
-    }, [units, query, statusFilter, sortMode]);
+    }, [level3Tools, unitById, query, statusFilter, sortMode]);
 
     const fetchInspectionDetail = useCallback(
         async (id: string) => {
@@ -281,6 +414,7 @@ export default function EmployeeEquipmentPage() {
             setInspection(null);
             setStartError(null);
             setReadOnly(false);
+            setNoExecute(false);
             setUnitChoice(null);
             setUnitHistory([]);
             setDetailLoading(true);
@@ -375,6 +509,7 @@ export default function EmployeeEquipmentPage() {
         setInspection(null);
         setStartError(null);
         setReadOnly(false);
+        setNoExecute(false);
         setUnitChoice(null);
         setUnitHistory([]);
     }, []);
@@ -402,7 +537,7 @@ export default function EmployeeEquipmentPage() {
             const total = row.progress?.total ?? 0;
             confirm({
                 title: "Batalkan pemeriksaan ini?",
-                message: `${row.unit.name} — ${decided}/${total} item sudah dinilai. Pemeriksaan yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
+                message: `${row.unit.name}: ${decided}/${total} item sudah dinilai. Pemeriksaan yang dibatalkan hilang dari daftar kerja dan tercatat sebagai Dibatalkan.`,
                 confirmLabel: "Ya, batalkan",
                 cancelLabel: "Jangan batalkan",
                 variant: "danger",
@@ -437,8 +572,10 @@ export default function EmployeeEquipmentPage() {
                     name: row.unit.name,
                     brand: row.unit.brand ?? null,
                     location: (row.unit as { location?: string | null }).location ?? null,
+                    company: row.unit.company,
                     template: { name: "" },
                     inspections: [],
+                    productTools: [],
                 },
             });
             setInspection(null);
@@ -481,6 +618,95 @@ export default function EmployeeEquipmentPage() {
         [toast]
     );
 
+    // Alat read-only (assigned=false): tampilkan riwayat unit saja, tanpa aksi eksekusi.
+    // Reuse pola readOnly + unitHistory; tombol mulai/lanjut disembunyikan via noExecute.
+    const openReadOnlyTool = useCallback(
+        (tool: { id: string; name: string; brand: string | null; location: string | null }, company: "WIG" | "MKI" | null) => {
+            const entry: MyUnit = {
+                unit: {
+                    id: tool.id,
+                    name: tool.name,
+                    brand: tool.brand,
+                    location: tool.location,
+                    company,
+                    template: { name: "" },
+                    inspections: [],
+                    productTools: [],
+                },
+            };
+            setSelectedUnit(entry);
+            setInspection(null);
+            setStartError(null);
+            setReadOnly(true);
+            setNoExecute(true);
+            setUnitChoice(entry);
+            setUnitHistory([]);
+            setDetailLoading(false);
+            void fetchUnitHistory(tool.id);
+        },
+        [fetchUnitHistory]
+    );
+
+    // Muat tools per produk saat masuk level 2 (untuk jumlah alat) / level 3.
+    useEffect(() => {
+        if (nav.level === 1) return;
+        const ids =
+            nav.level === 2
+                ? companyProducts.map((p) => p.id)
+                : [nav.productId];
+        const missing = ids.filter((id) => !toolsCache[id]);
+        if (missing.length === 0) return;
+        let cancelled = false;
+        setToolsLoading(true);
+        setToolsError(null);
+        void (async () => {
+            const entries = await Promise.all(
+                missing.map(async (id) => {
+                    try {
+                        const res = await fetch(`/api/employee/equipment/products/${encodeURIComponent(id)}/tools`);
+                        if (!res.ok) return null;
+                        const json = await res.json();
+                        return { id, data: json.data as ProductToolsData };
+                    } catch {
+                        return null;
+                    }
+                })
+            );
+            if (cancelled) return;
+            setToolsCache((prev) => {
+                const next = { ...prev };
+                for (const e of entries) if (e) next[e.id] = e.data;
+                return next;
+            });
+            if (entries.some((e) => e === null)) setToolsError("Sebagian daftar alat gagal dimuat.");
+            setToolsLoading(false);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [nav, companyProducts, toolsCache]);
+
+    const retryLevel3Tools = useCallback(() => {
+        if (nav.level !== 3) return;
+        const id = nav.productId;
+        setToolsLoading(true);
+        setToolsError(null);
+        void (async () => {
+            try {
+                const res = await fetch(`/api/employee/equipment/products/${encodeURIComponent(id)}/tools`);
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat alat produk."));
+                const json = await res.json();
+                setToolsCache((prev) => ({ ...prev, [id]: json.data as ProductToolsData }));
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : "Gagal memuat alat.";
+                setToolsError(msg);
+                reportClientError("EmployeeEquipment", msg, err, { productId: id });
+            } finally {
+                setToolsLoading(false);
+            }
+        })();
+    }, [nav]);
+
     const submitInspection = useCallback(() => {
         if (!inspection || submitting || readOnly) return;
         const active = inspection.items.filter((i) => i.isActive);
@@ -491,7 +717,7 @@ export default function EmployeeEquipmentPage() {
         const needsPhoto = active.some((i) => i.requirePhoto);
         confirm({
             title: "Kirim inspeksi?",
-            message: `Ringkasan: ${active.length} item — ${baik} baik, ${rusak} rusak, ${belum} belum dinilai, ${fotoCount}/5 foto.${needsPhoto && fotoCount === 0 ? " Minimal 1 foto wajib." : ""} Inspeksi yang dikirim tidak dapat diubah lagi.`,
+            message: `Ringkasan: ${active.length} item (${baik} baik, ${rusak} rusak, ${belum} belum dinilai, ${fotoCount}/5 foto).${needsPhoto && fotoCount === 0 ? " Minimal 1 foto wajib." : ""} Inspeksi yang dikirim tidak dapat diubah lagi.`,
             confirmLabel: "Ya, kirim",
             cancelLabel: "Periksa lagi",
             variant: "info",
@@ -575,7 +801,9 @@ export default function EmployeeEquipmentPage() {
                 </button>
 
                 <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                    <h1 className="text-xl font-semibold text-foreground">{selectedUnit.unit.name}</h1>
+                    <h1 className="text-xl font-semibold text-foreground">
+                        {selectedUnit.unit.name} <EquipmentCompanyBadge company={selectedUnit.unit.company} />
+                    </h1>
                     <p className="text-sm text-muted-foreground mt-1">
                         {selectedUnit.unit.template.name}
                         {[selectedUnit.unit.brand, selectedUnit.unit.location].filter(Boolean).length > 0 &&
@@ -595,10 +823,15 @@ export default function EmployeeEquipmentPage() {
                     )}
                     {readOnly && inspection && (
                         <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
-                            Tampilan baca — data tidak dapat diubah di sini.
+                            Tampilan baca. Data tidak dapat diubah di sini.
                         </p>
                     )}
-                    {readOnly && inspection && inspection.status === "OPEN" && (
+                    {noExecute && !inspection && (
+                        <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
+                            Lihat saja. Alat ini tidak ditugaskan kepada Anda. Anda hanya dapat melihat riwayatnya.
+                        </p>
+                    )}
+                    {readOnly && inspection && inspection.status === "OPEN" && !noExecute && (
                         <button
                             type="button"
                             onClick={() => setReadOnly(false)}
@@ -643,6 +876,7 @@ export default function EmployeeEquipmentPage() {
                             >
                                 <Eye aria-hidden="true" className="h-4 w-4" /> Lihat riwayat unit ini
                             </button>
+                            {!noExecute && (
                             <button
                                 type="button"
                                 onClick={() => {
@@ -653,6 +887,7 @@ export default function EmployeeEquipmentPage() {
                             >
                                 Mulai pemeriksaan baru
                             </button>
+                            )}
                         </div>
 
                         {unitHistoryLoading && (
@@ -725,7 +960,7 @@ export default function EmployeeEquipmentPage() {
                                 } ${updatingItem === item.id ? "opacity-60" : ""}`}
                             >
                                 <p className="text-sm font-medium text-foreground">
-                                    {item.isPass === true ? "Baik ✓ " : item.isPass === false ? "Rusak ! " : ""}
+                                    {item.isPass === true ? "Baik ✓ " : item.isPass === false ? "Rusak " : ""}
                                     {item.itemNameSnapshot}
                                 </p>
                                 <div className="flex gap-3 mt-2">
@@ -993,14 +1228,14 @@ export default function EmployeeEquipmentPage() {
                 </div>
             )}
 
-            {mainTab === "alat" && units.length > 0 && (
+            {mainTab === "alat" && nav.level === 3 && (
                 <div className="sticky top-0 z-10 bg-background/95 backdrop-blur pb-2 -mx-4 px-4 pt-1">
                     <EquipmentSearchField
                         id="cari-alat"
                         label="Cari alat"
                         value={query}
                         onChange={setQuery}
-                        placeholder="Cari nama, merek, lokasi, template..."
+                        placeholder="Cari nama, merek, lokasi..."
                     />
                     <div className="flex gap-2 mt-2 overflow-x-auto pb-1" role="group" aria-label="Filter status cek">
                         {STATUS_CHIPS.map((chip) => {
@@ -1035,49 +1270,206 @@ export default function EmployeeEquipmentPage() {
                 </div>
             )}
 
-            {mainTab === "alat" && units.length === 0 && !error && (
-                <div className="text-center py-12">
-                    <p className="text-muted-foreground">Anda belum ditugaskan ke alat mana pun.</p>
+            {mainTab === "alat" && nav.level === 1 && (
+                <div className="space-y-3" aria-live="polite" aria-label="Pilih perusahaan">
+                    {productsLoading && (
+                        <div className="space-y-3" role="status" aria-label="Memuat perusahaan">
+                            {[0, 1].map((i) => (
+                                <div key={i} className="bg-card border border-border rounded-lg p-4">
+                                    <Skeleton className="h-5 w-32 mb-2" />
+                                    <Skeleton className="h-4 w-48" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {!productsLoading && companies.length === 0 && units.length === 0 && !error && (
+                        <div className="text-center py-12">
+                            <p className="text-muted-foreground">Anda belum ditugaskan ke alat mana pun, atau alat Anda belum dikategorikan.</p>
+                            <p className="text-sm text-muted-foreground mt-1">Hubungi admin GA bila Anda seharusnya memiliki akses.</p>
+                        </div>
+                    )}
+                    {!productsLoading &&
+                        companies.map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                    setNav({ level: 2, company: c });
+                                    setProductSearch("");
+                                }}
+                                className="w-full flex items-center gap-3 p-4 bg-card border border-border rounded-lg hover:bg-accent/50 active:bg-accent transition-colors text-left min-h-[72px]"
+                            >
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-bold text-primary">
+                                    {c}
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block font-medium text-foreground">Perusahaan {c}</span>
+                                    <span className="block text-sm text-muted-foreground truncate">
+                                        {productCountByCompany[c]} jenis produk · {assignedCountByCompany[c]} alat ditugaskan
+                                    </span>
+                                </span>
+                                <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0" />
+                            </button>
+                        ))}
                 </div>
             )}
 
-            {mainTab === "alat" && visibleUnits.length === 0 && units.length > 0 && !error && (
-                <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                    <p className="text-sm font-medium text-foreground">Tidak ditemukan.</p>
-                    <p className="text-sm text-muted-foreground mt-1">Coba kata kunci atau filter lain.</p>
+            {mainTab === "alat" && nav.level === 2 && navCompany && (
+                <div className="space-y-3" aria-live="polite">
                     <button
                         type="button"
                         onClick={() => {
-                            setQuery("");
-                            setStatusFilter("ALL");
+                            setNav({ level: 1 });
+                            setProductSearch("");
                         }}
-                        className="mt-3 px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-primary border border-primary/40 rounded-md hover:bg-primary/10"
+                        className="text-sm font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
                     >
-                        Atur ulang pencarian
+                        ← Perusahaan
                     </button>
+                    <div>
+                        <h2 className="text-lg font-semibold text-foreground">Jenis produk {navCompany}</h2>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                            {companyProducts.length} jenis produk. Pilih untuk melihat alatnya.
+                        </p>
+                    </div>
+                    <EquipmentSearchField
+                        id="cari-produk"
+                        label="Cari jenis produk"
+                        value={productSearch}
+                        onChange={setProductSearch}
+                        placeholder="Cari jenis produk..."
+                    />
+                    {filteredCompanyProducts.length === 0 && (
+                        <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
+                            <p className="text-sm font-medium text-foreground">Tidak ditemukan.</p>
+                            <p className="text-sm text-muted-foreground mt-1">Coba kata kunci lain.</p>
+                        </div>
+                    )}
+                    {filteredCompanyProducts.map((p) => {
+                        const count = toolsCache[p.id]?.tools.length;
+                        return (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                    setNav({ level: 3, company: navCompany, productId: p.id });
+                                    setQuery("");
+                                    setStatusFilter("ALL");
+                                }}
+                                className="w-full flex items-center gap-2.5 p-4 bg-card border border-border rounded-lg hover:bg-accent/50 active:bg-accent transition-colors text-left min-h-[64px]"
+                            >
+                                <span className="min-w-0 flex-1">
+                                    <span className="block font-medium text-foreground truncate">{p.name}</span>
+                                    <span className="block text-sm text-muted-foreground">
+                                        {count !== undefined ? `${count} alat` : toolsLoading ? "Memuat…" : "-"}
+                                    </span>
+                                </span>
+                                <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0" />
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
-            {mainTab === "alat" && (
+            {mainTab === "alat" && nav.level === 3 && navCompany && navProductId && (
             <div className="space-y-3" aria-live="polite">
-                {visibleUnits.map((entry) => {
-                    const last = entry.unit.inspections[0];
-                    const meta = [entry.unit.brand, entry.unit.location, entry.unit.template.name].filter(Boolean).join(" · ");
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setNav({ level: 2, company: navCompany })}
+                        className="text-sm font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
+                    >
+                        ← Jenis produk {navCompany}
+                    </button>
+                    <h2 className="text-lg font-semibold text-foreground">
+                        {level3ProductName} <EquipmentCompanyBadge company={navCompany} />
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        {level3Tools.length} alat. Ketuk alat yang Ditugaskan untuk mengerjakan, atau Lihat saja untuk riwayat.
+                    </p>
+                </div>
+                {toolsError && (
+                    <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-center">
+                        <p className="text-sm text-destructive">{toolsError}</p>
+                        <button
+                            type="button"
+                            onClick={retryLevel3Tools}
+                            className="mt-2 text-sm font-medium text-primary hover:underline inline-flex items-center gap-1 min-h-[44px] px-3"
+                        >
+                            <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> Coba lagi
+                        </button>
+                    </div>
+                )}
+                {toolsLoading && level3Tools.length === 0 && (
+                    <div className="flex items-center justify-center py-8" role="status" aria-label="Memuat alat">
+                        <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                )}
+                {!toolsLoading && visibleLevel3Tools.length === 0 && level3Tools.length > 0 && (
+                    <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
+                        <p className="text-sm font-medium text-foreground">Tidak ditemukan.</p>
+                        <p className="text-sm text-muted-foreground mt-1">Coba kata kunci atau filter lain.</p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setQuery("");
+                                setStatusFilter("ALL");
+                            }}
+                            className="mt-3 px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-primary border border-primary/40 rounded-md hover:bg-primary/10"
+                        >
+                            Atur ulang pencarian
+                        </button>
+                    </div>
+                )}
+                {visibleLevel3Tools.map(({ tool, entry, last }) => {
+                    const meta = [tool.brand, tool.location].filter(Boolean).join(" · ");
                     return (
                         <button
-                            key={`unit-${entry.unit.id}`}
-                            onClick={() => void openUnit(entry)}
+                            key={`tool-${tool.id}`}
+                            onClick={() => {
+                                if (tool.assigned) {
+                                    void openUnit(
+                                        entry ?? {
+                                            unit: {
+                                                id: tool.id,
+                                                name: tool.name,
+                                                brand: tool.brand,
+                                                location: tool.location,
+                                                company: navCompany,
+                                                template: { name: "" },
+                                                inspections: [],
+                                                productTools: [],
+                                            },
+                                        }
+                                    );
+                                } else {
+                                    openReadOnlyTool(tool, navCompany);
+                                }
+                            }}
                             className="w-full flex items-start gap-2.5 p-4 bg-card border border-border rounded-lg hover:bg-accent/50 active:bg-accent transition-colors text-left min-h-[64px]"
                         >
                             <EquipmentStatusDot status={last?.status ?? null} />
                             <div className="min-w-0 flex-1">
-                                <p className="font-medium text-foreground truncate">{entry.unit.name}</p>
+                                <p className="font-medium text-foreground truncate">
+                                    {tool.name} <EquipmentCompanyBadge company={entry?.unit.company ?? navCompany} />
+                                </p>
                                 {meta && <p className="text-sm text-muted-foreground truncate">{meta}</p>}
                                 <p className={`text-xs mt-0.5 truncate ${last ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}`}>
-                                    {last
+                                    {entry && last
                                         ? `Terakhir diperiksa ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`
-                                        : "Belum pernah diperiksa — ketuk untuk melihat"}
+                                        : tool.assigned
+                                          ? "Belum pernah diperiksa. Ketuk untuk melihat."
+                                          : "Tidak ditugaskan. Ketuk untuk melihat riwayat."}
                                 </p>
+                                <span
+                                    className={`mt-1.5 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${
+                                        tool.assigned
+                                            ? "bg-primary/10 text-primary"
+                                            : "bg-muted text-muted-foreground"
+                                    }`}
+                                >
+                                    {tool.assigned ? "Ditugaskan" : "Lihat saja"}
+                                </span>
                             </div>
                             <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
                         </button>

@@ -101,13 +101,13 @@ describe("template & unit guards", () => {
     });
     it("qc members fallback kosong bila setting kosong", async () => {
         mocked.appSetting.findUnique.mockResolvedValue(null);
-        await expect(getEquipmentQcMemberIds()).resolves.toEqual([]);
+        await expect(getEquipmentQcMemberIds("WIG")).resolves.toEqual([]);
     });
 });
 
 describe("mode penugasan (WIG002 menentukan siapa)", () => {
     it("outsource (tanpa employee aktif) ditolak 422", async () => {
-        mocked.equipmentUnit.findUnique.mockResolvedValue({ id: "u1", isActive: true } as never);
+        mocked.equipmentUnit.findUnique.mockResolvedValue({ id: "u1", isActive: true, company: "WIG" } as never);
         mocked.employee.findFirst.mockResolvedValue(null);
         await expect(assignEquipmentUnit(wigSession(), { unitId: "u1", employeeId: "OUT-001" })).rejects.toMatchObject({ statusCode: 422 });
     });
@@ -119,7 +119,7 @@ describe("mode penugasan (WIG002 menentukan siapa)", () => {
         expect(out.unitId).toBeNull();
     });
     it("global vs spesifik bertabrakan 409", async () => {
-        mocked.equipmentUnit.findUnique.mockResolvedValue({ id: "unit-9", isActive: true } as never);
+        mocked.equipmentUnit.findUnique.mockResolvedValue({ id: "unit-9", isActive: true, company: "WIG" } as never);
         mocked.employee.findFirst.mockResolvedValue({ employeeId: "ID-001", name: "A", isActive: true, userAccount: { id: "u-1" } } as never);
         mocked.equipmentAssignment.findFirst.mockResolvedValue({ id: "a0" } as never);
         await expect(assignEquipmentUnit(wigSession(), { unitId: "unit-9", employeeId: "ID-001" })).rejects.toMatchObject({ statusCode: 409 });
@@ -141,11 +141,11 @@ describe("mode penugasan (WIG002 menentukan siapa)", () => {
 
 describe("qc members & recap", () => {
     it("bukan WIG002 ditolak 403", async () => {
-        await expect(setEquipmentQcMembers(empSession(), ["ID-001"], actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(setEquipmentQcMembers(empSession(), "WIG", ["ID-001"], actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("lebih dari 20 ditolak 409", async () => {
         const ids = Array.from({ length: 21 }, (_, i) => `QC-${i}`);
-        await expect(setEquipmentQcMembers(wigSession(), ids, actor)).rejects.toMatchObject({ statusCode: 409 });
+        await expect(setEquipmentQcMembers(wigSession(), "WIG", ids, actor)).rejects.toMatchObject({ statusCode: 409 });
     });
     it("recap tanpa hak ditolak 403", async () => {
         const { getEquipmentRecap } = await import("@/lib/services/equipmentService");
@@ -165,6 +165,7 @@ describe("inspection flow guards", () => {
             id: "u1",
             name: "Mixer",
             isActive: true,
+            company: "WIG",
             template: { isActive: true, items: [{ id: "ti1", name: "Fungsi", sortOrder: 0, requirePhoto: false }] },
         } as never);
         mocked.equipmentAssignment.findMany.mockResolvedValue([]);
@@ -182,7 +183,7 @@ describe("inspection flow guards", () => {
         const insp = {
             id: "in1",
             status: "OPEN",
-            unit: { id: "u1" },
+            unit: { id: "u1", company: "WIG" },
             items: [{ isActive: true, isPass: null, requirePhoto: false }],
             evidence: [],
         };
@@ -194,7 +195,7 @@ describe("inspection flow guards", () => {
         const insp = {
             id: "in1",
             status: "OPEN",
-            unit: { id: "u1" },
+            unit: { id: "u1", company: "WIG" },
             items: [{ isActive: true, isPass: true, requirePhoto: true }],
             evidence: [],
         };
@@ -206,7 +207,7 @@ describe("inspection flow guards", () => {
         const insp = {
             id: "in1",
             status: "OPEN",
-            unit: { id: "u1" },
+            unit: { id: "u1", company: "WIG" },
             items: [
                 { isActive: true, isPass: true, requirePhoto: true },
                 { isActive: true, isPass: false, requirePhoto: true },
@@ -240,7 +241,10 @@ describe("antrean QC (wadah)", () => {
         mocked.equipmentInspection.findMany.mockResolvedValue(rows as never);
         const out = await getPendingEquipmentApprovals(qcSession());
         expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { status: "SUBMITTED" }, orderBy: { submittedAt: "desc" } })
+            expect.objectContaining({
+                where: { status: "SUBMITTED", unit: { company: { in: ["WIG", "MKI"] } } },
+                orderBy: { submittedAt: "desc" },
+            })
         );
         expect(out.map((r) => (r as { id: string }).id)).toEqual(["new", "old"]);
     });
@@ -250,7 +254,7 @@ describe("QC DONE", () => {
     const submitted = {
         id: "in1",
         status: "SUBMITTED",
-        unit: { id: "u1" },
+        unit: { id: "u1", company: "WIG" },
         items: [],
         evidence: [],
         qcEvidence: [],
@@ -294,7 +298,7 @@ describe("APPROVAL final", () => {
     const doneRow = {
         id: "in1",
         status: "DONE",
-        unit: { id: "u1" },
+        unit: { id: "u1", company: "WIG" },
         items: [],
         evidence: [],
         qcEvidence: [],
@@ -313,18 +317,20 @@ describe("APPROVAL final", () => {
         await expect(approveEquipmentInspection(empSession(), "in1")).rejects.toMatchObject({ statusCode: 403 });
     });
     it("set approver bukan WIG002 ditolak 403", async () => {
-        await expect(setEquipmentApprover(empSession(), "AP-001", actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(setEquipmentApprover(empSession(), "WIG", "AP-001", actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("approver lebih dari 5 ditolak 409", async () => {
         await expect(
-            setEquipmentApprovers(wigSession(), ["A", "B", "C", "D", "E", "F"], actor)
+            setEquipmentApprovers(wigSession(), "WIG", ["A", "B", "C", "D", "E", "F"], actor)
         ).rejects.toMatchObject({ statusCode: 409 });
     });
-    it("legacy string tunggal tetap dibaca", async () => {
-        mocked.appSetting.findUnique.mockResolvedValue({ value: "AP-001" } as never);
+    it("daftar approver dibaca per perusahaan tanpa fallback kunci lama", async () => {
+        mocked.appSetting.findUnique.mockImplementation((async (args: { where: { key: string } }) =>
+            args.where.key === "equipment.approvers.WIG" ? { value: JSON.stringify(["AP-001"]) } : null) as never);
         mocked.employee.findMany.mockResolvedValue([{ employeeId: "AP-001", name: "Feri", isActive: true }] as never);
         const { getEquipmentApproverIds } = await import("@/lib/services/equipmentService");
-        await expect(getEquipmentApproverIds()).resolves.toEqual(["AP-001"]);
+        await expect(getEquipmentApproverIds("WIG")).resolves.toEqual(["AP-001"]);
+        await expect(getEquipmentApproverIds("MKI")).resolves.toEqual([]);
     });
     it("APPROVE di luar DONE ditolak 409", async () => {
         mockApprover();
@@ -359,7 +365,7 @@ describe("APPROVAL final", () => {
         mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
         await getApprovalQueue(approverSession());
         expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { status: "DONE" } })
+            expect.objectContaining({ where: { status: "DONE", unit: { company: { in: ["WIG", "MKI"] } } } })
         );
     });
     it("riwayat APPROVED memakai rentang approvedAt inklusif", async () => {
@@ -370,6 +376,7 @@ describe("APPROVAL final", () => {
             expect.objectContaining({
                 where: {
                     status: "APPROVED",
+                    unit: { company: { in: ["WIG", "MKI"] } },
                     approvedAt: {
                         gte: new Date("2026-10-17T00:00:00+07:00"),
                         lt: new Date("2026-10-20T00:00:00+07:00"),
@@ -399,7 +406,7 @@ describe("CANCEL berjalan", () => {
     const openRow = {
         id: "in1",
         status: "OPEN",
-        unit: { id: "u1" },
+        unit: { id: "u1", company: "WIG" },
         startedByEmployeeId: "ID-001",
         items: [],
         evidence: [],
