@@ -82,7 +82,7 @@ Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan
   - `stampedPath`: File gambar yang telah dicetak stempel resmi anti-manipulasi via engine `sharp`.
 
 ### G. Layanan Mandiri Karyawan (Self-Service)
-- **LeaveRequest (`leave_requests`)**: Pengajuan cuti (Cuti Tahunan, Sakit, dsb.). Saldo cuti tahunan default 12 hari per tahun. Cuti disetujui mengurangi saldo `usedLeave`. Satu rentang pengajuan dibatasi maksimal 366 hari kalender inklusif; rentang lebih panjang ditolak eksplisit agar perhitungan hari kerja roster tidak terpotong diam-diam.
+- **LeaveRequest (`leave_requests`)**: Pengajuan cuti (Cuti Tahunan, Sakit, dsb.). Saldo cuti tahunan default 12 hari per tahun. Cuti disetujui mengurangi saldo `usedLeave`. Satu rentang pengajuan dibatasi maksimal 366 hari kalender inklusif; rentang lebih panjang ditolak eksplisit agar perhitungan hari kerja roster tidak terpotong diam-diam. UI employee `/employee/leave` untuk Tahunan/Sakit/Pribadi memakai pilih tanggal lepas (bukan range): window besok s/d H+30, hari kerja saja (libur jadwal + tanggal sudah diajukan nonaktif), satu tanggal = satu `LeaveRequest` single-day; Tahunan dibatasi sisa kuota, Melahirkan/Paternity tetap range.
 - **LetterRequest (`letter_requests`)**: Permohonan surat keterangan resmi: `SK_KERJA`, `KET_PENGHASILAN`, `KET_MASIH_BEKERJA`, `BPJS`.
 - **TodoItem (`todo_items`)**: Catatan tugas personal karyawan.
 
