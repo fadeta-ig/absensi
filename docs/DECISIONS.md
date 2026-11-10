@@ -268,3 +268,15 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
   - Positif: Resepsionis bisa booking tak terbatas di jam yang sama (beda ruangan); peserta/pimpinan rapat/PIC tetap diproteksi bentrok; ruangan tetap first-come-first-served.
   - Negatif: Dua perilaku requester (resepsionis vs biasa) — didokumentasikan di ADR ini dan FEATURES; karyawan biasa yang "membuatkan meeting untuk orang lain" tetap kena cek diri.
   - Status: live lokal 2026-11-06 (service + 9 test D1 + suite 71 hijau + `tsc` bersih).
+
+---
+
+## ADR-021: Tiga Peran Meeting (Penyelenggara/Pimpinan/PIC) Setara Kelola Meeting & Task Masing-Masing
+
+- **Decision**: (1) `isMeetingOrganizer` mencakup PIC notulensi (`notulisEmployeeId`) selain pembuat dan pimpinan rapat — berlaku per-meeting. Dampak: PIC dapat reschedule (jadwal/ruangan/peserta), membatalkan, menyelesaikan lebih awal, menandai hadir, mengganti pimpinan rapat/PIC, dan membuka Pengaturan Meeting — sama seperti dua peran lain (WIG002/resepsionis tidak berubah, tetap via `managerAll`). (2) Kelola task E-Meeting saat berjalan (edit isi/deadline, tambah/hapus penerima, perpanjang, batalkan) dibuka untuk ketiga peran meeting itu selain pemberi task; verifikasi tetap eksklusif pemberi/privileged. Operasional tanpa meeting tidak berubah (pemberi/privileged saja).
+- **Context**: Permintaan pemilik: tiga peran (penyelenggara yang membuatkan, pimpinan yang memimpin di lapangan, PIC yang mencatat) harus punya hak penuh atas meeting dan task masing-masing — buat/edit/batalkan/reschedule sebelum berjalan; selesaikan + ganti pimpinan/PIC saat berjalan; edit/batalkan task saat berjalan. Sebelumnya PIC dikecualikan dari semua guard meeting, dan kelola task mensyaratkan assigner sehingga peran non-assigner mendapat 403.
+- **Chosen Approach**: Perluasan predikat + fallback `isMeetingRoleManager` per-appointment (3 kolom peran, fail-closed bila meeting tak ditemukan); UI `canManage`/Kelola Tugas mengikuti peran yang sama; test 403 lama ditulis ulang dengan aktor benar-benar luar + test baru per peran. Tanpa skema, permission, endpoint, atau kontrak API baru; pesan error dipertahankan.
+- **Consequences**:
+  - Positif: Satu definisi "pengelola meeting" untuk ketiga peran; tidak ada lagi 403 untuk PIC yang sah; verifikasi tetap terkunci pada pemberi (model verifikator tidak melemah).
+  - Negatif: Peran non-assigner kini bisa mengubah task orang lain dalam meetingnya — disengaja per permintaan pemilik; audit `revision` mencatat aktornya.
+  - Status: live lokal 2026-11-10 (service + UI + test peran + suite hijau + `tsc` bersih).

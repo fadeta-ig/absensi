@@ -61,16 +61,23 @@ export function isWig002(session: SessionPayload): boolean {
 }
 
 /**
- * Penyelenggara lapangan: pembuat meeting ATAU pimpinan rapat.
- * Penyelenggara belum tentu hadir (mis. resepsionis membuatkan meeting),
- * sehingga pimpinan rapat berwenang setara penyelenggara.
+ * Penyelenggara lapangan: pembuat meeting ATAU pimpinan rapat ATAU PIC notulensi.
+ * Ketiganya berwenang setara mengelola meeting masing-masing (jadwal ulang,
+ * batalkan, selesaikan, tandai hadir, ganti pimpinan/PIC) dan mengelola task
+ * hasil meeting saat berjalan. Penyelenggara belum tentu hadir (mis. resepsionis
+ * membuatkan meeting), sehingga pimpinan rapat dan PIC yang di lapangan
+ * diberi wewenang yang sama.
  */
 export function isMeetingOrganizer(
     session: SessionPayload,
-    appt: { requesterEmployeeId: string | null; leaderEmployeeId?: string | null }
+    appt: { requesterEmployeeId: string | null; leaderEmployeeId?: string | null; notulisEmployeeId?: string | null }
 ): boolean {
     if (!session.employeeId) return false;
-    return appt.requesterEmployeeId === session.employeeId || (appt.leaderEmployeeId != null && appt.leaderEmployeeId === session.employeeId);
+    return (
+        appt.requesterEmployeeId === session.employeeId ||
+        (appt.leaderEmployeeId != null && appt.leaderEmployeeId === session.employeeId) ||
+        (appt.notulisEmployeeId != null && appt.notulisEmployeeId === session.employeeId)
+    );
 }
 
 /** Pemantau e-meeting dinamis (daftar WIG002, max 5) atau operator WIG002. */
@@ -706,7 +713,7 @@ export async function setMeetingLeader(
         where: { id },
         select: {
             id: true, status: true, startAt: true, endAt: true,
-            requesterEmployeeId: true, leaderEmployeeId: true,
+            requesterEmployeeId: true, leaderEmployeeId: true, notulisEmployeeId: true,
             participants: { select: { employeeId: true } },
         },
     });
@@ -1084,7 +1091,7 @@ export async function cancelAppointment(
     const operator = isWig002(session);
     const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     if (!reason || reason.trim().length < 5) throw new AppointmentError("Alasan pembatalan minimal 5 karakter.", 400);
-    const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, roomId: true, startAt: true, endAt: true } });
+    const existing = await prisma.meetingAppointment.findUnique({ where: { id }, select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, notulisEmployeeId: true, roomId: true, startAt: true, endAt: true } });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
         throw new AppointmentError("Meeting yang sudah selesai atau dibatalkan tidak dapat dibatalkan.", 409);
@@ -1147,7 +1154,7 @@ export async function completeAppointment(
     const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
-        select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, roomId: true, startAt: true, endAt: true },
+        select: { id: true, title: true, agenda: true, isFullDay: true, status: true, requesterEmployeeId: true, leaderEmployeeId: true, notulisEmployeeId: true, roomId: true, startAt: true, endAt: true },
     });
     if (!existing) throw new AppointmentError("Jadwal meeting tidak ditemukan.", 404);
     if (["CANCELLED", "COMPLETED"].includes(existing.status)) {
@@ -1195,7 +1202,7 @@ export async function markAttendance(
     const managerAll = operator || (await isMeetingReceptionist(session).catch(() => false));
     const existing = await prisma.meetingAppointment.findUnique({
         where: { id },
-        select: { id: true, requesterEmployeeId: true, leaderEmployeeId: true, startAt: true, endAt: true, status: true, participants: { select: { id: true } } },
+        select: { id: true, requesterEmployeeId: true, leaderEmployeeId: true, notulisEmployeeId: true, startAt: true, endAt: true, status: true, participants: { select: { id: true } } },
     });
     if (!existing) throw new AppointmentError("Appointment tidak ditemukan.", 404);
     if (!managerAll && !isMeetingOrganizer(session, existing)) {

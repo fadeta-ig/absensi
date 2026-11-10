@@ -73,6 +73,8 @@ export default function MyTaskDetailPage() {
     const [rejectReason, setRejectReason] = useState("");
     const [memberOptions, setMemberOptions] = useState<Array<{ employeeId: string; name: string }>>([]);
     const [editAssigneeIds, setEditAssigneeIds] = useState<string[]>([]);
+    // Peran meeting task ini (penyelenggara/pimpinan/PIC) — boleh kelola selain pemberi.
+    const [meetingManagerIds, setMeetingManagerIds] = useState<string[]>([]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -108,6 +110,8 @@ export default function MyTaskDetailPage() {
                         const apptJson = await apptRes.json();
                         const parts = (apptJson.data?.participants ?? []) as Array<{ employeeId: string | null; employee?: { name: string | null } | null }>;
                         setMemberOptions(parts.filter((p) => p.employeeId).map((p) => ({ employeeId: p.employeeId as string, name: p.employee?.name ?? (p.employeeId as string) })));
+                        const roles = [apptJson.data?.requesterEmployeeId, apptJson.data?.leaderEmployeeId, apptJson.data?.notulisEmployeeId].filter((v): v is string => typeof v === "string" && v.length > 0);
+                        setMeetingManagerIds([...new Set(roles)]);
                     }
                 }
             } catch { /* daftar penerima tetap dapat memakai penerima saat ini */ }
@@ -123,6 +127,8 @@ export default function MyTaskDetailPage() {
 
     const mine = task && myEmployeeId ? task.assignees.find((a) => a.employeeId === myEmployeeId) ?? null : null;
     const iAmAssigner = Boolean(task && myEmployeeId && task.assigner.employeeId === myEmployeeId);
+    // Kelola task: pemberi ATAU salah satu dari tiga peran meeting (penyelenggara/pimpinan/PIC).
+    const isMeetingManager = Boolean(myEmployeeId && meetingManagerIds.includes(myEmployeeId));
     const isOperational = task?.sourceType === "OPERASIONAL";
     // Tugas terkunci permanen bila seluruh penerima sudah final
     // (SELESAI terverifikasi / DIBATALKAN / DITOLAK): kelola ditutup.
@@ -348,7 +354,7 @@ export default function MyTaskDetailPage() {
                 <FeedbackMessage variant="success">Tugas selesai. Semua penerima sudah tuntas, sehingga pengelolaan tugas ditutup.</FeedbackMessage>
             )}
 
-            {iAmAssigner && !task.isCancelled && !isFullyFinal && (
+            {(iAmAssigner || isMeetingManager) && !task.isCancelled && !isFullyFinal && (
                 <section className="card p-4 space-y-4" aria-label="Kelola tugas">
                     <h2 className="text-sm font-bold text-[var(--text-primary)]">Kelola Tugas</h2>
                     <div className="space-y-2">

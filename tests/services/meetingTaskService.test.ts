@@ -307,10 +307,10 @@ describe("submitTaskWork", () => {
 });
 
 describe("extendTaskDeadline", () => {
-    it("bukan pemberi/GA = 403", async () => {
+    it("bukan pemberi/GA/peran meeting = 403", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        await expect(extendTaskDeadline(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "Butuh data tambahan" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(extendTaskDeadline(empSession({ employeeId: "ID-009", username: "ID-009" }), "task-1", { proposedDate: "2026-10-20", reason: "Butuh data tambahan" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("pemberi boleh perpanjang saat meeting masih berjalan", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" } as never);
@@ -330,10 +330,10 @@ describe("extendTaskDeadline", () => {
 });
 
 describe("cancelMeetingTask", () => {
-    it("bukan pemberi/GA = 403", async () => {
+    it("bukan pemberi/GA/peran meeting = 403", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        await expect(cancelMeetingTask(empSession(), "task-1", "Alasan batal yang cukup panjang", actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(cancelMeetingTask(empSession({ employeeId: "ID-009", username: "ID-009" }), "task-1", "Alasan batal yang cukup panjang", actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("pemberi boleh membatalkan saat meeting masih berjalan", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" } as never);
@@ -377,10 +377,10 @@ describe("verifyTaskSubmission", () => {
 });
 
 describe("editMeetingTask", () => {
-    it("bukan pemberi/GA = 403", async () => {
+    it("bukan pemberi/GA/peran meeting = 403", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
         mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
-        await expect(editMeetingTask(empSession(), "task-1", { title: "Baru" }, actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(editMeetingTask(empSession({ employeeId: "ID-009", username: "ID-009" }), "task-1", { title: "Baru" }, actor)).rejects.toMatchObject({ statusCode: 403 });
     });
     it("pemberi boleh mengubah saat meeting masih berjalan", async () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" } as never);
@@ -391,6 +391,34 @@ describe("editMeetingTask", () => {
         mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-001", appointmentId: "appt-1" } as never);
         mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), status: "COMPLETED" } as never);
         await expect(editMeetingTask(empSession(), "task-1", { title: "Baru" }, actor)).rejects.toMatchObject({ statusCode: 409 });
+    });
+});
+
+describe("peran rapat dapat kelola task meeting (bukan assigner)", () => {
+    it("penyelenggara non-assigner boleh edit (lolos gate peran)", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), notulisEmployeeId: "ID-007" } as never);
+        await expect(editMeetingTask(empSession(), "task-1", {}, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("PIC non-assigner boleh edit (lolos gate peran)", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), requesterEmployeeId: "ID-007", leaderEmployeeId: "ID-007" } as never);
+        await expect(editMeetingTask(empSession(), "task-1", {}, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("pimpinan rapat non-assigner boleh edit (lolos gate peran)", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", title: "T", detail: null, isCancelled: false, assignerEmployeeId: "ID-009", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue(meetingRow() as never);
+        await expect(editMeetingTask(empSession({ employeeId: "ID-002", username: "ID-002" }), "task-1", {}, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("PIC non-assigner boleh perpanjang (lolos gate peran, gagal validasi alasan)", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), requesterEmployeeId: "ID-007", leaderEmployeeId: "ID-007" } as never);
+        await expect(extendTaskDeadline(empSession(), "task-1", { proposedDate: "2026-10-20", reason: "ab" }, actor)).rejects.toMatchObject({ statusCode: 400 });
+    });
+    it("PIC non-assigner boleh batalkan (lolos gate peran, gagal validasi alasan)", async () => {
+        mocked.meetingTask.findUnique.mockResolvedValue({ id: "task-1", isCancelled: false, assignerEmployeeId: "ID-002", appointmentId: "appt-1" } as never);
+        mocked.meetingAppointment.findUnique.mockResolvedValue({ ...meetingRow(), requesterEmployeeId: "ID-007", leaderEmployeeId: "ID-007" } as never);
+        await expect(cancelMeetingTask(empSession(), "task-1", "ab", actor)).rejects.toMatchObject({ statusCode: 400 });
     });
 });
 

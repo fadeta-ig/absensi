@@ -209,7 +209,7 @@ function DetailContent({ id }: { id: string }) {
         );
     }
 
-    const canManage = canManageAll || (!!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId));
+    const canManage = canManageAll || (!!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId || item.notulisEmployeeId === myEmployeeId));
     const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
     const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
     // Pengaturan Meeting (termasuk pimpinan rapat & PIC) juga dibuka saat

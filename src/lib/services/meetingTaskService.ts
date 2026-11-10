@@ -3,7 +3,7 @@ import { isValidCalendarDate, toWIBDateString, wibDateTimeToDate } from "@/lib/t
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
-import { isWig002, resolveLifecycleStatus, isMeetingMonitor, isMeetingReceptionist } from "@/lib/services/appointmentService";
+import { isWig002, resolveLifecycleStatus, isMeetingMonitor, isMeetingReceptionist, isMeetingOrganizer } from "@/lib/services/appointmentService";
 import path from "node:path";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -153,6 +153,29 @@ function internalParticipantIds(appt: { requesterEmployeeId: string | null; part
 export async function isPrivileged(session: SessionPayload): Promise<boolean> {
     if (isWig002(session)) return true;
     return isMeetingReceptionist(session).catch(() => false);
+}
+
+/**
+ * Tiga peran meeting (penyelenggara/requester, pimpinan rapat/leader, PIC
+ * notulensi/notulis) boleh mengelola task meeting masing-masing (edit,
+ * perpanjang, batalkan) selain pemberi task — selama meeting BERJALAN.
+ * Dicek per-appointment, jadi tidak berlaku lintas meeting.
+ */
+export async function isMeetingRoleManager(
+    session: SessionPayload,
+    task: { appointmentId: string | null; sourceType: string }
+): Promise<boolean> {
+    if (task.sourceType === "OPERASIONAL" || !task.appointmentId || !session.employeeId) return false;
+    try {
+        const appt = await prisma.meetingAppointment.findUnique({
+            where: { id: task.appointmentId },
+            select: { requesterEmployeeId: true, leaderEmployeeId: true, notulisEmployeeId: true },
+        });
+        if (!appt) return false;
+        return isMeetingOrganizer(session, appt);
+    } catch {
+        return false;
+    }
 }
 
 async function assertCanAccessMeeting(session: SessionPayload, appt: { requesterEmployeeId: string | null; participants: Array<{ employeeId: string | null }> }): Promise<void> {
@@ -1040,7 +1063,7 @@ export async function extendTaskDeadline(
     }
     await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
-    if (task.assignerEmployeeId !== session.employeeId && !privileged) {
+    if (task.assignerEmployeeId !== session.employeeId && !privileged && !(await isMeetingRoleManager(session, task))) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat memperpanjang deadline.", 403);
     }
     if (!input.reason || input.reason.trim().length < 5) throw new MeetingTaskError("Alasan perpanjangan minimal 5 karakter.", 400);
@@ -1085,7 +1108,7 @@ export async function cancelMeetingTask(
     }
     await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
-    if (task.assignerEmployeeId !== session.employeeId && !privileged) {
+    if (task.assignerEmployeeId !== session.employeeId && !privileged && !(await isMeetingRoleManager(session, task))) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat membatalkan.", 403);
     }
     if (!reason || reason.trim().length < 5) throw new MeetingTaskError("Alasan pembatalan minimal 5 karakter.", 400);
@@ -1140,7 +1163,7 @@ export async function editMeetingTask(
     }
     await assertTaskNotFullyFinal(task.assignees?.map((a) => a.status));
     const privileged = await isPrivileged(session);
-    if (task.assignerEmployeeId !== session.employeeId && !privileged) {
+    if (task.assignerEmployeeId !== session.employeeId && !privileged && !(await isMeetingRoleManager(session, task))) {
         throw new MeetingTaskError("Hanya pemberi task atau GA yang dapat mengubah.", 403);
     }
     const patch: { title?: string; detail?: string | null } = {};
