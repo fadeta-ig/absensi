@@ -6,7 +6,7 @@ import { z } from "zod";
 
 const employeesQuerySchema = z.object({
     q: z.string().trim().max(50).optional().default(""),
-    limit: z.coerce.number().int().min(1).max(200).optional().default(20),
+    limit: z.coerce.number().int().min(1).max(1000).optional().default(500),
     exclude: z.string().trim().max(100).optional(),
 });
 

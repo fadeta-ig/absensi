@@ -732,7 +732,7 @@ export const appointmentCreateSchema = z
         startTime: appointmentTimeSchema.optional(),
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
-        participants: z.array(appointmentParticipantSchema).max(100).default([]),
+        participants: z.array(appointmentParticipantSchema).max(1000).default([]),
         notulisEmployeeId: z.string().trim().min(1, "PIC notulensi wajib dipilih.").max(100, "PIC notulensi maksimal 100 karakter."),
         leaderEmployeeId: z.string().trim().min(1, "Pimpinan rapat wajib dipilih.").max(100, "Pimpinan rapat maksimal 100 karakter."),
         reminderOffsets: z.array(z.number().int().min(15)).min(1).max(5).nullable().optional(),
@@ -756,7 +756,7 @@ export const appointmentRescheduleSchema = z
         startTime: appointmentTimeSchema.optional(),
         endTime: appointmentTimeSchema.optional(),
         isFullDay: z.boolean().optional(),
-        participants: z.array(appointmentParticipantSchema).max(100).optional(),
+        participants: z.array(appointmentParticipantSchema).max(1000).optional(),
         notulisEmployeeId: z.string().trim().min(1, "PIC notulensi wajib dipilih.").max(100).optional(),
         leaderEmployeeId: z.string().trim().min(1, "Pimpinan rapat wajib dipilih.").max(100).optional(),
         changeReason: z

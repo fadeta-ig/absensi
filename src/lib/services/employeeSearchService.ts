@@ -26,6 +26,8 @@ export async function searchActiveEmployees(input: {
                     OR: [
                         { name: { contains: query } },
                         { employeeId: { contains: query } },
+                        { departmentRel: { is: { name: { contains: query } } } },
+                        { positionRel: { is: { name: { contains: query } } } },
                     ],
                 }
                 : {}),

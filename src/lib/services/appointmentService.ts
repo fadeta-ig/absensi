@@ -1349,7 +1349,7 @@ export async function getAvailability(query: AvailabilityQuery): Promise<unknown
         result.roomBusy = busy.map((b) => ({ startAt: b.startAt, endAt: b.endAt }));
     }
     if (query.employeeIds && query.employeeIds.length > 0) {
-        const ids = [...new Set(query.employeeIds.map((v) => v.trim()).filter(Boolean))].slice(0, 50);
+        const ids = [...new Set(query.employeeIds.map((v) => v.trim()).filter(Boolean))].slice(0, 500);
         const rows = await prisma.meetingAppointment.findMany({
             where: {
                 status: "SCHEDULED",
