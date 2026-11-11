@@ -218,7 +218,7 @@ export default function ParticipantPicker({
                             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold transition-colors min-h-8 ${
                                 isAllActiveSelected
                                     ? "bg-[var(--primary)] text-white"
-                                    : "bg-[var(--card)] text-[var(--primary)] border border-[var(--primary)]/30 hover:bg-[var(--primary)]/10"
+                                    : "bg-[var(--card)] text-[var(--primary)] border border-[var(--primary)] hover:bg-[var(--accent)]"
                             } disabled:opacity-50`}
                         >
                             <Users className="w-3.5 h-3.5" />
@@ -295,7 +295,7 @@ export default function ParticipantPicker({
                                         onClick={() => toggleEmployee(r)}
                                         className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 min-h-11 transition-colors ${
                                             selected
-                                                ? "bg-[var(--primary)]/10 hover:bg-[var(--primary)]/15"
+                                                ? "bg-[var(--accent)] hover:bg-[var(--accent)]"
                                                 : "hover:bg-[var(--secondary)]"
                                         }`}
                                     >
@@ -373,7 +373,7 @@ export default function ParticipantPicker({
                             <button
                                 type="button"
                                 onClick={() => setShowAllChips(true)}
-                                className="inline-flex items-center rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/30 px-2.5 py-1 text-xs font-bold hover:bg-[var(--primary)]/20"
+                                className="inline-flex items-center rounded-full bg-[var(--accent)] text-[var(--primary)] border border-[var(--primary)] px-2.5 py-1 text-xs font-bold hover:opacity-90"
                             >
                                 +{hiddenChipCount} peserta lainnya (Lihat semua)
                             </button>

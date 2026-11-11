@@ -499,17 +499,49 @@ export default function LeavePage() {
                                                 key={dateKey}
                                                 type="button"
                                                 disabled={disabled}
+                                                aria-pressed={selected}
                                                 onClick={() => toggleDate(dateKey)}
                                                 title={occupied ? `${formatIndonesianDate(dateKey)} — sudah diajukan` : off ? `${formatIndonesianDate(dateKey)} — libur jadwal` : formatIndonesianDate(dateKey)}
-                                                className={`rounded-lg border p-2 text-center transition-all ${selected ? "border-[var(--primary)] bg-[var(--primary)]/10 font-bold" : "border-[var(--border)] hover:border-[var(--primary)]"} ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                                                className={`relative rounded-lg border-2 p-2 text-center transition-all ${
+                                                    selected
+                                                        ? "border-red-600 bg-red-600 text-white font-bold shadow-md ring-2 ring-red-500/30"
+                                                        : disabled
+                                                          ? "border-[var(--border)] bg-[var(--muted)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
+                                                          : "border-[var(--border)] bg-[var(--card)] text-[var(--text-primary)] hover:border-red-500 hover:bg-[var(--accent)] cursor-pointer"
+                                                }`}
                                             >
-                                                <span className="block text-[10px] text-[var(--text-muted)]">{weekday}</span>
-                                                <span className="block text-sm">{dayNum}</span>
-                                                <span className="block text-[10px] text-[var(--text-muted)]">{dateKey.slice(5, 7)}/{dateKey.slice(0, 4)}</span>
+                                                {selected && (
+                                                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white text-red-600 flex items-center justify-center text-[10px] font-extrabold leading-none shadow-sm">
+                                                        ✓
+                                                    </span>
+                                                )}
+                                                <span className={`block text-[10px] ${selected ? "text-red-100 font-semibold" : "text-[var(--text-muted)]"}`}>
+                                                    {weekday}
+                                                </span>
+                                                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-white font-extrabold" : "font-semibold"}`}>
+                                                    {dayNum}
+                                                </span>
+                                                <span className={`block text-[10px] ${selected ? "text-red-100" : "text-[var(--text-muted)]"}`}>
+                                                    {occupied ? "Diajukan" : off ? "Libur" : `${dateKey.slice(5, 7)}/${dateKey.slice(0, 4)}`}
+                                                </span>
                                             </button>
                                         );
                                     })}
                                 </div>
+                                {selectedDates.length > 0 && (
+                                    <div className="flex items-center justify-between gap-2 flex-wrap mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 px-3 py-2">
+                                        <span className="text-xs font-semibold text-red-700 dark:text-red-300">
+                                            {selectedDates.length} tanggal dipilih: {selectedDates.map((d) => formatIndonesianDate(d)).join(", ")}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedDates([])}
+                                            className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline shrink-0"
+                                        >
+                                            Reset pilihan
+                                        </button>
+                                    </div>
+                                )}
                                 {form.type === "annual" && (
                                     <p className="text-xs text-[var(--text-muted)] mt-1">Sisa disetujui {remainingLeave} hari − menunggu persetujuan {pendingAnnualDays} hari = maks {maxSelectable} tanggal.</p>
                                 )}
