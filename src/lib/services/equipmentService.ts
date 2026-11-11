@@ -29,6 +29,53 @@ export const EQUIPMENT_APPROVERS_MAX = 5;
 /** Perusahaan yang dikenal modul equipment (sama dengan enum EquipmentCompany). */
 export const EQUIPMENT_COMPANIES: EquipmentCompany[] = ["WIG", "MKI"];
 
+/**
+ * Kembalikan daftar perusahaan yang memiliki/memakai unit alat:
+ * - `[]` bila belum dikategorikan (`company === null`)
+ * - `["WIG", "MKI"]` bila dipakai kedua perusahaan (`isSharedBoth === true` dan `company !== null`)
+ * - `[unit.company]` bila hanya 1 perusahaan (`WIG` atau `MKI`)
+ */
+export function getUnitCompanies(
+    unit: { company?: EquipmentCompany | null; isSharedBoth?: boolean | null; companies?: EquipmentCompany[] | null } | null | undefined
+): EquipmentCompany[] {
+    if (!unit) return [];
+    if (Array.isArray(unit.companies) && unit.companies.length > 0) {
+        return EQUIPMENT_COMPANIES.filter((c) => unit.companies!.includes(c));
+    }
+    if (!unit.company) return [];
+    if (unit.isSharedBoth) return [...EQUIPMENT_COMPANIES];
+    return [unit.company];
+}
+
+export function withUnitCompanies<T extends { company?: EquipmentCompany | null; isSharedBoth?: boolean | null }>(
+    unit: T
+): T & { companies: EquipmentCompany[] } {
+    return {
+        ...unit,
+        companies: getUnitCompanies(unit),
+    };
+}
+
+/** Filter Prisma EquipmentUnit untuk 1 perusahaan (mencakup unit eksklusif maupun unit WIG+MKI). */
+export function unitWhereForCompany(company: EquipmentCompany): Prisma.EquipmentUnitWhereInput {
+    return {
+        OR: [
+            { company },
+            { company: { not: null }, isSharedBoth: true },
+        ],
+    };
+}
+
+/** Filter Prisma EquipmentUnit untuk daftar perusahaan dalam cakupan sesi. */
+export function unitWhereForCompanies(companies: EquipmentCompany[]): Prisma.EquipmentUnitWhereInput {
+    const unique = EQUIPMENT_COMPANIES.filter((c) => companies.includes(c));
+    if (unique.length === 0) return { id: { in: [] } };
+    if (unique.length >= EQUIPMENT_COMPANIES.length) {
+        return { company: { in: [...EQUIPMENT_COMPANIES] } };
+    }
+    return unitWhereForCompany(unique[0]);
+}
+
 /** Key AppSetting daftar QC per perusahaan (migrasi eksplisit, tanpa fallback). */
 function qcMembersKey(company: EquipmentCompany): string {
     return `equipment.qcMembers.${company}`;
@@ -144,16 +191,37 @@ export async function requireQcMember(session: SessionPayload, company: Equipmen
     }
 }
 
+export async function requireQcMemberForUnit(
+    session: SessionPayload,
+    unit: { company?: EquipmentCompany | null; isSharedBoth?: boolean | null; companies?: EquipmentCompany[] | null } | null | undefined
+): Promise<void> {
+    requireQc(session);
+    const unitCompanies = getUnitCompanies(unit);
+    if (unitCompanies.length === 0) {
+        throw new EquipmentError("Alat belum dikategorikan perusahaan (WIG/MKI).", 422);
+    }
+    if (unitCompanies.length === 1) {
+        await requireQcMember(session, unitCompanies[0]);
+        return;
+    }
+    const flags = await Promise.all(unitCompanies.map((c) => isEquipmentQcMember(session, c).catch(() => false)));
+    if (!flags.some(Boolean)) {
+        throw new EquipmentError(
+            `Hanya karyawan QC (${unitCompanies.join("/")}) yang ditunjuk WIG002 yang dapat memproses antrean.`,
+            403
+        );
+    }
+}
+
 /** QC berhak atas inspeksi tertentu: muat perusahaan unitnya lalu cek keanggotaan QC perusahaan itu. */
 export async function requireQcMemberForInspection(session: SessionPayload, inspectionId: string): Promise<void> {
     requireQc(session);
     const insp = await prisma.equipmentInspection.findUnique({
         where: { id: inspectionId },
-        select: { id: true, unit: { select: { company: true } } },
+        select: { id: true, unit: { select: { company: true, isSharedBoth: true } } },
     });
     if (!insp) throw new EquipmentError("Inspeksi tidak ditemukan.", 404);
-    if (!insp.unit.company) throw new EquipmentError("Alat belum dikategorikan perusahaan (WIG/MKI).", 422);
-    await requireQcMember(session, insp.unit.company);
+    await requireQcMemberForUnit(session, insp.unit);
 }
 
 // ─── Guard internal ───────────────────────────────────────────────
@@ -311,6 +379,44 @@ export async function getEquipmentApproverCompanies(session: SessionPayload): Pr
 export async function requireApprover(session: SessionPayload, company: EquipmentCompany): Promise<void> {
     if (await isEquipmentApprover(session, company)) return;
     throw new EquipmentError(`Hanya approver ${company} yang ditunjuk WIG002 yang dapat menyetujui inspeksi.`, 403);
+}
+
+export async function requireApproverForUnit(
+    session: SessionPayload,
+    unit: { company?: EquipmentCompany | null; isSharedBoth?: boolean | null; companies?: EquipmentCompany[] | null } | null | undefined
+): Promise<void> {
+    const unitCompanies = getUnitCompanies(unit);
+    if (unitCompanies.length === 0) {
+        throw new EquipmentError("Alat belum dikategorikan perusahaan (WIG/MKI).", 422);
+    }
+    if (unitCompanies.length === 1) {
+        await requireApprover(session, unitCompanies[0]);
+        return;
+    }
+    const flags = await Promise.all(unitCompanies.map((c) => isEquipmentApprover(session, c).catch(() => false)));
+    if (!flags.some(Boolean)) {
+        throw new EquipmentError(
+            `Hanya approver (${unitCompanies.join("/")}) yang ditunjuk WIG002 yang dapat menyetujui inspeksi.`,
+            403
+        );
+    }
+}
+
+async function isQcOrApproverForUnit(
+    session: SessionPayload,
+    unit: { company?: EquipmentCompany | null; isSharedBoth?: boolean | null; companies?: EquipmentCompany[] | null } | null | undefined
+): Promise<{ isQc: boolean; isApprover: boolean }> {
+    if (!session.employeeId) return { isQc: false, isApprover: false };
+    const unitCompanies = getUnitCompanies(unit);
+    if (unitCompanies.length === 0) return { isQc: false, isApprover: false };
+    const [qcFlags, approverFlags] = await Promise.all([
+        Promise.all(unitCompanies.map((c) => isEquipmentQcMember(session, c).catch(() => false))),
+        Promise.all(unitCompanies.map((c) => isEquipmentApprover(session, c).catch(() => false))),
+    ]);
+    return {
+        isQc: qcFlags.some(Boolean),
+        isApprover: approverFlags.some(Boolean),
+    };
 }
 
 /** Karyawan internal aktif + punya akun aktif (outsource selalu ditolak). */
@@ -477,7 +583,7 @@ export async function deleteEquipmentTemplateItem(session: SessionPayload, id: s
 export async function getEquipmentUnits(session: SessionPayload, activeOnly = false) {
     // Baca master boleh WIG002/top reviewer (dropdown rekap); tulis tetap WIG002 di create/update.
     await requireWig002OrTopViewer(session);
-    return prisma.equipmentUnit.findMany({
+    const rows = await prisma.equipmentUnit.findMany({
         where: activeOnly ? { isActive: true } : {},
         orderBy: { name: "asc" },
         include: {
@@ -485,6 +591,7 @@ export async function getEquipmentUnits(session: SessionPayload, activeOnly = fa
             _count: { select: { assignments: true, inspections: true } },
         },
     });
+    return rows.map((u) => withUnitCompanies(u));
 }
 
 export interface EquipmentUnitInput {
@@ -493,6 +600,31 @@ export interface EquipmentUnitInput {
     location?: string | null;
     templateId: string;
     company?: EquipmentCompany | null;
+    companies?: EquipmentCompany[] | null;
+}
+
+function normalizeInputCompanies(input: {
+    company?: EquipmentCompany | null;
+    companies?: EquipmentCompany[] | null;
+}): { defined: boolean; companies: EquipmentCompany[]; company: EquipmentCompany | null; isSharedBoth: boolean } {
+    if (input.companies !== undefined) {
+        const raw = Array.isArray(input.companies) ? input.companies : [];
+        const companies = EQUIPMENT_COMPANIES.filter((c) => raw.includes(c));
+        if (companies.length === 0) {
+            return { defined: true, companies: [], company: null, isSharedBoth: false };
+        }
+        if (companies.length >= 2) {
+            return { defined: true, companies: ["WIG", "MKI"], company: "WIG", isSharedBoth: true };
+        }
+        return { defined: true, companies: [companies[0]], company: companies[0], isSharedBoth: false };
+    }
+    if (input.company !== undefined) {
+        if (input.company === null) {
+            return { defined: true, companies: [], company: null, isSharedBoth: false };
+        }
+        return { defined: true, companies: [input.company], company: input.company, isSharedBoth: false };
+    }
+    return { defined: false, companies: [], company: null, isSharedBoth: false };
 }
 
 export async function createEquipmentUnit(session: SessionPayload, input: EquipmentUnitInput) {
@@ -501,6 +633,7 @@ export async function createEquipmentUnit(session: SessionPayload, input: Equipm
     if (!clean) throw new EquipmentError("Nama alat wajib diisi.", 400);
     const template = await prisma.equipmentTemplate.findUnique({ where: { id: input.templateId } });
     if (!template || !template.isActive) throw new EquipmentError("Template tidak ditemukan atau nonaktif.", 422);
+    const norm = normalizeInputCompanies(input);
     try {
         const created = await prisma.equipmentUnit.create({
             data: {
@@ -509,11 +642,15 @@ export async function createEquipmentUnit(session: SessionPayload, input: Equipm
                 brand: input.brand?.trim() || null,
                 location: input.location?.trim() || null,
                 templateId: input.templateId,
-                company: input.company ?? null,
+                company: norm.defined ? norm.company : (input.company ?? null),
+                ...(norm.isSharedBoth ? { isSharedBoth: true } : {}),
             },
         });
-        await logCreated("CREATE_EQUIPMENT_UNIT", "EQUIPMENT_UNIT", created.id, session, { name: created.name });
-        return created;
+        await logCreated("CREATE_EQUIPMENT_UNIT", "EQUIPMENT_UNIT", created.id, session, {
+            name: created.name,
+            companies: getUnitCompanies(created),
+        });
+        return withUnitCompanies(created);
     } catch (err) {
         if (isPrismaUniqueViolation(err)) throw new EquipmentError("Nama alat sudah dipakai.", 409);
         throw err;
@@ -532,10 +669,20 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
         const template = await prisma.equipmentTemplate.findUnique({ where: { id: input.templateId } });
         if (!template || !template.isActive) throw new EquipmentError("Template tidak ditemukan atau nonaktif.", 422);
     }
-    if (input.company !== undefined && input.company !== existing.company) {
-        // NULL → perusahaan selalu boleh (kebutuhan rollout kategorisasi).
-        // Perubahan antar-perusahaan / pengosongan ditolak bila ada inspeksi berjalan.
-        if (existing.company !== null) {
+
+    const prevCompanies = getUnitCompanies(existing);
+    const norm = normalizeInputCompanies(input);
+    const isCompanyChanged =
+        norm.defined &&
+        (prevCompanies.length !== norm.companies.length || prevCompanies.some((c, idx) => c !== norm.companies[idx]));
+
+    if (isCompanyChanged) {
+        const nextCompanies = norm.companies;
+        const removedCompanies = prevCompanies.filter((c) => !nextCompanies.includes(c));
+        // Menambah perusahaan (mis. NULL → WIG, atau WIG → WIG+MKI) selalu boleh tanpa ganggu inspeksi/produk yang ada.
+        // Menghapus semua perusahaan / pindah penuh ke perusahaan lain ditolak bila masih ada inspeksi berjalan.
+        const lostAllPrevious = prevCompanies.length > 0 && !prevCompanies.some((c) => nextCompanies.includes(c));
+        if (lostAllPrevious) {
             const running = await prisma.equipmentInspection.count({
                 where: { unitId: id, status: { in: ["OPEN", "SUBMITTED"] } },
             });
@@ -543,23 +690,30 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
                 throw new EquipmentError("Unit masih punya inspeksi berjalan. Selesaikan dulu sebelum pindah perusahaan.", 409);
             }
         }
-        // Ganti/kosongkan perusahaan hanya bila tidak terpetakan ke produk lain perusahaan.
-        const nextCompany = input.company;
-        const conflict = nextCompany === null
-            ? await prisma.equipmentProductTool.findFirst({ where: { equipmentUnitId: id }, select: { id: true } })
-            : await prisma.equipmentProductTool.findFirst({
-                where: { equipmentUnitId: id, product: { company: { not: nextCompany } } },
-                select: { id: true },
-            });
-        if (conflict) {
-            throw new EquipmentError(
-                nextCompany === null
-                    ? "Alat masih terpetakan ke produk. Lepas dulu pemetaannya sebelum mengosongkan perusahaan."
-                    : `Alat masih terpetakan ke produk perusahaan lain. Lepas dulu pemetaannya sebelum pindah ke ${nextCompany}.`,
-                409
-            );
+        // Bila ada perusahaan yang dilepas dari unit, pastikan unit tidak masih terpetakan ke produk milik perusahaan yang dilepas tersebut.
+        if (removedCompanies.length > 0) {
+            const conflict = nextCompanies.length === 0
+                ? await prisma.equipmentProductTool.findFirst({ where: { equipmentUnitId: id }, select: { id: true } })
+                : await prisma.equipmentProductTool.findFirst({
+                      where: {
+                          equipmentUnitId: id,
+                          product: nextCompanies.length === 1
+                              ? { company: { not: nextCompanies[0] } }
+                              : { company: { in: removedCompanies } },
+                      },
+                      select: { id: true },
+                  });
+            if (conflict) {
+                throw new EquipmentError(
+                    nextCompanies.length === 0
+                        ? "Alat masih terpetakan ke produk. Lepas dulu pemetaannya sebelum mengosongkan perusahaan."
+                        : `Alat masih terpetakan ke produk perusahaan lain (${removedCompanies.join("/")}). Lepas dulu pemetaannya sebelum mengubah cakupan perusahaan.`,
+                    409
+                );
+            }
         }
     }
+
     const data: Prisma.EquipmentUnitUpdateInput = {};
     if (input.name !== undefined) {
         const clean = normalizeName(input.name);
@@ -571,9 +725,15 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
     if (input.location !== undefined) data.location = input.location?.trim() || null;
     if (input.templateId !== undefined) data.template = { connect: { id: input.templateId } };
     if (input.isActive !== undefined) data.isActive = input.isActive;
-    if (input.company !== undefined) data.company = input.company;
+    if (norm.defined) {
+        data.company = norm.company;
+        if (norm.isSharedBoth || Boolean((existing as { isSharedBoth?: boolean }).isSharedBoth) || input.companies !== undefined) {
+            data.isSharedBoth = norm.isSharedBoth;
+        }
+    }
     try {
-        return await prisma.equipmentUnit.update({ where: { id }, data });
+        const updated = await prisma.equipmentUnit.update({ where: { id }, data });
+        return withUnitCompanies(updated);
     } catch (err) {
         if (isPrismaUniqueViolation(err)) throw new EquipmentError("Nama alat sudah dipakai.", 409);
         throw err;
@@ -593,22 +753,25 @@ export async function getMyEquipmentUnits(session: SessionPayload, filters: { pr
     // Penugasan global (unitId null) mencakup semua unit aktif kedua perusahaan.
     const hasGlobal = effective.some((r) => r.unitId === null);
     const specificIds = [...new Set(effective.filter((r) => r.unitId !== null).map((r) => r.unitId as string))];
-    // Cakupan perusahaan: global = WIG+MKI; per unit = perusahaan unitnya. Unit
-    // belum berkategori (NULL) tidak tampil sampai WIG002 mengategorikannya.
+    // Cakupan perusahaan: global = WIG+MKI; per unit = perusahaan unitnya (termasuk WIG+MKI bila shared).
+    // Unit belum berkategori (NULL) tidak tampil sampai WIG002 mengategorikannya.
     let scope: EquipmentCompany[];
     if (hasGlobal) {
         scope = [...EQUIPMENT_COMPANIES];
     } else if (specificIds.length === 0) {
         return [];
     } else {
-        const scoped = await prisma.equipmentUnit.findMany({ where: { id: { in: specificIds } }, select: { company: true } });
-        scope = [...new Set(scoped.map((u) => u.company).filter((c): c is EquipmentCompany => c !== null))];
+        const scoped = await prisma.equipmentUnit.findMany({
+            where: { id: { in: specificIds } },
+            select: { company: true, isSharedBoth: true },
+        });
+        scope = [...new Set(scoped.flatMap((u) => getUnitCompanies(u)))];
         if (scope.length === 0) return [];
     }
     const units = await prisma.equipmentUnit.findMany({
         where: {
             isActive: true,
-            company: { in: scope },
+            ...unitWhereForCompanies(scope),
             ...(hasGlobal ? {} : { id: { in: specificIds } }),
             ...(filters.productId ? { productTools: { some: { productId: filters.productId } } } : {}),
         },
@@ -632,7 +795,7 @@ export async function getMyEquipmentUnits(session: SessionPayload, filters: { pr
             productTools: { select: { product: { select: { id: true, name: true, company: true } } } },
         },
     });
-    return units.map((u) => ({ assignmentId: null, startsOn: null, endsOn: null, unit: u }));
+    return units.map((u) => ({ assignmentId: null, startsOn: null, endsOn: null, unit: withUnitCompanies(u) }));
 }
 
 // ─── Assignment: WIG002 menentukan siapa dapat modul Inspeksi Alat ───
@@ -737,14 +900,18 @@ export async function assignEquipmentUnitsBulk(
 
 export async function getEquipmentAssignments(session: SessionPayload) {
     requireWig002(session);
-    return prisma.equipmentAssignment.findMany({
+    const rows = await prisma.equipmentAssignment.findMany({
         orderBy: { startsOnWibDate: "desc" },
         take: 200,
         include: {
-            unit: { select: { id: true, name: true, company: true } },
+            unit: { select: { id: true, name: true, company: true, isSharedBoth: true } },
             user: { select: { id: true, employeeId: true, displayName: true } },
         },
     });
+    return rows.map((r) => ({
+        ...r,
+        unit: r.unit ? withUnitCompanies(r.unit) : null,
+    }));
 }
 
 export async function endEquipmentAssignment(session: SessionPayload, assignmentId: string, endsOnWibDate?: string) {
@@ -844,7 +1011,7 @@ export async function queryEquipmentRecap(filters: EquipmentRecapFilters) {
     if (filters.unitId) where.unitId = filters.unitId;
     if (filters.company || filters.productId) {
         where.unit = {
-            ...(filters.company ? { company: filters.company } : {}),
+            ...(filters.company ? unitWhereForCompany(filters.company) : {}),
             ...(filters.productId ? { productTools: { some: { productId: filters.productId } } } : {}),
         };
     }
@@ -862,7 +1029,7 @@ export async function queryEquipmentRecap(filters: EquipmentRecapFilters) {
             orderBy: { createdAt: "desc" },
             take: 200,
             include: {
-                unit: { select: { id: true, name: true, brand: true, location: true, company: true } },
+                unit: { select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true } },
                 startedBy: { select: { employeeId: true, name: true } },
                 checkedBy: { select: { employeeId: true, name: true } },
                 approvedBy: { select: { employeeId: true, name: true } },
@@ -874,7 +1041,10 @@ export async function queryEquipmentRecap(filters: EquipmentRecapFilters) {
         prisma.equipmentInspection.count({ where: { ...where, status: "DONE" } }),
         prisma.equipmentInspection.count({ where: { ...where, status: "APPROVED" } }),
     ]);
-    return { summary: { open, submitted, done, approved, total: open + submitted + done + approved }, inspections: rows };
+    return {
+        summary: { open, submitted, done, approved, total: open + submitted + done + approved },
+        inspections: rows.map((r) => ({ ...r, unit: withUnitCompanies(r.unit) })),
+    };
 }
 
 /** Perusahaan cakupan eksekusi: global = kedua perusahaan, per unit = perusahaan unitnya (kecuali NULL). */
@@ -889,8 +1059,11 @@ export async function getExecuteCompanies(session: SessionPayload): Promise<Equi
     if (effective.some((r) => r.unitId === null)) return [...EQUIPMENT_COMPANIES];
     const ids = [...new Set(effective.map((r) => r.unitId as string))];
     if (ids.length === 0) return [];
-    const units = await prisma.equipmentUnit.findMany({ where: { id: { in: ids } }, select: { company: true } });
-    return [...new Set(units.map((u) => u.company).filter((c): c is EquipmentCompany => c !== null))];
+    const units = await prisma.equipmentUnit.findMany({
+        where: { id: { in: ids } },
+        select: { company: true, isSharedBoth: true },
+    });
+    return [...new Set(units.flatMap((u) => getUnitCompanies(u)))];
 }
 
 /** Gabungan cakupan perusahaan sesi (eksekusi + QC + approver). */
@@ -952,7 +1125,7 @@ export async function getEmployeeEquipmentCapabilities(
 // ─── Inspeksi ─────────────────────────────────────────────────────
 
 const inspectionInclude = {
-    unit: { select: { id: true, name: true, brand: true, location: true, company: true } },
+    unit: { select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true } },
     startedBy: { select: { employeeId: true, name: true } },
     checkedBy: { select: { employeeId: true, name: true } },
     approvedBy: { select: { employeeId: true, name: true } },
@@ -986,7 +1159,7 @@ export function toInspectionDto(insp: InspectionRow) {
     const photoOk = !needsPhoto || insp.evidence.length > 0;
     return {
         id: insp.id,
-        unit: insp.unit,
+        unit: withUnitCompanies(insp.unit),
         startedBy: insp.startedBy,
         status: insp.status,
         createdAt: insp.createdAt,
@@ -1071,9 +1244,7 @@ export async function getEquipmentInspection(session: SessionPayload, id: string
             orderBy: { startsOnWibDate: "desc" },
         });
         const mine = assigned.some((a) => isEffectiveOn(today, a.startsOnWibDate, a.endsOnWibDate));
-        const company = insp.unit.company;
-        const isQc = session.employeeId !== null && company !== null && (await isEquipmentQcMember(session, company).catch(() => false));
-        const isApprover = session.employeeId !== null && company !== null && (await isEquipmentApprover(session, company).catch(() => false));
+        const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
         const isStarter = session.employeeId !== null && insp.startedByEmployeeId === session.employeeId;
         if (!mine && !isQc && !isApprover && !isStarter) throw new EquipmentError("Anda tidak terlibat inspeksi ini.", 403);
     }
@@ -1102,10 +1273,9 @@ export async function getMyEquipmentInspections(session: SessionPayload, status?
 export async function getUnitInspectionHistory(session: SessionPayload, unitId: string) {
     if (!session.employeeId || !session.userId) throw new EquipmentError("Hanya karyawan yang dapat melihat riwayat unit.", 403);
     const today = toWIBDateString();
-    const unit = await prisma.equipmentUnit.findUnique({ where: { id: unitId }, select: { company: true } });
-    const company = unit?.company ?? null;
-    const [isQc, isTop] = await Promise.all([
-        company ? isEquipmentQcMember(session, company).catch(() => false) : false,
+    const unit = await prisma.equipmentUnit.findUnique({ where: { id: unitId }, select: { company: true, isSharedBoth: true } });
+    const [{ isQc }, isTop] = await Promise.all([
+        isQcOrApproverForUnit(session, unit),
         isEquipmentTopViewer(session).catch(() => false),
     ]);
     const assignments = await prisma.equipmentAssignment.findMany({
@@ -1129,22 +1299,21 @@ export async function getUnitInspectionHistory(session: SessionPayload, unitId: 
             submittedAt: true,
             checkedAt: true,
             approvedAt: true,
-            unit: { select: { id: true, name: true, brand: true, location: true, company: true } },
+            unit: { select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true } },
             startedBy: { select: { employeeId: true, name: true } },
             checkedByNameSnapshot: true,
             approvedByNameSnapshot: true,
         },
     });
-    return rows;
+    return rows.map((r) => ({ ...r, unit: withUnitCompanies(r.unit) }));
 }
 
 export async function getPendingEquipmentApprovals(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
-    // Wadah QC per perusahaan: anggota QC melihat SUBMITTED perusahaannya, terbaru di atas.
-    // QC tak perlu melihat 64 alat — hanya yang disubmit produksi.
+    // Wadah QC per perusahaan: anggota QC melihat SUBMITTED perusahaannya (termasuk alat shared WIG+MKI), terbaru di atas.
     const companies = await getEquipmentQcCompanies(session);
     if (companies.length === 0) throw new EquipmentError("Hanya karyawan QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
     const rows = await prisma.equipmentInspection.findMany({
-        where: { status: "SUBMITTED", unit: { company: { in: companies } } },
+        where: { status: "SUBMITTED", unit: unitWhereForCompanies(companies) },
         orderBy: { submittedAt: "desc" },
         take: 100,
         include: inspectionInclude,
@@ -1197,7 +1366,7 @@ export async function getApprovalQueue(session: SessionPayload, filters: Approva
             : {};
 
     let where: Prisma.EquipmentInspectionWhereInput;
-    const scope = { unit: { company: { in: companies } } };
+    const scope = { unit: unitWhereForCompanies(companies) };
     if (status === "DONE") {
         where = { status: "DONE", ...scope, ...dateRange("checkedAt") };
     } else if (status === "APPROVED") {
@@ -1296,8 +1465,7 @@ export async function checkEquipmentDone(
     if (!session.permissions.includes("employee.self")) throw new EquipmentError("Akses ditolak.", 403);
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "SUBMITTED") throw new EquipmentError("Hanya inspeksi yang sudah dikirim yang dapat diselesaikan QC.", 409);
-    if (!insp.unit.company) throw new EquipmentError("Alat belum dikategorikan perusahaan (WIG/MKI).", 422);
-    await requireQcMember(session, insp.unit.company);
+    await requireQcMemberForUnit(session, insp.unit);
     const today = toWIBDateString();
     const qc = await assertActiveInternalEmployee(prisma, session.employeeId, today);
     const cleanNote = note?.trim().slice(0, 1000) || null;
@@ -1340,8 +1508,7 @@ export async function approveEquipmentInspection(
     if (!session.permissions.includes("employee.self")) throw new EquipmentError("Akses ditolak.", 403);
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "DONE") throw new EquipmentError("Hanya inspeksi yang sudah diperiksa QC yang dapat disetujui.", 409);
-    if (!insp.unit.company) throw new EquipmentError("Alat belum dikategorikan perusahaan (WIG/MKI).", 422);
-    await requireApprover(session, insp.unit.company);
+    await requireApproverForUnit(session, insp.unit);
     const today = toWIBDateString();
     const approver = await assertActiveInternalEmployee(prisma, session.employeeId, today);
     await prisma.$transaction(async (tx) => {
@@ -1481,14 +1648,14 @@ export async function hasEquipmentEvidenceAccess(
     if (!session.userId) return false;
     const insp = await prisma.equipmentInspection.findUnique({
         where: { id: evidence.inspectionId },
-        select: { id: true, unitId: true, startedByEmployeeId: true, unit: { select: { company: true } } },
+        select: { id: true, unitId: true, startedByEmployeeId: true, unit: { select: { company: true, isSharedBoth: true } } },
     });
     if (!insp) return false;
     if (await isEquipmentTopViewer(session).catch(() => false)) return true;
-    // Terlibat = QC/approver perusahaan inspeksi, pemulai, atau assignee efektif.
-    if (session.employeeId && insp.unit.company) {
-        if (await isEquipmentQcMember(session, insp.unit.company).catch(() => false)) return true;
-        if (await isEquipmentApprover(session, insp.unit.company).catch(() => false)) return true;
+    // Terlibat = QC/approver perusahaan inspeksi (termasuk alat shared WIG+MKI), pemulai, atau assignee efektif.
+    if (session.employeeId) {
+        const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
+        if (isQc || isApprover) return true;
     }
     if (session.employeeId && insp.startedByEmployeeId === session.employeeId) return true;
     const today = toWIBDateString();
@@ -1602,13 +1769,13 @@ export async function hasQcEvidenceAccess(session: SessionPayload, inspectionId:
     if (await isEquipmentTopViewer(session).catch(() => false)) return true;
     const insp = await prisma.equipmentInspection.findUnique({
         where: { id: inspectionId },
-        select: { unitId: true, startedByEmployeeId: true, unit: { select: { company: true } } },
+        select: { unitId: true, startedByEmployeeId: true, unit: { select: { company: true, isSharedBoth: true } } },
     });
     if (!insp) return false;
-    // Terlibat = QC/approver perusahaan inspeksi, pemulai, atau assignee efektif.
-    if (session.employeeId && insp.unit.company) {
-        if (await isEquipmentQcMember(session, insp.unit.company).catch(() => false)) return true;
-        if (await isEquipmentApprover(session, insp.unit.company).catch(() => false)) return true;
+    // Terlibat = QC/approver perusahaan inspeksi (termasuk alat shared WIG+MKI), pemulai, atau assignee efektif.
+    if (session.employeeId) {
+        const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
+        if (isQc || isApprover) return true;
     }
     if (session.employeeId && insp.startedByEmployeeId === session.employeeId) return true;
     const today = toWIBDateString();

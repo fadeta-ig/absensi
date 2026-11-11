@@ -9,6 +9,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { useTablePagination } from "@/hooks/useTablePagination";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
+import { EquipmentCompanyBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { inputClass } from "@/app/ga/equipment/settings/_components/useSettingsData";
 import type {
@@ -16,7 +17,7 @@ import type {
     EquipmentUnit,
 } from "@/app/ga/equipment/settings/_components/useSettingsData";
 
-type UnitCompanyFilter = "SEMUA" | "WIG" | "MKI" | "TANPA";
+type UnitCompanyFilter = "SEMUA" | "WIG" | "MKI" | "BOTH" | "TANPA";
 
 interface UnitsTabProps {
     units: EquipmentUnit[];
@@ -37,8 +38,8 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
     const [unitTemplateId, setUnitTemplateId] = useState("");
     const [savingUnit, setSavingUnit] = useState(false);
 
-    // ─── Kategori perusahaan unit (modal unit) ───
-    const [unitCompany, setUnitCompany] = useState("");
+    // ─── Kategori perusahaan unit (modal unit: multi-pilih WIG / MKI / keduanya) ───
+    const [unitCompanies, setUnitCompanies] = useState<Array<"WIG" | "MKI">>([]);
 
     // ─── Filter & pagination client (tanpa query server) ───
     const [unitQuery, setUnitQuery] = useState("");
@@ -47,13 +48,16 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
     const filteredUnits = useMemo(() => {
         const q = unitQuery.trim().toLowerCase();
         return units.filter((u) => {
+            const comps = resolveDisplayCompanies(u);
             if (unitCompanyFilter === "WIG" || unitCompanyFilter === "MKI") {
-                if (u.company !== unitCompanyFilter) return false;
+                if (!comps.includes(unitCompanyFilter)) return false;
+            } else if (unitCompanyFilter === "BOTH") {
+                if (comps.length < 2) return false;
             } else if (unitCompanyFilter === "TANPA") {
-                if (u.company) return false;
+                if (comps.length > 0) return false;
             }
             if (!q) return true;
-            return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${u.company ?? ""} ${u.template.name ?? ""}`.toLowerCase().includes(q);
+            return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${comps.join(" ")} ${u.template.name ?? ""}`.toLowerCase().includes(q);
         });
     }, [units, unitQuery, unitCompanyFilter]);
 
@@ -75,11 +79,19 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
             setUnitBrand(unit?.brand ?? "");
             setUnitLocation(unit?.location ?? "");
             setUnitTemplateId(unit?.templateId ?? templates.find((t) => t.isActive)?.id ?? "");
-            setUnitCompany(unit?.company ?? "");
+            setUnitCompanies(unit ? resolveDisplayCompanies(unit) : []);
             setShowUnitModal(true);
         },
         [templates]
     );
+
+    const toggleModalCompany = useCallback((c: "WIG" | "MKI") => {
+        setUnitCompanies((prev) =>
+            prev.includes(c)
+                ? prev.filter((item) => item !== c)
+                : (["WIG", "MKI"] as const).filter((item) => item === c || prev.includes(item))
+        );
+    }, []);
 
     const saveUnit = useCallback(async () => {
         if (savingUnit || !unitName.trim() || !unitTemplateId) {
@@ -96,14 +108,14 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                       brand: unitBrand.trim() || null,
                       location: unitLocation.trim() || null,
                       templateId: unitTemplateId,
-                      company: unitCompany || null,
+                      companies: unitCompanies,
                   }
                 : {
                       name: unitName.trim(),
                       brand: unitBrand.trim() || null,
                       location: unitLocation.trim() || null,
                       templateId: unitTemplateId,
-                      ...(unitCompany ? { company: unitCompany } : {}),
+                      companies: unitCompanies,
                   };
             const res = await fetch("/api/ga/equipment/units", {
                 method: isEdit ? "PATCH" : "POST",
@@ -121,7 +133,7 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
         } finally {
             setSavingUnit(false);
         }
-    }, [savingUnit, unitName, unitTemplateId, unitBrand, unitLocation, unitCompany, editingUnit, toast, fetchUnits, fetchTemplates]);
+    }, [savingUnit, unitName, unitTemplateId, unitBrand, unitLocation, unitCompanies, editingUnit, toast, fetchUnits, fetchTemplates]);
 
     const toggleUnitActive = useCallback(
         async (unit: EquipmentUnit) => {
@@ -176,8 +188,8 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                     placeholder="Cari nama, merek, lokasi, template…"
                 />
             </div>
-            <div className="flex gap-1 mb-3 border-b border-border">
-                {(["SEMUA", "WIG", "MKI", "TANPA"] as const).map((c) => (
+            <div className="flex flex-wrap gap-1 mb-3 border-b border-border">
+                {(["SEMUA", "WIG", "MKI", "BOTH", "TANPA"] as const).map((c) => (
                     <button
                         key={c}
                         type="button"
@@ -191,7 +203,13 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                     >
-                        {c === "SEMUA" ? "Semua" : c === "TANPA" ? "Belum dikategorikan" : c}
+                        {c === "SEMUA"
+                            ? "Semua"
+                            : c === "BOTH"
+                              ? "WIG & MKI"
+                              : c === "TANPA"
+                                ? "Belum dikategorikan"
+                                : c}
                     </button>
                 ))}
             </div>
@@ -208,7 +226,9 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {paginatedUnits.map((unit) => (
+                        {paginatedUnits.map((unit) => {
+                            const comps = resolveDisplayCompanies(unit);
+                            return (
                             <TableRow key={unit.id}>
                                 <TableCell>
                                     <p className="font-medium text-foreground">{unit.name}</p>
@@ -221,12 +241,12 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                                 </TableCell>
                                 <TableCell>{unit.template.name}</TableCell>
                                 <TableCell>
-                                    {unit.company ? (
-                                        <span
-                                            className={`text-xs px-1.5 py-0.5 rounded font-medium ${unit.company === "WIG" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"}`}
-                                        >
-                                            {unit.company}
-                                        </span>
+                                    {comps.length > 0 ? (
+                                        <EquipmentCompanyBadge
+                                            company={unit.company}
+                                            isSharedBoth={unit.isSharedBoth}
+                                            companies={unit.companies}
+                                        />
                                     ) : (
                                         <span className="text-xs text-muted-foreground">—</span>
                                     )}
@@ -256,7 +276,8 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                                     </div>
                                 </TableCell>
                             </TableRow>
-                        ))}
+                            );
+                        })}
                     </TableBody>
                 </Table>
                 {units.length === 0 && (
@@ -322,16 +343,48 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-medium">Perusahaan</label>
-                            <select
-                                value={unitCompany}
-                                onChange={(e) => setUnitCompany(e.target.value)}
-                                className={`${inputClass} mt-1`}
-                            >
-                                <option value="">Belum dikategorikan</option>
-                                <option value="WIG">WIG</option>
-                                <option value="MKI">MKI</option>
-                            </select>
+                            <div className="flex items-center justify-between gap-2">
+                                <label className="text-xs font-medium">Perusahaan (bisa pilih 1 atau keduanya)</label>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setUnitCompanies((prev) => (prev.length === 2 ? [] : ["WIG", "MKI"]))
+                                    }
+                                    className="text-[11px] font-medium text-primary hover:underline"
+                                >
+                                    {unitCompanies.length === 2 ? "Kosongkan pilihan" : "Pilih WIG & MKI"}
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-1.5">
+                                {(["WIG", "MKI"] as const).map((c) => {
+                                    const checked = unitCompanies.includes(c);
+                                    return (
+                                        <label
+                                            key={c}
+                                            className={`flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${
+                                                checked
+                                                    ? "border-primary bg-primary/10 text-primary"
+                                                    : "border-border hover:bg-accent/50"
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() => toggleModalCompany(c)}
+                                                className="rounded border-border"
+                                            />
+                                            <span>Perusahaan {c}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                                {unitCompanies.length === 2
+                                    ? "Alat ini dapat dipetakan dan dipakai oleh produk di WIG maupun MKI."
+                                    : unitCompanies.length === 1
+                                      ? `Alat ini terdaftar untuk perusahaan ${unitCompanies[0]}.`
+                                      : "Belum dikategorikan ke perusahaan."}
+                            </p>
                         </div>
                         <div>
                             <label className="text-xs font-medium">Template</label>

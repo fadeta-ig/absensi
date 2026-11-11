@@ -12,6 +12,8 @@ import {
     getEmployeeEquipmentCompanies,
     isEffectiveOn,
     EQUIPMENT_COMPANIES,
+    getUnitCompanies,
+    unitWhereForCompany,
 } from "@/lib/services/equipmentService";
 
 // ─── Produk per perusahaan (master WIG002) ───────────────────────────
@@ -79,6 +81,9 @@ export interface ProductUnitRow {
     name: string;
     brand: string | null;
     location: string | null;
+    company?: EquipmentCompany | null;
+    isSharedBoth?: boolean;
+    companies?: EquipmentCompany[];
     assigned: boolean;
 }
 
@@ -101,7 +106,7 @@ export async function listProductUnitsForEmployee(
         prisma.equipmentAssignment.findMany({ where: { userId: session.userId } }),
         prisma.equipmentUnit.findMany({
             where: { isActive: true, productTools: { some: { productId } } },
-            select: { id: true, name: true, brand: true, location: true },
+            select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true },
             orderBy: { name: "asc" },
         }),
     ]);
@@ -110,7 +115,14 @@ export async function listProductUnitsForEmployee(
     const specificIds = new Set(effective.filter((r) => r.unitId !== null).map((r) => r.unitId as string));
     return {
         product: { id: product.id, company: product.company, name: product.name },
-        tools: units.map((u) => ({ ...u, assigned: hasGlobal || specificIds.has(u.id) })),
+        tools: units.map((u) => {
+            const hasCompanyMeta = "company" in u || "isSharedBoth" in u;
+            return {
+                ...u,
+                ...(hasCompanyMeta ? { companies: getUnitCompanies(u) } : {}),
+                assigned: hasGlobal || specificIds.has(u.id),
+            };
+        }),
     };
 }
 
@@ -121,6 +133,9 @@ export interface ProductToolChecklistRow {
     name: string;
     brand: string | null;
     location: string | null;
+    company?: EquipmentCompany | null;
+    isSharedBoth?: boolean;
+    companies?: EquipmentCompany[];
     checked: boolean;
 }
 
@@ -130,14 +145,18 @@ export async function getProductToolChecklist(session: SessionPayload, productId
     if (!product) throw new EquipmentError("Produk tidak ditemukan.", 404);
     const [units, mapped] = await Promise.all([
         prisma.equipmentUnit.findMany({
-            where: { isActive: true, company: product.company },
-            select: { id: true, name: true, brand: true, location: true },
+            where: { isActive: true, ...unitWhereForCompany(product.company) },
+            select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true },
             orderBy: { name: "asc" },
         }),
         prisma.equipmentProductTool.findMany({ where: { productId }, select: { equipmentUnitId: true } }),
     ]);
     const checkedIds = new Set(mapped.map((m) => m.equipmentUnitId));
-    const tools: ProductToolChecklistRow[] = units.map((u) => ({ ...u, checked: checkedIds.has(u.id) }));
+    const tools: ProductToolChecklistRow[] = units.map((u) => ({
+        ...u,
+        companies: getUnitCompanies(u),
+        checked: checkedIds.has(u.id),
+    }));
     return {
         product: { id: product.id, company: product.company, name: product.name },
         tools,
@@ -154,11 +173,11 @@ export async function setProductTools(session: SessionPayload, productId: string
     if (ids.length > 0) {
         const rows = await prisma.equipmentUnit.findMany({
             where: { id: { in: ids } },
-            select: { id: true, name: true, isActive: true, company: true },
+            select: { id: true, name: true, isActive: true, company: true, isSharedBoth: true },
         });
         const found = new Set(rows.map((r) => r.id));
         if (found.size !== ids.length) throw new EquipmentError("Sebagian alat tidak ditemukan.", 404);
-        const bad = rows.filter((r) => !r.isActive || r.company !== product.company);
+        const bad = rows.filter((r) => !r.isActive || !getUnitCompanies(r).includes(product.company));
         if (bad.length > 0) {
             const names = bad
                 .slice(0, 3)

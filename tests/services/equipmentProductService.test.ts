@@ -97,20 +97,28 @@ describe("checklist alat per produk", () => {
         mocked.equipmentProduct.findUnique.mockResolvedValue(null);
         await expect(getProductToolChecklist(wigSession(), "p9")).rejects.toMatchObject({ statusCode: 404 });
     });
-    it("hanya alat aktif se-perusahaan, tercentang ditandai", async () => {
+    it("hanya alat aktif se-perusahaan (termasuk alat shared WIG+MKI), tercentang ditandai", async () => {
         mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "WIG", name: "Mokuru" } as never);
         mocked.equipmentUnit.findMany.mockResolvedValue([
-            { id: "u1", name: "Mixer", brand: null, location: null },
-            { id: "u2", name: "Timbangan", brand: null, location: null },
+            { id: "u1", name: "Mixer", brand: null, location: null, company: "WIG", isSharedBoth: false },
+            { id: "u2", name: "Spatula Silicon", brand: null, location: null, company: "WIG", isSharedBoth: true },
         ] as never);
         mocked.equipmentProductTool.findMany.mockResolvedValue([{ equipmentUnitId: "u2" }] as never);
         const out = await getProductToolChecklist(wigSession(), "p1");
         expect(mocked.equipmentUnit.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { isActive: true, company: "WIG" } })
+            expect.objectContaining({
+                where: {
+                    isActive: true,
+                    OR: [
+                        { company: "WIG" },
+                        { company: { not: null }, isSharedBoth: true },
+                    ],
+                },
+            })
         );
         expect(out.tools).toEqual([
-            expect.objectContaining({ id: "u1", checked: false }),
-            expect.objectContaining({ id: "u2", checked: true }),
+            expect.objectContaining({ id: "u1", checked: false, companies: ["WIG"] }),
+            expect.objectContaining({ id: "u2", checked: true, companies: ["WIG", "MKI"] }),
         ]);
         expect(out).toMatchObject({ checkedCount: 1, totalCount: 2 });
     });
@@ -129,10 +137,10 @@ describe("simpan set alat produk", () => {
         await expect(setProductTools(wigSession(), "p1", ["u1", "u2", "u3"])).rejects.toMatchObject({ statusCode: 422 });
         expect(mocked.$transaction).not.toHaveBeenCalled();
     });
-    it("sukses: ganti set dalam satu transaksi + kembalikan checklist baru", async () => {
-        mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "WIG", name: "Mokuru" } as never);
+    it("sukses: ganti set dalam satu transaksi + kembalikan checklist baru (termasuk alat shared WIG+MKI)", async () => {
+        mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "MKI", name: "Produk B" } as never);
         mocked.equipmentUnit.findMany.mockResolvedValue([
-            { id: "u1", name: "Mixer", brand: null, location: null, isActive: true, company: "WIG" },
+            { id: "u1", name: "Spatula Silicon", brand: null, location: null, isActive: true, company: "WIG", isSharedBoth: true },
         ] as never);
         const tx = { equipmentProductTool: { deleteMany: vi.fn(), createMany: vi.fn() } };
         mocked.$transaction.mockImplementation((async (cb: (tx: unknown) => Promise<unknown>) => cb(tx)) as never);
@@ -169,6 +177,17 @@ describe("kategori perusahaan unit (via update unit existing)", () => {
         mocked.equipmentUnit.update.mockResolvedValue({ id: "u1" } as never);
         await updateEquipmentUnit(wigSession(), "u1", { company: "WIG", location: "Gudang" });
         expect(mocked.equipmentProductTool.findFirst).not.toHaveBeenCalled();
+    });
+    it("perluas dari 1 perusahaan ke 2 perusahaan (WIG & MKI) selalu diizinkan tanpa melepas pemetaan produk lama", async () => {
+        mocked.equipmentUnit.findUnique.mockResolvedValue({ id: "u1", company: "WIG", isSharedBoth: false } as never);
+        mocked.equipmentUnit.update.mockResolvedValue({ id: "u1", company: "WIG", isSharedBoth: true } as never);
+        const out = await updateEquipmentUnit(wigSession(), "u1", { companies: ["WIG", "MKI"] });
+        expect(mocked.equipmentProductTool.findFirst).not.toHaveBeenCalled();
+        expect(mocked.equipmentUnit.update).toHaveBeenCalledWith({
+            where: { id: "u1" },
+            data: { company: "WIG", isSharedBoth: true },
+        });
+        expect(out.companies).toEqual(["WIG", "MKI"]);
     });
 });
 

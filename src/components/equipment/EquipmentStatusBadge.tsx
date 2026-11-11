@@ -59,18 +59,46 @@ export function EquipmentStatusDot({ status }: { status: string | null }) {
     );
 }
 
-/** Badge perusahaan pemilik alat (WIG/MKI). Null = belum dikategorikan (tak tampil). */
-export function EquipmentCompanyBadge({ company }: { company: string | null | undefined }) {
-    if (!company) return null;
+export function resolveDisplayCompanies(input: {
+    company?: string | null;
+    isSharedBoth?: boolean | null;
+    companies?: readonly string[] | null;
+}): Array<"WIG" | "MKI"> {
+    if (Array.isArray(input.companies) && input.companies.length > 0) {
+        return (["WIG", "MKI"] as const).filter((c) => input.companies!.includes(c));
+    }
+    if (!input.company) return [];
+    if (input.isSharedBoth) return ["WIG", "MKI"];
+    if (input.company === "WIG" || input.company === "MKI") return [input.company];
+    return [];
+}
+
+/** Badge perusahaan pemilik alat (WIG, MKI, atau WIG + MKI sekaligus). Null/kosong = belum dikategorikan (tak tampil). */
+export function EquipmentCompanyBadge({
+    company,
+    isSharedBoth,
+    companies,
+}: {
+    company?: string | null;
+    isSharedBoth?: boolean | null;
+    companies?: readonly string[] | null;
+}) {
+    const list = resolveDisplayCompanies({ company, isSharedBoth, companies });
+    if (list.length === 0) return null;
     return (
-        <span
-            className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold ${
-                company === "WIG"
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                    : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-            }`}
-        >
-            {company}
+        <span className="inline-flex items-center gap-1 align-middle">
+            {list.map((c) => (
+                <span
+                    key={c}
+                    className={`inline-block text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                        c === "WIG"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                    }`}
+                >
+                    {c}
+                </span>
+            ))}
         </span>
     );
 }

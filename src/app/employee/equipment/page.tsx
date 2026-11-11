@@ -9,13 +9,22 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
-import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface ProductToolsData {
     product: { id: string; company: string; name: string };
-    tools: Array<{ id: string; name: string; brand: string | null; location: string | null; assigned: boolean }>;
+    tools: Array<{
+        id: string;
+        name: string;
+        brand: string | null;
+        location: string | null;
+        company?: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
+        assigned: boolean;
+    }>;
 }
 
 type AlatNav =
@@ -39,6 +48,8 @@ interface MyUnit {
         brand: string | null;
         location: string | null;
         company: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
         template: { name: string };
         inspections: LastCheck[];
         productTools: Array<{ product: { id: string; name: string; company: string } }>;
@@ -56,7 +67,14 @@ interface InspectionItem {
 
 interface InspectionDto {
     id: string;
-    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
+    unit: {
+        id: string;
+        name: string;
+        brand: string | null;
+        company: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
+    };
     status: string;
     createdAt: string;
     submittedAt: string | null;
@@ -77,7 +95,15 @@ interface UnitHistoryRow {
     submittedAt: string | null;
     checkedAt: string | null;
     approvedAt: string | null;
-    unit: { id: string; name: string; brand: string | null; location: string | null; company: "WIG" | "MKI" | null };
+    unit: {
+        id: string;
+        name: string;
+        brand: string | null;
+        location: string | null;
+        company: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
+    };
     startedBy: { employeeId: string; name: string };
     checkedByNameSnapshot: string | null;
     approvedByNameSnapshot: string | null;
@@ -243,8 +269,9 @@ export default function EmployeeEquipmentPage() {
             if (p.company === "WIG" || p.company === "MKI") set.add(p.company);
         }
         for (const u of units) {
-            const c = u.unit.company;
-            if (c === "WIG" || c === "MKI") set.add(c);
+            for (const c of resolveDisplayCompanies(u.unit)) {
+                set.add(c);
+            }
         }
         return (["WIG", "MKI"] as const).filter((c) => set.has(c));
     }, [products, units]);
@@ -260,8 +287,9 @@ export default function EmployeeEquipmentPage() {
     const assignedCountByCompany = useMemo(() => {
         const map: Record<"WIG" | "MKI", number> = { WIG: 0, MKI: 0 };
         for (const e of units) {
-            const c = e.unit.company;
-            if (c === "WIG" || c === "MKI") map[c] += 1;
+            for (const c of resolveDisplayCompanies(e.unit)) {
+                map[c] += 1;
+            }
         }
         return map;
     }, [units]);
@@ -802,7 +830,12 @@ export default function EmployeeEquipmentPage() {
 
                 <div className="bg-card border border-border rounded-lg p-4 mb-4">
                     <h1 className="text-xl font-semibold text-foreground">
-                        {selectedUnit.unit.name} <EquipmentCompanyBadge company={selectedUnit.unit.company} />
+                        {selectedUnit.unit.name}{" "}
+                        <EquipmentCompanyBadge
+                            company={selectedUnit.unit.company}
+                            isSharedBoth={selectedUnit.unit.isSharedBoth}
+                            companies={selectedUnit.unit.companies}
+                        />
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
                         {selectedUnit.unit.template.name}
@@ -1451,7 +1484,12 @@ export default function EmployeeEquipmentPage() {
                             <EquipmentStatusDot status={last?.status ?? null} />
                             <div className="min-w-0 flex-1">
                                 <p className="font-medium text-foreground truncate">
-                                    {tool.name} <EquipmentCompanyBadge company={entry?.unit.company ?? navCompany} />
+                                    {tool.name}{" "}
+                                    <EquipmentCompanyBadge
+                                        company={tool.company ?? entry?.unit.company ?? navCompany}
+                                        isSharedBoth={tool.isSharedBoth ?? entry?.unit.isSharedBoth}
+                                        companies={tool.companies ?? entry?.unit.companies}
+                                    />
                                 </p>
                                 {meta && <p className="text-sm text-muted-foreground truncate">{meta}</p>}
                                 <p className={`text-xs mt-0.5 truncate ${last ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}`}>

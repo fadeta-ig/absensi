@@ -190,7 +190,14 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
             <div className="bg-card border border-border rounded-lg p-4 mb-4">
                 <div className="flex items-start justify-between gap-2">
                     <div>
-                        <h1 className="text-xl font-semibold text-foreground">{detail.unit.name} <EquipmentCompanyBadge company={detail.unit.company} /></h1>
+                        <h1 className="text-xl font-semibold text-foreground">
+                            {detail.unit.name}{" "}
+                            <EquipmentCompanyBadge
+                                company={detail.unit.company}
+                                isSharedBoth={(detail.unit as { isSharedBoth?: boolean }).isSharedBoth}
+                                companies={(detail.unit as { companies?: string[] }).companies}
+                            />
+                        </h1>
                         <p className="text-sm text-muted-foreground mt-1">
                             {[detail.unit.brand, detail.unit.location].filter(Boolean).join(" · ") || "—"}
                         </p>

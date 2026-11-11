@@ -240,7 +240,14 @@ export default function EmployeeEquipmentApprovalsPage() {
                                     <div className="flex items-start gap-2">
                                         <EquipmentStatusDot status={stats.attention ? "OPEN" : "SUBMITTED"} />
                                         <div className="min-w-0 flex-1">
-                                            <h3 className="text-base font-bold text-[var(--text-primary)] truncate">{task.unit.name} <EquipmentCompanyBadge company={task.unit.company} /></h3>
+                                            <h3 className="text-base font-bold text-[var(--text-primary)] truncate">
+                                                {task.unit.name}{" "}
+                                                <EquipmentCompanyBadge
+                                                    company={task.unit.company}
+                                                    isSharedBoth={(task.unit as { isSharedBoth?: boolean }).isSharedBoth}
+                                                    companies={(task.unit as { companies?: string[] }).companies}
+                                                />
+                                            </h3>
                                             {task.unit.brand && (
                                                 <p className="text-xs text-[var(--text-muted)]">{task.unit.brand}</p>
                                             )}

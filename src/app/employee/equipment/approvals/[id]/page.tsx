@@ -214,7 +214,14 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
             </Link>
 
             <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                <h1 className="text-xl font-semibold text-foreground">{detail.unit.name} <EquipmentCompanyBadge company={detail.unit.company} /></h1>
+                <h1 className="text-xl font-semibold text-foreground">
+                    {detail.unit.name}{" "}
+                    <EquipmentCompanyBadge
+                        company={detail.unit.company}
+                        isSharedBoth={(detail.unit as { isSharedBoth?: boolean }).isSharedBoth}
+                        companies={(detail.unit as { companies?: string[] }).companies}
+                    />
+                </h1>
                 {detail.unit.brand && <p className="text-sm text-muted-foreground">{detail.unit.brand}</p>}
                 <p className="text-sm text-muted-foreground mt-1">
                     Dari {stripGelar(detail.startedBy.name)} · Dikirim {formatDateTime(detail.submittedAt)}

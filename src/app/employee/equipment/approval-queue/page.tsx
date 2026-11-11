@@ -366,7 +366,14 @@ export default function EquipmentApprovalQueuePage() {
                                 <div className="flex items-start gap-2.5">
                                     <EquipmentStatusDot status={row.status} />
                                     <div className="min-w-0 flex-1">
-                                        <p className="font-medium text-foreground truncate">{row.unit.name} <EquipmentCompanyBadge company={row.unit.company} /></p>
+                                        <p className="font-medium text-foreground truncate">
+                                            {row.unit.name}{" "}
+                                            <EquipmentCompanyBadge
+                                                company={row.unit.company}
+                                                isSharedBoth={(row.unit as { isSharedBoth?: boolean }).isSharedBoth}
+                                                companies={(row.unit as { companies?: string[] }).companies}
+                                            />
+                                        </p>
                                         {row.unit.brand && <p className="text-xs text-muted-foreground truncate">{row.unit.brand}</p>}
                                         <p className="text-xs text-muted-foreground mt-1 truncate">
                                             Diajukan {stripGelar(row.startedBy.name)} · Diperiksa QC {stripGelar(row.checkedByNameSnapshot ?? "")} · {formatDateTime(row.checkedAt)}

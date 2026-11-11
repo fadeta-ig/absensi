@@ -8,7 +8,7 @@ import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
-import { EquipmentCompanyBadge, EquipmentGlobalBadge } from "@/components/equipment/EquipmentStatusBadge";
+import { EquipmentCompanyBadge, EquipmentGlobalBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import { inputClass, isAssignmentActive } from "@/app/ga/equipment/settings/_components/useSettingsData";
 import type {
     EquipmentAssignment,
@@ -107,7 +107,7 @@ export function CreateAssignmentModal({
             assignMode === "units"
                 ? assignUnitIds
                 : assignMode === "company"
-                  ? units.filter((u) => u.isActive && u.company === assignCompany).map((u) => u.id)
+                  ? units.filter((u) => u.isActive && resolveDisplayCompanies(u).includes(assignCompany)).map((u) => u.id)
                   : assignMode === "product"
                     ? assignProductTools.filter((t) => t.checked).map((t) => t.id)
                     : [];
@@ -175,13 +175,13 @@ export function CreateAssignmentModal({
         }
     }, [savingAssign, assignMode, assignUnitIds, assignCompany, assignProductTools, units, assignEmployee, assignStartsOn, assignEndsOn, toast, fetchAssignments, fetchUnits]);
 
-    const assignableUnits = units.filter((u) => u.isActive && u.company);
+    const assignableUnits = units.filter((u) => u.isActive && resolveDisplayCompanies(u).length > 0);
     const filteredAssignUnits = assignableUnits.filter((u) => {
         const q = assignUnitQuery.trim().toLowerCase();
         if (!q) return true;
-        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${u.company ?? ""}`.toLowerCase().includes(q);
+        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${resolveDisplayCompanies(u).join(" ")}`.toLowerCase().includes(q);
     });
-    const assignCompanyUnits = assignableUnits.filter((u) => u.company === assignCompany);
+    const assignCompanyUnits = assignableUnits.filter((u) => resolveDisplayCompanies(u).includes(assignCompany));
     const assignProductChecked = assignProductTools.filter((t) => t.checked);
     const assignPreviewCount =
         assignMode === "units"
@@ -299,13 +299,17 @@ export function CreateAssignmentModal({
                                                     {[u.brand, u.location].filter(Boolean).join(" · ") || "—"}
                                                 </span>
                                             </span>
-                                            <EquipmentCompanyBadge company={u.company} />
+                                            <EquipmentCompanyBadge
+                                                company={u.company}
+                                                isSharedBoth={u.isSharedBoth}
+                                                companies={u.companies}
+                                            />
                                         </label>
                                     </li>
                                 ))}
                             </ul>
                         )}
-                        {units.some((u) => u.isActive && !u.company) && (
+                        {units.some((u) => u.isActive && resolveDisplayCompanies(u).length === 0) && (
                             <p className="text-xs text-muted-foreground mt-2">
                                 Alat yang belum berkategori tidak tampil di sini — kategorikan dulu di tab Produk.
                             </p>
@@ -343,7 +347,11 @@ export function CreateAssignmentModal({
                                         className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-1.5"
                                     >
                                         <span className="text-sm truncate">{u.name}</span>
-                                        <EquipmentCompanyBadge company={u.company} />
+                                        <EquipmentCompanyBadge
+                                            company={u.company}
+                                            isSharedBoth={u.isSharedBoth}
+                                            companies={u.companies}
+                                        />
                                     </li>
                                 ))}
                             </ul>
@@ -504,9 +512,11 @@ export function CreateAssignmentModal({
                                                 <span className="min-w-0 truncate">
                                                     {a.unit ? a.unit.name : "Semua unit"}{" "}
                                                     {a.unit ? (
-                                                        a.unit.company ? (
-                                                            <EquipmentCompanyBadge company={a.unit.company} />
-                                                        ) : null
+                                                        <EquipmentCompanyBadge
+                                                            company={a.unit.company}
+                                                            isSharedBoth={a.unit.isSharedBoth}
+                                                            companies={a.unit.companies}
+                                                        />
                                                     ) : (
                                                         <EquipmentGlobalBadge />
                                                     )}{" "}
@@ -644,7 +654,7 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
         }
     }, [assignment, savingEdit, editIsGlobal, editUnitIds, editEmployee, editStartsOn, editEndsOn, toast, fetchAssignments, fetchUnits, onClose]);
 
-    const assignableUnits = units.filter((u) => u.isActive && u.company);
+    const assignableUnits = units.filter((u) => u.isActive && resolveDisplayCompanies(u).length > 0);
     const editListUnits = (() => {
         const currentId = assignment?.unitId;
         if (!currentId || assignableUnits.some((u) => u.id === currentId)) return assignableUnits;
@@ -654,7 +664,7 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
     const filteredEditUnits = editListUnits.filter((u) => {
         const q = editUnitQuery.trim().toLowerCase();
         if (!q) return true;
-        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${u.company ?? ""}`.toLowerCase().includes(q);
+        return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${resolveDisplayCompanies(u).join(" ")}`.toLowerCase().includes(q);
     });
 
     if (!assignment) return null;
@@ -742,7 +752,11 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
                                                                 {[u.brand, u.location].filter(Boolean).join(" · ") || "—"}
                                                             </span>
                                                         </span>
-                                                        <EquipmentCompanyBadge company={u.company} />
+                                                        <EquipmentCompanyBadge
+                                                            company={u.company}
+                                                            isSharedBoth={u.isSharedBoth}
+                                                            companies={u.companies}
+                                                        />
                                                     </label>
                                                 </li>
                                             ))}

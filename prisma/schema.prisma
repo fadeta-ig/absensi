@@ -324,6 +324,8 @@ model EquipmentUnit {
   location       String?  @db.VarChar(200)
   /// Perusahaan pemilik alat (WIG/MKI). NULL = belum dikategorikan WIG002.
   company        EquipmentCompany?
+  /// True bila alat dipakai bersama oleh kedua perusahaan (WIG & MKI).
+  isSharedBoth   Boolean  @default(false) @map("is_shared_both")
   templateId     String   @map("template_id")
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")

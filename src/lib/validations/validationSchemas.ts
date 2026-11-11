@@ -975,7 +975,8 @@ export const equipmentUnitCreateSchema = z.object({
     brand: z.string().trim().max(200).nullable().optional(),
     location: z.string().trim().max(200).nullable().optional(),
     templateId: z.string().trim().min(1),
-    company: equipmentCompanySchema.optional(),
+    company: equipmentCompanySchema.nullable().optional(),
+    companies: z.array(equipmentCompanySchema).max(2).optional(),
 });
 
 export const equipmentUnitUpdateSchema = z.object({
@@ -986,6 +987,7 @@ export const equipmentUnitUpdateSchema = z.object({
     templateId: z.string().trim().min(1).optional(),
     isActive: z.boolean().optional(),
     company: equipmentCompanySchema.nullable().optional(),
+    companies: z.array(equipmentCompanySchema).max(2).nullable().optional(),
 });
 
 export const equipmentAssignSchema = z.object({

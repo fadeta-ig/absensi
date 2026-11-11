@@ -168,7 +168,7 @@ RBAC: tanpa permission baru. Akses meeting = peserta/requester atau WIG002 (`ga.
 ## 6. Inspeksi Alat Produksi (2026-10-10)
 
 1. `EquipmentTemplate` 1 ── * `EquipmentTemplateItem` (unik `[templateId, nameNormalized]`; flag `requirePhoto` per item).
-2. `EquipmentTemplate` 1 ── * `EquipmentUnit` (nama unik global; `brand`, `location`; tanpa reviewer per unit).
+2. `EquipmentTemplate` 1 ── * `EquipmentUnit` (nama unik global; `brand`, `location`; cakupan perusahaan mendukung 1 atau 2 perusahaan sekaligus via `company` + `isSharedBoth` / `companies: ["WIG"] | ["MKI"] | ["WIG", "MKI"]`, sehingga satu alat seperti Spatula Silicon dapat dipakai bersama oleh WIG & MKI dan dipetakan ke banyak produk di kedua perusahaan via `EquipmentProductTool`).
 3. `EquipmentUnit` 1 ── * `EquipmentAssignment` (`userId` + interval WIB; `unitId` null = global semua unit; internal saja; WIG002 menentukan siapa dapat modul).
 3. `EquipmentUnit` 1 ── * `EquipmentInspection` (`OPEN/SUBMITTED/DONE/APPROVED`; snapshot nama unit; tanpa jadwal — dibuat saat dipakai; kolom QC `checkedByEmployeeId/checkedByNameSnapshot/checkedAt/qcNote`; kolom approval `approvedByEmployeeId/approvedByNameSnapshot/approvedAt`).
 4. `EquipmentInspection` 1 ── * `EquipmentInspectionItem` (snapshot nama + `requirePhoto`; hasil `isPass` null = belum dinilai).

@@ -313,9 +313,11 @@ export default function AssignmentsTab({ assignments, units, fetchAssignments, f
                                         <span className="block text-sm font-semibold truncate">
                                             {a.unit ? a.unit.name : "Semua unit"}{" "}
                                             {a.unit ? (
-                                                a.unit.company ? (
-                                                    <EquipmentCompanyBadge company={a.unit.company} />
-                                                ) : null
+                                                <EquipmentCompanyBadge
+                                                    company={a.unit.company}
+                                                    isSharedBoth={a.unit.isSharedBoth}
+                                                    companies={a.unit.companies}
+                                                />
                                             ) : (
                                                 <EquipmentGlobalBadge />
                                             )}

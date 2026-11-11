@@ -25,6 +25,8 @@ export interface EquipmentUnit {
     brand: string | null;
     location: string | null;
     company: "WIG" | "MKI" | null;
+    isSharedBoth?: boolean;
+    companies?: Array<"WIG" | "MKI">;
     isActive: boolean;
     templateId: string;
     template: { id: string; name: string };
@@ -50,7 +52,13 @@ export interface EquipmentAssignment {
     unitId: string | null;
     startsOnWibDate: string;
     endsOnWibDate: string | null;
-    unit: { id: string; name: string; company: "WIG" | "MKI" | null } | null;
+    unit: {
+        id: string;
+        name: string;
+        company: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
+    } | null;
     user: { id: string; employeeId: string | null; displayName: string };
 }
 
@@ -67,6 +75,9 @@ export interface ProductToolRow {
     name: string;
     brand: string | null;
     location: string | null;
+    company?: "WIG" | "MKI" | null;
+    isSharedBoth?: boolean;
+    companies?: Array<"WIG" | "MKI">;
     checked: boolean;
 }
 

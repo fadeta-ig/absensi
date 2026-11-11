@@ -9,6 +9,7 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { useTablePagination } from "@/hooks/useTablePagination";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
+import { EquipmentCompanyBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import {
     inputClass,
 } from "@/app/ga/equipment/settings/_components/useSettingsData";
@@ -227,15 +228,15 @@ export default function ProdukTab({
     }, [savingChecklist, checklist, toast, fetchProducts, productCompany, setChecklist, setInitialChecked]);
 
     const setUnitCompanyQuick = useCallback(
-        async (unitId: string, company: EquipmentCompanyFilter) => {
+        async (unitId: string, companies: Array<"WIG" | "MKI">) => {
             try {
                 const res = await fetch("/api/ga/equipment/units", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ id: unitId, company }),
+                    body: JSON.stringify({ id: unitId, companies }),
                 });
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menetapkan perusahaan."));
-                toast(`Alat dikategorikan ke ${company}.`, "success");
+                toast(`Alat dikategorikan ke ${companies.join(" & ")}.`, "success");
                 await fetchUnits();
                 await fetchProducts(productCompany);
                 if (selectedProductId) await fetchChecklist(selectedProductId);
@@ -247,7 +248,7 @@ export default function ProdukTab({
     );
 
     const bulkSetCompany = useCallback(
-        async (company: EquipmentCompanyFilter) => {
+        async (companies: Array<"WIG" | "MKI">) => {
             if (bulkSelected.length === 0) {
                 toast("Pilih dulu alat yang akan dikategorikan.", "warning");
                 return;
@@ -260,7 +261,7 @@ export default function ProdukTab({
                             const res = await fetch("/api/ga/equipment/units", {
                                 method: "PATCH",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id, company }),
+                                body: JSON.stringify({ id, companies }),
                             });
                             return res.ok;
                         } catch {
@@ -271,7 +272,7 @@ export default function ProdukTab({
                 const ok = results.filter(Boolean).length;
                 const fail = results.length - ok;
                 toast(
-                    fail === 0 ? `${ok} alat dikategorikan ke ${company}.` : `${ok} berhasil, ${fail} gagal.`,
+                    fail === 0 ? `${ok} alat dikategorikan ke ${companies.join(" & ")}.` : `${ok} berhasil, ${fail} gagal.`,
                     fail === 0 ? "success" : "warning"
                 );
                 setBulkSelected([]);
@@ -285,7 +286,7 @@ export default function ProdukTab({
         [bulkSelected, toast, fetchUnits, fetchProducts, productCompany, selectedProductId, fetchChecklist]
     );
 
-    const uncategorizedUnits = units.filter((u) => u.isActive && !u.company);
+    const uncategorizedUnits = units.filter((u) => u.isActive && resolveDisplayCompanies(u).length === 0);
     const filteredUncategorizedUnits = uncategorizedUnits.filter((u) => {
         const q = uncategorizedQuery.trim().toLowerCase();
         if (!q) return true;
@@ -358,7 +359,7 @@ export default function ProdukTab({
                             </button>
                             <button
                                 type="button"
-                                onClick={() => void bulkSetCompany("WIG")}
+                                onClick={() => void bulkSetCompany(["WIG"])}
                                 disabled={bulkSaving || bulkSelected.length === 0}
                                 className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
                             >
@@ -366,11 +367,19 @@ export default function ProdukTab({
                             </button>
                             <button
                                 type="button"
-                                onClick={() => void bulkSetCompany("MKI")}
+                                onClick={() => void bulkSetCompany(["MKI"])}
                                 disabled={bulkSaving || bulkSelected.length === 0}
                                 className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
                             >
                                 {bulkSaving ? "Menyimpan..." : `Jadikan MKI (${bulkSelected.length})`}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void bulkSetCompany(["WIG", "MKI"])}
+                                disabled={bulkSaving || bulkSelected.length === 0}
+                                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
+                            >
+                                {bulkSaving ? "Menyimpan..." : `Jadikan WIG & MKI (${bulkSelected.length})`}
                             </button>
                         </div>
                         {filteredUncategorizedUnits.length === 0 ? (
@@ -407,7 +416,7 @@ export default function ProdukTab({
                                     <span className="flex gap-1 shrink-0">
                                         <button
                                             type="button"
-                                            onClick={() => void setUnitCompanyQuick(u.id, "WIG")}
+                                            onClick={() => void setUnitCompanyQuick(u.id, ["WIG"])}
                                             disabled={bulkSaving}
                                             className="px-2 py-1 text-[11px] font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[36px]"
                                         >
@@ -415,11 +424,19 @@ export default function ProdukTab({
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => void setUnitCompanyQuick(u.id, "MKI")}
+                                            onClick={() => void setUnitCompanyQuick(u.id, ["MKI"])}
                                             disabled={bulkSaving}
                                             className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 min-h-[36px]"
                                         >
                                             MKI
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void setUnitCompanyQuick(u.id, ["WIG", "MKI"])}
+                                            disabled={bulkSaving}
+                                            className="px-2 py-1 text-[11px] font-semibold rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 min-h-[36px]"
+                                        >
+                                            WIG &amp; MKI
                                         </button>
                                     </span>
                                 </li>
@@ -649,19 +666,26 @@ export default function ProdukTab({
                         <ul className="space-y-1 max-h-[360px] overflow-y-auto mb-3">
                             {paginatedTools.map((t) => (
                                 <li key={t.id}>
-                                    <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer hover:bg-accent/50 min-h-[48px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={t.checked}
-                                            onChange={() => toggleToolCheck(t.id)}
-                                            className="rounded border-border shrink-0"
-                                        />
-                                        <span className="min-w-0">
-                                            <span className="block text-sm font-medium truncate">{t.name}</span>
-                                            <span className="block text-xs text-muted-foreground truncate">
-                                                {[t.brand, t.location].filter(Boolean).join(" · ") || "—"}
+                                    <label className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer hover:bg-accent/50 min-h-[48px]">
+                                        <span className="flex items-center gap-2 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={t.checked}
+                                                onChange={() => toggleToolCheck(t.id)}
+                                                className="rounded border-border shrink-0"
+                                            />
+                                            <span className="min-w-0">
+                                                <span className="block text-sm font-medium truncate">{t.name}</span>
+                                                <span className="block text-xs text-muted-foreground truncate">
+                                                    {[t.brand, t.location].filter(Boolean).join(" · ") || "—"}
+                                                </span>
                                             </span>
                                         </span>
+                                        <EquipmentCompanyBadge
+                                            company={t.company}
+                                            isSharedBoth={t.isSharedBoth}
+                                            companies={t.companies}
+                                        />
                                     </label>
                                 </li>
                             ))}

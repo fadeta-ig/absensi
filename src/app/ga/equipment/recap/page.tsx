@@ -14,6 +14,8 @@ interface RecapUnitOption {
     id: string;
     name: string;
     company: "WIG" | "MKI" | null;
+    isSharedBoth?: boolean;
+    companies?: Array<"WIG" | "MKI">;
 }
 
 interface RecapSummary {
@@ -26,7 +28,14 @@ interface RecapSummary {
 
 interface RecapInspection {
     id: string;
-    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
+    unit: {
+        id: string;
+        name: string;
+        brand: string | null;
+        company: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
+    };
     startedBy: { employeeId: string; name: string };
     status: string;
     createdAt: string;
@@ -41,7 +50,14 @@ interface RecapDetailItem {
 
 interface RecapDetail {
     id: string;
-    unit: { id: string; name: string; brand: string | null; company: "WIG" | "MKI" | null };
+    unit: {
+        id: string;
+        name: string;
+        brand: string | null;
+        company: "WIG" | "MKI" | null;
+        isSharedBoth?: boolean;
+        companies?: Array<"WIG" | "MKI">;
+    };
     startedBy: { employeeId: string; name: string };
     status: string;
     createdAt: string;
@@ -412,7 +428,14 @@ export default function EquipmentRecapPage() {
                                     {inspections.map((item) => (
                                         <TableRow key={item.id}>
                                             <TableCell>
-                                                <p className="font-medium text-foreground">{item.unit.name} <EquipmentCompanyBadge company={item.unit.company} /></p>
+                                                <p className="font-medium text-foreground">
+                                                    {item.unit.name}{" "}
+                                                    <EquipmentCompanyBadge
+                                                        company={item.unit.company}
+                                                        isSharedBoth={item.unit.isSharedBoth}
+                                                        companies={item.unit.companies}
+                                                    />
+                                                </p>
                                                 {item.unit.brand && (
                                                     <p className="text-xs text-muted-foreground">{item.unit.brand}</p>
                                                 )}
@@ -458,7 +481,20 @@ export default function EquipmentRecapPage() {
                 <AccessibleModal ariaLabel="Detail inspeksi peralatan" onClose={closeDetail} className="!max-w-2xl !p-6">
                     <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
                         <div>
-                            <h2 className="modal-title">{detail ? <>{detail.unit.name} <EquipmentCompanyBadge company={detail.unit.company} /></> : "Memuat..."}</h2>
+                            <h2 className="modal-title">
+                                {detail ? (
+                                    <>
+                                        {detail.unit.name}{" "}
+                                        <EquipmentCompanyBadge
+                                            company={detail.unit.company}
+                                            isSharedBoth={detail.unit.isSharedBoth}
+                                            companies={detail.unit.companies}
+                                        />
+                                    </>
+                                ) : (
+                                    "Memuat..."
+                                )}
+                            </h2>
                             {detail && (
                                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
                                     {detail.startedBy.name} ·{" "}

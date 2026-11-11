@@ -77,20 +77,40 @@ beforeEach(() => {
 });
 
 describe("antrean tersaring perusahaan keanggotaan", () => {
-    it("QC WIG-only hanya melihat SUBMITTED unit WIG", async () => {
+    it("QC WIG-only melihat SUBMITTED unit WIG (termasuk unit shared WIG+MKI)", async () => {
         mockKeys({ "equipment.qcMembers.WIG": ["QC-001"] });
         mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
         await getPendingEquipmentApprovals(qcSession());
         expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { status: "SUBMITTED", unit: { company: { in: ["WIG"] } } } })
+            expect.objectContaining({
+                where: {
+                    status: "SUBMITTED",
+                    unit: {
+                        OR: [
+                            { company: "WIG" },
+                            { company: { not: null }, isSharedBoth: true },
+                        ],
+                    },
+                },
+            })
         );
     });
-    it("approver MKI-only hanya melihat antrean MKI", async () => {
+    it("approver MKI-only melihat antrean MKI (termasuk unit shared WIG+MKI)", async () => {
         mockKeys({ "equipment.approvers.MKI": ["AP-001"] });
         mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
         await getApprovalQueue(approverSession());
         expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ where: { status: "DONE", unit: { company: { in: ["MKI"] } } } })
+            expect.objectContaining({
+                where: {
+                    status: "DONE",
+                    unit: {
+                        OR: [
+                            { company: "MKI" },
+                            { company: { not: null }, isSharedBoth: true },
+                        ],
+                    },
+                },
+            })
         );
     });
     it("bukan anggota di perusahaan mana pun tetap 403", async () => {
@@ -179,25 +199,36 @@ describe("daftar unit, rekap, produk, dan evidence tersaring", () => {
             { unitId: "u2", startsOnWibDate: "2026-01-01", endsOnWibDate: null },
         ] as never);
         mocked.equipmentUnit.findMany
-            .mockResolvedValueOnce([{ company: "WIG" }, { company: null }] as never)
+            .mockResolvedValueOnce([{ company: "WIG", isSharedBoth: false }, { company: null, isSharedBoth: false }] as never)
             .mockResolvedValueOnce([] as never);
         await getMyEquipmentUnits(empSession(), { productId: "p1" });
         expect(mocked.equipmentUnit.findMany).toHaveBeenLastCalledWith(
             expect.objectContaining({
                 where: expect.objectContaining({
-                    company: { in: ["WIG"] },
+                    OR: [
+                        { company: "WIG" },
+                        { company: { not: null }, isSharedBoth: true },
+                    ],
                     productTools: { some: { productId: "p1" } },
                 }),
             })
         );
     });
-    it("rekap meneruskan filter company dan productId", async () => {
+    it("rekap meneruskan filter company dan productId (mencakup unit shared WIG+MKI)", async () => {
         mocked.equipmentInspection.findMany.mockResolvedValue([] as never);
         mocked.equipmentInspection.count.mockResolvedValue(0);
         await getEquipmentRecap(wigSession(), { company: "MKI", productId: "p9" });
         expect(mocked.equipmentInspection.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: expect.objectContaining({ unit: { company: "MKI", productTools: { some: { productId: "p9" } } } }),
+                where: expect.objectContaining({
+                    unit: {
+                        OR: [
+                            { company: "MKI" },
+                            { company: { not: null }, isSharedBoth: true },
+                        ],
+                        productTools: { some: { productId: "p9" } },
+                    },
+                }),
             })
         );
     });
