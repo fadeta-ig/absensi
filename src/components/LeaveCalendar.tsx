@@ -37,6 +37,7 @@ const TYPE_COLORS: Record<string, string> = {
     sick: "bg-red-100 text-red-700 border-red-200",
     personal: "bg-yellow-100 text-yellow-700 border-yellow-200",
     maternity: "bg-purple-100 text-purple-700 border-purple-200",
+    paternity: "bg-teal-100 text-teal-700 border-teal-200",
     default: "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]",
 };
 
@@ -45,6 +46,7 @@ const TYPE_LABELS: Record<string, string> = {
     sick: "Sakit",
     personal: "Pribadi",
     maternity: "Melahirkan",
+    paternity: "Paternity",
 };
 
 export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {

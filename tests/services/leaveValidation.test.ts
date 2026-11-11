@@ -49,4 +49,43 @@ describe("leave calendar range validation", () => {
             ]));
         }
     });
+
+    it("accepts discrete dates[] for annual, sick, and personal and rejects duplicate dates or maternity/paternity with dates[]", () => {
+        const okAnnual = leaveRequestSchema.safeParse({
+            type: "annual",
+            dates: ["2026-11-12", "2026-11-13"],
+            reason: "Keperluan keluarga",
+        });
+        expect(okAnnual.success).toBe(true);
+
+        const dupDates = leaveRequestSchema.safeParse({
+            type: "sick",
+            dates: ["2026-11-12", "2026-11-12"],
+            reason: "Istirahat medis",
+        });
+        expect(dupDates.success).toBe(false);
+
+        const maternityWithDates = leaveRequestSchema.safeParse({
+            type: "maternity",
+            dates: ["2026-11-12"],
+            reason: "Melahirkan",
+        });
+        expect(maternityWithDates.success).toBe(false);
+    });
+
+    it("accepts bulk ids[] in leaveUpdateSchema for approved/rejected and rejects missing id/ids", () => {
+        expect(leaveUpdateSchema.safeParse({
+            ids: ["leave-1", "leave-2"],
+            status: "approved",
+        }).success).toBe(true);
+
+        expect(leaveUpdateSchema.safeParse({
+            ids: ["leave-1"],
+            status: "pending",
+        }).success).toBe(false);
+
+        expect(leaveUpdateSchema.safeParse({
+            status: "approved",
+        }).success).toBe(false);
+    });
 });

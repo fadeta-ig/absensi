@@ -52,6 +52,7 @@ const LEAVE_TYPE_MAP: Record<string, string> = {
     sick: "Izin Sakit",
     personal: "Izin Pribadi",
     maternity: "Cuti Melahirkan",
+    paternity: "Cuti Paternity (Ayah)",
 };
 
 function normalizeWibDate(value: string): string {

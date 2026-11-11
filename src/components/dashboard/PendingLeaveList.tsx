@@ -19,6 +19,14 @@ interface PendingLeaveListProps {
     getEmployeeName: (empId: string) => string;
 }
 
+const TYPE_LABELS: Record<string, string> = {
+    annual: "Tahunan",
+    sick: "Sakit",
+    personal: "Pribadi",
+    maternity: "Melahirkan",
+    paternity: "Paternity (Ayah)",
+};
+
 const ITEMS_PER_PAGE = 5;
 
 export default function PendingLeaveList({ leaves, getEmployeeName }: PendingLeaveListProps) {
@@ -54,7 +62,12 @@ export default function PendingLeaveList({ leaves, getEmployeeName }: PendingLea
                                         </div>
                                         <div>
                                             <p className="text-sm font-medium text-[var(--text-primary)]">{getEmployeeName(l.employeeId)}</p>
-                                            <p className="text-[10px] text-[var(--text-muted)]">{l.type} • {formatDisplayDate(l.startDate)} — {formatDisplayDate(l.endDate)}</p>
+                                            <p className="text-[10px] text-[var(--text-muted)]">
+                                                {TYPE_LABELS[l.type] || l.type} •{" "}
+                                                {l.startDate.slice(0, 10) === l.endDate.slice(0, 10)
+                                                    ? formatDisplayDate(l.startDate)
+                                                    : `${formatDisplayDate(l.startDate)} — ${formatDisplayDate(l.endDate)}`}
+                                            </p>
                                         </div>
                                     </div>
                                     <span className="badge badge-warning">Pending</span>

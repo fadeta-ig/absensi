@@ -250,15 +250,54 @@ const leaveEndDateSchema = z.string()
         "Tanggal selesai harus berformat YYYY-MM-DD yang valid",
     );
 
+const leaveDiscreteDateSchema = z.string()
+    .min(1, "Tanggal cuti harus diisi")
+    .refine(
+        isValidCalendarDate,
+        "Tanggal cuti harus berformat YYYY-MM-DD yang valid",
+    );
+
 export const leaveRequestSchema = z.object({
     type: z.enum(["annual", "sick", "personal", "maternity", "paternity"], {
         message: "Tipe cuti tidak valid",
     }),
-    startDate: leaveStartDateSchema,
-    endDate: leaveEndDateSchema,
-    reason: z.string().min(1, "Alasan harus diisi"),
+    startDate: leaveStartDateSchema.optional(),
+    endDate: leaveEndDateSchema.optional(),
+    dates: z.array(leaveDiscreteDateSchema)
+        .min(1, "Pilih minimal 1 tanggal cuti")
+        .max(30, "Maksimal 30 tanggal cuti dalam satu pengajuan")
+        .optional(),
+    reason: z.string().trim().min(1, "Alasan harus diisi"),
     attachment: z.string().nullable().optional(),
 }).superRefine((data, context) => {
+    const hasDates = Array.isArray(data.dates) && data.dates.length > 0;
+    if (hasDates) {
+        if (data.type === "maternity" || data.type === "paternity") {
+            context.addIssue({
+                code: "custom",
+                path: ["dates"],
+                message: "Cuti melahirkan dan paternity harus menggunakan rentang tanggal mulai dan selesai.",
+            });
+            return;
+        }
+        const unique = new Set(data.dates);
+        if (unique.size !== data.dates!.length) {
+            context.addIssue({
+                code: "custom",
+                path: ["dates"],
+                message: "Terdapat tanggal cuti yang duplikat.",
+            });
+        }
+        return;
+    }
+
+    if (!data.startDate) {
+        context.addIssue({ code: "custom", path: ["startDate"], message: "Tanggal mulai harus diisi" });
+    }
+    if (!data.endDate) {
+        context.addIssue({ code: "custom", path: ["endDate"], message: "Tanggal selesai harus diisi" });
+    }
+    if (!data.startDate || !data.endDate) return;
     if (!isValidCalendarDate(data.startDate) || !isValidCalendarDate(data.endDate)) return;
     const range = validateLeaveDateRange(data.startDate, data.endDate);
     if (!range.success) {
@@ -267,7 +306,11 @@ export const leaveRequestSchema = z.object({
 });
 
 export const leaveUpdateSchema = z.object({
-    id: z.string().min(1, "ID harus diisi"),
+    id: z.string().min(1, "ID harus diisi").optional(),
+    ids: z.array(z.string().min(1, "ID harus diisi"))
+        .min(1, "Pilih minimal 1 pengajuan cuti")
+        .max(200, "Maksimal 200 pengajuan cuti dalam satu aksi massal")
+        .optional(),
     status: z.enum(["pending", "approved", "rejected"]).optional(),
     startDate: leaveStartDateSchema.optional(),
     endDate: leaveEndDateSchema.optional(),
@@ -275,6 +318,24 @@ export const leaveUpdateSchema = z.object({
     attachment: z.string().nullable().optional(),
     // ⛔ employeeId tidak bisa diubah via update
 }).superRefine((data, context) => {
+    const hasIds = Array.isArray(data.ids) && data.ids.length > 0;
+    if (hasIds) {
+        if (data.status !== "approved" && data.status !== "rejected") {
+            context.addIssue({
+                code: "custom",
+                path: ["status"],
+                message: "Status persetujuan massal harus berupa approved atau rejected.",
+            });
+        }
+        return;
+    }
+    if (!data.id) {
+        context.addIssue({
+            code: "custom",
+            path: ["id"],
+            message: "ID harus diisi",
+        });
+    }
     if (!data.startDate || !data.endDate) return;
     const range = validateLeaveDateRange(data.startDate, data.endDate);
     if (!range.success) {

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
                 shiftName: shift?.shiftName ?? null,
                 startTime: scheduleDay?.startTime ?? null,
                 endTime: scheduleDay?.endTime ?? null,
-                isOff: scheduleDay?.isOff ?? true,
+                isOff: scheduleDay ? scheduleDay.isOff : weekday === 0,
                 isOvernight: scheduleDay ? isOvernightSchedule(scheduleDay.startTime, scheduleDay.endTime) : false,
                 source: shift?.source ?? "none",
             };

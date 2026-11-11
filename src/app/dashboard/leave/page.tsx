@@ -42,6 +42,9 @@ interface LeaveRequest {
     reason: string;
     status: string;
     attachment?: string | null;
+    attachmentUrl?: string | null;
+    attachmentMime?: string | null;
+    attachmentSize?: number | null;
     createdAt: string;
 }
 
@@ -189,8 +192,8 @@ function LeaveManagementContent() {
 
     const handleOpenDetail = (l: LeaveRequest) => {
         setSelectedLeave(l);
-        setEditStartDate(l.startDate);
-        setEditEndDate(l.endDate);
+        setEditStartDate(l.startDate.slice(0, 10));
+        setEditEndDate(l.endDate.slice(0, 10));
         setIsModalOpen(true);
     };
 
@@ -219,9 +222,13 @@ function LeaveManagementContent() {
     const handleQuickAction = (l: LeaveRequest, status: string) => {
         if (updatingId) return;
         if (status === "rejected") {
+            const isSameDay = l.startDate.slice(0, 10) === l.endDate.slice(0, 10);
+            const periodLabel = isSameDay
+                ? formatIndonesianDate(l.startDate)
+                : `${formatIndonesianDate(l.startDate)} s/d ${formatIndonesianDate(l.endDate)}`;
             confirm({
                 title: "Tolak Cuti?",
-                message: `Pengajuan ${l.employee?.name || l.employeeId} (${formatIndonesianDate(l.startDate)} s/d ${formatIndonesianDate(l.endDate)}) akan ditolak.`,
+                message: `Pengajuan ${l.employee?.name || l.employeeId} (${periodLabel}) akan ditolak.`,
                 confirmLabel: "Ya, Tolak",
                 cancelLabel: "Batal",
                 variant: "danger",
@@ -277,39 +284,38 @@ function LeaveManagementContent() {
             variant: status === "approved" ? "info" : "danger",
             onConfirm: async () => {
                 setBulkProcessing(true);
-                const succeededIds: string[] = [];
-                let failedCount = 0;
                 try {
-                    for (const item of selectedPendingLeaves) {
-                        try {
-                            const res = await fetch("/api/leave", {
-                                method: "PUT",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: item.id, status }),
-                            });
-                            if (res.ok) {
-                                succeededIds.push(item.id);
-                            } else {
-                                failedCount++;
-                            }
-                        } catch {
-                            failedCount++;
-                        }
+                    const res = await fetch("/api/leave", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            ids: selectedPendingLeaves.map((item) => item.id),
+                            status,
+                        }),
+                    });
+                    if (!res.ok) {
+                        throw new Error(await getResponseErrorMessage(res, "Gagal memproses persetujuan cuti massal."));
                     }
+                    const outcome = await res.json();
+                    const succeededIds: string[] = Array.isArray(outcome?.succeededIds) ? outcome.succeededIds : [];
+                    const failedList: Array<{ id: string; error: string }> = Array.isArray(outcome?.failed) ? outcome.failed : [];
+                    const failedCount = failedList.length;
+
                     await fetchLeaves();
-                    setSelectedIds(prev => {
+                    setSelectedIds((prev) => {
                         const next = new Set(prev);
-                        succeededIds.forEach(id => next.delete(id));
+                        succeededIds.forEach((id) => next.delete(id));
                         return next;
                     });
                     if (failedCount === 0) {
                         toast(`${succeededIds.length} pengajuan cuti berhasil ${actionWord}.`, "success");
                     } else {
-                        toast(`${succeededIds.length} cuti berhasil ${actionWord}, ${failedCount} gagal diproses.`, "error");
+                        const firstReason = failedList[0]?.error ? ` (${failedList[0].error})` : "";
+                        toast(`${succeededIds.length} cuti berhasil ${actionWord}, ${failedCount} gagal diproses${firstReason}.`, "error");
                     }
                 } catch (error) {
                     reportClientError("LeaveManagementPage", "Gagal memproses persetujuan cuti massal", error);
-                    toast("Sebagian proses cuti massal gagal diperbarui.", "error");
+                    toast(error instanceof Error ? error.message : "Sebagian proses cuti massal gagal diperbarui.", "error");
                 } finally {
                     setBulkProcessing(false);
                 }
@@ -358,6 +364,7 @@ function LeaveManagementContent() {
             case "sick": return "Sakit";
             case "personal": return "Pribadi";
             case "maternity": return "Melahirkan";
+            case "paternity": return "Paternity (Ayah)";
             default: return t;
         }
     };
@@ -372,16 +379,22 @@ function LeaveManagementContent() {
 
     const calculateDays = (start: string, end: string) => {
         if (!start || !end) return 0;
-        const s = new Date(start);
-        const e = new Date(end);
-        const diff = e.getTime() - s.getTime();
-        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1);
+        const s = new Date(`${start.slice(0, 10)}T00:00:00Z`).getTime();
+        const e = new Date(`${end.slice(0, 10)}T00:00:00Z`).getTime();
+        if (Number.isNaN(s) || Number.isNaN(e) || e < s) return 0;
+        return Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
     };
 
-    const openAttachment = (data: string) => {
-        const win = window.open();
-        if (win) {
-            win.document.write(`<iframe src="${data}" frameborder="0" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
+    const openAttachment = (leave: LeaveRequest) => {
+        if (leave.attachmentUrl) {
+            window.open(leave.attachmentUrl, "_blank", "noopener,noreferrer");
+            return;
+        }
+        if (leave.attachment) {
+            const win = window.open();
+            if (win) {
+                win.document.write(`<iframe src="${leave.attachment}" frameborder="0" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`);
+            }
         }
     };
 
@@ -515,6 +528,7 @@ function LeaveManagementContent() {
                             <option value="sick">Sakit</option>
                             <option value="personal">Pribadi</option>
                             <option value="maternity">Melahirkan</option>
+                            <option value="paternity">Paternity (Ayah)</option>
                         </select>
                     </div>
                     {/* Date Inputs */}
@@ -671,7 +685,9 @@ function LeaveManagementContent() {
                                             </td>
                                             <td className="text-xs">
                                                 <div className="font-medium text-[var(--text-primary)]">{formatIndonesianDate(l.startDate)}</div>
-                                                <div className="text-[10px] text-[var(--text-muted)]">s/d {formatIndonesianDate(l.endDate)}</div>
+                                                {l.startDate.slice(0, 10) !== l.endDate.slice(0, 10) && (
+                                                    <div className="text-[10px] text-[var(--text-muted)]">s/d {formatIndonesianDate(l.endDate)}</div>
+                                                )}
                                             </td>
                                             <td className="text-center">
                                                 <span className="px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-secondary)] font-semibold text-xs">
@@ -699,9 +715,9 @@ function LeaveManagementContent() {
                                             </td>
                                             <td className="hidden lg:table-cell text-xs text-[var(--text-secondary)] max-w-[200px]">
                                                 <p className="truncate" title={l.reason}>{l.reason}</p>
-                                                {l.attachment && (
+                                                {(l.attachmentUrl || l.attachment) && (
                                                     <button
-                                                        onClick={() => openAttachment(l.attachment!)}
+                                                        onClick={() => openAttachment(l)}
                                                         className="inline-flex items-center gap-1 text-[10px] text-[var(--primary)] hover:underline mt-0.5"
                                                     >
                                                         <Paperclip className="w-3 h-3" /> Bukti Terlampir
@@ -720,14 +736,14 @@ function LeaveManagementContent() {
                                                         <>
                                                             {(() => {
                                                                 const busy = updatingId === l.id;
-                                                                const quotaHabis = remainingQuota !== null && remainingQuota <= 0;
+                                                                const quotaHabis = l.type === "annual" && remainingQuota !== null && remainingQuota <= 0;
                                                                 return (
                                                                     <>
                                                                         <button
                                                                             onClick={() => handleQuickAction(l, "approved")}
                                                                             disabled={busy || quotaHabis}
                                                                             className="btn btn-ghost btn-sm !p-1.5 text-emerald-600 hover:!bg-emerald-50 disabled:opacity-40 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
-                                                                            title={quotaHabis ? "Kuota habis — buka detail untuk persetujuan sebagian" : "Setujui Cuti"}
+                                                                            title={quotaHabis ? "Kuota cuti tahunan habis — buka detail untuk persetujuan sebagian" : "Setujui Cuti"}
                                                                             aria-label={`Setujui cuti ${l.employee?.name || l.employeeId}`}
                                                                         >
                                                                             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -909,7 +925,7 @@ function LeaveManagementContent() {
                                 </p>
                             </div>
 
-                            {selectedLeave.attachment && (
+                            {(selectedLeave.attachmentUrl || selectedLeave.attachment) && (
                                 <div className="flex items-center justify-between p-3 bg-blue-500/5 rounded-lg border border-blue-500/10">
                                     <div className="flex items-center gap-2.5">
                                         <Paperclip className="w-4 h-4 text-blue-600" />
@@ -919,7 +935,7 @@ function LeaveManagementContent() {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => openAttachment(selectedLeave.attachment!)}
+                                        onClick={() => openAttachment(selectedLeave)}
                                         className="btn btn-sm text-blue-600 bg-blue-500/10 hover:bg-blue-500/20"
                                     >
                                         Buka Lampiran
@@ -928,11 +944,20 @@ function LeaveManagementContent() {
                             )}
 
                             {selectedLeave.employee && (
-                                <div className="flex items-center justify-between p-3 bg-[var(--primary)]/5 rounded-lg border border-[var(--primary)]/10">
-                                    <span className="text-xs font-medium text-[var(--text-secondary)]">Sisa Kuota Cuti Tahunan</span>
-                                    <span className="text-sm font-bold text-[var(--primary)]">
-                                        {selectedLeave.employee.totalLeave - selectedLeave.employee.usedLeave} / {selectedLeave.employee.totalLeave} Hari
-                                    </span>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between p-3 bg-[var(--primary)]/5 rounded-lg border border-[var(--primary)]/10">
+                                        <span className="text-xs font-medium text-[var(--text-secondary)]">Sisa Kuota Cuti Tahunan</span>
+                                        <span className="text-sm font-bold text-[var(--primary)]">
+                                            {selectedLeave.employee.totalLeave - selectedLeave.employee.usedLeave} / {selectedLeave.employee.totalLeave} Hari
+                                        </span>
+                                    </div>
+                                    {selectedLeave.status === "pending" &&
+                                        selectedLeave.type === "annual" &&
+                                        (selectedLeave.employee.totalLeave - selectedLeave.employee.usedLeave) <= 0 && (
+                                            <p className="text-xs text-red-600 font-medium">
+                                                * Sisa kuota cuti tahunan karyawan sudah habis (0 hari). Pengajuan ini tidak dapat disetujui.
+                                            </p>
+                                        )}
                                 </div>
                             )}
                         </div>
@@ -949,9 +974,14 @@ function LeaveManagementContent() {
                                         Tolak
                                     </button>
                                     <button
-                                        disabled={isUpdating}
+                                        disabled={
+                                            isUpdating ||
+                                            (selectedLeave.type === "annual" &&
+                                                Boolean(selectedLeave.employee) &&
+                                                (selectedLeave.employee!.totalLeave - selectedLeave.employee!.usedLeave) <= 0)
+                                        }
                                         onClick={() => handleUpdate(selectedLeave.id, "approved")}
-                                        className="btn btn-success flex-1"
+                                        className="btn btn-success flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                         Setujui

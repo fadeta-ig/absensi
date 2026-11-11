@@ -258,7 +258,13 @@ export async function GET(request: NextRequest) {
             });
             sheetName = "Laporan Cuti";
 
-            const typeMap: Record<string, string> = { annual: "Tahunan", sick: "Sakit", personal: "Pribadi", maternity: "Melahirkan" };
+            const typeMap: Record<string, string> = {
+                annual: "Tahunan",
+                sick: "Sakit",
+                personal: "Pribadi",
+                maternity: "Melahirkan",
+                paternity: "Paternity (Ayah)",
+            };
             const statusMap: Record<string, string> = { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" };
 
             rows = records.map((r) => {

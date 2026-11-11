@@ -239,7 +239,7 @@ Kontrak notulen penting:
 ### H. Layanan Mandiri Karyawan (`/api/leave`, `/api/letter-requests`, `/api/todos`)
 | Rute | Metode | Permission / Akses | Deskripsi |
 |---|---|---|---|
-| `/api/leave` | `GET`, `POST`, `PUT` | `leave:read`, `create` | Pengajuan cuti tahunan/sakit dan persetujuan atasan. Tanggal wajib `YYYY-MM-DD` valid dan satu rentang dibatasi maksimal 366 hari kalender inklusif; create serta update yang melampaui batas ditolak `400`. |
+| `/api/leave` | `GET`, `POST`, `PUT` | `leave:read`, `create` | Pengajuan cuti (`annual`, `sick`, `personal`, `maternity`, `paternity`) dan persetujuan HR. `GET ?withBalance=1` menyertakan saldo otoritatif (`totalLeave`, `usedLeave`, `pendingAnnualDays`, `remainingLeave`, `availableAnnualLeave`). `POST` mendukung batch tanggal lepas (`dates: string[]`, 1–30 tanggal di window H+1..H+30 hari kerja untuk `annual`/`sick`/`personal`, 1 file lampiran dipakai bersama) maupun rentang `startDate`/`endDate` (maks 366 hari kalender inklusif). `PUT` mendukung pembaruan satuan (`id`) maupun aksi massal HR (`ids: string[], status: "approved" \| "rejected"`). |
 | `/api/letter-requests` | `GET`, `POST`, `PUT` | `letters:read`, `create`| Permohonan surat keterangan resmi perusahaan (SK Kerja, Penghasilan). |
 | `/api/todos` | `GET`, `POST`, `PUT` | Autentikasi | Manajemen papan tugas personal karyawan (*personal todo list*). |
 
