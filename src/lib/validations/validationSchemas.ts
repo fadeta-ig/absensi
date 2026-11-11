@@ -430,26 +430,48 @@ export const visitVerifySchema = z.object({
 
 /* ───────────────────── News ───────────────────── */
 
+export const newsAudienceSchema = z.enum(["ALL", "SELECTED"]);
+
 export const newsCreateSchema = z.object({
-    title: z.string().min(1, "Judul harus diisi"),
-    content: z.string().min(1, "Konten harus diisi"),
+    title: z.string().trim().min(1, "Judul harus diisi"),
+    content: z.string().trim().min(1, "Konten harus diisi"),
     category: z.enum(["announcement", "event", "policy", "general"], {
         message: "Kategori tidak valid",
     }),
     isPinned: z.boolean().optional().default(false),
     mediaUrl: z.string().nullable().optional(),
     mediaName: z.string().nullable().optional(),
+    audience: newsAudienceSchema.optional().default("ALL"),
+    targetEmployeeIds: z.array(z.string().trim().min(1).max(100)).max(1000).nullable().optional(),
+}).superRefine((data, ctx) => {
+    if (data.audience === "SELECTED" && (!Array.isArray(data.targetEmployeeIds) || data.targetEmployeeIds.length === 0)) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["targetEmployeeIds"],
+            message: "Pilih minimal 1 karyawan penerima untuk berita khusus/private.",
+        });
+    }
 });
 
 export const newsUpdateSchema = z.object({
     id: z.string().min(1, "ID harus diisi"),
-    title: z.string().min(1).optional(),
-    content: z.string().min(1).optional(),
+    title: z.string().trim().min(1).optional(),
+    content: z.string().trim().min(1).optional(),
     category: z.enum(["announcement", "event", "policy", "general"]).optional(),
     isPinned: z.boolean().optional(),
     mediaUrl: z.string().nullable().optional(),
     mediaName: z.string().nullable().optional(),
+    audience: newsAudienceSchema.optional(),
+    targetEmployeeIds: z.array(z.string().trim().min(1).max(100)).max(1000).nullable().optional(),
     // ⛔ author tidak bisa diubah via update
+}).superRefine((data, ctx) => {
+    if (data.audience === "SELECTED" && (!Array.isArray(data.targetEmployeeIds) || data.targetEmployeeIds.length === 0)) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["targetEmployeeIds"],
+            message: "Pilih minimal 1 karyawan penerima untuk berita khusus/private.",
+        });
+    }
 });
 
 /* ───────────────────── Shift ───────────────────── */

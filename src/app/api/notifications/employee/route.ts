@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { toWIBDateString, wibDateTimeToDate } from "@/lib/timezone";
 import { stripGelar } from "@/lib/utils/formatters";
 import { getReadKeys, markNotificationsRead } from "@/lib/services/notificationReadService";
+import { isNewsVisibleToEmployee } from "@/lib/services/newsService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -125,15 +126,18 @@ export async function GET(request: Request) {
             }),
         ]);
 
-        // Berita terbaru (3 hari terakhir)
+        // Berita terbaru (3 hari terakhir) — difilter agar berita khusus/private hanya muncul untuk penerima yang dituju
         const threeDaysAgo = new Date();
         threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-        const recentNews = await prisma.newsItem.findMany({
+        const recentNewsCandidates = await prisma.newsItem.findMany({
             where: { createdAt: { gte: threeDaysAgo } },
             orderBy: { createdAt: "desc" },
-            take: 3,
-            select: { id: true, title: true, category: true, createdAt: true },
+            take: 15,
+            select: { id: true, title: true, category: true, createdAt: true, audience: true, targetEmployeeIds: true },
         });
+        const recentNews = recentNewsCandidates
+            .filter((n) => isNewsVisibleToEmployee(n, session.employeeId))
+            .slice(0, 3);
 
         // ── Build notification items ──────────────────────────────────────────
 
@@ -182,9 +186,9 @@ export async function GET(request: Request) {
             notifications.push({
                 id:      `news-${news.id}`,
                 type:    "news",
-                title:   "Berita Baru",
+                title:   news.audience === "SELECTED" ? "Berita Khusus Anda" : "Berita Baru",
                 message: news.title,
-                href:    "/employee/news",
+                href:    `/employee/news?id=${encodeURIComponent(news.id)}`,
                 time:    news.createdAt.toISOString(),
                 isRead:  false,
             });

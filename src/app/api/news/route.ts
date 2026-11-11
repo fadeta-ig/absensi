@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { getNews, createNews, updateNews, deleteNews } from "@/lib/services/newsService";
+import { getNews, createNews, updateNews, deleteNews, NewsValidationError } from "@/lib/services/newsService";
 import { newsCreateSchema, newsUpdateSchema } from "@/lib/validations/validationSchemas";
+import { canManageHr } from "@/lib/permissions";
 import logger from "@/lib/logger";
 
 export async function GET() {
@@ -9,7 +10,11 @@ export async function GET() {
     if (!session) return unauthorizedResponse();
 
     try {
-        const news = await getNews();
+        const isHr = canManageHr(session) || session.role === "hr";
+        const news = await getNews({
+            includeAllForHr: isHr,
+            viewerEmployeeId: session.employeeId,
+        });
         return NextResponse.json(news);
     } catch (err) {
         return serverErrorResponse("NewsGET", err);
@@ -19,7 +24,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session) && session.role !== "hr") return forbiddenResponse();
 
     try {
         const result = await validateBody(request, newsCreateSchema);
@@ -32,9 +37,17 @@ export async function POST(request: NextRequest) {
             createdAt: new Date().toISOString(),
         });
 
-        logger.info("News item created", { newsId: news.id, author: session.username });
+        logger.info("News item created", {
+            newsId: news.id,
+            author: session.username,
+            audience: news.audience,
+            targetCount: news.targetEmployeeIds?.length ?? 0,
+        });
         return NextResponse.json(news, { status: 201 });
     } catch (err) {
+        if (err instanceof NewsValidationError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("NewsPOST", err);
     }
 }
@@ -42,7 +55,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session) && session.role !== "hr") return forbiddenResponse();
 
     try {
         const result = await validateBody(request, newsUpdateSchema);
@@ -58,6 +71,9 @@ export async function PUT(request: NextRequest) {
         logger.info("News item updated", { newsId: id, updatedBy: session.username });
         return NextResponse.json(updated);
     } catch (err) {
+        if (err instanceof NewsValidationError) {
+            return NextResponse.json({ error: err.message }, { status: err.statusCode });
+        }
         return serverErrorResponse("NewsPUT", err);
     }
 }
@@ -65,7 +81,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (session.role !== "hr") return forbiddenResponse();
+    if (!canManageHr(session) && session.role !== "hr") return forbiddenResponse();
 
     try {
         const { searchParams } = new URL(request.url);

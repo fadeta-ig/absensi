@@ -762,15 +762,17 @@ model LeaveRequest {
 }
 
 model NewsItem {
-  id        String   @id @default(uuid())
-  title     String
-  content   String   @db.Text
-  category  String   @default("general")
-  author    String
-  createdAt DateTime @default(now()) @map("created_at")
-  isPinned  Boolean  @default(false) @map("is_pinned")
-  mediaName String?  @map("media_name")
-  mediaUrl  String?  @map("media_url")
+  id                String   @id @default(uuid())
+  title             String
+  content           String   @db.Text
+  category          String   @default("general")
+  author            String
+  createdAt         DateTime @default(now()) @map("created_at")
+  isPinned          Boolean  @default(false) @map("is_pinned")
+  mediaName         String?  @map("media_name")
+  mediaUrl          String?  @map("media_url")
+  audience          String   @default("ALL") @db.VarChar(20)
+  targetEmployeeIds Json?    @map("target_employee_ids")
 
   @@map("news_items")
 }

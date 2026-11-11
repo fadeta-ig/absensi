@@ -251,7 +251,7 @@ Kontrak notulen penting:
 | `/api/master/positions` | `GET`, `POST` | `master:manage` | Pengelolaan jabatan struktural dan fungsional. |
 | `/api/master/locations` | `GET`, `POST` | `master:manage` | Pengelolaan lokasi titik kantor dan radius geofence presensi. |
 | `/api/master/payroll-components`| `GET`, `POST`| `master:manage`| Komponen tunjangan dan potongan master gaji. |
-| `/api/news` | `GET`, `POST`, `PUT` | `news:read`, `create` | Papan pengumuman dan berita internal perusahaan. |
+| `/api/news` | `GET`, `POST`, `PUT`, `DELETE` | Baca: autentikasi; tulis: HR (`canManageHr`) | Papan pengumuman dan berita internal perusahaan. `POST`/`PUT` menerima `audience: "ALL" \| "SELECTED"` + `targetEmployeeIds[]` (wajib ≥1 karyawan aktif bila `SELECTED`). `GET` untuk HR mengembalikan semua berita beserta `targetEmployees`; untuk karyawan hanya berita `ALL` atau yang memuat `employeeId` sesi (daftar penerima tidak diekspos). |
 | `/api/news/upload` | `POST` | `news:create` | Unggah gambar sampul untuk artikel pengumuman internal. |
 
 ### J. Endpoint Terjadwal Otomatis (`/api/cron`)

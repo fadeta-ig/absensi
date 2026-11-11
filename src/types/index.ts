@@ -195,6 +195,15 @@ export type LeaveRequest = {
     createdAt: string;
 };
 
+export type NewsAudience = "ALL" | "SELECTED";
+
+export type NewsTargetEmployee = {
+    employeeId: string;
+    name: string;
+    department?: string;
+    position?: string;
+};
+
 export type NewsItem = {
     id: string;
     title: string;
@@ -205,6 +214,9 @@ export type NewsItem = {
     isPinned: boolean;
     mediaUrl?: string | null;
     mediaName?: string | null;
+    audience?: NewsAudience;
+    targetEmployeeIds?: string[] | null;
+    targetEmployees?: NewsTargetEmployee[];
 };
 
 export type TodoItem = {

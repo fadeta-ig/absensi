@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe,
-    Download, FileText, Paperclip, Loader2, AlertCircle, Maximize2, ExternalLink, Eye
+    Download, FileText, Paperclip, Loader2, AlertCircle, Maximize2, ExternalLink, Eye, Lock
 } from "lucide-react";
 import { formatDisplayDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -35,6 +35,15 @@ interface NewsItem {
     isPinned: boolean;
     mediaUrl?: string | null;
     mediaName?: string | null;
+    audience?: "ALL" | "SELECTED";
+}
+
+function PrivateNewsBadge() {
+    return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2 py-0.5 text-[10px] font-bold">
+            <Lock className="w-2.5 h-2.5" /> Khusus Anda
+        </span>
+    );
 }
 
 function NewsPageContent() {
@@ -197,9 +206,10 @@ function NewsPageContent() {
                                         <CatIcon className={`w-5 h-5 ${info.color}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
+                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                                             {item.isPinned && <Pin className="w-3 h-3 text-[var(--primary)] shrink-0" />}
                                             <span className="badge badge-primary">{info.label}</span>
+                                            {item.audience === "SELECTED" && <PrivateNewsBadge />}
                                             {item.mediaUrl && (
                                                 <span className="badge bg-blue-50 text-blue-600 text-[10px] flex items-center gap-1">
                                                     <Paperclip className="w-2.5 h-2.5" /> Lampiran
@@ -251,6 +261,7 @@ function NewsPageContent() {
                         </div>
                         <div className="flex items-center gap-3 mb-4 flex-wrap">
                             <span className="badge badge-primary">{getCategoryInfo(selected.category).label}</span>
+                            {selected.audience === "SELECTED" && <PrivateNewsBadge />}
                             <span className="text-xs text-[var(--text-muted)]">Oleh {selected.author}</span>
                             <span className="text-xs text-[var(--text-muted)]">{new Date(selected.createdAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" })}</span>
                         </div>

@@ -14,7 +14,7 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AllMenusSheet from "./components/AllMenusSheet";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
-interface NewsItem { id: string; title: string; }
+interface NewsItem { id: string; title: string; audience?: "ALL" | "SELECTED"; }
 interface AttendanceRecord { date: string; clockIn?: string; clockOut?: string; status: string; }
 
 export default function EmployeeHomePage() {
@@ -320,7 +320,14 @@ export default function EmployeeHomePage() {
                                 <Link href={`/employee/news?id=${item.id}`} className="block px-4 py-3.5 hover:bg-[var(--secondary)]/60 transition-colors">
                                     <div className="flex gap-3 items-center">
                                         <div className="w-1.5 h-1.5 rounded-full bg-[#800020]/60 shrink-0" />
-                                        <p className="text-[13px] font-medium text-[var(--text-secondary)] leading-snug line-clamp-2">{item.title}</p>
+                                        <p className="text-[13px] font-medium text-[var(--text-secondary)] leading-snug line-clamp-2">
+                                            {item.audience === "SELECTED" && (
+                                                <span className="inline-block mr-1.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-1.5 py-px text-[10px] font-bold align-middle">
+                                                    Khusus Anda
+                                                </span>
+                                            )}
+                                            {item.title}
+                                        </p>
                                         <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0 ml-auto" />
                                     </div>
                                 </Link>

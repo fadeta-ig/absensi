@@ -80,7 +80,7 @@ Basis data terdiri dari **94 model Prisma** yang dipetakan ke tabel fisik melalu
 41. `LeaveRequest` (`leave_requests`): Permohonan cuti karyawan (`updatedAt` untuk sortir keputusan terbaru).
 42. `OvertimeRequest` (`overtime_requests`): Permohonan lembur karyawan (`updatedAt` untuk sortir keputusan terbaru).
 43. `LetterRequest` (`letter_requests`): Permohonan surat keterangan resmi.
-44. `NewsItem` (`news_items`): Pengumuman dan berita internal perusahaan.
+44. `NewsItem` (`news_items`): Pengumuman dan berita internal perusahaan. Kolom `audience` (`"ALL"` default = seluruh karyawan, `"SELECTED"` = khusus/private) + `targetEmployeeIds` (JSON array `employeeId` penerima, `NULL` bila `ALL`); berita lama otomatis `ALL`.
 45. `TodoItem` (`todo_items`): Daftar tugas personal karyawan.
 46. `AuditLog` (`audit_logs`): Catatan audit sistem terpusat (`action`, `entity`, `details` JSON, metadata aktor).
 47. `PushSubscription` (`push_subscriptions`): Langganan Web Push VAPID browser.
