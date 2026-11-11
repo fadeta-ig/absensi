@@ -1,7 +1,7 @@
 export type GreenMeetingOriginType = "DIREKSI" | "DEPARTMENT" | "DIVISION" | "EMPLOYEE" | "LAINNYA";
-/** Writer baru hanya TUGAS; reader arsip tetap INFORMASI|TUGAS. */
-export type GreenMeetingNoteType = "INFORMASI" | "TUGAS";
-export type GreenMeetingNoteCreateType = "TUGAS";
+/** Writer baru TUGAS + JUST_INFO; arsip INFORMASI tetap read-only. */
+export type GreenMeetingNoteType = "INFORMASI" | "TUGAS" | "JUST_INFO";
+export type GreenMeetingNoteCreateType = "TUGAS" | "JUST_INFO";
 export type GreenMeetingTaskStatus = "BELUM_DIMULAI" | "SEDANG_BERJALAN" | "SELESAI" | "DIBATALKAN";
 /** Status arsip legacy (termasuk IZIN lama). Data lama tetap dibaca, tidak dihapus. */
 export type GreenMeetingAttendanceStatus = "HADIR" | "IZIN" | "ALPA";

@@ -344,6 +344,47 @@ describe("Green Meeting Authorization & Logic", () => {
         ).rejects.toThrow(/hanya bertipe Tugas/);
         expect(prisma.greenMeetingNote.create).not.toHaveBeenCalled();
     });
+
+    it("should create JUST_INFO as global announcement (paksa ALL, tanpa deadline)", async () => {
+        const { createMeetingNote } = await import("@/lib/services/greenMeetingService");
+        (prisma.greenMeetingNote.create as Mock).mockResolvedValue({ id: "note-ji" });
+        await createMeetingNote(
+            "ses-1",
+            {
+                type: "JUST_INFO",
+                content: "Pengumuman untuk semua",
+                originType: "DIREKSI",
+                originName: "Direksi",
+                isAllTarget: false,
+                targets: [{ targetType: "DEPARTMENT", departmentId: "dept-1" }],
+                initialDeadlineDate: undefined,
+            } as never,
+            "WIG002"
+        );
+        expect(prisma.greenMeetingNote.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({
+                    type: "JUST_INFO",
+                    isAllTarget: true,
+                }),
+            })
+        );
+        const calledData = (prisma.greenMeetingNote.create as Mock).mock.calls[0][0].data;
+        expect(calledData.targets).toBeUndefined();
+        expect(calledData.deadlines).toBeUndefined();
+    });
+
+    it("should reject createMeetingNote JUST_INFO with deadline", async () => {
+        const { createMeetingNote } = await import("@/lib/services/greenMeetingService");
+        await expect(
+            createMeetingNote(
+                "ses-1",
+                { type: "JUST_INFO", content: "Pengumuman", initialDeadlineDate: "2026-09-25" } as never,
+                "WIG002"
+            )
+        ).rejects.toThrow(/tidak memakai tenggat/);
+        expect(prisma.greenMeetingNote.create).not.toHaveBeenCalled();
+    });
 });
 
 describe("Green Meeting Phase 4 & 5 Guards", () => {

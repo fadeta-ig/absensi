@@ -802,20 +802,24 @@ export async function updateMeetingNote(
         }
 
         const requestedType = data.type ?? existing.type;
-        // Writer baru TUGAS-only: tolak konversi apapun menjadi INFORMASI.
+        // Writer baru TUGAS + JUST_INFO: tolak konversi apapun menjadi INFORMASI.
         // Arsip INFORMASI boleh direvisi konten/targets-nya tanpa ganti type.
         if (requestedType === "INFORMASI" && existing.type !== "INFORMASI") {
-            throw new GreenMeetingError("Catatan baru hanya bertipe Tugas. Arsip Informasi bersifat read-only.", 400);
+            throw new GreenMeetingError("Catatan baru hanya bertipe Tugas atau Just Information. Arsip Informasi bersifat read-only.", 400);
         }
         if (
             existing.type === "TUGAS" &&
-            requestedType === "INFORMASI" &&
+            (requestedType === "INFORMASI" || requestedType === "JUST_INFO") &&
             (existing.taskStatus !== "BELUM_DIMULAI" || existing.deadlines.length > 1)
         ) {
             throw new GreenMeetingError(
                 "Tugas yang sudah berjalan, selesai, dibatalkan, atau pernah diperpanjang tidak dapat diubah menjadi Informasi.",
                 400
             );
+        }
+        // JUST_INFO tanpa tindak lanjut: tolak deadline masuk via update.
+        if (requestedType === "JUST_INFO" && data.initialDeadlineDate) {
+            throw new GreenMeetingError("Just Information tidak memakai tenggat waktu.", 400);
         }
 
         if (requestedType === "TUGAS" && !data.initialDeadlineDate && existing.type !== "TUGAS") {
@@ -880,11 +884,12 @@ export async function updateMeetingNote(
         await tx.greenMeetingNoteTarget.deleteMany({ where: { noteId } });
 
         // PATCH parsial: field tak dikirim fallback ke existing (data lama tidak hilang).
+        // JUST_INFO selalu global: paksa ALL agar sasaran personal tak tersisa.
         const nextType = data.type ?? existing.type;
         const nextContent = data.content ?? existing.content;
         const nextOriginType = data.originType ?? existing.originType;
         const nextOriginName = data.originName ?? existing.originName;
-        const nextIsAll = data.isAllTarget ?? existing.isAllTarget;
+        const nextIsAll = nextType === "JUST_INFO" ? true : (data.isAllTarget ?? existing.isAllTarget);
         const targets = nextIsAll ? [] : (data.targets ?? existing.targets.map((t) => ({
             targetType: t.targetType as NoteTargetItem["targetType"],
             departmentId: t.departmentId,
@@ -893,7 +898,7 @@ export async function updateMeetingNote(
             label: t.label,
         })));
         const changingToTask = existing.type !== "TUGAS" && nextType === "TUGAS";
-        const changingToInformation = existing.type === "TUGAS" && nextType === "INFORMASI";
+        const changingToInformation = existing.type === "TUGAS" && (nextType === "INFORMASI" || nextType === "JUST_INFO");
 
         if (changingToTask && data.initialDeadlineDate) {
             await tx.greenMeetingDeadlineHistory.create({
@@ -976,9 +981,10 @@ export async function getMeetingNoteRevisions(noteId: string) {
 }
 
 /**
- * Membuat butir notulen rapat baru (khusus Tugas ber-deadline).
+ * Membuat butir notulen rapat baru (Tugas ber-deadline atau Just Information global).
  * Arsip Informasi lama tetap dibaca, tidak bisa dibuat baru.
  * Mendukung penargetan From ➔ To (Semua Karyawan, perorangan, divisi, atau departemen).
+ * JUST_INFO selalu pengumuman global (isAllTarget dipaksa true, tanpa deadline/tindak lanjut).
  */
 export async function createMeetingNote(
     sessionId: string,
@@ -994,18 +1000,22 @@ export async function createMeetingNote(
     },
     actorUsername: string = "System"
 ) {
-    // Writer baru TUGAS-only; arsip INFORMASI read-only.
-    if (data.type !== "TUGAS") {
-        throw new GreenMeetingError("Catatan baru hanya bertipe Tugas. Arsip Informasi bersifat read-only.", 400);
+    // Writer baru TUGAS + JUST_INFO; arsip INFORMASI read-only.
+    if (data.type !== "TUGAS" && data.type !== "JUST_INFO") {
+        throw new GreenMeetingError("Catatan baru hanya bertipe Tugas atau Just Information. Arsip Informasi bersifat read-only.", 400);
     }
-    if (!data.initialDeadlineDate) {
+    if (data.type === "JUST_INFO" && data.initialDeadlineDate) {
+        throw new GreenMeetingError("Just Information tidak memakai tenggat waktu.", 400);
+    }
+    if (!data.initialDeadlineDate && data.type === "TUGAS") {
         throw new GreenMeetingError("Tenggat waktu awal (Deadline 1) wajib ditentukan untuk catatan bertipe Tugas.", 400);
     }
     if (data.type === "TUGAS" && data.initialDeadlineDate && !isValidCalendarDate(data.initialDeadlineDate)) {
         throw new GreenMeetingError("Tanggal tidak valid. Gunakan YYYY-MM-DD.", 400);
     }
 
-    const isAll = data.isAllTarget !== false;
+    // JUST_INFO selalu pengumuman global: paksa ALL + tanpa target/deadline.
+    const isAll = data.type === "JUST_INFO" ? true : data.isAllTarget !== false;
 
     // Gabungkan input targets atau targetDepartmentIds
     const rawTargets: NoteTargetItem[] = [];

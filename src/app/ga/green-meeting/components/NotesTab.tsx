@@ -275,17 +275,18 @@ export default function NotesTab({
             return;
         }
 
-        if (targetScope === "DEPARTMENT" && selectedDeptIds.length === 0) {
+        // JUST_INFO selalu pengumuman global: lewati validasi sasaran.
+        if (noteType !== "JUST_INFO" && targetScope === "DEPARTMENT" && selectedDeptIds.length === 0) {
             setErrorMsg("Pilih minimal satu departemen sasaran.");
             return;
         }
 
-        if (targetScope === "DIVISION" && selectedDivIds.length === 0) {
+        if (noteType !== "JUST_INFO" && targetScope === "DIVISION" && selectedDivIds.length === 0) {
             setErrorMsg("Pilih minimal satu divisi sasaran.");
             return;
         }
 
-        if (targetScope === "EMPLOYEE" && selectedEmployees.length === 0) {
+        if (noteType !== "JUST_INFO" && targetScope === "EMPLOYEE" && selectedEmployees.length === 0) {
             setErrorMsg("Pilih minimal satu karyawan sasaran.");
             return;
         }
@@ -334,18 +335,18 @@ export default function NotesTab({
             resolvedOriginName = customOriginText.trim();
         }
 
-        // Resolusi KEPADA
-        if (targetScope === "DEPARTMENT" && selectedDeptIds.length === 0) {
+        // Resolusi KEPADA (JUST_INFO selalu ALL, lewati validasi sasaran)
+        if (noteType !== "JUST_INFO" && targetScope === "DEPARTMENT" && selectedDeptIds.length === 0) {
             setErrorMsg("Pilih minimal satu departemen sasaran.");
             return;
         }
 
-        if (targetScope === "DIVISION" && selectedDivIds.length === 0) {
+        if (noteType !== "JUST_INFO" && targetScope === "DIVISION" && selectedDivIds.length === 0) {
             setErrorMsg("Pilih minimal satu divisi sasaran.");
             return;
         }
 
-        if (targetScope === "EMPLOYEE" && selectedEmployees.length === 0) {
+        if (noteType !== "JUST_INFO" && targetScope === "EMPLOYEE" && selectedEmployees.length === 0) {
             setErrorMsg("Pilih minimal satu karyawan sasaran.");
             return;
         }
@@ -357,11 +358,12 @@ export default function NotesTab({
 
         setSubmitting(true);
         try {
-            const isAll = targetScope === "ALL";
+            // JUST_INFO selalu pengumuman global ke semua karyawan.
+            const isAll = noteType === "JUST_INFO" ? true : targetScope === "ALL";
 
             const rawTargets: NoteTargetItem[] = [];
 
-            if (targetScope === "DEPARTMENT") {
+            if (noteType !== "JUST_INFO" && targetScope === "DEPARTMENT") {
                 selectedDeptIds.forEach((id) => {
                     const dept = departments.find((d) => d.id === id);
                     rawTargets.push({
@@ -370,7 +372,7 @@ export default function NotesTab({
                         label: dept?.name || "Departemen",
                     });
                 });
-            } else if (targetScope === "DIVISION") {
+            } else if (noteType !== "JUST_INFO" && targetScope === "DIVISION") {
                 selectedDivIds.forEach((id) => {
                     const div = divisions.find((d) => d.id === id);
                     rawTargets.push({
@@ -379,7 +381,7 @@ export default function NotesTab({
                         label: div?.name ? `Divisi ${div.name}` : "Divisi",
                     });
                 });
-            } else if (targetScope === "EMPLOYEE") {
+            } else if (noteType !== "JUST_INFO" && targetScope === "EMPLOYEE") {
                 selectedEmployees.forEach((emp) => {
                     rawTargets.push({
                         targetType: "EMPLOYEE",
@@ -466,7 +468,7 @@ export default function NotesTab({
                 <div>
                     <h3 className="text-base font-bold text-foreground">Agenda & Notulensi Rapat</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Catat instruksi tindak lanjut bertipe Tugas dengan rute tujuan fleksibel. Arsip Informasi lama tetap tampil di bawah (read-only).
+                        Catat tindak lanjut bertipe Tugas atau pengumuman Just Information global. Arsip Informasi lama tetap tampil di bawah (read-only).
                     </p>
                 </div>
                 <button
@@ -475,7 +477,7 @@ export default function NotesTab({
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-white shadow-sm transition-colors"
                 >
                     <PlusCircle size={16} />
-                    <span>{isFormOpen ? "Tutup Form" : "Tambah Tugas / Tindak Lanjut"}</span>
+                    <span>{isFormOpen ? "Tutup Form" : "Tambah Notulen"}</span>
                 </button>
             </div>
 
@@ -497,23 +499,42 @@ export default function NotesTab({
                     )}
 
                     <form onSubmit={handleSubmitNote} className="space-y-4">
-                        {/* 1. Tipe Catatan: writer baru TUGAS-only; arsip INFORMASI read-only */}
+                        {/* 1. Tipe Catatan: Tugas tindak lanjut atau Just Information global */}
                         <div>
                             <label className="block text-xs font-semibold text-foreground mb-1.5">
                                 Jenis Catatan Notulen
                             </label>
-                            <div className="grid grid-cols-1 gap-3 max-w-md">
-                                <div
-                                    aria-label="Tugas / Tindak Lanjut (satu-satunya jenis baru)"
-                                    className="flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg border bg-purple-600 text-white border-purple-600 shadow-sm"
+                            <div className="grid grid-cols-2 gap-3 max-w-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => setNoteType("TUGAS")}
+                                    aria-label="Tugas / Tindak Lanjut (wajib deadline)"
+                                    className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg border transition-colors ${noteType === "TUGAS"
+                                        ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+                                        : "border-border hover:bg-muted text-foreground"
+                                        }`}
                                 >
                                     <ListTodo size={14} />
-                                    <span>Tugas / Tindak Lanjut (wajib deadline)</span>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground">
-                                    Informasi / Pengumuman tidak lagi dibuat — arsip lama tetap tampil di daftar bawah.
-                                </p>
+                                    <span>Tugas / Tindak Lanjut</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNoteType("JUST_INFO")}
+                                    aria-label="Just Information (pengumuman global tanpa deadline)"
+                                    className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg border transition-colors ${noteType === "JUST_INFO"
+                                        ? "bg-sky-600 text-white border-sky-600 shadow-sm"
+                                        : "border-border hover:bg-muted text-foreground"
+                                        }`}
+                                >
+                                    <Info size={14} />
+                                    <span>Just Information</span>
+                                </button>
                             </div>
+                            <p className="text-[11px] text-muted-foreground mt-1.5">
+                                {noteType === "JUST_INFO"
+                                    ? "Pengumuman global ke semua karyawan — tanpa deadline, tanpa status tindak lanjut."
+                                    : "Tugas wajib deadline dan masuk pelacak tindak lanjut. Arsip Informasi lama tetap tampil di daftar bawah."}
+                            </p>
                         </div>
 
                         {/* 2. DARI (Asal Pengarah / Pemberi Bahasan) */}
@@ -758,7 +779,12 @@ export default function NotesTab({
                             )}
                         </div>
 
-                        {/* 3. KEPADA (Sasaran Audiens / Pelaksana) */}
+                        {/* 3. KEPADA (disembunyikan untuk JUST_INFO: selalu global) */}
+                        {noteType === "JUST_INFO" ? (
+                            <div className="bg-sky-500/10 p-3.5 rounded-lg border border-sky-500/20 text-xs text-sky-700 dark:text-sky-300 font-medium">
+                                Pengumuman ini otomatis terkirim ke <strong>Semua Karyawan (ALL)</strong> — tanpa pemilihan sasaran.
+                            </div>
+                        ) : (
                         <div className="space-y-3 pt-1">
                             <label className="block text-xs font-semibold text-foreground">
                                 KEPADA (Sasaran Sasaran Audiens / Pelaksana)
@@ -993,12 +1019,13 @@ export default function NotesTab({
                                 </div>
                             )}
                         </div>
+                        )}
 
                         {/* 4. Uraian Isi Notulen */}
                         <div>
                             <div className="flex items-center justify-between mb-1.5">
                                 <label className="block text-xs font-semibold text-foreground">
-                                    Uraian Pembahasan / Instruksi Tugas
+                                    {noteType === "JUST_INFO" ? "Isi Pengumuman" : "Uraian Pembahasan / Instruksi Tugas"}
                                 </label>
                                 <span className="text-[11px] text-muted-foreground tabular-nums">
                                     {content.length}/5000
@@ -1007,7 +1034,7 @@ export default function NotesTab({
                             <textarea
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
-                                placeholder="Tuliskan butir arahan rapat atau rincian pekerjaan tindak lanjut yang harus diselesaikan..."
+                                placeholder={noteType === "JUST_INFO" ? "Tuliskan pengumuman untuk semua karyawan..." : "Tuliskan butir arahan rapat atau rincian pekerjaan tindak lanjut yang harus diselesaikan..."}
                                 rows={3}
                                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                 maxLength={5000}
@@ -1105,6 +1132,7 @@ export default function NotesTab({
                 ) : (
                     notes.map((note) => {
                         const isTask = note.type === "TUGAS";
+                        const isJustInfo = note.type === "JUST_INFO";
                         const isComplete = note.taskStatus === "SELESAI";
                         const isDireksi = note.originType === "DIREKSI";
 
@@ -1115,7 +1143,9 @@ export default function NotesTab({
                                     ? isComplete
                                         ? "border-emerald-500/30 bg-emerald-500/[0.02]"
                                         : "border-purple-500/30 bg-purple-500/[0.02]"
-                                    : "border-border"
+                                    : isJustInfo
+                                        ? "border-sky-500/30 bg-sky-500/[0.02]"
+                                        : "border-border"
                                     }`}
                             >
                                 {/* Baris Atas: Badges & Routing */}
@@ -1126,6 +1156,11 @@ export default function NotesTab({
                                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
                                                 <ListTodo size={12} />
                                                 Tugas Tindak Lanjut
+                                            </span>
+                                        ) : isJustInfo ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                                                <Info size={12} />
+                                                Just Information
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">

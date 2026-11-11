@@ -156,14 +156,18 @@ export default function GreenMeetingNotesPage() {
         initialDeadlineDate?: string;
     }) => {
         if (!session) return;
-        // Writer baru TUGAS-only; arsip INFORMASI read-only.
-        if (data.type !== "TUGAS") {
-            toast("Catatan baru hanya bertipe Tugas. Arsip Informasi bersifat read-only.", "error");
-            throw new Error("Catatan baru hanya bertipe Tugas.");
+        // Writer baru TUGAS + JUST_INFO; arsip INFORMASI read-only.
+        if (data.type !== "TUGAS" && data.type !== "JUST_INFO") {
+            toast("Catatan baru hanya bertipe Tugas atau Just Information. Arsip Informasi bersifat read-only.", "error");
+            throw new Error("Catatan baru hanya bertipe Tugas atau Just Information.");
         }
-        if (!data.initialDeadlineDate) {
+        if (data.type === "TUGAS" && !data.initialDeadlineDate) {
             toast("Tenggat waktu awal (Deadline 1) wajib diisi.", "error");
             throw new Error("Deadline wajib diisi.");
+        }
+        if (data.type === "JUST_INFO" && data.initialDeadlineDate) {
+            toast("Just Information tidak memakai tenggat waktu.", "error");
+            throw new Error("Just Information tidak memakai deadline.");
         }
         try {
             const res = await fetch("/api/green-meeting/notes", {

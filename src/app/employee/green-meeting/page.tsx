@@ -601,6 +601,7 @@ export default function EmployeeGreenMeetingPage() {
                             ) : (
                                 filteredNotes.map((note) => {
                                     const isTask = note.type === "TUGAS";
+                                    const isJustInfo = note.type === "JUST_INFO";
                                     const isComplete = note.taskStatus === "SELESAI";
                                     const isForMe = (note.targets ?? []).some((t) => isGreenMeetingTargetRelevant(t, viewerScope) && t.targetType === "EMPLOYEE");
                                     const isForMyDept = !isForMe && (note.targets ?? []).some((t) => isGreenMeetingTargetRelevant(t, viewerScope) && t.targetType === "DEPARTMENT");
@@ -625,10 +626,12 @@ export default function EmployeeGreenMeetingPage() {
                                                         className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold border shrink-0 ${
                                                             isTask
                                                                 ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
-                                                                : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                                                                : isJustInfo
+                                                                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
+                                                                    : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
                                                         }`}
                                                     >
-                                                        {isTask ? "Tugas Tindak Lanjut" : "Informasi"}
+                                                        {isTask ? "Tugas Tindak Lanjut" : isJustInfo ? "Just Information" : "Informasi"}
                                                     </span>
 
                                                     {/* Smart Relevance Badges */}

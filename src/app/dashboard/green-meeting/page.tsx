@@ -86,7 +86,7 @@ interface GreenMeetingNoteTarget {
 
 interface GreenMeetingNote {
     id: string;
-    type: "INFORMASI" | "TUGAS";
+    type: "INFORMASI" | "TUGAS" | "JUST_INFO";
     content: string;
     originType: "DIREKSI" | "DEPARTMENT";
     originName: string;
@@ -299,7 +299,7 @@ export default function HrGreenMeetingMonitoringPage() {
     const filteredNotes = useMemo(() => (session?.notes || []).filter((n) => {
         if (noteFilter === "ALL") return true;
         if (noteFilter === "DIREKSI") return n.originType === "DIREKSI";
-        if (noteFilter === "INFORMASI") return n.type === "INFORMASI";
+        if (noteFilter === "INFORMASI") return n.type === "INFORMASI" || n.type === "JUST_INFO";
         if (noteFilter === "TUGAS") return n.type === "TUGAS";
         return true;
     }), [session, noteFilter]);
@@ -683,12 +683,13 @@ export default function HrGreenMeetingMonitoringPage() {
                             ) : (
                                 filteredNotes.map((note) => {
                                     const isTask = note.type === "TUGAS";
+                                    const isJustInfo = note.type === "JUST_INFO";
                                     return (
                                         <div key={note.id} className="bg-card border border-border rounded-xl p-4 sm:p-5 shadow-sm space-y-3">
                                             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-border/70">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${isTask ? "bg-purple-500/10 text-purple-600 border-purple-500/20" : "bg-blue-500/10 text-blue-600 border-blue-500/20"}`}>
-                                                        {isTask ? "Tugas Tindak Lanjut" : "Informasi"}
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${isTask ? "bg-purple-500/10 text-purple-600 border-purple-500/20" : isJustInfo ? "bg-sky-500/10 text-sky-600 border-sky-500/20" : "bg-blue-500/10 text-blue-600 border-blue-500/20"}`}>
+                                                        {isTask ? "Tugas Tindak Lanjut" : isJustInfo ? "Just Information" : "Informasi"}
                                                     </span>
                                                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-muted border border-border text-foreground font-medium flex-wrap">
                                                         <span className="font-bold">Dari: {note.originName}</span>

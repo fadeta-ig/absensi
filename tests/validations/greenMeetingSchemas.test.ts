@@ -146,6 +146,29 @@ describe("Green Meeting Zod Schemas", () => {
             });
             expect(res.success).toBe(true);
         });
+
+        it("should accept JUST_INFO without deadline (pengumuman global)", () => {
+            const res = greenMeetingNoteCreateSchema.safeParse({
+                type: "JUST_INFO",
+                content: "Pengumuman libur bersama",
+                originType: "DIREKSI",
+                originName: "Direksi",
+                isAllTarget: true,
+            });
+            expect(res.success).toBe(true);
+        });
+
+        it("should reject JUST_INFO with deadline (tanpa tenggat waktu)", () => {
+            const res = greenMeetingNoteCreateSchema.safeParse({
+                type: "JUST_INFO",
+                content: "Pengumuman libur bersama",
+                originType: "DIREKSI",
+                originName: "Direksi",
+                isAllTarget: true,
+                initialDeadlineDate: "2026-09-25",
+            });
+            expect(res.success).toBe(false);
+        });
     });
 
     describe("greenMeetingNoteUpdateSchema", () => {

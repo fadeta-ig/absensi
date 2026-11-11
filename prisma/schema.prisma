@@ -1392,6 +1392,7 @@ model EmployeeBirthdayPreparation {
 enum GreenMeetingNoteType {
   INFORMASI
   TUGAS
+  JUST_INFO
 }
 
 enum GreenMeetingTaskStatus {

@@ -605,7 +605,7 @@ export const greenMeetingTargetItemSchema = z.object({
 });
 
 const greenMeetingNoteBaseSchema = z.object({
-    type: z.enum(["INFORMASI", "TUGAS"]),
+    type: z.enum(["INFORMASI", "TUGAS", "JUST_INFO"]),
     content: z.string().trim().min(3, "Catatan minimal 3 karakter").max(5000),
     originType: z.enum(["DIREKSI", "DEPARTMENT", "DIVISION", "EMPLOYEE", "LAINNYA"]).default("DIREKSI"),
     originName: z.string().trim().min(1).max(150).default("Direksi"),
@@ -619,10 +619,17 @@ const greenMeetingNoteBaseSchema = z.object({
         .optional(),
 });
 
-export const greenMeetingNoteCreateSchema = greenMeetingNoteBaseSchema.refine(
-    (data) => data.type === "TUGAS" && !!data.initialDeadlineDate,
-    { message: "Catatan baru hanya bertipe Tugas dengan Tenggat waktu awal (Deadline 1). Arsip Informasi bersifat read-only.", path: ["initialDeadlineDate"] }
-);
+export const greenMeetingNoteCreateSchema = greenMeetingNoteBaseSchema.superRefine((data, ctx) => {
+    if (data.type === "INFORMASI") {
+        ctx.addIssue({ code: "custom", path: ["type"], message: "Arsip Informasi bersifat read-only." });
+    }
+    if (data.type === "TUGAS" && !data.initialDeadlineDate) {
+        ctx.addIssue({ code: "custom", path: ["initialDeadlineDate"], message: "Catatan baru hanya bertipe Tugas dengan Tenggat waktu awal (Deadline 1). Arsip Informasi bersifat read-only." });
+    }
+    if (data.type === "JUST_INFO" && data.initialDeadlineDate) {
+        ctx.addIssue({ code: "custom", path: ["initialDeadlineDate"], message: "Just Information tidak memakai tenggat waktu." });
+    }
+});
 
 /** PATCH parsial: semua field opsional kecuali changeReason (Zod v4: partial dari base tanpa refine). */
 export const greenMeetingNoteUpdateSchema = greenMeetingNoteBaseSchema.partial().extend({
