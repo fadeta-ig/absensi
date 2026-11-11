@@ -1173,3 +1173,92 @@ describe("tiga peran meeting: PIC setara penyelenggara", () => {
         expect(tx.meetingAppointmentParticipant.updateMany).toHaveBeenCalled();
     });
 });
+
+describe("penyelenggara merangkap pimpinan rapat / PIC notulensi", () => {
+    it("createAppointment: penyelenggara boleh menunjuk dirinya sendiri tanpa masuk daftar peserta", async () => {
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
+        const tx = {
+            meetingAppointment: {
+                findFirst: vi.fn().mockResolvedValue(null),
+                findMany: vi.fn().mockResolvedValue([]),
+                create: vi.fn().mockResolvedValue({ id: "a9", status: "SCHEDULED" }),
+            },
+            employeeUnavailability: { findMany: vi.fn().mockResolvedValue([]) },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        const out = (await createAppointment(
+            empSession(),
+            { title: "Rapat", date: "2026-12-01", startTime: "10:00", endTime: "11:00", roomId: "r1", participants: [{ employeeId: "ID-002" }], notulisEmployeeId: "ID-001", leaderEmployeeId: "ID-001" },
+            false
+        )) as { status: string };
+        expect(out.status).toBe("SCHEDULED");
+        expect(tx.meetingAppointment.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ requesterEmployeeId: "ID-001", notulisEmployeeId: "ID-001", leaderEmployeeId: "ID-001" }),
+            })
+        );
+    });
+
+    it("rescheduleAppointment: pembuat boleh dipertahankan sebagai pimpinan/PIC walau tidak ada di daftar peserta baru", async () => {
+        mocked.meetingRoom.findUnique.mockResolvedValue({ id: "r1", isActive: true } as never);
+        mocked.employee.findMany.mockResolvedValue([{ employeeId: "ID-002", isActive: true }] as never);
+        const tx = {
+            $queryRaw: vi.fn().mockResolvedValue([]),
+            meetingAppointment: {
+                findUnique: vi.fn().mockResolvedValue({
+                    id: "a1", title: "T", agenda: null, isFullDay: false, status: "SCHEDULED",
+                    requesterEmployeeId: "ID-001", leaderEmployeeId: null, notulisEmployeeId: null,
+                    roomId: "r1", meetingLink: null,
+                    startAt: new Date("2027-01-01T03:00:00.000Z"), endAt: new Date("2027-01-01T04:00:00.000Z"),
+                }),
+                findFirst: vi.fn().mockResolvedValue(null),
+                findMany: vi.fn().mockResolvedValue([]),
+                update: vi.fn().mockResolvedValue({ id: "a1", status: "SCHEDULED" }),
+            },
+            meetingAppointmentParticipant: {
+                findMany: vi.fn().mockResolvedValue([{ id: "p1", employeeId: "ID-002", guestName: null, isExternal: false }]),
+                deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+                create: vi.fn().mockResolvedValue({ id: "p-new" }),
+                updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+            },
+            meetingAppointmentRevision: { count: vi.fn().mockResolvedValue(0), create: vi.fn().mockResolvedValue({}) },
+            appointmentReminderLog: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+            employeeUnavailability: { findMany: vi.fn().mockResolvedValue([]) },
+            auditLog: { create: vi.fn().mockResolvedValue({}) },
+        };
+        vi.mocked(prisma.$transaction).mockImplementation(async (callback: (tx: never) => Promise<unknown>) => callback(tx as never));
+        await rescheduleAppointment(
+            empSession(),
+            "a1",
+            {
+                date: "2027-01-01", startTime: "10:00", endTime: "11:00", roomId: "r1",
+                participants: [{ employeeId: "ID-002" }], leaderEmployeeId: "ID-001", notulisEmployeeId: "ID-001",
+                changeReason: "penyelenggara merangkap pimpinan dan PIC",
+            },
+            { userId: "u", username: "ID-001" }
+        );
+        expect(tx.meetingAppointment.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                data: expect.objectContaining({ leaderEmployeeId: "ID-001", notulisEmployeeId: "ID-001" }),
+            })
+        );
+    });
+
+    it("setMeetingLeader: pembuat boleh menunjuk dirinya sendiri", async () => {
+        const now = Date.now();
+        const base = {
+            id: "a1", status: "SCHEDULED",
+            startAt: new Date(now + 3600_000), endAt: new Date(now + 7200_000),
+            requesterEmployeeId: "ID-001", leaderEmployeeId: null, notulisEmployeeId: null,
+            participants: [{ employeeId: "ID-002" }],
+        };
+        mocked.meetingAppointment.findUnique
+            .mockResolvedValueOnce(base as never)
+            .mockResolvedValueOnce({ ...base, leaderEmployeeId: "ID-001", room: null, requester: null } as never);
+        mocked.meetingAppointment.update.mockResolvedValue({ id: "a1" } as never);
+        await setMeetingLeader(empSession(), "a1", "ID-001", { userId: "u-1", username: "ID-001" });
+        expect(mocked.meetingAppointment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { leaderEmployeeId: "ID-001" } }));
+    });
+});

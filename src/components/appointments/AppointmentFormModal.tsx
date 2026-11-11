@@ -17,11 +17,12 @@ interface AppointmentFormModalProps {
     initialDate: string;
     editing: AppointmentListItem | null;
     myEmployeeId?: string | null;
+    myEmployeeName?: string | null;
     onClose: () => void;
     onSaved: () => void;
 }
 
-export default function AppointmentFormModal({ initialDate, editing, myEmployeeId, onClose, onSaved }: AppointmentFormModalProps) {
+export default function AppointmentFormModal({ initialDate, editing, myEmployeeId, myEmployeeName, onClose, onSaved }: AppointmentFormModalProps) {
     const [title, setTitle] = useState(editing?.title ?? "");
     const createSlot = !editing ? nextWibSlot(initialDate) : null;
     const [date, setDate] = useState(() => {
@@ -84,44 +85,66 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
 
     const editingId = editing?.id;
 
-    // PIC notulensi: hanya peserta internal yang sudah ditambahkan (tamu dikecualikan).
+    // PIC notulensi & pimpinan rapat: peserta internal yang sudah ditambahkan
+    // (tamu dikecualikan) ATAU penyelenggara/pembuat meeting itu sendiri
+    // (boleh merangkap — penyelenggara tidak masuk daftar peserta).
     const internalParticipants = participants.filter((p) => p.employeeId);
-    const notulisOptions = internalParticipants.filter((p) => {
+    const roleOwnerId = editing ? (editing.requesterEmployeeId ?? myEmployeeId ?? null) : (myEmployeeId ?? null);
+    const roleOwnerName = editing
+        ? (editing.requester?.name ?? (editing.requesterEmployeeId === myEmployeeId ? (myEmployeeName ?? null) : null))
+        : (myEmployeeName ?? null);
+    const organizerOption: PickedParticipant | null = roleOwnerId
+        ? {
+              key: `e:${roleOwnerId}`,
+              employeeId: roleOwnerId,
+              name: roleOwnerName ? `${roleOwnerName}` : roleOwnerId,
+          }
+        : null;
+    const roleEligible = organizerOption && !internalParticipants.some((p) => p.employeeId === organizerOption.employeeId)
+        ? [...internalParticipants, organizerOption]
+        : internalParticipants;
+    const notulisOptions = roleEligible.filter((p) => {
         const q = notulisQuery.trim().toLowerCase();
         if (!q) return true;
         return p.name.toLowerCase().includes(q) || (p.employeeId ?? "").toLowerCase().includes(q);
     });
-    const selectedNotulis = internalParticipants.find((p) => p.employeeId === notulisEmployeeId) ?? null;
-    const leaderOptions = internalParticipants.filter((p) => {
+    const selectedNotulis = roleEligible.find((p) => p.employeeId === notulisEmployeeId) ?? null;
+    const leaderOptions = roleEligible.filter((p) => {
         const q = leaderQuery.trim().toLowerCase();
         if (!q) return true;
         return p.name.toLowerCase().includes(q) || (p.employeeId ?? "").toLowerCase().includes(q);
     });
-    const selectedLeader = internalParticipants.find((p) => p.employeeId === leaderEmployeeId) ?? null;
+    const selectedLeader = roleEligible.find((p) => p.employeeId === leaderEmployeeId) ?? null;
+    const isOrganizerSelectedAsLeader = selectedLeader != null && selectedLeader.employeeId === roleOwnerId && !internalParticipants.some((p) => p.employeeId === roleOwnerId);
+    const isOrganizerSelectedAsNotulis = selectedNotulis != null && selectedNotulis.employeeId === roleOwnerId && !internalParticipants.some((p) => p.employeeId === roleOwnerId);
 
-    // Bila peserta terpilih sebagai notulis/pimpinan dihapus dari daftar, ikut bersihkan pilihan.
+    // Bila peserta terpilih sebagai notulis/pimpinan dihapus dari daftar, ikut bersihkan pilihan —
+    // kecuali bila yang dipilih adalah penyelenggara itu sendiri.
     useEffect(() => {
-        if (notulisEmployeeId && !internalParticipants.some((p) => p.employeeId === notulisEmployeeId)) {
+        if (notulisEmployeeId && notulisEmployeeId !== roleOwnerId && !internalParticipants.some((p) => p.employeeId === notulisEmployeeId)) {
             setNotulisEmployeeId("");
         }
-        if (leaderEmployeeId && !internalParticipants.some((p) => p.employeeId === leaderEmployeeId)) {
+        if (leaderEmployeeId && leaderEmployeeId !== roleOwnerId && !internalParticipants.some((p) => p.employeeId === leaderEmployeeId)) {
             setLeaderEmployeeId("");
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [participants]);
+    }, [participants, roleOwnerId]);
 
     useEffect(() => {
         setConflicts([]);
         setRoomConflict(false);
-        const ids = participants.filter((p) => p.employeeId).map((p) => p.employeeId as string);
-        if (!date || isFullDay || !startTime || !endTime || (ids.length === 0 && !roomId)) return;
+        const participantIds = participants.filter((p) => p.employeeId).map((p) => p.employeeId as string);
+        // Sertakan penyelenggara/pembuat untuk peringatan dini (backend
+        // tetap menegakkan cek bentrok penyelenggara sebagai penegak final).
+        const checkIds = [...new Set([...participantIds, ...(roleOwnerId ? [roleOwnerId] : [])])];
+        if (!date || isFullDay || !startTime || !endTime || (checkIds.length === 0 && !roomId)) return;
         const timer = setTimeout(async () => {
             setCheckingConflicts(true);
             try {
                 const controller = new AbortController();
                 const excludeParam = editingId ? `&excludeId=${encodeURIComponent(editingId)}` : "";
                 const roomParam = roomId ? `&roomId=${encodeURIComponent(roomId)}` : "";
-                const res = await fetch(`/api/appointments/availability?date=${date}&employees=${encodeURIComponent(ids.join(","))}${roomParam}${excludeParam}`, {
+                const res = await fetch(`/api/appointments/availability?date=${date}&employees=${encodeURIComponent(checkIds.join(","))}${roomParam}${excludeParam}`, {
                     signal: controller.signal,
                 });
                 if (!res.ok) return;
@@ -132,7 +155,11 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 const slotEnd = new Date(`${date}T${endTime}:00+07:00`).getTime();
                 if (!(slotEnd > slotStart)) return;
                 const hit: string[] = [];
-                for (const p of participants) {
+                const hitSource: PickedParticipant[] = [...participants];
+                if (organizerOption && !participants.some((p) => p.employeeId === organizerOption.employeeId)) {
+                    hitSource.push(organizerOption);
+                }
+                for (const p of hitSource) {
                     if (!p.employeeId) continue;
                     const intervals = busy[p.employeeId] ?? [];
                     if (intervals.some((b) => new Date(b.startAt).getTime() < slotEnd && new Date(b.endAt).getTime() > slotStart)) {
@@ -148,7 +175,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [date, startTime, endTime, isFullDay, participants, editingId, roomId]);
+    }, [date, startTime, endTime, isFullDay, participants, editingId, roomId, roleOwnerId, organizerOption]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -303,6 +330,11 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                             <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--primary)] bg-[var(--secondary)] px-3 py-2">
                                 <span className="text-sm font-medium">
                                     {stripGelar(selectedLeader.name)} <span className="text-[var(--text-muted)]">({selectedLeader.employeeId})</span>
+                                    {isOrganizerSelectedAsLeader && (
+                                        <span className="ml-1.5 rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--primary)]">
+                                            Penyelenggara (Anda)
+                                        </span>
+                                    )}
                                 </span>
                                 <button
                                     type="button"
@@ -322,14 +354,16 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                                         className="form-input !pl-9"
                                         value={leaderQuery}
                                         onChange={(e) => setLeaderQuery(e.target.value)}
-                                        placeholder={internalParticipants.length === 0 ? "Tambahkan peserta internal dulu…" : "Cari dari peserta yang ditambahkan…"}
-                                        disabled={internalParticipants.length === 0}
-                                        aria-label="Cari pimpinan rapat dari peserta"
+                                        placeholder={roleEligible.length === 0 ? "Tambahkan peserta internal dulu…" : "Cari dari peserta / penyelenggara…"}
+                                        disabled={roleEligible.length === 0}
+                                        aria-label="Cari pimpinan rapat dari peserta atau penyelenggara"
                                     />
                                 </div>
-                                {internalParticipants.length > 0 && (
+                                {roleEligible.length > 0 && (
                                     <div className="mt-1.5 max-h-36 overflow-y-auto rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]" role="listbox" aria-label="Daftar calon pimpinan rapat">
-                                        {leaderOptions.map((p) => (
+                                        {leaderOptions.map((p) => {
+                                            const isOwner = roleOwnerId != null && p.employeeId === roleOwnerId && !internalParticipants.some((ip) => ip.employeeId === roleOwnerId);
+                                            return (
                                             <button
                                                 key={p.key}
                                                 type="button"
@@ -339,8 +373,14 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                                                 onClick={() => { setLeaderEmployeeId(p.employeeId ?? ""); setLeaderQuery(""); }}
                                             >
                                                 {stripGelar(p.name)} <span className="text-[var(--text-muted)]">({p.employeeId})</span>
+                                                {isOwner && (
+                                                    <span className="ml-1.5 rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--primary)]">
+                                                        Penyelenggara
+                                                    </span>
+                                                )}
                                             </button>
-                                        ))}
+                                            );
+                                        })}
                                         {leaderOptions.length === 0 && (
                                             <p className="px-3 py-2 text-xs text-[var(--text-muted)]">Tidak ada peserta yang cocok dengan pencarian.</p>
                                         )}
@@ -349,7 +389,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                             </>
                         )}
                         <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                            Pimpinan rapat wajib dipilih dari peserta internal. Ia memimpin rapat di lapangan dan berwenang setara penyelenggara, termasuk mengganti PIC notulensi dan memberi tugas.
+                            Pimpinan rapat wajib dipilih dari peserta internal atau penyelenggara (Anda boleh menunjuk diri sendiri). Ia memimpin rapat di lapangan dan berwenang setara penyelenggara, termasuk mengganti PIC notulensi dan memberi tugas.
                         </p>
                     </div>
 
@@ -363,6 +403,11 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                             <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--primary)] bg-[var(--secondary)] px-3 py-2">
                                 <span className="text-sm font-medium">
                                     {stripGelar(selectedNotulis.name)} <span className="text-[var(--text-muted)]">({selectedNotulis.employeeId})</span>
+                                    {isOrganizerSelectedAsNotulis && (
+                                        <span className="ml-1.5 rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--primary)]">
+                                            Penyelenggara (Anda)
+                                        </span>
+                                    )}
                                 </span>
                                 <button
                                     type="button"
@@ -382,14 +427,16 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                                         className="form-input !pl-9"
                                         value={notulisQuery}
                                         onChange={(e) => setNotulisQuery(e.target.value)}
-                                        placeholder={internalParticipants.length === 0 ? "Tambahkan peserta internal dulu…" : "Cari dari peserta yang ditambahkan…"}
-                                        disabled={internalParticipants.length === 0}
-                                        aria-label="Cari PIC notulensi dari peserta"
+                                        placeholder={roleEligible.length === 0 ? "Tambahkan peserta internal dulu…" : "Cari dari peserta / penyelenggara…"}
+                                        disabled={roleEligible.length === 0}
+                                        aria-label="Cari PIC notulensi dari peserta atau penyelenggara"
                                     />
                                 </div>
-                                {internalParticipants.length > 0 && (
+                                {roleEligible.length > 0 && (
                                     <div className="mt-1.5 max-h-36 overflow-y-auto rounded-xl border border-[var(--border)] divide-y divide-[var(--border)]" role="listbox" aria-label="Daftar calon PIC notulensi">
-                                        {notulisOptions.map((p) => (
+                                        {notulisOptions.map((p) => {
+                                            const isOwner = roleOwnerId != null && p.employeeId === roleOwnerId && !internalParticipants.some((ip) => ip.employeeId === roleOwnerId);
+                                            return (
                                             <button
                                                 key={p.key}
                                                 type="button"
@@ -399,8 +446,14 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                                                 onClick={() => { setNotulisEmployeeId(p.employeeId ?? ""); setNotulisQuery(""); }}
                                             >
                                                 {stripGelar(p.name)} <span className="text-[var(--text-muted)]">({p.employeeId})</span>
+                                                {isOwner && (
+                                                    <span className="ml-1.5 rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--primary)]">
+                                                        Penyelenggara
+                                                    </span>
+                                                )}
                                             </button>
-                                        ))}
+                                            );
+                                        })}
                                         {notulisOptions.length === 0 && (
                                             <p className="px-3 py-2 text-xs text-[var(--text-muted)]">Tidak ada peserta yang cocok dengan pencarian.</p>
                                         )}
@@ -409,7 +462,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                             </>
                         )}
                         <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                            PIC notulensi wajib dipilih dari peserta internal. PIC mencatat notulensi; PIC dan pimpinan rapat dapat memberi tugas hasil meeting.
+                            PIC notulensi wajib dipilih dari peserta internal atau penyelenggara (Anda boleh menunjuk diri sendiri). PIC mencatat notulensi; PIC dan pimpinan rapat dapat memberi tugas hasil meeting.
                         </p>
                     </div>
 

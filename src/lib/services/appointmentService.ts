@@ -480,21 +480,26 @@ export async function createAppointment(session: SessionPayload, input: CreateAp
     if (session.employeeId && participants.some((p) => p.employeeId === session.employeeId)) {
         throw new AppointmentError("Anda sudah tercatat sebagai penyelenggara meeting ini dan tidak perlu ditambahkan sebagai peserta.", 400);
     }
-    // PIC notulensi WAJIB saat buat meeting: harus peserta internal yang sudah ditambahkan.
+    // PIC notulensi WAJIB saat buat meeting: peserta internal yang sudah
+    // ditambahkan, ATAU penyelenggara/pembuat meeting itu sendiri (boleh
+    // merangkap — penyelenggara tidak masuk tabel peserta).
     const notulisId = input.notulisEmployeeId?.trim() || null;
     if (!notulisId) {
         throw new AppointmentError("PIC notulensi wajib dipilih dari peserta internal meeting.", 400);
     }
-    if (!participants.some((p) => p.employeeId === notulisId)) {
+    const notulisIsOrganizer = session.employeeId != null && notulisId === session.employeeId;
+    if (!notulisIsOrganizer && !participants.some((p) => p.employeeId === notulisId)) {
         throw new AppointmentError("Petugas notulensi harus peserta internal meeting ini.", 422);
     }
     // Pimpinan rapat WAJIB saat buat meeting: peserta internal yang memimpin
-    // rapat di lapangan dan berwenang setara penyelenggara.
+    // rapat di lapangan dan berwenang setara penyelenggara — penyelenggara
+    // boleh menunjuk dirinya sendiri.
     const leaderId = input.leaderEmployeeId?.trim() || null;
     if (!leaderId) {
         throw new AppointmentError("Pimpinan rapat wajib dipilih dari peserta internal meeting.", 400);
     }
-    if (!participants.some((p) => p.employeeId === leaderId)) {
+    const leaderIsOrganizer = session.employeeId != null && leaderId === session.employeeId;
+    if (!leaderIsOrganizer && !participants.some((p) => p.employeeId === leaderId)) {
         throw new AppointmentError("Pimpinan rapat harus peserta internal meeting ini.", 422);
     }
     // Siapa cepat dia dapat: booking langsung SCHEDULED, meeting tetap jalan
@@ -730,7 +735,9 @@ export async function setMeetingLeader(
     }
     const leaderId = leaderEmployeeId?.trim() || null;
     if (!leaderId) throw new AppointmentError("Pimpinan rapat wajib dipilih dan tidak dapat dikosongkan.", 400);
-    if (!existing.participants.some((p) => p.employeeId === leaderId)) {
+    // Pimpinan boleh peserta internal ATAU pembuat/penyelenggara meeting
+    // itu sendiri (penyelenggara tidak masuk tabel peserta).
+    if (!existing.participants.some((p) => p.employeeId === leaderId) && leaderId !== existing.requesterEmployeeId) {
         throw new AppointmentError("Pimpinan rapat harus peserta internal meeting ini.", 422);
     }
     await prisma.meetingAppointment.update({ where: { id }, data: { leaderEmployeeId: leaderId } });
@@ -920,19 +927,20 @@ export async function rescheduleAppointment(
             ? normalizedParticipants.map((p) => p.employeeId).filter((v): v is string => Boolean(v))
             : existingParticipants.map((p) => p.employeeId).filter((v): v is string => Boolean(v));
         // Pimpinan rapat & PIC notulensi dari Pengaturan Meeting: wajib
-        // peserta internal pada daftar peserta hasil edit.
+        // peserta internal pada daftar peserta hasil edit, ATAU pembuat/
+        // penyelenggara meeting itu sendiri (boleh merangkap peran).
         const nextLeaderId = input.leaderEmployeeId === undefined ? (existing.leaderEmployeeId ?? null) : (input.leaderEmployeeId?.trim() || null);
         if (input.leaderEmployeeId !== undefined && !nextLeaderId) {
             throw new AppointmentError("Pimpinan rapat wajib dipilih dan tidak dapat dikosongkan.", 400);
         }
-        if (nextLeaderId && !participantEmployeeIds.includes(nextLeaderId)) {
+        if (nextLeaderId && !participantEmployeeIds.includes(nextLeaderId) && nextLeaderId !== existing.requesterEmployeeId) {
             throw new AppointmentError("Pimpinan rapat harus peserta internal meeting ini.", 422);
         }
         const nextNotulisId = input.notulisEmployeeId === undefined ? (existing.notulisEmployeeId ?? null) : (input.notulisEmployeeId?.trim() || null);
         if (input.notulisEmployeeId !== undefined && !nextNotulisId) {
             throw new AppointmentError("PIC notulensi wajib dipilih dan tidak dapat dikosongkan.", 400);
         }
-        if (nextNotulisId && !participantEmployeeIds.includes(nextNotulisId)) {
+        if (nextNotulisId && !participantEmployeeIds.includes(nextNotulisId) && nextNotulisId !== existing.requesterEmployeeId) {
             throw new AppointmentError("Petugas notulensi harus peserta internal meeting ini.", 422);
         }
         const isRoleChanged = nextLeaderId !== (existing.leaderEmployeeId ?? null) || nextNotulisId !== (existing.notulisEmployeeId ?? null);

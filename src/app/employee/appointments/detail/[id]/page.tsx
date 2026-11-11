@@ -41,6 +41,7 @@ function DetailContent({ id }: { id: string }) {
     const toast = useToast();
     const [item, setItem] = useState<AppointmentListItem | null>(null);
     const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+    const [myEmployeeName, setMyEmployeeName] = useState<string | null>(null);
     const [canManageAll, setCanManageAll] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -67,6 +68,7 @@ function DetailContent({ id }: { id: string }) {
             if (meRes.ok) {
                 const me = await meRes.json();
                 setMyEmployeeId(me.employeeId ?? null);
+                setMyEmployeeName(typeof me.name === "string" && me.name.trim() ? me.name : null);
             }
             if (capsRes && capsRes.ok) {
                 const caps = await capsRes.json().catch(() => null);
@@ -580,6 +582,7 @@ function DetailContent({ id }: { id: string }) {
                     initialDate={item.startAt.slice(0, 10)}
                     editing={item}
                     myEmployeeId={myEmployeeId}
+                    myEmployeeName={myEmployeeName}
                     onClose={() => setEditing(false)}
                     onSaved={() => { setEditing(false); void load(); }}
                 />

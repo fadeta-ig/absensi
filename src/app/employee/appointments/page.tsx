@@ -40,6 +40,7 @@ export default function EmployeeAppointmentsPage() {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [modal, setModal] = useState<ModalState>({ type: "none" });
     const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+    const [myEmployeeName, setMyEmployeeName] = useState<string | null>(null);
     const fetchedRef = useRef("");
 
     useEffect(() => {
@@ -49,6 +50,8 @@ export default function EmployeeAppointmentsPage() {
             .then((data: unknown) => {
                 if (!cancelled && data && typeof data === "object" && "employeeId" in data) {
                     setMyEmployeeId(String((data as { employeeId: unknown }).employeeId ?? ""));
+                    const rawName = (data as { name?: unknown }).name;
+                    setMyEmployeeName(typeof rawName === "string" && rawName.trim() ? rawName : null);
                 }
             })
             .catch(() => undefined);
@@ -749,7 +752,7 @@ export default function EmployeeAppointmentsPage() {
             )}
 
             {modal.type === "create" && (
-                <AppointmentFormModal initialDate={selectedDate} editing={null} myEmployeeId={myEmployeeId} onClose={() => setModal({ type: "none" })} onSaved={handleSaved} />
+                <AppointmentFormModal initialDate={selectedDate} editing={null} myEmployeeId={myEmployeeId} myEmployeeName={myEmployeeName} onClose={() => setModal({ type: "none" })} onSaved={handleSaved} />
             )}
         </div>
     );
