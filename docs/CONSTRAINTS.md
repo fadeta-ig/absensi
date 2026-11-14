@@ -2,7 +2,7 @@
 
 > **Purpose**: What must or must not be done.  
 > **Source of Truth**: Framework constraints, Edge runtime, security policies, and business rules.  
-> **Last Verified**: 2026-10-22  
+> **Last Verified**: 2026-11-14  
 
 Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, keamanan, dan deployment yang terbukti aktif dalam codebase ini.
 
@@ -21,9 +21,9 @@ Dokumen ini mendefinisikan batasan teknis, aturan bisnis, batas kompatibilitas, 
   - Berkas foto kunjungan disimpan secara lokal di filesystem server (`storage/visit-photos/`), dan file unggahan umum di `public/uploads/`.
   - Bukti foto inspeksi alat disimpan di `storage/equipment-evidence/` (pelaksana) dan `storage/equipment-qc-evidence/` (QC), masing-masing maks 5 berkas JPEG per inspeksi.
   - Sistem saat ini belum menggunakan object storage cloud (seperti S3 atau GCS), sehingga arsitektur scaling horizontal multi-instance memerlukan shared NFS atau modifikasi storage driver.
-- **Batasan Ukuran Berkas**:
-  - Dokumen BAST disimpan langsung ke database dalam bentuk `MediumBlob` (maksimal 16MB per file).
-  - Berkas log Winston dirotasi pada batas 5MB (`logs/error.log`) dan 10MB (`logs/combined.log`) dengan retensi maksimal 5 berkas.
+- **Batasan Ukuran Berkas & Stream Logging**:
+  - Dokumen BAST disimpan ke disk lokal (`storage/bast-documents/`, batas ukuran default `5MB` melalui `AppSetting` `upload.bast.maxMb`) dengan kompatibilitas baca mundur ke kolom `MediumBlob` lama di database.
+  - Aplikasi tidak menulis file log ke direktori lokal `/logs/`; Winston (`src/lib/logger.ts`) hanya menulis ke stream `stdout` (`info`/`warn`/`debug`) dan `stderr` (`error` via `stderrLevels: ["error"]`, berformat single-line JSON tanpa ANSI di production). Persistensi (`~/.pm2/logs/hris-out.log` dan `hris-error.log`) serta rotasi ukuran/retensi wajib ditangani oleh PM2 (`pm2-logrotate` / `logrotate` sistem).
 
 ---
 

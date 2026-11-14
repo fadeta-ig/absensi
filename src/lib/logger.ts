@@ -2,8 +2,9 @@
  * Logger Terpusat — Winston
  *
  * Transport:
- * - Console: selalu aktif (development & production)
- * - File: hanya production (logs/error.log + logs/combined.log)
+ * - Console: selalu aktif di semua environment (stdout untuk info/warn/debug, stderr untuk error via stderrLevels).
+ *   - Production: single-line JSON terstruktur tanpa ANSI colorize (ditangkap PM2 ke hris-out.log & hris-error.log).
+ *   - Development / Test: format readable berwarna.
  */
 
 import winston from "winston";
@@ -89,34 +90,18 @@ const logger = winston.createLogger({
     defaultMeta: { service: "presensi-hris" },
     transports: [
         new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
-                    const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
-                    return `${timestamp} [${service}] ${level}: ${message}${metaStr}`;
-                })
-            ),
+            stderrLevels: ["error"],
+            format: IS_PRODUCTION
+                ? undefined
+                : winston.format.combine(
+                      winston.format.colorize(),
+                      winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
+                          const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
+                          return `${timestamp} [${service}] ${level}: ${message}${metaStr}`;
+                      })
+                  ),
         }),
     ],
 });
-
-// File transports hanya di production
-if (IS_PRODUCTION) {
-    logger.add(
-        new winston.transports.File({
-            filename: "logs/error.log",
-            level: "error",
-            maxsize: 5_242_880, // 5MB
-            maxFiles: 5,
-        })
-    );
-    logger.add(
-        new winston.transports.File({
-            filename: "logs/combined.log",
-            maxsize: 10_485_760, // 10MB
-            maxFiles: 5,
-        })
-    );
-}
 
 export default logger;

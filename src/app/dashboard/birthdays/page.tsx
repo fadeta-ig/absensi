@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import { reportClientError } from "@/lib/clientErrors";
 import type {
     BirthdayOverviewResult,
     BirthdayEmployeeDetail,
@@ -165,7 +166,7 @@ export default function BirthdayManagementPage() {
                 }
             }
         } catch (error) {
-            console.error("Failed to fetch auxiliary birthday data:", error);
+            reportClientError("DashboardBirthdays", "Failed to fetch auxiliary birthday data", error);
         }
     }, []);
 

@@ -2,7 +2,7 @@
 
 > **Purpose**: Development, build, test, and deployment procedures.  
 > **Source of Truth**: `package.json` scripts, dev environment, and testing tools.  
-> **Last Verified**: 2026-10-23  
+> **Last Verified**: 2026-11-14  
 
 Dokumen ini memuat panduan langkah demi langkah untuk instalasi, pengembangan lokal, sinkronisasi basis data, testing, build, dan deployment.
 
@@ -197,12 +197,17 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    proses yang terbukti sisa hris sendiri.
    Smoke test: login + 1 presensi + buka halaman fitur yang di-deploy.
 
-6. **Konfigurasi Auto-Start saat VPS Reboot:**
+6. **Konfigurasi Auto-Start saat VPS Reboot & Rotasi Log PM2 (`pm2-logrotate`):**
    ```bash
    pm2 startup
    # Jalankan perintah 'sudo env PATH=...' yang direkomendasikan di terminal
+   pm2 install pm2-logrotate
+   pm2 set pm2-logrotate:max_size 10M
+   pm2 set pm2-logrotate:retain 10
+   pm2 set pm2-logrotate:compress true
    pm2 save
    ```
+   *Catatan: Aplikasi menulis log terstruktur langsung ke `stdout` (`~/.pm2/logs/hris-out.log`) dan `stderr` (`~/.pm2/logs/hris-error.log`) tanpa membuat `/var/www/hris/logs/`, sehingga `pm2-logrotate` wajib aktif agar disk VPS tetap terjaga.*
 
 7. **Larangan production:**
    `db:seed*`, `db:reset*`, `migrate reset/dev`, `db push --force-reset` /

@@ -27,6 +27,9 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error"] } : false,
+  },
   async headers() {
     return [
       // Service worker + hasil generate-nya: jangan di-cache agar update langsung aktif.

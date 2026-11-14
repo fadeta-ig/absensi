@@ -2,7 +2,7 @@
 
 > **Purpose**: How the system is structured.  
 > **Source of Truth**: Repository implementation, `src/`, `next.config.ts`, and runtime components.  
-> **Last Verified**: 2026-09-10  
+> **Last Verified**: 2026-11-14  
 
 ## 1. High-Level Architecture Overview
 
@@ -59,7 +59,7 @@ graph TD
   - Autentikasi sesi aktif di tingkat API (`requireAuth()`) dengan memeriksa versi sesi di database (`sessionVersion`).
   - Pembersihan input HTML otomatis (`sanitizeObject()`) untuk mencegah serangan Cross-Site Scripting (XSS).
   - Validasi ketat request body menggunakan skema Zod (`validateBody()`).
-  - Standardisasi format error (400 Bad Request, 401 Unauthorized, 403 Forbidden, 500 Internal Server Error) dan serialisasi log terpusat via Winston.
+  - Standardisasi format error (400 Bad Request, 401 Unauthorized, 403 Forbidden, 500 Internal Server Error) dan serialisasi log terpusat via Winston ke stream `stdout`/`stderr` (single-line JSON di production).
 
 ### C. Domain Services Layer (`src/lib/services/*`)
 - **Tanggung Jawab**:
@@ -89,7 +89,7 @@ graph TD
 - **Security & Token**: `jose` 6.1.3, `bcryptjs` 3.0.3, `zod` 4.3.6
 - **Styling & UI**: `tailwindcss` 3.4.19, `radix-ui` 1.4.3, `lucide-react` 0.563.0
 - **Image Processing**: `sharp` 0.35.3
-- **Logging**: `winston` 3.19.0
+- **Logging**: `winston` 3.19.0 (`Console` stream-only ke `stdout`/`stderr`; tanpa file transport `/logs/`)
 - **PWA & Web Push**: `@ducanh2912/next-pwa` 10.2.9, `web-push` 3.6.7
 - **Exports & Documents**: `exceljs` 4.4.0, `jspdf` 4.1.0, `jspdf-autotable` 5.0.7
 - **Testing**: `vitest` 4.1.4, `@vitest/coverage-v8` 4.1.4
