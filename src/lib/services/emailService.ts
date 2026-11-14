@@ -6,7 +6,7 @@ const parsedPort = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 587;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
-const SMTP_FROM = process.env.SMTP_FROM || "WIG HRIS <noreply@wijayainovasi.co.id>";
+const SMTP_FROM = process.env.SMTP_FROM || "WITS <noreply@wijayainovasi.co.id>";
 
 const isSmtpConfigured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
@@ -55,7 +55,7 @@ export async function sendPasswordEmail(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aktivasi Akun HRIS - PT Wijaya Inovasi Gemilang</title>
+  <title>Aktivasi Akun WITS - Wijaya Integrated Talent System</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #18181b;">
   <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 16px;">
@@ -68,10 +68,10 @@ export async function sendPasswordEmail(
           <tr>
             <td style="padding: 32px 32px 24px; border-bottom: 1px solid #f4f4f5;">
               <div style="color: #71717a; font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;">
-                PT WIJAYA INOVASI GEMILANG
+                WITS &mdash; WIJAYA INTEGRATED TALENT SYSTEM
               </div>
               <h1 style="color: #09090b; font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.3px;">
-                Aktivasi Akun HRIS
+                Aktivasi Akun WITS
               </h1>
             </td>
           </tr>
@@ -84,7 +84,7 @@ export async function sendPasswordEmail(
                 Halo <strong>${safeName}</strong>,
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 24px;">
-                Akun HRIS dan Presensi Kehadiran Anda pada PT Wijaya Inovasi Gemilang telah aktif. Berikut adalah rincian informasi kredensial akun Anda:
+                Akun WITS (Wijaya Integrated Talent System) dan Presensi Kehadiran Anda telah aktif. Berikut adalah rincian informasi kredensial akun Anda:
               </p>
 
               <!-- Account Details Table -->
@@ -141,7 +141,7 @@ export async function sendPasswordEmail(
               <!-- Action Button -->
               <div style="text-align: center; margin-bottom: 28px;">
                 <a href="${safeAppUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
-                  Masuk ke Portal HRIS
+                  Masuk ke Portal WITS
                 </a>
                 <div style="margin-top: 10px; font-size: 11.5px; color: #71717a;">
                   Tautan akses: <a href="${safeAppUrl}" style="color: #0f172a; text-decoration: underline;">${safeAppUrl}</a>
@@ -173,10 +173,10 @@ export async function sendPasswordEmail(
           <tr>
             <td style="padding: 20px 32px; border-top: 1px solid #f4f4f5; text-align: center;">
               <p style="margin: 0 0 4px; font-size: 11px; color: #71717a; line-height: 1.5;">
-                Email ini dikirimkan secara otomatis oleh Sistem HRIS &amp; Presensi PT Wijaya Inovasi Gemilang.
+                Email ini dikirimkan secara otomatis oleh Sistem WITS - Wijaya Integrated Talent System.
               </p>
               <p style="margin: 0; font-size: 11px; color: #a1a1aa;">
-                &copy; 2026 PT Wijaya Inovasi Gemilang. Seluruh hak cipta dilindungi undang-undang.
+                &copy; 2026 WITS - Wijaya Integrated Talent System.
               </p>
             </td>
           </tr>
@@ -199,15 +199,14 @@ export async function sendPasswordEmail(
 
     try {
         const transporter = createTransporter()!;
-        const text = `PT WIJAYA INOVASI GEMILANG
-Sistem Informasi SDM & Layanan Mandiri Karyawan (HRIS)
+        const text = `WITS - Wijaya Integrated Talent System
 --------------------------------------------------
 
 INFORMASI KREDENSIAL AKUN LOGIN
 
 Halo ${name},
 
-Akun HRIS dan Presensi Kehadiran Anda pada PT Wijaya Inovasi Gemilang telah aktif. Berikut adalah rincian kredensial akun Anda:
+Akun WITS (Wijaya Integrated Talent System) dan Presensi Kehadiran Anda telah aktif. Berikut adalah rincian kredensial akun Anda:
 
 - Nama Lengkap       : ${name}
 ${employeeId ? `- NIP / ID Karyawan  : ${employeeId}\n` : ""}- Username Login     : ${username}
@@ -226,13 +225,13 @@ PANDUAN KEAMANAN & PENGGUNAAN:
 3. Jaga kerahasiaan akun dan jangan berikan kata sandi kepada siapa pun.
 
 --------------------------------------------------
-PT Wijaya Inovasi Gemilang
+WITS - Wijaya Integrated Talent System
 Email ini dikirimkan secara otomatis oleh sistem.`;
 
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
-            subject: "Informasi Kredensial Akun HRIS - PT Wijaya Inovasi Gemilang",
+            subject: "Informasi Kredensial Akun - WITS - Wijaya Integrated Talent System",
             text,
             html,
         });
@@ -275,7 +274,7 @@ export async function sendPasswordChangedEmail(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pemberitahuan Keamanan: Kata Sandi Berhasil Diperbarui - PT Wijaya Inovasi Gemilang</title>
+  <title>Pemberitahuan Keamanan: Kata Sandi Berhasil Diperbarui - WITS</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #18181b;">
   <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #f4f4f5; padding: 40px 16px;">
@@ -288,7 +287,7 @@ export async function sendPasswordChangedEmail(
           <tr>
             <td style="padding: 32px 32px 24px; border-bottom: 1px solid #f4f4f5;">
               <div style="color: #71717a; font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px;">
-                PT WIJAYA INOVASI GEMILANG
+                WITS &mdash; WIJAYA INTEGRATED TALENT SYSTEM
               </div>
               <h1 style="color: #09090b; font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.3px;">
                 Pemberitahuan Keamanan Akun
@@ -303,7 +302,7 @@ export async function sendPasswordChangedEmail(
                 Halo <strong>${safeName}</strong>,
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #52525b; margin: 0 0 20px;">
-                Kata sandi untuk akun HRIS &amp; Presensi Anda baru saja berhasil diperbarui pada <strong>${timeFormatted}</strong>.
+                Kata sandi untuk akun WITS Anda baru saja berhasil diperbarui pada <strong>${timeFormatted}</strong>.
               </p>
               
               <!-- Security Notice -->
@@ -316,7 +315,7 @@ export async function sendPasswordChangedEmail(
               <!-- Action Button -->
               <div style="text-align: center; margin-bottom: 28px;">
                 <a href="${safeAppUrl}" style="display: inline-block; background-color: #0f172a; color: #ffffff; font-size: 13.5px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
-                  Masuk ke Portal HRIS
+                  Masuk ke Portal WITS
                 </a>
                 <div style="margin-top: 10px; font-size: 11.5px; color: #71717a;">
                   Tautan akses: <a href="${safeAppUrl}" style="color: #0f172a; text-decoration: underline;">${safeAppUrl}</a>
@@ -339,10 +338,10 @@ export async function sendPasswordChangedEmail(
           <tr>
             <td style="padding: 20px 32px; border-top: 1px solid #f4f4f5; text-align: center;">
               <p style="margin: 0 0 4px; font-size: 11px; color: #71717a; line-height: 1.5;">
-                Email ini dikirimkan secara otomatis oleh Sistem HRIS &amp; Presensi PT Wijaya Inovasi Gemilang.
+                Email ini dikirimkan secara otomatis oleh Sistem WITS - Wijaya Integrated Talent System.
               </p>
               <p style="margin: 0; font-size: 11px; color: #a1a1aa;">
-                &copy; 2026 PT Wijaya Inovasi Gemilang. Seluruh hak cipta dilindungi undang-undang.
+                &copy; 2026 WITS - Wijaya Integrated Talent System.
               </p>
             </td>
           </tr>
@@ -366,13 +365,13 @@ export async function sendPasswordChangedEmail(
         const transporter = createTransporter();
         if (!transporter) return false;
 
-        const text = `PT WIJAYA INOVASI GEMILANG
-Pemberitahuan Keamanan Akun HRIS & Presensi
+        const text = `WITS - Wijaya Integrated Talent System
+Pemberitahuan Keamanan Akun WITS
 --------------------------------------------------
 
 Halo ${name},
 
-Kata sandi untuk akun HRIS & Presensi Anda baru saja berhasil diperbarui pada ${timeFormatted}.
+Kata sandi untuk akun WITS Anda baru saja berhasil diperbarui pada ${timeFormatted}.
 
 Anda akan logout terlebih dulu di seluruh perangkat yang sudah login secara otomatis untuk keamanan.
 
@@ -383,13 +382,13 @@ PEMBERITAHUAN PENTING:
 Jika Anda tidak merasa melakukan perubahan kata sandi ini, segera hubungi tim IT Support atau Administrator HR perusahaan untuk mengamankan akun Anda.
 
 --------------------------------------------------
-PT Wijaya Inovasi Gemilang
-Email ini dikirim secara otomatis oleh sistem.`;
+WITS - Wijaya Integrated Talent System
+Email ini dikirimkan secara otomatis oleh sistem.`;
 
         await transporter.sendMail({
             from: SMTP_FROM,
             to: email,
-            subject: "Pemberitahuan Keamanan: Kata Sandi Berhasil Diperbarui - PT Wijaya Inovasi Gemilang",
+            subject: "Pemberitahuan Keamanan: Kata Sandi Berhasil Diperbarui - WITS",
             text,
             html,
         });
@@ -480,7 +479,7 @@ export async function sendBirthdayReminderEmail(
     const title = milestoneTitle ? escapeHtml(milestoneTitle) : "Pengingat Persiapan Ulang Tahun Pegawai";
 
     const textContent = `PENGINGAT ULANG TAHUN PEGAWAI
-PT Wijaya Inovasi Gemilang - HRIS System
+WITS - Wijaya Integrated Talent System
 ==================================================
 
 Berikut adalah daftar pegawai yang memiliki jadwal ulang tahun mendatang:
@@ -491,9 +490,9 @@ ${items.map((rawItem) => `- ${escapeHtml(rawItem.name)} (${escapeHtml(rawItem.de
   Status: ${rawItem.statusName ? escapeHtml(rawItem.statusName) : "Belum Diproses"}`).join("\n\n")}
 
 ==================================================
-Catatan: Pembaruan status persiapan dan catatan dapat dilakukan melalui menu Ulang Tahun di Dashboard HRIS.
+Catatan: Pembaruan status persiapan dan catatan dapat dilakukan melalui menu Ulang Tahun di Dashboard WITS.
 Waktu Pengiriman: ${timestamp} WIB
-Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG.`;
+Email ini dikirimkan secara otomatis oleh Sistem WITS - Wijaya Integrated Talent System.`;
 
     const html = `<!DOCTYPE html>
 <html lang="id">
@@ -508,7 +507,7 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG.`;
     <div style="padding:28px 24px;">
       <div style="border-bottom:1px solid #f1f5f9;padding-bottom:16px;margin-bottom:20px;">
         <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:#64748b;text-transform:uppercase;margin-bottom:4px;">
-          PT Wijaya Inovasi Gemilang
+          WITS &mdash; Wijaya Integrated Talent System
         </div>
         <div style="font-size:18px;font-weight:700;color:#0f172a;">
           ${title}
@@ -538,12 +537,12 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG.`;
 
       <div style="background:#f8fafc;border-left:3px solid #800020;padding:12px 16px;border-radius:0 6px 6px 0;margin-bottom:24px;">
         <p style="margin:0;font-size:12px;line-height:1.5;color:#475569;">
-          <strong>Petunjuk HR:</strong> Untuk memperbarui status persiapan atau menambahkan catatan detail perayaan, silakan akses menu <strong>Ulang Tahun</strong> pada Dashboard HRIS.
+          <strong>Petunjuk HR:</strong> Untuk memperbarui status persiapan atau menambahkan catatan detail perayaan, silakan akses menu <strong>Ulang Tahun</strong> pada Dashboard WITS.
         </p>
       </div>
 
       <div style="border-top:1px solid #f1f5f9;padding-top:16px;font-size:11px;color:#94a3b8;line-height:1.5;">
-        <div>Email otomatis dari Sistem HRIS PT Wijaya Inovasi Gemilang.</div>
+        <div>Email otomatis dari Sistem WITS - Wijaya Integrated Talent System.</div>
         <div style="margin-top:2px;">Waktu pengiriman: ${timestamp} WIB</div>
       </div>
     </div>
@@ -560,7 +559,7 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG.`;
         await transporter.sendMail({
             from: SMTP_FROM,
             to: recipients.join(", "),
-            subject: `Pengingat Ulang Tahun Pegawai - WIG HRIS (${items.length} Pegawai)`,
+            subject: `Pengingat Ulang Tahun Pegawai - WITS (${items.length} Pegawai)`,
             text: textContent,
             html,
         });
@@ -927,7 +926,7 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         `Rekap Harian Inspeksi — ${input.dateLabel}\n` +
         `\nPeralatan: ${eqSummaryText}\n${eqActorsText}${eqLinesText}\n` +
         `\nKebersihan: ${clSummaryText}\n${clReviewerText}${clLinesText}\n` +
-        `\nEmail otomatis Sistem HRIS PT Wijaya Inovasi Gemilang.`;
+        `\nEmail otomatis sistem WITS - Wijaya Integrated Talent System.`;
     const clSummaryHtml =
         clActive.length === 0
             ? "<p>Tidak ada ruangan aktif (semua libur).</p>"
@@ -983,7 +982,7 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
     const html =
         `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"></head>` +
         `<body style="font-family:Arial,Helvetica,sans-serif;color:#333333;max-width:600px;margin:0 auto;padding:16px;">` +
-        `<p style="font-size:12px;color:#666666;">PT Wijaya Inovasi Gemilang — Sistem HRIS</p>` +
+        `<p style="font-size:12px;color:#666666;">WITS — Wijaya Integrated Talent System</p>` +
         `<h2 style="font-size:18px;color:#222222;">Rekap Harian Inspeksi — ${escapeHtml(input.dateLabel)}</h2>` +
         `<h3 style="font-size:15px;color:#222222;">Peralatan</h3>` +
         eqSummaryHtml +
@@ -993,7 +992,7 @@ export async function sendDailyRecapEmail(input: DailyRecapEmailInput): Promise<
         clSummaryHtml +
         clReviewerHtml +
         clLinesHtml +
-        `<p style="font-size:12px;color:#666666;">Email otomatis Sistem HRIS PT Wijaya Inovasi Gemilang. Balas ke alamat GA bila ada pertanyaan.</p>` +
+        `<p style="font-size:12px;color:#666666;">Email otomatis sistem WITS - Wijaya Integrated Talent System. Balas ke alamat GA bila ada pertanyaan.</p>` +
         `</body></html>`;
 
     try {
@@ -1071,7 +1070,7 @@ export async function sendTestBirthdayReminderEmail(
     });
 
     const textContent = `UJI COBA SISTEM EMAIL PENGINGAT ULANG TAHUN
-PT Wijaya Inovasi Gemilang - HRIS System
+WITS - Wijaya Integrated Talent System
 ==================================================
 
 Konfigurasi koneksi SMTP berhasil diverifikasi.
@@ -1085,7 +1084,7 @@ ${testItems.map((item) => `- ${item.name} (${item.department} - ${item.position}
 
 ==================================================
 Waktu Pengujian: ${timestamp} WIB
-Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG. Tidak memerlukan balasan.`;
+Email ini dikirimkan secara otomatis oleh Sistem WITS - Wijaya Integrated Talent System. Tidak memerlukan balasan.`;
 
     const html = `<!DOCTYPE html>
 <html lang="id">
@@ -1100,7 +1099,7 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG. Tidak memerlukan bala
     <div style="padding:28px 24px;">
       <div style="border-bottom:1px solid #f1f5f9;padding-bottom:16px;margin-bottom:20px;">
         <div style="font-size:11px;font-weight:600;letter-spacing:1px;color:#64748b;text-transform:uppercase;margin-bottom:4px;">
-          PT Wijaya Inovasi Gemilang
+          WITS &mdash; Wijaya Integrated Talent System
         </div>
         <div style="font-size:18px;font-weight:700;color:#0f172a;">
           Uji Coba Pengingat Ulang Tahun Pegawai
@@ -1153,7 +1152,7 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG. Tidak memerlukan bala
       </div>
 
       <div style="border-top:1px solid #f1f5f9;padding-top:16px;font-size:11px;color:#94a3b8;line-height:1.5;">
-        <div>Email uji coba dari Sistem HRIS PT Wijaya Inovasi Gemilang.</div>
+        <div>Email uji coba dari Sistem WITS - Wijaya Integrated Talent System.</div>
         <div style="margin-top:2px;">Waktu pengujian: ${timestamp} WIB</div>
       </div>
     </div>
@@ -1170,7 +1169,7 @@ Email ini dikirimkan secara otomatis oleh Sistem HRIS WIG. Tidak memerlukan bala
         await transporter.sendMail({
             from: SMTP_FROM,
             to: recipients.join(", "),
-            subject: "Uji Coba Pengingat Ulang Tahun - WIG HRIS",
+            subject: "Uji Coba Pengingat Ulang Tahun - WITS",
             text: textContent,
             html,
         });

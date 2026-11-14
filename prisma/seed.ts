@@ -164,7 +164,7 @@ export async function seedCleaningModule() {
 
 async function main() {
     console.log("=================================================================");
-    console.log("🚀 Menjalankan Reset & Master Seeding Lengkap Presensi & HRIS WIG");
+    console.log("🚀 Menjalankan Reset & Master Seeding Lengkap WITS - Wijaya Integrated Talent System");
     console.log("=================================================================");
     console.log("⚠️  SEED INI MENGHAPUS DATA (wipe). Hanya untuk database kosong/lokal.");
 

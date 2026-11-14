@@ -53,7 +53,7 @@ export const UPLOAD_LIMIT_META: Record<UploadLimitKey, { label: string; descript
         description: "Batas per foto bukti kunjungan (visitPhotoService).",
     },
     "upload.news.maxMb": {
-        label: "Media WIG News",
+        label: "Media WITS News",
         description: "Lampiran gambar / dokumen pada unggahan berita.",
     },
     "upload.document.maxMb": {

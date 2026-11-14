@@ -227,7 +227,7 @@ export function exportPayslipPdf(payslip: PayslipData) {
     // Footer
     doc.setFontSize(7);
     doc.setFont("helvetica", "italic");
-    doc.text("Dokumen ini dicetak secara otomatis oleh sistem WIG Attendance.", w / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" });
+    doc.text("Dokumen ini dicetak secara otomatis oleh sistem WITS - Wijaya Integrated Talent System.", w / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" });
 
     doc.save(`Slip_Gaji_${payslip.employeeId}_${payslip.period}.pdf`);
 }
@@ -359,7 +359,7 @@ export function exportBatchPayslipsPdf(payslips: PayslipData[], filename = "Slip
         doc.setFontSize(7);
         doc.setFont("helvetica", "italic");
         doc.text(
-            `Dokumen ini dicetak secara otomatis oleh sistem WIG HRIS. Lembar ${index + 1} dari ${payslips.length}`,
+            `Dokumen ini dicetak secara otomatis oleh sistem WITS - Wijaya Integrated Talent System. Lembar ${index + 1} dari ${payslips.length}`,
             w / 2,
             doc.internal.pageSize.getHeight() - 10,
             { align: "center" }

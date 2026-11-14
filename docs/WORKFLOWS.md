@@ -1,4 +1,4 @@
-# Workflows & Operational Commands — Presensi & HRIS WIG
+# Workflows & Operational Commands — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Development, build, test, and deployment procedures.  
 > **Source of Truth**: `package.json` scripts, dev environment, and testing tools.  

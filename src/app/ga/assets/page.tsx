@@ -134,7 +134,7 @@ export default function AssetsPage() {
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = `Data_Aset_WIG_${new Date().toISOString().split("T")[0]}.xlsx`;
+            link.download = `Data_Aset_WITS_${new Date().toISOString().split("T")[0]}.xlsx`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

@@ -118,8 +118,8 @@ export default function LoginPage() {
           <div className="flex items-center justify-center gap-4">
             <div className="w-16 h-16 relative">
               <Image
-                src="/assets/logo.png"
-                alt="WIG HRIS"
+                src="/assets/logo_wig.png"
+                alt="PT Wijaya Inovasi Gemilang"
                 fill
                 sizes="64px"
                 className="object-contain"
@@ -160,8 +160,8 @@ export default function LoginPage() {
             <div className="flex items-center justify-center gap-4 mb-4">
               <div className="w-16 h-16 relative">
                 <Image
-                  src="/assets/logo.png"
-                  alt="WIG HRIS"
+                  src="/assets/logo_wig.png"
+                  alt="PT Wijaya Inovasi Gemilang"
                   fill
                   sizes="64px"
                   className="object-contain"
@@ -179,8 +179,8 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">WIG HRIS</h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">PT Wijaya Inovasi Gemilang</p>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">WITS</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">Wijaya Integrated Talent System</p>
           </div>
 
           {/* Form */}

@@ -1,4 +1,4 @@
-# Presensi dan HRIS WIG
+# WITS (Wijaya Integrated Talent System)
 
 ## Stack
 

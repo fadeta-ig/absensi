@@ -1,4 +1,4 @@
-# AI Agent Rules & Operational Contract — Presensi & HRIS WIG
+# AI Agent Rules & Operational Contract — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Cara AI agent harus menggunakan Project Brain dan batasan operasional.  
 > **Source of Truth**: Panduan operasional repositori dan protokol Project Brain.  

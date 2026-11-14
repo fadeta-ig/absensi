@@ -1,4 +1,4 @@
-# Gotchas & Pitfalls — Presensi & HRIS WIG
+# Gotchas & Pitfalls — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Things that are easy to get wrong or surprising.  
 > **Source of Truth**: Verified technical gotchas, Edge runtime peculiarities, and historical migration artifacts.  

@@ -39,7 +39,7 @@ function rpConfig(): { rpID: string; rpName: string; expectedOrigin: string } {
     const derivedRpID = url.hostname === "127.0.0.1" ? "localhost" : url.hostname;
     const rpID = envRpID || derivedRpID;
     const expectedOrigin = envOrigin || `${url.protocol}//${url.host}`;
-    return { rpID, rpName: "WIG HRIS", expectedOrigin };
+    return { rpID, rpName: "WITS", expectedOrigin };
 }
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;

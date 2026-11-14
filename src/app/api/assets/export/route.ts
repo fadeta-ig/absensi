@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
         // Create workbook
         const workbook = new ExcelJS.Workbook();
-        workbook.creator = "WIG IT System";
+        workbook.creator = "WITS";
         workbook.created = new Date();
 
         const worksheet = workbook.addWorksheet("Data Aset", {
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         // 1. Add Title / Report Header
         worksheet.mergeCells("A1:K1");
         const titleCell = worksheet.getCell("A1");
-        titleCell.value = "LAPORAN DATA INVENTARIS ASET WIG";
+        titleCell.value = "LAPORAN DATA INVENTARIS ASET WITS";
         titleCell.font = { name: "Arial", size: 16, bold: true, color: { argb: "FFFFFFFF" } };
         titleCell.fill = {
             type: "pattern",
@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
 
         const response = new NextResponse(buffer);
         response.headers.set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.headers.set("Content-Disposition", `attachment; filename="Data_Aset_WIG_${new Date().toISOString().split("T")[0]}.xlsx"`);
+        response.headers.set("Content-Disposition", `attachment; filename="Data_Aset_WITS_${new Date().toISOString().split("T")[0]}.xlsx"`);
 
         return response;
 

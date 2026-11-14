@@ -1,4 +1,4 @@
-# Integrations & External Services — Presensi & HRIS WIG
+# Integrations & External Services — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: External and internal integrations.  
 > **Source of Truth**: Integration implementations (`nodemailer`, `web-push`, network validator, and cron endpoints).  
@@ -18,7 +18,7 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
   - `SMTP_PORT`: Port SMTP (default: `587` untuk TLS).
   - `SMTP_USER`: Nama pengguna otentikasi.
   - `SMTP_PASS`: Kata sandi / App Password.
-  - `SMTP_FROM`: Alamat pengirim (contoh: `"WIG Attendance <noreply@example.com>"`).
+  - `SMTP_FROM`: Alamat pengirim (contoh: `"WITS <noreply@example.com>"`).
 - **Failure Considerations**:
   - Jika variabel SMTP tidak dikonfigurasi, `emailService.ts` akan mencatat warning ke Winston dan gagal secara halus tanpa menyebabkan crash pada request HTTP utama.
 

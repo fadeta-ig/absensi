@@ -1,13 +1,13 @@
-# Project Overview — Presensi & HRIS WIG
+# Project Overview — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: What this project is and what it does.  
 > **Source of Truth**: Repository scope, `package.json`, and business capabilities.  
-> **Last Verified**: 2026-10-11  
+> **Last Verified**: 2026-11-14  
 
 ## 1. Project Purpose
 
 
-Project **Presensi & HRIS WIG** (`fadeta-ig/absensi`) adalah platform terintegrasi Human Resource Information System (HRIS), General Affairs (GA) Asset Management, dan Portal Layanan Mandiri Karyawan berbasis Progressive Web App (PWA) untuk lingkungan perusahaan PT Wahana Inti Ganda (WIG) dan grup MKI.
+Project **WITS (Wijaya Integrated Talent System)** (`fadeta-ig/absensi`) adalah platform terintegrasi Human Resource Information System (HRIS), General Affairs (GA) Asset Management, dan Portal Layanan Mandiri Karyawan berbasis Progressive Web App (PWA) untuk lingkungan perusahaan **PT Wijaya Inovasi Gemilang (WIG)** dan **PT Mahakarya Kosmetika Indonesia (MKI)**.
 
 Project ini dirancang untuk:
 - Mengotomatisasi dan memvalidasi presensi karyawan secara akurat dengan 3 faktor keamanan (jaringan Wi-Fi kantor, geofencing GPS, dan foto selfie).
@@ -63,7 +63,7 @@ Aplikasi melayani 4 kelompok peran utama:
 
 ## 4. Terminology
 
-- **WIG / MKI**: PT Wahana Inti Ganda / grup entitas bisnis yang menaungi sistem.
+- **WIG / MKI**: PT Wijaya Inovasi Gemilang / PT Mahakarya Kosmetika Indonesia — dua entitas perusahaan yang menaungi sistem.
 - **GA**: General Affairs (Urusan Umum / Logistik Aset).
 - **BAST**: Berita Acara Serah Terima (dokumen serah terima fisik aset ke karyawan).
 - **PTKP**: Penghasilan Tidak Kena Pajak (status perpajakan seperti TK/0, K/1, dsb.).

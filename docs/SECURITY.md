@@ -1,10 +1,10 @@
-# Security Architecture & Rules — Presensi & HRIS WIG
+# Security Architecture & Rules — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Security architecture and rules.  
 > **Source of Truth**: Authentication, authorization, PII encryption, and security middleware in `src/lib/`.  
 > **Last Verified**: 2026-10-11
 
-Dokumen ini mendokumentasikan mekanisme keamanan, autentikasi, otorisasi, penanganan rahasia (*secrets handling*), dan praktik yang dilarang pada sistem **Presensi & HRIS WIG**.
+Dokumen ini mendokumentasikan mekanisme keamanan, autentikasi, otorisasi, penanganan rahasia (*secrets handling*), dan praktik yang dilarang pada sistem **WITS (Wijaya Integrated Talent System)**.
 
 
 ---

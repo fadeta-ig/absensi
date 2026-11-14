@@ -225,9 +225,9 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                         (i.href !== "/employee/my-tasks/monitoring" || monitorVisible)
                 )
             }
-            brandTitle="WIG Portal"
+            brandTitle="WITS Portal"
             brandSubtitle="Employee"
-            mobileTitle="WIG"
+            mobileTitle="WITS"
             storageKey="employee-sidebar-collapsed"
             onLogout={handleLogout}
             logoutLoading={loggingOut}

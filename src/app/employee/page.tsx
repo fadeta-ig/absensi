@@ -251,7 +251,7 @@ export default function EmployeeHomePage() {
                             Buka Menu Presensi
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)] block mt-0.5 leading-tight">
-                            Akses seluruh menu & layanan HRIS
+                            Akses seluruh menu & layanan WITS
                         </span>
                     </div>
                 </div>

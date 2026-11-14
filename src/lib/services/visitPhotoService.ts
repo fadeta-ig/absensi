@@ -233,7 +233,7 @@ function createWatermarkSvg(input: {
         ? "jarak target tidak tersedia"
         : `${Math.round(input.distanceToTargetMeters)} m dari target`;
     const lines = [
-        `WIG • ${phaseLabel} • Foto ${input.sequence}/${input.totalPhotos} • ${evidenceId}`,
+        `WITS • ${phaseLabel} • Foto ${input.sequence}/${input.totalPhotos} • ${evidenceId}`,
         `${formatWIBTimestamp(input.officialTimestamp)} • Waktu server`,
         `${truncate(input.clientName, 48)} — ${truncate(detail, 72)}`,
         `${input.location.lat.toFixed(6)}, ${input.location.lng.toFixed(6)} • ${accuracy} • ${distance}`,

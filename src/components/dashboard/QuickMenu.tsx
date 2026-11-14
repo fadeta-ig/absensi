@@ -34,7 +34,7 @@ export default function QuickMenu({ employeeCount, todayAttendanceCount, pending
         { label: "Cuti", desc: "Kelola pengajuan", href: "/dashboard/leave", icon: CalendarOff, count: pendingLeaveCount },
         { label: "Jam Kerja", desc: "Atur shift", href: "/dashboard/shifts", icon: Clock },
         { label: "Laporan", desc: "Export data", href: "/dashboard/reports", icon: FileText },
-        { label: "WIG News", desc: "Pengumuman", href: "/dashboard/news", icon: Megaphone, count: newsCount },
+        { label: "WITS News", desc: "Pengumuman", href: "/dashboard/news", icon: Megaphone, count: newsCount },
     ];
 
     return (

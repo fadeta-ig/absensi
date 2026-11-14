@@ -1,4 +1,4 @@
-# Architectural Decisions — Presensi & HRIS WIG
+# Architectural Decisions — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Why important architectural decisions were made.  
 > **Source of Truth**: Architectural Decision Records verified via commit history and codebase.  

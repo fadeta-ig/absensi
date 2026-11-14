@@ -1,4 +1,4 @@
-# Data Model & Storage — Presensi & HRIS WIG
+# Data Model & Storage — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Persistent data and schema knowledge.  
 > **Source of Truth**: `prisma/schema.prisma` and live database tables.  

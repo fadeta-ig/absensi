@@ -98,7 +98,7 @@ export default function CleaningLayout({ children }: { children: React.ReactNode
         <AppShell
             user={user}
             navItems={CLEANING_NAV_ITEMS}
-            brandTitle="WIG Inspeksi"
+            brandTitle="WITS Inspeksi"
             brandSubtitle="Checklist Inspeksi"
             mobileTitle="Inspeksi"
             storageKey="cleaning-sidebar-collapsed"
