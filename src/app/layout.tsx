@@ -6,8 +6,8 @@ import ToastContainer from "@/components/Toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "WIG HRIS - PT Wijaya Inovasi Gemilang",
-  description: "Sistem HRIS & Presensi Karyawan PT Wijaya Inovasi Gemilang",
+  title: "WITS - Wijaya Integrated Talent System",
+  description: "WITS - Wijaya Integrated Talent System",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "WIG HRIS",
+    title: "WITS",
   },
 };
 

@@ -232,7 +232,7 @@ export default function ReportsPage() {
                         <FileDown className="w-5 h-5 text-[var(--primary)]" />
                         Export Laporan
                     </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">Download data HRIS dalam format Excel & PDF</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">Download data WITS dalam format Excel & PDF</p>
                 </div>
             </div>
 

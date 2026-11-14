@@ -440,7 +440,7 @@ function ScanPageInner({ id }: { id: string }) {
             {/* ── Compact Header ── */}
             <div className="bg-[var(--card)] border-b px-5 py-4 flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/assets/logo.png" alt="WIG HRIS" className="h-6 w-auto object-contain" />
+                <img src="/assets/wits.png" alt="WITS" className="h-6 w-auto object-contain rounded" />
                 <div className="h-4 w-px bg-slate-200" />
                 <span className="text-xs font-semibold text-[var(--text-secondary)]">Asset Management</span>
             </div>
@@ -551,7 +551,7 @@ function ScanPageInner({ id }: { id: string }) {
             {/* ── Footer ── */}
             <div className="bg-[var(--card)] border-t px-5 py-3 text-center">
                 <p className="text-[10px] text-[var(--text-muted)] font-medium">
-                    PT Wijaya Inovasi Gemilang · Asset Management System © 2026
+                    WITS - Wijaya Integrated Talent System · Asset Management System © 2026
                 </p>
             </div>
 

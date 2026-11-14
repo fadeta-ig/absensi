@@ -1,4 +1,4 @@
-# Coding Conventions — Presensi & HRIS WIG
+# Coding Conventions — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: How code is normally written.  
 > **Source of Truth**: Established patterns in `src/` and project styling.  

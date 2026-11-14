@@ -1,4 +1,4 @@
-# Codebase Map — Presensi & HRIS WIG
+# Codebase Map — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Peta repository dan lokasi implementation penting.  
 > **Source of Truth**: Struktur file dan direktori aktual repository.  

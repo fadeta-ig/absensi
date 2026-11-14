@@ -7,7 +7,7 @@ type CategoryInfo = { prefix: string; name: string };
 export async function generateBulkImportTemplate(categories: CategoryInfo[]) {
     const ExcelJS = (await import("exceljs")).default;
     const wb = new ExcelJS.Workbook();
-    wb.creator = "WIG IT System";
+    wb.creator = "WITS";
     
     // ─── Sheet 1: DATA IMPORT ───────────────────────────────────────────
     const ws = wb.addWorksheet("📋 Data Import", {
@@ -134,7 +134,7 @@ export async function generateBulkImportTemplate(categories: CategoryInfo[]) {
         }
     };
 
-    addGuideRow(["🗂️ PANDUAN PENGGUNAAN TEMPLATE IMPORT ASET — WIG HRIS", "", "", ""], "title");
+    addGuideRow(["🗂️ PANDUAN PENGGUNAAN TEMPLATE IMPORT ASET — WITS", "", "", ""], "title");
     addGuideRow(["", "", "", ""], "empty");
     addGuideRow(["ATURAN PENGISIAN", "", "", ""], "section");
     addGuideRow(["Kolom Wajib", "Prefix Kategori, Nama Aset, Kondisi", "", ""], "labelValue");
@@ -158,7 +158,7 @@ export async function generateBulkImportTemplate(categories: CategoryInfo[]) {
     addGuideRow(["TANDA BINTANG (*)", "", "", ""], "section");
     addGuideRow(["Kolom header yang mengandung tanda (*)", "WAJIB diisi. Jangan biarkan kosong!", "", ""], "labelValue");
     addGuideRow(["", "", "", ""], "empty");
-    addGuideRow(["© WIG HRIS — General Affairs Portal", "", "", ""], "normal");
+    addGuideRow(["© WITS — General Affairs Portal", "", "", ""], "normal");
 
     // ─── Write to buffer & trigger download ────────────────────────────
     const buffer = await wb.xlsx.writeBuffer();
@@ -166,7 +166,7 @@ export async function generateBulkImportTemplate(categories: CategoryInfo[]) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Template_Import_Aset_WIG_${new Date().toISOString().split("T")[0]}.xlsx`;
+    link.download = `Template_Import_Aset_WITS_${new Date().toISOString().split("T")[0]}.xlsx`;
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();

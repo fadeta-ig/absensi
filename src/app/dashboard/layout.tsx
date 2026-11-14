@@ -58,7 +58,7 @@ const navItems: NavItem[] = [
     },
     { href: "/dashboard/reports", icon: FileDown, label: "Laporan" },
     { href: "/dashboard/audit", icon: ShieldAlert, label: "Audit Trail" },
-    { href: "/dashboard/news", icon: Megaphone, label: "WIG News" },
+    { href: "/dashboard/news", icon: Megaphone, label: "WITS News" },
     { href: "/dashboard/letter-requests", icon: FileText, label: "Surat Karyawan" },
 ];
 
@@ -179,9 +179,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AppShell
             user={user}
             navItems={dynamicNavItems}
-            brandTitle="WIG HR"
+            brandTitle="WITS HR"
             brandSubtitle="Admin Panel"
-            mobileTitle="WIG HR"
+            mobileTitle="WITS HR"
             storageKey="sidebar-collapsed"
             onLogout={handleLogout}
             logoutLoading={loggingOut}

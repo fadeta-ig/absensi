@@ -1,4 +1,4 @@
-# End-to-End System Flows — Presensi & HRIS WIG
+# End-to-End System Flows — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Alur sistem end-to-end utama (Data & Request Flows).  
 > **Source of Truth**: Alur navigasi UI, route handler API, dan service bisnis terpadu.  

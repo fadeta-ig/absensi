@@ -40,7 +40,7 @@ const limitsPayload = {
         },
         {
             key: "upload.news.maxMb",
-            label: "Media WIG News",
+            label: "Media WITS News",
             description: "Lampiran gambar / dokumen pada unggahan berita.",
             valueMb: 10,
             source: "default",
@@ -89,7 +89,7 @@ describe("UploadSettingsPage", () => {
 
         expect(await screen.findByRole("heading", { name: "Batas Ukuran Unggahan" })).toBeInTheDocument();
         expect(screen.getByText("Foto selfie presensi")).toBeInTheDocument();
-        expect(screen.getByText("Media WIG News")).toBeInTheDocument();
+        expect(screen.getByText("Media WITS News")).toBeInTheDocument();
         expect(screen.getAllByText("Bawaan").length).toBeGreaterThan(0);
     });
 

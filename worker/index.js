@@ -12,7 +12,7 @@ function toAbsoluteUrl(path) {
 self.addEventListener("push", function (event) {
     if (!event.data) return;
 
-    let title = "WIG HRIS";
+    let title = "WITS";
     let options;
     try {
         const data = event.data.json();
@@ -40,7 +40,7 @@ self.addEventListener("push", function (event) {
             console.error("[SW] Push parse error:", err);
             return;
         }
-        title = "WIG HRIS";
+        title = "WITS";
         options = {
             body: text,
             icon: "/icons/android-chrome-192x192.png",

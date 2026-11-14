@@ -104,7 +104,7 @@ describe("logger & serializeError", () => {
         expect(parsedInfo).toMatchObject({
             level: "info",
             message: "Cron job finished",
-            service: "presensi-hris",
+            service: "wits",
             job: "daily-recap",
             count: 3,
         });
@@ -113,7 +113,7 @@ describe("logger & serializeError", () => {
         expect(parsedError).toMatchObject({
             level: "error",
             message: "Task notification failed",
-            service: "presensi-hris",
+            service: "wits",
             context: "MeetingTask",
             err: {
                 name: "Error",
@@ -160,7 +160,7 @@ describe("logger & serializeError", () => {
         expect(parsed).toMatchObject({
             level: "error",
             message: "[TestEndpointGET] Server error",
-            service: "presensi-hris",
+            service: "wits",
             employeeId: "EMP001",
             error: {
                 name: "Error",
@@ -254,7 +254,7 @@ describe("logger & serializeError", () => {
         expect(cronWarnJson).toMatchObject({
             level: "warn",
             message: "Unauthorized daily-recap cron attempt",
-            service: "presensi-hris",
+            service: "wits",
         });
         expect(fs.existsSync(path.resolve(process.cwd(), "logs"))).toBe(false);
     });

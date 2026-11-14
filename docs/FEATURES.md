@@ -1,10 +1,10 @@
-# System Features & Capabilities — Presensi & HRIS WIG
+# System Features & Capabilities — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Pengetahuan kapabilitas, modul fitur, dan batasan fungsional sistem.  
 > **Source of Truth**: Implementasi fitur di layer UI (`src/app/`) dan service bisnis (`src/lib/services/`).  
 > **Last Verified**: 2026-10-11
 
-Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **Presensi & HRIS WIG** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
+Dokumen ini menjelaskan kapabilitas fungsional yang disediakan oleh platform **WITS (Wijaya Integrated Talent System)** untuk berbagai aktor pengguna (Super Admin, HR, GA, dan Karyawan).
 
 ---
 

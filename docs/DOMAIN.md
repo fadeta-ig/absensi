@@ -1,10 +1,10 @@
-# Domain Model & Business Rules — Presensi & HRIS WIG
+# Domain Model & Business Rules — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Business/domain knowledge.  
 > **Source of Truth**: Business services logic, calculations, and domain workflows.  
 > **Last Verified**: 2026-10-11
 
-Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan relasi utama dalam ekosistem **Presensi & HRIS WIG**.
+Dokumen ini memetakan konsep domain, terminologi bisnis, aturan operasional, dan relasi utama dalam ekosistem **WITS (Wijaya Integrated Talent System)**.
 
 
 ---

@@ -87,7 +87,7 @@ const logger = winston.createLogger({
         normalizeErrorMetadata(),
         winston.format.json()
     ),
-    defaultMeta: { service: "presensi-hris" },
+    defaultMeta: { service: "wits" },
     transports: [
         new winston.transports.Console({
             stderrLevels: ["error"],

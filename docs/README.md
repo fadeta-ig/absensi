@@ -1,4 +1,4 @@
-# Project Brain Entry Point — Presensi & HRIS WIG
+# Project Brain Entry Point — WITS (Wijaya Integrated Talent System)
 
 > **Purpose**: Entry point dan navigation map untuk AI coding agents.  
 > **Source of Truth**: Struktur repository dan spesifikasi Project Brain.  

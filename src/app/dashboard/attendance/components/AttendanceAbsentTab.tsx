@@ -144,7 +144,7 @@ export function AttendanceAbsentTab({
             clean = "62" + clean.slice(1);
         }
         const text = encodeURIComponent(
-            `Halo Rekan ${name}, kami menginformasikan Anda belum melakukan presensi hari ini (${targetDate}). Mohon segera melakukan presensi melalui portal HRIS atau konfirmasi kepada HR jika berhalangan. Terima kasih.`
+            `Halo Rekan ${name}, kami menginformasikan Anda belum melakukan presensi hari ini (${targetDate}). Mohon segera melakukan presensi melalui portal WITS atau konfirmasi kepada HR jika berhalangan. Terima kasih.`
         );
         return `https://wa.me/${clean}?text=${text}`;
     };

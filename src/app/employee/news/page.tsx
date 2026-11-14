@@ -152,7 +152,7 @@ function NewsPageContent() {
             <div>
                 <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Newspaper className="w-5 h-5 text-[var(--primary)]" />
-                    WIG News
+                    WITS News
                 </h1>
                 <p className="text-sm text-[var(--text-muted)] mt-1">Informasi dan pengumuman perusahaan</p>
             </div>
