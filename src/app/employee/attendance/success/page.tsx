@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Clock, CalendarCheck } from "lucide-react";
+import StateCard from "@/components/ui/StateCard";
 
 function SuccessContent() {
     const searchParams = useSearchParams();
@@ -13,13 +14,13 @@ function SuccessContent() {
     const isClockOut = action === "CLOCK_OUT";
 
     return (
-        <div className="space-y-4 animate-[fadeIn_0.3s_ease]">
-            <div className="card p-8 text-center">
-                <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-3" />
-                <h1 className="text-lg font-bold text-[var(--text-primary)]">
+        <div className="space-y-5 animate-[fadeIn_0.3s_ease]">
+            <div className="emp-surface p-6 text-center">
+                <CheckCircle2 className="w-14 h-14 text-[var(--success)] mx-auto mb-3" />
+                <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)]">
                     {isClockOut ? "Clock Out Berhasil!" : "Clock In Berhasil!"}
                 </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">
+                <p className="text-xs text-[var(--text-muted)] mt-1">
                     {isClockOut ? "Terima kasih, istirahatlah dengan baik." : "Selamat bekerja, semoga harimu produktif."}
                 </p>
                 {shiftDate && (
@@ -50,7 +51,7 @@ export default function AttendanceSuccessPage() {
     return (
         <Suspense
             fallback={
-                <div className="card p-8 text-center text-sm text-[var(--text-muted)]">Memuat status presensi...</div>
+                <StateCard variant="loading" title="Memuat status presensi" />
             }
         >
             <SuccessContent />

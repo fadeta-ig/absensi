@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { AlertCircle, NotebookPen, Plus, Trash2, CheckCircle, Circle, Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
 
 interface TodoItem {
     id: string;
@@ -103,17 +106,15 @@ export default function TodosPage() {
     const progress = todos.length > 0 ? (completedCount / todos.length) * 100 : 0;
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <NotebookPen className="w-5 h-5 text-[var(--primary)]" />
-                    Catatan & To-Do
-                </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Kelola tugas harian Anda</p>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader
+                title="Catatan & To-Do"
+                subtitle="Kelola tugas harian Anda"
+                icon={NotebookPen}
+            />
 
             {loadError && (
-                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
+                <div className="flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] p-3 text-sm text-[var(--destructive-text)]">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{loadError}</span>
                 </div>
@@ -121,7 +122,7 @@ export default function TodosPage() {
 
             {/* Progress */}
             {todos.length > 0 && (
-                <div className="card p-4">
+                <div className="emp-surface p-4">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs text-[var(--text-secondary)]">{completedCount} dari {todos.length} selesai</span>
                         <span className="text-sm font-bold text-[var(--primary)]">{Math.round(progress)}%</span>
@@ -150,20 +151,17 @@ export default function TodosPage() {
             {/* List */}
             <div className="space-y-2">
                 {initialLoading ? (
-                    <div className="card p-8 text-center text-[var(--text-muted)]">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[var(--primary)] opacity-50" />
-                        <p className="text-sm font-medium">Memuat catatan...</p>
-                    </div>
+                    <ListSkeleton label="Memuat catatan" />
                 ) : todos.length === 0 ? (
-                    <div className="card p-8 text-center">
-                        <NotebookPen className="w-10 h-10 text-[var(--text-muted)] opacity-30 mx-auto mb-2" />
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada catatan</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-1">Tambahkan tugas harian Anda di atas</p>
-                    </div>
+                    <EmptyState
+                        icon={NotebookPen}
+                        title="Belum ada catatan"
+                        description="Tambahkan tugas harian Anda di atas"
+                    />
                 ) : (
                     todos.map((todo) => (
-                        <div key={todo.id} className={`card px-4 py-3 flex items-center gap-3 group transition-opacity ${todo.completed ? "opacity-60" : ""}`}>
-                            <button onClick={() => toggleTodo(todo.id, todo.completed)} disabled={busyId === todo.id} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors disabled:opacity-50">
+                        <div key={todo.id} className={`emp-surface px-4 py-3 flex items-center gap-3 group transition-opacity ${todo.completed ? "opacity-60" : ""}`}>
+                            <button onClick={() => toggleTodo(todo.id, todo.completed)} disabled={busyId === todo.id} aria-pressed={todo.completed} aria-label={todo.completed ? `Tandai "${todo.text}" belum selesai` : `Tandai "${todo.text}" selesai`} className="shrink-0 min-w-11 min-h-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--primary)] transition-colors disabled:opacity-50">
                                 {busyId === todo.id ? <Loader2 className="w-5 h-5 animate-spin text-[var(--primary)]" /> : todo.completed ? <CheckCircle className="w-5 h-5 text-[var(--primary)]" /> : <Circle className="w-5 h-5" />}
                             </button>
                             <div className="flex-1 min-w-0">
@@ -172,7 +170,7 @@ export default function TodosPage() {
                                     {new Date(todo.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
                                 </p>
                             </div>
-                            <button onClick={() => deleteTodo(todo.id)} disabled={busyId === todo.id} className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-red-500 transition-all disabled:opacity-50">
+                            <button onClick={() => deleteTodo(todo.id)} disabled={busyId === todo.id} aria-label={`Hapus "${todo.text}"`} className="shrink-0 min-w-11 min-h-11 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--destructive-text)] transition-colors disabled:opacity-50">
                                 {busyId === todo.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                             </button>
                         </div>

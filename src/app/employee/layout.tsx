@@ -78,10 +78,10 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
                             
                             {/* Icon with 3D lift on active/hover */}
                             <div className="relative z-10 transition-transform duration-300 ease-out group-hover:-translate-y-1">
-                                <Icon className={`w-5 h-5 transition-colors duration-300 ${isActive ? "text-primary drop-shadow-sm" : "text-gray-500 dark:text-gray-400 group-hover:text-primary/70"}`} />
+                                <Icon className={`w-5 h-5 transition-colors duration-300 ${isActive ? "text-[var(--primary)] drop-shadow-sm" : "text-[var(--text-muted)] group-hover:text-[color-mix(in_srgb,var(--primary)_70%,transparent)]"}`} />
                             </div>
                             
-                            <span className={`text-[10px] font-semibold relative z-10 transition-colors duration-300 ${isActive ? "text-primary" : "text-gray-500 dark:text-gray-400"}`}>
+                            <span className={`text-[10px] font-semibold relative z-10 transition-colors duration-300 ${isActive ? "text-[var(--primary)]" : "text-[var(--text-muted)]"}`}>
                                 {item.label}
                             </span>
                         </button>

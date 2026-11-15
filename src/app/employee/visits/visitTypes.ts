@@ -1,4 +1,11 @@
 import { VisitPhotoCategory, VisitStatus } from "@/types";
+import type { StatusTone } from "@/components/ui/StatusBadge";
+
+export const VISIT_STATUS_TONE: Record<VisitStatus, StatusTone> = {
+    draft: "neutral",
+    clocked_in: "progress",
+    clocked_out: "warning",
+};
 
 export const VISIT_STATUS_CONFIG: Record<VisitStatus, { label: string; class: string; color: string }> = {
     draft: {

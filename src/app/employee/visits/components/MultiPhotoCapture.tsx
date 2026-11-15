@@ -474,8 +474,8 @@ export function MultiPhotoCapture({
                 <span
                     className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                         isFulfilled
-                            ? "bg-green-50 text-green-700 border border-green-200"
-                            : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                            ? "bg-[var(--success-bg)] text-[var(--success)] border border-[var(--success-border)]"
+                            : "bg-[var(--warning-bg)] text-[var(--warning)] border border-[var(--warning-border)]"
                     }`}
                 >
                     <span>{photos.length}/{minPhotos} foto</span>
@@ -494,13 +494,13 @@ export function MultiPhotoCapture({
                                     <button
                                         type="button"
                                         onClick={() => removePhoto(i)}
-                                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md"
+                                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-[var(--destructive)] text-white flex items-center justify-center shadow-md"
                                         aria-label={`Hapus foto ${i + 1}`}
                                     >
                                         <X className="w-3.5 h-3.5" />
                                     </button>
                                 )}
-                                <span className="absolute bottom-1 left-1 text-[9px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded">
+                                <span className="absolute bottom-1 left-1 text-[10px] font-bold bg-black/60 text-white px-1.5 py-0.5 rounded">
                                     {i + 1}
                                 </span>
                             </div>
@@ -588,14 +588,14 @@ export function MultiPhotoCapture({
             )}
 
             {toast && (
-                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-700" role="status">
+                <div className="flex items-start gap-2 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-2.5 text-xs text-[var(--warning)]" role="status">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <span>{toast}</span>
                 </div>
             )}
 
             {cameraError && (
-                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-2.5 text-xs text-[var(--destructive)]">
+                <div className="flex items-start gap-2 rounded-lg border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] p-2.5 text-xs text-[var(--destructive-text)]">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <span>{cameraError}</span>
                 </div>

@@ -19,10 +19,12 @@
   --muted-foreground: #71717A;
   --accent: #FFF1F3;
   --accent-foreground: #800020;
-  --destructive: #dc2626;
+  --destructive: #B91C1C;
   --destructive-foreground: #FFFFFF;
   --destructive-bg: #FEE2E2;
   --destructive-border: #FECACA;
+  /* Teks di atas --destructive-bg; dipisah agar solid fill tetap gelap */
+  --destructive-text: #B91C1C;
   --success: #047857;
   --success-bg: #D1FAE5;
   --success-border: #A7F3D0;
@@ -79,6 +81,8 @@
   --destructive-foreground: #FFFFFF;
   --destructive-bg: rgba(239, 68, 68, 0.14);
   --destructive-border: rgba(239, 68, 68, 0.28);
+  /* Teks di atas --destructive-bg; dipisah agar solid fill tetap gelap */
+  --destructive-text: #F87171;
   --success: #34D399;
   --success-bg: rgba(52, 211, 153, 0.14);
   --success-border: rgba(52, 211, 153, 0.28);
@@ -185,6 +189,37 @@ select:focus-visible,
 
   .card:hover {
     box-shadow: var(--shadow-md);
+  }
+
+  /* ===== Employee portal surface (reference: /employee home) ===== */
+  .emp-surface {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+  }
+
+  .emp-surface-hover {
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+  }
+
+  .emp-surface-hover:hover {
+    border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+
+  .emp-row-hover {
+    transition: background-color 0.2s ease;
+  }
+
+  .emp-row-hover:hover {
+    background-color: color-mix(in srgb, var(--secondary) 60%, transparent);
+  }
+
+  .emp-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
   }
 
   /* Buttons */

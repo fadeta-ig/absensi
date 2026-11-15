@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowUpDown, CheckCircle2, ChevronRight, Circle, Eye, Loader2, RefreshCw, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { ArrowUpDown, ChevronRight, Eye, Loader2, RefreshCw, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import EmptyState from "@/components/ui/EmptyState";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
@@ -773,7 +776,7 @@ export default function EmployeeEquipmentPage() {
 
     if (loading) {
         return (
-            <div className="mx-auto px-4 py-6" role="status" aria-live="polite" aria-label="Memuat daftar alat">
+            <div className="mx-auto space-y-5" role="status" aria-live="polite" aria-label="Memuat daftar alat">
                 <Skeleton className="h-7 w-48 mb-2" />
                 <Skeleton className="h-4 w-72 mb-6" />
                 <Skeleton className="h-12 mb-3" />
@@ -783,7 +786,7 @@ export default function EmployeeEquipmentPage() {
                     <Skeleton className="h-9 w-24" />
                 </div>
                 {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="bg-card border border-border rounded-lg p-4 mb-3">
+                    <div key={i} className="emp-surface p-4 mb-3">
                         <Skeleton className="h-5 w-3/4 mb-2" />
                         <Skeleton className="h-4 w-1/2 mb-1" />
                         <Skeleton className="h-3 w-2/3" />
@@ -795,15 +798,15 @@ export default function EmployeeEquipmentPage() {
 
     if (isTopOnly) {
         return (
-            <div className="mx-auto px-4 py-6">
-                <div className="bg-card border border-border rounded-lg p-6 text-center">
-                    <p className="text-foreground font-medium">Halaman ini untuk pelaksana pemeriksaan.</p>
-                    <p className="text-sm text-muted-foreground mt-1">
+            <div className="mx-auto space-y-5">
+                <div className="emp-surface p-6 text-center">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">Halaman ini untuk pelaksana pemeriksaan.</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
                         Peran Anda sebagai atasan. Silakan pantau hasil pemeriksaan melalui tombol di bawah.
                     </p>
                     <Link
                         href="/employee/equipment/overview"
-                        className="inline-block mt-4 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                        className="btn btn-primary mt-4"
                     >
                         Buka Pantau Inspeksi Alat
                     </Link>
@@ -819,17 +822,17 @@ export default function EmployeeEquipmentPage() {
         const canSubmit = !!inspection && inspection.status === "OPEN" && inspection.progress.allDecided && inspection.progress.photoOk;
 
         return (
-            <div className="mx-auto px-4 py-6">
+            <div className="mx-auto space-y-5">
                 <button
                     onClick={backToUnits}
                     disabled={detailLoading || starting || submitting}
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2 disabled:opacity-50"
+                    className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] mb-4 inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2 disabled:opacity-50"
                 >
                     ← Kembali ke daftar alat
                 </button>
 
-                <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                    <h1 className="text-xl font-semibold text-foreground">
+                <div className="emp-surface p-4 mb-4">
+                    <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)]">
                         {selectedUnit.unit.name}{" "}
                         <EquipmentCompanyBadge
                             company={selectedUnit.unit.company}
@@ -837,30 +840,25 @@ export default function EmployeeEquipmentPage() {
                             companies={selectedUnit.unit.companies}
                         />
                     </h1>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-xs font-medium text-[var(--text-secondary)] mt-1">
                         {selectedUnit.unit.template.name}
                         {[selectedUnit.unit.brand, selectedUnit.unit.location].filter(Boolean).length > 0 &&
                             ` · ${[selectedUnit.unit.brand, selectedUnit.unit.location].filter(Boolean).join(" · ")}`}
                     </p>
                     {inspection && (
-                        <span
-                            className={`mt-2 inline-flex items-center gap-1 text-sm font-medium px-2 py-0.5 rounded-full ${
-                                inspection.status === "OPEN"
-                                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                    : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                            }`}
-                        >
-                            {inspection.status === "OPEN" ? <Circle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                            {inspection.status === "OPEN" ? "Berjalan" : equipmentStatusLabel(inspection.status)}
-                        </span>
+                        <div className="mt-2">
+                            <StatusBadge tone={inspection.status === "OPEN" ? "progress" : "success"}>
+                                {inspection.status === "OPEN" ? "Berjalan" : equipmentStatusLabel(inspection.status)}
+                            </StatusBadge>
+                        </div>
                     )}
                     {readOnly && inspection && (
-                        <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
+                        <p className="text-xs font-medium text-[var(--text-muted)] bg-[var(--muted)] rounded-lg px-2 py-1.5">
                             Tampilan baca. Data tidak dapat diubah di sini.
                         </p>
                     )}
                     {noExecute && !inspection && (
-                        <p className="mt-2 text-xs font-medium text-muted-foreground bg-muted rounded-md px-2 py-1.5">
+                        <p className="text-xs font-medium text-[var(--text-muted)] bg-[var(--muted)] rounded-lg px-2 py-1.5">
                             Lihat saja. Alat ini tidak ditugaskan kepada Anda. Anda hanya dapat melihat riwayatnya.
                         </p>
                     )}
@@ -868,7 +866,7 @@ export default function EmployeeEquipmentPage() {
                         <button
                             type="button"
                             onClick={() => setReadOnly(false)}
-                            className="mt-2 px-4 min-h-[44px] inline-flex items-center text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                            className="btn btn-primary btn-sm mt-2"
                         >
                             Lanjutkan mengerjakan
                         </button>
@@ -877,35 +875,39 @@ export default function EmployeeEquipmentPage() {
 
                 {(detailLoading || starting) && (
                     <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <Loader2 className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
                     </div>
                 )}
 
                 {!detailLoading && !starting && startError && !inspection && (
-                    <div className="text-center py-8 bg-card border border-border rounded-lg">
-                        <p className="text-sm text-destructive mb-4">{startError}</p>
-                        <button
-                            onClick={() => void startInspection(selectedUnit.unit.id)}
-                            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
-                        >
-                            Coba lagi
-                        </button>
-                    </div>
+                    <StateCard
+                        variant="error"
+                        title="Gagal memulai pemeriksaan"
+                        description={startError}
+                        action={
+                            <button
+                                onClick={() => void startInspection(selectedUnit.unit.id)}
+                                className="btn btn-primary btn-sm"
+                            >
+                                Coba lagi
+                            </button>
+                        }
+                    />
                 )}
 
                 {!detailLoading && !starting && !inspection && unitChoice && (
-                    <div className="bg-card border border-border rounded-lg p-4">
-                        <p className="text-sm text-foreground font-medium">
+                    <div className="emp-surface p-4">
+                        <p className="text-sm text-[var(--text-primary)] font-medium">
                             Tidak ada pemeriksaan yang sedang berjalan untuk alat ini.
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1 mb-3">
+                        <p className="text-xs text-[var(--text-muted)] mt-1 mb-3">
                             Melihat riwayat tidak akan membuat pemeriksaan baru. Pemeriksaan baru hanya dibuat setelah Anda menekan tombol mulai.
                         </p>
                         <div className="flex flex-col gap-2">
                             <button
                                 type="button"
                                 onClick={() => void fetchUnitHistory(unitChoice.unit.id)}
-                                className="w-full px-4 min-h-[48px] inline-flex items-center justify-center gap-2 text-sm font-semibold border border-border rounded-md hover:bg-accent"
+                                className="btn btn-secondary w-full min-h-12"
                             >
                                 <Eye aria-hidden="true" className="h-4 w-4" /> Lihat riwayat unit ini
                             </button>
@@ -916,7 +918,7 @@ export default function EmployeeEquipmentPage() {
                                     setUnitChoice(null);
                                     void startInspection(unitChoice.unit.id);
                                 }}
-                                className="w-full px-4 min-h-[48px] inline-flex items-center justify-center gap-2 text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                                className="btn btn-primary w-full min-h-12"
                             >
                                 Mulai pemeriksaan baru
                             </button>
@@ -925,7 +927,7 @@ export default function EmployeeEquipmentPage() {
 
                         {unitHistoryLoading && (
                             <div className="flex items-center justify-center py-6">
-                                <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-muted-foreground" />
+                                <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
                             </div>
                         )}
 
@@ -936,20 +938,20 @@ export default function EmployeeEquipmentPage() {
                                         key={row.id}
                                         type="button"
                                         onClick={() => void openHistoryDetail(row)}
-                                        className="w-full flex items-start gap-2.5 p-3 bg-background border border-border rounded-lg hover:bg-accent/50 text-left"
+                                        className="w-full flex items-start gap-2.5 p-3 bg-[var(--background)] border border-[var(--border)] rounded-lg hover:bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] text-left"
                                     >
                                         <EquipmentStatusDot status={row.status} />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block text-sm font-medium text-foreground truncate">
+                                            <span className="block text-sm font-medium text-[var(--text-primary)] truncate">
                                                 {stripGelar(row.startedBy.name)} · {equipmentStatusLabel(row.status)}
                                             </span>
-                                            <span className="block text-xs text-muted-foreground truncate">
+                                            <span className="block text-xs text-[var(--text-muted)] truncate">
                                                 Mulai {formatDateTime(row.createdAt)}
                                                 {row.checkedByNameSnapshot ? ` · QC: ${stripGelar(row.checkedByNameSnapshot)}` : ""}
                                                 {row.approvedByNameSnapshot ? ` · Approval: ${stripGelar(row.approvedByNameSnapshot)}` : ""}
                                             </span>
                                         </span>
-                                        <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                                        <ChevronRight aria-hidden="true" className="h-5 w-5 text-[var(--text-muted)] shrink-0 mt-0.5" />
                                     </button>
                                 ))}
                             </div>
@@ -970,7 +972,7 @@ export default function EmployeeEquipmentPage() {
                                     Penilaian {inspection.progress.decided}/{inspection.progress.total} · Foto {fotoCount}/5
                                     {needsPhoto && fotoCount === 0 ? " (minimal 1)" : ""}
                                 </span>
-                                <span className="block mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden" aria-hidden="true">
+                                <span className="block mt-1.5 h-1.5 rounded-full bg-[var(--muted)] overflow-hidden" aria-hidden="true">
                                     <span
                                         className="block h-full rounded-full bg-primary transition-all"
                                         style={{ width: `${inspection.progress.total === 0 ? 0 : Math.round((inspection.progress.decided / inspection.progress.total) * 100)}%` }}
@@ -986,13 +988,13 @@ export default function EmployeeEquipmentPage() {
                                 key={item.id}
                                 className={`rounded-lg border-2 p-3 transition-colors ${
                                     item.isPass === true
-                                        ? "bg-green-50 border-green-300 dark:bg-green-900/10 dark:border-green-700"
+                                        ? "bg-[var(--success-bg)] border-[var(--success-border)]"
                                         : item.isPass === false
-                                          ? "bg-red-50 border-red-300 dark:bg-red-900/10 dark:border-red-700"
-                                          : "bg-card border-border"
+                                          ? "bg-[var(--destructive-bg)] border-[var(--destructive-border)]"
+                                          : "bg-[var(--card)] border-[var(--border)]"
                                 } ${updatingItem === item.id ? "opacity-60" : ""}`}
                             >
-                                <p className="text-sm font-medium text-foreground">
+                                <p className="text-sm font-medium text-[var(--text-primary)]">
                                     {item.isPass === true ? "Baik ✓ " : item.isPass === false ? "Rusak " : ""}
                                     {item.itemNameSnapshot}
                                 </p>
@@ -1002,10 +1004,10 @@ export default function EmployeeEquipmentPage() {
                                         onClick={() => gradeItem(item, true)}
                                         disabled={updatingItem !== null || inspection.status !== "OPEN" || readOnly}
                                         aria-pressed={item.isPass === true}
-                                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-md text-base font-semibold border transition-colors disabled:opacity-50 min-h-[52px] ${
+                                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 min-h-[52px] ${
                                             item.isPass === true
-                                                ? "bg-green-600 text-white border-green-600"
-                                                : "border-border hover:bg-green-50 dark:hover:bg-green-900/20"
+                                                ? "bg-[var(--success)] text-white border-[var(--success)]"
+                                                : "border-[var(--border)] hover:bg-[var(--success-bg)]"
                                         }`}
                                     >
                                         {updatingItem === item.id ? (
@@ -1020,10 +1022,10 @@ export default function EmployeeEquipmentPage() {
                                         onClick={() => gradeItem(item, false)}
                                         disabled={updatingItem !== null || inspection.status !== "OPEN" || readOnly}
                                         aria-pressed={item.isPass === false}
-                                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-md text-base font-semibold border transition-colors disabled:opacity-50 min-h-[52px] ${
+                                        className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-3 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 min-h-[52px] ${
                                             item.isPass === false
-                                                ? "bg-red-600 text-white border-red-600"
-                                                : "border-border hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                ? "bg-[var(--destructive)] text-white border-[var(--destructive)]"
+                                                : "border-[var(--border)] hover:bg-[var(--destructive-bg)]"
                                         }`}
                                     >
                                         {updatingItem === item.id ? (
@@ -1046,14 +1048,14 @@ export default function EmployeeEquipmentPage() {
                                             onChange={(e) => setNotes((prev) => ({ ...prev, [item.id]: e.target.value }))}
                                             placeholder="Catatan (opsional)"
                                             maxLength={2000}
-                                            className="w-full px-3 py-2.5 border border-border rounded-md text-sm bg-background min-h-[44px]"
+                                            className="form-input min-h-[44px]"
                                         />
                                         {noteDirty && (
                                             <button
                                                 type="button"
                                                 onClick={() => gradeItem(item, item.isPass ?? true)}
                                                 disabled={updatingItem !== null || readOnly}
-                                                className="mt-1.5 px-3 min-h-[44px] inline-flex items-center text-xs font-semibold text-primary border border-primary/40 rounded-md hover:bg-primary/10 disabled:opacity-50"
+                                                className="btn btn-secondary btn-sm mt-1.5 min-h-11"
                                             >
                                                 {updatingItem === item.id ? "Menyimpan..." : item.isPass === null ? "Simpan dan nilai Baik" : "Simpan catatan"}
                                             </button>
@@ -1061,17 +1063,17 @@ export default function EmployeeEquipmentPage() {
                                     </div>
                                 )}
                                 {item.note && (inspection.status !== "OPEN" || readOnly) && (
-                                    <p className="mt-1.5 text-xs text-muted-foreground">Catatan: {item.note}</p>
+                                    <p className="mt-1.5 text-xs text-[var(--text-muted)]">Catatan: {item.note}</p>
                                 )}
                             </div>
                             );
                         })}
 
-                        <div className="rounded-lg border border-border bg-card p-3">
-                            <p className="text-sm font-medium text-foreground mb-1">
-                                Foto dokumentasi {needsPhoto ? <span className="font-normal text-muted-foreground">(minimal 1, maksimal 5)</span> : <span className="font-normal text-muted-foreground">(opsional, maksimal 5)</span>}
+                        <div className="emp-surface p-3">
+                            <p className="text-sm font-medium text-[var(--text-primary)] mb-1">
+                                Foto dokumentasi {needsPhoto ? <span className="font-normal text-[var(--text-muted)]">(minimal 1, maksimal 5)</span> : <span className="font-normal text-[var(--text-muted)]">(opsional, maksimal 5)</span>}
                             </p>
-                            <p className="text-xs text-muted-foreground mb-2">
+                            <p className="text-xs text-[var(--text-muted)] mb-2">
                                 Satu tempat pengunggahan ini mewakili semua parameter di atas.
                             </p>
                             <EquipmentEvidencePanel
@@ -1083,9 +1085,9 @@ export default function EmployeeEquipmentPage() {
 
                         {inspection.status === "OPEN" && !readOnly && (
                             <div className="sticky bottom-4 z-10 pt-1">
-                                <div className="bg-card/95 backdrop-blur border border-border rounded-lg p-3 shadow-lg">
+                                <div className="emp-surface p-3">
                                     {!canSubmit && (
-                                        <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-2">
+                                        <p className="text-xs font-medium text-[var(--warning)] mb-2">
                                             {!inspection.progress.allDecided
                                                 ? `Nilai semua item terlebih dahulu (sisa ${inspection.progress.total - inspection.progress.decided}).`
                                                 : "Tambahkan minimal 1 foto dokumentasi terlebih dahulu."}
@@ -1095,7 +1097,7 @@ export default function EmployeeEquipmentPage() {
                                         onClick={submitInspection}
                                         disabled={!canSubmit || submitting}
                                         aria-describedby="kirim-hint"
-                                        className="w-full px-4 py-3 text-base font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[52px] inline-flex items-center justify-center gap-2"
+                                        className="btn btn-primary w-full min-h-[52px]"
                                     >
                                         {submitting && <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" />}
                                         {submitting ? "Mengirim..." : `Kirim Inspeksi (${inspection.progress.decided}/${inspection.progress.total})`}
@@ -1113,9 +1115,9 @@ export default function EmployeeEquipmentPage() {
     }
 
     return (
-        <div className="mx-auto px-4 py-6">
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Inspeksi Alat</h1>
-            <p className="text-sm text-muted-foreground mb-4">
+        <div className="mx-auto space-y-5">
+            <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] mb-1">Inspeksi Alat</h1>
+            <p className="text-sm text-[var(--text-muted)] mb-4">
                 {units.length === 0
                     ? "Pilih alat yang ditugaskan kepada Anda untuk diperiksa."
                     : `${checkedTodayCount}/${units.length} alat diperiksa hari ini. Pilih alat untuk diperiksa.`}
@@ -1137,10 +1139,10 @@ export default function EmployeeEquipmentPage() {
                             setMainTab(tab.key);
                             if (tab.key === "riwayat" && history.length === 0 && !historyLoading) void fetchHistory();
                         }}
-                        className={`flex-1 px-3 min-h-[44px] inline-flex items-center justify-center text-sm font-semibold rounded-md border transition-colors ${
+                        className={`flex-1 px-3 min-h-[44px] inline-flex items-center justify-center text-sm font-semibold rounded-xl border transition-colors ${
                             mainTab === tab.key
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                                ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]"
+                                : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                         }`}
                     >
                         {tab.label}
@@ -1168,8 +1170,8 @@ export default function EmployeeEquipmentPage() {
                                 aria-pressed={historyFilter === chip.key}
                                 className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-sm font-medium rounded-full border transition-colors ${
                                     historyFilter === chip.key
-                                        ? "bg-primary text-primary-foreground border-primary"
-                                        : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                                        ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]"
+                                        : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                                 }`}
                             >
                                 {chip.label}
@@ -1179,7 +1181,7 @@ export default function EmployeeEquipmentPage() {
 
                     {historyLoading && (
                         <div className="flex items-center justify-center py-12" role="status" aria-label="Memuat riwayat">
-                            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-muted-foreground" />
+                            <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
                         </div>
                     )}
 
@@ -1189,7 +1191,7 @@ export default function EmployeeEquipmentPage() {
                             .map((h) => (
                                 <div
                                     key={h.id}
-                                    className="bg-card border border-border rounded-lg p-4"
+                                    className="emp-surface p-4"
                                 >
                                     <button
                                         type="button"
@@ -1198,25 +1200,25 @@ export default function EmployeeEquipmentPage() {
                                     >
                                         <EquipmentStatusDot status={h.status} />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block font-medium text-foreground truncate">{h.unit.name}</span>
-                                            <span className="block text-xs text-muted-foreground truncate">
+                                            <span className="block font-medium text-[var(--text-primary)] truncate">{h.unit.name}</span>
+                                            <span className="block text-xs text-[var(--text-muted)] truncate">
                                                 Mulai {formatDateTime(h.createdAt)} · {equipmentStatusLabel(h.status)}
                                             </span>
                                             {h.checkedByNameSnapshot && (
-                                                <span className="block text-xs text-muted-foreground truncate">
+                                                <span className="block text-xs text-[var(--text-muted)] truncate">
                                                     QC: {stripGelar(h.checkedByNameSnapshot)}
                                                     {h.approvedByNameSnapshot ? ` · Approval: ${stripGelar(h.approvedByNameSnapshot)}` : ""}
                                                 </span>
                                             )}
                                         </span>
-                                        <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
+                                        <ChevronRight aria-hidden="true" className="h-5 w-5 text-[var(--text-muted)] shrink-0 mt-1" />
                                     </button>
                                     {h.status === "OPEN" && (
                                         <div className="flex gap-2 mt-3">
                                             <button
                                                 type="button"
                                                 onClick={() => void openHistoryDetail(h, { edit: true })}
-                                                className="flex-1 px-3 min-h-[44px] inline-flex items-center justify-center text-sm font-semibold text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                                                className="btn btn-primary btn-sm flex-1 min-h-11"
                                             >
                                                 Lanjutkan
                                             </button>
@@ -1225,7 +1227,7 @@ export default function EmployeeEquipmentPage() {
                                                 onClick={() => handleCancel(h)}
                                                 disabled={cancellingId === h.id}
                                                 aria-label={`Batalkan pemeriksaan ${h.unit.name}`}
-                                                className="flex-1 px-3 min-h-[44px] inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-destructive border border-destructive/40 rounded-md hover:bg-destructive/10 disabled:opacity-50"
+                                                className="btn btn-secondary btn-sm flex-1 min-h-11 text-[var(--destructive-text)]"
                                             >
                                                 {cancellingId === h.id ? (
                                                     <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
@@ -1240,29 +1242,28 @@ export default function EmployeeEquipmentPage() {
                             ))}
 
                     {!historyLoading && history.filter((h) => (historyFilter === "ALL" ? h.status !== "CANCELLED" : h.status === historyFilter)).length === 0 && (
-                        <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                            <p className="text-sm font-medium text-foreground">Belum ada riwayat.</p>
-                            <p className="text-sm text-muted-foreground mt-1">Pemeriksaan yang Anda mulai akan tercatat di sini.</p>
-                        </div>
+                            <EmptyState
+                                title="Belum ada riwayat."
+                                description="Pemeriksaan yang Anda mulai akan tercatat di sini."
+                            />
                     )}
                 </div>
             )}
 
             {mainTab === "alat" && error && (
-                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center mb-4">
-                    <AlertTriangle aria-hidden="true" className="h-5 w-5 text-destructive mx-auto mb-2" />
-                    <p className="text-sm text-destructive">{error}</p>
+                <FeedbackMessage variant="error" className="mb-4">
+                    <p>{error}</p>
                     <button
                         onClick={() => void fetchUnits()}
-                        className="mt-3 text-sm font-medium text-primary hover:underline inline-flex items-center gap-1 min-h-[44px] px-3"
+                        className="mt-1 font-semibold underline inline-flex items-center gap-1 min-h-11"
                     >
                         <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> Coba lagi
                     </button>
-                </div>
+                </FeedbackMessage>
             )}
 
             {mainTab === "alat" && nav.level === 3 && (
-                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur pb-2 -mx-4 px-4 pt-1">
+                <div className="sticky top-0 z-10 bg-[var(--background)] pb-2 pt-1">
                     <EquipmentSearchField
                         id="cari-alat"
                         label="Cari alat"
@@ -1281,8 +1282,8 @@ export default function EmployeeEquipmentPage() {
                                     aria-pressed={active}
                                     className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-sm font-medium rounded-full border transition-colors ${
                                         active
-                                            ? "bg-primary text-primary-foreground border-primary"
-                                            : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                                            ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]"
+                                            : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                                     }`}
                                 >
                                     {chip.label}
@@ -1294,7 +1295,7 @@ export default function EmployeeEquipmentPage() {
                             onClick={() => setSortMode((m) => (m === "NEVER_FIRST" ? "AZ" : "NEVER_FIRST"))}
                             title={sortMode === "NEVER_FIRST" ? "Urut: belum diperiksa dulu" : "Urut: A-Z"}
                             aria-label={sortMode === "NEVER_FIRST" ? "Urut: belum diperiksa dulu. Ketuk untuk urut A-Z." : "Urut: A-Z. Ketuk untuk belum diperiksa dulu."}
-                            className="shrink-0 px-3 min-h-[44px] inline-flex items-center gap-1.5 text-sm font-medium rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                            className="shrink-0 px-3 min-h-[44px] inline-flex items-center gap-1.5 text-sm font-medium rounded-full border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                         >
                             <ArrowUpDown aria-hidden="true" className="h-4 w-4" />
                             {sortMode === "NEVER_FIRST" ? "Belum diperiksa" : "A-Z"}
@@ -1308,7 +1309,7 @@ export default function EmployeeEquipmentPage() {
                     {productsLoading && (
                         <div className="space-y-3" role="status" aria-label="Memuat perusahaan">
                             {[0, 1].map((i) => (
-                                <div key={i} className="bg-card border border-border rounded-lg p-4">
+                                <div key={i} className="emp-surface p-4">
                                     <Skeleton className="h-5 w-32 mb-2" />
                                     <Skeleton className="h-4 w-48" />
                                 </div>
@@ -1316,10 +1317,10 @@ export default function EmployeeEquipmentPage() {
                         </div>
                     )}
                     {!productsLoading && companies.length === 0 && units.length === 0 && !error && (
-                        <div className="text-center py-12">
-                            <p className="text-muted-foreground">Anda belum ditugaskan ke alat mana pun, atau alat Anda belum dikategorikan.</p>
-                            <p className="text-sm text-muted-foreground mt-1">Hubungi admin GA bila Anda seharusnya memiliki akses.</p>
-                        </div>
+                        <EmptyState
+                            title="Belum ada alat yang ditugaskan"
+                            description="Anda belum ditugaskan ke alat mana pun, atau alat Anda belum dikategorikan. Hubungi admin GA bila Anda seharusnya memiliki akses."
+                        />
                     )}
                     {!productsLoading &&
                         companies.map((c) => (
@@ -1330,18 +1331,18 @@ export default function EmployeeEquipmentPage() {
                                     setNav({ level: 2, company: c });
                                     setProductSearch("");
                                 }}
-                                className="w-full flex items-center gap-3 p-4 bg-card border border-border rounded-lg hover:bg-accent/50 active:bg-accent transition-colors text-left min-h-[72px]"
+                                className="w-full flex items-center gap-3 p-4 emp-surface hover:bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] active:bg-[var(--secondary)] transition-colors text-left min-h-[72px]"
                             >
-                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-bold text-primary">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
                                     {c}
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                    <span className="block font-medium text-foreground">Perusahaan {c}</span>
-                                    <span className="block text-sm text-muted-foreground truncate">
+                                    <span className="block font-medium text-[var(--text-primary)]">Perusahaan {c}</span>
+                                    <span className="block text-sm text-[var(--text-muted)] truncate">
                                         {productCountByCompany[c]} jenis produk · {assignedCountByCompany[c]} alat ditugaskan
                                     </span>
                                 </span>
-                                <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0" />
+                                <ChevronRight aria-hidden="true" className="h-5 w-5 text-[var(--text-muted)] shrink-0" />
                             </button>
                         ))}
                 </div>
@@ -1355,13 +1356,13 @@ export default function EmployeeEquipmentPage() {
                             setNav({ level: 1 });
                             setProductSearch("");
                         }}
-                        className="text-sm font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
+                        className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
                     >
                         ← Perusahaan
                     </button>
                     <div>
-                        <h2 className="text-lg font-semibold text-foreground">Jenis produk {navCompany}</h2>
-                        <p className="text-sm text-muted-foreground mt-0.5">
+                        <h2 className="text-sm font-bold text-[var(--text-primary)]">Jenis produk {navCompany}</h2>
+                        <p className="text-sm text-[var(--text-muted)] mt-0.5">
                             {companyProducts.length} jenis produk. Pilih untuk melihat alatnya.
                         </p>
                     </div>
@@ -1373,10 +1374,7 @@ export default function EmployeeEquipmentPage() {
                         placeholder="Cari jenis produk..."
                     />
                     {filteredCompanyProducts.length === 0 && (
-                        <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                            <p className="text-sm font-medium text-foreground">Tidak ditemukan.</p>
-                            <p className="text-sm text-muted-foreground mt-1">Coba kata kunci lain.</p>
-                        </div>
+                            <EmptyState title="Tidak ditemukan." description="Coba kata kunci lain." />
                     )}
                     {filteredCompanyProducts.map((p) => {
                         const count = toolsCache[p.id]?.tools.length;
@@ -1389,15 +1387,15 @@ export default function EmployeeEquipmentPage() {
                                     setQuery("");
                                     setStatusFilter("ALL");
                                 }}
-                                className="w-full flex items-center gap-2.5 p-4 bg-card border border-border rounded-lg hover:bg-accent/50 active:bg-accent transition-colors text-left min-h-[64px]"
+                                className="w-full flex items-center gap-2.5 p-4 emp-surface hover:bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] active:bg-[var(--secondary)] transition-colors text-left min-h-[64px]"
                             >
                                 <span className="min-w-0 flex-1">
-                                    <span className="block font-medium text-foreground truncate">{p.name}</span>
-                                    <span className="block text-sm text-muted-foreground">
+                                    <span className="block font-medium text-[var(--text-primary)] truncate">{p.name}</span>
+                                    <span className="block text-sm text-[var(--text-muted)]">
                                         {count !== undefined ? `${count} alat` : toolsLoading ? "Memuat…" : "-"}
                                     </span>
                                 </span>
-                                <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0" />
+                                <ChevronRight aria-hidden="true" className="h-5 w-5 text-[var(--text-muted)] shrink-0" />
                             </button>
                         );
                     })}
@@ -1410,49 +1408,51 @@ export default function EmployeeEquipmentPage() {
                     <button
                         type="button"
                         onClick={() => setNav({ level: 2, company: navCompany })}
-                        className="text-sm font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
+                        className="text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
                     >
                         ← Jenis produk {navCompany}
                     </button>
-                    <h2 className="text-lg font-semibold text-foreground">
+                    <h2 className="text-sm font-bold text-[var(--text-primary)]">
                         {level3ProductName} <EquipmentCompanyBadge company={navCompany} />
                     </h2>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <p className="text-sm text-[var(--text-muted)] mt-0.5">
                         {level3Tools.length} alat. Ketuk alat yang Ditugaskan untuk mengerjakan, atau Lihat saja untuk riwayat.
                     </p>
                 </div>
                 {toolsError && (
-                    <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-center">
-                        <p className="text-sm text-destructive">{toolsError}</p>
+                    <FeedbackMessage variant="error" compact>
+                        <p>{toolsError}</p>
                         <button
                             type="button"
                             onClick={retryLevel3Tools}
-                            className="mt-2 text-sm font-medium text-primary hover:underline inline-flex items-center gap-1 min-h-[44px] px-3"
+                            className="mt-1 font-semibold underline inline-flex items-center gap-1 min-h-11"
                         >
                             <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" /> Coba lagi
                         </button>
-                    </div>
+                    </FeedbackMessage>
                 )}
                 {toolsLoading && level3Tools.length === 0 && (
                     <div className="flex items-center justify-center py-8" role="status" aria-label="Memuat alat">
-                        <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <Loader2 aria-hidden="true" className="h-6 w-6 animate-spin text-[var(--text-muted)]" />
                     </div>
                 )}
                 {!toolsLoading && visibleLevel3Tools.length === 0 && level3Tools.length > 0 && (
-                    <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
-                        <p className="text-sm font-medium text-foreground">Tidak ditemukan.</p>
-                        <p className="text-sm text-muted-foreground mt-1">Coba kata kunci atau filter lain.</p>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setQuery("");
-                                setStatusFilter("ALL");
-                            }}
-                            className="mt-3 px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-primary border border-primary/40 rounded-md hover:bg-primary/10"
-                        >
-                            Atur ulang pencarian
-                        </button>
-                    </div>
+                    <EmptyState
+                        title="Tidak ditemukan."
+                        description="Coba kata kunci atau filter lain."
+                        action={
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setQuery("");
+                                    setStatusFilter("ALL");
+                                }}
+                                className="btn btn-secondary btn-sm"
+                            >
+                                Atur ulang pencarian
+                            </button>
+                        }
+                    />
                 )}
                 {visibleLevel3Tools.map(({ tool, entry, last }) => {
                     const meta = [tool.brand, tool.location].filter(Boolean).join(" · ");
@@ -1479,11 +1479,11 @@ export default function EmployeeEquipmentPage() {
                                     openReadOnlyTool(tool, navCompany);
                                 }
                             }}
-                            className="w-full flex items-start gap-2.5 p-4 bg-card border border-border rounded-lg hover:bg-accent/50 active:bg-accent transition-colors text-left min-h-[64px]"
+                            className="w-full flex items-start gap-2.5 p-4 emp-surface hover:bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] active:bg-[var(--secondary)] transition-colors text-left min-h-[64px]"
                         >
                             <EquipmentStatusDot status={last?.status ?? null} />
                             <div className="min-w-0 flex-1">
-                                <p className="font-medium text-foreground truncate">
+                                <p className="font-medium text-[var(--text-primary)] truncate">
                                     {tool.name}{" "}
                                     <EquipmentCompanyBadge
                                         company={tool.company ?? entry?.unit.company ?? navCompany}
@@ -1491,8 +1491,8 @@ export default function EmployeeEquipmentPage() {
                                         companies={tool.companies ?? entry?.unit.companies}
                                     />
                                 </p>
-                                {meta && <p className="text-sm text-muted-foreground truncate">{meta}</p>}
-                                <p className={`text-xs mt-0.5 truncate ${last ? "text-muted-foreground" : "font-semibold text-amber-700 dark:text-amber-300"}`}>
+                                {meta && <p className="text-sm text-[var(--text-muted)] truncate">{meta}</p>}
+                                <p className={`text-xs mt-0.5 truncate ${last ? "text-[var(--text-muted)]" : "font-semibold text-[var(--warning)]"}`}>
                                     {entry && last
                                         ? `Terakhir diperiksa ${formatDateTime(last.createdAt)} oleh ${stripGelar(last.startedBy.name)} · ${equipmentStatusLabel(last.status)}`
                                         : tool.assigned
@@ -1503,13 +1503,13 @@ export default function EmployeeEquipmentPage() {
                                     className={`mt-1.5 inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${
                                         tool.assigned
                                             ? "bg-primary/10 text-primary"
-                                            : "bg-muted text-muted-foreground"
+                                            : "bg-[var(--muted)] text-[var(--text-muted)]"
                                     }`}
                                 >
                                     {tool.assigned ? "Ditugaskan" : "Lihat saja"}
                                 </span>
                             </div>
-                            <ChevronRight aria-hidden="true" className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
+                            <ChevronRight aria-hidden="true" className="h-5 w-5 text-[var(--text-muted)] shrink-0 mt-1" />
                         </button>
                     );
                 })}

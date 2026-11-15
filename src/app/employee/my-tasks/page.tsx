@@ -3,12 +3,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, ListChecks, Loader2, Plus, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ListChecks, Plus, UploadCloud } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import EmptyState from "@/components/ui/EmptyState";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { stripGelar } from "@/lib/utils/formatters";
 import { formatWIBDateTime } from "@/lib/timezone";
 import { meetingTaskStatusLabel } from "@/components/appointments/AppointmentBadges";
+
+const MY_TASK_TONE: Record<string, StatusTone> = {
+    OPEN: "neutral",
+    BELUM_DIKERJAKAN: "neutral",
+    ON_PROGRESS: "progress",
+    SELESAI: "success",
+    DIBATALKAN: "neutral",
+    MENUNGGU_PERSETUJUAN: "warning",
+    DITOLAK: "danger",
+};
 
 interface MyTaskAssignee {
     employeeId: string;
@@ -120,20 +134,27 @@ export default function EmployeeMyTasksPage() {
     ];
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
-                <button type="button" onClick={() => router.push("/employee")} className="btn btn-secondary btn-sm" aria-label="Kembali ke beranda">
-                    <ArrowLeft className="w-4 h-4" />
+        <div className="space-y-5">
+            <div className="flex items-start gap-2">
+                <button
+                    type="button"
+                    onClick={() => router.push("/employee")}
+                    className="flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--secondary)] active:scale-[0.99]"
+                    aria-label="Kembali ke beranda"
+                >
+                    <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="min-w-0 flex-1">
-                    <h1 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                        <ListChecks className="w-5 h-5 text-[var(--primary)]" /> Tugas Saya
-                    </h1>
-                    <p className="text-xs text-[var(--text-muted)]">Semua tugas untuk Anda, dari berbagai sumber</p>
-                </div>
-                <Link href="/employee/my-tasks/create" className="btn btn-primary btn-sm shrink-0 min-h-10" aria-label="Tambah tugas baru">
-                    <Plus className="w-4 h-4" /> Tambah Task
-                </Link>
+                <PageHeader
+                    className="min-w-0 flex-1"
+                    title="Tugas Saya"
+                    subtitle="Semua tugas untuk Anda, dari berbagai sumber"
+                    icon={ListChecks}
+                    action={
+                        <Link href="/employee/my-tasks/create" className="btn btn-primary btn-sm min-h-10" aria-label="Tambah tugas baru">
+                            <Plus className="w-4 h-4" /> Tambah Task
+                        </Link>
+                    }
+                />
             </div>
 
             <div className="flex gap-1.5 flex-wrap" role="tablist" aria-label="Filter tugas" onKeyDown={(e) => {
@@ -154,10 +175,10 @@ export default function EmployeeMyTasksPage() {
                         aria-controls="panel-tasks"
                         tabIndex={filter === f.key ? 0 : -1}
                         onClick={() => setFilter(f.key)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold min-h-9 ${
+                        className={`px-3 py-1.5 rounded-full border text-xs font-semibold min-h-9 transition-colors active:scale-[0.99] ${
                             filter === f.key
-                                ? "bg-[var(--primary)] text-white"
-                                : "bg-[var(--secondary)] text-[var(--text-secondary)]"
+                                ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] hover:bg-[var(--secondary)]"
                         }`}
                     >
                         {f.label}
@@ -168,15 +189,15 @@ export default function EmployeeMyTasksPage() {
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
 
             {loading ? (
-                <p className="text-sm text-[var(--text-muted)] flex items-center gap-2" aria-label="Memuat tugas">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Memuat tugas…
-                </p>
+                <ListSkeleton label="Memuat tugas" />
             ) : tasks.length === 0 ? (
-                <div className="card p-6 text-center" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
-                    <ListChecks className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
-                    <p className="text-sm font-medium text-[var(--text-primary)]">Belum ada tugas di sini</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Tugas baru untuk Anda akan muncul di halaman ini. Anda juga bisa memberi tugas lewat Tambah Task.</p>
-                    <Link href="/employee/my-tasks/create" className="btn btn-primary btn-sm min-h-10 mt-3 inline-flex">Tambah Task</Link>
+                <div role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
+                    <EmptyState
+                        icon={ListChecks}
+                        title="Belum ada tugas di sini"
+                        description="Tugas baru untuk Anda akan muncul di halaman ini. Anda juga bisa memberi tugas lewat Tambah Tugas."
+                        action={<Link href="/employee/my-tasks/create" className="btn btn-primary btn-sm min-h-10">Tambah Tugas</Link>}
+                    />
                 </div>
             ) : (
                 <div className="space-y-2.5" role="tabpanel" id="panel-tasks" aria-labelledby={`tab-task-${filter}`}>
@@ -192,22 +213,22 @@ export default function EmployeeMyTasksPage() {
                             <article
                                 key={task.id}
                                 id={`task-${task.id}`}
-                                className={`card p-4 ${highlight === task.id ? "ring-2 ring-[var(--primary)]" : ""}`}
+                                className={`emp-surface p-4 ${highlight === task.id ? "ring-2 ring-[var(--primary)]" : ""}`}
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <p className="text-sm font-semibold text-[var(--text-primary)]">{task.title}</p>
                                     {task.isCancelled ? (
-                                        <span className="badge-error shrink-0">Dibatalkan</span>
+                                        <StatusBadge tone="danger" className="shrink-0">Dibatalkan</StatusBadge>
                                     ) : filter === "verify" ? (
-                                        <span className="badge-info shrink-0">Menunggu Verifikasi ({pendingCount})</span>
+                                        <StatusBadge tone="progress" className="shrink-0">Menunggu Verifikasi ({pendingCount})</StatusBadge>
                                     ) : mine?.status === "SELESAI" ? (
-                                        <span className={`badge-success shrink-0`}>{mine?.stickyOverdue ? "Overdue (Done)" : "Selesai"}</span>
+                                        <StatusBadge tone="success" className="shrink-0">{mine?.stickyOverdue ? "Overdue (Done)" : "Selesai"}</StatusBadge>
                                     ) : mine?.isOverdue ? (
-                                        <span className="badge-error shrink-0" title="Overdue untuk Anda">
+                                        <StatusBadge tone="danger" className="shrink-0" title="Overdue untuk Anda">
                                             Overdue{(task.activeDeadline?.sequence ?? 1) > 1 ? " · Kesempatan ke-2" : ""}
-                                        </span>
+                                        </StatusBadge>
                                     ) : (
-                                        <span className="badge-info shrink-0" title={task.anyOverdue ? "Ada penerima lain yang overdue" : undefined}>{mine ? meetingTaskStatusLabel(mine.status) : "Berjalan"}</span>
+                                        <StatusBadge tone={mine ? (MY_TASK_TONE[mine.status] ?? "neutral") : "info"} className="shrink-0" title={task.anyOverdue ? "Ada penerima lain yang overdue" : undefined}>{mine ? meetingTaskStatusLabel(mine.status) : "Berjalan"}</StatusBadge>
                                     )}
                                 </div>
                                 {task.detail && <p className="text-xs text-[var(--text-secondary)] mt-1 whitespace-pre-wrap">{task.detail}</p>}
@@ -237,7 +258,7 @@ export default function EmployeeMyTasksPage() {
                                     </div>
                                     <div className="flex gap-1.5">
                                         <dt className="text-[var(--text-muted)] w-20 shrink-0">Deadline</dt>
-                                        <dd className={`font-semibold ${mine?.isOverdue ? "text-red-600" : "text-[var(--text-secondary)]"}`}>
+                                        <dd className={`font-semibold ${mine?.isOverdue ? "text-[var(--destructive-text)]" : "text-[var(--text-secondary)]"}`}>
                                             {task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "-"}
                                             {task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}
                                         </dd>
@@ -255,7 +276,7 @@ export default function EmployeeMyTasksPage() {
                                     {!isOperational && task.appointmentId && (
                                         <Link
                                             href={`/employee/appointments/detail/${task.appointmentId}/history?highlight=${encodeURIComponent(`task-created-${task.id}`)}`}
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex items-center justify-center gap-1"
+                                            className="btn btn-secondary btn-sm min-h-10"
                                             aria-label={`Lihat riwayat ${task.title}`}
                                         >
                                             Riwayat
@@ -264,7 +285,7 @@ export default function EmployeeMyTasksPage() {
                                     {filter === "verify" ? (
                                         <Link
                                             href={`/employee/my-tasks/${task.id}`}
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--primary)] text-white flex-1 flex items-center justify-center gap-1"
+                                            className="btn btn-primary btn-sm min-h-10 flex-1"
                                             aria-label={`Tinjau pengumpulan ${task.title}`}
                                         >
                                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -273,7 +294,7 @@ export default function EmployeeMyTasksPage() {
                                     ) : mine?.status === "MENUNGGU_PERSETUJUAN" ? (
                                         <Link
                                             href={`/employee/my-tasks/${task.id}`}
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--primary)] text-white flex-1 flex items-center justify-center gap-1"
+                                            className="btn btn-primary btn-sm min-h-10 flex-1"
                                             aria-label={`Tinjau dan setujui ${task.title}`}
                                         >
                                             <CheckCircle2 className="w-3.5 h-3.5" />
@@ -282,7 +303,7 @@ export default function EmployeeMyTasksPage() {
                                     ) : canSubmit ? (
                                         <Link
                                             href={`/employee/my-tasks/${task.id}`}
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--primary)] text-white flex-1 flex items-center justify-center gap-1"
+                                            className="btn btn-primary btn-sm min-h-10 flex-1"
                                             aria-label={`Kumpulkan hasil ${task.title}`}
                                         >
                                             <UploadCloud className="w-3.5 h-3.5" />
@@ -291,7 +312,7 @@ export default function EmployeeMyTasksPage() {
                                     ) : (
                                         <Link
                                             href={`/employee/my-tasks/${task.id}`}
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex-1 flex items-center justify-center gap-1"
+                                            className="btn btn-secondary btn-sm min-h-10 flex-1"
                                             aria-label={`Buka detail tugas ${task.title}`}
                                         >
                                             Lihat Detail

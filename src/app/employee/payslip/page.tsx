@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Download, X, Eye, AlertCircle } from "lucide-react";
+import { FileText, Download, X, Eye } from "lucide-react";
 import { exportPayslipPdf } from "@/lib/export";
 import { formatDisplayDate } from "@/lib/utils";
 import DataTablePagination from "@/components/ui/DataTablePagination";
-import { Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 
@@ -72,40 +75,23 @@ export default function PayslipPage() {
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-[var(--primary)]" />
-                    Slip Gaji
-                </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Riwayat slip gaji Anda</p>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader title="Slip Gaji" subtitle="Riwayat slip gaji Anda" icon={FileText} />
 
             {loading ? (
-                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat slip gaji">
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="card p-5 space-y-2">
-                            <Skeleton className="h-5 w-2/3" />
-                            <Skeleton className="h-4 w-1/2" />
-                            <Skeleton className="h-3 w-1/3" />
-                        </div>
-                    ))}
-                </div>
+                <ListSkeleton label="Memuat slip gaji" />
             ) : loadError ? (
-                <div className="card p-12 text-center">
-                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
-                </div>
+                <StateCard variant="error" title="Slip gaji gagal dimuat" description={loadError} />
             ) : payslips.length === 0 ? (
-                <div className="card p-12 text-center">
-                    <FileText className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada slip gaji</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Slip gaji akan muncul di sini setelah HR membuatnya</p>
-                </div>
+                <EmptyState
+                    icon={FileText}
+                    title="Belum ada slip gaji"
+                    description="Slip gaji akan muncul di sini setelah HR membuatnya."
+                />
             ) : (
                 <div className="space-y-3">
                     {payslips.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((p) => (
-                        <div key={p.id} className="card p-5">
+                        <div key={p.id} className="emp-surface p-5">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold text-[var(--text-primary)]">Periode: {p.period}</p>
@@ -117,7 +103,7 @@ export default function PayslipPage() {
                                         <button onClick={() => setSelected(p)} className="btn btn-ghost btn-sm text-[var(--primary)]">
                                             <Eye className="w-3.5 h-3.5" /> Detail
                                         </button>
-                                        <button onClick={() => handleDownloadPdf(p)} className="btn btn-ghost btn-sm text-red-600">
+                                        <button onClick={() => handleDownloadPdf(p)} className="btn btn-ghost btn-sm text-[var(--primary)]">
                                             <Download className="w-3.5 h-3.5" /> PDF
                                         </button>
                                     </div>
@@ -144,7 +130,7 @@ export default function PayslipPage() {
                 <AccessibleModal ariaLabel={`Slip gaji ${selected.period}`} onClose={() => setSelected(null)}>
                         <div className="modal-header">
                             <h2 className="modal-title">Slip Gaji — {selected.period}</h2>
-                            <button className="modal-close" onClick={() => setSelected(null)}><X className="w-4 h-4" /></button>
+                            <button className="modal-close" onClick={() => setSelected(null)} aria-label="Tutup slip gaji"><X className="w-4 h-4" /></button>
                         </div>
 
                         <div className="space-y-4">
@@ -168,12 +154,12 @@ export default function PayslipPage() {
                                         {allowances(selected.items).map((a, i) => (
                                             <div key={`a-${i}`} className="flex justify-between text-sm py-1 pl-3">
                                                 <span className="text-[var(--text-secondary)]">{a.name}</span>
-                                                <span className="font-medium text-green-600">+{fmt(a.amount)}</span>
+                                                <span className="font-medium text-[var(--success)]">+{fmt(a.amount)}</span>
                                             </div>
                                         ))}
                                         <div className="flex justify-between text-sm py-1 pl-3 border-t border-dashed border-[var(--border)]">
                                             <span className="text-[var(--text-secondary)] font-medium">Subtotal Tunjangan</span>
-                                            <span className="font-semibold text-green-600">+{fmt(totalAllowances(selected.items))}</span>
+                                            <span className="font-semibold text-[var(--success)]">+{fmt(totalAllowances(selected.items))}</span>
                                         </div>
                                     </>
                                 )}
@@ -181,7 +167,7 @@ export default function PayslipPage() {
                                 {selected.overtime > 0 && (
                                     <div className="flex justify-between text-sm py-1.5">
                                         <span className="text-[var(--text-secondary)]">Lembur</span>
-                                        <span className="font-medium text-green-600">+{fmt(selected.overtime)}</span>
+                                        <span className="font-medium text-[var(--success)]">+{fmt(selected.overtime)}</span>
                                     </div>
                                 )}
 
@@ -192,18 +178,18 @@ export default function PayslipPage() {
                                         {deductions(selected.items).map((d, i) => (
                                             <div key={`d-${i}`} className="flex justify-between text-sm py-1 pl-3">
                                                 <span className="text-[var(--text-secondary)]">{d.name}</span>
-                                                <span className="font-medium text-red-600">-{fmt(d.amount)}</span>
+                                                <span className="font-medium text-[var(--destructive-text)]">-{fmt(d.amount)}</span>
                                             </div>
                                         ))}
                                         <div className="flex justify-between text-sm py-1 pl-3 border-t border-dashed border-[var(--border)]">
                                             <span className="text-[var(--text-secondary)] font-medium">Subtotal Potongan</span>
-                                            <span className="font-semibold text-red-600">-{fmt(totalDeductions(selected.items))}</span>
+                                            <span className="font-semibold text-[var(--destructive-text)]">-{fmt(totalDeductions(selected.items))}</span>
                                         </div>
                                     </>
                                 )}
 
                                 {/* Net */}
-                                <div className="flex justify-between py-3 mt-3 border-t-2 border-[var(--primary)] bg-[var(--primary)]/5 px-3 rounded-lg">
+                                <div className="flex justify-between py-3 mt-3 border-t-2 border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] px-3 rounded-lg">
                                     <span className="text-sm font-bold text-[var(--text-primary)]">Take Home Pay</span>
                                     <span className="text-lg font-extrabold text-[var(--primary)]">{fmt(selected.netSalary)}</span>
                                 </div>

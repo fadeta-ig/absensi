@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, Eye, Loader2, RotateCcw, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Eye, RotateCcw, Search, X } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
 import { stripGelar } from "@/lib/utils/formatters";
 
 type RincianStatus = "Tepat Waktu" | "Overdue" | "Tunggakan";
@@ -60,9 +62,9 @@ function fmtSelisih(v: number | null): string {
 }
 
 function badgeCls(t: RincianTask): string {
-    if (t.masihBerjalan) return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-    if (t.status === "Tepat Waktu") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-    return "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+    if (t.masihBerjalan) return "bg-[var(--warning-bg)] text-[var(--warning)]";
+    if (t.status === "Tepat Waktu") return "bg-[var(--success-bg)] text-[var(--success)]";
+    return "bg-[var(--destructive-bg)] text-[var(--destructive-text)]";
 }
 
 function badgeText(t: RincianTask): string {
@@ -170,43 +172,43 @@ export default function MeetingMonitorPage() {
 
     if (allowed === false && !loading) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-5">
                 <button type="button" onClick={() => router.push("/employee/my-tasks")} className="btn btn-secondary btn-sm">
                     <ArrowLeft className="w-4 h-4" /> Kembali
                 </button>
-                <div className="card p-6 text-center">
-                    <Eye className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
-                    <p className="text-sm font-medium text-[var(--text-primary)]">Anda belum bisa membuka halaman ini</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Halaman ini khusus pemantau yang ditunjuk WIG002. Minta WIG002 menunjuk Anda untuk membukanya.</p>
-                </div>
+                <EmptyState
+                    icon={Eye}
+                    title="Anda belum bisa membuka halaman ini"
+                    description="Halaman ini khusus pemantau yang ditunjuk WIG002. Minta WIG002 menunjuk Anda untuk membukanya."
+                />
             </div>
         );
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
             <div className="flex items-center gap-2">
                 <button type="button" onClick={() => router.push("/employee/my-tasks")} className="btn btn-secondary btn-sm" aria-label="Kembali ke Tugas Saya">
                     <ArrowLeft className="w-4 h-4" />
                 </button>
                 <div>
-                    <h1 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                    <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] flex items-center gap-1.5">
                         <Eye className="w-5 h-5 text-[var(--primary)]" /> Pantau Tugas
                     </h1>
-                    <p className="text-xs text-[var(--text-muted)]">Ketepatan penyelesaian tugas seluruh karyawan. Diurutkan dari tingkat ketepatan terendah.</p>
+                    <p className="text-[11px] font-medium text-[var(--text-secondary)]">Ketepatan penyelesaian tugas seluruh karyawan. Diurutkan dari tingkat ketepatan terendah.</p>
                 </div>
             </div>
 
             {tunggakanLalu.length > 0 && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" role="status">
-                    <p className="text-xs font-bold text-amber-800 dark:text-amber-200">Masih ada tunggakan dari bulan lalu yang belum selesai:</p>
+                <div className="rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2.5" role="status">
+                    <p className="text-xs font-bold text-[var(--warning)]">Masih ada tunggakan dari bulan lalu yang belum selesai:</p>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                         {tunggakanLalu.map((t) => (
                             <button
                                 key={t.month}
                                 type="button"
                                 onClick={() => setMonth(t.month)}
-                                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-white/70 text-amber-800 border border-amber-300 dark:bg-amber-950/40 dark:text-amber-200"
+                                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-[var(--card)] text-[var(--warning)] border border-[var(--warning-border)]"
                             >
                                 {t.label}: {t.taskCount} tugas ({t.employeeCount} karyawan) — lihat
                             </button>
@@ -215,7 +217,7 @@ export default function MeetingMonitorPage() {
                 </div>
             )}
 
-            <div className="card p-3 space-y-2">
+            <div className="emp-surface p-3 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="pantau-bulan">Periode</label>
@@ -281,23 +283,21 @@ export default function MeetingMonitorPage() {
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
 
             {loading ? (
-                <p className="text-sm text-[var(--text-muted)] flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Memuat pantauan…
-                </p>
+                <ListSkeleton label="Memuat pantauan" />
             ) : filtered.length === 0 ? (
-                <div className="card p-6 text-center">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">Belum ada data pada periode ini</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Pilih periode lain atau ubah filter untuk melihat hasil.</p>
-                    {(filterQ || filterDivisi || sourceFilter) && (
-                        <button type="button" onClick={() => { setFilterQ(""); setFilterDivisi(""); setSourceFilter(""); setPage(1); }} className="btn btn-secondary btn-sm min-h-10 mt-3">Reset filter</button>
-                    )}
-                </div>
+                <EmptyState
+                    title="Belum ada data pada periode ini"
+                    description="Pilih periode lain atau ubah filter untuk melihat hasil."
+                    action={(filterQ || filterDivisi || sourceFilter) ? (
+                        <button type="button" onClick={() => { setFilterQ(""); setFilterDivisi(""); setSourceFilter(""); setPage(1); }} className="btn btn-secondary btn-sm">Reset filter</button>
+                    ) : undefined}
+                />
             ) : (
                 <div className="space-y-2.5">
                     {filtered.map((r) => {
                         const open = expanded.has(r.employeeId);
                         return (
-                            <article key={r.employeeId} className="card p-4">
+                            <article key={r.employeeId} className="emp-surface p-4">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
                                         <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{stripGelar(r.name)}</p>
@@ -331,7 +331,7 @@ export default function MeetingMonitorPage() {
                                     type="button"
                                     onClick={() => toggleExpand(r.employeeId)}
                                     aria-expanded={open}
-                                    className="mt-2 w-full px-3 py-2 rounded-lg text-xs font-semibold min-h-10 bg-[var(--secondary)] text-[var(--text-secondary)] flex items-center justify-center gap-1"
+                                    className="btn btn-secondary btn-sm mt-2 w-full min-h-10"
                                 >
                                     {open ? "Tutup rincian" : "Lihat rincian tugas"}
                                     <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? "rotate-180" : ""}`} />

@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, AlertCircle, CalendarDays, LayoutList, Search, X } from "lucide-react";
+import { Plus, AlertCircle, CalendarClock, CalendarDays, LayoutList, Search, X } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import StateCard from "@/components/ui/StateCard";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AppointmentCalendar, { type CalendarAppointment } from "@/components/appointments/AppointmentCalendar";
@@ -346,18 +350,19 @@ export default function EmployeeAppointmentsPage() {
     }, [router]);
 
     return (
-        <div className="w-full min-w-0 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <h1 className="text-lg font-extrabold text-[var(--text-primary)] truncate">E Meeting</h1>
-                    <p className="text-xs text-[var(--text-muted)]">Kelola meeting, ruangan, dan ketersediaan Anda</p>
-                </div>
-                <button type="button" onClick={() => setModal({ type: "create" })} className="btn btn-primary shrink-0">
-                    <Plus className="w-4 h-4" /> Buat Meeting
-                </button>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                title="E Meeting"
+                subtitle="Kelola meeting, ruangan, dan ketersediaan Anda"
+                icon={CalendarClock}
+                action={
+                    <button type="button" onClick={() => setModal({ type: "create" })} className="btn btn-primary">
+                        <Plus className="w-4 h-4" /> Buat Meeting
+                    </button>
+                }
+            />
 
-            <div className="card overflow-hidden">
+            <div className="emp-surface emp-surface-hover overflow-hidden">
                 <button
                     type="button"
                     onClick={() => setShowBusy(!showBusy)}
@@ -388,7 +393,7 @@ export default function EmployeeAppointmentsPage() {
                                         <button
                                             type="button"
                                             onClick={() => { void handleDeleteBusy(b.id); }}
-                                            className="text-rose-600 text-[11px] font-bold shrink-0 min-h-9 px-2"
+                                            className="text-[var(--destructive-text)] text-[11px] font-bold shrink-0 min-h-9 px-2"
                                         >
                                             Hapus
                                         </button>
@@ -396,7 +401,7 @@ export default function EmployeeAppointmentsPage() {
                                 ))}
                             </ul>
                         )}
-                        <form onSubmit={handleSaveBusy} className="grid grid-cols-2 gap-2">
+                        <form onSubmit={handleSaveBusy} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="form-group !mb-0">
                                 <label className="form-label" htmlFor="busy-from">Tanggal Mulai *</label>
                                 <input id="busy-from" type="date" className="form-input" value={busyFrom} onChange={(e) => setBusyFrom(e.target.value)} required />
@@ -442,8 +447,10 @@ export default function EmployeeAppointmentsPage() {
                         aria-controls="panel-appointments"
                         tabIndex={scope === t.key ? 0 : -1}
                         onClick={() => setScope(t.key)}
-                        className={`flex-1 min-h-11 rounded-xl px-2 text-xs font-bold transition-colors ${
-                            scope === t.key ? "bg-[var(--card)] text-[var(--primary)] shadow-sm" : "text-[var(--text-muted)]"
+                        className={`flex-1 min-h-11 rounded-xl border px-2 text-xs font-bold transition-colors ${
+                            scope === t.key
+                                ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
                         }`}
                     >
                         {t.label}
@@ -475,8 +482,10 @@ export default function EmployeeAppointmentsPage() {
                         aria-controls="panel-appointments"
                         tabIndex={view === t.key ? 0 : -1}
                         onClick={() => setView(t.key)}
-                        className={`flex-1 min-h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 ${
-                            view === t.key ? "bg-[var(--primary)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"
+                        className={`flex-1 min-h-11 rounded-xl border text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                            view === t.key
+                                ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)]"
                         }`}
                     >
                         <t.icon className="w-4 h-4" /> {t.label}
@@ -490,7 +499,7 @@ export default function EmployeeAppointmentsPage() {
                 </FeedbackMessage>
             )}
 
-            <div className="card p-3 space-y-2">
+            <div className="emp-surface p-3 space-y-2">
                 <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                     <input
@@ -564,36 +573,34 @@ export default function EmployeeAppointmentsPage() {
                 <div role="tabpanel" id="panel-appointments" aria-labelledby={`tab-view-${view} tab-scope-${scope}`}>
                 <div className="space-y-3">
                     {loading ? (
-                        [0, 1, 2].map((i) => (
-                            <div key={i} className="card p-4 animate-pulse" role="status" aria-label="Memuat meeting">
-                                <div className="h-4 w-2/3 rounded bg-[var(--secondary)]" />
-                                <div className="h-3 w-1/3 rounded bg-[var(--secondary)] mt-2" />
-                            </div>
-                        ))
+                        <ListSkeleton count={3} rows={2} label="Memuat meeting" />
                     ) : scopedItems.length === 0 ? (
-                        <div className="card p-12 text-center border-dashed">
-                            <p className="text-sm font-medium text-[var(--text-muted)]">
-                                {scope === "history"
+                        <EmptyState
+                            icon={CalendarClock}
+                            title={
+                                scope === "history"
                                     ? hasActiveFilter
                                         ? "Tidak ada riwayat meeting yang sesuai."
                                         : "Belum ada meeting sebelumnya."
                                     : hasActiveFilter || scope !== "all"
                                         ? "Tidak ada meeting mendatang yang sesuai."
-                                        : "Belum ada meeting mendatang."}
-                            </p>
-                            {(hasActiveFilter || scope !== "all") && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        clearFilters();
-                                        setScope("all");
-                                    }}
-                                    className="btn btn-secondary btn-sm mt-3"
-                                >
-                                    Tampilkan Semua Data
-                                </button>
-                            )}
-                        </div>
+                                        : "Belum ada meeting mendatang."
+                            }
+                            action={
+                                (hasActiveFilter || scope !== "all") ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            clearFilters();
+                                            setScope("all");
+                                        }}
+                                        className="btn btn-secondary btn-sm"
+                                    >
+                                        Tampilkan Semua Data
+                                    </button>
+                                ) : undefined
+                            }
+                        />
                     ) : (
                         scopedItems.map((a) => {
                             const accepted = a.participants.filter((p) => p.inviteStatus === "ACCEPTED").length;
@@ -604,7 +611,7 @@ export default function EmployeeAppointmentsPage() {
                                     key={a.id}
                                     type="button"
                                     onClick={() => { void openDetail(a.id); }}
-                                    className="card w-full text-left p-4 hover:border-[var(--primary)]/40 transition-colors"
+                                    className="emp-surface emp-surface-hover w-full text-left p-4 active:scale-[0.99]"
                                 >
                                     <p className="text-[11px] font-bold text-[var(--primary)]">
                                         {formatIndonesianDate(a.startAt)} · {a.isFullDay ? "Seharian Penuh" : `${fmtTime(a.startAt)}–${fmtTime(a.endAt)}`}
@@ -679,14 +686,12 @@ export default function EmployeeAppointmentsPage() {
                     </div>
 
                     {loading ? (
-                        <div className="card p-12 text-center">
-                            <Loader2 className="w-5 h-5 animate-spin text-[var(--primary)] mx-auto" />
-                            <span className="sr-only">Memuat jadwal</span>
-                        </div>
+                        <StateCard variant="loading" title="Memuat jadwal" />
                     ) : dayItems.length === 0 ? (
-                        <div className="card p-12 text-center border-dashed">
-                            <p className="text-sm font-medium text-[var(--text-muted)]">
-                                {hasActiveFilter
+                        <EmptyState
+                            icon={CalendarDays}
+                            title={
+                                hasActiveFilter
                                     ? "Tidak ada hasil untuk filter ini."
                                     : scope === "mine"
                                         ? "Belum ada meeting yang Anda selenggarakan pada tanggal ini."
@@ -694,18 +699,20 @@ export default function EmployeeAppointmentsPage() {
                                             ? "Belum ada undangan meeting untuk Anda pada tanggal ini."
                                             : scope === "history"
                                                 ? "Belum ada riwayat meeting pada tanggal ini."
-                                                : "Belum ada meeting pada tanggal ini."}
-                            </p>
-                            {hasActiveFilter ? (
-                                <button type="button" onClick={clearFilters} className="btn btn-secondary btn-sm mt-3">
-                                    Reset Filter
-                                </button>
-                            ) : (
-                                <button type="button" onClick={() => setModal({ type: "create" })} className="btn btn-secondary btn-sm mt-3">
-                                    <Plus className="w-3.5 h-3.5" /> Buat dari tanggal ini
-                                </button>
-                            )}
-                        </div>
+                                                : "Belum ada meeting pada tanggal ini."
+                            }
+                            action={
+                                hasActiveFilter ? (
+                                    <button type="button" onClick={clearFilters} className="btn btn-secondary btn-sm">
+                                        Reset Filter
+                                    </button>
+                                ) : (
+                                    <button type="button" onClick={() => setModal({ type: "create" })} className="btn btn-secondary btn-sm">
+                                        <Plus className="w-3.5 h-3.5" /> Buat dari tanggal ini
+                                    </button>
+                                )
+                            }
+                        />
                     ) : (
                         dayItems.map((a) => {
                             const isMine = myEmployeeId !== null && a.requesterEmployeeId === myEmployeeId;
@@ -715,7 +722,7 @@ export default function EmployeeAppointmentsPage() {
                                     key={a.id}
                                     type="button"
                                     onClick={() => { void openDetail(a.id); }}
-                                    className="card w-full text-left p-4 hover:border-[var(--primary)]/40 transition-colors"
+                                    className="emp-surface emp-surface-hover w-full text-left p-4 active:scale-[0.99]"
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">

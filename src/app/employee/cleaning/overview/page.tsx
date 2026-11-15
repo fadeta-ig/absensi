@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarDays, CheckCircle2, Clock, Eye, Loader2, RefreshCw, UserCheck, X } from "lucide-react";
+import { Ban, CalendarDays, CheckCircle2, Clock, Eye, RefreshCw, UserCheck, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePanel";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
@@ -285,27 +290,26 @@ export default function CleaningOverviewPage() {
     }, [rooms, query, statusFilter, dayParaf, dayChecklist, selectedDate]);
 
     return (
-        <div className="mx-auto px-4 py-6">
-            <div className="flex items-start justify-between gap-2 mb-6">
-                <div>
-                    <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Pantau Kebersihan Ruangan</h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                        Pantau kerja kebersihan bawahan: ruangan, progres, dan pemeriksaan.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={handleRefresh}
-                    disabled={loading}
-                    className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm font-medium border border-[var(--border)] rounded-md hover:bg-[var(--secondary)] disabled:opacity-50 shrink-0"
-                >
-                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-                </button>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                title="Pantau Kebersihan Ruangan"
+                subtitle="Pantau kerja kebersihan bawahan: ruangan, progres, dan pemeriksaan."
+                icon={Eye}
+                action={
+                    <button
+                        type="button"
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        className="btn btn-secondary btn-sm min-h-[44px]"
+                    >
+                        <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+                    </button>
+                }
+            />
 
             {/* ===== PANTAU HARIAN ===== */}
-            <section aria-label="Kondisi hari ini" className="mb-8">
-                <div className="card p-4 mb-4">
+            <section aria-label="Kondisi hari ini" className="space-y-3">
+                <div className="emp-surface p-4">
                     <EquipmentSearchField
                         id="cari-ruangan"
                         label="Cari ruangan"
@@ -328,10 +332,10 @@ export default function CleaningOverviewPage() {
                                 type="button"
                                 onClick={() => setStatusFilter(key)}
                                 aria-pressed={statusFilter === key}
-                                className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-sm font-medium rounded-full border transition-colors ${
+                                className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-xs font-semibold rounded-full border transition-colors active:scale-[0.99] ${
                                     statusFilter === key
-                                        ? "bg-primary text-primary-foreground border-primary"
-                                        : "border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
+                                        ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                        : "border-[var(--border)] bg-[var(--card)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                                 }`}
                             >
                                 {label}
@@ -340,10 +344,10 @@ export default function CleaningOverviewPage() {
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-4 mt-3">
                         <div>
-                            <h2 className="text-base font-bold text-[var(--text-primary)]">
+                            <h2 className="text-sm font-bold text-[var(--text-primary)]">
                                 {isToday ? "Hari ini" : "Tanggal yang dipilih"} — {formatWibDateLabel(selectedDate)}
                             </h2>
-                            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                            <p className="text-[11px] text-[var(--text-muted)] mt-1">
                                 Pilih tanggal lain untuk melihat hari sebelumnya. Data terbaru sampai hari ini.
                             </p>
                         </div>
@@ -375,30 +379,19 @@ export default function CleaningOverviewPage() {
                                     ["Libur", todaySummary.libur],
                                 ] as [string, number][]
                             ).map(([label, value]) => (
-                                <div key={label} className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-center">
-                                    <p className="text-2xl font-semibold text-[var(--text-primary)]">{value}</p>
-                                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{label}</p>
+                                <div key={label} className="emp-surface px-4 py-3 min-w-0">
+                                    <p className="text-xl font-extrabold leading-none text-[var(--text-primary)]">{value}</p>
+                                    <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">{label}</p>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
 
-                {loading && (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
-                    </div>
-                )}
-                {error && !loading && (
-                    <div className="mb-4 p-4 bg-[var(--destructive-bg)] text-[var(--destructive)] rounded-xl border border-[var(--destructive-border)] text-center">
-                        <AlertTriangle className="h-5 w-5 mx-auto mb-2" />
-                        <p className="text-sm">{error}</p>
-                    </div>
-                )}
+                {loading && <ListSkeleton count={3} label="Memuat daftar ruangan" />}
+                {error && !loading && <StateCard variant="error" title={error} />}
                 {!loading && !error && rooms.length === 0 && (
-                    <div className="text-center py-10 border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--card)]">
-                        <p className="text-sm text-[var(--text-muted)]">Belum ada ruangan aktif.</p>
-                    </div>
+                    <EmptyState title="Belum ada ruangan aktif." />
                 )}
 
                 {!loading &&
@@ -417,44 +410,36 @@ export default function CleaningOverviewPage() {
                         const kurangCount = items.length - selesaiCount - tidakAdaCount;
 
                         let statusBadge = "Belum ada data";
-                        let badgeClass = "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
-                        let dotClass = "bg-gray-300 dark:bg-gray-600";
+                        let statusTone: StatusTone = "neutral";
                         if (day?.isFree) {
                             statusBadge = "Libur";
                         } else if (day && detail?.type === "record") {
                             if (day.checklist.isComplete && day.missingRoles.length === 0) {
                                 statusBadge = "Sudah beres dan sudah diperiksa";
-                                badgeClass = "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
-                                dotClass = "bg-green-500";
+                                statusTone = "success";
                             } else if (day.checklist.isComplete) {
                                 statusBadge = "Sudah beres, menunggu pemeriksaan";
-                                badgeClass = "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-                                dotClass = "bg-amber-500";
+                                statusTone = "warning";
                             } else if (kurangCount > 0) {
                                 statusBadge = `Kurang ${kurangCount} pekerjaan`;
-                                badgeClass = "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
-                                dotClass = "bg-amber-500";
+                                statusTone = "warning";
                             } else {
                                 statusBadge = "Belum dikerjakan";
                             }
                         } else if (dayLoading) {
                             statusBadge = "Memuat…";
+                            statusTone = "progress";
                         }
 
                         return (
-                            <div key={room.roomId} className="card p-4 mb-3">
-                                <div className="flex items-start gap-2.5">
-                                    <span aria-hidden="true" className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${dotClass}`} />
+                            <div key={room.roomId} className="emp-surface emp-surface-hover p-4">
+                                <div className="flex items-start justify-between gap-2.5">
                                     <div className="min-w-0 flex-1">
-                                        <h3 className="text-base font-bold text-[var(--text-primary)] truncate">{room.roomName}</h3>
-                                        <p className="mt-1">
-                                            <span
-                                                className={`inline-flex items-center font-bold px-2 py-0.5 rounded-full text-xs ${badgeClass}`}
-                                            >
-                                                {statusBadge}
-                                            </span>
-                                        </p>
-                                        <p className="text-xs text-[var(--text-muted)] mt-1">
+                                        <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">{room.roomName}</h3>
+                                        <div className="mt-1.5">
+                                            <StatusBadge tone={statusTone}>{statusBadge}</StatusBadge>
+                                        </div>
+                                        <p className="text-xs text-[var(--text-muted)] mt-1.5">
                                             {day?.isFree
                                                 ? "Hari libur, tidak perlu pemeriksaan."
                                                 : day && detail?.type === "record"
@@ -462,13 +447,13 @@ export default function CleaningOverviewPage() {
                                                   : "Buka rincian untuk melihat daftar pekerjaan dan pemeriksaan."}
                                         </p>
                                     </div>
-                                    <span className="inline-flex items-center gap-1 text-xs text-primary shrink-0 mt-1" aria-hidden="true">
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--primary)] shrink-0" aria-hidden="true">
                                         <Eye className="h-3.5 w-3.5" /> Rincian
                                     </span>
                                 </div>
                                 <button
                                     onClick={() => openRoomDetail(room.roomId)}
-                                    className="btn btn-secondary mt-3 w-full min-h-[48px]"
+                                    className="btn btn-secondary mt-3 w-full min-h-[44px] active:scale-[0.99]"
                                     type="button"
                                 >
                                     Lihat rincian
@@ -477,9 +462,7 @@ export default function CleaningOverviewPage() {
                         );
                     })}
                 {rooms.length > 0 && visibleRooms.length === 0 && (
-                    <p className="text-center text-muted-foreground py-6 text-sm">
-                        Tidak ketemu. Coba kata kunci atau filter lain.
-                    </p>
+                    <EmptyState title="Tidak ketemu. Coba kata kunci atau filter lain." />
                 )}
             </section>
 
@@ -513,13 +496,11 @@ export default function CleaningOverviewPage() {
                     </div>
 
                     {dayError[activeKey] && !activeDay && !activeDetail ? (
-                        <p className="text-xs text-[var(--destructive)]">
+                        <p className="text-xs text-[var(--destructive-text)]">
                             {dayError[activeKey]} Coba tutup lalu buka lagi.
                         </p>
                     ) : !activeDay && !activeDetail ? (
-                        <div className="flex items-center justify-center py-10">
-                            <Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" />
-                        </div>
+                        <StateCard variant="loading" />
                     ) : activeDay?.isFree ? (
                         <p className="text-sm text-[var(--text-muted)]">
                             Hari libur{activeDay.holidayDescription ? `: ${activeDay.holidayDescription}` : ""}. Tidak perlu
@@ -547,8 +528,8 @@ export default function CleaningOverviewPage() {
                                             <span
                                                 className={`shrink-0 inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full ${
                                                     s.status === "TERLAMBAT"
-                                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                                                        : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                        ? "bg-[var(--warning-bg)] text-[var(--warning)]"
+                                                        : "bg-[var(--success-bg)] text-[var(--success)]"
                                                 }`}
                                             >
                                                 {s.status === "TERLAMBAT" ? "Terlambat" : "Tepat waktu"}
@@ -593,22 +574,22 @@ export default function CleaningOverviewPage() {
                                         {activeItems.map((item) => (
                                             <div key={item.id} className="flex items-start gap-2 text-xs">
                                                 {item.isUnavailable ? (
-                                                    <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                    <Ban className="h-3.5 w-3.5 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
                                                 ) : item.isComplete ? (
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-[var(--success)] mt-0.5 flex-shrink-0" />
                                                 ) : (
-                                                    <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                    <Clock className="h-3.5 w-3.5 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
                                                 )}
                                                 <div className="flex-1 min-w-0">
                                                     <p
                                                         className={
-                                                            item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"
+                                                            item.isComplete && !item.isUnavailable ? "line-through text-[var(--text-muted)]" : "text-[var(--text-primary)]"
                                                         }
                                                     >
                                                         {item.itemNameSnapshot} —{" "}
                                                         {item.isUnavailable ? "tidak ada di ruangan" : item.isComplete ? "sudah dikerjakan" : "belum dikerjakan"}
                                                     </p>
-                                                    <p className="text-muted-foreground">
+                                                    <p className="text-[var(--text-muted)]">
                                                         {item.lastChangedBy
                                                             ? `Oleh ${item.lastChangedBy.displayName} · jam ${formatTimeWib(item.lastChangedAt)}`
                                                             : "Belum ada yang mengerjakan"}

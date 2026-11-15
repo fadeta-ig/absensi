@@ -3,11 +3,16 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
     FileEdit, Send, Clock, CheckCircle, XCircle, Loader2,
-    Calendar, AlertCircle, ClipboardCheck
+    Calendar, AlertCircle, ClipboardCheck, X
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
-import { Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
@@ -33,10 +38,10 @@ interface FormState {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<CorrectionRequest["status"], { label: string; badge: string; icon: typeof CheckCircle }> = {
-    PENDING:  { label: "Menunggu",  badge: "badge-warning", icon: Clock },
-    APPROVED: { label: "Disetujui", badge: "badge-success", icon: CheckCircle },
-    REJECTED: { label: "Ditolak",   badge: "badge-error",   icon: XCircle },
+const STATUS_CONFIG: Record<CorrectionRequest["status"], { label: string; tone: StatusTone; icon: typeof CheckCircle }> = {
+    PENDING:  { label: "Menunggu",  tone: "warning", icon: Clock },
+    APPROVED: { label: "Disetujui", tone: "success", icon: CheckCircle },
+    REJECTED: { label: "Ditolak",   tone: "danger",   icon: XCircle },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -255,58 +260,55 @@ export default function AttendanceCorrectionPage() {
     const paginated = requests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
 
-            {/* ── Header ─────────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <FileEdit className="w-5 h-5 text-[var(--primary)]" />
-                        Koreksi Presensi
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Ajukan koreksi jam masuk/keluar yang terlewat atau salah
-                    </p>
-                </div>
-                <button
-                    className="btn btn-primary"
-                    onClick={() => setShowForm((prev) => !prev)}
-                    disabled={!serverContext.isOnline || !serverContext.isFresh}
-                >
-                    <Send className="w-4 h-4" />
-                    Ajukan Koreksi
-                </button>
-            </div>
+            <PageHeader
+                title="Koreksi Presensi"
+                subtitle="Ajukan koreksi jam masuk/keluar yang terlewat atau salah"
+                icon={FileEdit}
+                action={
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => setShowForm(true)}
+                        disabled={!serverContext.isOnline || !serverContext.isFresh}
+                    >
+                        <Send className="w-4 h-4" />
+                        Ajukan Koreksi
+                    </button>
+                }
+            />
 
             {(!serverContext.isFresh || !serverContext.isOnline) && (
-                <div className="flex items-start justify-between gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300" role="status">
-                    <span>
-                        {serverContext.isOnline ? "Konteks waktu server belum segar." : "Perangkat offline."} Pengajuan koreksi dinonaktifkan sampai waktu server dapat diverifikasi.
-                    </span>
-                    <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">Coba lagi</button>
-                </div>
+                <FeedbackMessage variant="warning" compact>
+                    <div className="flex items-start justify-between gap-3">
+                        <span>
+                            {serverContext.isOnline ? "Konteks waktu server belum segar." : "Perangkat offline."} Pengajuan koreksi dinonaktifkan sampai waktu server dapat diverifikasi.
+                        </span>
+                        <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">Coba lagi</button>
+                    </div>
+                </FeedbackMessage>
             )}
 
-            {/* ── Info Box ───────────────────────────────────────────────────── */}
-            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-sm text-amber-800">
-                    <p className="font-semibold">Syarat Pengajuan Koreksi</p>
-                    <ul className="mt-1 space-y-0.5 text-xs list-disc list-inside text-amber-700">
-                        <li>Hanya untuk tanggal <strong>sebelum hari ini</strong></li>
-                        <li>Sertakan alasan yang jelas dan bukti jika tersedia</li>
-                        <li>Pengajuan akan diverifikasi oleh HR</li>
-                    </ul>
-                </div>
-            </div>
+            <FeedbackMessage variant="warning" title="Syarat Pengajuan Koreksi">
+                <ul className="mt-1 space-y-0.5 text-xs list-disc list-inside">
+                    <li>Hanya untuk tanggal <strong>sebelum hari ini</strong></li>
+                    <li>Sertakan alasan yang jelas dan bukti jika tersedia</li>
+                    <li>Pengajuan akan diverifikasi oleh HR</li>
+                </ul>
+            </FeedbackMessage>
 
-            {/* ── Form ───────────────────────────────────────────────────────── */}
+            {/* ── Form Modal ─────────────────────────────────────────────────── */}
             {showForm && (
-                <div className="card p-6 border-2 border-[var(--primary)]/20 shadow-xl">
-                    <h3 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                        <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
-                        Form Koreksi Presensi
-                    </h3>
+                <AccessibleModal ariaLabel="Ajukan koreksi presensi" onClose={() => setShowForm(false)} className="max-w-md">
+                    <div className="modal-header">
+                        <h2 className="modal-title flex items-center gap-2">
+                            <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
+                            Form Koreksi Presensi
+                        </h2>
+                        <button className="modal-close" onClick={() => setShowForm(false)} aria-label="Tutup form koreksi presensi">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Tanggal Target */}
@@ -324,14 +326,14 @@ export default function AttendanceCorrectionPage() {
                                 required
                             />
                             {form.targetDate && !isValidTargetDate(form.targetDate, serverDate) && (
-                                <p className="text-[10px] text-red-500 mt-1 font-medium flex items-center gap-1">
+                                <p className="text-[10px] text-[var(--destructive-text)] mt-1 font-medium flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3 shrink-0" /> Tanggal tidak boleh hari ini atau masa depan
                                 </p>
                             )}
                         </div>
 
                         {/* Jam yang diajukan */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <div className="form-group !mb-0">
                                 <label htmlFor="correction-clock-in" className="form-label flex items-center gap-1">
                                     <Clock className="w-3 h-3" /> Jam Masuk (Diajukan)
@@ -408,10 +410,10 @@ export default function AttendanceCorrectionPage() {
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={submitting || !serverContext.isOnline || !serverContext.isFresh}
-                                className="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-[var(--border)] rounded-lg hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all text-sm text-[var(--text-muted)] hover:text-[var(--primary)]"
+                                className="flex items-center justify-center gap-2 w-full p-3 border-2 border-dashed border-[var(--border)] rounded-lg hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] transition-all text-sm text-[var(--text-muted)] hover:text-[var(--primary)]"
                             >
                                 {attachmentName
-                                    ? <span className="text-green-600 font-medium text-xs flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> {attachmentName}</span>
+                                    ? <span className="text-[var(--success)] font-medium text-xs flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> {attachmentName}</span>
                                     : "Klik untuk lampirkan foto/dokumen (maks 2MB)"
                                 }
                             </button>
@@ -429,13 +431,13 @@ export default function AttendanceCorrectionPage() {
                             {submitting ? "Mengirim..." : "Kirim Pengajuan Koreksi"}
                         </button>
                     </form>
-                </div>
+                </AccessibleModal>
             )}
 
             {/* ── List ───────────────────────────────────────────────────────── */}
             <div className="space-y-3">
-                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <ClipboardCheck className="w-4 h-4 text-[var(--primary)]" />
+                <h2 className="emp-eyebrow flex items-center gap-1.5">
+                    <ClipboardCheck className="w-3.5 h-3.5" />
                     Riwayat Pengajuan
                     {requests.length > 0 && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-muted)]">
@@ -445,31 +447,21 @@ export default function AttendanceCorrectionPage() {
                 </h2>
 
                 {loadingList ? (
-                    <div className="space-y-2" role="status" aria-live="polite" aria-label="Memuat riwayat koreksi">
-                        {[0, 1, 2].map((i) => (
-                            <div key={i} className="card p-4 space-y-2">
-                                <Skeleton className="h-5 w-2/3" />
-                                <Skeleton className="h-4 w-1/2" />
-                                <Skeleton className="h-3 w-1/3" />
-                            </div>
-                        ))}
-                    </div>
+                    <ListSkeleton label="Memuat riwayat koreksi" />
                 ) : requests.length === 0 ? (
-                    <div className="card p-8 text-center">
-                        <FileEdit className="w-10 h-10 text-[var(--text-muted)] opacity-20 mx-auto mb-2" />
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada pengajuan koreksi</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-1">
-                            Gunakan tombol &quot;Ajukan Koreksi&quot; di atas untuk membuat pengajuan baru.
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon={FileEdit}
+                        title="Belum ada pengajuan koreksi"
+                        description='Gunakan tombol "Ajukan Koreksi" di atas untuk membuat pengajuan baru.'
+                    />
                 ) : (
                     <>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {paginated.map((req) => {
                                 const cfg = STATUS_CONFIG[req.status];
                                 const StatusIcon = cfg.icon;
                                 return (
-                                    <div key={req.id} className="card p-4 space-y-3">
+                                    <div key={req.id} className="emp-surface p-4 space-y-3">
                                         <div className="flex items-start justify-between gap-2">
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
@@ -491,10 +483,9 @@ export default function AttendanceCorrectionPage() {
                                                     </span>
                                                 </div>
                                             </div>
-                                            <span className={`badge ${cfg.badge} flex items-center gap-1 shrink-0`}>
-                                                <StatusIcon className="w-3 h-3" />
+                                            <StatusBadge tone={cfg.tone} icon={StatusIcon} className="shrink-0">
                                                 {cfg.label}
-                                            </span>
+                                            </StatusBadge>
                                         </div>
 
                                         <p className="text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">

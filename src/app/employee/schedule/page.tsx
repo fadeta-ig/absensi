@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle, Loader2, Moon, Sun, Briefcase, CalendarCheck } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Moon, Sun, Briefcase, CalendarCheck } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import EmptyState from "@/components/ui/EmptyState";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ScheduleItem {
@@ -17,36 +21,37 @@ interface ScheduleItem {
     source: "assignment" | "fallback" | "default" | "none";
 }
 
+const DAYS_TO_LOAD = 14;
+
 export default function EmployeeSchedulePage() {
     const toast = useToast();
     const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
-    const daysToLoad = 14;
+
+    const loadSchedule = useCallback(async () => {
+        setLoading(true);
+        setLoadError("");
+        try {
+            const res = await fetch(`/api/employee/shift-schedule?days=${DAYS_TO_LOAD}`);
+            if (!res.ok) {
+                throw new Error(await getResponseErrorMessage(res, "Gagal memuat jadwal shift."));
+            }
+            const data = await res.json();
+            setSchedule(Array.isArray(data) ? data : []);
+        } catch (error) {
+            reportClientError("EmployeeSchedulePage", "Gagal memuat jadwal shift", error);
+            const message = error instanceof Error ? error.message : "Gagal memuat jadwal shift.";
+            setLoadError(message);
+            toast(message, "error");
+        } finally {
+            setLoading(false);
+        }
+    }, [toast]);
 
     useEffect(() => {
-        const loadSchedule = async () => {
-            setLoading(true);
-            setLoadError("");
-            try {
-                const res = await fetch(`/api/employee/shift-schedule?days=${daysToLoad}`);
-                if (!res.ok) {
-                    throw new Error(await getResponseErrorMessage(res, "Gagal memuat jadwal shift."));
-                }
-                const data = await res.json();
-                setSchedule(Array.isArray(data) ? data : []);
-            } catch (error) {
-                reportClientError("EmployeeSchedulePage", "Gagal memuat jadwal shift", error);
-                const message = error instanceof Error ? error.message : "Gagal memuat jadwal shift.";
-                setLoadError(message);
-                toast(message, "error");
-            } finally {
-                setLoading(false);
-            }
-        };
-
         void loadSchedule();
-    }, [toast, daysToLoad]);
+    }, [loadSchedule]);
 
     const formatDayName = (dateStr: string) => {
         return new Intl.DateTimeFormat("id-ID", { 
@@ -85,45 +90,41 @@ export default function EmployeeSchedulePage() {
 
     return (
         <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
-            {/* ─── Header ──────────────────────────────────────── */}
-            <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <CalendarCheck className="w-5 h-5 text-[var(--primary)]" />
-                    Jadwal Saya
-                </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Jadwal shift kerja {daysToLoad} hari ke depan</p>
-            </div>
+            <PageHeader
+                title="Jadwal Saya"
+                subtitle={`Jadwal shift kerja ${DAYS_TO_LOAD} hari ke depan`}
+                icon={CalendarCheck}
+            />
 
-            {loading && (
-                <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-4 py-8 flex flex-col items-center justify-center gap-3 text-sm text-[var(--text-secondary)]">
-                    <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
-                    <span>Memuat jadwal kerja...</span>
-                </div>
-            )}
+            {loading && <StateCard variant="loading" title="Memuat jadwal kerja..." />}
 
-            {loadError && (
-                <div className="rounded-2xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{loadError}</span>
-                </div>
+            {!loading && loadError && (
+                <StateCard
+                    variant="error"
+                    title="Jadwal shift gagal dimuat"
+                    description={loadError}
+                    action={
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadSchedule()}>
+                            Coba lagi
+                        </button>
+                    }
+                />
             )}
 
             {!loading && !loadError && schedule.length === 0 && (
-                <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">
-                    Jadwal tidak tersedia.
-                </div>
+                <EmptyState
+                    icon={CalendarCheck}
+                    title="Jadwal belum tersedia"
+                    description="Roster shift Anda akan muncul di sini setelah dijadwalkan."
+                />
             )}
 
             {/* ─── Schedule List ────────────────────────────────── */}
             <div className="space-y-3 pb-8">
-                {schedule.map((item, i) => (
-                    <div 
-                        key={i} 
-                        className={`rounded-2xl border p-4 flex flex-col gap-3 transition-colors ${
-                            item.isOff 
-                                ? "bg-rose-50/50 border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30" 
-                                : "bg-[var(--card)] border-[var(--border)] hover:border-[var(--primary)]/40"
-                        }`}
+                {schedule.map((item) => (
+                    <div
+                        key={item.date}
+                        className={`emp-surface emp-surface-hover flex flex-col gap-3 p-4 ${item.isOff ? "bg-[color-mix(in_srgb,var(--secondary)_40%,transparent)]" : ""}`}
                     >
                         <div className="flex items-start justify-between">
                             <div>
@@ -137,39 +138,35 @@ export default function EmployeeSchedulePage() {
 
                             <div className="flex flex-wrap items-center justify-end gap-1.5 max-w-[50%]">
                                 {item.isOff && (
-                                    <span className="text-[10px] font-semibold text-rose-600 bg-rose-100 dark:bg-rose-500/20 dark:text-rose-400 px-2 py-0.5 rounded-full whitespace-nowrap">
-                                        Libur
-                                    </span>
+                                    <StatusBadge tone="neutral">Libur</StatusBadge>
                                 )}
                                 {(() => {
                                     const band = getTimeBand(item);
                                     if (band === "malam") {
                                         return (
-                                            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-100 dark:bg-indigo-500/20 dark:text-indigo-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
-                                                <Moon className="w-3 h-3" /> Malam
-                                            </span>
+                                            <StatusBadge tone="neutral" icon={Moon}>
+                                                Malam
+                                            </StatusBadge>
                                         );
                                     }
                                     if (band === "siang") {
                                         return (
-                                            <span className="text-[10px] font-semibold text-amber-600 bg-amber-100 dark:bg-amber-500/20 dark:text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
-                                                <Sun className="w-3 h-3" /> Siang
-                                            </span>
+                                            <StatusBadge tone="neutral" icon={Sun}>
+                                                Siang
+                                            </StatusBadge>
                                         );
                                     }
                                     if (band === "pagi") {
                                         return (
-                                            <span className="text-[10px] font-semibold text-sky-600 bg-sky-100 dark:bg-sky-500/20 dark:text-sky-400 px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap">
-                                                <Sun className="w-3 h-3" /> Pagi
-                                            </span>
+                                            <StatusBadge tone="neutral" icon={Sun}>
+                                                Pagi
+                                            </StatusBadge>
                                         );
                                     }
                                     return null;
                                 })()}
                                 {!item.isOff && item.source !== "none" && (
-                                    <span className="text-[10px] font-semibold text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                                        {getSourceLabel(item.source)}
-                                    </span>
+                                    <StatusBadge tone="neutral">{getSourceLabel(item.source)}</StatusBadge>
                                 )}
                             </div>
                         </div>
@@ -180,7 +177,7 @@ export default function EmployeeSchedulePage() {
                                     <Briefcase className="w-4 h-4 text-[var(--text-secondary)]" />
                                 </div>
                                 <div>
-                                    <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-tight">
+                                    <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">
                                         {item.shiftName}
                                     </p>
                                     <p className="text-[11px] font-medium text-[var(--text-muted)] mt-0.5 leading-tight flex items-center gap-1">
@@ -193,7 +190,7 @@ export default function EmployeeSchedulePage() {
                             <p className="text-[11px] text-[var(--text-muted)] italic">Shift tidak ditentukan</p>
                         )}
                         {item.isOff && (
-                            <p className="text-[11px] text-rose-500/80 dark:text-rose-400/80 italic mt-1 font-medium">Hari istirahat jadwal</p>
+                            <p className="mt-1 text-[11px] font-medium italic text-[var(--text-muted)]">Hari istirahat jadwal</p>
                         )}
                         
                         {/* Hidden descriptive text for easy testing / screen readers */}

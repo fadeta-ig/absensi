@@ -5,7 +5,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Loader2,
-    AlertTriangle,
     CheckCircle2,
     Clock,
     FileCheck2,
@@ -19,6 +18,11 @@ import { CleaningEvidencePanel } from "@/components/cleaning/CleaningEvidencePan
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import SignaturePad from "@/components/ui/SignaturePad";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import EmptyState from "@/components/ui/EmptyState";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
 
 interface EmployeeApprovalTask {
     approvalId: string;
@@ -532,7 +536,7 @@ function DailyParafSection() {
 
     return (
         <div>
-            <div className="card p-4 mb-6">
+            <div className="emp-surface p-4 mb-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                         <button
@@ -578,7 +582,7 @@ function DailyParafSection() {
                             key={f}
                             onClick={() => setDailyFilter(f)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                                dailyFilter === f ? "bg-[var(--primary)] text-white" : "btn btn-secondary !p-1.5"
+                                dailyFilter === f ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]" : "bg-[var(--secondary)] text-[var(--text-secondary)]"
                             }`}
                             type="button"
                         >
@@ -589,26 +593,19 @@ function DailyParafSection() {
             </div>
 
             {(roomsLoading || parafLoading) && (
-                <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
-                </div>
+                <ListSkeleton label="Memuat paraf harian" />
             )}
 
             {roomsError && !roomsLoading && (
-                <div className="mb-6 p-4 bg-[var(--destructive-bg)] text-[var(--destructive)] rounded-xl border border-[var(--destructive-border)] text-center">
-                    <AlertTriangle className="h-5 w-5 mx-auto mb-2" />
-                    <p className="text-sm">{roomsError}</p>
-                </div>
+                <FeedbackMessage variant="error" className="mb-6">{roomsError}</FeedbackMessage>
             )}
 
             {!roomsLoading && !parafLoading && !roomsError && filteredRooms.length === 0 && (
-                <div className="text-center py-12 border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--card)]">
-                    <FileCheck2 className="h-10 w-10 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
-                    <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">Tidak Ada Paraf Harian</h3>
-                    <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
-                        Tidak ada ruangan-tanggal yang menunggu paraf Anda pada {formatWibDateLabel(selectedDate)}.
-                    </p>
-                </div>
+                <EmptyState
+                    icon={FileCheck2}
+                    title="Tidak ada paraf harian"
+                    description={`Tidak ada ruangan-tanggal yang menunggu paraf Anda pada ${formatWibDateLabel(selectedDate)}.`}
+                />
             )}
 
             {!roomsLoading && !parafLoading && filteredRooms.length > 0 && (
@@ -618,10 +615,10 @@ function DailyParafSection() {
                         const myRole = myRoleFor(p);
                         const myPending = myRole ? p.missingRoles.includes(myRole) : p.missingRoles.length > 0;
                         return (
-                            <div key={r.roomId} className="card p-5" data-testid={`paraf-harian-item-${r.roomId}`}>
+                            <div key={r.roomId} className="emp-surface p-5" data-testid={`paraf-harian-item-${r.roomId}`}>
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                                     <div>
-                                        <h3 className="text-base font-bold text-[var(--text-primary)]">{p.roomName}</h3>
+                                        <h3 className="text-sm font-bold text-[var(--text-primary)]">{p.roomName}</h3>
                                         <p className="text-xs text-[var(--text-muted)]">{formatWibDateLabel(p.wibDate)}</p>
                                     </div>
                                     <div>
@@ -652,8 +649,8 @@ function DailyParafSection() {
                                                 key={s.id}
                                                 className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
                                                     s.status === "TERLAMBAT"
-                                                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                                                        : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                        ? "bg-[var(--warning-bg)] text-[var(--warning)]"
+                                                        : "bg-[var(--success-bg)] text-[var(--success)]"
                                                 }`}
                                             >
                                                 {dailyRoleLabel(s.role)}: {s.status === "TERLAMBAT" ? "Terlambat" : "Tepat waktu"} · {s.signerName}
@@ -662,7 +659,7 @@ function DailyParafSection() {
                                     </div>
                                 )}
                                 {!p.checklist.isComplete && !p.isFree && (
-                                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">
+                                    <p className="text-xs text-[var(--warning)] mb-2">
                                         Paraf dikunci hingga checklist 100% selesai.
                                     </p>
                                 )}
@@ -687,7 +684,7 @@ function DailyParafSection() {
                     <h2 className="text-sm font-bold text-[var(--text-primary)] mb-3">Riwayat paraf saya</h2>
                     <div className="space-y-2">
                         {myHistory.map((h) => (
-                            <div key={h.id} className="card px-4 py-3 flex items-center justify-between gap-3">
+                            <div key={h.id} className="emp-surface px-4 py-3 flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
                                         {h.roomName} · {formatWibDateLabel(h.wibDate)}
@@ -699,8 +696,8 @@ function DailyParafSection() {
                                 <span
                                     className={`shrink-0 inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                                         h.status === "TERLAMBAT"
-                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                                            : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                            ? "bg-[var(--warning-bg)] text-[var(--warning)]"
+                                            : "bg-[var(--success-bg)] text-[var(--success)]"
                                     }`}
                                 >
                                     {h.status === "TERLAMBAT" ? "Terlambat" : "Tepat waktu"}
@@ -730,9 +727,7 @@ function DailyParafSection() {
                     </div>
 
                     {detailLoading && (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
-                        </div>
+                        <ListSkeleton label="Memuat detail paraf" />
                     )}
 
                     {!detailLoading && detailParaf && (
@@ -748,18 +743,18 @@ function DailyParafSection() {
                                             .map((item) => (
                                                 <div key={item.id} className="flex items-start gap-2 text-xs">
                                                     {item.isUnavailable ? (
-                                                        <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                        <Ban className="h-3.5 w-3.5 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
                                                     ) : item.isComplete ? (
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                                        <CheckCircle2 className="h-3.5 w-3.5 text-[var(--success)] mt-0.5 flex-shrink-0" />
                                                     ) : (
-                                                        <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                        <Clock className="h-3.5 w-3.5 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
                                                     )}
                                                     <div className="flex-1 min-w-0">
-                                                        <p className={item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"}>
+                                                        <p className={item.isComplete && !item.isUnavailable ? "line-through text-[var(--text-muted)]" : "text-[var(--text-primary)]"}>
                                                             {item.itemNameSnapshot}
                                                             {item.isUnavailable ? " · Tidak ada di ruangan" : ""}
                                                         </p>
-                                                        <p className="text-muted-foreground">
+                                                        <p className="text-[var(--text-muted)]">
                                                             {item.lastChangedBy
                                                                 ? `${item.lastChangedBy.displayName} · ${formatTimeWib(item.lastChangedAt)}`
                                                                 : "Belum diubah"}
@@ -780,7 +775,7 @@ function DailyParafSection() {
                                     </h4>
                                     <div className="space-y-1">
                                         {detailChecklist.preview.items.map((item, idx) => (
-                                            <p key={idx} className="text-xs text-muted-foreground">
+                                            <p key={idx} className="text-xs text-[var(--text-muted)]">
                                                 {idx + 1}. {item.name}
                                             </p>
                                         ))}
@@ -788,22 +783,22 @@ function DailyParafSection() {
                                 </div>
                             )}
                             {(!detailChecklist || detailChecklist.type === "no_record") && (
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-[var(--text-muted)]">
                                     {detailChecklist?.message ?? "Detail checklist belum tersedia untuk tanggal ini."}
                                 </p>
                             )}
 
                             <div className="border-t border-[var(--border)] pt-3" data-testid="paraf-harian-section">
-                                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">
                                     Paraf harian atasan
                                 </h4>
                                 {detailParaf.isFree ? (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-[var(--text-muted)]">
                                         Bebas paraf{detailParaf.isHoliday && detailParaf.holidayDescription ? ` · ${detailParaf.holidayDescription}` : " · Hari libur"}.
                                     </p>
                                 ) : (
                                     <div className="space-y-2">
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-[var(--text-muted)]">
                                             Atasan pemeriksa:{" "}
                                             {detailParaf.reviewers
                                                 ? `Diperiksa oleh ${detailParaf.reviewers.inspectedByName ?? detailParaf.reviewers.inspectedByEmployeeId}, diketahui ${detailParaf.reviewers.knownByName ?? detailParaf.reviewers.knownByEmployeeId}`
@@ -819,8 +814,8 @@ function DailyParafSection() {
                                                         <span
                                                             className={`shrink-0 inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full ${
                                                                 s.status === "TERLAMBAT"
-                                                                    ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                                                                    : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                                    ? "bg-[var(--warning-bg)] text-[var(--warning)]"
+                                                                    : "bg-[var(--success-bg)] text-[var(--success)]"
                                                             }`}
                                                         >
                                                             {s.status === "TERLAMBAT" ? "Terlambat" : "Tepat waktu"}
@@ -829,20 +824,20 @@ function DailyParafSection() {
                                                 ))}
                                             </div>
                                         ) : (
-                                            <p className="text-xs text-muted-foreground">Belum ada paraf untuk tanggal ini.</p>
+                                            <p className="text-xs text-[var(--text-muted)]">Belum ada paraf untuk tanggal ini.</p>
                                         )}
                                         {detailParaf.missingRoles.length > 0 && (
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="text-xs text-[var(--text-muted)]">
                                                 Menunggu paraf dari: {detailParaf.missingRoles.map((role) => reviewerNameFor(detailParaf, role)).join(", ")}
                                             </p>
                                         )}
                                         {!detailParaf.checklist.isComplete && (
-                                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                                            <p className="text-xs text-[var(--warning)]">
                                                 Paraf dikunci hingga checklist 100% selesai.
                                             </p>
                                         )}
                                         {!detailParaf.reviewers && (
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="text-xs text-[var(--text-muted)]">
                                                 Paraf dikunci hingga reviewer bulanan ditetapkan.
                                             </p>
                                         )}
@@ -852,7 +847,7 @@ function DailyParafSection() {
 
                             {!detailParaf.isFree && (
                                 <div className="border-t border-[var(--border)] pt-3 space-y-2">
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-[var(--text-muted)]">
                                             Tepat bila Anda memaraf di hari yang sama sebelum jam 00.00 malam waktu Jakarta; lewat dari itu tercatat terlambat.
                                         </p>
                                     {(() => {
@@ -868,7 +863,7 @@ function DailyParafSection() {
                                                     onClick={() => void handleConfirmParaf()}
                                                     disabled={signing || locked}
                                                     title={locked ? "Paraf terkunci" : "Simpan paraf harian"}
-                                                    className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50"
+                                                    className="btn btn-primary btn-sm"
                                                 >
                                                     {signing ? "Menyimpan..." : "Simpan Paraf"}
                                                 </button>
@@ -876,7 +871,7 @@ function DailyParafSection() {
                                                     type="button"
                                                     onClick={() => setActiveRoomId(null)}
                                                     disabled={signing}
-                                                    className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                                                    className="btn btn-ghost btn-sm"
                                                 >
                                                     Batal
                                                 </button>
@@ -1051,21 +1046,19 @@ export default function EmployeeCleaningApprovalsPage() {
     };
 
     return (
-        <div className="mx-auto px-4 py-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tanda Tangan Inspeksi</h1>
-                <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                    Periksa dan tanda tangani checklist inspeksi bulanan ruangan yang ditugaskan kepada Anda.
-                </p>
-            </div>
+        <div className="mx-auto space-y-5">
+            <PageHeader
+                title="Tanda Tangan Inspeksi"
+                subtitle="Periksa dan tanda tangani checklist inspeksi bulanan ruangan yang ditugaskan kepada Anda."
+            />
 
-            <div className="flex items-center gap-2 mb-6" role="tablist" aria-label="Jenis persetujuan">
+            <div className="flex items-center gap-2" role="tablist" aria-label="Jenis persetujuan">
                 <button
                     onClick={() => setActiveTab("daily")}
                     role="tab"
                     aria-selected={activeTab === "daily"}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        activeTab === "daily" ? "bg-[var(--primary)] text-white" : "btn btn-secondary !p-1.5"
+                        activeTab === "daily" ? "border border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]" : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
                     }`}
                     type="button"
                 >
@@ -1076,7 +1069,7 @@ export default function EmployeeCleaningApprovalsPage() {
                     role="tab"
                     aria-selected={activeTab === "monthly"}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                        activeTab === "monthly" ? "bg-[var(--primary)] text-white" : "btn btn-secondary !p-1.5"
+                        activeTab === "monthly" ? "border border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]" : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
                     }`}
                     type="button"
                 >
@@ -1089,7 +1082,7 @@ export default function EmployeeCleaningApprovalsPage() {
             ) : (
             <>
             {/* Filter controls */}
-            <div className="card flex flex-wrap items-center justify-between gap-4 p-4 mb-6">
+            <div className="emp-surface flex flex-wrap items-center justify-between gap-4 p-4 mb-6">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => setMonth(shiftMonth(month, -1))}
@@ -1117,8 +1110,8 @@ export default function EmployeeCleaningApprovalsPage() {
                         onClick={() => setStatusFilter("ALL")}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                             statusFilter === "ALL"
-                                ? "bg-[var(--primary)] text-white"
-                                : "btn btn-secondary !p-1.5"
+                                ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]"
+                                : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
                         }`}
                         type="button"
                     >
@@ -1128,8 +1121,8 @@ export default function EmployeeCleaningApprovalsPage() {
                         onClick={() => setStatusFilter("PENDING")}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                             statusFilter === "PENDING"
-                                ? "bg-[var(--primary)] text-white"
-                                : "btn btn-secondary !p-1.5"
+                                ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]"
+                                : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
                         }`}
                         type="button"
                     >
@@ -1139,8 +1132,8 @@ export default function EmployeeCleaningApprovalsPage() {
                         onClick={() => setStatusFilter("SIGNED")}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                             statusFilter === "SIGNED"
-                                ? "bg-[var(--primary)] text-white"
-                                : "btn btn-secondary !p-1.5"
+                                ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]"
+                                : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
                         }`}
                         type="button"
                     >
@@ -1150,26 +1143,19 @@ export default function EmployeeCleaningApprovalsPage() {
             </div>
 
             {loading && (
-                <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
-                </div>
+                <ListSkeleton label="Memuat tugas tanda tangan" />
             )}
 
             {error && !loading && (
-                <div className="mb-6 p-4 bg-[var(--destructive-bg)] text-[var(--destructive)] rounded-xl border border-[var(--destructive-border)] text-center">
-                    <AlertTriangle className="h-5 w-5 mx-auto mb-2" />
-                    <p className="text-sm">{error}</p>
-                </div>
+                <FeedbackMessage variant="error" className="mb-6">{error}</FeedbackMessage>
             )}
 
             {!loading && !error && tasks.length === 0 && (
-                <div className="text-center py-16 border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--card)]">
-                    <FileCheck2 className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
-                    <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">Tidak Ada Tugas Tanda Tangan</h3>
-                    <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
-                        Tidak ada tugas penandatanganan inspeksi untuk Anda pada bulan {formatMonthLabel(month)}.
-                    </p>
-                </div>
+                <EmptyState
+                    icon={FileCheck2}
+                    title="Tidak ada tugas tanda tangan"
+                    description={`Tidak ada tugas penandatanganan inspeksi untuk Anda pada bulan ${formatMonthLabel(month)}.`}
+                />
             )}
 
             {!loading && !error && tasks.length > 0 && (
@@ -1177,15 +1163,15 @@ export default function EmployeeCleaningApprovalsPage() {
                     {tasks.map((task) => (
                         <div
                             key={`${task.approvalId}_${task.role}`}
-                            className="card p-5 hover:shadow-md transition-shadow"
+                            className="emp-surface p-5"
                         >
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <h3 className="text-base font-bold text-[var(--text-primary)]">
+                                        <h3 className="text-sm font-bold text-[var(--text-primary)]">
                                             {task.roomName}
                                         </h3>
-                                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[var(--secondary)] text-[var(--text-secondary)] border border-[var(--border)]">
+                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--secondary)] text-[var(--text-secondary)] border border-[var(--border)]">
                                             {task.roleLabel}
                                         </span>
                                     </div>
@@ -1200,7 +1186,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                             <CheckCircle2 className="h-3.5 w-3.5" /> Sudah Ditandatangani
                                         </span>
                                     ) : task.isSignable === false ? (
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-[var(--warning-border)]">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[var(--warning-bg)] text-[var(--warning)] border border-[var(--warning-border)]">
                                             <Clock className="h-3.5 w-3.5" /> Menunggu akhir bulan — dibuka {formatOpensOnShort(task.opensOnWibDate)}
                                         </span>
                                     ) : (
@@ -1286,15 +1272,13 @@ export default function EmployeeCleaningApprovalsPage() {
                     </div>
 
                     {modalLoading && (
-                        <div className="flex items-center justify-center py-16">
-                            <Loader2 className="h-8 w-8 animate-spin text-[var(--primary)]" />
-                        </div>
+                        <StateCard variant="loading" title="Memuat data tanda tangan" />
                     )}
 
                     {!modalLoading && modalData && (
                         <div>
                             {modalData.signable && !modalData.signable.isSignable && (
-                                <div className="mb-4 p-3 rounded-xl bg-amber-100/60 dark:bg-amber-900/20 border border-amber-300/60 dark:border-amber-800/50 text-xs text-amber-900 dark:text-amber-200">
+                                <div className="mb-4 p-3 rounded-xl bg-[var(--warning-bg)] border border-[var(--warning-border)] text-[var(--warning)]">
                                     Tanda tangan untuk periode {formatMonthLabel(modalData.monthWib)} baru dapat dilakukan
                                     mulai {formatOpensOnShort(modalData.signable.opensOnWibDate)} pukul 00.00 WIB (akhir
                                     bulan). Anda tetap bisa melihat rincian di bawah ini.
@@ -1309,7 +1293,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                     <p className="text-[11px] text-[var(--text-muted)] mb-2">
                                         Ketuk tanggal untuk melihat item, foto bukti, dan paraf hari itu.
                                     </p>
-                                    <div className="overflow-x-auto border border-[var(--border)] rounded-xl p-2.5 bg-[var(--secondary)]/30">
+                                    <div className="overflow-x-auto border border-[var(--border)] rounded-xl p-2.5 bg-[color-mix(in_srgb,var(--secondary)_30%,transparent)]">
                                         <div className="flex gap-1.5 min-w-max">
                                             {modalData.days.map((d) => (
                                                 <button
@@ -1319,7 +1303,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                                     onClick={() => void openDayDetail(modalData.roomId, d.date)}
                                                     title={`${d.date}: ${d.status}`}
                                                     aria-pressed={selectedDay === d.date}
-                                                    className={`w-7 h-10 rounded-lg flex flex-col items-center justify-center text-[9px] font-medium border disabled:opacity-40 disabled:cursor-not-allowed ${
+                                                    className={`w-7 h-10 rounded-lg flex flex-col items-center justify-center text-[10px] font-medium border disabled:opacity-40 disabled:cursor-not-allowed ${
                                                         selectedDay === d.date
                                                             ? "ring-2 ring-[var(--primary)]"
                                                             : ""
@@ -1329,12 +1313,12 @@ export default function EmployeeCleaningApprovalsPage() {
                                                             : d.status === "FUTURE"
                                                                 ? "bg-[var(--secondary)] text-[var(--text-muted)] border-[var(--border)]"
                                                                 : d.status === "LIBUR"
-                                                                    ? "bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400 border-[var(--border)]"
+                                                                    ? "bg-[var(--muted)] text-[var(--text-muted)] border-[var(--border)]"
                                                                     : "bg-[var(--warning-bg)] text-[var(--warning)] border-[var(--warning-border)]"
                                                     }`}
                                                 >
                                                     <span className="font-semibold">{parseInt(d.date.split("-")[2], 10)}</span>
-                                                    <span className="text-[7px] font-bold">
+                                                    <span className="text-[10px] font-bold">
                                                         {d.status === "SELESAI" ? "OK" : d.status === "FUTURE" ? "-" : d.status === "LIBUR" ? "L" : "!"}
                                                     </span>
                                                 </button>
@@ -1368,8 +1352,8 @@ export default function EmployeeCleaningApprovalsPage() {
                                                                     key={s.id}
                                                                     className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
                                                                         s.status === "TERLAMBAT"
-                                                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                                                                            : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                                            ? "bg-[var(--warning-bg)] text-[var(--warning)]"
+                                                                            : "bg-[var(--success-bg)] text-[var(--success)]"
                                                                     }`}
                                                                 >
                                                                     {dailyRoleLabel(s.role)}: {s.status === "TERLAMBAT" ? "Terlambat" : "Tepat waktu"} · {s.signerName}
@@ -1391,18 +1375,18 @@ export default function EmployeeCleaningApprovalsPage() {
                                                         .map((item) => (
                                                             <div key={item.id} className="flex items-start gap-2 text-xs">
                                                                 {item.isUnavailable ? (
-                                                                    <Ban className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                                    <Ban className="h-3.5 w-3.5 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
                                                                 ) : item.isComplete ? (
-                                                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                                                    <CheckCircle2 className="h-3.5 w-3.5 text-[var(--success)] mt-0.5 flex-shrink-0" />
                                                                 ) : (
-                                                                    <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                                    <Clock className="h-3.5 w-3.5 text-[var(--text-muted)] mt-0.5 flex-shrink-0" />
                                                                 )}
                                                                 <div className="flex-1 min-w-0">
-                                                                    <p className={item.isComplete && !item.isUnavailable ? "line-through text-muted-foreground" : "text-foreground"}>
+                                                                    <p className={item.isComplete && !item.isUnavailable ? "line-through text-[var(--text-muted)]" : "text-[var(--text-primary)]"}>
                                                                         {item.itemNameSnapshot}
                                                                         {item.isUnavailable ? " · Tidak ada di ruangan" : ""}
                                                                     </p>
-                                                                    <p className="text-muted-foreground">
+                                                                    <p className="text-[var(--text-muted)]">
                                                                         {item.lastChangedBy
                                                                             ? `${item.lastChangedBy.displayName} · ${formatTimeWib(item.lastChangedAt)}`
                                                                             : "Belum dikerjakan"}
@@ -1421,7 +1405,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                                         Checklist belum diisi petugas. Daftar pekerjaan hari itu:
                                                     </p>
                                                     {dayChecklist.preview.items.map((item, idx) => (
-                                                        <p key={idx} className="text-xs text-muted-foreground">
+                                                        <p key={idx} className="text-xs text-[var(--text-muted)]">
                                                             {idx + 1}. {item.name}
                                                         </p>
                                                     ))}
@@ -1445,7 +1429,7 @@ export default function EmployeeCleaningApprovalsPage() {
                                     if (roleInfo.isSigned && roleInfo.signature) {
                                         return (
                                             <div key={roleInfo.role} className="space-y-4">
-                                                <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/20 text-center">
+                                                <div className="p-4 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_20%,transparent)] text-center">
                                                     <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-2">
                                                         Tanda Tangan {roleInfo.roleLabel}{isMine ? " (Anda)" : ""}
                                                     </h4>
@@ -1488,8 +1472,8 @@ export default function EmployeeCleaningApprovalsPage() {
 
                                     if (modalData.signable && !modalData.signable.isSignable) {
                                         return (
-                                            <div key={roleInfo.role} className="p-4 rounded-xl border border-amber-300/60 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/10 text-center">
-                                                <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+                                            <div key={roleInfo.role} className="p-4 rounded-xl border border-[var(--warning-border)] bg-[var(--warning-bg)] text-center">
+                                                <p className="text-xs text-[var(--warning)] font-medium">
                                                     Tanda tangan dibuka {formatOpensOnShort(modalData.signable.opensOnWibDate)} pukul
                                                     00.00 WIB (akhir bulan).
                                                 </p>

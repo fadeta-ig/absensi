@@ -202,7 +202,7 @@ export default function AllMenusSheet({
                 },
                 {
                     href: "/employee/documents",
-                    label: "Dokumen Karyawan",
+                    label: "Dokumen & Surat",
                     description: "Berkas kontrak, formulir, dan surat resmi",
                     icon: FileText,
                     bg: "bg-orange-50 dark:bg-orange-950/40",
@@ -322,7 +322,7 @@ export default function AllMenusSheet({
                 ...(canTopViewCleaning === false || canTopViewCleaning === null ? [] : [
                     {
                         href: "/employee/cleaning/overview",
-                        label: "Pantau Inspeksi",
+                        label: "Pantau Kebersihan",
                         description: "Pantau checklist, paraf, dan rekap inspeksi (khusus atasan tertinggi)",
                         icon: FileCheck2,
                         bg: "bg-cyan-50 dark:bg-cyan-950/40",
@@ -331,7 +331,7 @@ export default function AllMenusSheet({
                 ]),
                 {
                     href: "/employee/todos",
-                    label: "To-Do List",
+                    label: "Catatan & To-Do",
                     description: "Daftar tugas kerja dan catatan aktivitas harian",
                     icon: NotebookPen,
                     bg: "bg-violet-50 dark:bg-violet-950/40",
@@ -380,10 +380,10 @@ export default function AllMenusSheet({
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
                     <div>
-                        <h2 className="text-base font-bold text-[var(--text-primary)]">
+                        <h2 className="text-base font-extrabold tracking-tight text-[var(--text-primary)]">
                             Menu Presensi & Layanan WITS
                         </h2>
-                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                             Daftar lengkap seluruh fitur portal karyawan
                         </p>
                     </div>
@@ -397,10 +397,10 @@ export default function AllMenusSheet({
                 </div>
 
                 {/* Content List per Category */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 custom-scrollbar">
                     {categories.map((cat, idx) => (
                         <div key={idx} className="space-y-2.5">
-                            <h3 className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider pl-1">
+                            <h3 className="emp-eyebrow pl-1">
                                 {cat.title}
                             </h3>
                             <div className="grid grid-cols-1 gap-2">
@@ -410,13 +410,13 @@ export default function AllMenusSheet({
                                         <button
                                             key={itemIdx}
                                             onClick={() => handleNavigate(item.href)}
-                                            className="w-full flex items-center gap-3.5 p-3 rounded-xl bg-[var(--secondary)]/40 hover:bg-[var(--secondary)] border border-transparent hover:border-[var(--border)] transition-all duration-150 text-left group"
+                                            className="emp-row-hover w-full flex items-center gap-3.5 p-3 rounded-2xl border border-transparent hover:border-[var(--border)] active:scale-[0.99] text-left group"
                                         >
                                             <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
                                                 <Icon className={`w-5 h-5 ${item.color} stroke-[1.8]`} />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors leading-snug truncate">
+                                                <p className="text-[13px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors leading-snug truncate">
                                                     {item.label}
                                                 </p>
                                                 <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
@@ -435,7 +435,7 @@ export default function AllMenusSheet({
                     <div className="pt-2 pb-4">
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40 text-sm font-semibold hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
+                            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-[var(--destructive-bg)] text-[var(--destructive-text)] border border-[var(--destructive-border)] text-sm font-semibold hover:opacity-90 transition-opacity active:scale-[0.99]"
                         >
                             <LogOut className="w-4 h-4 stroke-[2]" />
                             <span>Keluar dari Akun</span>
