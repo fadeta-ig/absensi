@@ -8,29 +8,40 @@ import {
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
 import type { HistoryEvent, MeetingHistory } from "@/lib/services/meetingHistoryService";
 import { formatWIBDateTime } from "@/lib/timezone";
 
-const ACTION_STYLE: Record<string, { icon: typeof Info; chip: string }> = {
-    created: { icon: Megaphone, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-    rescheduled: { icon: CalendarClock, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-    cancelled: { icon: Ban, chip: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
-    completed_early: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
-    minutes_created: { icon: FileText, chip: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" },
-    minutes_updated: { icon: Pencil, chip: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" },
-    minutes_deleted: { icon: XCircle, chip: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" },
-    rsvp_accepted: { icon: UserCheck, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
-    rsvp_declined: { icon: UserX, chip: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
-    task_created: { icon: ClipboardList, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-    task_progress: { icon: PlayCircle, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-    task_done: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
-    task_done_late: { icon: CheckCircle2, chip: "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300" },
-    task_submitted: { icon: UploadCloud, chip: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-    submission_approved: { icon: CheckCircle2, chip: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
-    revision_requested: { icon: Pencil, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-    task_cancelled: { icon: XCircle, chip: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
-    deadline_extended: { icon: Hourglass, chip: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
+type ChipTone = "info" | "warning" | "success" | "danger" | "neutral";
+
+const CHIP_TONE: Record<ChipTone, string> = {
+    info: "bg-[var(--info-bg)] text-[var(--info)]",
+    warning: "bg-[var(--warning-bg)] text-[var(--warning)]",
+    success: "bg-[var(--success-bg)] text-[var(--success)]",
+    danger: "bg-[var(--destructive-bg)] text-[var(--destructive-text)]",
+    neutral: "bg-[var(--secondary)] text-[var(--text-secondary)]",
+};
+
+const ACTION_STYLE: Record<string, { icon: typeof Info; tone: ChipTone }> = {
+    created: { icon: Megaphone, tone: "info" },
+    rescheduled: { icon: CalendarClock, tone: "warning" },
+    cancelled: { icon: Ban, tone: "danger" },
+    completed_early: { icon: CheckCircle2, tone: "success" },
+    minutes_created: { icon: FileText, tone: "neutral" },
+    minutes_updated: { icon: Pencil, tone: "neutral" },
+    minutes_deleted: { icon: XCircle, tone: "danger" },
+    rsvp_accepted: { icon: UserCheck, tone: "success" },
+    rsvp_declined: { icon: UserX, tone: "danger" },
+    task_created: { icon: ClipboardList, tone: "info" },
+    task_progress: { icon: PlayCircle, tone: "info" },
+    task_done: { icon: CheckCircle2, tone: "success" },
+    task_done_late: { icon: CheckCircle2, tone: "warning" },
+    task_submitted: { icon: UploadCloud, tone: "info" },
+    submission_approved: { icon: CheckCircle2, tone: "success" },
+    revision_requested: { icon: Pencil, tone: "warning" },
+    task_cancelled: { icon: XCircle, tone: "neutral" },
+    deadline_extended: { icon: Hourglass, tone: "warning" },
 };
 
 function fmtDT(iso: string): string {
@@ -106,7 +117,7 @@ function HistoryContent({ id }: { id: string }) {
 
     if (error || !data) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-5">
                 <button type="button" onClick={() => router.push(`/employee/appointments/detail/${id}`)} className="btn btn-secondary btn-sm">
                     <ArrowLeft className="w-4 h-4" /> Kembali ke Detail
                 </button>
@@ -125,23 +136,23 @@ function HistoryContent({ id }: { id: string }) {
     ];
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
             <div className="flex items-center gap-2">
                 <button
                     type="button"
                     onClick={() => router.push(`/employee/appointments/detail/${id}`)}
-                    className="min-w-11 min-h-11 rounded-xl hover:bg-[var(--secondary)] flex items-center justify-center"
+                    className="min-w-11 min-h-11 rounded-xl hover:bg-[var(--secondary)] flex items-center justify-center active:scale-[0.99] transition-colors"
                     aria-label="Kembali ke detail meeting"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="min-w-0">
-                    <h1 className="text-base font-extrabold text-[var(--text-primary)] truncate">Riwayat Meeting</h1>
-                    <p className="text-xs text-[var(--text-muted)] truncate">{a.title}</p>
+                    <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] truncate">Riwayat Meeting</h1>
+                    <p className="text-[11px] font-medium text-[var(--text-secondary)] truncate">{a.title}</p>
                 </div>
             </div>
 
-            <div className="card p-4 space-y-2">
+            <div className="emp-surface p-4 space-y-2">
                 <AppointmentStatusBadge status={a.status} lifecycle={a.lifecycle} />
                 <dl className="space-y-1 text-xs">
                     <div className="flex gap-1.5">
@@ -170,13 +181,13 @@ function HistoryContent({ id }: { id: string }) {
                     </div>
                 </dl>
                 {a.agenda && (
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 px-3 py-2.5 mt-1">
+                    <div className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_40%,transparent)] px-3 py-2.5 mt-1">
                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Agenda / Pokok Bahasan</p>
                         <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{a.agenda}</p>
                     </div>
                 )}
                 {a.minutes && (
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 px-3 py-2.5 mt-1">
+                    <div className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] px-3 py-2.5 mt-1">
                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Notulensi Final</p>
                         <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{a.minutes}</p>
                     </div>
@@ -192,7 +203,7 @@ function HistoryContent({ id }: { id: string }) {
                         aria-selected={filter === f.key}
                         onClick={() => setFilter(f.key)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold min-h-9 ${
-                            filter === f.key ? "bg-[var(--primary)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"
+                            filter === f.key ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[var(--primary)]" : "bg-[var(--secondary)] text-[var(--text-secondary)]"
                         }`}
                     >
                         {f.label}
@@ -201,10 +212,11 @@ function HistoryContent({ id }: { id: string }) {
             </div>
 
             {events.length === 0 ? (
-                <div className="card p-6 text-center">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">Belum ada riwayat</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">Aktivitas meeting dan task akan tercatat di sini.</p>
-                </div>
+                <EmptyState
+                    icon={ClipboardList}
+                    title="Belum ada riwayat"
+                    description="Aktivitas meeting dan task akan tercatat di sini."
+                />
             ) : (
                 <ol className="space-y-2">
                     {events.map((e: HistoryEvent) => {
@@ -214,9 +226,9 @@ function HistoryContent({ id }: { id: string }) {
                             <li
                                 key={e.id}
                                 id={`hist-${e.id}`}
-                                className={`card p-3 flex gap-3 ${highlight === e.id ? "ring-2 ring-[var(--primary)]" : ""}`}
+                                className={`emp-surface p-3 flex gap-3 ${highlight === e.id ? "ring-2 ring-[var(--primary)]" : ""}`}
                             >
-                                <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${style.chip}`}>
+                                <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${CHIP_TONE[style.tone]}`}>
                                     <Icon className="w-4 h-4" />
                                 </span>
                                 <div className="min-w-0 flex-1">

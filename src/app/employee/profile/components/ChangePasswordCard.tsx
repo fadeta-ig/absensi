@@ -48,11 +48,11 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
         setFormError(null);
 
         if (newPassword.length < 8) {
-            setFormError("Password baru minimal 8 karakter");
+            setFormError("Kata sandi baru minimal 8 karakter");
             return;
         }
         if (newPassword !== confirmPassword) {
-            setFormError("Konfirmasi password tidak cocok");
+            setFormError("Konfirmasi kata sandi tidak cocok");
             return;
         }
 
@@ -64,7 +64,7 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
                 body: JSON.stringify({ currentPassword, newPassword }),
             });
             if (!res.ok) {
-                throw new Error(await getResponseErrorMessage(res, "Gagal mengubah password"));
+                throw new Error(await getResponseErrorMessage(res, "Gagal mengubah kata sandi"));
             }
 
             const data = await res.json().catch(() => null);
@@ -76,8 +76,8 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
             setNewPassword("");
             setConfirmPassword("");
         } catch (error) {
-            reportClientError("ChangePasswordCard", "Gagal mengubah password karyawan", error);
-            toast(error instanceof Error ? error.message : "Password belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
+            reportClientError("ChangePasswordCard", "Gagal mengubah kata sandi karyawan", error);
+            toast(error instanceof Error ? error.message : "Kata sandi belum berubah karena koneksi bermasalah. Periksa internet lalu coba lagi.", "error");
         } finally {
             setLoading(false);
         }
@@ -85,24 +85,24 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
 
     const passwordStrength = (pw: string) => {
         if (pw.length === 0) return null;
-        if (pw.length < 8) return { label: "Lemah", color: "bg-red-400", width: "w-1/4" };
-        if (pw.length < 12) return { label: "Cukup", color: "bg-yellow-400", width: "w-2/4" };
-        if (/[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw)) return { label: "Kuat", color: "bg-green-500", width: "w-full" };
-        return { label: "Baik", color: "bg-blue-400", width: "w-3/4" };
+        if (pw.length < 8) return { label: "Lemah", color: "bg-[var(--destructive)]", width: "w-1/4" };
+        if (pw.length < 12) return { label: "Cukup", color: "bg-[var(--warning)]", width: "w-2/4" };
+        if (/[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw)) return { label: "Kuat", color: "bg-[var(--success)]", width: "w-full" };
+        return { label: "Baik", color: "bg-[var(--info)]", width: "w-3/4" };
     };
 
     const strength = passwordStrength(newPassword);
 
     return (
-        <SettingCard icon={ShieldCheck} title="Ubah Password" subtitle="Perbarui password akun Anda">
+        <SettingCard icon={ShieldCheck} title="Ubah Kata Sandi" subtitle="Perbarui kata sandi akun Anda">
 
             {isSuccess ? (
-                <div className="p-6 text-center space-y-4">
-                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300 mx-auto flex items-center justify-center">
+                <div className="rounded-2xl bg-[var(--secondary)] p-6 text-center space-y-4">
+                    <div className="w-12 h-12 rounded-full bg-[var(--success-bg)] text-[var(--success)] mx-auto flex items-center justify-center">
                         <CheckCircle className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
-                        <h3 className="text-base font-bold text-[var(--text-primary)]">Kata Sandi Berhasil Diperbarui</h3>
+                        <h3 className="text-sm font-bold text-[var(--text-primary)]">Kata Sandi Berhasil Diperbarui</h3>
                         <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto leading-relaxed">
                             {message?.text}
                         </p>
@@ -111,7 +111,7 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
                         <button
                             type="button"
                             onClick={handleRedirectNow}
-                            className="btn btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold shadow-sm"
+                            className="btn btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold"
                         >
                             <LogIn className="w-4 h-4" />
                             Masuk Sekarang ({countdown}s)
@@ -122,14 +122,14 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {locked && (
                         <NoticeBox kind="warning">
-                            Simpan dulu perubahan profil di atas sebelum ganti password.
+                            Simpan dulu perubahan profil di atas sebelum ganti kata sandi.
                         </NoticeBox>
                     )}
                     {formError && <NoticeBox kind="error">{formError}</NoticeBox>}
 
                     <div className="form-group !mb-0">
                         <label className="form-label">
-                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password Saat Ini</span>
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Kata Sandi Saat Ini</span>
                         </label>
                         <div className="relative">
                             <input
@@ -137,10 +137,10 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
                                 className="form-input pr-10"
                                 value={currentPassword}
                                 onChange={(e) => setCurrentPassword(e.target.value)}
-                                placeholder="Masukkan password saat ini"
+                                placeholder="Masukkan kata sandi saat ini"
                                 required
                             />
-                            <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                            <button type="button" onClick={() => setShowCurrent(!showCurrent)} aria-label={showCurrent ? "Sembunyikan kata sandi saat ini" : "Tampilkan kata sandi saat ini"} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
                                 {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
@@ -148,7 +148,7 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
 
                     <div className="form-group !mb-0">
                         <label className="form-label">
-                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password Baru</span>
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Kata Sandi Baru</span>
                         </label>
                         <div className="relative">
                             <input
@@ -160,7 +160,7 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
                                 required
                                 minLength={8}
                             />
-                            <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
+                            <button type="button" onClick={() => setShowNew(!showNew)} aria-label={showNew ? "Sembunyikan kata sandi baru" : "Tampilkan kata sandi baru"} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">
                                 {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
@@ -176,25 +176,25 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
 
                     <div className="form-group !mb-0">
                         <label className="form-label">
-                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Konfirmasi Password Baru</span>
+                            <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Konfirmasi Kata Sandi Baru</span>
                         </label>
                         <input
                             type="password"
                             className="form-input"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="Ulangi password baru"
+                            placeholder="Ulangi kata sandi baru"
                             required
                             minLength={8}
                         />
                         {confirmPassword && newPassword !== confirmPassword && (
-                            <p className="text-[10px] text-red-500 mt-1">Password tidak cocok</p>
+                            <p className="text-[10px] text-[var(--destructive-text)] mt-1">Kata sandi tidak cocok</p>
                         )}
                     </div>
 
                     <button type="submit" className="btn btn-primary w-full" disabled={loading || locked || !currentPassword || !newPassword || newPassword !== confirmPassword}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                        Ubah Password
+                        Ubah Kata Sandi
                     </button>
                 </form>
             )}

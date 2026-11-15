@@ -22,11 +22,11 @@ export default async function Employee360ViewPage({ params }: { params: Promise<
 
     if (!isAllowed) {
         return (
-            <div className="md:py-4">
-                <div className="card p-8 text-center max-w-md mx-auto">
-                    <AlertCircle className="w-10 h-10 text-[var(--destructive)] opacity-70 mx-auto mb-3" />
-                    <h1 className="text-base font-bold text-[var(--text-primary)]">Akses monitoring tidak tersedia</h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-2">
+            <div>
+                <div className="emp-surface p-8 text-center">
+                    <AlertCircle className="w-10 h-10 text-[var(--destructive-text)] opacity-70 mx-auto mb-3" />
+                    <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)]">Akses monitoring tidak tersedia</h1>
+                    <p className="text-xs text-[var(--text-muted)] mt-2">
                         Profil ini tidak termasuk dalam daftar anggota tim yang dapat Anda monitor.
                     </p>
                 </div>

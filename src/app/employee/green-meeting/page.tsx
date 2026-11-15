@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/table";
 import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
 import { reportClientError } from "@/lib/clientErrors";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import EmptyState from "@/components/ui/EmptyState";
 import { isGreenMeetingTargetRelevant, isGreenMeetingNoteRelevant } from "@/lib/greenMeetingTargeting";
 import { personRowsOf, legacyRowsOf, countAttendance } from "@/app/ga/green-meeting/selectors";
 import { AttendanceBadge, TaskStatusBadge } from "@/components/green-meeting/GreenMeetingBadges";
@@ -238,26 +240,27 @@ export default function EmployeeGreenMeetingPage() {
     }), [allNotes, noteFilter, viewerScope]);
 
     return (
-        <div className="w-full space-y-4 min-w-0 pb-6 max-w-full overflow-x-hidden" aria-busy={loading}>
+        <div className="w-full space-y-5 min-w-0 max-w-full overflow-x-hidden" aria-busy={loading}>
+            <h1 className="sr-only">Green Meeting</h1>
             {/* Header Super Compact: Tanggal, Lokasi, Jam, dan Kehadiran */}
-            <div className="bg-card border border-border/80 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3 min-w-0 overflow-hidden">
+            <div className="emp-surface p-3 sm:p-4 space-y-3 min-w-0 overflow-hidden">
                 {/* Top Row: Date Navigation & Quick Actions */}
                 <div className="flex items-center justify-between gap-2 min-w-0">
                     {/* Date Navigator */}
-                    <div className="flex items-center bg-muted/60 border border-border rounded-xl p-1 min-w-0 flex-1 max-w-[260px] sm:max-w-[280px]">
+                    <div className="flex items-center bg-[color-mix(in_srgb,var(--muted)_60%,transparent)] border border-[var(--border)] rounded-xl p-1 min-w-0 flex-1 max-w-[260px] sm:max-w-[280px]">
                         <button
                             type="button"
                             onClick={() => {
                                 setCurrentDateStr(addCalendarDays(currentDateStr, -1));
                             }}
-                            className="min-w-11 min-h-11 p-2.5 hover:bg-background rounded-lg text-foreground transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                            className="min-w-11 min-h-11 p-2.5 hover:bg-[var(--background)] rounded-lg text-[var(--text-primary)] transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                             title="Hari Sebelumnya"
                             aria-label="Hari Sebelumnya"
                         >
                             <ChevronLeft size={16} aria-hidden="true" />
                         </button>
                         <label
-                            className="relative flex items-center justify-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-background/80 rounded-lg cursor-pointer transition-colors group flex-1 min-w-0"
+                            className="relative flex items-center justify-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[color-mix(in_srgb,var(--background)_80%,transparent)] rounded-lg cursor-pointer transition-colors group flex-1 min-w-0"
                             title="Klik untuk memilih tanggal dari kalender"
                             onClick={(e) => {
                                 try {
@@ -283,7 +286,7 @@ export default function EmployeeGreenMeetingPage() {
                             onClick={() => {
                                 setCurrentDateStr(addCalendarDays(currentDateStr, 1));
                             }}
-                            className="min-w-11 min-h-11 p-2.5 hover:bg-background rounded-lg text-foreground transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                            className="min-w-11 min-h-11 p-2.5 hover:bg-[var(--background)] rounded-lg text-[var(--text-primary)] transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                             title="Hari Berikutnya"
                             aria-label="Hari Berikutnya"
                         >
@@ -296,7 +299,7 @@ export default function EmployeeGreenMeetingPage() {
                         <button
                             type="button"
                             onClick={() => setCurrentDateStr(todayStr)}
-                            className="px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl border border-border bg-card hover:bg-muted text-foreground transition-all shadow-2xs focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                            className="px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)] text-[var(--text-primary)] transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                         >
                             Hari Ini
                         </button>
@@ -306,7 +309,7 @@ export default function EmployeeGreenMeetingPage() {
                             onClick={handleRefresh}
                             disabled={loading}
                             aria-busy={loading}
-                            className="p-2.5 min-w-11 min-h-11 rounded-xl border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-all shadow-2xs disabled:opacity-50 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                            className="p-2.5 min-w-11 min-h-11 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all disabled:opacity-50 shrink-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                             title="Muat Ulang"
                             aria-label="Muat Ulang Data"
                         >
@@ -317,45 +320,45 @@ export default function EmployeeGreenMeetingPage() {
 
                 {/* Off-Day Alert Banner if Active */}
                 {offDayInfo?.isOffDay && (
-                    <div className="px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 flex items-center gap-2 min-w-0">
-                        <AlertCircle size={14} className="shrink-0 text-amber-600" />
+                    <div className="px-3 py-2 rounded-xl text-xs font-semibold bg-[var(--warning-bg)] text-[var(--warning)] border border-[var(--warning-border)] flex items-center gap-2 min-w-0">
+                        <AlertCircle size={14} className="shrink-0 text-[var(--warning)]" />
                         <span className="truncate">{offDayInfo.reason || "Hari Libur Rutin / Libur Nasional"}</span>
                     </div>
                 )}
 
                 {/* Meeting Metadata Strip: 3-column micro card layout */}
-                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1 border-t border-border/60 text-xs min-w-0">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-muted/40 border border-border/50 min-w-0 overflow-hidden">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1 border-t border-[color-mix(in_srgb,var(--border)_60%,transparent)] text-xs min-w-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)] min-w-0 overflow-hidden">
                         <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                             <MapPin size={13} />
                         </div>
                         <div className="min-w-0 flex-1 w-full">
-                            <p className="text-[11px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider truncate">Lokasi</p>
-                            <p className="text-[11px] sm:text-xs font-semibold text-foreground truncate" title={session?.room || "Belum ada sesi"}>
+                            <p className="text-[11px] sm:text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider truncate">Lokasi</p>
+                            <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-primary)] truncate" title={session?.room || "Belum ada sesi"}>
                                 {session ? session.room : "—"}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 min-w-0 overflow-hidden">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-[var(--info-bg)] border border-[var(--info-border)] min-w-0 overflow-hidden">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[color-mix(in_srgb,var(--info-border)_60%,transparent)] text-[var(--info)] flex items-center justify-center shrink-0">
                             <Clock size={13} />
                         </div>
                         <div className="min-w-0 flex-1 w-full">
-                            <p className="text-[11px] sm:text-xs text-muted-foreground font-medium uppercase tracking-wider truncate">Mulai</p>
-                            <p className="text-[11px] sm:text-xs font-semibold text-foreground truncate">
+                            <p className="text-[11px] sm:text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider truncate">Mulai</p>
+                            <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-primary)] truncate">
                                 {session ? `${session.startTime} WIB` : "—"}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 min-w-0 overflow-hidden">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 p-2 rounded-xl bg-[var(--success-bg)] border border-[var(--success-border)] min-w-0 overflow-hidden">
+                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[color-mix(in_srgb,var(--success-border)_60%,transparent)] text-[var(--success)] flex items-center justify-center shrink-0">
                             <CheckCircle2 size={13} aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1 w-full">
-                            <p className="text-[11px] sm:text-xs text-emerald-700 dark:text-emerald-400 font-medium uppercase tracking-wider truncate">Kehadiran</p>
-                            <p className="text-[11px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-300 truncate">
+                            <p className="text-[11px] sm:text-xs text-[var(--success)] font-medium uppercase tracking-wider truncate">Kehadiran</p>
+                            <p className="text-[11px] sm:text-xs font-bold text-[var(--success)] truncate">
                                 {hadirCount}/{personRows.length} Hadir ({attendancePercent}%)
                             </p>
                         </div>
@@ -364,42 +367,44 @@ export default function EmployeeGreenMeetingPage() {
             </div>
 
             {loadError && (
-                <div className="p-3 text-xs rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 min-w-0">
-                        <AlertCircle size={14} className="shrink-0" />
-                        <span className="break-words">{loadError}</span>
-                    </span>
-                    <button
-                        type="button"
-                        onClick={handleRefresh}
-                        className="shrink-0 px-3 py-2.5 min-h-11 text-xs font-semibold rounded-lg border border-rose-500/30"
-                    >
-                        Coba lagi
-                    </button>
-                </div>
+                <FeedbackMessage variant="error" compact>
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2 min-w-0">
+                            <AlertCircle size={14} className="shrink-0" />
+                            <span className="break-words">{loadError}</span>
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleRefresh}
+                            className="shrink-0 px-3 py-2.5 min-h-11 text-xs font-semibold rounded-lg border border-[var(--destructive-border)]"
+                        >
+                            Coba lagi
+                        </button>
+                    </div>
+                </FeedbackMessage>
             )}
 
             {/* Segmented Minimalist Tab Navigation */}
             <div
                 role="tablist"
                 aria-label="Pilih tampilan rapat"
-                className={`grid ${userDeptId ? "grid-cols-3" : "grid-cols-2"} gap-1.5 bg-muted/70 p-1.5 rounded-2xl border border-border/80 min-w-0`}
+                className={`grid ${userDeptId ? "grid-cols-3" : "grid-cols-2"} gap-1.5 bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] p-1.5 rounded-2xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] min-w-0`}
             >
                 <button
                     type="button"
                     role="tab"
                     aria-selected={activeTab === "NOTES"}
                     onClick={() => setActiveTab("NOTES")}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 px-1.5 sm:px-3 text-xs font-semibold rounded-xl transition-all min-w-0 min-h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-1.5 sm:px-3 text-xs font-semibold rounded-xl border border-transparent transition-all min-w-0 min-h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                         activeTab === "NOTES"
-                            ? "bg-card text-foreground shadow-xs ring-1 ring-border/50"
-                            : "text-muted-foreground hover:text-foreground hover:bg-card/40"
+                            ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                            : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                     }`}
                 >
                     <FileText size={14} className="shrink-0 text-primary" />
                     <span className="truncate">Notulensi</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                        activeTab === "NOTES" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                        activeTab === "NOTES" ? "bg-primary/10 text-primary" : "bg-[var(--muted)] text-[var(--text-muted)]"
                     }`}>
                         {allNotes.length}
                     </span>
@@ -411,16 +416,16 @@ export default function EmployeeGreenMeetingPage() {
                         role="tab"
                         aria-selected={activeTab === "MY_DEPT_TASKS"}
                         onClick={() => setActiveTab("MY_DEPT_TASKS")}
-                        className={`flex items-center justify-center gap-1.5 py-2.5 px-1.5 sm:px-3 text-xs font-semibold rounded-xl transition-all min-w-0 min-h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                        className={`flex items-center justify-center gap-1.5 py-2.5 px-1.5 sm:px-3 text-xs font-semibold rounded-xl border border-transparent transition-all min-w-0 min-h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                             activeTab === "MY_DEPT_TASKS"
-                                ? "bg-card text-foreground shadow-xs ring-1 ring-border/50"
-                                : "text-muted-foreground hover:text-foreground hover:bg-card/40"
+                                ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                         }`}
                     >
-                        <ListTodo size={14} className="shrink-0 text-purple-600" />
+                        <ListTodo size={14} className="shrink-0 text-[var(--primary)]" />
                         <span className="truncate">Tugas Dept</span>
                         <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                            activeTab === "MY_DEPT_TASKS" ? "bg-purple-500/15 text-purple-600 dark:text-purple-400" : "bg-muted text-muted-foreground"
+                            activeTab === "MY_DEPT_TASKS" ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]" : "bg-[var(--muted)] text-[var(--text-muted)]"
                         }`}>
                             {activeDeptTaskCount}
                         </span>
@@ -432,16 +437,16 @@ export default function EmployeeGreenMeetingPage() {
                     role="tab"
                     aria-selected={activeTab === "ATTENDANCE"}
                     onClick={() => setActiveTab("ATTENDANCE")}
-                    className={`flex items-center justify-center gap-1.5 py-2.5 px-1.5 sm:px-3 text-xs font-semibold rounded-xl transition-all min-w-0 min-h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+                    className={`flex items-center justify-center gap-1.5 py-2.5 px-1.5 sm:px-3 text-xs font-semibold rounded-xl border border-transparent transition-all min-w-0 min-h-11 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                         activeTab === "ATTENDANCE"
-                            ? "bg-card text-foreground shadow-xs ring-1 ring-border/50"
-                            : "text-muted-foreground hover:text-foreground hover:bg-card/40"
+                            ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                            : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--secondary)]"
                     }`}
                 >
-                    <Building2 size={14} aria-hidden="true" className="shrink-0 text-blue-600" />
+                    <Building2 size={14} aria-hidden="true" className="shrink-0 text-[var(--primary)]" />
                     <span className="truncate">Presensi</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
-                        activeTab === "ATTENDANCE" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-muted text-muted-foreground"
+                        activeTab === "ATTENDANCE" ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]" : "bg-[var(--muted)] text-[var(--text-muted)]"
                     }`}>
                         {personRows.length}
                     </span>
@@ -453,10 +458,10 @@ export default function EmployeeGreenMeetingPage() {
                 {loading && !session && myDeptTasks.length === 0 && (
                     <div className="space-y-2.5 animate-pulse" role="status" aria-label="Memuat data rapat">
                         {[0, 1, 2].map((i) => (
-                            <div key={i} className="bg-card border border-border rounded-2xl p-4 space-y-2">
-                                <div className="h-3 w-1/3 rounded bg-muted" />
-                                <div className="h-3 w-full rounded bg-muted" />
-                                <div className="h-3 w-2/3 rounded bg-muted" />
+                            <div key={i} className="emp-surface p-4 space-y-2">
+                                <div className="h-3 w-1/3 rounded bg-[var(--muted)]" />
+                                <div className="h-3 w-full rounded bg-[var(--muted)]" />
+                                <div className="h-3 w-2/3 rounded bg-[var(--muted)]" />
                             </div>
                         ))}
                     </div>
@@ -476,8 +481,8 @@ export default function EmployeeGreenMeetingPage() {
                                 aria-pressed={noteFilter === "ALL"}
                                 className={`px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                                     noteFilter === "ALL"
-                                        ? "bg-foreground text-background shadow-xs"
-                                        : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                        ? "bg-[var(--primary)] text-white"
+                                        : "bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] hover:bg-[var(--muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)]"
                                 }`}
                             >
                                 Semua Notulen ({allNotes.length})
@@ -489,8 +494,8 @@ export default function EmployeeGreenMeetingPage() {
                                     aria-pressed={noteFilter === "RELEVANT"}
                                     className={`px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 snap-start focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                                         noteFilter === "RELEVANT"
-                                            ? "bg-emerald-600 text-white shadow-xs"
-                                            : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                            ? "bg-[var(--primary)] text-white"
+                                            : "bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] hover:bg-[var(--muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)]"
                                     }`}
                                     title="Tampilkan notulensi yang ditujukan untuk Anda atau departemen Anda"
                                 >
@@ -499,7 +504,7 @@ export default function EmployeeGreenMeetingPage() {
                                         className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                                             noteFilter === "RELEVANT"
                                                 ? "bg-white/20 text-white"
-                                                : "bg-card text-foreground"
+                                                : "bg-[var(--card)] text-[var(--text-primary)]"
                                         }`}
                                     >
                                         {countRelevant}
@@ -513,8 +518,8 @@ export default function EmployeeGreenMeetingPage() {
                                     aria-pressed={noteFilter === "PERSONAL"}
                                     className={`px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 snap-start focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                                         noteFilter === "PERSONAL"
-                                            ? "bg-teal-600 text-white shadow-xs"
-                                            : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                            ? "bg-[var(--primary)] text-white"
+                                            : "bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] hover:bg-[var(--muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)]"
                                     }`}
                                     title="Tampilkan butir notulensi yang khusus ditujukan kepada Anda pribadi"
                                 >
@@ -523,7 +528,7 @@ export default function EmployeeGreenMeetingPage() {
                                         className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                                             noteFilter === "PERSONAL"
                                                 ? "bg-white/20 text-white"
-                                                : "bg-card text-foreground"
+                                                : "bg-[var(--card)] text-[var(--text-primary)]"
                                         }`}
                                     >
                                         {countPersonal}
@@ -536,8 +541,8 @@ export default function EmployeeGreenMeetingPage() {
                                 aria-pressed={noteFilter === "TUGAS"}
                                 className={`px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 snap-start focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                                     noteFilter === "TUGAS"
-                                        ? "bg-purple-600 text-white shadow-xs"
-                                        : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                        ? "bg-[var(--primary)] text-white"
+                                        : "bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] hover:bg-[var(--muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)]"
                                 }`}
                             >
                                 <span>Tugas Tindak Lanjut</span>
@@ -545,7 +550,7 @@ export default function EmployeeGreenMeetingPage() {
                                     className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                                         noteFilter === "TUGAS"
                                             ? "bg-white/20 text-white"
-                                            : "bg-card text-foreground"
+                                            : "bg-[var(--card)] text-[var(--text-primary)]"
                                     }`}
                                 >
                                     {countTasks}
@@ -557,8 +562,8 @@ export default function EmployeeGreenMeetingPage() {
                                 aria-pressed={noteFilter === "DIREKSI"}
                                 className={`px-3 py-2.5 min-h-11 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 shrink-0 snap-start focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
                                     noteFilter === "DIREKSI"
-                                        ? "bg-amber-600 text-white shadow-xs"
-                                        : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
+                                        ? "bg-[var(--primary)] text-white"
+                                        : "bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] hover:bg-[var(--muted)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)]"
                                 }`}
                             >
                                 <span>Arahan Direksi</span>
@@ -566,7 +571,7 @@ export default function EmployeeGreenMeetingPage() {
                                     className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                                         noteFilter === "DIREKSI"
                                             ? "bg-white/20 text-white"
-                                            : "bg-card text-foreground"
+                                            : "bg-[var(--card)] text-[var(--text-primary)]"
                                     }`}
                                 >
                                     {countDireksi}
@@ -577,18 +582,19 @@ export default function EmployeeGreenMeetingPage() {
                         {/* Note Cards List */}
                         <div className="space-y-3 min-w-0">
                             {filteredNotes.length === 0 ? (
-                                <div className="bg-card border border-border rounded-2xl p-6 sm:p-8 text-center text-muted-foreground space-y-2 shadow-xs w-full min-w-0 overflow-hidden">
-                                    <Info size={28} className="mx-auto text-muted-foreground opacity-50" />
-                                    <p className="text-xs sm:text-sm font-semibold text-foreground px-2 break-words [overflow-wrap:anywhere]">
-                                        {noteFilter === "RELEVANT" || noteFilter === "PERSONAL"
+                                <EmptyState
+                                    icon={Info}
+                                    className="w-full min-w-0 overflow-hidden"
+                                    title={
+                                        noteFilter === "RELEVANT" || noteFilter === "PERSONAL"
                                             ? "Tidak ada notulensi khusus untuk Anda atau departemen Anda pada tanggal ini."
                                             : noteFilter === "TUGAS"
                                             ? "Tidak ada tugas tindak lanjut pada tanggal ini."
                                             : noteFilter === "DIREKSI"
                                             ? "Tidak ada arahan direksi pada tanggal ini."
-                                            : "Belum ada catatan notulen pada sesi ini."}
-                                    </p>
-                                    {noteFilter !== "ALL" && allNotes.length > 0 && (
+                                            : "Belum ada catatan notulen pada sesi ini."
+                                    }
+                                    action={noteFilter !== "ALL" && allNotes.length > 0 ? (
                                         <button
                                             type="button"
                                             onClick={() => setNoteFilter("ALL")}
@@ -596,8 +602,8 @@ export default function EmployeeGreenMeetingPage() {
                                         >
                                             Tampilkan semua notulensi rapat ({allNotes.length})
                                         </button>
-                                    )}
-                                </div>
+                                    ) : undefined}
+                                />
                             ) : (
                                 filteredNotes.map((note) => {
                                     const isTask = note.type === "TUGAS";
@@ -610,25 +616,25 @@ export default function EmployeeGreenMeetingPage() {
                                     return (
                                         <div
                                             key={note.id}
-                                            className={`bg-card border rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 transition-all min-w-0 overflow-hidden ${
+                                            className={`emp-surface p-3.5 sm:p-4 space-y-3 transition-all min-w-0 overflow-hidden ${
                                                 isTask
                                                     ? isComplete
-                                                        ? "border-emerald-500/30 bg-emerald-500/[0.01]"
-                                                        : "border-purple-500/30 bg-purple-500/[0.01]"
-                                                    : "border-border/80"
+                                                        ? "border-[var(--success-border)]"
+                                                        : "border-[color-mix(in_srgb,var(--primary)_30%,transparent)]"
+                                                    : "border-[color-mix(in_srgb,var(--border)_80%,transparent)]"
                                             }`}
                                         >
                                             {/* Top Row: Type, Relevance Badges, and Status */}
-                                            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60 min-w-0 flex-wrap">
+                                            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[color-mix(in_srgb,var(--border)_60%,transparent)] min-w-0 flex-wrap">
                                                 <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                                     {/* Type Pill */}
                                                     <span
                                                         className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold border shrink-0 ${
                                                             isTask
-                                                                ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                                                                ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border-[color-mix(in_srgb,var(--primary)_20%,transparent)]"
                                                                 : isJustInfo
-                                                                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
-                                                                    : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                                                                    ? "bg-[var(--info-bg)] text-[var(--info)] border-[var(--info-border)]"
+                                                                    : "bg-[var(--secondary)] text-[var(--text-secondary)] border-[var(--border)]"
                                                         }`}
                                                     >
                                                         {isTask ? "Tugas Tindak Lanjut" : isJustInfo ? "Just Information" : "Informasi"}
@@ -636,24 +642,24 @@ export default function EmployeeGreenMeetingPage() {
 
                                                     {/* Smart Relevance Badges */}
                                                     {isForMe && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-[var(--success-bg)] text-[var(--success)] border border-[var(--success-border)] shrink-0">
                                                             <User size={11} aria-hidden="true" />
                                                             Untuk Anda
                                                         </span>
                                                     )}
                                                     {!isForMe && isForMyDept && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-[var(--info-bg)] text-[var(--info)] border border-[var(--info-border)] shrink-0">
                                                             <Building2 size={11} aria-hidden="true" />
                                                             Dept Anda
                                                         </span>
                                                     )}
                                                     {!isForMe && !isForMyDept && isForMyDiv && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 shrink-0">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] border border-[color-mix(in_srgb,var(--primary)_20%,transparent)] shrink-0">
                                                             Divisi Anda
                                                         </span>
                                                     )}
                                                     {note.lastEditedAt && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-muted text-muted-foreground border border-border shrink-0">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[var(--muted)] text-[var(--text-muted)] border border-[var(--border)] shrink-0">
                                                             <History size={11} aria-hidden="true" />
                                                             Direvisi
                                                         </span>
@@ -669,20 +675,20 @@ export default function EmployeeGreenMeetingPage() {
                                             </div>
 
                                             {/* Dedicated Routing Panel: Dari ➔ Kepada (Zero Leak Guarantee) */}
-                                            <div className="bg-muted/40 border border-border/50 rounded-xl p-2 sm:p-2.5 text-xs text-muted-foreground min-w-0">
+                                            <div className="bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] border border-[color-mix(in_srgb,var(--border)_50%,transparent)] rounded-xl p-2 sm:p-2.5 text-xs text-[var(--text-muted)] min-w-0">
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
-                                                    <div className="flex items-center gap-1.5 shrink-0 text-foreground">
-                                                        <span className="font-semibold text-muted-foreground text-[11px] flex items-center gap-1">
+                                                    <div className="flex items-center gap-1.5 shrink-0 text-[var(--text-primary)]">
+                                                        <span className="font-semibold text-[var(--text-muted)] text-[11px] flex items-center gap-1">
                                                             <Send size={11} className="text-primary" /> Dari:
                                                         </span>
-                                                        <span className="font-bold text-foreground">{note.originName}</span>
+                                                        <span className="font-bold text-[var(--text-primary)]">{note.originName}</span>
                                                     </div>
 
-                                                    <span className="hidden sm:inline text-muted-foreground/50">•</span>
+                                                    <span className="hidden sm:inline text-[color-mix(in_srgb,var(--text-muted)_50%,transparent)]">•</span>
 
                                                     <div className="flex items-start sm:items-center gap-1.5 min-w-0 flex-1">
-                                                        <span className="font-semibold text-muted-foreground text-[11px] shrink-0">Kepada:</span>
-                                                        <div className="font-semibold text-foreground break-words [overflow-wrap:anywhere] min-w-0 flex-1 leading-snug">
+                                                        <span className="font-semibold text-[var(--text-muted)] text-[11px] shrink-0">Kepada:</span>
+                                                        <div className="font-semibold text-[var(--text-primary)] break-words [overflow-wrap:anywhere] min-w-0 flex-1 leading-snug">
                                                             {note.isAllTarget ? (
                                                                 <span className="text-primary font-bold">Semua Karyawan</span>
                                                             ) : (
@@ -699,7 +705,7 @@ export default function EmployeeGreenMeetingPage() {
                                             </div>
 
                                             {/* Note Body */}
-                                            <div className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-normal break-words [overflow-wrap:anywhere] min-w-0">
+                                            <div className="text-xs sm:text-sm text-[color-mix(in_srgb,var(--text-primary)_90%,transparent)] whitespace-pre-wrap leading-relaxed font-normal break-words [overflow-wrap:anywhere] min-w-0">
                                                 {note.content}
                                             </div>
 
@@ -716,29 +722,29 @@ export default function EmployeeGreenMeetingPage() {
                                                 const dueDay = new Date(last.deadlineDate).toISOString().slice(0, 10);
                                                 const isOverdue = note.taskStatus !== "SELESAI" && note.taskStatus !== "DIBATALKAN" && dueDay < todayStr;
                                                 return (
-                                                <div className="pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between flex-wrap gap-2 min-w-0">
+                                                <div className="pt-2 border-t border-[color-mix(in_srgb,var(--border)_50%,transparent)] text-[11px] text-[var(--text-muted)] flex items-center justify-between flex-wrap gap-2 min-w-0">
                                                     <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                                         <Clock size={12} aria-hidden="true" className="text-primary shrink-0" />
                                                         <span className="truncate">
                                                             Tenggat:{" "}
-                                                            <strong className="text-foreground font-semibold">
+                                                            <strong className="text-[var(--text-primary)] font-semibold">
                                                                 {dueStr}
                                                             </strong>
                                                         </span>
                                                         {isOverdue && (
-                                                            <span aria-label={`Lewat tenggat sejak ${dueStr}`} className="px-1.5 py-1 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20 shrink-0">
+                                                            <span aria-label={`Lewat tenggat sejak ${dueStr}`} className="px-1.5 py-1 rounded text-[11px] font-semibold bg-[var(--destructive-bg)] text-[var(--destructive-text)] border border-[var(--destructive-border)] shrink-0">
                                                                 Lewat tenggat
                                                             </span>
                                                         )}
                                                         {note.deadlines.length > 1 && (
-                                                            <span className="px-1.5 py-1 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20 shrink-0">
+                                                            <span className="px-1.5 py-1 rounded text-[11px] font-semibold bg-[var(--warning-bg)] text-[var(--warning)] border border-[var(--warning-border)] shrink-0">
                                                                 Perpanjangan ke-{note.deadlines.length - 1}
                                                             </span>
                                                         )}
                                                     </div>
 
                                                     {note.completedAt && (
-                                                        <span className="text-emerald-600 font-medium inline-flex items-center gap-1 shrink-0">
+                                                        <span className="text-[var(--success)] font-medium inline-flex items-center gap-1 shrink-0">
                                                             <CheckCircle2 size={11} aria-hidden="true" />
                                                             Selesai {new Date(note.completedAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}
                                                         </span>
@@ -757,21 +763,21 @@ export default function EmployeeGreenMeetingPage() {
                 {/* TAB 2: TUGAS SAYA & DEPARTEMEN */}
                 {activeTab === "MY_DEPT_TASKS" && (
                     <div className="space-y-3 min-w-0">
-                        <div className="bg-muted/40 p-3 rounded-2xl border border-border/80 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 min-w-0">
+                        <div className="bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] p-3 rounded-2xl border border-[color-mix(in_srgb,var(--border)_80%,transparent)] text-xs text-[var(--text-muted)] flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 min-w-0">
                             <span className="truncate">
-                                Tindak lanjut untuk <strong className="text-foreground font-semibold">{userDeptName || "Departemen Anda"}</strong>:
+                                Tindak lanjut untuk <strong className="text-[var(--text-primary)] font-semibold">{userDeptName || "Departemen Anda"}</strong>:
                             </span>
-                            <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold border border-purple-500/20 shrink-0 self-start sm:self-auto">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] font-bold border border-[color-mix(in_srgb,var(--primary)_20%,transparent)] shrink-0 self-start sm:self-auto">
                                 {activeDeptTaskCount} Tugas Aktif
                             </span>
                         </div>
 
                         {myDeptTasks.length === 0 ? (
-                            <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground shadow-xs">
-                                <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500 opacity-60" />
-                                <p className="text-sm font-semibold text-foreground">Tidak ada tugas aktif saat ini.</p>
-                                <p className="text-xs mt-0.5">Seluruh instruksi rapat telah selesai dikerjakan.</p>
-                            </div>
+                            <EmptyState
+                                icon={CheckCircle2}
+                                title="Tidak ada tugas aktif saat ini."
+                                description="Seluruh instruksi rapat telah selesai dikerjakan."
+                            />
                         ) : (
                             myDeptTasks.map((task) => {
                                 const currentDeadline =
@@ -782,27 +788,27 @@ export default function EmployeeGreenMeetingPage() {
                                 return (
                                     <div
                                         key={task.id}
-                                        className={`bg-card border rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-2.5 transition-all min-w-0 overflow-hidden ${
-                                            isCompleted ? "opacity-75 border-border" : "border-purple-500/30 bg-purple-500/[0.01]"
+                                        className={`emp-surface p-3.5 sm:p-4 space-y-2.5 transition-all min-w-0 overflow-hidden ${
+                                            isCompleted ? "opacity-75 border-[var(--border)]" : "border-[color-mix(in_srgb,var(--primary)_30%,transparent)]"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between gap-2 flex-wrap min-w-0">
-                                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap text-xs text-[var(--text-muted)] min-w-0">
                                                 <span className="truncate">
-                                                    Dari: <strong className="text-foreground font-semibold">{task.originName}</strong>
+                                                    Dari: <strong className="text-[var(--text-primary)] font-semibold">{task.originName}</strong>
                                                 </span>
                                                 {task.session?.meetingDate && (
-                                                    <span className="text-[11px] text-muted-foreground shrink-0">
+                                                    <span className="text-[11px] text-[var(--text-muted)] shrink-0">
                                                         • {new Date(task.session.meetingDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" })}
                                                     </span>
                                                 )}
                                                 {isPersonalTask ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-[var(--success-bg)] text-[var(--success)] border border-[var(--success-border)] shrink-0">
                                                         <User size={11} aria-hidden="true" />
                                                         Tugas Pribadi
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-[var(--info-bg)] text-[var(--info)] border border-[var(--info-border)] shrink-0">
                                                         <Building2 size={11} aria-hidden="true" />
                                                         Departemen
                                                     </span>
@@ -813,7 +819,7 @@ export default function EmployeeGreenMeetingPage() {
                                             </div>
                                         </div>
 
-                                        <div className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] min-w-0">
+                                        <div className="text-xs sm:text-sm font-medium text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed break-words [overflow-wrap:anywhere] min-w-0">
                                             {task.content}
                                         </div>
 
@@ -828,23 +834,23 @@ export default function EmployeeGreenMeetingPage() {
                                             const dueDay = new Date(currentDeadline.deadlineDate).toISOString().slice(0, 10);
                                             const isOverdue = !isCompleted && task.taskStatus !== "DIBATALKAN" && dueDay < toWIBDateString();
                                             return (
-                                            <div className="pt-2 border-t border-border/50 flex items-center justify-between flex-wrap gap-2 text-[11px] text-muted-foreground min-w-0">
+                                            <div className="pt-2 border-t border-[color-mix(in_srgb,var(--border)_50%,transparent)] flex items-center justify-between flex-wrap gap-2 text-[11px] text-[var(--text-muted)] min-w-0">
                                                 <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                                                     <Clock size={12} aria-hidden="true" className="text-primary shrink-0" />
                                                     <span className="truncate">
                                                         Batas Waktu:{" "}
-                                                        <strong className="text-foreground font-semibold">
+                                                        <strong className="text-[var(--text-primary)] font-semibold">
                                                             {dueStr}
                                                         </strong>
                                                     </span>
                                                     {isOverdue && (
-                                                        <span aria-label={`Lewat tenggat sejak ${dueStr}`} className="text-[11px] font-semibold text-rose-600 bg-rose-500/10 px-1.5 py-1 rounded border border-rose-500/20 shrink-0">
+                                                        <span aria-label={`Lewat tenggat sejak ${dueStr}`} className="text-[11px] font-semibold text-[var(--destructive-text)] bg-[var(--destructive-bg)] px-1.5 py-1 rounded border border-[var(--destructive-border)] shrink-0">
                                                             Lewat tenggat
                                                         </span>
                                                     )}
                                                 </div>
                                                 {task.deadlines.length > 1 && (
-                                                    <span className="text-[11px] font-semibold text-amber-600 bg-amber-500/10 px-1.5 py-1 rounded border border-amber-500/20 shrink-0">
+                                                    <span className="text-[11px] font-semibold text-[var(--warning)] bg-[var(--warning-bg)] px-1.5 py-1 rounded border border-[var(--warning-border)] shrink-0">
                                                         Diperpanjang {task.deadlines.length - 1}x
                                                     </span>
                                                 )}
@@ -862,14 +868,14 @@ export default function EmployeeGreenMeetingPage() {
                 {activeTab === "ATTENDANCE" && (
                     <div className="space-y-3 min-w-0">
                         {!session && !loading ? (
-                            <div className="p-8 text-center bg-card border border-border rounded-2xl shadow-xs">
-                                <p className="text-sm font-semibold text-foreground">Tidak ada sesi rapat pada tanggal ini.</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">Pilih tanggal lain atau hubungi Tim GA.</p>
+                            <div className="p-8 text-center emp-surface ">
+                                <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada sesi rapat pada tanggal ini.</p>
+                                <p className="text-xs text-[var(--text-muted)] mt-0.5">Pilih tanggal lain atau hubungi Tim GA.</p>
                             </div>
                         ) : (
                             <>
                         {legacyRows.length > 0 && (
-                            <p className="text-xs text-muted-foreground bg-card border border-border rounded-2xl px-4 py-3">
+                            <p className="text-xs text-[var(--text-muted)] emp-surface px-4 py-3">
                                 {personRows.length > 0
                                     ? `Sesi campuran: ${legacyRows.length} baris arsip lama disembunyikan, hanya ${personRows.length} baris per-orang ditampilkan.`
                                     : "Sesi ini memakai format lama (per departemen). Datanya tersimpan sebagai arsip dan tidak ditampilkan di sini."}
@@ -878,7 +884,7 @@ export default function EmployeeGreenMeetingPage() {
                         {/* Mobile View: Clean Modern Cards with left status stripe */}
                         <div className="sm:hidden space-y-2.5 min-w-0">
                             {personRows.length === 0 ? (
-                                <div className="p-8 text-center text-xs text-muted-foreground bg-card border border-border rounded-2xl shadow-xs">
+                                <div className="p-8 text-center text-xs text-[var(--text-muted)] emp-surface ">
                                     Tidak ada data kehadiran untuk sesi rapat ini.
                                 </div>
                             ) : (
@@ -890,17 +896,17 @@ export default function EmployeeGreenMeetingPage() {
                                     return (
                                         <div
                                             key={att.id}
-                                            className={`p-3 rounded-2xl bg-card border shadow-xs space-y-2 min-w-0 border-l-4 ${
+                                            className={`p-3 rounded-2xl bg-[var(--card)] border space-y-2 min-w-0 border-l-4 ${
                                                 isHadir
-                                                    ? "border-l-emerald-500 border-border"
-                                                    : "border-l-rose-500 border-border"
+                                                    ? "border-l-emerald-500 border-[var(--border)]"
+                                                    : "border-l-rose-500 border-[var(--border)]"
                                             }`}
                                         >
                                             <div className="flex items-start justify-between gap-2 min-w-0">
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex items-center gap-1.5 min-w-0">
-                                                        <span className="text-[10px] font-mono text-muted-foreground shrink-0">{idx + 1}.</span>
-                                                        <span className="text-xs font-bold text-foreground truncate">
+                                                        <span className="text-[10px] font-mono text-[var(--text-muted)] shrink-0">{idx + 1}.</span>
+                                                        <span className="text-xs font-bold text-[var(--text-primary)] truncate">
                                                             {attName}
                                                         </span>
                                                         {isMine && (
@@ -909,8 +915,8 @@ export default function EmployeeGreenMeetingPage() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-muted-foreground pl-4 truncate">
-                                                        <span className="font-medium text-foreground/70">Dept:</span>{" "}
+                                                    <p className="text-[11px] text-[var(--text-muted)] pl-4 truncate">
+                                                        <span className="font-medium text-[color-mix(in_srgb,var(--text-primary)_70%,transparent)]">Dept:</span>{" "}
                                                         {att.departmentName || "-"}
                                                     </p>
                                                 </div>
@@ -925,7 +931,7 @@ export default function EmployeeGreenMeetingPage() {
                         </div>
 
                         {/* Desktop View: Full Responsive Table */}
-                        <div className="hidden sm:block bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
+                        <div className="hidden sm:block emp-surface overflow-hidden ">
                             <div className="w-full overflow-x-auto">
                                 <Table>
                                     <TableHeader>
@@ -939,15 +945,15 @@ export default function EmployeeGreenMeetingPage() {
                                     <TableBody>
                                         {personRows.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">
+                                                <TableCell colSpan={4} className="text-center py-8 text-xs text-[var(--text-muted)]">
                                                     Tidak ada data kehadiran untuk sesi rapat ini.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
                                             personRows.map((att, idx) => (
                                                 <TableRow key={att.id}>
-                                                    <TableCell className="text-center text-xs text-muted-foreground">{idx + 1}</TableCell>
-                                                    <TableCell className="font-semibold text-xs text-foreground">
+                                                    <TableCell className="text-center text-xs text-[var(--text-muted)]">{idx + 1}</TableCell>
+                                                    <TableCell className="font-semibold text-xs text-[var(--text-primary)]">
                                                         {att.employeeName || att.representativeName || "-"}
                                                         {userEmployeeId && att.employeeId === userEmployeeId && (
                                                             <span className="ml-1.5 inline-flex items-center px-1.5 py-1 rounded text-[11px] font-bold bg-primary/10 text-primary border border-primary/20">
@@ -955,7 +961,7 @@ export default function EmployeeGreenMeetingPage() {
                                                             </span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-xs text-muted-foreground">
+                                                    <TableCell className="text-xs text-[var(--text-muted)]">
                                                         {att.departmentName || "-"}
                                                     </TableCell>
                                                     <TableCell>

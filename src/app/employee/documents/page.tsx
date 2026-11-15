@@ -3,14 +3,19 @@
 import { useState, useEffect } from "react";
 import {
     FileText, Send, Clock, CheckCircle, XCircle, Loader2,
-    AlertCircle, Info,
-    Briefcase, DollarSign, UserCheck, Shield, Check,
+    AlertCircle,
+    Briefcase, DollarSign, UserCheck, Shield, Check, X,
     type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { StepperTimeline } from "@/components/ui/StepperTimeline";
-import { Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatDisplayDateTime } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
@@ -38,22 +43,22 @@ const LETTER_TYPE_CONFIG: Record<LetterType, {
     iconColor: string;
     iconBg: string;
 }> = {
-    SK_KERJA:          { label: "Surat Keterangan Kerja",  description: "Untuk keperluan bank, visa, atau instansi lain",    icon: Briefcase,  iconColor: "text-blue-600",   iconBg: "bg-blue-50" },
-    KET_PENGHASILAN:   { label: "Keterangan Penghasilan",  description: "Rincian gaji untuk keperluan kredit atau lainnya",   icon: DollarSign, iconColor: "text-green-600",  iconBg: "bg-green-50" },
-    KET_MASIH_BEKERJA: { label: "Masih Aktif Bekerja",     description: "Bukti masih berstatus karyawan aktif perusahaan",    icon: UserCheck,  iconColor: "text-purple-600", iconBg: "bg-purple-50" },
-    BPJS:              { label: "Surat Keterangan BPJS",   description: "Informasi keikutsertaan BPJS Kesehatan / TK",        icon: Shield,     iconColor: "text-rose-600",   iconBg: "bg-rose-50" },
+    SK_KERJA:          { label: "Surat Keterangan Kerja",  description: "Untuk keperluan bank, visa, atau instansi lain",    icon: Briefcase,  iconColor: "text-blue-600 dark:text-blue-400",    iconBg: "bg-blue-50 dark:bg-blue-950/40" },
+    KET_PENGHASILAN:   { label: "Keterangan Penghasilan",  description: "Rincian gaji untuk keperluan kredit atau lainnya",   icon: DollarSign, iconColor: "text-green-600 dark:text-green-400",  iconBg: "bg-green-50 dark:bg-green-950/40" },
+    KET_MASIH_BEKERJA: { label: "Masih Aktif Bekerja",     description: "Bukti masih berstatus karyawan aktif perusahaan",    icon: UserCheck,  iconColor: "text-purple-600 dark:text-purple-400", iconBg: "bg-purple-50 dark:bg-purple-950/40" },
+    BPJS:              { label: "Surat Keterangan BPJS",   description: "Informasi keikutsertaan BPJS Kesehatan / TK",        icon: Shield,     iconColor: "text-rose-600 dark:text-rose-400",   iconBg: "bg-rose-50 dark:bg-rose-950/40" },
 };
 
 const STATUS_CONFIG: Record<LetterStatus, {
     label: string;
-    badge: string;
+    tone: StatusTone;
     icon: LucideIcon;
     step: number;
 }> = {
-    PENDING:    { label: "Menunggu",     badge: "badge-warning", icon: Clock,         step: 1 },
-    PROCESSING: { label: "Diproses",     badge: "badge-info",    icon: Loader2,       step: 2 },
-    READY:      { label: "Siap Diambil", badge: "badge-success", icon: CheckCircle,   step: 3 },
-    REJECTED:   { label: "Ditolak",      badge: "badge-error",   icon: XCircle,       step: -1 },
+    PENDING:    { label: "Menunggu",     tone: "warning",  icon: Clock,         step: 1 },
+    PROCESSING: { label: "Diproses",     tone: "info",     icon: Loader2,       step: 2 },
+    READY:      { label: "Siap Diambil", tone: "success",  icon: CheckCircle,   step: 3 },
+    REJECTED:   { label: "Ditolak",      tone: "danger",   icon: XCircle,       step: -1 },
 };
 
 const TIMELINE_STEPS = [
@@ -134,45 +139,42 @@ export default function DocumentsPage() {
     const paginated  = requests.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-[var(--primary)]" />
-                        Dokumen &amp; Surat
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Ajukan permintaan surat keterangan ke HR
-                    </p>
-                </div>
-                <button className="btn btn-primary" onClick={() => setShowForm((p) => !p)}>
-                    <Send className="w-4 h-4" />
-                    {showForm ? "Tutup Form" : "Minta Surat"}
-                </button>
-            </div>
+            <PageHeader
+                title="Dokumen & Surat"
+                subtitle="Ajukan permintaan surat keterangan ke HR"
+                icon={FileText}
+                action={
+                    <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+                        <Send className="w-4 h-4" />
+                        Minta Surat
+                    </button>
+                }
+            />
 
             {/* ── Info Banner ────────────────────────────────────────────────── */}
-            <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-800">
-                    <p className="font-semibold">Cara Kerja</p>
-                    <p className="text-xs text-blue-600 mt-1">
-                        Pilih jenis surat → Isi tujuan → Kirim ke HR.
-                        Tim HR akan memproses dan menghubungi Anda saat surat siap diambil.
-                        Estimasi proses: <strong>1–3 hari kerja</strong>.
-                    </p>
-                </div>
-            </div>
+            <FeedbackMessage variant="info" title="Cara Kerja">
+                <p>
+                    Pilih jenis surat → Isi tujuan → Kirim ke HR.
+                    Tim HR akan memproses dan menghubungi Anda saat surat siap diambil.
+                    Estimasi proses: <strong>1–3 hari kerja</strong>.
+                </p>
+            </FeedbackMessage>
 
-            {/* ── Form ───────────────────────────────────────────────────────── */}
+            {/* ── Form Modal ─────────────────────────────────────────────────── */}
             {showForm && (
-                <div className="card p-6 border-2 border-[var(--primary)]/20 shadow-xl">
-                    <h3 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-[var(--primary)]" />
-                        Form Permintaan Surat
-                    </h3>
+                <AccessibleModal ariaLabel="Permintaan surat" onClose={() => setShowForm(false)}>
+                    <div className="modal-header">
+                        <h2 className="modal-title flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-[var(--primary)]" />
+                            Form Permintaan Surat
+                        </h2>
+                        <button className="modal-close" onClick={() => setShowForm(false)} aria-label="Tutup form permintaan surat">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Pilih Jenis Surat */}
@@ -193,15 +195,15 @@ export default function DocumentsPage() {
                                                 role="radio"
                                                 aria-checked={isSelected}
                                                 onClick={() => setSelectedType(type)}
-                                                className={`group relative flex items-center justify-between gap-3 p-3.5 rounded-xl text-left transition-all duration-200 cursor-pointer ${
+                                                className={`group relative flex items-center justify-between gap-3 p-3.5 rounded-xl border text-left transition-colors cursor-pointer ${
                                                     isSelected
-                                                        ? "border-2 border-[var(--primary)] bg-gradient-to-r from-[var(--primary)]/15 via-[var(--primary)]/5 to-transparent ring-2 ring-[var(--primary)]/20 shadow-md translate-x-1"
-                                                        : "border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)]/40 hover:bg-[var(--secondary)]/40 opacity-70 hover:opacity-100"
+                                                        ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]"
+                                                        : "border-[var(--border)] bg-[var(--card)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--secondary)_40%,transparent)]"
                                                 }`}
                                             >
                                                 <div className="flex items-start gap-3 min-w-0">
-                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 ${
-                                                        isSelected ? "bg-[var(--primary)] text-white shadow-sm ring-2 ring-[var(--primary)]/20" : `${cfg.iconBg} ${cfg.iconColor}`
+                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                                                        isSelected ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]" : `${cfg.iconBg} ${cfg.iconColor}`
                                                     }`}>
                                                         <TypeIcon className="w-4.5 h-4.5" />
                                                     </div>
@@ -213,7 +215,7 @@ export default function DocumentsPage() {
                                                                 {cfg.label}
                                                             </p>
                                                             {isSelected && (
-                                                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--primary)] text-white shadow-xs">
+                                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--primary)] text-white">
                                                                     <Check className="w-2.5 h-2.5 stroke-[3]" />
                                                                     Dipilih
                                                                 </span>
@@ -227,7 +229,7 @@ export default function DocumentsPage() {
 
                                                 <div className="shrink-0 pl-2">
                                                     {isSelected ? (
-                                                        <div className="w-6 h-6 rounded-full bg-[var(--primary)] text-white flex items-center justify-center shadow-sm ring-2 ring-[var(--primary)]/30">
+                                                        <div className="w-6 h-6 rounded-full bg-[var(--primary)] text-white flex items-center justify-center">
                                                             <Check className="w-3.5 h-3.5 stroke-[3]" />
                                                         </div>
                                                     ) : (
@@ -241,9 +243,9 @@ export default function DocumentsPage() {
                             </div>
 
                             {/* Active Selection Summary Callout */}
-                            <div className="mt-3 p-3 rounded-xl border border-[var(--primary)]/25 bg-[var(--primary)]/5 flex items-center justify-between gap-3">
+                            <div className="mt-3 p-3 rounded-xl border border-[color-mix(in_srgb,var(--primary)_25%,transparent)] bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] flex items-center justify-between gap-3">
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center shrink-0 shadow-xs">
+                                    <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-white flex items-center justify-center shrink-0">
                                         <Check className="w-4 h-4 stroke-[2.5]" />
                                     </div>
                                     <div className="min-w-0">
@@ -253,9 +255,9 @@ export default function DocumentsPage() {
                                         </p>
                                     </div>
                                 </div>
-                                <span className="badge badge-primary text-[10px] font-semibold shrink-0">
+                                <StatusBadge tone="info" className="shrink-0">
                                     Siap Dibuat
-                                </span>
+                                </StatusBadge>
                             </div>
                         </div>
 
@@ -284,39 +286,29 @@ export default function DocumentsPage() {
                             {submitting ? "Mengirim..." : "Kirim Permintaan ke HR"}
                         </button>
                     </form>
-                </div>
+                </AccessibleModal>
             )}
 
             {/* ── Riwayat ────────────────────────────────────────────────────── */}
             <div className="space-y-3">
-                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[var(--primary)]" />
+                <h2 className="emp-eyebrow flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5" />
                     Riwayat Permintaan
                     {requests.length > 0 && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-muted)]">
+                        <span className="rounded-full bg-[var(--secondary)] px-2 py-0.5 font-bold text-[var(--text-muted)]">
                             {requests.length}
                         </span>
                     )}
                 </h2>
 
                 {loadingList ? (
-                    <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat riwayat permintaan">
-                        {[0, 1, 2].map((i) => (
-                            <div key={i} className="card p-4 space-y-2">
-                                <Skeleton className="h-5 w-2/3" />
-                                <Skeleton className="h-4 w-1/2" />
-                                <Skeleton className="h-3 w-1/3" />
-                            </div>
-                        ))}
-                    </div>
+                    <ListSkeleton label="Memuat riwayat permintaan" />
                 ) : requests.length === 0 ? (
-                    <div className="card p-8 text-center">
-                        <FileText className="w-10 h-10 text-[var(--text-muted)] opacity-20 mx-auto mb-2" />
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada permintaan surat</p>
-                        <p className="text-xs text-[var(--text-muted)] mt-1">
-                            Gunakan tombol &quot;Minta Surat&quot; untuk membuat permintaan baru.
-                        </p>
-                    </div>
+                    <EmptyState
+                        icon={FileText}
+                        title="Belum ada permintaan surat"
+                        description={'Gunakan tombol "Minta Surat" untuk membuat permintaan baru.'}
+                    />
                 ) : (
                     <>
                         <div className="space-y-3">
@@ -328,7 +320,7 @@ export default function DocumentsPage() {
                                 const currentStep = statusCfg.step;
 
                                 return (
-                                    <div key={req.id} className="card p-4 space-y-3">
+                                    <div key={req.id} className="emp-surface p-4 space-y-3">
                                         {/* Top Row */}
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-center gap-2">
@@ -340,10 +332,9 @@ export default function DocumentsPage() {
                                                     <p className="text-[10px] text-[var(--text-muted)]">{formatDisplayDateTime(req.createdAt)}</p>
                                                 </div>
                                             </div>
-                                            <span className={`badge ${statusCfg.badge} flex items-center gap-1 shrink-0`}>
-                                                <StatusIcon className="w-3 h-3" />
+                                            <StatusBadge tone={statusCfg.tone} icon={StatusIcon} className="shrink-0">
                                                 {statusCfg.label}
-                                            </span>
+                                            </StatusBadge>
                                         </div>
 
                                         {/* Tujuan */}
@@ -368,10 +359,9 @@ export default function DocumentsPage() {
 
                                         {/* Status Rejected Banner */}
                                         {req.status === "REJECTED" && (
-                                            <div className="flex items-center gap-2 p-2.5 bg-red-50 rounded-lg border border-red-100">
-                                                <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                                                <p className="text-[11px] text-red-600 font-medium">Permintaan ini ditolak oleh HR</p>
-                                            </div>
+                                            <FeedbackMessage variant="error" compact>
+                                                Permintaan ini ditolak oleh HR
+                                            </FeedbackMessage>
                                         )}
 
                                         {/* Notes dari HR */}

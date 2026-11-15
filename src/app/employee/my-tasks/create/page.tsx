@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Briefcase, Loader2, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface Recipient {
@@ -51,7 +52,7 @@ export default function CreateMyTaskPage() {
                 setRecipients(Array.isArray(json.data) ? json.data : []);
             } catch (err) {
                 if (controller.signal.aborted) return;
-                reportClientError("CreateMyTaskPage", "Gagal memuat data Tambah Task", err);
+                reportClientError("CreateMyTaskPage", "Gagal memuat data Tambah Tugas", err);
                 setError(err instanceof Error ? err.message : "Gagal memuat daftar karyawan. Periksa koneksi Anda, lalu coba lagi.");
             } finally {
                 if (!controller.signal.aborted) setLoadingRecipients(false);
@@ -119,24 +120,25 @@ export default function CreateMyTaskPage() {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
             <div className="flex items-start gap-2">
                 <button type="button" onClick={() => router.push("/employee/my-tasks")} className="btn btn-secondary btn-sm" aria-label="Kembali ke Tugas Saya">
                     <ArrowLeft className="w-4 h-4" />
                 </button>
-                <div className="min-w-0">
-                    <h1 className="text-lg font-bold text-[var(--text-primary)]">Tambah Task</h1>
-                    <p className="text-xs text-[var(--text-muted)]">Beri tugas di luar meeting ke karyawan lain</p>
-                </div>
+                <PageHeader
+                    title="Tambah Tugas"
+                    subtitle="Beri tugas di luar meeting ke karyawan lain"
+                    className="flex-1"
+                />
             </div>
 
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
             {success && <FeedbackMessage variant="success">{success}</FeedbackMessage>}
 
-            <section className="card p-4 space-y-2" aria-label="Pilih kategori tugas">
+            <section className="emp-surface p-4 space-y-2" aria-label="Pilih kategori tugas">
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">Pilih kategori</h2>
                 <div className="grid grid-cols-1 gap-2">
-                    <div className="rounded-xl border-2 border-[var(--primary)] bg-[var(--secondary)]/40 p-3 flex items-start gap-2" aria-current="true">
+                    <div className="rounded-xl border-2 border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] p-3 flex items-start gap-2" aria-current="true">
                         <Briefcase className="w-4 h-4 text-[var(--primary)] shrink-0 mt-0.5" />
                         <span>
                             <span className="block text-sm font-bold text-[var(--text-primary)]">Operasional</span>
@@ -160,10 +162,10 @@ export default function CreateMyTaskPage() {
                 </div>
             </section>
 
-            <section className="card p-4 space-y-3" aria-label="Form tugas operasional">
+            <section className="emp-surface p-4 space-y-3" aria-label="Form tugas operasional">
                 <div>
                     <span className="form-label">Pemberi Tugas</span>
-                    <p className="form-input bg-[var(--secondary)]/50 flex items-center min-h-10 text-sm" aria-readonly="true">
+                    <p className="form-input bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] flex items-center min-h-10 text-sm" aria-readonly="true">
                         {myName ? `${stripGelar(myName)} (${myEmployeeId ?? "-"})` : (myEmployeeId ?? "Memuat…")}
                         <span className="text-[11px] text-[var(--text-muted)] ml-1">— otomatis dari akun Anda, bertugas memverifikasi hasil</span>
                     </p>

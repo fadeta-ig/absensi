@@ -11,7 +11,9 @@ import { ClockOutModal } from "./components/ClockOutModal";
 import { VisitDetailModal } from "./components/VisitDetailModal";
 import { useConfirm } from "@/components/ConfirmModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
-import { Skeleton } from "@/components/ui/Skeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
@@ -159,25 +161,20 @@ export default function VisitsPage() {
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <MapPinned className="w-5 h-5 text-[var(--primary)]" />
-                        Kunjungan Dinas
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Buat draft, clock in, dan clock out kunjungan
-                    </p>
-                </div>
-                <button
-                    className="btn btn-primary"
-                    onClick={() => setModal({ type: "create_draft" })}
-                >
-                    <Plus className="w-4 h-4" /> Buat Draft
-                </button>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader
+                title="Kunjungan Dinas"
+                subtitle="Buat draft, clock in, dan clock out kunjungan"
+                icon={MapPinned}
+                action={
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => setModal({ type: "create_draft" })}
+                    >
+                        <Plus className="w-4 h-4" /> Buat Draft
+                    </button>
+                }
+            />
 
             {/* Message */}
             {message && (
@@ -187,16 +184,17 @@ export default function VisitsPage() {
             )}
 
             {/* Filter */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter status kunjungan">
                 <Filter className="w-4 h-4 text-[var(--text-muted)]" />
                 {VISIT_FILTER_OPTIONS.map((opt) => (
                     <button
                         key={opt.key}
                         onClick={() => { setFilterStatus(opt.key); setCurrentPage(1); }}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                        aria-pressed={filterStatus === opt.key}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                             filterStatus === opt.key
-                                ? "bg-[var(--primary)] text-white"
-                                : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
+                                ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:bg-[var(--secondary)]"
                         }`}
                     >
                         {opt.label}
@@ -209,26 +207,16 @@ export default function VisitsPage() {
 
             {/* Visit List */}
             {loading ? (
-                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat kunjungan">
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="card p-4 space-y-2">
-                            <Skeleton className="h-5 w-2/3" />
-                            <Skeleton className="h-4 w-1/2" />
-                            <Skeleton className="h-3 w-1/3" />
-                        </div>
-                    ))}
-                </div>
+                <ListSkeleton label="Memuat kunjungan" />
             ) : filtered.length === 0 ? (
-                <div className="card p-12 text-center border-dashed">
-                    <MapPinned className="w-12 h-12 text-[var(--border)] mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-[var(--text-primary)]">Belum ada kunjungan</h3>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Buat draft kunjungan untuk memulai
-                    </p>
-                </div>
+                <EmptyState
+                    icon={MapPinned}
+                    title="Belum ada kunjungan"
+                    description="Buat draft kunjungan untuk memulai"
+                />
             ) : (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-3">
                         {paginatedVisits.map((visit) => (
                             <VisitCard
                                 key={visit.id}

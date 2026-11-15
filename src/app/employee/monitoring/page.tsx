@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { Users, Search, Activity, Layers, AlertCircle, RotateCcw } from "lucide-react";
+import { Users, Search, Activity, Layers, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import DataTablePagination from "@/components/ui/DataTablePagination";
+import EmptyState from "@/components/ui/EmptyState";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 const MONITORING_FILTER_KEY = "employee-monitoring-filter";
 
@@ -130,10 +133,10 @@ export default function MonitoringPage() {
 
     if (forbidden) {
         return (
-            <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-                <div className="card p-6 text-center">
-                    <h1 className="text-base font-semibold text-[var(--text-primary)]">Monitoring Tim tidak tersedia untuk akun Anda.</h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
+            <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+                <div className="emp-surface p-6 text-center">
+                    <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)]">Monitoring Tim tidak tersedia untuk akun Anda.</h1>
+                    <p className="text-xs text-[var(--text-muted)] mt-2">
                         Halaman ini hanya untuk atasan yang memiliki bawahan. Hubungi admin HR bila Anda seharusnya memiliki akses.
                     </p>
                 </div>
@@ -142,22 +145,22 @@ export default function MonitoringPage() {
     }
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
                         <Activity className="w-5 h-5 text-[var(--primary)]" />
                         Monitoring Tim
                     </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                    <p className="text-[11px] font-medium text-[var(--text-secondary)] mt-1">
                         Monitoring performa dan profil anggota tim Anda secara real-time.
                     </p>
                 </div>
             </div>
 
             {/* Filter Bar */}
-            <div className="card p-4 space-y-3">
+            <div className="emp-surface p-4 space-y-3">
                 <div className="space-y-2.5">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
@@ -199,23 +202,20 @@ export default function MonitoringPage() {
 
             {/* Grid kartu karyawan */}
             {loadError ? (
-                <div className="card p-12 text-center text-[var(--destructive)]">
-                    <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-70" />
-                    <p className="font-semibold text-sm">{loadError}</p>
-                </div>
+                <StateCard variant="error" title="Gagal memuat tim" description={loadError} />
             ) : filtered.length === 0 ? (
-                <div className="card p-12 text-center text-[var(--text-muted)]">
-                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada anggota tim yang cocok</p>
-                    <p className="text-xs mt-1">Coba sesuaikan kata kunci pencarian Anda</p>
-                </div>
+                <EmptyState
+                    icon={Users}
+                    title="Tidak ada anggota tim yang cocok"
+                    description="Coba sesuaikan kata kunci pencarian Anda"
+                />
             ) : (
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 gap-3">
                         {paginatedEmployees.map((e) => (
                             <div
                                 key={e.id}
-                                className="card p-4 flex flex-col justify-between space-y-3 border-l-4 border-l-[var(--primary)] hover:shadow-md transition-shadow"
+                                className="emp-surface p-4 flex flex-col justify-between space-y-3 border-l-4 border-l-[var(--primary)]"
                             >
                                 {/* Card Header */}
                                 <div className="flex justify-between items-start">
@@ -228,9 +228,9 @@ export default function MonitoringPage() {
                                             <p className="text-[10px] text-[var(--text-muted)] font-mono">{e.employeeId}</p>
                                         </div>
                                     </div>
-                                    <span className={`badge ${e.isActive ? "badge-success" : "badge-error"} text-[9px]`}>
+                                    <StatusBadge tone={e.isActive ? "success" : "danger"} className="shrink-0">
                                         {e.isActive ? "Aktif" : "Nonaktif"}
-                                    </span>
+                                    </StatusBadge>
                                 </div>
 
                                 {/* Card Content */}
@@ -251,7 +251,7 @@ export default function MonitoringPage() {
                                         href={`/employee/monitoring/${e.id}`}
                                         className="btn btn-secondary btn-sm w-full flex items-center justify-center gap-1.5 text-xs"
                                     >
-                                        <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                                        <Layers className="w-3.5 h-3.5 text-[var(--success)]" />
                                         Lihat Profil 360
                                     </Link>
                                 </div>
@@ -259,7 +259,7 @@ export default function MonitoringPage() {
                         ))}
                     </div>
 
-                    <div className="card overflow-hidden">
+                    <div className="emp-surface overflow-hidden">
                         <DataTablePagination
                             currentPage={currentPage}
                             totalPages={totalPages}

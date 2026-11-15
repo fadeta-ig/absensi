@@ -4,14 +4,18 @@ import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
 
 import { useState, useEffect } from "react";
 import {
-    Clock4, Plus, Loader2, AlertCircle, X,
+    Clock4, Plus, Loader2, X,
     Calendar, Clock, FileText, Filter
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import { useToast } from "@/components/Toast";
 import DataTablePagination from "@/components/ui/DataTablePagination";
-import { Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 
 interface OvertimeRequest {
     id: string;
@@ -25,10 +29,10 @@ interface OvertimeRequest {
     createdAt: string;
 }
 
-const STATUS_CONFIG = {
-    pending: { label: "Menunggu", class: "badge-warning" },
-    approved: { label: "Disetujui", class: "badge-success" },
-    rejected: { label: "Ditolak", class: "badge-error" },
+const STATUS_CONFIG: Record<OvertimeRequest["status"], { label: string; tone: StatusTone }> = {
+    pending: { label: "Menunggu", tone: "warning" },
+    approved: { label: "Disetujui", tone: "success" },
+    rejected: { label: "Ditolak", tone: "danger" },
 };
 
 export default function EmployeeOvertimePage() {
@@ -113,32 +117,28 @@ export default function EmployeeOvertimePage() {
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <Clock4 className="w-5 h-5 text-[var(--primary)]" />
-                        Lembur
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Total disetujui: <strong className="text-[var(--text-primary)]">{Number(totalApproved.toFixed(2))}</strong> jam
-                    </p>
-                </div>
-                <button className="btn btn-primary" onClick={() => { setShowForm(true); resetForm(); }}>
-                    <Plus className="w-4 h-4" /> Ajukan Lembur
-                </button>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader
+                title="Lembur"
+                subtitle={`Total disetujui: ${Number(totalApproved.toFixed(2))} jam`}
+                icon={Clock4}
+                action={
+                    <button className="btn btn-primary" onClick={() => { setShowForm(true); resetForm(); }}>
+                        <Plus className="w-4 h-4" /> Ajukan Lembur
+                    </button>
+                }
+            />
 
             {/* Filter */}
-            <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-[var(--text-muted)]" />
+            <div className="flex flex-wrap items-center gap-2">
+                <Filter className="w-4 h-4 text-[var(--text-muted)]" aria-hidden="true" />
                 {["all", "pending", "approved", "rejected"].map((s) => (
                     <button
                         key={s}
                         onClick={() => { setFilterStatus(s); setCurrentPage(1); }}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filterStatus === s
-                            ? "bg-[var(--primary)] text-white"
-                            : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--border)]"
+                        className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors active:scale-[0.99] ${filterStatus === s
+                            ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:bg-[color-mix(in_srgb,var(--secondary)_60%,transparent)]"
                             }`}
                     >
                         {s === "all" ? "Semua" : STATUS_CONFIG[s as keyof typeof STATUS_CONFIG].label}
@@ -148,36 +148,22 @@ export default function EmployeeOvertimePage() {
 
             {/* Request List */}
             {loadingList ? (
-                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat pengajuan lembur">
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="card p-4 space-y-2">
-                            <Skeleton className="h-5 w-2/3" />
-                            <Skeleton className="h-4 w-1/2" />
-                            <Skeleton className="h-3 w-1/3" />
-                        </div>
-                    ))}
-                </div>
+                <ListSkeleton count={3} label="Memuat pengajuan lembur" />
             ) : loadError ? (
-                <div className="card p-8 text-center">
-                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
-                </div>
+                <StateCard variant="error" title={loadError} />
             ) : filtered.length === 0 ? (
-                <div className="card p-8 text-center">
-                    <Clock4 className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
-                    <p className="text-sm text-[var(--text-muted)]">Belum ada pengajuan lembur</p>
-                </div>
+                <EmptyState icon={Clock4} title="Belum ada pengajuan lembur" />
             ) : (
                 <div className="space-y-3">
                     {paginatedRequests.map((req) => {
                         const cfg = STATUS_CONFIG[req.status];
                         return (
-                            <div key={req.id} className="card p-4 hover:shadow-md transition-shadow">
+                            <div key={req.id} className="emp-surface p-4">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <Calendar className="w-4 h-4 text-[var(--primary)] shrink-0" />
-                                            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{formatDisplayDate(req.date)}</h3>
+                                            <h3 className="text-sm font-bold text-[var(--text-primary)]">{formatDisplayDate(req.date)}</h3>
                                         </div>
                                         <p className="text-xs text-[var(--text-muted)] mb-1">
                                             <Clock className="w-3 h-3 inline mr-1" />
@@ -187,7 +173,7 @@ export default function EmployeeOvertimePage() {
                                             <FileText className="w-3 h-3 inline mr-1" />{req.reason}
                                         </p>
                                     </div>
-                                    <span className={`badge ${cfg.class}`}>{cfg.label}</span>
+                                    <StatusBadge tone={cfg.tone}>{cfg.label}</StatusBadge>
                                 </div>
                             </div>
                         );
@@ -211,7 +197,7 @@ export default function EmployeeOvertimePage() {
                 <AccessibleModal ariaLabel="Pengajuan lembur" onClose={() => setShowForm(false)} className="max-w-md">
                         <div className="modal-header">
                             <h2 className="modal-title">Pengajuan Lembur</h2>
-                            <button className="modal-close" onClick={() => setShowForm(false)}>
+                            <button className="modal-close" onClick={() => setShowForm(false)} aria-label="Tutup form pengajuan lembur">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
@@ -224,7 +210,7 @@ export default function EmployeeOvertimePage() {
                                     onChange={(e) => setForm({ ...form, date: e.target.value })} required />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-3">
                                 <div className="form-group !mb-0">
                                     <label className="form-label">
                                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Jam Mulai</span>

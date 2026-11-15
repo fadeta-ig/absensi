@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, FileCheck2, RefreshCw } from "lucide-react";
+import { FileCheck2, RefreshCw } from "lucide-react";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
-import { Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 
@@ -113,70 +116,61 @@ export default function EmployeeEquipmentApprovalsPage() {
     }, [tasks, query, qcFilter, qcSort]);
 
     return (
-        <div className="mx-auto px-4 py-6">
-            <div className="flex items-start justify-between gap-2 mb-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-[var(--text-primary)]">Pemeriksaan QC</h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-0.5">
-                        {tasks.length === 0
-                            ? "Periksa hasil inspeksi produksi, lalu selesaikan pemeriksaannya."
-                            : `${tasks.length} antrean · ${readyCount} siap diselesaikan`}
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => void fetchTasks()}
-                    disabled={loading}
-                    className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 shrink-0"
-                >
-                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Muat Ulang
-                </button>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                title="Pemeriksaan QC"
+                subtitle={
+                    tasks.length === 0
+                        ? "Periksa hasil inspeksi produksi, lalu selesaikan pemeriksaannya."
+                        : `${tasks.length} antrean · ${readyCount} siap diselesaikan`
+                }
+                icon={FileCheck2}
+                action={
+                    <button
+                        type="button"
+                        onClick={() => void fetchTasks()}
+                        disabled={loading}
+                        className="btn btn-secondary btn-sm min-h-[44px]"
+                    >
+                        <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Muat Ulang
+                    </button>
+                }
+            />
 
             {forbidden && (
-                <div className="card p-6 text-center">
-                    <h2 className="text-base font-semibold text-[var(--text-primary)]">Pemeriksaan QC tidak tersedia untuk akun Anda.</h2>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Halaman ini hanya untuk anggota QC yang ditunjuk. Hubungi admin GA bila Anda seharusnya memiliki akses.
-                    </p>
-                </div>
+                <EmptyState
+                    icon={FileCheck2}
+                    title="Pemeriksaan QC tidak tersedia untuk akun Anda."
+                    description="Halaman ini hanya untuk anggota QC yang ditunjuk. Hubungi admin GA bila Anda seharusnya memiliki akses."
+                />
             )}
 
-            {!forbidden && loading && (
-                <div role="status" aria-live="polite" aria-label="Memuat antrean QC">
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="bg-card border border-border rounded-lg p-4 mb-3">
-                            <Skeleton className="h-5 w-2/3 mb-2" />
-                            <Skeleton className="h-4 w-1/2 mb-1" />
-                            <Skeleton className="h-3 w-1/3" />
-                        </div>
-                    ))}
-                </div>
-            )}
+            {!forbidden && loading && <ListSkeleton count={3} label="Memuat antrean QC" />}
 
             {!forbidden && error && !loading && (
-                <div className="mb-6 p-4 bg-[var(--destructive-bg)] text-[var(--destructive)] rounded-xl border border-[var(--destructive-border)] text-center">
-                    <AlertTriangle className="h-5 w-5 mx-auto mb-2" />
-                    <p className="text-sm">{error}</p>
-                    <button onClick={() => void fetchTasks()} className="mt-3 text-sm font-medium text-primary hover:underline min-h-[44px] px-3 inline-flex items-center">
-                        Coba lagi
-                    </button>
-                </div>
+                <StateCard
+                    variant="error"
+                    title="Antrean QC gagal dimuat"
+                    description={error}
+                    action={
+                        <button onClick={() => void fetchTasks()} className="btn btn-secondary btn-sm">
+                            Coba lagi
+                        </button>
+                    }
+                />
             )}
 
             {!forbidden && !loading && !error && tasks.length === 0 && (
-                <div className="text-center py-16 border-2 border-dashed border-[var(--border)] rounded-xl bg-[var(--card)]">
-                    <FileCheck2 aria-hidden="true" className="h-12 w-12 text-[var(--text-muted)] mx-auto mb-3 opacity-40" />
-                    <h3 className="text-base font-semibold text-[var(--text-primary)] mb-1">Tidak Ada Antrean QC</h3>
-                    <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
-                        Tidak ada inspeksi yang menunggu pemeriksaan QC. Muat ulang untuk melihat data terbaru.
-                    </p>
-                </div>
+                <EmptyState
+                    icon={FileCheck2}
+                    title="Tidak ada antrean QC"
+                    description="Tidak ada inspeksi yang menunggu pemeriksaan QC. Muat ulang untuk melihat data terbaru."
+                />
             )}
 
             {!forbidden && !loading && !error && tasks.length > 0 && (
                 <>
-                    <div className="mb-3">
+                    <div className="space-y-3">
                         <EquipmentSearchField
                             id="cari-antrean"
                             label="Cari antrean QC"
@@ -184,7 +178,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                             onChange={setQuery}
                             placeholder="Cari alat atau pengirim..."
                         />
-                        <div className="flex gap-2 mt-2 overflow-x-auto pb-1" role="group" aria-label="Filter antrean">
+                        <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter antrean">
                             {(
                                 [
                                     ["ALL", "Semua"],
@@ -197,10 +191,10 @@ export default function EmployeeEquipmentApprovalsPage() {
                                     type="button"
                                     onClick={() => setQcFilter(key)}
                                     aria-pressed={qcFilter === key}
-                                    className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-sm font-medium rounded-full border transition-colors ${
+                                    className={`shrink-0 px-3 min-h-[44px] inline-flex items-center text-[11px] font-semibold rounded-full border transition-colors active:scale-[0.99] ${
                                         qcFilter === key
-                                            ? "bg-primary text-primary-foreground border-primary"
-                                            : "border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                                            ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)]"
                                     }`}
                                 >
                                     {label}
@@ -210,37 +204,39 @@ export default function EmployeeEquipmentApprovalsPage() {
                                 type="button"
                                 onClick={() => setQcSort((s) => (s === "OLDEST" ? "NEWEST" : "OLDEST"))}
                                 aria-label={qcSort === "OLDEST" ? "Urut: terlama menunggu. Ketuk untuk terbaru." : "Urut: terbaru. Ketuk untuk terlama."}
-                                className="shrink-0 px-3 min-h-[44px] inline-flex items-center text-sm font-medium rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-accent"
+                                className="shrink-0 px-3 min-h-[44px] inline-flex items-center text-[11px] font-semibold rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] transition-colors active:scale-[0.99]"
                             >
                                 {qcSort === "OLDEST" ? "Terlama dulu" : "Terbaru dulu"}
                             </button>
                         </div>
                     </div>
                     {visibleTasks.length === 0 && (
-                        <div className="text-center py-12 border-2 border-dashed border-[var(--border)] rounded-xl">
-                            <p className="text-sm font-medium text-[var(--text-primary)]">Tidak ditemukan.</p>
-                            <p className="text-sm text-[var(--text-muted)] mt-1">Coba kata kunci atau filter lain.</p>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setQuery("");
-                                    setQcFilter("ALL");
-                                }}
-                                className="mt-3 px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-primary border border-primary/40 rounded-md hover:bg-primary/10"
-                            >
-                                Atur ulang pencarian
-                            </button>
-                        </div>
+                        <EmptyState
+                            title="Tidak ditemukan."
+                            description="Coba kata kunci atau filter lain."
+                            action={
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setQuery("");
+                                        setQcFilter("ALL");
+                                    }}
+                                    className="btn btn-secondary btn-sm min-h-[44px]"
+                                >
+                                    Atur ulang pencarian
+                                </button>
+                            }
+                        />
                     )}
                     <div className="space-y-3" aria-live="polite">
                         {visibleTasks.map((task) => {
                             const stats = taskStats(task);
                             return (
-                                <div key={task.id} className="card p-4">
+                                <div key={task.id} className="emp-surface p-4">
                                     <div className="flex items-start gap-2">
                                         <EquipmentStatusDot status={stats.attention ? "OPEN" : "SUBMITTED"} />
                                         <div className="min-w-0 flex-1">
-                                            <h3 className="text-base font-bold text-[var(--text-primary)] truncate">
+                                            <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">
                                                 {task.unit.name}{" "}
                                                 <EquipmentCompanyBadge
                                                     company={task.unit.company}
@@ -251,10 +247,10 @@ export default function EmployeeEquipmentApprovalsPage() {
                                             {task.unit.brand && (
                                                 <p className="text-xs text-[var(--text-muted)]">{task.unit.brand}</p>
                                             )}
-                                            <p className="text-sm text-[var(--text-secondary)] mt-0.5">
+                                            <p className="text-[13px] text-[var(--text-secondary)] mt-0.5">
                                                 Dari {stripGelar(task.startedBy.name)} · {waitingFor(task.submittedAt)}
                                             </p>
-                                            <p className={`text-xs mt-0.5 ${stats.rusak > 0 ? "font-semibold text-red-600 dark:text-red-400" : stats.belum > 0 ? "font-medium text-amber-700 dark:text-amber-300" : "text-[var(--text-muted)]"}`}>
+                                            <p className={`text-xs mt-0.5 ${stats.rusak > 0 ? "font-semibold text-[var(--destructive-text)]" : stats.belum > 0 ? "font-medium text-[var(--warning)]" : "text-[var(--text-muted)]"}`}>
                                                 {stats.baik} baik · {stats.rusak} rusak · {stats.belum} belum dinilai
                                                 {stats.ready && stats.rusak === 0 ? " · siap diselesaikan" : ""}
                                             </p>

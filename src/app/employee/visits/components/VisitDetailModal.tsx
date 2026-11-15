@@ -7,9 +7,10 @@ import {
     AlertCircle, Building2, LogIn, LogOut, ArrowRight
 } from "lucide-react";
 import { VisitReport } from "@/types";
-import { VISIT_STATUS_CONFIG } from "../visitTypes";
 import { VisitPhotoGrid } from "@/components/VisitPhotoGrid";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { VISIT_STATUS_CONFIG, VISIT_STATUS_TONE } from "../visitTypes";
 
 interface VisitDetailModalProps {
     visit: VisitReport;
@@ -33,7 +34,7 @@ function TimelineStep({
             <div
                 className={`w-3 h-3 rounded-full border-2 shrink-0 ${
                     isDone
-                        ? "bg-green-500 border-green-500"
+                        ? "bg-[var(--success)] border-[var(--success)]"
                         : isActive
                         ? "bg-[var(--primary)] border-[var(--primary)] animate-pulse"
                         : "bg-transparent border-[var(--border)]"
@@ -42,7 +43,7 @@ function TimelineStep({
             <span
                 className={`text-xs font-medium ${
                     isDone
-                        ? "text-green-700"
+                        ? "text-[var(--success)]"
                         : isActive
                         ? "text-[var(--primary)] font-bold"
                         : "text-[var(--text-muted)]"
@@ -76,12 +77,12 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
         <AccessibleModal ariaLabel={`Detail kunjungan ${visit.clientName}`} onClose={onClose} className="max-w-lg !p-0 overflow-hidden">
                 {/* Header */}
                 <div className="bg-[var(--secondary)] p-5 border-b border-[var(--border)] flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <h2 className="text-lg font-bold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
                         <FileText className="w-5 h-5 text-[var(--primary)]" />
                         Detail Kunjungan
                     </h2>
                     <button
-                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--destructive)] hover:text-white text-[var(--text-secondary)] transition-colors"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--secondary)] hover:text-[var(--primary)] text-[var(--text-muted)] transition-colors"
                         onClick={onClose}
                         aria-label="Tutup detail kunjungan"
                     >
@@ -93,16 +94,16 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                     {/* Title & Status */}
                     <div className="flex items-start justify-between gap-4">
                         <div>
-                            <h3 className="text-xl font-bold text-[var(--text-primary)]">
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">
                                 {visit.clientName}
                             </h3>
-                            <p className="text-sm text-[var(--text-muted)] mt-1 flex items-center gap-1">
-                                <Clock className="w-4 h-4" /> {formatDisplayDate(visit.date)}
+                            <p className="text-xs text-[var(--text-muted)] mt-1 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> {formatDisplayDate(visit.date)}
                             </p>
                         </div>
-                        <span className={`badge ${statusConfig.class} text-xs px-2.5 py-1.5`}>
+                        <StatusBadge tone={VISIT_STATUS_TONE[visit.status]}>
                             {statusConfig.label}
-                        </span>
+                        </StatusBadge>
                     </div>
 
                     {/* Timeline */}
@@ -135,8 +136,8 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
 
                     {/* Clock In/Out Summary */}
                     {(visit.clockInTime || visit.clockOutTime) && (
-                        <div className="bg-[var(--primary)]/5 p-4 rounded-xl border border-[var(--primary)]/10">
-                            <p className="text-[11px] font-bold text-[var(--primary)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <div className="bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] p-4 rounded-xl border border-[color-mix(in_srgb,var(--primary)_10%,transparent)]">
+                            <p className="emp-eyebrow text-[var(--primary)] mb-3 flex items-center gap-1.5">
                                 <Clock className="w-3.5 h-3.5" /> Waktu Kunjungan
                             </p>
                             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
@@ -173,7 +174,7 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                                 {visit.clientAddress}
                             </p>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[var(--border)]">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-[var(--border)]">
                             <div>
                                 <p className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
                                     <FileText className="w-3.5 h-3.5" /> Tujuan
@@ -197,11 +198,11 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
 
                     {/* HR Notes */}
                     {visit.notes && (
-                        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                            <p className="text-[11px] font-bold text-yellow-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                        <div className="bg-[var(--warning-bg)] p-4 rounded-xl border border-[var(--warning-border)]">
+                            <p className="text-[11px] font-bold text-[var(--warning)] uppercase tracking-wider mb-1 flex items-center gap-1.5">
                                 <AlertCircle className="w-3.5 h-3.5" /> Catatan
                             </p>
-                            <p className="text-yellow-800 text-sm italic leading-relaxed">
+                            <p className="text-[var(--warning)] text-sm italic leading-relaxed">
                                 {visit.notes}
                             </p>
                         </div>
@@ -229,13 +230,13 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                                     <span>Tujuan: {visit.visitLocation.lat.toFixed(6)}, {visit.visitLocation.lng.toFixed(6)} (±{visit.visitRadius}m)</span>
                                 </div>
                                 {visit.clockInLocation && (
-                                    <div className="text-xs font-mono bg-blue-50 p-3 rounded-lg border border-blue-200 text-blue-700 flex items-center gap-2">
+                                    <div className="text-xs font-mono bg-[var(--info-bg)] p-3 rounded-xl border border-[var(--info-border)] text-[var(--info)] flex items-center gap-2">
                                         <LogIn className="w-3 h-3 shrink-0" />
                                         <span>Clock In: {visit.clockInLocation.lat.toFixed(6)}, {visit.clockInLocation.lng.toFixed(6)}</span>
                                     </div>
                                 )}
                                 {visit.clockOutLocation && (
-                                    <div className="text-xs font-mono bg-orange-50 p-3 rounded-lg border border-orange-200 text-orange-700 flex items-center gap-2">
+                                    <div className="text-xs font-mono bg-[var(--warning-bg)] p-3 rounded-xl border border-[var(--warning-border)] text-[var(--warning)] flex items-center gap-2">
                                         <LogOut className="w-3 h-3 shrink-0" />
                                         <span>Clock Out: {visit.clockOutLocation.lat.toFixed(6)}, {visit.clockOutLocation.lng.toFixed(6)}</span>
                                     </div>

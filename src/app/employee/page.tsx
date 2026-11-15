@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { 
     Clock, CalendarOff, Newspaper, ClipboardList, TrendingUp, 
-    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard, AlertCircle, Loader2,
+    ChevronRight, LogIn, Receipt, Bell, LayoutDashboard, Loader2,
     Grid, ChevronDown, CalendarClock, ListChecks
 } from "lucide-react";
 import Link from "next/link";
@@ -11,6 +11,7 @@ import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
 import { stripGelar } from "@/lib/utils/formatters";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import AllMenusSheet from "./components/AllMenusSheet";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
 
@@ -175,35 +176,34 @@ export default function EmployeeHomePage() {
             <PushNotificationManager />
 
             {loadingData && (
-                <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-4 py-3 flex items-center gap-3 text-sm text-[var(--text-secondary)]">
+                <div className="emp-surface px-4 py-3 flex items-center gap-3 text-sm text-[var(--text-secondary)]">
                     <Loader2 className="w-4 h-4 animate-spin text-[var(--primary)]" />
                     <span>Memuat data beranda...</span>
                 </div>
             )}
 
             {loadError && (
-                <div className="rounded-2xl border border-[var(--destructive)]/20 bg-[var(--destructive)]/10 px-4 py-3 flex items-start gap-2 text-sm text-[var(--destructive)]">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{loadError}</span>
-                </div>
+                <FeedbackMessage variant="error">{loadError}</FeedbackMessage>
             )}
 
             {(!serverContext.isFresh || !serverContext.isOnline) && (
-                <div className="rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 flex items-start justify-between gap-3 text-xs text-amber-800 dark:text-amber-300" role="status">
-                    <span>
-                        {serverContext.isOnline ? "Konteks waktu server belum segar." : "Perangkat offline."} Waktu yang terlihat adalah snapshot server terakhir dan tidak digunakan untuk mengirim presensi.
-                    </span>
-                    <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">Coba lagi</button>
-                </div>
+                <FeedbackMessage variant="warning" role="status">
+                    <div className="flex items-start justify-between gap-3">
+                        <span>
+                            {serverContext.isOnline ? "Konteks waktu server belum segar." : "Perangkat offline."} Waktu yang terlihat adalah snapshot server terakhir dan tidak digunakan untuk mengirim presensi.
+                        </span>
+                        <button type="button" onClick={() => void serverContext.refresh()} className="font-bold underline text-[var(--primary)] shrink-0 min-h-11">Coba lagi</button>
+                    </div>
+                </FeedbackMessage>
             )}
 
             {/* ─── Greeting ────────────────────────────────────── */}
-            <div className="rounded-2xl bg-[var(--card)] border border-[var(--border)] px-5 py-4">
+            <div className="emp-surface px-5 py-4">
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">
                     {greeting}{" "}
                     <span className="text-[var(--text-muted)] font-medium italic text-[11px] ml-1">Happy Shine On You</span>
                 </h2>
-                <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed mt-1.5">{subGreeting}</p>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed mt-1.5">{subGreeting}</p>
                 {attendanceDate && (
                     <p className="text-[10px] text-[var(--text-muted)] mt-2">
                         Presensi shift {attendanceDate}: {todayRecord ? getStatusLabel(todayRecord.status) : "Belum tercatat"}
@@ -240,10 +240,10 @@ export default function EmployeeHomePage() {
             <button
                 type="button"
                 onClick={() => setIsAllMenusOpen(true)}
-                className="w-full py-3 px-4 rounded-2xl bg-[var(--card)] hover:bg-[var(--secondary)] border border-[var(--border)] hover:border-[var(--primary)]/40 shadow-sm transition-all duration-200 flex items-center justify-between group active:scale-[0.99]"
+                className="w-full py-3 px-4 rounded-2xl bg-[var(--card)] hover:bg-[var(--secondary)] border border-[var(--border)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] shadow-sm transition-all duration-200 flex items-center justify-between group active:scale-[0.99]"
             >
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                    <div className="w-8 h-8 rounded-xl bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] flex items-center justify-center shrink-0">
                         <Grid className="w-4 h-4" />
                     </div>
                     <div className="text-left">
@@ -256,7 +256,7 @@ export default function EmployeeHomePage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-[var(--primary)] bg-[var(--primary)]/10 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-semibold text-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] px-2 py-0.5 rounded-full">
                         15 Layanan
                     </span>
                     <ChevronDown className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
@@ -266,7 +266,7 @@ export default function EmployeeHomePage() {
             {/* ─── Stats Row (Compact) ─────────────────────────── */}
             <div className="grid grid-cols-2 gap-3">
                 {/* Total Kehadiran */}
-                <div className="flex items-center gap-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-3 emp-surface px-4 py-3">
                     <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
                         <TrendingUp className="w-[18px] h-[18px] text-emerald-600 stroke-[2]" />
                     </div>
@@ -277,7 +277,7 @@ export default function EmployeeHomePage() {
                 </div>
 
                 {/* Sisa Cuti */}
-                <div className="flex items-center gap-3 bg-[var(--card)] border border-[var(--border)] rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-3 emp-surface px-4 py-3">
                     <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
                         <CalendarOff className="w-[18px] h-[18px] text-amber-600 stroke-[2]" />
                     </div>
@@ -289,7 +289,7 @@ export default function EmployeeHomePage() {
             </div>
 
             {/* ─── Informasi / Pengumuman ──────────────────────── */}
-            <div className="bg-[var(--card)] rounded-2xl border border-[var(--border)] overflow-hidden">
+            <div className="emp-surface overflow-hidden">
                 <div className="flex items-center justify-between px-4 pt-4 pb-2">
                     <h2 className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-1.5">
                         <Bell className="w-3.5 h-3.5" /> Informasi
@@ -307,7 +307,7 @@ export default function EmployeeHomePage() {
                     </div>
                 ) : loadError ? (
                     <div className="px-4 pb-5 pt-3 text-center">
-                        <p className="text-xs font-medium text-[var(--destructive)]">Informasi belum dapat dimuat.</p>
+                        <p className="text-xs font-medium text-[var(--destructive-text)]">Informasi belum dapat dimuat.</p>
                     </div>
                 ) : news.length === 0 ? (
                     <div className="px-4 pb-5 pt-3 text-center">
@@ -317,9 +317,9 @@ export default function EmployeeHomePage() {
                     <div className="flex flex-col">
                         {news.slice(0, 3).map((item, index) => (
                             <div key={item.id}>
-                                <Link href={`/employee/news?id=${item.id}`} className="block px-4 py-3.5 hover:bg-[var(--secondary)]/60 transition-colors">
+                                <Link href={`/employee/news?id=${item.id}`} className="block px-4 py-3.5 hover:bg-[color-mix(in_srgb,var(--secondary)_60%,transparent)] transition-colors">
                                     <div className="flex gap-3 items-center">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#800020]/60 shrink-0" />
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[color-mix(in_srgb,var(--primary)_60%,transparent)] shrink-0" />
                                         <p className="text-[13px] font-medium text-[var(--text-secondary)] leading-snug line-clamp-2">
                                             {item.audience === "SELECTED" && (
                                                 <span className="inline-block mr-1.5 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-1.5 py-px text-[10px] font-bold align-middle">

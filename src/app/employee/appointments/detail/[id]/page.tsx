@@ -2,9 +2,12 @@
 
 import { Suspense, use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Settings, StickyNote, Trash2, User, Users, X } from "lucide-react";
+import { ArrowLeft, CalendarClock, Check, CheckCheck, ExternalLink, History, Link2, Loader2, MapPin, Settings, StickyNote, Trash2, User, Users, X } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import EmptyState from "@/components/ui/EmptyState";
 import { AppointmentStatusBadge, AttendanceMarkBadge, InviteResponseBadge } from "@/components/appointments/AppointmentBadges";
 import AppointmentFormModal from "@/components/appointments/AppointmentFormModal";
 import MeetingMinutesSection from "@/components/appointments/MeetingMinutesSection";
@@ -29,7 +32,7 @@ function fmtDateOnly(iso: string): string {
 export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     return (
-        <Suspense fallback={<p className="text-sm text-[var(--text-muted)] flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Memuat meeting…</p>}>
+        <Suspense fallback={<StateCard variant="loading" title="Memuat meeting…" />}>
             <DetailContent id={id} />
         </Suspense>
     );
@@ -181,16 +184,12 @@ function DetailContent({ id }: { id: string }) {
     }
 
     if (loading) {
-        return (
-            <p className="text-sm text-[var(--text-muted)] flex items-center gap-2 py-10 justify-center" aria-label="Memuat detail meeting">
-                <Loader2 className="w-4 h-4 animate-spin" /> Memuat detail meeting…
-            </p>
-        );
+        return <StateCard variant="loading" title="Memuat detail meeting…" />;
     }
 
     if (error && !item) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-5">
                 <button type="button" onClick={() => router.push("/employee/appointments")} className="btn btn-secondary btn-sm">
                     <ArrowLeft className="w-4 h-4" /> Kembali
                 </button>
@@ -202,11 +201,11 @@ function DetailContent({ id }: { id: string }) {
 
     if (!item) {
         return (
-            <div className="space-y-4">
+            <div className="space-y-5">
                 <button type="button" onClick={() => router.push("/employee/appointments")} className="btn btn-secondary btn-sm">
                     <ArrowLeft className="w-4 h-4" /> Kembali
                 </button>
-                <p className="text-sm text-[var(--text-muted)]">Meeting tidak ditemukan.</p>
+                <EmptyState icon={CalendarClock} title="Meeting tidak ditemukan." />
             </div>
         );
     }
@@ -252,44 +251,40 @@ function DetailContent({ id }: { id: string }) {
     ];
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
+        <div className="space-y-5">
+            <div className="flex items-start gap-2">
                 <button
                     type="button"
                     onClick={() => router.push("/employee/appointments")}
-                    className="min-w-11 min-h-11 rounded-xl hover:bg-[var(--secondary)] flex items-center justify-center"
+                    className="min-w-11 min-h-11 rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--secondary)] flex items-center justify-center active:scale-[0.99]"
                     aria-label="Kembali ke E Meeting"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="min-w-0">
-                    <h1 className="text-base font-extrabold text-[var(--text-primary)] truncate">{item.title}</h1>
-                    <p className="text-xs text-[var(--text-muted)]">
-                        {item.isFullDay ? `${fmtDateOnly(item.startAt)} · Seharian Penuh` : `${fmtDT(item.startAt)} – ${fmtDT(item.endAt)}`}
-                    </p>
-                </div>
+                <PageHeader
+                    className="min-w-0 flex-1"
+                    title={item.title}
+                    subtitle={item.isFullDay ? `${fmtDateOnly(item.startAt)} · Seharian Penuh` : `${fmtDT(item.startAt)} – ${fmtDT(item.endAt)}`}
+                    icon={CalendarClock}
+                />
             </div>
 
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
 
             {isFrozen && (
-                <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/60 px-3 py-2.5" role="status" aria-label="Status meeting">
-                    <p className="text-xs font-semibold text-[var(--text-secondary)]">
-                        {item.status === "CANCELLED"
-                            ? "Meeting ini telah dibatalkan."
-                            : "Meeting telah selesai. Revisi notulensi tetap dapat dilakukan dengan mencantumkan alasan perubahan."}
-                    </p>
-                </div>
+                <FeedbackMessage variant="info" role="status">
+                    {item.status === "CANCELLED"
+                        ? "Meeting ini telah dibatalkan."
+                        : "Meeting telah selesai. Revisi notulensi tetap dapat dilakukan dengan mencantumkan alasan perubahan."}
+                </FeedbackMessage>
             )}
             {isOverdueStored && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" role="status" aria-label="Meeting lewat jadwal">
-                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">
-                        Jadwal sudah lewat. Tekan Selesaikan untuk menutup meeting, atau biarkan sistem menyelesaikannya otomatis. Task baru tidak dapat ditambahkan; pengerjaan task dibuka setelah meeting selesai.
-                    </p>
-                </div>
+                <FeedbackMessage variant="warning" role="status">
+                    Jadwal sudah lewat. Tekan Selesaikan untuk menutup meeting, atau biarkan sistem menyelesaikannya otomatis. Task baru tidak dapat ditambahkan; pengerjaan task dibuka setelah meeting selesai.
+                </FeedbackMessage>
             )}
 
-            <div className="card p-4 space-y-3">
+            <div className="emp-surface p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                     <AppointmentStatusBadge status={item.status} lifecycle={item.lifecycle} />
                     {canAccessWorkspace && (
@@ -344,8 +339,8 @@ function DetailContent({ id }: { id: string }) {
                 )}
 
                 {item.agenda && (
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/40 p-3 space-y-1">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1">
+                    <div className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_40%,transparent)] p-3 space-y-1">
+                        <p className="emp-eyebrow flex items-center gap-1.5">
                             <StickyNote className="w-3.5 h-3.5" /> Agenda / Pokok Bahasan
                         </p>
                         <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
@@ -355,14 +350,14 @@ function DetailContent({ id }: { id: string }) {
                 )}
 
                 <div>
-                    <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                    <p className="emp-eyebrow flex items-center gap-1.5 mb-1.5">
                         <Users className="w-3.5 h-3.5" /> Peserta ({item.participants.length})
                     </p>
                     <p className="text-[11px] text-[var(--text-muted)] mb-1.5">
                         {rsvpCounts.accepted} menerima · {rsvpCounts.declined} menolak · {rsvpCounts.pending} belum merespons
                     </p>
                     {myParticipant && !canRsvp && rsvpLocked && (
-                        <div className="mb-2 rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 px-3 py-2.5">
+                        <div className="mb-2 rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] px-3 py-2.5">
                             <p className="text-xs font-bold text-[var(--text-primary)]">
                                 Keputusan Anda: {myResponse === "ACCEPTED" ? "Menerima Undangan" : "Menolak Undangan"}
                             </p>
@@ -379,7 +374,7 @@ function DetailContent({ id }: { id: string }) {
                                     type="button"
                                     disabled={rsvping}
                                     onClick={() => { void handleRsvp("ACCEPT"); }}
-                                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold min-h-9 flex items-center gap-1 ${myParticipant?.inviteStatus === "ACCEPTED" ? "bg-emerald-600 text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
+                                    className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold min-h-9 flex items-center gap-1 transition-colors ${myParticipant?.inviteStatus === "ACCEPTED" ? "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success)]" : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)]"}`}
                                 >
                                     {rsvping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                     Terima Undangan
@@ -389,7 +384,7 @@ function DetailContent({ id }: { id: string }) {
                                         type="button"
                                         disabled={rsvping}
                                         onClick={() => setAskingDecline(true)}
-                                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold min-h-9 flex items-center gap-1 ${myParticipant?.inviteStatus === "DECLINED" ? "bg-rose-600 text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
+                                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold min-h-9 flex items-center gap-1 ${myParticipant?.inviteStatus === "DECLINED" ? "bg-[var(--destructive)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
                                     >
                                         <X className="w-3.5 h-3.5" />
                                         Tolak Undangan
@@ -427,7 +422,7 @@ function DetailContent({ id }: { id: string }) {
                                                     onConfirm: () => { void handleRsvp("DECLINE", declineNote); },
                                                 })
                                             }
-                                            className="btn flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                                            className="btn flex-1 bg-[var(--destructive)] text-white hover:opacity-90"
                                         >
                                             {rsvping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                                             Tolak Undangan
@@ -454,14 +449,14 @@ function DetailContent({ id }: { id: string }) {
                                         <button
                                             type="button"
                                             onClick={() => setMarks({ ...marks, [p.id]: "HADIR" })}
-                                            className={`px-2 py-1 rounded-lg text-[11px] font-semibold min-h-9 ${marks[p.id] === "HADIR" || (!marks[p.id] && p.attendance === "HADIR") ? "bg-emerald-600 text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
+                                            className={`px-2 py-1 rounded-lg text-[11px] font-semibold min-h-9 ${marks[p.id] === "HADIR" || (!marks[p.id] && p.attendance === "HADIR") ? "bg-[var(--success)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
                                         >
                                             Hadir
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setMarks({ ...marks, [p.id]: "TIDAK_HADIR" })}
-                                            className={`px-2 py-1 rounded-lg text-[11px] font-semibold min-h-9 ${marks[p.id] === "TIDAK_HADIR" || (!marks[p.id] && p.attendance === "TIDAK_HADIR") ? "bg-rose-600 text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
+                                            className={`px-2 py-1 rounded-lg text-[11px] font-semibold min-h-9 ${marks[p.id] === "TIDAK_HADIR" || (!marks[p.id] && p.attendance === "TIDAK_HADIR") ? "bg-[var(--destructive)] text-white" : "bg-[var(--secondary)] text-[var(--text-secondary)]"}`}
                                         >
                                             Tidak Hadir
                                         </button>
@@ -519,7 +514,7 @@ function DetailContent({ id }: { id: string }) {
                                     onConfirm: () => setAskingCancel(true),
                                 })
                             }
-                            className="btn flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                            className="btn flex-1 bg-[var(--destructive)] text-white hover:opacity-90"
                         >
                             <Trash2 className="w-4 h-4" /> Batalkan
                         </button>
@@ -549,7 +544,7 @@ function DetailContent({ id }: { id: string }) {
                                 type="button"
                                 onClick={() => { void handleCancel(); }}
                                 disabled={actionLoading || cancelReason.trim().length < 5}
-                                className="btn flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                                className="btn flex-1 bg-[var(--destructive)] text-white hover:opacity-90"
                             >
                                 {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                 {actionLoading ? "Membatalkan…" : "Ya, Batalkan Meeting"}
@@ -561,11 +556,11 @@ function DetailContent({ id }: { id: string }) {
 
             {canAccessWorkspace && (
                 <>
-                    <div className="card p-4">
+                    <div className="emp-surface p-4">
                         <MeetingMinutesSection appointmentId={item.id} readOnly={item.status === "CANCELLED" || (!isInvolved && !canManageAll)} refreshKey={syncKey} />
                     </div>
 
-                    <div className="card p-4">
+                    <div className="emp-surface p-4">
                         <MeetingTaskSummary
                             appointmentId={item.id}
                             participants={taskParticipants}

@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip } from "lucide-react";
+import { CalendarOff, Send, CalendarDays, Clock, CheckCircle, XCircle, Loader2, X, Paperclip } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import AccessibleModal from "@/components/ui/AccessibleModal";
 import { StepperTimeline } from "@/components/ui/StepperTimeline";
-import { Skeleton } from "@/components/ui/Skeleton";
 import DataTablePagination from "@/components/ui/DataTablePagination";
+import EmptyState from "@/components/ui/EmptyState";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatDisplayDate, formatIndonesianDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
@@ -362,11 +367,11 @@ export default function LeavePage() {
         }
     };
 
-    const getStatusInfo = (s: string) => {
+    const getStatusInfo = (s: string): { label: string; tone: StatusTone; icon: typeof CheckCircle } => {
         switch (s) {
-            case "approved": return { label: "Disetujui", badge: "badge-success", icon: CheckCircle };
-            case "rejected": return { label: "Ditolak", badge: "badge-error", icon: XCircle };
-            default: return { label: "Menunggu", badge: "badge-warning", icon: Clock };
+            case "approved": return { label: "Disetujui", tone: "success", icon: CheckCircle };
+            case "rejected": return { label: "Ditolak", tone: "danger", icon: XCircle };
+            default: return { label: "Menunggu", tone: "warning", icon: Clock };
         }
     };
 
@@ -387,45 +392,42 @@ export default function LeavePage() {
     const totalPages = Math.ceil(leaves.length / pageSize) || 1;
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <CalendarOff className="w-5 h-5 text-[var(--primary)]" />
-                        Manajemen Cuti
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">Ajukan dan pantau pengajuan cuti</p>
-                </div>
-                <button
-                    className="btn btn-primary"
-                    onClick={() => setShowForm(!showForm)}
-                >
-                    <Send className="w-4 h-4" /> Ajukan Cuti
-                </button>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader
+                title="Manajemen Cuti"
+                subtitle="Ajukan dan pantau pengajuan cuti"
+                icon={CalendarOff}
+                action={
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => setShowForm(true)}
+                    >
+                        <Send className="w-4 h-4" /> Ajukan Cuti
+                    </button>
+                }
+            />
 
             {loadError && (
-                <div className="flex items-start gap-2 rounded-lg border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{loadError}</span>
-                </div>
+                <FeedbackMessage variant="error" title="Gagal memuat data cuti">
+                    {loadError}
+                </FeedbackMessage>
             )}
 
             {/* Authoritative Annual Leave Balance */}
-            <div className="grid grid-cols-3 gap-4">
-                <div className="card p-4 text-center">
-                    <p className="text-2xl font-extrabold text-[var(--primary)]">{initialLoading ? "..." : totalLeave}</p>
+            <div className="grid grid-cols-3 gap-3">
+                <div className="emp-surface p-4 text-center">
+                    <p className="text-xl font-extrabold tracking-tight text-[var(--primary)]">{initialLoading ? "..." : totalLeave}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Kuota Tahunan</p>
                 </div>
-                <div className="card p-4 text-center">
-                    <p className="text-2xl font-extrabold text-orange-500">{initialLoading ? "..." : usedLeave}</p>
+                <div className="emp-surface p-4 text-center">
+                    <p className="text-xl font-extrabold tracking-tight text-[var(--warning)]">{initialLoading ? "..." : usedLeave}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Terpakai (Disetujui)</p>
                     {!initialLoading && pendingAnnualDays > 0 && (
-                        <p className="text-[11px] font-medium text-amber-600 mt-0.5">+{pendingAnnualDays} hari menunggu HR</p>
+                        <p className="text-[11px] font-medium text-[var(--warning)] mt-0.5">+{pendingAnnualDays} hari menunggu HR</p>
                     )}
                 </div>
-                <div className="card p-4 text-center">
-                    <p className="text-2xl font-extrabold text-green-600">{initialLoading ? "..." : availableAnnualLeave}</p>
+                <div className="emp-surface p-4 text-center">
+                    <p className="text-xl font-extrabold tracking-tight text-[var(--success)]">{initialLoading ? "..." : availableAnnualLeave}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">Tersedia Diajukan</p>
                     {!initialLoading && pendingAnnualDays > 0 && (
                         <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Sisa disetujui: {remainingLeave} hari</p>
@@ -435,27 +437,25 @@ export default function LeavePage() {
 
             {/* Balance Warning Alerts */}
             {!initialLoading && availableAnnualLeave <= 0 ? (
-                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center gap-3 text-red-600 font-medium text-sm">
-                    <XCircle className="w-5 h-5 flex-shrink-0" />
-                    <span>
-                        {remainingLeave <= 0
-                            ? "Kuota Cuti Tahunan Anda telah habis. Anda tidak dapat mengajukan Cuti Tahunan baru, namun tetap dapat mengajukan Izin Sakit, Izin Pribadi, Cuti Melahirkan, atau Paternity."
-                            : `Seluruh sisa Cuti Tahunan Anda (${remainingLeave} hari) sedang menunggu persetujuan HR. Anda tetap dapat mengajukan Izin Sakit, Izin Pribadi, Cuti Melahirkan, atau Paternity.`}
-                    </span>
-                </div>
+                <FeedbackMessage variant="error" title="Kuota cuti tahunan tidak tersedia">
+                    {remainingLeave <= 0
+                        ? "Kuota Cuti Tahunan Anda telah habis. Anda tidak dapat mengajukan Cuti Tahunan baru, namun tetap dapat mengajukan Izin Sakit, Izin Pribadi, Cuti Melahirkan, atau Paternity."
+                        : `Seluruh sisa Cuti Tahunan Anda (${remainingLeave} hari) sedang menunggu persetujuan HR. Anda tetap dapat mengajukan Izin Sakit, Izin Pribadi, Cuti Melahirkan, atau Paternity.`}
+                </FeedbackMessage>
             ) : !initialLoading && availableAnnualLeave <= 2 ? (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-3 text-amber-600 font-medium text-sm">
-                    <CalendarOff className="w-5 h-5 flex-shrink-0" />
-                    <span>Peringatan: Kuota Cuti Tahunan yang dapat diajukan tersisa {availableAnnualLeave} hari kerja.</span>
-                </div>
+                <FeedbackMessage variant="warning" title="Kuota cuti tahunan hampir habis">
+                    Kuota Cuti Tahunan yang dapat diajukan tersisa {availableAnnualLeave} hari kerja.
+                </FeedbackMessage>
             ) : null}
 
-            {/* Form */}
+            {/* Form Modal */}
             {showForm && (
-                <div className="card p-6 border-2 border-[var(--primary)]/20 shadow-xl">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-bold text-[var(--text-primary)]">Form Pengajuan Cuti</h3>
-                        <button onClick={() => setShowForm(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-4 h-4" /></button>
+                <AccessibleModal ariaLabel="Ajukan cuti" onClose={() => setShowForm(false)} className="max-w-md">
+                    <div className="modal-header">
+                        <h2 className="modal-title">Ajukan Cuti</h2>
+                        <button className="modal-close" onClick={() => setShowForm(false)} aria-label="Tutup form pengajuan cuti">
+                            <X className="w-4 h-4" />
+                        </button>
                     </div>
                     <form onSubmit={isDiscrete ? handleSubmitDiscrete : handleSubmitRange} className="space-y-4">
                         <div className="form-group !mb-0">
@@ -468,7 +468,7 @@ export default function LeavePage() {
                                 <option value="paternity">Paternity (Ayah)</option>
                             </select>
                             {form.type === "annual" && availableAnnualLeave <= 0 && (
-                                <p className="text-xs text-red-500 font-medium mt-1">
+                                <p className="text-xs text-[var(--destructive-text)] font-medium mt-1">
                                     * Kuota Cuti Tahunan tidak tersedia ({remainingLeave} sisa − {pendingAnnualDays} menunggu persetujuan HR). Pilih jenis cuti lain bila diperlukan.
                                 </p>
                             )}
@@ -479,7 +479,7 @@ export default function LeavePage() {
                                 <p className="text-xs text-[var(--text-muted)]">Besok s/d {windowEnd ? formatIndonesianDate(windowEnd) : ""} ({WINDOW_DAYS} hari ke depan), khusus hari kerja jadwal Anda. Satu tanggal terpilih = satu pengajuan cuti.</p>
                                 {scheduleLoading && <p className="text-xs text-[var(--text-muted)] mt-1">Memuat jadwal shift...</p>}
                                 {scheduleError && (
-                                    <div className="flex items-center justify-between gap-2 text-xs text-amber-600 mt-1">
+                                    <div className="flex items-center justify-between gap-2 text-xs text-[var(--warning)] mt-1">
                                         <span>Jadwal shift gagal dimuat, libur sementara mengikuti hari Minggu. {scheduleError}</span>
                                         <button type="button" onClick={() => void loadSchedule()} className="underline font-semibold shrink-0">
                                             Coba lagi
@@ -502,41 +502,57 @@ export default function LeavePage() {
                                                 aria-pressed={selected}
                                                 onClick={() => toggleDate(dateKey)}
                                                 title={occupied ? `${formatIndonesianDate(dateKey)} — sudah diajukan` : off ? `${formatIndonesianDate(dateKey)} — libur jadwal` : formatIndonesianDate(dateKey)}
-                                                className={`relative rounded-lg border-2 p-2 text-center transition-all ${
+                                                className={`relative rounded-xl border p-2 text-center transition-colors ${
                                                     selected
-                                                        ? "border-red-600 bg-red-600 text-white font-bold shadow-md ring-2 ring-red-500/30"
-                                                        : disabled
-                                                          ? "border-[var(--border)] bg-[var(--muted)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
-                                                          : "border-[var(--border)] bg-[var(--card)] text-[var(--text-primary)] hover:border-red-500 hover:bg-[var(--accent)] cursor-pointer"
+                                                        ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] font-bold"
+                                                        : occupied
+                                                          ? "border-dashed border-[var(--border)] bg-[var(--secondary)] text-[var(--text-muted)] opacity-70 cursor-not-allowed"
+                                                          : disabled
+                                                            ? "border-[var(--border)] bg-[var(--muted)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
+                                                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-primary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] hover:bg-[var(--secondary)] cursor-pointer active:scale-[0.98]"
                                                 }`}
                                             >
                                                 {selected && (
-                                                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white text-red-600 flex items-center justify-center text-[10px] font-extrabold leading-none shadow-sm">
+                                                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center text-[10px] font-extrabold leading-none shadow-sm">
                                                         ✓
                                                     </span>
                                                 )}
-                                                <span className={`block text-[10px] ${selected ? "text-red-100 font-semibold" : "text-[var(--text-muted)]"}`}>
+                                                <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)] font-semibold" : "text-[var(--text-muted)]"}`}>
                                                     {weekday}
                                                 </span>
-                                                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-white font-extrabold" : "font-semibold"}`}>
+                                                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-[var(--primary)] font-extrabold" : "font-semibold"}`}>
                                                     {dayNum}
                                                 </span>
-                                                <span className={`block text-[10px] ${selected ? "text-red-100" : "text-[var(--text-muted)]"}`}>
-                                                    {occupied ? "Diajukan" : off ? "Libur" : `${dateKey.slice(5, 7)}/${dateKey.slice(0, 4)}`}
+                                                <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)]" : "text-[var(--text-muted)]"}`}>
+                                                    {occupied ? "Diajukan" : off ? "Libur" : "\u00A0"}
                                                 </span>
                                             </button>
                                         );
                                     })}
                                 </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]">
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="h-2.5 w-2.5 rounded-full border border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]" aria-hidden="true" />
+                                        Terpilih
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="h-2.5 w-2.5 rounded-full border border-[var(--border)] bg-[var(--muted)]" aria-hidden="true" />
+                                        Libur jadwal
+                                    </span>
+                                    <span className="inline-flex items-center gap-1">
+                                        <span className="h-2.5 w-2.5 rounded-full border border-dashed border-[var(--border)] bg-[var(--secondary)]" aria-hidden="true" />
+                                        Sudah diajukan
+                                    </span>
+                                </div>
                                 {selectedDates.length > 0 && (
-                                    <div className="flex items-center justify-between gap-2 flex-wrap mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 px-3 py-2">
-                                        <span className="text-xs font-semibold text-red-700 dark:text-red-300">
+                                    <div className="flex items-center justify-between gap-2 flex-wrap mt-2 rounded-lg bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] border border-[color-mix(in_srgb,var(--primary)_20%,transparent)] px-3 py-2">
+                                        <span className="text-xs font-semibold text-[var(--primary)]">
                                             {selectedDates.length} tanggal dipilih: {selectedDates.map((d) => formatIndonesianDate(d)).join(", ")}
                                         </span>
                                         <button
                                             type="button"
                                             onClick={() => setSelectedDates([])}
-                                            className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline shrink-0"
+                                            className="text-xs font-bold text-[var(--primary)] hover:underline shrink-0"
                                         >
                                             Reset pilihan
                                         </button>
@@ -547,7 +563,7 @@ export default function LeavePage() {
                                 )}
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="form-group !mb-0">
                                     <label className="form-label">Tanggal Mulai</label>
                                     <input type="date" className="form-input" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
@@ -556,6 +572,9 @@ export default function LeavePage() {
                                     <label className="form-label">Tanggal Selesai</label>
                                     <input type="date" className="form-input" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
                                 </div>
+                                <p className="text-[10px] text-[var(--text-muted)] sm:col-span-2">
+                                    Cuti dihitung per hari kerja sesuai jadwal shift Anda. Tanggal akhir harus sama atau setelah tanggal mulai.
+                                </p>
                             </div>
                         )}
                         <div className="form-group !mb-0">
@@ -569,7 +588,7 @@ export default function LeavePage() {
                                     <button
                                         type="button"
                                         onClick={clearAttachment}
-                                        className="text-[11px] font-medium text-red-500 hover:underline flex items-center gap-1"
+                                        className="text-[11px] font-medium text-[var(--destructive-text)] hover:underline flex items-center gap-1"
                                     >
                                         <X className="w-3 h-3" /> Hapus bukti
                                     </button>
@@ -577,7 +596,7 @@ export default function LeavePage() {
                             </div>
                             <div className="relative mt-1">
                                 <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" id="leave-attachment" />
-                                <label htmlFor="leave-attachment" className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-[var(--border)] rounded-lg hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all cursor-pointer group">
+                                <label htmlFor="leave-attachment" className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-[var(--border)] rounded-lg hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] transition-all cursor-pointer group">
                                     {form.attachment ? (
                                         <div className="flex items-center gap-2 text-[var(--success)] font-medium text-xs truncate max-w-full">
                                             <Paperclip className="w-4 h-4 shrink-0" />
@@ -598,51 +617,44 @@ export default function LeavePage() {
                             {loading ? "Mengirim..." : isDiscrete ? `Kirim ${selectedDates.length} Pengajuan` : "Kirim Pengajuan"}
                         </button>
                     </form>
-                </div>
+                </AccessibleModal>
             )}
 
             {/* History */}
             <div className="space-y-3">
-                <h2 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4 text-[var(--primary)]" />
+                <h2 className="emp-eyebrow flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5" />
                     Riwayat Cuti
                 </h2>
                 {initialLoading ? (
-                    <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat riwayat cuti">
-                        {[0, 1, 2].map((i) => (
-                            <div key={i} className="card p-4 space-y-2">
-                                <Skeleton className="h-5 w-2/3" />
-                                <Skeleton className="h-4 w-1/2" />
-                                <Skeleton className="h-3 w-1/3" />
-                            </div>
-                        ))}
-                    </div>
+                    <ListSkeleton label="Memuat riwayat cuti" />
                 ) : leaves.length === 0 ? (
-                    <div className="card p-8 text-center">
-                        <CalendarOff className="w-10 h-10 text-[var(--text-muted)] opacity-30 mx-auto mb-2" />
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada pengajuan</p>
-                    </div>
+                    <EmptyState
+                        icon={CalendarOff}
+                        title="Belum ada pengajuan cuti"
+                        description="Pengajuan yang Anda kirim akan muncul di sini beserta status persetujuannya."
+                    />
                 ) : (
-                    <div className="space-y-4">
-                        <div className="space-y-2">
+                    <div className="space-y-3">
+                        <div className="space-y-3">
                             {paginatedLeaves.map((l) => {
                                 const info = getStatusInfo(l.status);
                                 const StatusIcon = info.icon;
                                 const hasAttachment = Boolean(l.attachmentUrl || l.attachment);
                                 return (
-                                    <div key={l.id} className="card p-4 space-y-3">
+                                    <div key={l.id} className="emp-surface p-4 space-y-3">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2">
-                                                <span className="badge badge-info">{getTypeLabel(l.type)}</span>
+                                                <StatusBadge tone="neutral">{getTypeLabel(l.type)}</StatusBadge>
                                                 {hasAttachment && (
-                                                    <button onClick={() => openAttachment(l)} className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--secondary)] text-[var(--primary)] rounded text-[10px] font-bold hover:bg-[var(--primary)]/10 transition-colors">
+                                                    <button onClick={() => openAttachment(l)} className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--secondary)] text-[var(--primary)] rounded-full text-[10px] font-bold hover:bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] transition-colors min-h-6">
                                                         <Paperclip className="w-3 h-3" /> Bukti
                                                     </button>
                                                 )}
                                             </div>
-                                            <span className={`badge ${info.badge} flex items-center gap-1`}>
-                                                <StatusIcon className="w-3 h-3" /> {info.label}
-                                            </span>
+                                            <StatusBadge tone={info.tone} icon={StatusIcon}>
+                                                {info.label}
+                                            </StatusBadge>
                                         </div>
                                         <div className="flex items-center justify-between text-sm font-semibold text-[var(--text-primary)]">
                                             <span className="text-xs sm:text-sm">

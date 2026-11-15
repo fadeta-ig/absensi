@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, MapPin, Link2, Clock3 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Plus, MapPin, Link2, Clock3 } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
 import { participantDisplayName, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -74,7 +77,7 @@ export default function AppointmentDayDetailPage() {
 
     if (!valid) {
         return (
-            <div className="w-full min-w-0 space-y-4">
+            <div className="space-y-5">
                 <FeedbackMessage variant="error" title="Tanggal tidak valid">
                     Kembali ke kalender dan pilih tanggal yang sesuai.
                 </FeedbackMessage>
@@ -88,38 +91,44 @@ export default function AppointmentDayDetailPage() {
     const first = items[0];
 
     return (
-        <div className="w-full min-w-0 space-y-4">
-            <div className="flex items-center gap-2">
+        <div className="space-y-5">
+            <div className="flex items-start gap-2">
                 <button
                     type="button"
                     onClick={() => router.push("/employee/appointments")}
-                    className="min-w-11 min-h-11 p-2.5 flex items-center justify-center rounded-xl hover:bg-[var(--secondary)]"
+                    className="min-w-11 min-h-11 p-2.5 flex items-center justify-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--secondary)] active:scale-[0.99]"
                     aria-label="Kembali ke kalender"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="min-w-0 flex-1">
-                    <h1 className="text-base font-extrabold text-[var(--text-primary)] truncate">{formatIndonesianDate(new Date(`${date}T00:00:00+07:00`))}</h1>
-                    <p className="text-xs text-[var(--text-muted)]">
-                        {loading ? "Memuat data…" : items.length === 0 ? "Tidak ada meeting" : `${items.length} meeting${total !== null && total > items.length ? ` dari ${total}` : ""} · Mulai pukul ${first ? fmtTime(first.startAt) : ""}`}
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => router.push(`/employee/appointments/${shiftDate(date, -1)}`)}
-                    className="min-w-11 min-h-11 p-2.5 flex items-center justify-center rounded-xl hover:bg-[var(--secondary)]"
-                    aria-label="Hari sebelumnya"
-                >
-                    <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => router.push(`/employee/appointments/${shiftDate(date, 1)}`)}
-                    className="min-w-11 min-h-11 p-2.5 flex items-center justify-center rounded-xl hover:bg-[var(--secondary)]"
-                    aria-label="Hari berikutnya"
-                >
-                    <ChevronRight className="w-5 h-5" />
-                </button>
+                <PageHeader
+                    className="min-w-0 flex-1"
+                    title={formatIndonesianDate(new Date(`${date}T00:00:00+07:00`))}
+                    subtitle={
+                        loading ? "Memuat data…" : items.length === 0 ? "Tidak ada meeting" : `${items.length} meeting${total !== null && total > items.length ? ` dari ${total}` : ""} · Mulai pukul ${first ? fmtTime(first.startAt) : ""}`
+                    }
+                    icon={CalendarDays}
+                    action={
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => router.push(`/employee/appointments/${shiftDate(date, -1)}`)}
+                                className="min-w-11 min-h-11 p-2.5 flex items-center justify-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--secondary)] active:scale-[0.99]"
+                                aria-label="Hari sebelumnya"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => router.push(`/employee/appointments/${shiftDate(date, 1)}`)}
+                                className="min-w-11 min-h-11 p-2.5 flex items-center justify-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--secondary)] active:scale-[0.99]"
+                                aria-label="Hari berikutnya"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        </>
+                    }
+                />
             </div>
 
             {date !== toLocalToday() && (
@@ -135,25 +144,21 @@ export default function AppointmentDayDetailPage() {
             )}
 
             {loading ? (
-                <div className="space-y-3" aria-label="Memuat jadwal">
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="card p-4 animate-pulse" role="status">
-                            <div className="h-4 w-2/3 rounded bg-[var(--secondary)]" />
-                            <div className="h-3 w-1/3 rounded bg-[var(--secondary)] mt-2" />
-                        </div>
-                    ))}
-                </div>
+                <ListSkeleton count={3} rows={2} label="Memuat jadwal" />
             ) : items.length === 0 ? (
-                <div className="card p-12 text-center border-dashed">
-                    <p className="text-sm font-medium text-[var(--text-muted)]">Belum ada meeting pada tanggal ini.</p>
-                    <button
-                        type="button"
-                        onClick={() => router.push(`/employee/appointments?date=${date}&create=1`)}
-                        className="btn btn-primary btn-sm mt-3"
-                    >
-                        <Plus className="w-3.5 h-3.5" /> Buat Meeting pada Tanggal Ini
-                    </button>
-                </div>
+                <EmptyState
+                    icon={CalendarDays}
+                    title="Belum ada meeting pada tanggal ini."
+                    action={
+                        <button
+                            type="button"
+                            onClick={() => router.push(`/employee/appointments?date=${date}&create=1`)}
+                            className="btn btn-primary btn-sm"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Buat Meeting pada Tanggal Ini
+                        </button>
+                    }
+                />
             ) : (
                 <ol className="space-y-3">
                     {total !== null && total > items.length && (
@@ -169,7 +174,7 @@ export default function AppointmentDayDetailPage() {
                                 <button
                                     type="button"
                                     onClick={() => { void openDetail(a.id); }}
-                                    className="card w-full text-left p-4 hover:border-[var(--primary)]/40 transition-colors"
+                                    className="emp-surface emp-surface-hover w-full text-left p-4 active:scale-[0.99]"
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className="shrink-0 w-14 text-center rounded-xl bg-[var(--secondary)] py-2">

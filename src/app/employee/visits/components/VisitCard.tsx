@@ -4,7 +4,8 @@ import { formatDisplayDate, formatDisplayTime } from "@/lib/utils";
 
 import { Building2, Navigation, Clock, LogIn, LogOut, Trash2, ArrowRight } from "lucide-react";
 import { VisitReport } from "@/types";
-import { VISIT_STATUS_CONFIG } from "../visitTypes";
+import StatusBadge from "@/components/ui/StatusBadge";
+import { VISIT_STATUS_CONFIG, VISIT_STATUS_TONE } from "../visitTypes";
 
 interface VisitCardProps {
     visit: VisitReport;
@@ -19,19 +20,19 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
 
     return (
         <div
-            className="card p-5 hover:border-[var(--primary)] hover:shadow-md transition-all cursor-pointer group flex flex-col h-full bg-[var(--card)]"
+            className="emp-surface emp-surface-hover p-4 active:scale-[0.99] transition-all cursor-pointer group flex flex-col h-full"
             onClick={() => onSelect(visit)}
         >
             {/* Header */}
             <div className="flex items-start justify-between gap-4 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] flex items-center justify-center shrink-0">
                     <Building2 className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h3 className="text-[15px] font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
+                    <h3 className="text-sm font-bold text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
                         {visit.clientName}
                     </h3>
-                    <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1.5 flex-wrap">
+                    <div className="flex items-center gap-3 text-[11px] text-[var(--text-muted)] mt-1.5 flex-wrap">
                         <span className="flex items-center gap-1 truncate max-w-[150px]">
                             <Navigation className="w-3 h-3 shrink-0" />
                             <span className="truncate">{visit.clientAddress}</span>
@@ -48,12 +49,12 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
             {(visit.clockInTime || visit.clockOutTime) && (
                 <div className="flex items-center gap-3 mb-3 text-xs">
                     {visit.clockInTime && (
-                        <span className="flex items-center gap-1 font-mono text-blue-600 font-semibold">
+                        <span className="flex items-center gap-1 font-mono text-[var(--info)] font-semibold">
                             <LogIn className="w-3 h-3" /> {formatDisplayTime(visit.clockInTime)}
                         </span>
                     )}
                     {visit.clockOutTime && (
-                        <span className="flex items-center gap-1 font-mono text-orange-600 font-semibold">
+                        <span className="flex items-center gap-1 font-mono text-[var(--warning)] font-semibold">
                             <LogOut className="w-3 h-3" /> {formatDisplayTime(visit.clockOutTime)}
                         </span>
                     )}
@@ -61,10 +62,10 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
             )}
 
             {/* Footer */}
-            <div className="mt-auto pt-3 border-t border-[var(--border)] flex items-center justify-between">
-                <span className={`badge ${cfg.class} px-3 py-1 text-[11px] font-bold`}>
+            <div className="mt-auto pt-3 border-t border-[var(--border)] flex items-center justify-between gap-2">
+                <StatusBadge tone={VISIT_STATUS_TONE[visit.status]}>
                     {cfg.label}
-                </span>
+                </StatusBadge>
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -79,7 +80,7 @@ export function VisitCard({ visit, onSelect, onClockIn, onClockOut, onDelete }: 
                             </button>
                             <button
                                 onClick={() => onDelete(visit)}
-                                className="btn btn-ghost btn-sm !h-7 !px-1.5 text-red-500 hover:!bg-red-50"
+                                className="btn btn-ghost btn-sm !h-7 !px-1.5 text-[var(--destructive-text)] hover:!bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] hover:text-[var(--destructive-text)]"
                                 title="Hapus Draft"
                             >
                                 <Trash2 className="w-3 h-3" />

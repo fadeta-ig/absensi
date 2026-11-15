@@ -21,7 +21,7 @@ const ICONS = {
 
 const STYLES: Record<FeedbackVariant, string> = {
     success: "border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success)]",
-    error: "border-[var(--destructive-border)] bg-[var(--destructive-bg)] text-[var(--destructive)]",
+    error: "border-[var(--destructive-border)] bg-[var(--destructive-bg)] text-[var(--destructive-text)]",
     warning: "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning)]",
     info: "border-[var(--info-border)] bg-[var(--info-bg)] text-[var(--info)]",
 };

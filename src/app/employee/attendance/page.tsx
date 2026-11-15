@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { useRouter } from "next/navigation";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
@@ -471,29 +472,32 @@ export default function AttendancePage() {
     const hasGpsBlocker = !isGpsChecking && !isGpsOk;
 
     return (
-        <div className="w-full max-w-md mx-auto space-y-3 animate-[fadeIn_0.25s_ease]">
+        <div className="w-full max-w-md mx-auto space-y-5 animate-[fadeIn_0.25s_ease]">
+            <h1 className="sr-only">Presensi Kehadiran</h1>
             {(!serverContext.isFresh || !serverContext.isOnline) && (
-                <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 shadow-sm" role="status">
-                    <div className="flex items-start gap-2 min-w-0">
-                        <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>
-                            {serverContext.isOnline ? "Konteks server kedaluwarsa." : "Perangkat offline."} Jam server terakhir: {serverContext.displayWibTime ?? "belum tersedia"} WIB. Presensi dinonaktifkan.
+                <FeedbackMessage variant="warning" compact>
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-start gap-2 min-w-0">
+                            <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>
+                                {serverContext.isOnline ? "Konteks server kedaluwarsa." : "Perangkat offline."} Jam server terakhir: {serverContext.displayWibTime ?? "belum tersedia"} WIB. Presensi dinonaktifkan.
+                            </span>
                         </span>
+                        <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">
+                            Coba lagi
+                        </button>
                     </div>
-                    <button type="button" onClick={() => void serverContext.refresh()} className="font-bold text-[var(--primary)] shrink-0">
-                        Coba lagi
-                    </button>
-                </div>
+                </FeedbackMessage>
             )}
 
             {/* ── Tampilan Selesai Jika Kehadiran Sudah Lengkap ── */}
             {isDone ? (
-                <div className="card p-6 text-center space-y-5 rounded-3xl shadow-sm border border-[var(--border)] bg-[var(--card)]">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-inner">
+                <div className="emp-surface p-6 text-center space-y-5">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-[var(--success-bg)] text-[var(--success)] flex items-center justify-center">
                         <CheckCircle2 className="w-8 h-8" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)]">Presensi Shift Selesai</h2>
+                        <h2 className="text-sm font-bold text-[var(--text-primary)]">Presensi Shift Selesai</h2>
                         <p className="text-xs text-[var(--text-muted)] mt-1">
                             Tanggal shift {serverContext.context?.shiftDate ?? "-"} telah memiliki Clock In dan Clock Out.
                             Bila ada kesalahan jam, ajukan koreksi di menu Koreksi Presensi.
@@ -503,13 +507,13 @@ export default function AttendancePage() {
                     <div className="grid grid-cols-2 gap-3 p-3.5 bg-[var(--secondary)] rounded-2xl border border-[var(--border)] text-left">
                         <div className="space-y-0.5">
                             <span className="text-[10px] text-[var(--text-muted)] font-medium">Jam Masuk (In)</span>
-                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                            <p className="text-sm font-bold text-[var(--success)]">
                                 {formatWibTime(todayRecord?.clockIn)} WIB
                             </p>
                         </div>
                         <div className="space-y-0.5">
                             <span className="text-[10px] text-[var(--text-muted)] font-medium">Jam Pulang (Out)</span>
-                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                            <p className="text-sm font-bold text-[var(--info)]">
                                 {formatWibTime(todayRecord?.clockOut)} WIB
                             </p>
                         </div>
@@ -535,7 +539,7 @@ export default function AttendancePage() {
             ) : (
                 /* ── Layar Utama Presensi (Kamera Bersih, Tanpa Biometrik Palsu, Satu Layar Penuh) ── */
                 <div className="space-y-2.5">
-                    <div className="card px-4 py-3 rounded-2xl flex items-center justify-between gap-3">
+                    <div className="emp-surface px-4 py-3 flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <p className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)]">Tanggal Shift</p>
                             <p className="text-sm font-bold text-[var(--text-primary)]">{serverContext.context?.shiftDate ?? "Menunggu server..."}</p>
@@ -547,7 +551,7 @@ export default function AttendancePage() {
                             </p>
                         </div>
                         {serverContext.context?.isOvernight && (
-                            <span className="shrink-0 rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-300">
+                            <span className="shrink-0 rounded-full bg-[var(--info-bg)] border border-[var(--info-border)] px-2.5 py-1 text-[10px] font-bold text-[var(--info)]">
                                 Lintas Hari H+1
                             </span>
                         )}
@@ -610,7 +614,7 @@ export default function AttendancePage() {
                                 <button
                                     type="button"
                                     onClick={() => void startCamera()}
-                                    className="btn btn-primary text-xs py-2.5 px-5 font-bold rounded-2xl shadow-lg flex items-center gap-2"
+                                    className="btn btn-primary text-xs py-2.5 px-5 font-bold rounded-2xl flex items-center gap-2"
                                 >
                                     <RefreshCw className="w-3.5 h-3.5" />
                                     Coba Lagi
@@ -752,7 +756,7 @@ export default function AttendancePage() {
                                             type="button"
                                             onClick={submitAttendance}
                                             disabled={!canSubmit}
-                                            className={`btn btn-primary flex-1 py-3 px-4 text-xs font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2 transition-all ${
+                                            className={`btn btn-primary flex-1 py-3 px-4 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-all ${
                                                 !canSubmit ? "opacity-50 cursor-not-allowed" : "hover:brightness-105 active:scale-98"
                                             }`}
                                         >
@@ -782,16 +786,16 @@ export default function AttendancePage() {
 
                     {/* ── Contextual Off-Day Attendance Banner & Reason Input ── */}
                     {isClockIn && isOffDay && (
-                        <div className="p-4 rounded-3xl border border-amber-500/30 bg-amber-500/10 text-[var(--text-primary)] space-y-3 shadow-sm">
+                        <div className="rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4 space-y-3">
                             <div className="flex items-start gap-3">
-                                <div className="p-2 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                                <div className="p-2 rounded-2xl bg-[color-mix(in_srgb,var(--warning-border)_60%,transparent)] text-[var(--warning)] shrink-0">
                                     <CalendarClock className="w-5 h-5" />
                                 </div>
                                 <div className="space-y-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <h3 className="text-xs font-bold text-[var(--text-primary)]">Jadwal Hari Libur</h3>
                                         {networkInfo?.shiftName && (
-                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--warning-border)] text-[var(--warning)]">
                                                 {networkInfo.shiftName}
                                             </span>
                                         )}
@@ -809,10 +813,10 @@ export default function AttendancePage() {
                                     onChange={(e) => setOffDayReason(e.target.value)}
                                     placeholder="Contoh: Piket darurat pemeliharaan jaringan"
                                     maxLength={500}
-                                    className="w-full px-3.5 py-2.5 rounded-2xl border border-amber-500/30 bg-[var(--card)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all shadow-inner"
+                                    className="w-full px-3.5 py-2.5 rounded-2xl border border-[var(--warning-border)] bg-[var(--card)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--warning)_50%,transparent)] transition-all"
                                 />
                                 {offDayReason.length > 0 && offDayReason.trim().length < 3 && (
-                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                                    <p className="text-[10px] text-[var(--warning)] mt-1">
                                         Alasan kehadiran minimal 3 karakter.
                                     </p>
                                 )}
@@ -822,43 +826,49 @@ export default function AttendancePage() {
 
                     {/* ── Single Contextual Alert: Hanya Muncul Jika Ada Kendala Validasi ── */}
                     {hasNetworkBlocker && (
-                        <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-2 shadow-sm">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <WifiOff className="w-4 h-4 shrink-0 text-amber-600" />
-                                <span className="truncate">Gunakan Wi-Fi kantor WIG untuk presensi</span>
+                        <FeedbackMessage variant="warning" compact>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 min-w-0">
+                                    <WifiOff className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">Gunakan Wi-Fi kantor WIG untuk presensi</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => void serverContext.refresh()}
+                                    className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> Cek
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => void serverContext.refresh()}
-                                className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
-                            >
-                                <RefreshCw className="w-3 h-3" /> Cek
-                            </button>
-                        </div>
+                        </FeedbackMessage>
                     )}
 
                     {!hasNetworkBlocker && hasGpsBlocker && (
-                        <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-800 text-xs text-red-800 dark:text-red-300 flex items-center justify-between gap-2 shadow-sm">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                                <span className="truncate">Lokasi GPS belum sesuai radius kantor</span>
+                        <FeedbackMessage variant="error" compact>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 min-w-0">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">Lokasi GPS belum sesuai radius kantor</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={checkGpsStatus}
+                                    className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> Cek
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={checkGpsStatus}
-                                className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
-                            >
-                                <RefreshCw className="w-3 h-3" /> Cek
-                            </button>
-                        </div>
+                        </FeedbackMessage>
                     )}
 
                     {/* Error Feedback Message jika request gagal */}
                     {message && status === "error" && (
-                        <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-300 dark:border-rose-800 text-xs text-red-800 dark:text-red-300 flex items-center gap-2 shadow-sm">
-                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                            <span className="flex-1">{message}</span>
-                        </div>
+                        <FeedbackMessage variant="error" compact>
+                            <span className="flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                <span className="flex-1">{message}</span>
+                            </span>
+                        </FeedbackMessage>
                     )}
                 </div>
             )}

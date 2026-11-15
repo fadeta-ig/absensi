@@ -7,9 +7,11 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import StateCard from "@/components/ui/StateCard";
 
 interface ApprovalItem {
     id: string;
@@ -173,32 +175,28 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
 
     if (loading) {
         return (
-            <div className="mx-auto px-4 py-6" role="status" aria-live="polite" aria-label="Memuat detail QC">
-                <Skeleton className="h-7 w-2/3 mb-2" />
-                <Skeleton className="h-4 w-1/2 mb-6" />
-                {[0, 1, 2].map((i) => (
-                    <div key={i} className="bg-card border border-border rounded-lg p-4 mb-3">
-                        <Skeleton className="h-5 w-3/4 mb-2" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
-                ))}
+            <div className="space-y-5">
+                <ListSkeleton count={3} label="Memuat detail QC" />
             </div>
         );
     }
 
     if (error || !detail) {
         return (
-            <div className="mx-auto px-4 py-6">
-                <Link href="/employee/equipment/approvals" className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center min-h-[44px] px-2 -ml-2">
+            <div className="space-y-5">
+                <Link href="/employee/equipment/approvals" className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
                     ← Kembali ke antrean
                 </Link>
-                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
-                    <AlertTriangle aria-hidden="true" className="h-6 w-6 text-destructive mx-auto mb-2" />
-                    <p className="text-sm text-destructive">{error ?? "Detail tidak ditemukan."}</p>
-                    <button onClick={() => void fetchDetail()} className="mt-3 px-4 min-h-[44px] inline-flex items-center text-sm font-medium text-primary hover:underline">
-                        Coba lagi
-                    </button>
-                </div>
+                <StateCard
+                    variant="error"
+                    title="Detail QC gagal dimuat"
+                    description={error ?? "Detail tidak ditemukan."}
+                    action={
+                        <button onClick={() => void fetchDetail()} className="btn btn-secondary btn-sm min-h-[44px]">
+                            Coba lagi
+                        </button>
+                    }
+                />
             </div>
         );
     }
@@ -208,13 +206,13 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
     const isDone = detail.status === "DONE";
 
     return (
-        <div className="mx-auto px-4 py-6">
-            <Link href="/employee/equipment/approvals" className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center min-h-[44px] px-2 -ml-2">
+        <div className="space-y-5">
+            <Link href="/employee/equipment/approvals" className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
                 ← Kembali ke antrean
             </Link>
 
-            <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                <h1 className="text-xl font-semibold text-foreground">
+            <div className="emp-surface p-4">
+                <h1 className="text-xl font-extrabold leading-none tracking-tight text-[var(--text-primary)]">
                     {detail.unit.name}{" "}
                     <EquipmentCompanyBadge
                         company={detail.unit.company}
@@ -222,27 +220,27 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                         companies={(detail.unit as { companies?: string[] }).companies}
                     />
                 </h1>
-                {detail.unit.brand && <p className="text-sm text-muted-foreground">{detail.unit.brand}</p>}
-                <p className="text-sm text-muted-foreground mt-1">
+                {detail.unit.brand && <p className="text-xs text-[var(--text-muted)] mt-1">{detail.unit.brand}</p>}
+                <p className="text-[11px] font-medium text-[var(--text-secondary)] mt-1">
                     Dari {stripGelar(detail.startedBy.name)} · Dikirim {formatDateTime(detail.submittedAt)}
                 </p>
-                <p className={`text-sm font-medium mt-1 ${rusak > 0 ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
+                <p className={`text-[13px] font-semibold mt-1 ${rusak > 0 ? "text-[var(--destructive-text)]" : "text-[var(--text-primary)]"}`}>
                     {baik} baik · {rusak} rusak · {detail.progress.decided}/{detail.progress.total} dinilai
                 </p>
             </div>
 
             {isDone ? (
-                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/10 dark:border-green-800 px-4 py-3 mb-4">
-                    <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                <FeedbackMessage variant="success">
+                    <p className="text-[13px] font-semibold">
                         Diperiksa oleh {stripGelar(detail.checkedByNameSnapshot ?? detail.checkedBy?.name ?? "")} (QC)
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(detail.checkedAt)}</p>
-                    {detail.qcNote && <p className="text-sm text-muted-foreground mt-1">Catatan QC: {detail.qcNote}</p>}
-                </div>
+                    <p className="text-[11px] mt-0.5 opacity-80">{formatDateTime(detail.checkedAt)}</p>
+                    {detail.qcNote && <p className="text-[13px] mt-1">Catatan QC: {detail.qcNote}</p>}
+                </FeedbackMessage>
             ) : (
-                <div className="sticky top-2 z-10 mb-4">
-                    <div className="bg-card/95 backdrop-blur border border-border rounded-lg p-3 shadow-lg">
-                        <label htmlFor="qc-note" className="text-xs font-medium text-secondary">
+                <div className="sticky top-2 z-10">
+                    <div className="emp-surface p-3">
+                        <label htmlFor="qc-note" className="text-[10px] font-semibold text-[var(--text-muted)]">
                             Catatan QC (opsional)
                         </label>
                         <textarea
@@ -254,7 +252,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                             rows={2}
                             className="form-textarea mt-1 min-h-[64px] text-sm"
                         />
-                        <p className="text-[11px] text-muted-foreground text-right">{qcNote.length}/1000</p>
+                        <p className="text-[11px] text-[var(--text-muted)] text-right">{qcNote.length}/1000</p>
                         <button
                             type="button"
                             onClick={handleDone}
@@ -268,17 +266,17 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                 </div>
             )}
 
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3">
                 {detail.items
                     .filter((i) => i.isActive)
                     .map((item) => (
-                        <div key={item.id} className="flex items-start gap-2 text-sm border border-[var(--border)] rounded-lg px-3 py-2.5 bg-card">
+                        <div key={item.id} className="emp-surface flex items-start gap-2 text-[13px] px-4 py-3">
                             {item.isPass === true ? (
-                                <CheckCircle2 aria-hidden="true" className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                                <CheckCircle2 aria-hidden="true" className="h-5 w-5 text-[var(--success)] mt-0.5 shrink-0" />
                             ) : item.isPass === false ? (
-                                <X aria-hidden="true" className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                                <X aria-hidden="true" className="h-5 w-5 text-[var(--destructive-text)] mt-0.5 shrink-0" />
                             ) : (
-                                <AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                                <AlertTriangle aria-hidden="true" className="h-5 w-5 text-[var(--warning)] mt-0.5 shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium text-[var(--text-primary)]">
@@ -287,32 +285,36 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                                         — {item.isPass === true ? "Baik" : item.isPass === false ? "Rusak" : "Belum dinilai"}
                                     </span>
                                 </p>
-                                {item.note && <p className="text-sm text-[var(--text-muted)]">Catatan: {item.note}</p>}
+                                {item.note && <p className="text-xs text-[var(--text-muted)]">Catatan: {item.note}</p>}
                             </div>
                         </div>
                     ))}
             </div>
 
-            <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                <h2 className="text-sm font-semibold text-foreground mb-1">Foto dokumentasi produksi</h2>
+            <div className="emp-surface p-4">
+                <h2 className="emp-eyebrow flex items-center gap-1.5 mb-1">
+                    <Camera className="h-3.5 w-3.5" aria-hidden="true" /> Foto dokumentasi produksi
+                </h2>
                 <div className="mt-1">
                     <EquipmentEvidencePanel inspectionId={detail.id} collapsible />
                 </div>
             </div>
 
-            <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-sm font-semibold text-foreground mb-1">
-                    Foto QC (opsional{qcPhotos.length > 0 ? ` — ${qcPhotos.length} foto` : ""})
+            <div className="emp-surface p-4">
+                <h2 className="emp-eyebrow flex items-center gap-1.5 mb-1">
+                    <Camera className="h-3.5 w-3.5" aria-hidden="true" /> Foto QC (opsional{qcPhotos.length > 0 ? ` — ${qcPhotos.length} foto` : ""})
                 </h2>
                 {qcPhotosLoading ? (
-                    <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <div className="flex justify-center py-4">
+                        <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
+                    </div>
                 ) : (
                     qcPhotos.length > 0 && (
                         <div className="grid grid-cols-3 gap-2 mb-3">
                             {qcPhotos.map((p, idx) => (
                                 <a key={p.id} href={p.url} target="_blank" rel="noreferrer" title={p.note ?? `Foto QC ${idx + 1}`}>
                                     {/* eslint-disable-next-line @next/next/no-img-element -- thumbnail serve privat ber-auth */}
-                                    <img src={p.url} alt={p.note ?? `Foto QC ${idx + 1}`} loading="lazy" className="w-full aspect-square object-cover rounded-md border border-[var(--border)]" />
+                                    <img src={p.url} alt={p.note ?? `Foto QC ${idx + 1}`} loading="lazy" className="w-full aspect-square object-cover rounded-lg border border-[var(--border)]" />
                                 </a>
                             ))}
                         </div>
@@ -354,7 +356,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                         </button>
                     </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-2">Foto harus diambil dari kamera dalam format JPEG.</p>
+                <p className="text-xs text-[var(--text-muted)] mt-2">Foto harus diambil dari kamera dalam format JPEG.</p>
             </div>
         </div>
     );

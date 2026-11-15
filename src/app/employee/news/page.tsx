@@ -4,13 +4,17 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     Newspaper, Pin, X, Megaphone, PartyPopper, BookOpen, Globe,
-    Download, FileText, Paperclip, Loader2, AlertCircle, Maximize2, ExternalLink, Eye, Lock
+    Download, FileText, Paperclip, Maximize2, ExternalLink, Eye, Lock
 } from "lucide-react";
 import { formatDisplayDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import DataTablePagination from "@/components/ui/DataTablePagination";
-import { Skeleton } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 const NEWS_FILTER_KEY = "employee-news-filter";
 const NEWS_FILTERS = ["all", "announcement", "event", "policy", "general"];
@@ -40,9 +44,9 @@ interface NewsItem {
 
 function PrivateNewsBadge() {
     return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2 py-0.5 text-[10px] font-bold">
-            <Lock className="w-2.5 h-2.5" /> Khusus Anda
-        </span>
+        <StatusBadge tone="warning" icon={Lock}>
+            Khusus Anda
+        </StatusBadge>
     );
 }
 
@@ -128,10 +132,10 @@ function NewsPageContent() {
 
     const getCategoryInfo = (cat: string) => {
         switch (cat) {
-            case "announcement": return { label: "Pengumuman", icon: Megaphone, color: "text-[var(--primary)]", bg: "bg-[var(--primary)]/10" };
-            case "event": return { label: "Acara", icon: PartyPopper, color: "text-blue-600", bg: "bg-blue-500/10" };
-            case "policy": return { label: "Kebijakan", icon: BookOpen, color: "text-orange-600", bg: "bg-orange-500/10" };
-            default: return { label: "Umum", icon: Globe, color: "text-[var(--text-secondary)]", bg: "bg-gray-500/10" };
+            case "announcement": return { label: "Pengumuman", icon: Megaphone, color: "text-[var(--primary)]", bg: "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]" };
+            case "event": return { label: "Acara", icon: PartyPopper, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/10" };
+            case "policy": return { label: "Kebijakan", icon: BookOpen, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-500/10" };
+            default: return { label: "Umum", icon: Globe, color: "text-[var(--text-secondary)]", bg: "bg-[var(--secondary)]" };
         }
     };
 
@@ -148,24 +152,24 @@ function NewsPageContent() {
         /\.pdf($|\?)/i.test(url) || (Boolean(name) && /\.pdf$/i.test(name!));
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div>
-                <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                    <Newspaper className="w-5 h-5 text-[var(--primary)]" />
-                    WITS News
-                </h1>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Informasi dan pengumuman perusahaan</p>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader
+                title="WITS News"
+                subtitle="Informasi dan pengumuman perusahaan"
+                icon={Newspaper}
+            />
 
             {/* Filters */}
             <div className="flex gap-2 flex-wrap">
                 {filters.map((f) => (
                     <button
                         key={f.key}
+                        type="button"
                         onClick={() => { setFilter(f.key); setCurrentPage(1); }}
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${filter === f.key
-                            ? "bg-[var(--primary)] text-white shadow-sm"
-                            : "bg-[var(--secondary)] text-[var(--text-secondary)] hover:bg-[var(--muted)]"
+                        aria-pressed={filter === f.key}
+                        className={`px-3.5 py-1.5 rounded-full border text-xs font-medium transition-colors active:scale-[0.99] ${filter === f.key
+                            ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-secondary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] hover:bg-[var(--secondary)]"
                             }`}
                     >
                         {f.label}
@@ -175,45 +179,31 @@ function NewsPageContent() {
 
             {/* News List */}
             {loading ? (
-                <div className="space-y-3" role="status" aria-live="polite" aria-label="Memuat berita">
-                    {[0, 1, 2].map((i) => (
-                        <div key={i} className="card p-4 space-y-2">
-                            <Skeleton className="h-5 w-2/3" />
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-3 w-1/3" />
-                        </div>
-                    ))}
-                </div>
+                <ListSkeleton label="Memuat berita" />
             ) : loadError ? (
-                <div className="card p-12 text-center">
-                    <AlertCircle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
-                </div>
+                <StateCard variant="error" title="Berita gagal dimuat" description={loadError} />
             ) : filtered.length === 0 ? (
-                <div className="card p-12 text-center">
-                    <Newspaper className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada berita</p>
-                </div>
+                <EmptyState icon={Newspaper} title="Tidak ada berita" />
             ) : (
                 <div className="space-y-3">
                     {paginatedNews.map((item) => {
                         const info = getCategoryInfo(item.category);
                         const CatIcon = info.icon;
                         return (
-                            <div key={item.id} className="card p-5 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelected(item)}>
-                                <div className="flex gap-4">
-                                    <div className={`w-10 h-10 rounded-lg ${info.bg} flex items-center justify-center shrink-0`}>
+                            <button key={item.id} type="button" className="emp-surface emp-surface-hover p-4 w-full text-left active:scale-[0.99] transition-colors" onClick={() => setSelected(item)}>
+                                <div className="flex gap-3">
+                                    <div className={`w-10 h-10 rounded-xl ${info.bg} flex items-center justify-center shrink-0`}>
                                         <CatIcon className={`w-5 h-5 ${info.color}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                                             {item.isPinned && <Pin className="w-3 h-3 text-[var(--primary)] shrink-0" />}
-                                            <span className="badge badge-primary">{info.label}</span>
+                                            <StatusBadge tone="neutral">{info.label}</StatusBadge>
                                             {item.audience === "SELECTED" && <PrivateNewsBadge />}
                                             {item.mediaUrl && (
-                                                <span className="badge bg-blue-50 text-blue-600 text-[10px] flex items-center gap-1">
-                                                    <Paperclip className="w-2.5 h-2.5" /> Lampiran
-                                                </span>
+                                                <StatusBadge tone="info" icon={Paperclip}>
+                                                    Lampiran
+                                                </StatusBadge>
                                             )}
                                         </div>
                                         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">{item.title}</h3>
@@ -225,7 +215,7 @@ function NewsPageContent() {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </button>
                         );
                     })}
 
@@ -257,10 +247,10 @@ function NewsPageContent() {
                 >
                         <div className="modal-header">
                             <h2 className="modal-title">{selected.title}</h2>
-                            <button className="modal-close" onClick={handleCloseModal}><X className="w-4 h-4" /></button>
+                            <button className="modal-close" onClick={handleCloseModal} aria-label="Tutup detail berita"><X className="w-4 h-4" /></button>
                         </div>
                         <div className="flex items-center gap-3 mb-4 flex-wrap">
-                            <span className="badge badge-primary">{getCategoryInfo(selected.category).label}</span>
+                            <StatusBadge tone="neutral">{getCategoryInfo(selected.category).label}</StatusBadge>
                             {selected.audience === "SELECTED" && <PrivateNewsBadge />}
                             <span className="text-xs text-[var(--text-muted)]">Oleh {selected.author}</span>
                             <span className="text-xs text-[var(--text-muted)]">{new Date(selected.createdAt).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" })}</span>
@@ -271,7 +261,7 @@ function NewsPageContent() {
                         {selected.mediaUrl && (
                             <div className="mt-6 pt-5 border-t border-[var(--border)] space-y-3">
                                 <div className="flex items-center justify-between flex-wrap gap-2">
-                                    <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                                    <span className="emp-eyebrow flex items-center gap-1.5">
                                         <Paperclip className="w-3.5 h-3.5 text-[var(--primary)]" />
                                         Lampiran Dokumen & Media
                                     </span>
@@ -328,7 +318,7 @@ function NewsPageContent() {
                                         {/* Document Action & Info Card */}
                                         <div className="p-3.5 rounded-xl bg-[var(--secondary)] border border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center shrink-0">
+                                                <div className="w-10 h-10 rounded-lg bg-[var(--destructive-bg)] text-[var(--destructive-text)] border border-[var(--destructive-border)] flex items-center justify-center shrink-0">
                                                     <FileText className="w-5 h-5" />
                                                 </div>
                                                 <div className="min-w-0">
@@ -336,7 +326,7 @@ function NewsPageContent() {
                                                         {selected.mediaName || "Dokumen Lampiran.pdf"}
                                                     </p>
                                                     <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5">
-                                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--destructive)]" />
                                                         Dokumen PDF Resmi
                                                     </p>
                                                 </div>
@@ -378,7 +368,7 @@ function NewsPageContent() {
                                         </div>
 
                                         {/* Inline Embedded PDF Viewer */}
-                                        <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] shadow-inner">
+                                        <div className="rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)]">
                                             <iframe
                                                 src={`${selected.mediaUrl}#toolbar=0&navpanes=0&view=FitH`}
                                                 className="w-full h-80 sm:h-96 border-0 bg-[var(--card)]"
@@ -421,12 +411,12 @@ function NewsPageContent() {
                     ariaLabel={`Pratinjau PDF: ${previewPdf.name}`}
                     onClose={() => setPreviewPdf(null)}
                     overlayClassName="!p-2 sm:!p-6 z-[1100]"
-                    className="!max-w-5xl !w-full !h-[92vh] flex flex-col !p-0 overflow-hidden shadow-2xl border-2 border-[var(--border)]"
+                    className="!max-w-5xl !w-full !h-[92vh] flex flex-col !p-0 overflow-hidden border-2 border-[var(--border)]"
                 >
                         {/* Viewer Top Bar */}
                         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border)] bg-[var(--card)]">
                             <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-950/40 text-red-600 flex items-center justify-center shrink-0">
+                                <div className="w-8 h-8 rounded-lg bg-[var(--destructive-bg)] text-[var(--destructive-text)] flex items-center justify-center shrink-0">
                                     <FileText className="w-4 h-4" />
                                 </div>
                                 <div className="min-w-0">
@@ -469,7 +459,7 @@ function NewsPageContent() {
                         </div>
 
                         {/* Viewer Iframe Content */}
-                        <div className="flex-1 w-full bg-[var(--secondary)]/30 relative">
+                        <div className="flex-1 w-full bg-[color-mix(in_srgb,var(--secondary)_30%,transparent)] relative">
                             <iframe
                                 src={`${previewPdf.url}#toolbar=1`}
                                 className="w-full h-full border-0 bg-[var(--card)]"
@@ -509,12 +499,7 @@ function NewsPageContent() {
 
 export default function NewsPage() {
     return (
-        <Suspense fallback={
-            <div className="card p-12 text-center">
-                <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-60 mx-auto mb-3" />
-                <p className="text-sm font-semibold text-[var(--text-primary)]">Memuat berita...</p>
-            </div>
-        }>
+        <Suspense fallback={<StateCard variant="loading" title="Memuat berita..." />}>
             <NewsPageContent />
         </Suspense>
     );

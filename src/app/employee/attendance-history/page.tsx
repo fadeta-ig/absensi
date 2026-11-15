@@ -3,11 +3,15 @@
 import { useEffect, useState, useMemo } from "react";
 import {
     ClipboardList, CalendarDays, Clock, CheckCircle, AlertTriangle,
-    XCircle, Filter, ChevronLeft, ChevronRight, Loader2, AlertCircle,
-    FileSpreadsheet
+    XCircle, Filter, ChevronLeft, ChevronRight, FileSpreadsheet
 } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import DataTablePagination from "@/components/ui/DataTablePagination";
+import EmptyState from "@/components/ui/EmptyState";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { exportToExcel } from "@/lib/export";
 import { useToast } from "@/components/Toast";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
@@ -62,11 +66,11 @@ const MONTHS = [
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ];
 
-const STATUS_MAP: Record<string, { label: string; badge: string; icon: typeof CheckCircle }> = {
-    present: { label: "Hadir", badge: "badge-success", icon: CheckCircle },
-    late: { label: "Terlambat", badge: "badge-warning", icon: AlertTriangle },
-    absent: { label: "Alpha", badge: "badge-error", icon: XCircle },
-    leave: { label: "Cuti", badge: "badge-info", icon: CalendarDays },
+const STATUS_MAP: Record<string, { label: string; tone: StatusTone; icon: typeof CheckCircle }> = {
+    present: { label: "Hadir", tone: "success", icon: CheckCircle },
+    late: { label: "Terlambat", tone: "warning", icon: AlertTriangle },
+    absent: { label: "Alpha", tone: "danger", icon: XCircle },
+    leave: { label: "Cuti", tone: "info", icon: CalendarDays },
 };
 
 /** Format ISO string or HH:mm → HH:mm */
@@ -281,53 +285,48 @@ export default function AttendanceHistoryPage() {
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease] min-w-0 overflow-hidden">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <ClipboardList className="w-5 h-5 text-[var(--primary)]" />
-                        Riwayat Kehadiran
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Lihat detail kehadiran harian, bulanan, atau tahunan
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={handleExportExcel}
-                    disabled={filteredRecords.length === 0}
-                    className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
-                >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    Ekspor Excel
-                </button>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease] min-w-0 overflow-hidden">
+            <PageHeader
+                title="Riwayat Kehadiran"
+                subtitle="Lihat detail kehadiran harian, bulanan, atau tahunan"
+                icon={ClipboardList}
+                action={
+                    <button
+                        type="button"
+                        onClick={handleExportExcel}
+                        disabled={filteredRecords.length === 0}
+                        className="btn btn-secondary btn-sm flex items-center gap-1.5 border border-[var(--border)]"
+                    >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        Ekspor Excel
+                    </button>
+                }
+            />
 
             {!serverContext.context && (
-                <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-xs text-amber-800 dark:text-amber-300" role="status">
+                <FeedbackMessage variant="info" compact>
                     Navigasi tanggal menunggu tanggal WIB resmi dari server.
-                </div>
+                </FeedbackMessage>
             )}
 
             {/* Filter Controls */}
-            <div className="card p-4 space-y-4">
+            <div className="emp-surface p-4 space-y-3">
                 <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-[var(--text-muted)]" />
-                    <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Filter Periode</span>
+                    <span className="emp-eyebrow">Filter Periode</span>
                 </div>
 
                 {/* Mode Toggle */}
-                <div className="flex bg-[var(--secondary)] rounded-lg p-1 w-fit">
+                <div className="flex bg-[var(--secondary)] rounded-xl p-1 w-fit">
                     {(["day", "month", "year"] as FilterMode[]).map((mode) => (
                         <button
                             key={mode}
                             type="button"
                             onClick={() => setFilterMode(mode)}
                             disabled={!serverContext.context}
-                            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${filterMode === mode
-                                ? "bg-[var(--card)] text-[var(--primary)] shadow-sm"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                            className={`px-4 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${filterMode === mode
+                                ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]"
+                                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                                 }`}
                         >
                             {mode === "day" ? "Hari" : mode === "month" ? "Bulan" : "Tahun"}
@@ -398,55 +397,58 @@ export default function AttendanceHistoryPage() {
             </div>
 
             {/* Summary Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-                <div className="card p-3 sm:p-4 text-center min-w-0">
-                    <div className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-green-50 mb-1.5 sm:mb-2">
-                        <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
+            <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-3 emp-surface px-4 py-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--success-bg)] flex items-center justify-center shrink-0">
+                        <CheckCircle className="w-[18px] h-[18px] text-[var(--success)]" />
                     </div>
-                    <p className="text-xl sm:text-2xl font-extrabold text-green-600">{stats.present}</p>
-                    <p className="text-[9px] sm:text-[10px] text-[var(--text-muted)] uppercase font-semibold mt-0.5 truncate" title="Hadir tepat waktu (tidak termasuk Terlambat)">Tepat Waktu</p>
+                    <div className="min-w-0">
+                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{stats.present}</p>
+                        <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate" title="Hadir tepat waktu (tidak termasuk Terlambat)">Tepat waktu</p>
+                    </div>
                 </div>
-                <div className="card p-3 sm:p-4 text-center min-w-0">
-                    <div className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-orange-50 mb-1.5 sm:mb-2">
-                        <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />
+                <div className="flex items-center gap-3 emp-surface px-4 py-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--warning-bg)] flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-[18px] h-[18px] text-[var(--warning)]" />
                     </div>
-                    <p className="text-xl sm:text-2xl font-extrabold text-orange-500">{stats.late}</p>
-                    <p className="text-[9px] sm:text-[10px] text-[var(--text-muted)] uppercase font-semibold mt-0.5 truncate">Terlambat</p>
+                    <div className="min-w-0">
+                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{stats.late}</p>
+                        <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Terlambat</p>
+                    </div>
                 </div>
-                <div className="card p-3 sm:p-4 text-center min-w-0">
-                    <div className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-red-50 mb-1.5 sm:mb-2">
-                        <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
+                <div className="flex items-center gap-3 emp-surface px-4 py-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--destructive-bg)] flex items-center justify-center shrink-0">
+                        <XCircle className="w-[18px] h-[18px] text-[var(--destructive-text)]" />
                     </div>
-                    <p className="text-xl sm:text-2xl font-extrabold text-red-500">{stats.absent}</p>
-                    <p className="text-[9px] sm:text-[10px] text-[var(--text-muted)] uppercase font-semibold mt-0.5 truncate">Alpha</p>
+                    <div className="min-w-0">
+                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{stats.absent}</p>
+                        <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Alpha</p>
+                    </div>
                 </div>
-                <div className="card p-3 sm:p-4 text-center min-w-0">
-                    <div className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-blue-50 mb-1.5 sm:mb-2">
-                        <CalendarDays className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
+                <div className="flex items-center gap-3 emp-surface px-4 py-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[var(--info-bg)] flex items-center justify-center shrink-0">
+                        <CalendarDays className="w-[18px] h-[18px] text-[var(--info)]" />
                     </div>
-                    <p className="text-xl sm:text-2xl font-extrabold text-blue-500">{stats.leave}</p>
-                    <p className="text-[9px] sm:text-[10px] text-[var(--text-muted)] uppercase font-semibold mt-0.5 truncate">Cuti</p>
+                    <div className="min-w-0">
+                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{stats.leave}</p>
+                        <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Cuti</p>
+                    </div>
                 </div>
             </div>
 
             {/* Data Table / Mobile Cards */}
             {loading ? (
-                <div className="flex justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-[var(--primary)] opacity-50" />
-                </div>
+                <StateCard variant="loading" title="Memuat riwayat presensi..." />
             ) : loadError ? (
-                <div className="card p-8 text-center">
-                    <AlertCircle className="w-8 h-8 mx-auto opacity-70 mb-2 text-[var(--destructive)]" />
-                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
-                </div>
+                <StateCard variant="error" title="Riwayat presensi gagal dimuat" description={loadError} />
             ) : filteredRecords.length === 0 ? (
-                <div className="card p-8 text-center text-[var(--text-muted)]">
-                    <ClipboardList className="w-8 h-8 mx-auto opacity-20 mb-2" />
-                    <p className="text-sm font-medium">Tidak ada data kehadiran</p>
-                    <p className="text-xs mt-1">untuk periode {periodLabel}</p>
-                </div>
+                <EmptyState
+                    icon={ClipboardList}
+                    title="Tidak ada data kehadiran"
+                    description={`Belum ada catatan kehadiran untuk periode ${periodLabel}.`}
+                />
             ) : (
-                <div className="card overflow-hidden">
+                <div className="emp-surface overflow-hidden">
                     {/* Unified Card List (Consistent across mobile and desktop canvas) */}
                     <div className="divide-y divide-[var(--border)]">
                         {paginatedRecords.map((r) => {
@@ -457,38 +459,37 @@ export default function AttendanceHistoryPage() {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-xs font-semibold text-[var(--text-primary)]">{fmtDate(r.shiftDate ?? r.date)}</span>
-                                            {r.isOffDay && <span className="badge badge-warning text-[9px]">Hari Libur</span>}
+                                            {r.isOffDay && <StatusBadge tone="neutral">Hari Libur</StatusBadge>}
                                             {r.isOvernight && (
-                                                <span
-                                                    className="badge badge-info text-[9px]"
+                                                <StatusBadge
+                                                    tone="neutral"
                                                     title={r.shiftName && r.shiftStartTime && r.shiftEndTime ? `${r.shiftName}: ${r.shiftStartTime}-${r.shiftEndTime}` : "Shift lintas hari"}
                                                 >
                                                     Lintas Hari
-                                                </span>
+                                                </StatusBadge>
                                             )}
                                         </div>
-                                        <span className={`badge ${si.badge} flex items-center gap-1 text-[10px] px-2 py-0.5`}>
-                                            <StatusIcon className="w-3 h-3" />
+                                        <StatusBadge tone={si.tone} icon={StatusIcon}>
                                             {si.label}
-                                        </span>
+                                        </StatusBadge>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-center bg-[var(--secondary)]/40 p-2 rounded-lg">
+                                    <div className="grid grid-cols-3 gap-2 text-center bg-[color-mix(in_srgb,var(--secondary)_40%,transparent)] p-2 rounded-lg">
                                         <div>
-                                            <p className="text-[9px] text-[var(--text-muted)] uppercase font-semibold">Masuk</p>
+                                            <p className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Masuk</p>
                                             <div className="flex items-center justify-center gap-1 mt-0.5">
-                                                <Clock className="w-3 h-3 text-blue-500" />
+                                                <Clock className="w-3 h-3 text-[var(--text-muted)]" />
                                                 <span className="text-xs font-mono font-medium text-[var(--text-secondary)]">{fmtTime(r.clockIn)}</span>
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[9px] text-[var(--text-muted)] uppercase font-semibold">Keluar</p>
+                                            <p className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Keluar</p>
                                             <div className="flex items-center justify-center gap-1 mt-0.5">
-                                                <Clock className="w-3 h-3 text-orange-500" />
+                                                <Clock className="w-3 h-3 text-[var(--text-muted)]" />
                                                 <span className="text-xs font-mono font-medium text-[var(--text-secondary)]">{fmtTime(r.clockOut)}</span>
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[9px] text-[var(--text-muted)] uppercase font-semibold">Durasi</p>
+                                            <p className="text-[10px] text-[var(--text-muted)] uppercase font-semibold">Durasi</p>
                                             <span className="text-xs font-medium text-[var(--text-secondary)] mt-0.5 block">{calcDuration(r.clockIn, r.clockOut)}</span>
                                         </div>
                                     </div>

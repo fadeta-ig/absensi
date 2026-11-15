@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, FileText, Loader2, UploadCloud } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, ListChecks, UploadCloud } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import EmptyState from "@/components/ui/EmptyState";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
+import SectionCard from "@/components/ui/SectionCard";
 import { stripGelar } from "@/lib/utils/formatters";
 import { formatWIBDateTime } from "@/lib/timezone";
 import { useConfirm } from "@/components/ConfirmModal";
@@ -48,7 +53,8 @@ interface WorkTask {
     anyOverdue: boolean;
 }
 
-const VERDICT_LABEL: Record<string, string> = { PENDING: "Menunggu Verifikasi", DITERIMA: "Diterima", DIREVISI: "Perlu Revisi" };
+const VERDICT_LABEL: Record<string, string> = { PENDING: "Menunggu Verifikasi", DITERIMA: "Diterima", DIREVISI: "Perlu Revisi", DITOLAK: "Ditolak" };
+const VERDICT_TONE: Record<string, StatusTone> = { PENDING: "progress", DITERIMA: "success", DIREVISI: "warning", DITOLAK: "danger" };
 
 export default function MyTaskDetailPage() {
     const params = useParams<{ id: string }>();
@@ -241,24 +247,33 @@ export default function MyTaskDetailPage() {
         } finally { setBusy(false); }
     }
 
-    if (loading) return <p className="text-sm text-[var(--text-muted)] flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Memuat detail tugas…</p>;
-    if (!task) return <FeedbackMessage variant="error">{error || "Tugas tidak ditemukan."}</FeedbackMessage>;
+    if (loading) return <StateCard variant="loading" title="Memuat detail tugas…" />;
+    if (!task) return <StateCard variant="error" description={error || "Tugas tidak ditemukan."} />;
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
             <div className="flex items-start gap-2">
-                <button type="button" onClick={() => router.push("/employee/my-tasks")} className="btn btn-secondary btn-sm" aria-label="Kembali ke Tugas Saya"><ArrowLeft className="w-4 h-4" /></button>
-                <div className="min-w-0">
-                    <h1 className="text-lg font-bold text-[var(--text-primary)]">{task.title}</h1>
-                    <p className="text-xs text-[var(--text-muted)]">{isOperational ? "Sumber: Operasional · Tugas di luar meeting" : `Sumber: E-Meeting · ${task.appointment?.title ?? ""}`}</p>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => router.push("/employee/my-tasks")}
+                    className="flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--secondary)] active:scale-[0.99]"
+                    aria-label="Kembali ke Tugas Saya"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <PageHeader
+                    className="min-w-0 flex-1"
+                    title={task.title}
+                    subtitle={isOperational ? "Sumber: Operasional · Tugas di luar meeting" : `Sumber: E-Meeting · ${task.appointment?.title ?? ""}`}
+                    icon={ListChecks}
+                />
             </div>
 
             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
             {success && <FeedbackMessage variant="success">{success}</FeedbackMessage>}
             {task.isCancelled && <FeedbackMessage variant="warning">Tugas dibatalkan{task.cancelReason ? `: ${task.cancelReason}` : "."} Anda tidak bisa lagi mengumpulkan atau memverifikasi hasil.</FeedbackMessage>}
 
-            <section className="card p-4 space-y-2" aria-label="Informasi tugas">
+            <section className="emp-surface p-4 space-y-2" aria-label="Informasi tugas">
                 <dl className="space-y-1.5 text-xs">
                     {isOperational ? (
                         <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Sumber</dt><dd className="text-[var(--text-secondary)]">Operasional — tugas di luar meeting</dd></div>
@@ -266,12 +281,12 @@ export default function MyTaskDetailPage() {
                         <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Meeting asal</dt><dd><Link className="text-[var(--primary)] font-semibold hover:underline" href={`/employee/appointments/detail/${task.appointmentId}`}>{task.appointment.title}</Link> · {formatWIBDateTime(new Date(task.appointment.startAt), { day: "numeric", month: "short", year: "numeric" })}{task.appointment.room ? ` · ${task.appointment.room.name}` : ""}</dd></div>
                     ) : null}
                     <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Pemberi tugas</dt><dd className="text-[var(--text-secondary)]">{task.assigner.name ? stripGelar(task.assigner.name) : task.assigner.employeeId}</dd></div>
-                    <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Deadline</dt><dd className={`font-semibold ${mine?.isOverdue ? "text-red-600" : "text-[var(--text-secondary)]"}`}>{task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}{task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}</dd></div>
+                    <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Deadline</dt><dd className={`font-semibold ${mine?.isOverdue ? "text-[var(--destructive-text)]" : "text-[var(--text-secondary)]"}`}>{task.activeDeadline ? formatWIBDateTime(new Date(task.activeDeadline.deadlineAt), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}{task.extensionsCount > 0 ? ` (diperpanjang ${task.extensionsCount}x)` : ""}</dd></div>
                     {mine && <div className="flex gap-2"><dt className="text-[var(--text-muted)] w-24 shrink-0">Status Anda</dt><dd className="text-[var(--text-secondary)]">{meetingTaskStatusLabel(mine.status)}{mine.stickyOverdue && mine.status === "SELESAI" ? " · Overdue (Done)" : ""}</dd></div>}
                 </dl>
-                {task.detail && <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap border-t border-[var(--border)] pt-2">{task.detail}</p>}
+                {task.detail && <p className="text-[13px] text-[var(--text-secondary)] whitespace-pre-wrap border-t border-[var(--border)] pt-2">{task.detail}</p>}
                 <div className="border-t border-[var(--border)] pt-2">
-                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">Penerima tugas</p>
+                    <p className="emp-eyebrow mb-1.5">Penerima tugas</p>
                     <ul className="space-y-1 text-xs text-[var(--text-secondary)]">
                         {task.assignees.map((a) => <li key={a.employeeId} className="flex justify-between gap-2"><span>{stripGelar(a.name)}{a.employeeId === myEmployeeId ? " (Anda)" : ""}{a.status === "DITOLAK" && a.rejectionReason ? <span className="block text-[11px] text-[var(--text-muted)]">Alasan: {a.rejectionReason}</span> : null}</span><span>{meetingTaskStatusLabel(a.status)}</span></li>)}
                     </ul>
@@ -279,23 +294,21 @@ export default function MyTaskDetailPage() {
             </section>
 
             {mine?.status === "MENUNGGU_PERSETUJUAN" && !task.isCancelled && (
-                <section className="card p-4 space-y-3" aria-label="Persetujuan tugas">
-                    <h2 className="text-sm font-bold text-[var(--text-primary)]">Persetujuan Tugas</h2>
+                <SectionCard title="Persetujuan Tugas" icon={CheckCircle2} ariaLabel="Persetujuan tugas" bodyClassName="space-y-3">
                     <p className="text-xs text-[var(--text-secondary)]">Tugas ini menunggu persetujuan Anda. Terima tugas untuk mulai mengerjakan sebelum deadline.</p>
                     <button type="button" disabled={busy} onClick={() => confirm({ title: "Terima tugas ini?", message: "Setelah diterima, Anda perlu mengumpulkan hasil sebelum deadline.", confirmLabel: "Ya, Terima Tugas", variant: "info", onConfirm: () => { void handleRespond("TERIMA"); } })} className="btn btn-primary w-full min-h-11 text-sm">Terima Tugas</button>
-                    <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} maxLength={1000} placeholder="Alasan penolakan (wajib, min. 5 karakter)" className="input w-full text-sm" aria-label="Alasan penolakan tugas" />
-                    <button type="button" disabled={busy} onClick={() => void handleRespond("TOLAK")} className="btn btn-secondary w-full min-h-10 text-sm text-red-600">Tolak Tugas</button>
-                </section>
+                    <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} maxLength={1000} placeholder="Alasan penolakan (wajib, min. 5 karakter)" className="form-input" aria-label="Alasan penolakan tugas" />
+                    <button type="button" disabled={busy} onClick={() => void handleRespond("TOLAK")} className="btn btn-secondary w-full min-h-10 text-sm text-[var(--destructive-text)]">Tolak Tugas</button>
+                </SectionCard>
             )}
 
             {mine && !task.isCancelled && (
-                <section className="card p-4 space-y-3" aria-label="Pengumpulan hasil">
-                    <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5"><UploadCloud className="w-4 h-4 text-[var(--primary)]" /> Pengumpulan Hasil</h2>
+                <SectionCard title="Pengumpulan Hasil" icon={UploadCloud} ariaLabel="Pengumpulan hasil" bodyClassName="space-y-3">
                     {canSubmit ? (
                         <>
                             <p className="text-xs text-[var(--text-muted)]">Lampirkan 1–5 file hasil pekerjaan (JPG, PNG, WEBP, atau PDF), lalu kumpulkan untuk diverifikasi pemberi tugas.</p>
-                            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={3} placeholder="Catatan hasil pekerjaan (opsional)" className="input w-full text-sm" aria-label="Catatan hasil pekerjaan" />
-                            <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))} className="input w-full text-sm" aria-label="Pilih lampiran hasil pekerjaan" />
+                            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={3} placeholder="Catatan hasil pekerjaan (opsional)" className="form-textarea" aria-label="Catatan hasil pekerjaan" />
+                            <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))} className="form-input" aria-label="Pilih lampiran hasil pekerjaan" />
                             {files.length > 0 && <p className="text-xs text-[var(--text-muted)]">{files.length} file dipilih: {files.map((f) => f.name).join(", ")}</p>}
                             <button type="button" disabled={busy} onClick={() => void handleSubmit()} className="btn btn-primary w-full min-h-11 text-sm">{busy ? "Mengirim…" : "Kumpulkan Hasil"}</button>
                         </>
@@ -306,27 +319,33 @@ export default function MyTaskDetailPage() {
                     ) : mine.status === "ON_PROGRESS" ? (
                         <p className="text-xs text-[var(--text-secondary)]">Hasil terkirim. Menunggu verifikasi dari pemberi tugas.</p>
                     ) : mine.status === "SELESAI" ? (
-                        <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Tugas Anda sudah selesai dan terverifikasi.</p>
+                        <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[var(--success)]" /> Tugas Anda sudah selesai dan terverifikasi.</p>
                     ) : !meetingFinished ? (
                         <p className="text-xs text-[var(--text-secondary)]">Anda bisa mengumpulkan hasil setelah meeting selesai.</p>
                     ) : (
                         <p className="text-xs text-[var(--text-secondary)]">Status tugas Anda belum memungkinkan pengumpulan hasil.</p>
                     )}
-                </section>
+                </SectionCard>
             )}
 
-            <section className="card p-4 space-y-3" aria-label="Riwayat pengumpulan">
-                <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5"><FileText className="w-4 h-4 text-[var(--primary)]" /> Riwayat Pengumpulan</h2>
-                {task.submissions.length === 0 ? <p className="text-xs text-[var(--text-muted)]">Belum ada hasil yang dikumpulkan.</p> : task.submissions.map((s) => (
-                    <article key={s.id} className="border border-[var(--border)] rounded-xl p-3 space-y-2">
+            <SectionCard title="Riwayat Pengumpulan" icon={FileText} ariaLabel="Riwayat pengumpulan" bodyClassName="space-y-3">
+                {task.submissions.length === 0 ? (
+                    <EmptyState icon={FileText} title="Belum ada hasil yang dikumpulkan." className="p-4" />
+                ) : task.submissions.map((s) => (
+                    <article key={s.id} className="emp-surface p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                             <p className="text-xs font-semibold text-[var(--text-primary)]">{nameOf(s.employeeId)} · Pengumpulan ke-{s.attemptNo}</p>
-                            <span className="badge-info shrink-0">{VERDICT_LABEL[s.verdict] ?? s.verdict}</span>
+                            <StatusBadge
+                                tone={VERDICT_TONE[s.verdict] ?? "danger"}
+                                className="shrink-0"
+                            >
+                                {VERDICT_LABEL[s.verdict] ?? s.verdict}
+                            </StatusBadge>
                         </div>
                         <p className="text-[11px] text-[var(--text-muted)]">{formatWIBDateTime(new Date(s.createdAt), { day: "numeric", month: "short", year: "numeric" })}</p>
                         {s.note && <p className="text-xs text-[var(--text-secondary)] whitespace-pre-wrap">{s.note}</p>}
                         {s.verifyNote && <p className="text-xs text-[var(--text-secondary)]">Catatan verifikator: {s.verifyNote}</p>}
-                        {s.resubmitDueAt && s.verdict === "DIREVISI" && <p className="text-xs font-semibold text-red-600">Batas kumpul ulang: {formatWIBDateTime(new Date(s.resubmitDueAt), { day: "numeric", month: "short", year: "numeric" })}</p>}
+                        {s.resubmitDueAt && s.verdict === "DIREVISI" && <p className="text-xs font-semibold text-[var(--destructive-text)]">Batas kumpul ulang: {formatWIBDateTime(new Date(s.resubmitDueAt), { day: "numeric", month: "short", year: "numeric" })}</p>}
                         {s.attachments.length > 0 && (
                             <ul className="space-y-1">
                                 {s.attachments.map((a, i) => (
@@ -339,39 +358,39 @@ export default function MyTaskDetailPage() {
                                 <div className="flex gap-1.5">
                                     <button type="button" disabled={busy} onClick={() => confirmTerima(s.id)} className="btn btn-primary btn-sm flex-1 min-h-10">Terima Hasil</button>
                                 </div>
-                                <textarea value={revNote[s.id] ?? ""} onChange={(e) => setRevNote((p) => ({ ...p, [s.id]: e.target.value }))} rows={2} maxLength={2000} placeholder="Catatan revisi (wajib, min. 5 karakter)" className="input w-full text-sm" aria-label="Catatan revisi" />
+                                <textarea value={revNote[s.id] ?? ""} onChange={(e) => setRevNote((p) => ({ ...p, [s.id]: e.target.value }))} rows={2} maxLength={2000} placeholder="Catatan revisi (wajib, min. 5 karakter)" className="form-textarea" aria-label="Catatan revisi" />
                                 <label className="block text-xs text-[var(--text-secondary)]">Batas kumpul ulang
-                                    <input type="date" value={revDue[s.id] ?? ""} onChange={(e) => setRevDue((p) => ({ ...p, [s.id]: e.target.value }))} className="input w-full text-sm mt-1" aria-label="Batas kumpul ulang" />
+                                    <input type="date" value={revDue[s.id] ?? ""} onChange={(e) => setRevDue((p) => ({ ...p, [s.id]: e.target.value }))} className="form-input mt-1" aria-label="Batas kumpul ulang" />
                                 </label>
                                 <button type="button" disabled={busy} onClick={() => void handleVerify(s.id, "REVISI")} className="btn btn-secondary btn-sm w-full min-h-10">Minta Revisi</button>
                             </div>
                         )}
                     </article>
                 ))}
-            </section>
+            </SectionCard>
 
             {iAmAssigner && isFullyFinal && !task.isCancelled && !success && (
                 <FeedbackMessage variant="success">Tugas selesai. Semua penerima sudah tuntas, sehingga pengelolaan tugas ditutup.</FeedbackMessage>
             )}
 
             {(iAmAssigner || isMeetingManager) && !task.isCancelled && !isFullyFinal && (
-                <section className="card p-4 space-y-4" aria-label="Kelola tugas">
+                <section className="emp-surface p-4 space-y-4" aria-label="Kelola tugas">
                     <h2 className="text-sm font-bold text-[var(--text-primary)]">Kelola Tugas</h2>
                     <div className="space-y-2">
                         <p className="text-xs font-semibold text-[var(--text-secondary)]">Perpanjang deadline</p>
                         <div className="grid grid-cols-1 gap-2">
-                            <input type="date" value={extendDate} onChange={(e) => setExtendDate(e.target.value)} className="input w-full text-sm" aria-label="Tanggal deadline baru" />
-                            <input value={extendReason} onChange={(e) => setExtendReason(e.target.value)} maxLength={1000} placeholder="Alasan perpanjangan (min. 5 karakter)" className="input w-full text-sm" aria-label="Alasan perpanjangan" />
+                            <input type="date" value={extendDate} onChange={(e) => setExtendDate(e.target.value)} className="form-input" aria-label="Tanggal deadline baru" />
+                            <input value={extendReason} onChange={(e) => setExtendReason(e.target.value)} maxLength={1000} placeholder="Alasan perpanjangan (min. 5 karakter)" className="form-input" aria-label="Alasan perpanjangan" />
                         </div>
                         <button type="button" disabled={busy} onClick={() => void handleManage("extend")} className="btn btn-secondary btn-sm w-full min-h-10">Perpanjang Deadline</button>
                         <p className="text-[11px] text-[var(--text-muted)]">{isOperational ? "Perpanjangan mengikuti batas kesempatan deadline yang berlaku (awal + 1 perpanjangan)." : "Perpanjangan mengikuti batas kesempatan deadline yang berlaku untuk tugas dari meeting."}</p>
                     </div>
                     <div className="space-y-2 border-t border-[var(--border)] pt-3">
                         <p className="text-xs font-semibold text-[var(--text-secondary)]">Ubah tugas</p>
-                        <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={200} className="input w-full text-sm" aria-label="Judul tugas" />
-                        <textarea value={editDetail} onChange={(e) => setEditDetail(e.target.value)} rows={3} maxLength={5000} className="input w-full text-sm" aria-label="Detail tugas" placeholder="Detail tugas (opsional)" />
+                        <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={200} className="form-input" aria-label="Judul tugas" />
+                        <textarea value={editDetail} onChange={(e) => setEditDetail(e.target.value)} rows={3} maxLength={5000} className="form-textarea" aria-label="Detail tugas" placeholder="Detail tugas (opsional)" />
                         <label className="block text-xs text-[var(--text-secondary)]">Ubah deadline (kosongkan jika tidak berubah)
-                            <input type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)} className="input w-full text-sm mt-1" aria-label="Deadline dari ubah tugas" />
+                            <input type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)} className="form-input mt-1" aria-label="Deadline dari ubah tugas" />
                         </label>
                         {memberOptions.length > 0 && (
                             <fieldset className="space-y-1">
@@ -388,11 +407,11 @@ export default function MyTaskDetailPage() {
                     </div>
                     <div className="space-y-2 border-t border-[var(--border)] pt-3">
                         <p className="text-xs font-semibold text-[var(--text-secondary)]">Batalkan tugas</p>
-                        <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} maxLength={1000} placeholder="Alasan pembatalan (min. 5 karakter)" className="input w-full text-sm" aria-label="Alasan pembatalan" />
+                        <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} maxLength={1000} placeholder="Alasan pembatalan (min. 5 karakter)" className="form-input" aria-label="Alasan pembatalan" />
                         <button type="button" disabled={busy} onClick={() => {
                             if (cancelReason.trim().length < 5) { setError("Alasan pembatalan wajib diisi minimal 5 karakter."); return; }
                             confirm({ title: "Batalkan tugas ini?", message: "Tugas yang dibatalkan tidak dapat dikumpulkan atau diverifikasi lagi.", confirmLabel: "Ya, Batalkan Tugas", variant: "danger", onConfirm: () => { void handleManage("cancel"); } });
-                        }} className="btn btn-secondary btn-sm w-full min-h-10 text-red-600">Batalkan Tugas</button>
+                        }} className="btn btn-secondary btn-sm w-full min-h-10 text-[var(--destructive-text)]">Batalkan Tugas</button>
                     </div>
                 </section>
             )}

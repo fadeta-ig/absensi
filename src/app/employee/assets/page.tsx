@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, Plus, AlertTriangle, CheckCircle, Clock, X, MessageSquare, Monitor, Loader2, Info } from "lucide-react";
+import { Package, Plus, AlertTriangle, CheckCircle, Clock, X, MessageSquare, Monitor, Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import EmptyState from "@/components/ui/EmptyState";
+import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 interface Asset {
     id: string;
@@ -107,76 +112,74 @@ export default function EmployeeAssetsPage() {
         }
     };
 
+    const KONDISI_STYLE: Record<string, { label: string; tone: "success" | "danger" | "neutral" }> = {
+        BAIK: { label: "Baik", tone: "success" },
+        RUSAK: { label: "Rusak", tone: "danger" },
+        BELUM_DINILAI: { label: "Belum dinilai", tone: "neutral" },
+    };
+
     const getStatusBadge = (status: string) => {
         switch(status) {
-            case "PENDING": return <span className="badge badge-warning"><Clock className="w-3 h-3 mr-1"/> Pending</span>;
-            case "IN_PROGRESS": return <span className="badge bg-blue-100 text-blue-700 border-blue-200"><Loader2 className="w-3 h-3 mr-1 animate-spin"/> Proses GA</span>;
-            case "APPROVED": return <span className="badge bg-indigo-100 text-indigo-700 border-indigo-200"><CheckCircle className="w-3 h-3 mr-1"/> Disetujui</span>;
-            case "REJECTED": return <span className="badge badge-error"><X className="w-3 h-3 mr-1"/> Ditolak</span>;
-            case "RESOLVED": return <span className="badge badge-success"><CheckCircle className="w-3 h-3 mr-1"/> Selesai</span>;
-            default: return <span className="badge badge-ghost">{status}</span>;
+            case "PENDING": return <StatusBadge tone="warning" icon={Clock}>Pending</StatusBadge>;
+            case "IN_PROGRESS": return <StatusBadge tone="info" icon={Loader2} className="[&_svg]:animate-spin">Proses GA</StatusBadge>;
+            case "APPROVED": return <StatusBadge tone="success" icon={CheckCircle}>Disetujui</StatusBadge>;
+            case "REJECTED": return <StatusBadge tone="danger" icon={X}>Ditolak</StatusBadge>;
+            case "RESOLVED": return <StatusBadge tone="success" icon={CheckCircle}>Selesai</StatusBadge>;
+            default: return <StatusBadge tone="neutral">{status}</StatusBadge>;
         }
     };
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <Monitor className="w-6 h-6 text-[var(--primary)]" />
-                        Aset Saya
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">Kelola aset perusahaan yang Anda gunakan.</p>
-                </div>
-                <button onClick={() => handleOpenModal("NEW_REQUEST")} className="btn btn-primary shadow-md">
-                    <Plus className="w-4 h-4" /> Request Aset Baru
-                </button>
-            </div>
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
+            <PageHeader
+                title="Aset Saya"
+                subtitle="Kelola aset perusahaan yang Anda gunakan."
+                icon={Monitor}
+                action={
+                    <button onClick={() => handleOpenModal("NEW_REQUEST")} className="btn btn-primary">
+                        <Plus className="w-4 h-4" /> Request Aset Baru
+                    </button>
+                }
+            />
 
             {loading ? (
                 <div className="flex justify-center py-12"><div className="spinner" /></div>
             ) : loadError ? (
-                <div className="card p-8 text-center">
-                    <AlertTriangle className="w-12 h-12 text-[var(--destructive)] opacity-60 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-[var(--destructive)]">{loadError}</p>
-                </div>
+                <StateCard variant="error" title="Gagal memuat aset" description={loadError} />
             ) : (
-                <div className="space-y-6">
+                <div className="space-y-5">
                     {/* Daftar Aset */}
                     <div className="space-y-4">
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                            <Package className="w-5 h-5 text-indigo-500" /> Barang Inventaris
+                        <h2 className="emp-eyebrow flex items-center gap-1.5">
+                            <Package className="w-3.5 h-3.5" /> Barang Inventaris
                         </h2>
                         {assets.length === 0 ? (
-                            <div className="card p-8 text-center bg-[var(--secondary)]/30 border-dashed">
-                                <Package className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
-                                <p className="text-sm font-semibold text-[var(--text-primary)]">Tidak ada aset</p>
-                                <p className="text-xs text-[var(--text-muted)] mt-1">Anda belum memegang aset perusahaan apapun.</p>
-                            </div>
+                            <EmptyState
+                                icon={Package}
+                                title="Tidak ada aset"
+                                description="Anda belum memegang aset perusahaan apapun."
+                            />
                         ) : (
                             <div className="grid grid-cols-1 gap-3">
                                 {assets.map((asset) => (
-                                    <div key={asset.id} className="card p-4 hover:shadow-md transition-shadow group">
+                                    <div key={asset.id} className="emp-surface emp-surface-hover p-4 group">
                                         <div className="flex justify-between items-start">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="badge bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-200">{asset.categoryRel.prefix}</span>
+                                                    <StatusBadge tone="neutral">{asset.categoryRel.prefix}</StatusBadge>
                                                     <span className="text-[10px] font-mono text-[var(--text-muted)]">{asset.assetCode}</span>
                                                 </div>
                                                 <h3 className="font-bold text-[var(--text-primary)]">{asset.name}</h3>
                                                 <p className="text-xs text-[var(--text-secondary)]">S/N: {asset.serialNumber || "-"}</p>
                                             </div>
                                             <div>
-                                                <span className={`text-[10px] font-bold px-2 py-1 rounded border ${
-                                                    asset.kondisi === "BAIK" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                                    "bg-orange-50 text-orange-700 border-orange-200"
-                                                }`}>{asset.kondisi}</span>
+                                                <StatusBadge tone={KONDISI_STYLE[asset.kondisi]?.tone ?? "neutral"}>{KONDISI_STYLE[asset.kondisi]?.label ?? asset.kondisi}</StatusBadge>
                                             </div>
                                         </div>
                                         <div className="mt-4 pt-3 border-t border-[var(--border)] flex justify-end">
                                             <button 
                                                 onClick={() => handleOpenModal("DAMAGE_REPORT", asset)}
-                                                className="btn btn-ghost btn-sm text-orange-600 hover:!bg-orange-50 hover:text-orange-700 text-xs"
+                                                className="btn btn-ghost btn-sm text-[var(--warning)] hover:bg-[var(--warning-bg)] text-xs"
                                             >
                                                 <AlertTriangle className="w-3.5 h-3.5" /> Lapor Kendala
                                             </button>
@@ -189,26 +192,26 @@ export default function EmployeeAssetsPage() {
 
                     {/* Riwayat Tiket */}
                     <div className="space-y-4">
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-emerald-500" /> Riwayat Tiket
+                        <h2 className="emp-eyebrow flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5" /> Riwayat Tiket
                         </h2>
                         {tickets.length === 0 ? (
-                            <div className="card p-8 text-center bg-[var(--secondary)]/30 border-dashed">
-                                <MessageSquare className="w-12 h-12 text-[var(--text-muted)] opacity-30 mx-auto mb-3" />
-                                <p className="text-sm font-semibold text-[var(--text-primary)]">Belum ada tiket</p>
-                                <p className="text-xs text-[var(--text-muted)] mt-1">Riwayat permintaan atau pelaporan aset akan muncul di sini.</p>
-                            </div>
+                            <EmptyState
+                                icon={MessageSquare}
+                                title="Belum ada tiket"
+                                description="Riwayat permintaan atau pelaporan aset akan muncul di sini."
+                            />
                         ) : (
                             <div className="space-y-3">
                                 {tickets.map(t => (
-                                    <div key={t.id} className="card p-4 space-y-3">
+                                    <div key={t.id} className="emp-surface p-4 space-y-3">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[10px] font-mono text-[var(--text-muted)]">{t.ticketCode}</span>
-                                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${t.type === "NEW_REQUEST" ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"}`}>
-                                                        {t.type === "NEW_REQUEST" ? "REQUEST BARU" : "LAPOR KERUSAKAN"}
-                                                    </span>
+                                                    <StatusBadge tone={t.type === "NEW_REQUEST" ? "info" : "warning"}>
+                                                        {t.type === "NEW_REQUEST" ? "Request Baru" : "Lapor Kerusakan"}
+                                                    </StatusBadge>
                                                 </div>
                                                 <h4 className="font-bold text-sm text-[var(--text-primary)]">{t.title}</h4>
                                                 {t.asset && (
@@ -217,18 +220,14 @@ export default function EmployeeAssetsPage() {
                                             </div>
                                             {getStatusBadge(t.status)}
                                         </div>
-                                        <p className="text-xs text-[var(--text-secondary)] p-2.5 bg-[var(--secondary)]/50 rounded-lg border border-[var(--border)]">
+                                        <p className="text-xs text-[var(--text-secondary)] p-2.5 bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] rounded-lg border border-[var(--border)]">
                                             {t.description}
                                         </p>
                                         
                                         {t.gaResponse && (
-                                            <div className="flex items-start gap-2 p-2.5 bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-lg">
-                                                <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                                                <div className="flex-1">
-                                                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-500 mb-0.5">Tanggapan GA:</p>
-                                                    <p className="text-xs text-emerald-800 dark:text-emerald-400">{t.gaResponse}</p>
-                                                </div>
-                                            </div>
+                                            <FeedbackMessage variant="success" title="Tanggapan GA" compact>
+                                                {t.gaResponse}
+                                            </FeedbackMessage>
                                         )}
                                         
                                         <div className="text-[10px] text-[var(--text-muted)] text-right">
@@ -252,19 +251,19 @@ export default function EmployeeAssetsPage() {
                         <div className="modal-header">
                             <h2 className="modal-title flex items-center gap-2">
                                 {modalType === "NEW_REQUEST" ? (
-                                    <><Plus className="w-5 h-5 text-blue-500"/> Request Aset Baru</>
+                                    <><Plus className="w-5 h-5 text-[var(--primary)]"/> Request Aset Baru</>
                                 ) : (
-                                    <><AlertTriangle className="w-5 h-5 text-orange-500"/> Lapor Kerusakan</>
+                                    <><AlertTriangle className="w-5 h-5 text-[var(--warning)]"/> Lapor Kerusakan</>
                                 )}
                             </h2>
                             <button className="modal-close" onClick={() => !submitting && setShowModal(false)} disabled={submitting} aria-label="Tutup modal tiket aset"><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {modalType === "DAMAGE_REPORT" && selectedAsset && (
-                                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                                    <p className="text-xs font-bold text-orange-800 mb-1">Aset yang dilaporkan:</p>
-                                    <p className="text-sm font-semibold text-orange-900">{selectedAsset.name}</p>
-                                    <p className="text-xs text-orange-700 font-mono">{selectedAsset.assetCode}</p>
+                                <div className="p-3 bg-[var(--warning-bg)] border border-[var(--warning-border)] rounded-xl">
+                                    <p className="text-xs font-bold text-[var(--warning)] mb-1">Aset yang dilaporkan:</p>
+                                    <p className="text-sm font-semibold text-[var(--text-primary)]">{selectedAsset.name}</p>
+                                    <p className="text-xs text-[var(--text-secondary)] font-mono">{selectedAsset.assetCode}</p>
                                 </div>
                             )}
                             <div className="form-group !mb-0">

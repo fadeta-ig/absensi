@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Eye, Loader2, RefreshCw } from "lucide-react";
+import { Eye, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusBadge, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
 
 interface OverviewInspection {
     id: string;
@@ -55,8 +59,7 @@ function toInputDate(d: Date): string {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const inputClass =
-    "w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm";
+const inputClass = "mt-1 min-h-[44px]";
 
 const OVERVIEW_FILTER_KEY = "employee-equipment-overview-filter";
 
@@ -179,36 +182,34 @@ export default function EmployeeEquipmentOverviewPage() {
     }, [fetchOverview, status, company, productId]);
 
     return (
-        <div className="mx-auto px-4 py-6">
-            <div className="flex items-start justify-between gap-2 mb-6">
-                <div>
-                    <h1 className="text-2xl font-semibold text-foreground">Pantau Inspeksi Alat</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        Pantau hasil pemeriksaan bawahan: alat, foto, dan pemeriksaan QC.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => void fetchOverview()}
-                    disabled={loading}
-                    className="inline-flex items-center gap-1.5 px-3 min-h-[44px] text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 shrink-0"
-                >
-                    <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Muat Ulang
-                </button>
-            </div>
+        <div className="space-y-5">
+            <PageHeader
+                title="Pantau Inspeksi Alat"
+                subtitle="Pantau hasil pemeriksaan bawahan: alat, foto, dan pemeriksaan QC."
+                icon={Eye}
+                action={
+                    <button
+                        type="button"
+                        onClick={() => void fetchOverview()}
+                        disabled={loading}
+                        className="btn btn-secondary btn-sm min-h-[44px]"
+                    >
+                        <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Muat Ulang
+                    </button>
+                }
+            />
 
             {forbidden && !loading && (
-                <div className="bg-card border border-border rounded-lg p-6 text-center">
-                    <p className="text-foreground font-medium">Pantauan tidak tersedia untuk akun Anda.</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Halaman ini hanya untuk atasan yang ditunjuk. Hubungi admin GA bila Anda seharusnya memiliki akses.
-                    </p>
-                </div>
+                <EmptyState
+                    icon={Eye}
+                    title="Pantauan tidak tersedia untuk akun Anda."
+                    description="Halaman ini hanya untuk atasan yang ditunjuk. Hubungi admin GA bila Anda seharusnya memiliki akses."
+                />
             )}
 
             {!forbidden && (
                 <>
-                    <div className="bg-card border border-border rounded-lg p-4 mb-4">
+                    <div className="emp-surface p-4">
                         <EquipmentSearchField
                             id="cari-pantau"
                             label="Cari pantauan"
@@ -218,8 +219,8 @@ export default function EmployeeEquipmentOverviewPage() {
                         />
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                             <div>
-                                <label htmlFor="pantau-status" className="text-xs font-medium">Status</label>
-                                <select id="pantau-status" value={status} onChange={(e) => setStatus(e.target.value)} className={`${inputClass} mt-1 min-h-[44px]`}>
+                                <label htmlFor="pantau-status" className="text-[10px] font-semibold text-[var(--text-muted)]">Status</label>
+                                <select id="pantau-status" value={status} onChange={(e) => setStatus(e.target.value)} className={`form-select ${inputClass}`}>
                                     {STATUS_OPTIONS.map((s) => (
                                         <option key={s} value={s}>
                                             {s === "" ? "Semua status" : equipmentStatusLabel(s)}
@@ -228,7 +229,7 @@ export default function EmployeeEquipmentOverviewPage() {
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="pantau-perusahaan" className="text-xs font-medium">Perusahaan</label>
+                                <label htmlFor="pantau-perusahaan" className="text-[10px] font-semibold text-[var(--text-muted)]">Perusahaan</label>
                                 <select
                                     id="pantau-perusahaan"
                                     value={company}
@@ -236,7 +237,7 @@ export default function EmployeeEquipmentOverviewPage() {
                                         setCompany(e.target.value);
                                         setProductId("");
                                     }}
-                                    className={`${inputClass} mt-1 min-h-[44px]`}
+                                    className={`form-select ${inputClass}`}
                                 >
                                     <option value="">Semua perusahaan</option>
                                     <option value="WIG">WIG</option>
@@ -244,12 +245,12 @@ export default function EmployeeEquipmentOverviewPage() {
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="pantau-produk" className="text-xs font-medium">Produk</label>
+                                <label htmlFor="pantau-produk" className="text-[10px] font-semibold text-[var(--text-muted)]">Produk</label>
                                 <select
                                     id="pantau-produk"
                                     value={productId}
                                     onChange={(e) => setProductId(e.target.value)}
-                                    className={`${inputClass} mt-1 min-h-[44px]`}
+                                    className={`form-select ${inputClass}`}
                                 >
                                     <option value="">Semua produk</option>
                                     {products
@@ -263,50 +264,49 @@ export default function EmployeeEquipmentOverviewPage() {
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="pantau-dari" className="text-xs font-medium">Dari tanggal</label>
-                                <input id="pantau-dari" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} mt-1 min-h-[44px]`} />
+                                <label htmlFor="pantau-dari" className="text-[10px] font-semibold text-[var(--text-muted)]">Dari tanggal</label>
+                                <input id="pantau-dari" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`form-input ${inputClass}`} />
                             </div>
                             <div>
-                                <label htmlFor="pantau-sampai" className="text-xs font-medium">Sampai tanggal</label>
-                                <input id="pantau-sampai" type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} mt-1 min-h-[44px]`} />
+                                <label htmlFor="pantau-sampai" className="text-[10px] font-semibold text-[var(--text-muted)]">Sampai tanggal</label>
+                                <input id="pantau-sampai" type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`form-input ${inputClass}`} />
                             </div>
                         </div>
                         <div className="flex gap-2 mt-3">
                             <button
                                 onClick={() => void fetchOverview()}
                                 disabled={loading}
-                                className="px-4 min-h-[44px] text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50"
+                                className="btn btn-primary min-h-[44px]"
                             >
                                 {loading ? "Memuat..." : "Tampilkan"}
                             </button>
                             <button
                                 onClick={showToday}
                                 disabled={loading}
-                                className="px-4 min-h-[44px] text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50"
+                                className="btn btn-secondary min-h-[44px]"
                             >
                                 Hari ini
                             </button>
                         </div>
                     </div>
 
-                    {loading && (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    )}
+                    {loading && <ListSkeleton count={3} label="Memuat pantauan" />}
 
                     {error && !loading && (
-                        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
-                            <AlertTriangle className="h-5 w-5 text-destructive mx-auto mb-2" />
-                            <p className="text-sm text-destructive">{error}</p>
-                            <button onClick={() => void fetchOverview()} className="mt-3 text-sm text-primary hover:underline">
-                                Coba lagi
-                            </button>
-                        </div>
+                        <StateCard
+                            variant="error"
+                            title="Pantauan gagal dimuat"
+                            description={error}
+                            action={
+                                <button onClick={() => void fetchOverview()} className="btn btn-secondary btn-sm">
+                                    Coba lagi
+                                </button>
+                            }
+                        />
                     )}
 
                     {!loading && !error && summary && (
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                             {(
                                 [
                                     ["Berjalan", summary.open],
@@ -316,9 +316,9 @@ export default function EmployeeEquipmentOverviewPage() {
                                     ["Total", summary.total],
                                 ] as [string, number][]
                             ).map(([label, value]) => (
-                                <div key={label} className="bg-card border border-border rounded-lg p-3 text-center">
-                                    <p className="text-2xl font-semibold text-foreground">{value}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                                <div key={label} className="emp-surface px-4 py-3 min-w-0">
+                                    <p className="text-xl font-extrabold leading-none text-[var(--text-primary)]">{value}</p>
+                                    <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">{label}</p>
                                 </div>
                             ))}
                         </div>
@@ -330,11 +330,11 @@ export default function EmployeeEquipmentOverviewPage() {
                                 <Link
                                     key={item.id}
                                     href={`/employee/equipment/overview/${item.id}`}
-                                    className="block bg-card border border-border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+                                    className="emp-surface emp-surface-hover block p-4 active:scale-[0.99] transition-colors"
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
-                                            <p className="font-medium text-foreground truncate">
+                                            <p className="text-[13px] font-bold text-[var(--text-primary)] truncate">
                                                 {item.unit.name}{" "}
                                                 <EquipmentCompanyBadge
                                                     company={item.unit.company}
@@ -343,30 +343,30 @@ export default function EmployeeEquipmentOverviewPage() {
                                                 />
                                             </p>
                                             {item.unit.brand && (
-                                                <p className="text-xs text-muted-foreground">{item.unit.brand}</p>
+                                                <p className="text-xs text-[var(--text-muted)]">{item.unit.brand}</p>
                                             )}
-                                            <p className="text-xs text-muted-foreground mt-1">
+                                            <p className="text-xs text-[var(--text-muted)] mt-1">
                                                 {stripGelar(item.startedBy.name)} · mulai {formatDateTime(item.createdAt)}
                                             </p>
                                             {item.status === "SUBMITTED" && (
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-xs text-[var(--text-muted)]">
                                                     Dikirim {formatDateTime(item.submittedAt)}
                                                 </p>
                                             )}
                                             {(item.checkedByNameSnapshot || item.checkedBy) && (
-                                                <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                                                <p className="text-xs text-[var(--success)] mt-0.5">
                                                     Diperiksa oleh {stripGelar(item.checkedByNameSnapshot ?? item.checkedBy?.name ?? "")} (QC)
                                                 </p>
                                             )}
                                             {(item.approvedByNameSnapshot || item.approvedBy) && (
-                                                <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                                                <p className="text-xs text-[var(--success)] mt-0.5">
                                                     Approval - {stripGelar(item.approvedByNameSnapshot ?? item.approvedBy?.name ?? "")}
                                                 </p>
                                             )}
                                         </div>
                                         <div className="flex flex-col items-end gap-2 shrink-0">
                                             <EquipmentStatusBadge status={item.status} />
-                                            <span className="inline-flex items-center gap-1 text-xs text-primary">
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--primary)]">
                                                 <Eye className="h-3.5 w-3.5" /> Detail
                                             </span>
                                         </div>
@@ -374,11 +374,10 @@ export default function EmployeeEquipmentOverviewPage() {
                                 </Link>
                             ))}
                             {visibleInspections.length === 0 && (
-                                <p className="text-center text-muted-foreground py-8 text-sm">
-                                    {inspections.length === 0
-                                        ? "Tidak ada inspeksi pada rentang ini."
-                                        : "Tidak ditemukan. Coba kata kunci lain."}
-                                </p>
+                                <EmptyState
+                                    icon={Eye}
+                                    title={inspections.length === 0 ? "Tidak ada inspeksi pada rentang ini." : "Tidak ditemukan. Coba kata kunci lain."}
+                                />
                             )}
                         </div>
                     )}

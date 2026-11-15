@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
     User, Phone, Mail, Briefcase, Building2, Calendar,
-    Save, Loader2, AlertCircle,
+    Save, Loader2,
     Shield, Lock, IdCard, Users, ChevronDown, LogOut, ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
@@ -11,6 +11,9 @@ import { useConfirm } from "@/components/ConfirmModal";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
 import { NoticeBox } from "@/components/ui/NoticeBox";
 import { DestructiveButton } from "@/components/ui/DestructiveButton";
+import PageHeader from "@/components/ui/PageHeader";
+import StateCard from "@/components/ui/StateCard";
+import StatusBadge from "@/components/ui/StatusBadge";
 import Image from "next/image";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { ChangePasswordCard } from "./components/ChangePasswordCard";
@@ -89,7 +92,7 @@ function HubSection({
                 type="button"
                 onClick={onToggle}
                 aria-expanded={open}
-                className="card p-4 w-full flex items-center justify-between gap-2 text-left"
+                className="emp-surface emp-surface-hover p-4 w-full flex items-center justify-between gap-2 text-left"
             >
                 <span className="flex items-center gap-2 min-w-0">
                     <Icon className="w-4 h-4 text-[var(--primary)] shrink-0" />
@@ -235,21 +238,14 @@ export default function ProfilePage() {
     const leaveRemaining = profile ? profile.totalLeave - profile.usedLeave : 0;
 
     return (
-        <div className="space-y-6 animate-[fadeIn_0.5s_ease]">
+        <div className="space-y-5 animate-[fadeIn_0.5s_ease]">
 
             {/* ── Header ─────────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h1 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <User className="w-5 h-5 text-[var(--primary)]" />
-                        Profil Saya
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">
-                        Akun, data pribadi, dan keamanan
-                    </p>
-                </div>
-
-                {isDirty && profile && (
+            <PageHeader
+                title="Profil Saya"
+                subtitle="Akun, data pribadi, dan keamanan"
+                icon={User}
+                action={isDirty && profile ? (
                     <button
                         onClick={handleSave}
                         disabled={saving}
@@ -261,25 +257,23 @@ export default function ProfilePage() {
                         }
                         {saving ? "Menyimpan..." : "Simpan Perubahan"}
                     </button>
-                )}
-            </div>
+                ) : undefined}
+            />
 
             {!profile ? (
-                <div className="card p-8 text-center">
-                    <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-[var(--text-primary)]">Gagal memuat profil</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">
-                        Bagian keamanan di bawah tetap dapat digunakan.
-                    </p>
-                </div>
+                <StateCard
+                    variant="error"
+                    title="Gagal memuat profil"
+                    description="Bagian keamanan di bawah tetap dapat digunakan."
+                />
             ) : (
                 <>
                     {/* ── Avatar + Nama ──────────────────────────────────────────── */}
-                    <div className="card p-5">
+                    <div className="emp-surface p-5">
                         <div className="flex items-start gap-5">
                             {/* Avatar read-only (diatur HR) */}
                             <div className="relative shrink-0">
-                                <div className="w-20 h-20 rounded-2xl bg-[var(--primary)]/10 overflow-hidden flex items-center justify-center">
+                                <div className="w-20 h-20 rounded-2xl bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] overflow-hidden flex items-center justify-center">
                                     {avatarPreview
                                         ? <Image src={avatarPreview} alt="Avatar" width={80} height={80} className="w-20 h-20 object-cover" unoptimized />
                                         : <span className="text-3xl font-bold text-[var(--primary)]">
@@ -295,16 +289,12 @@ export default function ProfilePage() {
                                 <p className="text-sm text-[var(--text-muted)]">{profile.position} • {profile.department}</p>
 
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)]">
                                         {ROLE_LABELS[profile.role] ?? profile.role}
                                     </span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                        profile.isActive
-                                            ? "bg-green-50 text-green-700"
-                                            : "bg-red-50 text-red-700"
-                                    }`}>
+                                    <StatusBadge tone={profile.isActive ? "success" : "danger"}>
                                         {profile.isActive ? "Aktif" : "Non-Aktif"}
-                                    </span>
+                                    </StatusBadge>
                                 </div>
                                 <p className="text-xs text-[var(--text-muted)] mt-1.5">
                                     Foto profil resmi diatur oleh HR.
@@ -316,8 +306,8 @@ export default function ProfilePage() {
                         <div className="mt-4 grid grid-cols-3 gap-3">
                             {[
                                 { label: "Total Cuti", value: profile.totalLeave, color: "text-[var(--primary)]" },
-                                { label: "Terpakai", value: profile.usedLeave, color: "text-orange-500" },
-                                { label: "Sisa", value: leaveRemaining, color: leaveRemaining > 0 ? "text-green-600" : "text-red-500" },
+                                { label: "Terpakai", value: profile.usedLeave, color: "text-[var(--warning)]" },
+                                { label: "Sisa", value: leaveRemaining, color: leaveRemaining > 0 ? "text-[var(--success)]" : "text-[var(--destructive-text)]" },
                             ].map(({ label, value, color }) => (
                                 <div key={label} className="bg-[var(--secondary)] rounded-xl p-3 text-center">
                                     <p className={`text-xl font-extrabold ${color}`}>{value}</p>
@@ -337,7 +327,7 @@ export default function ProfilePage() {
                         onToggle={() => setDataOpen((v) => !v)}
                     >
                         {/* ── Editable Fields ──────────────────────────────────── */}
-                        <div className="card p-5 space-y-4">
+                        <div className="emp-surface p-5 space-y-4">
                             <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
                                 <Phone className="w-4 h-4 text-[var(--primary)]" />
                                 Informasi yang Dapat Diubah
@@ -367,7 +357,7 @@ export default function ProfilePage() {
                         </div>
 
                         {/* ── Read-Only Fields ─────────────────────────────────── */}
-                        <div className="card p-5 space-y-4">
+                        <div className="emp-surface p-5 space-y-4">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
                                     <Shield className="w-4 h-4 text-[var(--primary)]" />

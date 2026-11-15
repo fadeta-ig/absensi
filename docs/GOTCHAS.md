@@ -110,3 +110,12 @@ Dokumen ini mencatat perilaku tidak terduga, kesalahan umum, area rentan (*fragi
 - **Pitfall**: membandingkan `effectiveTo` API langsung dengan tanggal kalender hari terakhir tanpa mengurangi 1 hari menghasilkan off-by-one (jadwal terlihat "bocor" sehari). Pratinjau dry-run dan modal Kelola selalu menampilkan interval inklusif agar HR tidak salah baca.
 - **Pitfall**: `cancelAssignment`/`updateAssignmentEnd` memakai kunci unik `(employeeId, effectiveFrom)` — kirim `effectiveFrom` persis (bukan tanggal di tengah interval), atau API menjawab `404 NOT_FOUND`.
 
+---
+
+## 12. Tailwind Hanya Mengenal `primary` dan `accent`
+
+- **Kontrak**: `tailwind.config.js` hanya menambahkan `primary` (palet hex lengkap) dan `accent` ke `theme.extend.colors`. Token semantik lain (`--destructive`, `--success`, `--warning`, `--info`, `--muted`, `--secondary`, `--card`, `--border`) hanya ada sebagai CSS variable di `src/app/globals.css`.
+- **Pitfall**: kelas seperti `text-destructive`, `bg-success/10`, `border-warning`, atau `hover:text-destructive/80` **tidak menghasilkan aturan CSS sama sekali** — build tetap sukses, tetapi teks/permukaan tidak berwarna. Ini sudah terbukti dari bundle `.next/static/css/*.css` (tidak ada `.text-destructive`).
+- **Aturan kode**: tulis token non-`primary` sebagai arbitrary value (`text-[var(--destructive-text)]`, `bg-[var(--success-bg)]`, `border-[var(--warning-border)]`), dan alpha lewat `color-mix` (`bg-[color-mix(in_srgb,var(--x)_10%,transparent)]`). `primary` boleh memakai sintaks biasa (`bg-primary/10`, `hover:bg-primary/90`).
+- **Catatan**: sisa pemakaian `destructive` di `/ga`, `/cleaning`, dan `/dashboard` belum diperbaiki pada 2026-11-15; `/employee` sudah bersih.
+

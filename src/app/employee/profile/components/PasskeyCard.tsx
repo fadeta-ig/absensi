@@ -157,7 +157,7 @@ export default function PasskeyCard() {
             {message && <NoticeBox kind={message.kind}>{message.text}</NoticeBox>}
 
             {supported === false && (
-                <p className="text-xs text-[var(--text-muted)] mb-4">
+                <p className="text-[11px] leading-relaxed text-[var(--text-muted)] mb-4">
                     Perangkat/browser ini tidak mendukung passkey. Tetap gunakan password seperti biasa.
                 </p>
             )}
@@ -171,7 +171,7 @@ export default function PasskeyCard() {
                     {devices.length > 0 && (
                         <ul className="space-y-2">
                             {devices.map((d) => (
-                                <li key={d.id} className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] px-3 py-2">
+                                <li key={d.id} className="emp-surface flex items-center justify-between gap-2 px-3 py-2">
                                     <div className="min-w-0">
                                         <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{d.label || "Perangkat tanpa nama"}</p>
                                         <p className="text-[11px] text-[var(--text-muted)]">
@@ -184,7 +184,7 @@ export default function PasskeyCard() {
                                         type="button"
                                         disabled={busy}
                                         onClick={() => handleRevoke(d.id, d.label)}
-                                        className="p-2 rounded-lg hover:bg-rose-50 text-rose-600 dark:hover:bg-red-950/40 dark:text-red-400 min-w-9 min-h-9 flex items-center justify-center shrink-0"
+                                        className="p-2 rounded-lg text-[var(--destructive-text)] hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] transition-colors active:scale-[0.99] min-w-9 min-h-9 flex items-center justify-center shrink-0"
                                         aria-label={`Hapus ${d.label || "perangkat"}`}
                                     >
                                         <Trash2 className="w-4 h-4" />

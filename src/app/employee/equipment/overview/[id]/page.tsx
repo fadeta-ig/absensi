@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Clock, Loader2, X } from "lucide-react";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { EquipmentStatusBadge, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
 import { stripGelar } from "@/lib/utils/formatters";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import StateCard from "@/components/ui/StateCard";
 
 interface DetailItem {
     id: string;
@@ -136,41 +139,46 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="space-y-5">
+                <ListSkeleton count={3} label="Memuat detail inspeksi" />
             </div>
         );
     }
 
     if (forbidden) {
         return (
-            <div className="mx-auto px-4 py-6">
-                <div className="bg-card border border-border rounded-lg p-6 text-center">
-                    <p className="text-foreground font-medium">Detail tidak tersedia untuk akun Anda.</p>
-                    <p className="text-sm text-muted-foreground mt-1">Halaman ini hanya untuk atasan yang ditunjuk.</p>
-                    <Link href={backHref} className="mt-3 inline-block text-sm text-primary hover:underline">
-                        {backLabel}
-                    </Link>
-                </div>
+            <div className="space-y-5">
+                <EmptyState
+                    title="Detail tidak tersedia untuk akun Anda."
+                    description="Halaman ini hanya untuk atasan yang ditunjuk."
+                    action={
+                        <Link href={backHref} className="btn btn-secondary btn-sm min-h-[44px]">
+                            {backLabel}
+                        </Link>
+                    }
+                />
             </div>
         );
     }
 
     if (error || !detail) {
         return (
-            <div className="mx-auto px-4 py-6">
-                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
-                    <AlertTriangle className="h-6 w-6 text-destructive mx-auto mb-2" />
-                    <p className="text-sm text-destructive">{error ?? "Detail tidak ditemukan."}</p>
-                    <div className="mt-3 flex items-center justify-center gap-3 text-sm">
-                        <button onClick={() => void fetchDetail()} className="text-primary hover:underline min-h-[44px] px-3 inline-flex items-center">
-                            Coba lagi
-                        </button>
-                        <Link href={backHref} className="text-muted-foreground hover:text-foreground min-h-[44px] px-3 inline-flex items-center">
-                            ← Kembali
-                        </Link>
-                    </div>
-                </div>
+            <div className="space-y-5">
+                <StateCard
+                    variant="error"
+                    title="Detail inspeksi gagal dimuat"
+                    description={error ?? "Detail tidak ditemukan."}
+                    action={
+                        <div className="flex items-center justify-center gap-3">
+                            <button onClick={() => void fetchDetail()} className="btn btn-secondary btn-sm min-h-[44px]">
+                                Coba lagi
+                            </button>
+                            <Link href={backHref} className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors min-h-[44px] px-3 inline-flex items-center">
+                                ← Kembali
+                            </Link>
+                        </div>
+                    }
+                />
             </div>
         );
     }
@@ -179,18 +187,18 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
     const rusak = detail.items.filter((i) => i.isPass === false).length;
 
     return (
-        <div className="mx-auto px-4 py-6">
+        <div className="space-y-5">
             <Link
                 href={backHref}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
+                className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1 min-h-[44px] px-2 -ml-2"
             >
                 {backLabel}
             </Link>
 
-            <div className="bg-card border border-border rounded-lg p-4 mb-4">
+            <div className="emp-surface p-4">
                 <div className="flex items-start justify-between gap-2">
-                    <div>
-                        <h1 className="text-xl font-semibold text-foreground">
+                    <div className="min-w-0">
+                        <h1 className="text-xl font-extrabold leading-none tracking-tight text-[var(--text-primary)]">
                             {detail.unit.name}{" "}
                             <EquipmentCompanyBadge
                                 company={detail.unit.company}
@@ -198,41 +206,43 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                                 companies={(detail.unit as { companies?: string[] }).companies}
                             />
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="mt-1 text-[11px] font-medium leading-tight text-[var(--text-secondary)]">
                             {[detail.unit.brand, detail.unit.location].filter(Boolean).join(" · ") || "—"}
                         </p>
                     </div>
                     <EquipmentStatusBadge status={detail.status} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
+                <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-2">
                     {detail.progress.decided}/{detail.progress.total} item dinilai · {baik} baik · {rusak} rusak
                 </p>
             </div>
 
-            <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                <h2 className="text-sm font-semibold text-foreground mb-2">Linimasa</h2>
-                <ol className="space-y-2 text-sm">
+            <div className="emp-surface p-4">
+                <h2 className="emp-eyebrow flex items-center gap-1.5 mb-2">
+                    <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Linimasa
+                </h2>
+                <ol className="space-y-2 text-[13px]">
                     <li className="flex gap-2">
-                        <span className="text-muted-foreground shrink-0 w-16">Mulai</span>
-                        <span className="text-foreground">
+                        <span className="text-[var(--text-muted)] shrink-0 w-16">Mulai</span>
+                        <span className="text-[var(--text-primary)]">
                             {stripGelar(detail.startedBy.name)} · {formatDateTime(detail.createdAt)}
                         </span>
                     </li>
                     <li className="flex gap-2">
-                        <span className="text-muted-foreground shrink-0 w-16">Submit</span>
-                        <span className="text-foreground">{formatDateTime(detail.submittedAt)}</span>
+                        <span className="text-[var(--text-muted)] shrink-0 w-16">Submit</span>
+                        <span className="text-[var(--text-primary)]">{formatDateTime(detail.submittedAt)}</span>
                     </li>
                     <li className="flex gap-2">
-                        <span className="text-muted-foreground shrink-0 w-16">QC</span>
-                        <span className="text-foreground">
+                        <span className="text-[var(--text-muted)] shrink-0 w-16">QC</span>
+                        <span className="text-[var(--text-primary)]">
                             {detail.checkedByNameSnapshot || detail.checkedBy
                                 ? `Diperiksa oleh ${stripGelar(detail.checkedByNameSnapshot ?? detail.checkedBy?.name ?? "")} (QC) · ${formatDateTime(detail.checkedAt)}`
                                 : "Menunggu pemeriksaan QC"}
                         </span>
                     </li>
                     <li className="flex gap-2">
-                        <span className="text-muted-foreground shrink-0 w-16">Approval</span>
-                        <span className="text-foreground">
+                        <span className="text-[var(--text-muted)] shrink-0 w-16">Approval</span>
+                        <span className="text-[var(--text-primary)]">
                             {detail.approvedByNameSnapshot || detail.approvedBy
                                 ? `Disetujui - ${stripGelar(detail.approvedByNameSnapshot ?? detail.approvedBy?.name ?? "")} · ${formatDateTime(detail.approvedAt)}`
                                 : "Menunggu approval atasan"}
@@ -240,7 +250,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                     </li>
                 </ol>
                 {detail.qcNote && (
-                    <p className="text-xs text-muted-foreground mt-2">Catatan QC: {detail.qcNote}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-2">Catatan QC: {detail.qcNote}</p>
                 )}
                 {detail.status === "DONE" && canApprove && (
                     <button
@@ -254,41 +264,45 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                 )}
             </div>
 
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3">
                 {detail.items.map((item) => (
-                    <div key={item.id} className="bg-card border border-border rounded-lg px-3 py-2">
+                    <div key={item.id} className="emp-surface px-4 py-3">
                         <div className="flex items-start gap-2">
                             {item.isPass === true ? (
-                                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                                <CheckCircle2 className="h-4 w-4 text-[var(--success)] mt-0.5 shrink-0" />
                             ) : item.isPass === false ? (
-                                <X className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                                <X className="h-4 w-4 text-[var(--destructive-text)] mt-0.5 shrink-0" />
                             ) : (
-                                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                                <AlertTriangle className="h-4 w-4 text-[var(--warning)] mt-0.5 shrink-0" />
                             )}
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground">
+                                <p className="text-[13px] font-medium text-[var(--text-primary)]">
                                     {item.itemNameSnapshot}{" "}
-                                    <span className="font-normal text-muted-foreground">
+                                    <span className="font-normal text-[var(--text-muted)]">
                                         — {item.isPass === true ? "Baik" : item.isPass === false ? "Rusak" : "Belum dinilai"}
                                     </span>
                                 </p>
-                                {item.note && <p className="text-xs text-muted-foreground mt-0.5">Catatan: {item.note}</p>}
+                                {item.note && <p className="text-xs text-[var(--text-muted)] mt-0.5">Catatan: {item.note}</p>}
                             </div>
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="bg-card border border-border rounded-lg p-4 mb-4">
-                <h2 className="text-sm font-semibold text-foreground mb-1">Foto dokumentasi produksi</h2>
+            <div className="emp-surface p-4">
+                <h2 className="emp-eyebrow flex items-center gap-1.5 mb-1">
+                    <Camera className="h-3.5 w-3.5" aria-hidden="true" /> Foto dokumentasi produksi
+                </h2>
                 <div className="mt-1">
                     <EquipmentEvidencePanel inspectionId={detail.id} collapsible />
                 </div>
             </div>
 
             {(detail.checkedByNameSnapshot || detail.checkedBy) && (
-                <div className="bg-card border border-border rounded-lg p-4">
-                    <h2 className="text-sm font-semibold text-foreground mb-2">Dokumentasi QC</h2>
+                <div className="emp-surface p-4">
+                    <h2 className="emp-eyebrow flex items-center gap-1.5 mb-2">
+                        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Dokumentasi QC
+                    </h2>
                     <div className="mt-1">
                         <EquipmentEvidencePanel
                             inspectionId={detail.id}
