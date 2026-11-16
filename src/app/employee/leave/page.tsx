@@ -50,6 +50,34 @@ interface ScheduleDay {
 const DISCRETE_TYPES = new Set(["annual", "sick", "personal"]);
 const WINDOW_DAYS = 30;
 const WEEKDAY_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const MONTH_NAV_LIMIT = 12;
+
+interface MonthCursor {
+    y: number;
+    m: number;
+}
+
+function monthCursorOf(key: string): MonthCursor {
+    return { y: Number(key.slice(0, 4)), m: Number(key.slice(5, 7)) - 1 };
+}
+
+function monthStartOf(c: MonthCursor): string {
+    return `${c.y}-${String(c.m + 1).padStart(2, "0")}-01`;
+}
+
+function daysInMonthOf(c: MonthCursor): number {
+    return new Date(Date.UTC(c.y, c.m + 1, 0)).getUTCDate();
+}
+
+function shiftMonth(c: MonthCursor, delta: number): MonthCursor {
+    const total = c.y * 12 + c.m + delta;
+    return { y: Math.floor(total / 12), m: ((total % 12) + 12) % 12 };
+}
+
+function compareMonth(a: MonthCursor, b: MonthCursor): number {
+    return a.y * 12 + a.m - (b.y * 12 + b.m);
+}
 
 function toDateKey(raw: string): string {
     return typeof raw === "string" ? raw.slice(0, 10) : "";
@@ -108,10 +136,11 @@ export default function LeavePage() {
     const [form, setForm] = useState({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
     const [attachmentName, setAttachmentName] = useState("");
     const [selectedDates, setSelectedDates] = useState<string[]>([]);
+    const [monthCursor, setMonthCursor] = useState<MonthCursor>(() => monthCursorOf(addDaysKey(getWIBTodayKey(), 1)));
     const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
     const [scheduleLoading, setScheduleLoading] = useState(false);
     const [scheduleError, setScheduleError] = useState("");
-    const scheduleLoadedRef = useRef(false);
+    const scheduleLoadedRef = useRef("");
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -164,40 +193,77 @@ export default function LeavePage() {
         void loadLeaves();
     }, [loadLeaves]);
 
-    const loadSchedule = useCallback(async () => {
+    const loadSchedule = useCallback(async (startKey?: string, dayCount?: number) => {
         setScheduleLoading(true);
         setScheduleError("");
         try {
-            const res = await fetch("/api/employee/shift-schedule?days=31");
+            const start = startKey ?? addDaysKey(getWIBTodayKey(), 1);
+            const days = dayCount ?? WINDOW_DAYS;
+            const res = await fetch(`/api/employee/shift-schedule?start=${start}&days=${days}`);
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat jadwal shift."));
             const data = await res.json();
             setSchedule(Array.isArray(data) ? data : []);
-            scheduleLoadedRef.current = true;
+            scheduleLoadedRef.current = `${start}:${days}`;
         } catch (error) {
             reportClientError("EmployeeLeavePage", "Gagal memuat jadwal shift", error);
             setSchedule([]);
-            scheduleLoadedRef.current = false;
+            scheduleLoadedRef.current = "";
             setScheduleError(error instanceof Error ? error.message : "Gagal memuat jadwal shift.");
         } finally {
             setScheduleLoading(false);
         }
     }, []);
 
-    useEffect(() => {
-        if (showForm && DISCRETE_TYPES.has(form.type) && !scheduleLoadedRef.current) {
-            void loadSchedule();
-        }
-    }, [showForm, form.type, loadSchedule]);
+    const isAnnualForm = form.type === "annual";
 
     const wibToday = useMemo(() => getWIBTodayKey(), []);
+    const tomorrowKey = useMemo(() => addDaysKey(wibToday, 1), [wibToday]);
+    // Jendela lama H+1 s/d H+30 — dipakai sakit/pribadi (bebas dari patokan).
+    const windowStart = tomorrowKey;
     const windowDates = useMemo(() => {
         const out: string[] = [];
         for (let i = 1; i <= WINDOW_DAYS; i++) {
-            out.push(addDaysKey(wibToday, i));
+            out.push(addDaysKey(windowStart, i));
         }
         return out;
-    }, [wibToday]);
+    }, [windowStart]);
     const windowEnd = windowDates.length > 0 ? windowDates[windowDates.length - 1] : "";
+    const windowKey = `${windowStart}:${windowDates.length}`;
+
+    // Kalender annual: navigasi bulan/tahun (maks +12 bulan), tanpa panel patokan.
+    // Patokan implisit = tanggal terpilih pertama; tanggal sebelumnya terkunci,
+    // 30 hari ke depan (inklusif) terbuka — lintas bulan/tahun.
+    const baseMonth = useMemo(() => monthCursorOf(wibToday), [wibToday]);
+    const maxMonth = useMemo(() => shiftMonth(baseMonth, MONTH_NAV_LIMIT), [baseMonth]);
+    const clampCursor = useCallback((c: MonthCursor): MonthCursor => {
+        if (compareMonth(c, baseMonth) < 0) return baseMonth;
+        if (compareMonth(c, maxMonth) > 0) return maxMonth;
+        return c;
+    }, [baseMonth, maxMonth]);
+    const monthStart = monthStartOf(monthCursor);
+    const monthLen = daysInMonthOf(monthCursor);
+    const monthLeadBlanks = getUTCDayKey(monthStart);
+    const monthScheduleKey = `${monthStart}:${monthLen}`;
+    const yearOptions = useMemo(() => {
+        const opts: number[] = [];
+        for (let y = baseMonth.y; y <= maxMonth.y; y++) opts.push(y);
+        return opts;
+    }, [baseMonth, maxMonth]);
+
+    // Patokan implisit annual = tanggal terpilih paling awal (selectedDates selalu terurut).
+    const annualAnchor = isAnnualForm && selectedDates.length > 0 ? selectedDates[0] : null;
+    const annualAnchorEnd = annualAnchor ? addDaysKey(annualAnchor, WINDOW_DAYS - 1) : null;
+
+    useEffect(() => {
+        if (!showForm || !DISCRETE_TYPES.has(form.type)) return;
+        if (isAnnualForm) {
+            if (scheduleLoadedRef.current !== monthScheduleKey) {
+                void loadSchedule(monthStart, monthLen);
+            }
+        } else if (scheduleLoadedRef.current !== windowKey) {
+            void loadSchedule(windowStart, windowDates.length || WINDOW_DAYS);
+        }
+    }, [showForm, form.type, isAnnualForm, monthScheduleKey, monthStart, monthLen, windowKey, windowStart, windowDates.length, loadSchedule]);
 
     const occupiedSet = useMemo(() => {
         const set = new Set<string>();
@@ -233,7 +299,21 @@ export default function LeavePage() {
 
     const toggleDate = (dateKey: string) => {
         setSelectedDates((prev) => {
-            if (prev.includes(dateKey)) return prev.filter((d) => d !== dateKey);
+            if (prev.includes(dateKey)) {
+                const next = prev.filter((d) => d !== dateKey);
+                // Bila patokan (tanggal pertama) dihapus, jendela ikut geser ke
+                // tanggal tersisa paling awal; pilihan di luar jendela baru dibuang.
+                if (form.type === "annual" && next.length > 0) {
+                    const anchor = next[0];
+                    const maxKey = addDaysKey(anchor, WINDOW_DAYS - 1);
+                    const kept = next.filter((d) => d >= anchor && d <= maxKey);
+                    if (kept.length !== next.length) {
+                        toast("Pilihan di luar 30 hari dari tanggal pertama dibuang.", "warning");
+                    }
+                    return kept;
+                }
+                return next;
+            }
             if (form.type === "annual" && prev.length >= maxSelectable) {
                 toast(
                     `Maksimal ${maxSelectable} tanggal untuk Cuti Tahunan (sisa disetujui ${remainingLeave} hari dikurangi ${pendingAnnualDays} hari menunggu HR).`,
@@ -245,8 +325,63 @@ export default function LeavePage() {
                 toast(`Maksimal ${WINDOW_DAYS} tanggal dalam 30 hari ke depan.`, "warning");
                 return prev;
             }
+            // Annual: tanggal pertama jadi patokan — hanya patokan s/d +29 yang boleh dipilih.
+            if (form.type === "annual" && prev.length > 0) {
+                const anchor = prev[0];
+                const maxKey = addDaysKey(anchor, WINDOW_DAYS - 1);
+                if (dateKey < anchor || dateKey > maxKey) {
+                    toast(`Di luar 30 hari dari tanggal pertama (${formatIndonesianDate(anchor)} s/d ${formatIndonesianDate(maxKey)}).`, "warning");
+                    return prev;
+                }
+            }
             return [...prev, dateKey].sort();
         });
+    };
+
+    const renderDayCell = (dateKey: string) => {
+        const occupied = occupiedSet.has(dateKey);
+        const off = isDateOff(dateKey);
+        const outOfAnchor = isAnnualForm && annualAnchor !== null && annualAnchorEnd !== null &&
+            (dateKey < annualAnchor || dateKey > annualAnchorEnd);
+        const past = isAnnualForm && dateKey <= wibToday;
+        const disabled = occupied || off || past || outOfAnchor || (form.type === "annual" && availableAnnualLeave <= 0);
+        const selected = selectedDateSet.has(dateKey);
+        const dayNum = Number(dateKey.slice(8, 10));
+        const weekday = WEEKDAY_SHORT[getUTCDayKey(dateKey)];
+        return (
+            <button
+                key={dateKey}
+                type="button"
+                disabled={disabled}
+                aria-pressed={selected}
+                onClick={() => toggleDate(dateKey)}
+                title={occupied ? `${formatIndonesianDate(dateKey)} — sudah diajukan` : off ? `${formatIndonesianDate(dateKey)} — libur jadwal` : past ? `${formatIndonesianDate(dateKey)} — sudah lewat` : outOfAnchor ? `${formatIndonesianDate(dateKey)} — di luar 30 hari dari tanggal pertama` : formatIndonesianDate(dateKey)}
+                className={`relative rounded-xl border p-2 text-center transition-colors ${
+                    selected
+                        ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] font-bold"
+                        : occupied
+                          ? "border-dashed border-[var(--border)] bg-[var(--secondary)] text-[var(--text-muted)] opacity-70 cursor-not-allowed"
+                          : disabled
+                            ? "border-[var(--border)] bg-[var(--muted)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
+                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-primary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] hover:bg-[var(--secondary)] cursor-pointer active:scale-[0.98]"
+                }`}
+            >
+                {selected && (
+                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center text-[10px] font-extrabold leading-none shadow-sm">
+                        ✓
+                    </span>
+                )}
+                <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)] font-semibold" : "text-[var(--text-muted)]"}`}>
+                    {weekday}
+                </span>
+                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-[var(--primary)] font-extrabold" : "font-semibold"}`}>
+                    {dayNum}
+                </span>
+                <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)]" : "text-[var(--text-muted)]"}`}>
+                    {occupied ? "Diajukan" : off ? "Libur" : "\u00A0"}
+                </span>
+            </button>
+        );
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,6 +437,8 @@ export default function LeavePage() {
                     dates: sorted,
                     reason: form.reason.trim(),
                     attachment: form.attachment || null,
+                    // Patokan implisit = tanggal terpilih pertama.
+                    ...(form.type === "annual" ? { anchorDate: sorted[0] } : {}),
                 }),
             });
             if (!res.ok) {
@@ -459,8 +596,8 @@ export default function LeavePage() {
                     </div>
                     <form onSubmit={isDiscrete ? handleSubmitDiscrete : handleSubmitRange} className="space-y-4">
                         <div className="form-group !mb-0">
-                            <label className="form-label">Jenis Cuti</label>
-                            <select className="form-select" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); setSelectedDates([]); }}>
+                            <label className="form-label">Jenis Cuti/Izin</label>
+                            <select className="form-select" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); setSelectedDates([]); setMonthCursor(baseMonth); }}>
                                 <option value="annual">Tahunan</option>
                                 <option value="sick">Sakit</option>
                                 <option value="personal">Pribadi</option>
@@ -469,67 +606,88 @@ export default function LeavePage() {
                             </select>
                             {form.type === "annual" && availableAnnualLeave <= 0 && (
                                 <p className="text-xs text-[var(--destructive-text)] font-medium mt-1">
-                                    * Kuota Cuti Tahunan tidak tersedia ({remainingLeave} sisa − {pendingAnnualDays} menunggu persetujuan HR). Pilih jenis cuti lain bila diperlukan.
+                                    * Kuota Cuti Tahunan tidak tersedia ({remainingLeave} sisa − {pendingAnnualDays} menunggu persetujuan HR). Pilih jenis cuti/Izin lain bila diperlukan.
                                 </p>
                             )}
                         </div>
                         {isDiscrete ? (
                             <div className="form-group !mb-0">
                                 <label className="form-label">Pilih Tanggal ({selectedDates.length}/{form.type === "annual" ? maxSelectable : WINDOW_DAYS} hari kerja)</label>
-                                <p className="text-xs text-[var(--text-muted)]">Besok s/d {windowEnd ? formatIndonesianDate(windowEnd) : ""} ({WINDOW_DAYS} hari ke depan), khusus hari kerja jadwal Anda. Satu tanggal terpilih = satu pengajuan cuti.</p>
+                                {isAnnualForm ? (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <button
+                                            type="button"
+                                            aria-label="Bulan sebelumnya"
+                                            disabled={compareMonth(monthCursor, baseMonth) <= 0}
+                                            onClick={() => setMonthCursor((c) => clampCursor(shiftMonth(c, -1)))}
+                                            className="btn btn-ghost btn-sm px-2 disabled:opacity-40"
+                                        >
+                                            ‹
+                                        </button>
+                                        <select
+                                            className="form-select flex-1"
+                                            value={monthCursor.m}
+                                            onChange={(e) => setMonthCursor((c) => clampCursor({ ...c, m: Number(e.target.value) }))}
+                                            aria-label="Pilih bulan"
+                                        >
+                                            {MONTH_NAMES.map((name, i) => (
+                                                <option key={name} value={i}>{name}</option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            className="form-select w-24"
+                                            value={monthCursor.y}
+                                            onChange={(e) => setMonthCursor((c) => clampCursor({ ...c, y: Number(e.target.value) }))}
+                                            aria-label="Pilih tahun"
+                                        >
+                                            {yearOptions.map((y) => (
+                                                <option key={y} value={y}>{y}</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            aria-label="Bulan berikutnya"
+                                            disabled={compareMonth(monthCursor, maxMonth) >= 0}
+                                            onClick={() => setMonthCursor((c) => clampCursor(shiftMonth(c, 1)))}
+                                            className="btn btn-ghost btn-sm px-2 disabled:opacity-40"
+                                        >
+                                            ›
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-[var(--text-muted)]">Besok s/d {windowEnd ? formatIndonesianDate(windowEnd) : ""} ({WINDOW_DAYS} hari ke depan), khusus hari kerja jadwal Anda. Satu tanggal terpilih = satu pengajuan cuti.</p>
+                                )}
                                 {scheduleLoading && <p className="text-xs text-[var(--text-muted)] mt-1">Memuat jadwal shift...</p>}
                                 {scheduleError && (
                                     <div className="flex items-center justify-between gap-2 text-xs text-[var(--warning)] mt-1">
                                         <span>Jadwal shift gagal dimuat, libur sementara mengikuti hari Minggu. {scheduleError}</span>
-                                        <button type="button" onClick={() => void loadSchedule()} className="underline font-semibold shrink-0">
+                                        <button type="button" onClick={() => void loadSchedule(isAnnualForm ? monthStart : windowStart, isAnnualForm ? monthLen : windowDates.length || WINDOW_DAYS)} className="underline font-semibold shrink-0">
                                             Coba lagi
                                         </button>
                                     </div>
                                 )}
-                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
-                                    {windowDates.map((dateKey) => {
-                                        const occupied = occupiedSet.has(dateKey);
-                                        const off = isDateOff(dateKey);
-                                        const disabled = occupied || off || (form.type === "annual" && availableAnnualLeave <= 0);
-                                        const selected = selectedDateSet.has(dateKey);
-                                        const dayNum = Number(dateKey.slice(8, 10));
-                                        const weekday = WEEKDAY_SHORT[getUTCDayKey(dateKey)];
-                                        return (
-                                            <button
-                                                key={dateKey}
-                                                type="button"
-                                                disabled={disabled}
-                                                aria-pressed={selected}
-                                                onClick={() => toggleDate(dateKey)}
-                                                title={occupied ? `${formatIndonesianDate(dateKey)} — sudah diajukan` : off ? `${formatIndonesianDate(dateKey)} — libur jadwal` : formatIndonesianDate(dateKey)}
-                                                className={`relative rounded-xl border p-2 text-center transition-colors ${
-                                                    selected
-                                                        ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] font-bold"
-                                                        : occupied
-                                                          ? "border-dashed border-[var(--border)] bg-[var(--secondary)] text-[var(--text-muted)] opacity-70 cursor-not-allowed"
-                                                          : disabled
-                                                            ? "border-[var(--border)] bg-[var(--muted)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
-                                                            : "border-[var(--border)] bg-[var(--card)] text-[var(--text-primary)] hover:border-[color-mix(in_srgb,var(--primary)_40%,transparent)] hover:bg-[var(--secondary)] cursor-pointer active:scale-[0.98]"
-                                                }`}
-                                            >
-                                                {selected && (
-                                                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] flex items-center justify-center text-[10px] font-extrabold leading-none shadow-sm">
-                                                        ✓
-                                                    </span>
-                                                )}
-                                                <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)] font-semibold" : "text-[var(--text-muted)]"}`}>
-                                                    {weekday}
-                                                </span>
-                                                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-[var(--primary)] font-extrabold" : "font-semibold"}`}>
-                                                    {dayNum}
-                                                </span>
-                                                <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)]" : "text-[var(--text-muted)]"}`}>
-                                                    {occupied ? "Diajukan" : off ? "Libur" : "\u00A0"}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                {isAnnualForm ? (
+                                    <div className="mt-2">
+                                        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-[var(--text-muted)] mb-1">
+                                            {WEEKDAY_SHORT.map((d) => (
+                                                <span key={d}>{d}</span>
+                                            ))}
+                                        </div>
+                                        <div className="grid grid-cols-7 gap-1">
+                                            {Array.from({ length: monthLeadBlanks }).map((_, i) => (
+                                                <span key={`blank-${i}`} />
+                                            ))}
+                                            {Array.from({ length: monthLen }).map((_, i) => {
+                                                const dateKey = `${monthStart.slice(0, 8)}${String(i + 1).padStart(2, "0")}`;
+                                                return renderDayCell(dateKey);
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
+                                        {windowDates.map((dateKey) => renderDayCell(dateKey))}
+                                    </div>
+                                )}
                                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--text-muted)]">
                                     <span className="inline-flex items-center gap-1">
                                         <span className="h-2.5 w-2.5 rounded-full border border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]" aria-hidden="true" />
@@ -583,7 +741,7 @@ export default function LeavePage() {
                         </div>
                         <div className="form-group !mb-0">
                             <div className="flex items-center justify-between">
-                                <label className="form-label !mb-0">Upload Bukti (PDF/Foto)</label>
+                                <label className="form-label !mb-0">Upload Bukti (Opsional)</label>
                                 {form.attachment && (
                                     <button
                                         type="button"
@@ -610,7 +768,7 @@ export default function LeavePage() {
                                     )}
                                 </label>
                             </div>
-                            <p className="text-[10px] text-[var(--text-muted)] mt-1">* Maksimal 2MB (JPG/PNG/WEBP/PDF). Satu bukti disimpan sekali dan ditautkan ke semua tanggal terpilih.</p>
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">* Opsional — boleh dikosongkan. Maksimal 2MB (JPG/PNG/WEBP/PDF). Satu bukti disimpan sekali dan ditautkan ke semua tanggal terpilih.</p>
                         </div>
                         <button type="submit" className="btn btn-primary w-full" disabled={loading || (form.type === "annual" && availableAnnualLeave <= 0) || (isDiscrete && selectedDates.length === 0)}>
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

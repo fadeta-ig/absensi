@@ -8,7 +8,7 @@ import { LeaveDateRangeError, validateLeaveDateRange } from "@/lib/services/leav
 import { assertAllowedFile } from "@/lib/fileMagic";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
 import { toDateString } from "@/lib/utils";
-import { addCalendarDays, toUTCDateKey, toWIBDateString } from "@/lib/timezone";
+import { addCalendarDays, isValidCalendarDate, toUTCDateKey, toWIBDateString } from "@/lib/timezone";
 
 export const DISCRETE_LEAVE_MAX_WINDOW_DAYS = 30;
 
@@ -563,6 +563,7 @@ export async function createLeaveRequestsBatch(
         reason: string;
         status: LeaveRequest["status"];
         attachment?: string | null;
+        anchorDate?: string | null;
     },
     opts?: { attachmentMaxBytes?: number; todayWib?: string }
 ): Promise<LeaveRequestWithAttachment[]> {
@@ -579,15 +580,52 @@ export async function createLeaveRequestsBatch(
     }
 
     const todayKey = opts?.todayWib ?? toWIBDateString();
-    const minDateKey = addCalendarDays(todayKey, 1);
-    const maxDateKey = addCalendarDays(todayKey, DISCRETE_LEAVE_MAX_WINDOW_DAYS);
+    const tomorrowKey = addCalendarDays(todayKey, 1);
 
-    for (const dateKey of normalizedDates) {
-        assertSupportedLeaveRange(dateKey, dateKey);
-        if (dateKey < minDateKey || dateKey > maxDateKey) {
-            throw new LeaveValidationError(
-                `Tanggal ${dateKey} berada di luar batas pengajuan (${minDateKey} s/d ${maxDateKey}).`
-            );
+    if (data.type === "annual" && data.anchorDate) {
+        // Revisi client: tanggal patokan pilihan user mengunci semua tanggal
+        // sebelumnya; window 30 hari inklusif = anchor s/d anchor+29.
+        // Berlaku lintas bulan/tahun karena murni offset kalender.
+        const anchorKey = toDateString(data.anchorDate);
+        if (!isValidCalendarDate(anchorKey)) {
+            throw new LeaveValidationError("Tanggal patokan tidak valid (YYYY-MM-DD).");
+        }
+        if (anchorKey < tomorrowKey) {
+            throw new LeaveValidationError(`Tanggal patokan minimal ${tomorrowKey} (H+1, tidak boleh hari ini atau masa lalu).`);
+        }
+        const minDateKey = anchorKey;
+        const maxDateKey = addCalendarDays(anchorKey, DISCRETE_LEAVE_MAX_WINDOW_DAYS - 1);
+
+        for (const dateKey of normalizedDates) {
+            assertSupportedLeaveRange(dateKey, dateKey);
+            if (dateKey < minDateKey || dateKey > maxDateKey) {
+                throw new LeaveValidationError(
+                    `Tanggal ${dateKey} berada di luar jendela patokan ${minDateKey} s/d ${maxDateKey} (30 hari dari tanggal pilihan).`
+                );
+            }
+        }
+    } else if (data.type === "annual") {
+        // Fallback kompatibilitas: tanpa anchorDate, pakai jendela lama H+1 s/d H+30.
+        const minDateKey = tomorrowKey;
+        const maxDateKey = addCalendarDays(todayKey, DISCRETE_LEAVE_MAX_WINDOW_DAYS);
+
+        for (const dateKey of normalizedDates) {
+            assertSupportedLeaveRange(dateKey, dateKey);
+            if (dateKey < minDateKey || dateKey > maxDateKey) {
+                throw new LeaveValidationError(
+                    `Tanggal ${dateKey} berada di luar batas pengajuan (${minDateKey} s/d ${maxDateKey}).`
+                );
+            }
+        }
+    } else {
+        // Sakit/pribadi bebas dari jendela patokan: hanya tolak hari ini/masa lalu.
+        for (const dateKey of normalizedDates) {
+            assertSupportedLeaveRange(dateKey, dateKey);
+            if (dateKey < tomorrowKey) {
+                throw new LeaveValidationError(
+                    `Tanggal ${dateKey} sudah lewat (minimal pengajuan ${tomorrowKey}).`
+                );
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { prisma } from "@/lib/prisma";
-import { toWIBDateString, addCalendarDays, toUTCDateKey } from "@/lib/timezone";
+import { toWIBDateString, addCalendarDays, toUTCDateKey, isValidCalendarDate } from "@/lib/timezone";
 import { isOvernightSchedule } from "@/lib/services/attendanceShiftHelper";
 import { resolveShiftsForRange } from "@/lib/services/shiftAssignmentService";
 
@@ -27,7 +27,14 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Data karyawan tidak ditemukan." }, { status: 404 });
         }
 
-        const startDate = toWIBDateString(new Date());
+        const startParam = request.nextUrl.searchParams.get("start");
+        let startDate = toWIBDateString(new Date());
+        if (startParam !== null && startParam !== "") {
+            if (!isValidCalendarDate(startParam)) {
+                return NextResponse.json({ error: "Parameter start harus berformat YYYY-MM-DD yang valid." }, { status: 400 });
+            }
+            startDate = startParam;
+        }
         const endDate = addCalendarDays(startDate, days - 1);
         const resolvedRange = await resolveShiftsForRange(prisma, session.employeeId, startDate, endDate);
 

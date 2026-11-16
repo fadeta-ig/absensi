@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
                 reason: body.reason,
                 status: "pending",
                 attachment: body.attachment ?? null,
+                anchorDate: body.anchorDate ?? null,
             });
 
             logger.info("Leave request batch created", {

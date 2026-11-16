@@ -267,6 +267,9 @@ export const leaveRequestSchema = z.object({
         .min(1, "Pilih minimal 1 tanggal cuti")
         .max(30, "Maksimal 30 tanggal cuti dalam satu pengajuan")
         .optional(),
+    anchorDate: z.string()
+        .refine(isValidCalendarDate, "Tanggal patokan harus berformat YYYY-MM-DD yang valid")
+        .optional(),
     reason: z.string().trim().min(1, "Alasan harus diisi"),
     attachment: z.string().nullable().optional(),
 }).superRefine((data, context) => {

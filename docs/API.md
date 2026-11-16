@@ -102,7 +102,7 @@ export const POST = apiGuard(
 | `/api/shifts/assignments` | `PATCH` | `hr.manage` | Ubah tanggal akhir (eksklusif) satu assignment: `{employeeId, effectiveFrom, effectiveTo \| null}`. Akhir lama/baru tidak boleh < hari ini dan tidak boleh melewati awal assignment berikutnya (`409 OVERLAP`). Audit `ROSTER_UPDATE_END`. |
 | `/api/shifts/assignments` | `DELETE` | `hr.manage` | Batalkan satu assignment yang dimulai hari ini atau setelahnya:
 `{employeeId, effectiveFrom}`. Assignment sebelumnya yang terpotong tepat pada tanggal mulai dibuka kembali hingga akhir assignment yang dibatalkan; bila penerus bershift sama dan bersambung, keduanya digabung (merge). Audit `ROSTER_CANCEL`. |
-| `/api/employee/shift-schedule?days=14` | `GET` | `employee.self` | Jadwal shift N hari ke depan (1-31, default 14) untuk employee yang login: tanggal, hari, nama/jam shift, libur, lintas-hari, sumber. |
+| `/api/employee/shift-schedule?days=14` | `GET` | `employee.self` | Jadwal shift N hari (1-31, default 14) untuk employee yang login: tanggal, hari, nama/jam shift, libur, lintas-hari, sumber. Param opsional `start=YYYY-MM-DD` (default hari ini WIB) untuk jendela patokan cuti tahunan lintas bulan/tahun. |
 
 ### C. Manajemen Karyawan (`/api/employees`)
 | Rute | Metode | Permission / Akses | Deskripsi |
@@ -239,7 +239,7 @@ Kontrak notulen penting:
 ### H. Layanan Mandiri Karyawan (`/api/leave`, `/api/letter-requests`, `/api/todos`)
 | Rute | Metode | Permission / Akses | Deskripsi |
 |---|---|---|---|
-| `/api/leave` | `GET`, `POST`, `PUT` | `leave:read`, `create` | Pengajuan cuti (`annual`, `sick`, `personal`, `maternity`, `paternity`) dan persetujuan HR. `GET ?withBalance=1` menyertakan saldo otoritatif (`totalLeave`, `usedLeave`, `pendingAnnualDays`, `remainingLeave`, `availableAnnualLeave`). `POST` mendukung batch tanggal lepas (`dates: string[]`, 1–30 tanggal di window H+1..H+30 hari kerja untuk `annual`/`sick`/`personal`, 1 file lampiran dipakai bersama) maupun rentang `startDate`/`endDate` (maks 366 hari kalender inklusif). `PUT` mendukung pembaruan satuan (`id`) maupun aksi massal HR (`ids: string[], status: "approved" \| "rejected"`). |
+| `/api/leave` | `GET`, `POST`, `PUT` | `leave:read`, `create` | Pengajuan cuti (`annual`, `sick`, `personal`, `maternity`, `paternity`) dan persetujuan HR. `GET ?withBalance=1` menyertakan saldo otoritatif (`totalLeave`, `usedLeave`, `pendingAnnualDays`, `remainingLeave`, `availableAnnualLeave`). `POST` mendukung batch tanggal lepas (`dates: string[]`, 1–30 tanggal; khusus `annual` memakai `anchorDate` = tanggal terpilih pertama — jendela patokan s/d patokan+29 inklusif lintas bulan/tahun, tanggal sebelumnya terkunci di UX kalender bulan/tahun, patokan minimal H+1; tanpa `anchorDate` fallback H+1..H+30; `sick`/`personal` bebas dari patokan hanya tolak ≤ hari ini; 1 file lampiran dipakai bersama) maupun rentang `startDate`/`endDate` (maks 366 hari kalender inklusif). `PUT` mendukung pembaruan satuan (`id`) maupun aksi massal HR (`ids: string[], status: "approved" \| "rejected"`). |
 | `/api/letter-requests` | `GET`, `POST`, `PUT` | `letters:read`, `create`| Permohonan surat keterangan resmi perusahaan (SK Kerja, Penghasilan). |
 | `/api/todos` | `GET`, `POST`, `PUT` | Autentikasi | Manajemen papan tugas personal karyawan (*personal todo list*). |
 
