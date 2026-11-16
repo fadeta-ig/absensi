@@ -344,7 +344,7 @@ function LeaveManagementContent() {
             [
                 { key: "employeeId", label: "NIP" },
                 { key: "name", label: "Nama Karyawan" },
-                { key: "type", label: "Jenis Cuti" },
+                { key: "type", label: "Jenis Cuti/Izin" },
                 { key: "startDate", label: "Tgl Mulai" },
                 { key: "endDate", label: "Tgl Selesai" },
                 { key: "duration", label: "Durasi" },
@@ -623,7 +623,7 @@ function LeaveManagementContent() {
                                 </button>
                             </TableHead>
                             <TableHead>Karyawan</TableHead>
-                            <TableHead>Jenis Cuti</TableHead>
+                            <TableHead>Jenis Cuti/Izin</TableHead>
                             <TableHead>Periode</TableHead>
                             <TableHead className="text-center">Durasi</TableHead>
                             <TableHead>Sisa Kuota Cuti</TableHead>
