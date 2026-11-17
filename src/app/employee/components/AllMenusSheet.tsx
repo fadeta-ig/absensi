@@ -25,6 +25,7 @@ import {
     BadgeCheck,
     Wrench,
     Eye,
+    MessageSquareText,
 } from "lucide-react";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
 
@@ -59,6 +60,8 @@ interface AllMenusSheetProps {
     canApproveEquipment?: boolean | null;
     /** Pemantau e-meeting WIG002. null = belum dimuat → sembunyikan dulu. */
     canMonitorMeeting?: boolean | null;
+    /** Karyawan yang ditunjuk WIG002 sebagai editor aturan sapaan beranda. */
+    canEditGreeting?: boolean;
 }
 
 export default function AllMenusSheet({
@@ -73,6 +76,7 @@ export default function AllMenusSheet({
     canTopViewEquipment,
     canApproveEquipment,
     canMonitorMeeting,
+    canEditGreeting = false,
 }: AllMenusSheetProps) {
     const router = useRouter();
     const { logout } = useEmployeeLogout();
@@ -292,6 +296,14 @@ export default function AllMenusSheet({
                     icon: Eye,
                     bg: "bg-cyan-50 dark:bg-cyan-950/40",
                     color: "text-cyan-600 dark:text-cyan-400",
+                }] : []),
+                ...(canEditGreeting ? [{
+                    href: "/employee/greeting-settings",
+                    label: "Sapaan Beranda",
+                    description: "Atur aturan sapaan yang tampil di beranda karyawan",
+                    icon: MessageSquareText,
+                    bg: "bg-rose-50 dark:bg-rose-950/40",
+                    color: "text-rose-600 dark:text-rose-400",
                 }] : []),
                 {
                     href: "/employee/green-meeting",

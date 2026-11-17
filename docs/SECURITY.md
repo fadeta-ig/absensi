@@ -68,6 +68,12 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
   - Bukti foto JPEG-only: klaim MIME + magic-byte (SOI `FFD8` … EOI `FFD9`), batas ukuran dari setting `upload.equipmentEvidence.maxMb` (pre-check `Content-Length` → `413`), maks 5 foto inspeksi + 5 foto QC, upload hanya saat status `OPEN` (foto QC hanya saat `SUBMITTED`).
   - Path traversal guard: `path.resolve` + pemeriksaan prefix direktori storage (`storage/equipment-evidence`, `storage/equipment-qc-evidence`); penyajian berkas memakai header `Cache-Control: private, no-store` + `X-Content-Type-Options: nosniff`.
   - Halaman equipment menumpang guard portal yang ada (`/ga/*`, `/employee/*` di `proxy.ts`); setiap API route tetap menegakkan `requireAuth()` dan otorisasi sendiri.
+- **Boundary Sapaan Beranda (Employee Home)**:
+  - Aturan sapaan aktif dibaca semua karyawan lewat `GET /api/employee/greeting` (`employee.self`) dan tidak memuat data pribadi.
+  - CRUD aturan sapaan hanya untuk WIG002 (`ga.manage`) atau satu karyawan yang ditunjuk di `AppSetting` `greeting.editorEmployeeId`; guard mengecek employee masih aktif sehingga penunjukan basi mati sendiri.
+  - Penunjukan editor hanya WIG002 (`GET/PUT /api/ga/greeting-settings/editor`); karyawan terpilih tidak dapat mengubah daftar editor.
+  - Input aturan divalidasi di API (Zod) dan service: batas panjang teks, format jam `HH:MM`, minimal satu hari atau satu tanggal, prioritas 0–9999.
+  - Portal `/ga/greeting-settings` hanya untuk WIG002; karyawan terpilih memakai `/employee/greeting-settings`.
 
 ---
 

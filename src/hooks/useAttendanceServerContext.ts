@@ -39,6 +39,7 @@ interface ContextState {
     displayWibTime: string | null;
     displayWibDate: string | null;
     displayWibHour: number | null;
+    displayWibMinute: number | null;
     refresh: () => Promise<void>;
 }
 
@@ -125,6 +126,14 @@ function getWibHour(date: Date): number {
         hour12: false,
     }).formatToParts(date).find((part) => part.type === "hour")?.value;
     return Number(hour ?? "0") % 24;
+}
+
+function getWibMinute(date: Date): number {
+    const minute = new Intl.DateTimeFormat("en-US", {
+        timeZone: WIB_TIME_ZONE,
+        minute: "2-digit",
+    }).formatToParts(date).find((part) => part.type === "minute")?.value;
+    return Number(minute ?? "0");
 }
 
 export function useAttendanceServerContext(): ContextState {
@@ -231,6 +240,7 @@ export function useAttendanceServerContext(): ContextState {
         displayWibTime: displayInstant ? formatWibTime(displayInstant) : null,
         displayWibDate: displayInstant ? formatWibDate(displayInstant) : context?.serverWibDate ?? null,
         displayWibHour: displayInstant ? getWibHour(displayInstant) : null,
+        displayWibMinute: displayInstant ? getWibMinute(displayInstant) : null,
         refresh,
     };
 }

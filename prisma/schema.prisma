@@ -1811,11 +1811,38 @@ model CleaningApprovalIdempotency {
 // Konsumen gelombang 2 membaca via getUploadLimit() dengan fallback DEFAULTS.
 model AppSetting {
   key             String   @id
-  value           String
+  value           String   @db.Text
   updatedByUserId String?  @map("updated_by_user_id")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
+}
+
+// ─── Sapaan Beranda Dinamis ─────────────────────────────────────
+// Setiap baris adalah satu aturan sapaan. Pemenang ditentukan oleh
+// prioritas tertinggi di antara aturan aktif yang cocok dengan jam,
+// hari/tanggal WIB saat ini. `repeatWeekly=true` memakai `daysOfWeek`;
+// `false` memakai `specificDate` (satu tanggal). `endTime < startTime`
+// berarti jendela lintas hari.
+model GreetingRule {
+  id              String   @id @default(uuid())
+  name            String   @db.VarChar(100)
+  greeting        String   @db.VarChar(120)
+  subGreeting     String   @db.Text
+  startTime       String   @db.VarChar(5) @map("start_time")
+  endTime         String   @db.VarChar(5) @map("end_time")
+  repeatWeekly    Boolean  @default(true) @map("repeat_weekly")
+  daysOfWeek      String   @default("[0,1,2,3,4,5,6]") @db.VarChar(20) @map("days_of_week")
+  specificDate    String?  @db.VarChar(10) @map("specific_date")
+  priority        Int      @default(0)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdByUserId String?  @map("created_by_user_id")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive, priority], map: "idx_greeting_rules_active_priority")
+  @@map("greeting_rules")
 }
 
 // ─── Cleaning Paraf Harian (Tahap 1) ────────────────────────────

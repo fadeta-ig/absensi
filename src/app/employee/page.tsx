@@ -10,6 +10,7 @@ import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
 import { stripGelar } from "@/lib/utils/formatters";
+import { FALLBACK_GREETING, resolveGreetingForMoment, type GreetingRuleLike } from "@/lib/greeting";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import AllMenusSheet from "./components/AllMenusSheet";
@@ -40,19 +41,30 @@ export default function EmployeeHomePage() {
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
+    const [greetingRules, setGreetingRules] = useState<GreetingRuleLike[]>([]);
+    const [canEditGreeting, setCanEditGreeting] = useState(false);
+    const [, setClockTick] = useState(0);
+
+    // Sapaan mengikuti jendela jam; render ulang tiap menit agar batas jam
+    // terasa tepat tanpa menunggu refresh konteks server berikutnya.
+    useEffect(() => {
+        const timer = window.setInterval(() => setClockTick((tick) => tick + 1), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const loadHomeData = async () => {
             setLoadingData(true);
             setLoadError("");
             try {
-                const [userRes, newsRes, attendanceRes, capsRes, equipCapsRes, monitorCapsRes] = await Promise.all([
+                const [userRes, newsRes, attendanceRes, capsRes, equipCapsRes, monitorCapsRes, greetingRes] = await Promise.all([
                     fetch("/api/auth/me"),
                     fetch("/api/news"),
                     fetch("/api/attendance"),
                     fetch("/api/employee/cleaning/capabilities").catch(() => null),
                     fetch("/api/employee/equipment/capabilities").catch(() => null),
                     fetch("/api/employee/meeting-capabilities").catch(() => null),
+                    fetch("/api/employee/greeting", { cache: "no-store" }).catch(() => null),
                 ]);
 
                 if (!userRes.ok) throw new Error(await getResponseErrorMessage(userRes, "Gagal memuat data profil."));
@@ -95,6 +107,15 @@ export default function EmployeeHomePage() {
                 } catch {
                     setCanMonitorMeeting(false);
                 }
+                try {
+                    const greetingJson = greetingRes && greetingRes.ok ? await greetingRes.json() : null;
+                    const greetingData = greetingJson?.data;
+                    setGreetingRules(Array.isArray(greetingData?.rules) ? (greetingData.rules as GreetingRuleLike[]) : []);
+                    setCanEditGreeting(Boolean(greetingData?.canEditGreeting));
+                } catch {
+                    setGreetingRules([]);
+                    setCanEditGreeting(false);
+                }
                 if (userData?.totalLeave !== undefined && userData?.usedLeave !== undefined) {
                     setLeaveBalance({ total: userData.totalLeave, used: userData.usedLeave });
                 }
@@ -121,22 +142,18 @@ export default function EmployeeHomePage() {
         switch (s) { case "present": return "Hadir Tepat Waktu"; case "late": return "Terlambat"; default: return s; }
     };
 
-    const hour = serverContext.displayWibHour;
-    let greeting = "Selamat Malam!";
-    let subGreeting = "Waktunya istirahat dan persiapkan diri untuk hari esok yang lebih baik.";
-    if (hour === null) {
-        greeting = "Waktu server belum tersedia";
-        subGreeting = "Sambungkan perangkat ke internet untuk memuat tanggal dan waktu presensi resmi.";
-    } else if (hour >= 5 && hour < 11) {
-        greeting = "Selamat Pagi!";
-        subGreeting = "Awali hari dengan semangat dan senyuman. Siap untuk mencapai target hari ini!";
-    } else if (hour >= 11 && hour < 15) {
-        greeting = "Selamat Siang!";
-        subGreeting = "Tetap fokus dan produktif di tengah hari. Jangan lupa luangkan waktu sejenak untuk istirahat.";
-    } else if (hour >= 15 && hour < 18) {
-        greeting = "Selamat Sore!";
-        subGreeting = "Terus melangkah walau lelah mulai terasa. Selesaikan tugas hari ini dengan standar kualitas tertinggi dan dedikasi penuh!";
-    }
+    const greetingMoment = serverContext.displayWibDate
+        && serverContext.displayWibHour !== null
+        && serverContext.displayWibMinute !== null
+        ? {
+            wibDate: serverContext.displayWibDate,
+            hour: serverContext.displayWibHour,
+            minute: serverContext.displayWibMinute,
+        }
+        : null;
+    const activeGreeting = greetingMoment
+        ? resolveGreetingForMoment(greetingRules, greetingMoment)
+        : FALLBACK_GREETING;
 
     const presentTotal = attendance.filter(a => a.status === "present" || a.status === "late").length;
     const remainingLeave = leaveBalance.total - leaveBalance.used;
@@ -200,10 +217,10 @@ export default function EmployeeHomePage() {
             {/* ─── Greeting ────────────────────────────────────── */}
             <div className="emp-surface px-5 py-4">
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">
-                    {greeting}{" "}
+                    {activeGreeting.greeting}{" "}
                     <span className="text-[var(--text-muted)] font-medium italic text-[11px] ml-1">Happy Shine On You</span>
                 </h2>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed mt-1.5">{subGreeting}</p>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed mt-1.5">{activeGreeting.subGreeting}</p>
                 {attendanceDate && (
                     <p className="text-[10px] text-[var(--text-muted)] mt-2">
                         Presensi shift {attendanceDate}: {todayRecord ? getStatusLabel(todayRecord.status) : "Belum tercatat"}
@@ -351,6 +368,7 @@ export default function EmployeeHomePage() {
                 canTopViewEquipment={equipmentCaps ? equipmentCaps.canTopView : null}
                 canApproveEquipment={equipmentCaps ? equipmentCaps.canApprove : null}
                 canMonitorMeeting={canMonitorMeeting}
+                canEditGreeting={canEditGreeting}
             />
 
         </div>

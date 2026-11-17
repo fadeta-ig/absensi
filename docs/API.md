@@ -185,6 +185,10 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/employee/equipment/approvals/pending-approval` | `GET` | Approver terdaftar | Antrean + riwayat: `?status=DONE/APPROVED/ALL&from=&to=` (tanggal WIB inklusif; DONE=checkedAt, APPROVED=approvedAt; tanpa tanggal = semua backlog). |
 | `/api/employee/equipment/qc-evidence` | `GET`, `POST` | Terlibat | List + upload foto QC (opsional, maks 5 per inspeksi). |
 | `/api/employee/equipment/qc-evidence/[id]` | `GET` | Terlibat | Serve berkas foto QC. |
+| `/api/ga/greeting-settings` | `GET`, `POST` | WIG002 + `ga.manage` / karyawan editor terpilih | Daftar dan tambah aturan sapaan beranda employee. Setiap aturan: `name`, `greeting`, `subGreeting`, `startTime`/`endTime` (`HH:MM`, lintas hari bila selesai < mulai), `repeatWeekly` + `daysOfWeek` atau `specificDate`, `priority`, `isActive`. Cache baca 60 detik. |
+| `/api/ga/greeting-settings/[id]` | `PUT`, `DELETE` | WIG002 + `ga.manage` / karyawan editor terpilih | Ubah atau hapus satu aturan sapaan. `404` bila aturan tidak ditemukan. |
+| `/api/ga/greeting-settings/editor` | `GET`, `PUT` | WIG002 + `ga.manage` | Penunjukan satu karyawan internal aktif yang boleh ikut mengelola aturan sapaan; `employeeId: null`/kosong mengosongkan. |
+| `/api/employee/greeting` | `GET` | `employee.self` | Aturan sapaan aktif + `canEditGreeting` untuk beranda employee (`Cache-Control: no-store`). Client memilih aturan yang cocok memakai jam/tanggal WIB dari konteks presensi. |
 
 ### E. Green Meeting (`/api/green-meeting`)
 

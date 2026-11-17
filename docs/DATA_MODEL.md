@@ -138,6 +138,11 @@ Relasi inti Cleaning:
 
 RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Akun outsource memakai `UserAccount.employeeId = null` dan `createdByUserId` untuk membatasi kepemilikan administratif akun; tidak ada model outsource terpisah.
 
+### I. Sapaan Beranda Employee (GreetingRule + AppSetting)
+- `GreetingRule` menyimpan aturan sapaan CRUD: `name`, `greeting`, `subGreeting`, `startTime`/`endTime` (`HH:MM`, `endTime < startTime` berarti lintas hari), `repeatWeekly` + `daysOfWeek` (JSON array 0–6) atau `specificDate` (`YYYY-MM-DD`), `priority` (0–9999), `isActive`, dan aktor `createdByUserId`/`updatedByUserId`. Index `[isActive, priority]`.
+- `AppSetting` `greeting.editorEmployeeId` menyimpan satu `employeeId` karyawan internal aktif yang boleh ikut mengelola aturan.
+- Resolusi: aturan aktif dengan prioritas tertinggi yang cocok dengan jam/hari/tanggal WIB dipakai; bila tidak ada yang cocok, fallback ke teks bawaan per jam di `src/lib/greeting.ts`. Saat jam server belum tersedia, kartu memakai sapaan netral non-editable `Selamat Datang!` dan banner peringatan waktu terpisah.
+
 ## 4. Appointment Meeting + Ruangan (2026-10-07)
 
 1. `MeetingRoom` 1 ── * `MeetingAppointment` (`roomId` wajib untuk appointment baru/berubah sejak ADR-015; kolom `meetingLink` hanya warisan historis read-only, tidak lagi diisi jalur baru).

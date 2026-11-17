@@ -95,6 +95,7 @@ hriswig/
   - `src/app/employee/equipment/page.tsx`: Daftar unit alat produksi dan entry inspeksi harian karyawan.
   - `src/app/employee/equipment/overview/`: Ringkasan status inspeksi per unit (`page.tsx` + `overview/[id]/page.tsx`).
   - `src/app/employee/equipment/approvals/`: Antrean dan detail persetujuan inspeksi (`page.tsx` + `approvals/[id]/page.tsx`).
+  - `src/app/employee/greeting-settings/page.tsx`: Editor aturan sapaan beranda untuk karyawan yang ditunjuk WIG002.
 
 ### C. Portal General Affairs (`src/app/ga/`)
 - **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat, Green Meeting, dan Inspeksi Harian.
@@ -112,6 +113,7 @@ hriswig/
   - `src/app/ga/green-meeting/recap/page.tsx`: Rekap rentang tanggal serta ekspor Excel/PDF.
   - `src/app/ga/green-meeting/components/`: Komponen native bersama untuk header, navigasi submodul, presensi, notulen, tugas, pengaturan, dan rekap.
   - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, akun outsource, penetapan petugas inspeksi, dan daftar atasan tertinggi max 5 (`TopViewerCard` + `GET/POST/DELETE settings/top-viewers`).
+  - `src/app/ga/greeting-settings/page.tsx`: CRUD aturan sapaan beranda (jam, hari/tanggal, prioritas, status aktif) dan penunjukan satu karyawan editor (khusus WIG002).
   - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
   - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
   - `src/app/ga/equipment/settings/page.tsx`: Pengaturan template/unit alat produksi, anggota QC, dan top viewers.
@@ -143,6 +145,8 @@ hriswig/
   - `src/app/api/employee/cleaning/`: Dua route handler bagi reviewer employee untuk membaca dan menandatangani persetujuan bulanan.
   - `src/app/api/employee/equipment/`: Route handler inspeksi alat sisi karyawan: capabilities, units, inspections (+[id], +[id]/submit), items/[itemId], evidence (+[id]), qc-evidence (+[id]), overview, dan approvals (+done).
   - `src/app/api/ga/equipment/`: Route handler inspeksi alat sisi GA: templates, template-items, units, inspections/[id], evidence (+[id]), qc-members, qc-evidence (+[id]), recap, dan settings/top-viewers.
+  - `src/app/api/ga/greeting-settings/`: Route handler CRUD aturan sapaan (`GET`/`POST`, `PUT`/`DELETE` per id) dan penunjukan editor (`GET`/`PUT`, WIG002-only).
+  - `src/app/api/employee/greeting/route.ts`: Baca aturan sapaan aktif + `canEditGreeting` untuk beranda employee.
 
 ---
 
@@ -163,6 +167,7 @@ hriswig/
   - `cleaningService.ts`: Domain service inspeksi harian: CRUD ruangan/template/item, akun outsource, penetapan petugas, sinkronisasi role CLEANING_WORKER, snapshot checklist harian, perubahan item, dan rekap bulanan.
   - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
   - `equipmentService.ts`: Domain service inspeksi alat produksi: template/unit, lifecycle inspeksi + submit, evidence foto (operator & QC), anggota QC, top viewers, capabilities, approvals, dan rekap.
+  - `greetingSettingsService.ts`: CRUD `GreetingRule`, `AppSetting` `greeting.editorEmployeeId`, cache 60 detik, validasi aturan, dan guard WIG002/editor aktif.
 
 ---
 

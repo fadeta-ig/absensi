@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck, ClipboardCheck, CalendarClock } from "lucide-react";
+import { LayoutDashboard, Phone, Package, QrCode, Ticket, CalendarCheck, ClipboardCheck, CalendarClock, MessageSquareText } from "lucide-react";
 import AppShell, { AppShellLoading, NavItem } from "@/components/layout/AppShell";
 import PushNotificationManager from "@/components/PushNotificationManager";
 import { unsubscribePush } from "@/lib/pushClient";
@@ -141,10 +141,14 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
 
     if (loading || !user) return <AppShellLoading message="Memuat portal GA..." />;
 
+    const navItems: NavItem[] = user.username === "WIG002"
+        ? [...GA_NAV_ITEMS, { href: "/ga/greeting-settings", icon: MessageSquareText, label: "Sapaan Beranda" }]
+        : GA_NAV_ITEMS;
+
     return (
         <AppShell
             user={user}
-            navItems={GA_NAV_ITEMS}
+            navItems={navItems}
             brandTitle="WITS GA"
             brandSubtitle="General Affairs"
             mobileTitle="WITS GA"
