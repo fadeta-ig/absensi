@@ -218,7 +218,6 @@ export default function EmployeeHomePage() {
             <div className="emp-surface px-5 py-4">
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">
                     {activeGreeting.greeting}{" "}
-                    <span className="text-[var(--text-muted)] font-medium italic text-[11px] ml-1">Happy Shine On You</span>
                 </h2>
                 <p className="text-xs text-[var(--text-secondary)] leading-relaxed mt-1.5">{activeGreeting.subGreeting}</p>
                 {attendanceDate && (
