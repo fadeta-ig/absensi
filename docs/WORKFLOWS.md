@@ -2,7 +2,7 @@
 
 > **Purpose**: Development, build, test, and deployment procedures.  
 > **Source of Truth**: `package.json` scripts, dev environment, and testing tools.  
-> **Last Verified**: 2026-11-14  
+> **Last Verified**: 2026-11-17  
 
 Dokumen ini memuat panduan langkah demi langkah untuk instalasi, pengembangan lokal, sinkronisasi basis data, testing, build, dan deployment.
 
@@ -151,13 +151,13 @@ Berikut daftar perintah yang terkonfigurasi pada `package.json`:
    cp .env .env.bak-$(date +%F)
    ```
 
-3. **Tarik kode + dependensi + cek:**
+3. **Tarik kode + dependensi:**
    ```bash
    git pull
    npm ci
-   npm run lint
-   npx tsc --noEmit
    ```
+   > Lint dan typecheck (`npm run lint`, `npx tsc --noEmit`) adalah kewajiban
+   > di environment lokal sebelum push ke `master`, bukan langkah deploy VPS.
 
 4. **Skema database (preview dulu, tanpa `--force-reset` selamanya):**
    ```bash
