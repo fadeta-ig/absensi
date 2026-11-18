@@ -12,6 +12,7 @@ import {
     ChevronRight,
 } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
+import NationalHolidayBadge from "@/components/calendar/NationalHolidayBadge";
 import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
 import type { GreenMeetingConfig, GreenMeetingSession } from "../types";
 
@@ -103,6 +104,7 @@ export default function GreenMeetingHeader({
                                 {offDayInfo.reason || "Hari Libur"}
                             </span>
                         )}
+                        <NationalHolidayBadge dateKey={currentDateStr} />
                     </div>
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-foreground">
                         Rapat Koordinasi Rutin Harian

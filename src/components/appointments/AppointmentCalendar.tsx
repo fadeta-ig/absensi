@@ -7,6 +7,7 @@ import {
     ChevronRight,
 } from "lucide-react";
 import { getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
+import type { IndonesianHoliday } from "@/lib/services/holidayService";
 
 export interface CalendarAppointment {
     id: string;
@@ -24,6 +25,8 @@ interface AppointmentCalendarProps {
     selectedDate: string;
     onSelectDate: (date: string) => void;
     onMonthChange?: (year: number, month: number) => void;
+    /** Libur nasional/cuti bersama dari kalender global; kosong = tanpa penanda. */
+    holidaysByDate?: Map<string, IndonesianHoliday[]>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -39,7 +42,7 @@ function fmtTime(iso: string): string {
     return `${String(hours).padStart(2, "0")}.${String(minutes).padStart(2, "0")}`;
 }
 
-export default function AppointmentCalendar({ appointmentsByDate, selectedDate, onSelectDate, onMonthChange }: AppointmentCalendarProps) {
+export default function AppointmentCalendar({ appointmentsByDate, selectedDate, onSelectDate, onMonthChange, holidaysByDate }: AppointmentCalendarProps) {
     const [currentDate, setCurrentDate] = useState(() => {
         const [y, m] = selectedDate.split("-").map(Number);
         return new Date(y || new Date().getFullYear(), (m || new Date().getMonth() + 1) - 1, 1);
@@ -132,6 +135,7 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
                         ? `${year}-${String(month + 1).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`
                         : "";
                     const items = d.currentMonth ? appointmentsByDate.get(dateKey) || [] : [];
+                    const dateHolidays = d.currentMonth && holidaysByDate ? holidaysByDate.get(dateKey) || [] : [];
                     const isSunday = i % 7 === 0;
                     const isSaturday = i % 7 === 6;
                     const isToday = dateKey === todayKey;
@@ -140,7 +144,9 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
                         ? "bg-[var(--secondary)]/50"
                         : isSelected
                             ? "bg-[var(--primary)]/10"
-                            : isSunday
+                            : dateHolidays.length > 0
+                                ? "bg-rose-50 dark:bg-rose-950/35"
+                                : isSunday
                                 ? "bg-red-50 dark:bg-red-950/25"
                                 : isSaturday
                                     ? "bg-slate-100/80 dark:bg-slate-800/50"
@@ -155,11 +161,20 @@ export default function AppointmentCalendar({ appointmentsByDate, selectedDate, 
                             aria-label={d.currentMonth ? `Pilih tanggal ${dateKey}` : undefined}
                         >
                             <div className="flex justify-between items-start mb-1">
-                                <span className={`text-[11px] font-bold ${d.currentMonth ? (isToday ? "w-5 h-5 bg-[#800020] text-white rounded-full flex items-center justify-center -mt-0.5" : isSunday ? "text-red-700 dark:text-red-300" : "text-[var(--text-primary)]") : "text-[var(--text-muted)] opacity-50"}`}>
+                                <span className={`text-[11px] font-bold ${d.currentMonth ? (isToday ? "w-5 h-5 bg-[#800020] text-white rounded-full flex items-center justify-center -mt-0.5" : dateHolidays.length > 0 || isSunday ? "text-red-700 dark:text-red-300" : "text-[var(--text-primary)]") : "text-[var(--text-muted)] opacity-50"}`}>
                                     {d.day}
                                 </span>
                             </div>
                             <div className="space-y-1">
+                                {dateHolidays.slice(0, 1).map((holiday) => (
+                                    <div
+                                        key={`${holiday.date}-${holiday.name}`}
+                                        className="truncate rounded border border-red-200 bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-red-800 dark:border-red-800/70 dark:bg-red-900/50 dark:text-red-100"
+                                        title={`${holiday.type === "joint-leave" ? "Cuti Bersama" : "Libur Nasional"}: ${holiday.name}`}
+                                    >
+                                        {holiday.name}
+                                    </div>
+                                ))}
                                 {items.slice(0, 2).map((a) => (
                                     <div
                                         key={a.id}

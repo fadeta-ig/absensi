@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useGlobalHolidays } from "@/hooks/useGlobalHolidays";
 import { toDateString } from "@/lib/utils";
 import type { IndonesianHoliday } from "@/lib/services/holidayService";
 import {
@@ -51,9 +52,6 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
-    const [isLoadingHolidays, setIsLoadingHolidays] = useState(true);
-    const [holidayError, setHolidayError] = useState("");
     const [birthdays, setBirthdays] = useState<EmployeeBirthday[]>([]);
     const [isLoadingBirthdays, setIsLoadingBirthdays] = useState(true);
     const [birthdayError, setBirthdayError] = useState("");
@@ -63,40 +61,7 @@ export default function LeaveCalendar({ leaves }: LeaveCalendarProps) {
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
-
-    useEffect(() => {
-        const controller = new AbortController();
-
-        async function fetchHolidays() {
-            setIsLoadingHolidays(true);
-            setHolidayError("");
-
-            try {
-                const response = await fetch(`/api/holidays?year=${year}`, {
-                    signal: controller.signal,
-                });
-                if (!response.ok) {
-                    throw new Error(await getResponseErrorMessage(response, "Data hari libur nasional tidak dapat dimuat."));
-                }
-
-                const result: unknown = await response.json();
-                const data = result && typeof result === "object" && Array.isArray((result as { data?: unknown }).data)
-                    ? (result as { data: IndonesianHoliday[] }).data
-                    : [];
-                setHolidays(data);
-            } catch (error) {
-                if (controller.signal.aborted) return;
-                reportClientError("LeaveCalendar", "Gagal memuat hari libur nasional", error, { year });
-                setHolidays([]);
-                setHolidayError(error instanceof Error ? error.message : "Data hari libur nasional tidak dapat dimuat.");
-            } finally {
-                if (!controller.signal.aborted) setIsLoadingHolidays(false);
-            }
-        }
-
-        void fetchHolidays();
-        return () => controller.abort();
-    }, [year]);
+    const { holidays, isLoading: isLoadingHolidays, error: holidayError } = useGlobalHolidays(year);
 
     useEffect(() => {
         const controller = new AbortController();

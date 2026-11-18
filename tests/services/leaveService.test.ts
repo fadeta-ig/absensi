@@ -303,4 +303,61 @@ describe("Leave Service - authoritative balance, dual-reader mapper & batch disc
             )
         ).rejects.toBeInstanceOf(LeaveValidationError);
     });
+
+    it("rejects createLeaveRequestsBatch on national holidays (kalender global)", async () => {
+        mocks.leaveFindFirst.mockResolvedValue(null);
+        mocks.resolveShiftsForRange.mockResolvedValue([
+            { date: "2026-08-17", shift: null },
+            { date: "2026-08-18", shift: null },
+        ]);
+
+        await expect(
+            createLeaveRequestsBatch(
+                {
+                    employeeId: "EMP001",
+                    type: "annual",
+                    dates: ["2026-08-17", "2026-08-18"],
+                    reason: "Liburan",
+                    status: "pending",
+                    anchorDate: "2026-08-17",
+                },
+                { todayWib: "2026-08-10" }
+            )
+        ).rejects.toThrow(/2026-08-17.*libur nasional\/cuti bersama/);
+    });
+
+    it("allows Bali regional days (not national holidays) in createLeaveRequestsBatch", async () => {
+        mocks.leaveFindFirst.mockResolvedValue(null);
+        // Single date -> countWorkingDaysForEmployee path.
+        mocks.countWorkingDaysForEmployee.mockResolvedValue(1);
+        mocks.employeeFindUnique.mockResolvedValue({ totalLeave: 12, usedLeave: 0 });
+        mocks.leaveFindMany.mockResolvedValue([]);
+        mocks.leaveCreate.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+            id: "lr-bali",
+            employeeId: "EMP001",
+            type: "annual",
+            startDate: new Date("2026-06-17T00:00:00.000Z"),
+            endDate: new Date("2026-06-17T00:00:00.000Z"),
+            reason: "Galungan di kampung",
+            status: "pending",
+            attachment: null,
+            createdAt: new Date("2026-06-10T00:00:00.000Z"),
+            ...args.data,
+        }));
+
+        const created = await createLeaveRequestsBatch(
+            {
+                employeeId: "EMP001",
+                type: "annual",
+                dates: ["2026-06-17"],
+                reason: "Galungan di kampung",
+                status: "pending",
+                anchorDate: "2026-06-17",
+            },
+            { todayWib: "2026-06-10" }
+        );
+
+        expect(created).toHaveLength(1);
+        expect(created[0].startDate).toBe("2026-06-17");
+    });
 });

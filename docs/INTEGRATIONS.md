@@ -44,6 +44,15 @@ Dokumen ini mendokumentasikan integrasi layanan eksternal, layanan internal, mek
 - **Failure Considerations**:
   - Jika reverse proxy Nginx di depan aplikasi salah mengonfigurasi header `x-forwarded-for`, IP klien dapat terbaca sebagai `127.0.0.1` atau IP internal docker, sehingga menyebabkan presensi ditolak.
 
+### D. Sumber Data Libur Nasional (kalenderbali.com via api-harilibur, vendored)
+- **Tujuan**: Satu sumber kalender libur global (nasional + cuti bersama) yang di-reuse seluruh kalender WITS (`LeaveCalendar`, grid cuti employee, grid meeting, blocker pengajuan cuti).
+- **Logika asal** (repo komunitas `tmp/api-harilibur`, tidak ikut di-commit — `tmp/` ter-ignore): scrape `https://kalenderbali.com?bl={1..12}&th={tahun}`, parse `div.waralist[1]`, item merah (`color:#FF0000`) = libur nasional, item biasa ber-keyword Galungan/Kuningan/Siwa Ratri/Saraswati = hari Bali (`is_national_holiday: false`).
+- **Bentuk di WITS**: file mentah disalin byte-identik ke `data/holidays/{tahun}.json` (1995, 2015–2028); normalisasi + filter berjalan di service saat load (`normalizeKalenderBaliPayload`: zero-pad tanggal, buang `is_national_holiday: false`/Bali, klasifikasi `joint-leave` via `/cuti bersama/i`, dedupe, sort ascending).
+- **Runtime**: `getGlobalHolidays(tahun, bulan?)` — primer vendored (cache memori 6 jam), fallback best-effort ke `https://api-hari-libur.vercel.app/api?year=` bila file lokal absen (timeout 8 detik; gagal → `[]`, bukan error). Diekspos via `GET /api/calendar/holidays` (auth apa pun, tanpa gate HR) dan hook `useGlobalHolidays`.
+- **Freshness**: tiap awal tahun tarik ulang JSON upstream ke `data/holidays/` (contoh: `curl -fsSL "https://api-hari-libur.vercel.app/api?year=2027" -o data/holidays/2027.json`, lalu validasi array JSON non-kosong); dijalankan manual.
+- **Failure Considerations**:
+  - File tahun belum ada + upstream mati → endpoint mengembalikan `data: []` dengan `source: "upstream"`; blocker cuti menjadi no-op (fail-open) agar pengajuan tidak macet total, dan grid menampilkan tanpa penanda libur.
+
 ---
 
 ## 2. Internal Services & API Boundaries

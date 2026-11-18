@@ -279,4 +279,12 @@ Dokumen ini mencatat keputusan arsitektural penting (Architectural Decision Reco
 - **Consequences**:
   - Positif: Satu definisi "pengelola meeting" untuk ketiga peran; tidak ada lagi 403 untuk PIC yang sah; verifikasi tetap terkunci pada pemberi (model verifikator tidak melemah).
   - Negatif: Peran non-assigner kini bisa mengubah task orang lain dalam meetingnya — disengaja per permintaan pemilik; audit `revision` mencatat aktornya.
-  - Status: live lokal 2026-11-10 (service + UI + test peran + suite hijau + `tsc` bersih).
+## ADR-022: Kalender Libur Global Vendored (kalenderbali.com) + Blocker Cuti Nasional
+
+- **Decision**: (1) Satu sumber kalender libur global: file JSON kalenderbali.com di-vendor ke `data/holidays/` (primer) + fallback best-effort ke upstream bila tahun belum ada; normalisasi di service (`normalizeKalenderBaliPayload`: zero-pad, buang hari Bali `is_national_holiday: false`, `joint-leave` via `/cuti bersama/i`); endpoint `GET /api/calendar/holidays` (auth apa pun, tanpa gate HR) + hook `useGlobalHolidays` dipakai ulang semua grid kalender. (2) Libur nasional/cuti bersama menjadi blocker pengajuan `annual`/`sick`/`personal` (server tolak + UX disable); `maternity`/`paternity` dikecualikan (hitungan hari kalender regulasi); meeting/presensi tidak diblokir.
+- **Context**: Permintaan pemilik: ambil logic data API kalenderbali.com dan terapkan ke seluruh kalender WITS secara global dan reusable. Data kalenderbali tidak memuat cuti bersama (nol baris di semua tahun) dan tanggalnya tak selalu zero-padded; repo komunitas hanya referensi (`tmp/` ter-ignore, tidak di-commit).
+- **Chosen Approach**: Vendored deterministik (tanpa scrape runtime yang rapuh terhadap selector `div.waralist[1]`), sync tahunan manual via curl ke `data/holidays/`; perluasan `holidayService.ts` tanpa mengubah kontrak lama; endpoint baru agar kontrak HR-gated `/api/holidays` tidak berubah diam-diam.
+- **Consequences**:
+  - Positif: Satu kebenaran libur untuk semua kalender; tidak ada fetch eksternal di path baca panas (cache memori); cuti tidak lagi bisa diajukan di hari libur resmi.
+  - Negatif: Data vendored bisa basi bila sync tahunan lupa dijalankan — fallback upstream + `source` di respons membuatnya terlihat; tahun tak dikenal + upstream mati = fail-open (`[]`).
+  - Status: live lokal 2026-11-18 (service + endpoint + hook + UI + blocker + test + suite hijau + `tsc` bersih).

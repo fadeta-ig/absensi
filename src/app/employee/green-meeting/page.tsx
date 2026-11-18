@@ -27,6 +27,7 @@ import {
     TableCell,
 } from "@/components/ui/table";
 import { addCalendarDays, toWIBDateString } from "@/lib/timezone";
+import NationalHolidayBadge from "@/components/calendar/NationalHolidayBadge";
 import { reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmptyState from "@/components/ui/EmptyState";
@@ -325,6 +326,7 @@ export default function EmployeeGreenMeetingPage() {
                         <span className="truncate">{offDayInfo.reason || "Hari Libur Rutin / Libur Nasional"}</span>
                     </div>
                 )}
+                <NationalHolidayBadge dateKey={currentDateStr} className="w-full justify-center py-2" />
 
                 {/* Meeting Metadata Strip: 3-column micro card layout */}
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1 border-t border-[color-mix(in_srgb,var(--border)_60%,transparent)] text-xs min-w-0">

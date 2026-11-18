@@ -119,6 +119,7 @@ hriswig/
   - `src/app/ga/equipment/settings/page.tsx`: Pengaturan template/unit alat produksi, anggota QC, dan top viewers.
   - `src/app/ga/equipment/recap/page.tsx`: Rekap inspeksi alat produksi.
   - `src/components/equipment/`: Komponen bersama inspeksi alat (`EquipmentStatusBadge`, `EquipmentSearchField`, `EquipmentEvidencePanel`, `EmployeeSearchPicker`).
+  - `src/components/calendar/`: `NationalHolidayBadge` (penanda "Tanggal Merah" global, dipakai header/session Green Meeting) + hook `src/hooks/useGlobalHolidays.ts` (fetch cache `/api/calendar/holidays`).
 
 ### D. Portal Inspeksi Harian (`src/app/cleaning/`)
 - **Purpose**: Portal operasional terbatas untuk petugas inspeksi.
@@ -168,6 +169,7 @@ hriswig/
   - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
   - `equipmentService.ts`: Domain service inspeksi alat produksi: template/unit, lifecycle inspeksi + submit, evidence foto (operator & QC), anggota QC, top viewers, capabilities, approvals, dan rekap.
   - `greetingSettingsService.ts`: CRUD `GreetingRule`, `AppSetting` `greeting.editorEmployeeId`, cache 60 detik, validasi aturan, dan guard WIG002/editor aktif.
+  - `holidayService.ts`: Kalender libur global (logic kalenderbali.com) — normalisasi payload nasional/cuti bersama, loader vendored `data/holidays/` + fallback upstream, cache memori, `findHolidaysInDates` untuk blocker cuti.
 
 ---
 

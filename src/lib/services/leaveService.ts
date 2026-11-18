@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { LeaveDateRangeError, validateLeaveDateRange } from "@/lib/services/leaveDateRange";
+import { findHolidaysInDates } from "@/lib/services/holidayService";
 import { assertAllowedFile } from "@/lib/fileMagic";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
 import { toDateString } from "@/lib/utils";
@@ -488,6 +489,35 @@ async function assertAllDatesAreWorkingDays(
     }
 }
 
+/** Expand rentang inklusif menjadi daftar YYYY-MM-DD (rentang sudah tervalidasi ≤366 hari). */
+function expandDateRange(startDate: string, endDate: string): string[] {
+    const out: string[] = [];
+    let current = startDate;
+    while (current <= endDate) {
+        out.push(current);
+        if (current === endDate) break;
+        current = addCalendarDays(current, 1);
+    }
+    return out;
+}
+
+/**
+ * Blocker libur nasional/cuti bersama (kalender global, logic kalenderbali.com):
+ * tolak tanggal cuti yang jatuh pada hari libur resmi. Berlaku untuk
+ * annual/sick/personal; maternity/paternity dikecualikan karena dihitung
+ * hari kalender menurut regulasi (90 hari / 3 hari inklusif hari libur).
+ */
+async function assertNoNationalHoliday(dateKeys: string[]): Promise<void> {
+    if (dateKeys.length === 0) return;
+    const hits = await findHolidaysInDates(dateKeys);
+    if (hits.length > 0) {
+        const labels = hits.map((holiday) => `${holiday.date} (${holiday.name})`);
+        throw new LeaveValidationError(
+            `Tanggal ${labels.join(", ")} adalah libur nasional/cuti bersama dan tidak dapat diajukan cuti.`
+        );
+    }
+}
+
 async function cleanupSavedAttachment(filename: string | null | undefined): Promise<void> {
     if (!filename) return;
     const target = resolveLeaveAttachmentPath(filename);
@@ -501,6 +531,10 @@ export async function createLeaveRequest(data: Omit<LeaveRequest, "id">, opts?: 
     assertSupportedLeaveRange(startDate, endDate);
 
     await assertNoOverlappingLeave(data.employeeId, startDate, endDate);
+
+    if (data.type === "annual" || data.type === "sick" || data.type === "personal") {
+        await assertNoNationalHoliday(expandDateRange(startDate, endDate));
+    }
 
     const { countWorkingDaysForEmployee } = await import("@/lib/services/shiftAssignmentService");
     const requestedDays = await countWorkingDaysForEmployee(
@@ -631,6 +665,7 @@ export async function createLeaveRequestsBatch(
 
     await assertNoOverlappingLeaveForDates(data.employeeId, normalizedDates);
     await assertAllDatesAreWorkingDays(data.employeeId, normalizedDates);
+    await assertNoNationalHoliday(normalizedDates);
 
     if (data.type === "annual") {
         const balance = await getEmployeeLeaveBalance(data.employeeId);
@@ -716,6 +751,9 @@ export async function updateLeaveRequest(id: string, data: Partial<LeaveRequest>
     const isDateChanged = startDate !== existingStartDate || endDate !== existingEndDate;
     if (isDateChanged && (data.status ?? existing.status) !== "rejected") {
         await assertNoOverlappingLeave(existing.employeeId, startDate, endDate, id);
+        if (existing.type === "annual" || existing.type === "sick" || existing.type === "personal") {
+            await assertNoNationalHoliday(expandDateRange(startDate, endDate));
+        }
     }
 
     // Balance Recalculation Logic

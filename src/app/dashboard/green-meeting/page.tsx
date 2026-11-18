@@ -30,6 +30,7 @@ import {
     TableCell,
 } from "@/components/ui/table";
 import { toWIBDateString, addCalendarDays } from "@/lib/timezone";
+import NationalHolidayBadge from "@/components/calendar/NationalHolidayBadge";
 import { exportToExcel, exportToPdfTable } from "@/lib/export";
 import { reportClientError } from "@/lib/clientErrors";
 import {
@@ -340,6 +341,7 @@ export default function HrGreenMeetingMonitoringPage() {
                                     {offDayInfo.reason || "Hari Libur"}
                                 </span>
                             )}
+                            <NationalHolidayBadge dateKey={currentDateStr} />
                         </div>
                         <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 text-foreground">
                             Pemantauan Rapat Koordinasi Harian

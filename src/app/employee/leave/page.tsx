@@ -13,6 +13,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatDisplayDate, formatIndonesianDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useGlobalHolidays } from "@/hooks/useGlobalHolidays";
 
 interface LeaveRequest {
     id: string;
@@ -137,6 +138,9 @@ export default function LeavePage() {
     const [attachmentName, setAttachmentName] = useState("");
     const [selectedDates, setSelectedDates] = useState<string[]>([]);
     const [monthCursor, setMonthCursor] = useState<MonthCursor>(() => monthCursorOf(addDaysKey(getWIBTodayKey(), 1)));
+    // Kalender global (nasional + cuti bersama): disable tanggal libur resmi di grid.
+    // Diambil per tahun kalender yang sedang dilihat; cache hook dipakai ulang semua kalender.
+    const { holidaysByDate } = useGlobalHolidays(showForm ? monthCursor.y : null);
     const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
     const [scheduleLoading, setScheduleLoading] = useState(false);
     const [scheduleError, setScheduleError] = useState("");
@@ -340,7 +344,9 @@ export default function LeavePage() {
 
     const renderDayCell = (dateKey: string) => {
         const occupied = occupiedSet.has(dateKey);
-        const off = isDateOff(dateKey);
+        // Libur nasional/cuti bersama (kalender global) diperlakukan seperti libur jadwal.
+        const nationalHoliday = holidaysByDate.get(dateKey)?.[0] ?? null;
+        const off = isDateOff(dateKey) || nationalHoliday !== null;
         const outOfAnchor = isAnnualForm && annualAnchor !== null && annualAnchorEnd !== null &&
             (dateKey < annualAnchor || dateKey > annualAnchorEnd);
         const past = isAnnualForm && dateKey <= wibToday;
@@ -355,11 +361,13 @@ export default function LeavePage() {
                 disabled={disabled}
                 aria-pressed={selected}
                 onClick={() => toggleDate(dateKey)}
-                title={occupied ? `${formatIndonesianDate(dateKey)} — sudah diajukan` : off ? `${formatIndonesianDate(dateKey)} — libur jadwal` : past ? `${formatIndonesianDate(dateKey)} — sudah lewat` : outOfAnchor ? `${formatIndonesianDate(dateKey)} — di luar 30 hari dari tanggal pertama` : formatIndonesianDate(dateKey)}
+                title={nationalHoliday ? `${formatIndonesianDate(dateKey)} — libur nasional/cuti bersama: ${nationalHoliday.name}` : occupied ? `${formatIndonesianDate(dateKey)} — sudah diajukan` : off ? `${formatIndonesianDate(dateKey)} — libur jadwal` : past ? `${formatIndonesianDate(dateKey)} — sudah lewat` : outOfAnchor ? `${formatIndonesianDate(dateKey)} — di luar 30 hari dari tanggal pertama` : formatIndonesianDate(dateKey)}
                 className={`relative rounded-xl border p-2 text-center transition-colors ${
                     selected
                         ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[var(--primary)] font-bold"
-                        : occupied
+                        : nationalHoliday
+                          ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200 cursor-not-allowed"
+                          : occupied
                           ? "border-dashed border-[var(--border)] bg-[var(--secondary)] text-[var(--text-muted)] opacity-70 cursor-not-allowed"
                           : disabled
                             ? "border-[var(--border)] bg-[var(--muted)] text-[var(--text-muted)] opacity-50 cursor-not-allowed"
@@ -374,7 +382,7 @@ export default function LeavePage() {
                 <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)] font-semibold" : "text-[var(--text-muted)]"}`}>
                     {weekday}
                 </span>
-                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-[var(--primary)] font-extrabold" : "font-semibold"}`}>
+                <span className={`block text-base leading-tight my-0.5 ${selected ? "text-[var(--primary)] font-extrabold" : nationalHoliday ? "font-extrabold text-red-700 dark:text-red-300" : "font-semibold"}`}>
                     {dayNum}
                 </span>
                 <span className={`block text-[10px] ${selected ? "text-[color-mix(in_srgb,var(--primary)_70%,transparent)]" : "text-[var(--text-muted)]"}`}>

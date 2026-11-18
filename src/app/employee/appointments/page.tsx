@@ -14,6 +14,7 @@ import AppointmentCalendar, { type CalendarAppointment } from "@/components/appo
 import AppointmentFormModal from "@/components/appointments/AppointmentFormModal";
 import { AppointmentStatusBadge } from "@/components/appointments/AppointmentBadges";
 import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointments, participantDisplayName, requesterDisplayName, type AppointmentListItem } from "@/components/appointments/useAppointments";
+import { useGlobalHolidays } from "@/hooks/useGlobalHolidays";
 import { toDateString, formatIndonesianDate } from "@/lib/utils";
 import { formatWIBDateTime, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
 
@@ -39,6 +40,8 @@ export default function EmployeeAppointmentsPage() {
         const [y, m] = toWIBDateString(new Date()).split("-").map(Number);
         return { year: y, month: m - 1 };
     });
+    // Kalender global: penanda libur nasional/cuti bersama di grid bulanan.
+    const { holidaysByDate } = useGlobalHolidays(view === "month" ? month.year : null);
     const [items, setItems] = useState<AppointmentListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -659,6 +662,7 @@ export default function EmployeeAppointmentsPage() {
                 <AppointmentCalendar
                     appointmentsByDate={appointmentsByDate}
                     selectedDate={selectedDate}
+                    holidaysByDate={holidaysByDate}
                     onMonthChange={(y, m) => setMonth({ year: y, month: m })}
                     onSelectDate={(d) => {
                         router.push(`/employee/appointments/${d}`);
