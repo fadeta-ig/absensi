@@ -393,7 +393,7 @@ export default function AllMenusSheet({
                 <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
                     <div>
                         <h2 className="text-base font-extrabold tracking-tight text-[var(--text-primary)]">
-                            Menu Presensi & Layanan WITS
+                            Menu & Layanan WITS
                         </h2>
                         <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
                             Daftar lengkap seluruh fitur portal karyawan
