@@ -353,7 +353,7 @@ export default function AttendanceHistoryPage() {
                             <select
                                 value={selectedMonth}
                                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                                className="form-select !py-1.5 !text-sm w-auto"
+                                className="form-select !py-1.5 !pr-8 !text-sm w-auto"
                             >
                                 {MONTHS.map((m, i) => (
                                     <option key={i} value={i}>{m}</option>
@@ -362,7 +362,7 @@ export default function AttendanceHistoryPage() {
                             <select
                                 value={selectedYear}
                                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                                className="form-select !py-1.5 !text-sm w-auto"
+                                className="form-select !py-1.5 !pr-8 !text-sm w-auto"
                             >
                                 {availableYears.map((y) => (
                                     <option key={y} value={y}>{y}</option>
@@ -373,7 +373,7 @@ export default function AttendanceHistoryPage() {
                         <select
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
-                            className="form-select !py-1.5 !text-sm w-auto"
+                            className="form-select !py-1.5 !pr-8 !text-sm w-auto"
                         >
                             {availableYears.map((y) => (
                                 <option key={y} value={y}>{y}</option>

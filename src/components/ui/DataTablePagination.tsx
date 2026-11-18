@@ -85,7 +85,7 @@ export default function DataTablePagination({
                         <select
                             value={pageSize}
                             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                            className="form-select !py-1 !px-2 !text-xs !h-8 bg-[var(--secondary)] border-[var(--border)] rounded-md font-medium text-[var(--text-primary)] cursor-pointer"
+                            className="form-select !py-1 !pl-2 !pr-8 !text-xs !h-8 bg-[var(--secondary)] border-[var(--border)] rounded-md font-medium text-[var(--text-primary)] cursor-pointer"
                         >
                             {pageSizeOptions.map((opt) => (
                                 <option key={opt} value={opt}>

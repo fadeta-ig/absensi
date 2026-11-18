@@ -34,7 +34,6 @@ export default function EmployeeHomePage() {
     } | null>(null);
     const [news, setNews] = useState<NewsItem[]>([]);
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-    const [leaveBalance, setLeaveBalance] = useState({ total: 0, used: 0 });
     const [cleaningCaps, setCleaningCaps] = useState<{ isReviewer: boolean; isTopViewer: boolean } | null>(null);
     const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean; canApprove: boolean } | null>(null);
     const [canMonitorMeeting, setCanMonitorMeeting] = useState<boolean | null>(null);
@@ -116,9 +115,6 @@ export default function EmployeeHomePage() {
                     setGreetingRules([]);
                     setCanEditGreeting(false);
                 }
-                if (userData?.totalLeave !== undefined && userData?.usedLeave !== undefined) {
-                    setLeaveBalance({ total: userData.totalLeave, used: userData.usedLeave });
-                }
                 setNews(Array.isArray(newsData) ? newsData : []);
                 setAttendance(Array.isArray(attendanceData) ? attendanceData : []);
             } catch (err) {
@@ -155,39 +151,38 @@ export default function EmployeeHomePage() {
         ? resolveGreetingForMoment(greetingRules, greetingMoment)
         : FALLBACK_GREETING;
 
-    const presentTotal = attendance.filter(a => a.status === "present" || a.status === "late").length;
-    const remainingLeave = leaveBalance.total - leaveBalance.used;
-
     return (
         <div className="space-y-5">
             
             {/* ─── Header ──────────────────────────────────────── */}
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
+            <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                     {user?.avatarUrl ? (
-                        <img src={user.avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover border-2 border-[var(--card)] ring-1 ring-[var(--border)]" />
+                        <img src={user.avatarUrl} alt="Avatar" className="w-12 h-12 rounded-full object-cover border-2 border-[var(--card)] ring-1 ring-[var(--border)] shrink-0" />
                     ) : (
-                        <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-lg font-bold border-2 border-[var(--card)] ring-1 ring-[var(--border)]">
+                        <div className="w-12 h-12 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-lg font-bold border-2 border-[var(--card)] ring-1 ring-[var(--border)] shrink-0">
                             {user?.name?.charAt(0).toUpperCase() ?? "U"}
                         </div>
                     )}
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-0.5">
-                            {serverContext.displayWibDate
-                                ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long" }).format(new Date(`${serverContext.displayWibDate}T00:00:00+07:00`))
-                                : "Menunggu waktu server"}
-                        </p>
-                        <h1 className="text-xl font-extrabold tracking-tight text-[var(--text-primary)] leading-none">
-                            {stripGelar(user?.name)?.split(" ")[0] || "Sobat"}
+                    <div className="min-w-0">
+                        <h1 className="text-base font-extrabold tracking-tight text-[var(--text-primary)] leading-tight truncate">
+                            {stripGelar(user?.name) || "Sobat"}
                         </h1>
-                        <p className="text-[10px] font-semibold text-[var(--text-secondary)] mt-0.5 leading-tight">
-                            {user?.positionRel?.name ?? "Karyawan"} – {user?.departmentRel?.name ?? "Department"}
+                        <p className="text-[11px] font-semibold text-[var(--text-secondary)] leading-tight truncate">
+                            {user?.positionRel?.name ?? "Karyawan"}
                         </p>
                     </div>
                 </div>
-                <span className="text-lg font-bold font-mono tracking-tighter text-[var(--text-primary)] pt-0.5">
-                    {serverContext.displayWibTime?.slice(0, 5) ?? "--:--"} WIB
-                </span>
+                <div className="text-right shrink-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] leading-tight">
+                        {serverContext.displayWibDate
+                            ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long" }).format(new Date(`${serverContext.displayWibDate}T00:00:00+07:00`))
+                            : "Menunggu waktu server"}
+                    </p>
+                    <p className="text-lg font-bold font-mono tracking-tighter text-[var(--text-primary)] leading-tight mt-0.5">
+                        {serverContext.displayWibTime?.slice(0, 5) ?? "--:--"} WIB
+                    </p>
+                </div>
             </div>
 
             <PushNotificationManager />
@@ -215,17 +210,14 @@ export default function EmployeeHomePage() {
             )}
 
             {/* ─── Greeting ────────────────────────────────────── */}
-            <div className="emp-surface px-5 py-4">
-                <h2 className="text-sm font-bold text-[var(--text-primary)]">
-                    {activeGreeting.greeting}{" "}
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed mt-1.5">{activeGreeting.subGreeting}</p>
-                {attendanceDate && (
-                    <p className="text-[10px] text-[var(--text-muted)] mt-2">
-                        Presensi shift {attendanceDate}: {todayRecord ? getStatusLabel(todayRecord.status) : "Belum tercatat"}
-                    </p>
-                )}
-            </div>
+            <figure className="border-l-2 border-[var(--primary)] pl-3 py-0.5">
+                <blockquote className="text-[13px] font-semibold italic leading-snug text-[var(--text-primary)]">
+                    {activeGreeting.greeting}
+                </blockquote>
+                <figcaption className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed">
+                    {activeGreeting.subGreeting}
+                </figcaption>
+            </figure>
 
             {/* ─── Quick Actions ───────────────────────────────── */}
             <div className="grid grid-cols-4 gap-y-4 gap-x-2">
@@ -234,10 +226,8 @@ export default function EmployeeHomePage() {
                     { href: "/employee/payslip", icon: Receipt, label: "Slip Gaji", bg: "bg-amber-50 dark:bg-amber-950/40", color: "text-amber-600 dark:text-amber-400" },
                     { href: "/employee/overtime", icon: Clock, label: "Lembur", bg: "bg-sky-50 dark:bg-sky-950/40", color: "text-sky-600 dark:text-sky-400" },
                     { href: "/employee/visits", icon: LayoutDashboard, label: "Kunjungan", bg: "bg-indigo-50 dark:bg-indigo-950/40", color: "text-indigo-600 dark:text-indigo-400" },
-                    { href: "/employee/attendance/correction", icon: ClipboardList, label: "Koreksi", bg: "bg-teal-50 dark:bg-teal-950/40", color: "text-teal-600 dark:text-teal-400" },
                     { href: "/employee/todos", icon: LogIn, label: "To-Do", bg: "bg-violet-50 dark:bg-violet-950/40", color: "text-violet-600 dark:text-violet-400" },
                     { href: "/employee/documents", icon: Newspaper, label: "Dokumen", bg: "bg-orange-50 dark:bg-orange-950/40", color: "text-orange-600 dark:text-orange-400" },
-                    { href: "/employee/attendance-history", icon: TrendingUp, label: "Riwayat", bg: "bg-emerald-50 dark:bg-emerald-950/40", color: "text-emerald-600 dark:text-emerald-400" },
                     { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting", bg: "bg-cyan-50 dark:bg-cyan-950/40", color: "text-cyan-600 dark:text-cyan-400" },
                     { href: "/employee/my-tasks", icon: ListChecks, label: "Tugas Saya", bg: "bg-teal-50 dark:bg-teal-950/40", color: "text-teal-600 dark:text-teal-400" },
                 ].map((item, i) => (
@@ -264,7 +254,7 @@ export default function EmployeeHomePage() {
                     </div>
                     <div className="text-left">
                         <span className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors block leading-tight">
-                            Buka Menu Presensi
+                            Buka Menu Lainnya
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)] block mt-0.5 leading-tight">
                             Akses seluruh menu & layanan WITS
@@ -272,37 +262,9 @@ export default function EmployeeHomePage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] px-2 py-0.5 rounded-full">
-                        15 Layanan
-                    </span>
                     <ChevronDown className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
                 </div>
             </button>
-
-            {/* ─── Stats Row (Compact) ─────────────────────────── */}
-            <div className="grid grid-cols-2 gap-3">
-                {/* Total Kehadiran */}
-                <div className="flex items-center gap-3 emp-surface px-4 py-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0">
-                        <TrendingUp className="w-[18px] h-[18px] text-emerald-600 stroke-[2]" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{loadingData ? "..." : presentTotal}</p>
-                        <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Total Kehadiran</p>
-                    </div>
-                </div>
-
-                {/* Sisa Cuti */}
-                <div className="flex items-center gap-3 emp-surface px-4 py-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
-                        <CalendarOff className="w-[18px] h-[18px] text-amber-600 stroke-[2]" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xl font-extrabold text-[var(--text-primary)] leading-none">{loadingData ? "..." : remainingLeave}</p>
-                        <p className="text-[10px] font-semibold text-[var(--text-muted)] mt-0.5 truncate">Sisa Hari Cuti</p>
-                    </div>
-                </div>
-            </div>
 
             {/* ─── Informasi / Pengumuman ──────────────────────── */}
             <div className="emp-surface overflow-hidden">
@@ -331,7 +293,7 @@ export default function EmployeeHomePage() {
                     </div>
                 ) : (
                     <div className="flex flex-col">
-                        {news.slice(0, 3).map((item, index) => (
+                        {news.slice(0, 6).map((item, index) => (
                             <div key={item.id}>
                                 <Link href={`/employee/news?id=${item.id}`} className="block px-4 py-3.5 hover:bg-[color-mix(in_srgb,var(--secondary)_60%,transparent)] transition-colors">
                                     <div className="flex gap-3 items-center">

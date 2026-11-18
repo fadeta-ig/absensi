@@ -801,7 +801,7 @@ export default function BirthdayManagementPage() {
                                                     <select
                                                         value={emp.preparation?.statusId || ""}
                                                         onChange={(e) => handleQuickStatusChange(emp, e.target.value)}
-                                                        className="form-select text-xs py-1 px-2.5 w-auto max-w-[160px]"
+                                                        className="form-select text-xs py-1 pl-2.5 pr-8 w-auto max-w-[160px]"
                                                     >
                                                         <option value="">Belum Diproses</option>
                                                         {statuses.map((st) => (

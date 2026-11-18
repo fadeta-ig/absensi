@@ -519,7 +519,7 @@ export default function ShiftRosterPage() {
                 </div>
                 <select
                     id="roster-filter-dept"
-                    className="form-select !w-auto text-xs"
+                    className="form-select !w-auto !pr-8 text-xs"
                     aria-label="Filter berdasarkan departemen"
                     value={filterDepartment}
                     disabled={controlsDisabled}
@@ -534,7 +534,7 @@ export default function ShiftRosterPage() {
                 </select>
                 <select
                     id="roster-filter-origin"
-                    className="form-select !w-auto text-xs"
+                    className="form-select !w-auto !pr-8 text-xs"
                     aria-label="Filter berdasarkan sumber jadwal"
                     value={filterOrigin}
                     disabled={controlsDisabled}
