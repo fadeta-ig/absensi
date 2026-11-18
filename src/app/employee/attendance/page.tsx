@@ -2,9 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect, memo } from "react";
 import {
-    Camera, MapPin, Clock, CheckCircle2, AlertCircle, Loader2,
+    Camera, Clock, CheckCircle2, AlertCircle, Loader2,
     Wifi, WifiOff, FlipHorizontal, RotateCcw, SwitchCamera,
-    ArrowRight, VideoOff, RefreshCw, CalendarClock
+    ArrowRight, VideoOff, RefreshCw, CalendarClock, MapPin
 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
@@ -71,7 +71,7 @@ const HudClock = memo(function HudClock({ serverWibNow }: { serverWibNow?: strin
     }, [formatLiveTime, serverMs]);
     if (!time) return null;
     return (
-        <span className="text-[11px] font-medium text-white/90 flex items-center gap-1">
+        <span className="text-[11px] font-medium text-white/90 flex items-center gap-1 tabular-nums">
             <Clock className="w-3 h-3 text-white/60" />
             {time} WIB
         </span>
@@ -147,7 +147,7 @@ export default function AttendancePage() {
         } finally {
             setIsGpsChecking(false);
         }
-    }, []);
+    }, []); 
 
     // ── 3. Stop Active Camera Stream ──
     const stopCamera = useCallback(() => {
@@ -472,7 +472,7 @@ export default function AttendancePage() {
     const hasGpsBlocker = !isGpsChecking && !isGpsOk;
 
     return (
-        <div className="w-full max-w-md mx-auto space-y-5 animate-[fadeIn_0.25s_ease]">
+        <div className="w-full max-w-md mx-auto space-y-5">
             <h1 className="sr-only">Presensi Kehadiran</h1>
             {(!serverContext.isFresh || !serverContext.isOnline) && (
                 <FeedbackMessage variant="warning" compact>
@@ -539,25 +539,92 @@ export default function AttendancePage() {
             ) : (
                 /* ── Layar Utama Presensi (Kamera Bersih, Tanpa Biometrik Palsu, Satu Layar Penuh) ── */
                 <div className="space-y-2.5">
-                    <div className="emp-surface px-4 py-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)]">Tanggal Shift</p>
-                            <p className="text-sm font-bold text-[var(--text-primary)]">{serverContext.context?.shiftDate ?? "Menunggu server..."}</p>
-                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                                {serverContext.context?.shiftName ?? "Jadwal kerja"}
-                                {serverContext.context?.todaySchedule
-                                    ? ` · ${serverContext.context.todaySchedule.startTime}-${serverContext.context.todaySchedule.endTime} WIB`
-                                    : " · Jadwal tidak tersedia"}
-                            </p>
-                        </div>
-                        {serverContext.context?.isOvernight && (
-                            <span className="shrink-0 rounded-full bg-[var(--info-bg)] border border-[var(--info-border)] px-2.5 py-1 text-[10px] font-bold text-[var(--info)]">
-                                Lintas Hari H+1
-                            </span>
-                        )}
-                    </div>
+                    {/* ── Info validasi di atas viewfinder agar terbaca lebih dulu ── */}
+                    {isClockIn && isOffDay && (
+                        <div className="rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-2xl bg-[color-mix(in_srgb,var(--warning-border)_60%,transparent)] text-[var(--warning)] shrink-0">
+                                    <CalendarClock className="w-5 h-5" />
+                                </div>
+                                <div className="space-y-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="text-xs font-bold text-[var(--text-primary)]">Jadwal Hari Libur</h3>
+                                        {networkInfo?.shiftName && (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--warning-border)] text-[var(--warning)]">
+                                                {networkInfo.shiftName}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                        Anda terdeteksi masuk di luar jadwal kerja resmi. Masukkan keperluan/alasan penugasan untuk verifikasi HR.
+                                    </p>
+                                </div>
+                            </div>
 
-                    {/* Viewfinder Card */}
+                            <div className="pt-0.5">
+                                <input
+                                    type="text"
+                                    value={offDayReason}
+                                    onChange={(e) => setOffDayReason(e.target.value)}
+                                    placeholder="Contoh: Piket darurat pemeliharaan jaringan"
+                                    maxLength={500}
+                                    className="w-full px-3.5 py-2.5 rounded-2xl border border-[var(--warning-border)] bg-[var(--card)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--warning)_50%,transparent)] transition-all"
+                                />
+                                {offDayReason.length > 0 && offDayReason.trim().length < 3 && (
+                                    <p className="text-[10px] text-[var(--warning)] mt-1">
+                                        Alasan kehadiran minimal 3 karakter.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {hasNetworkBlocker && (
+                        <FeedbackMessage variant="warning" compact>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 min-w-0">
+                                    <WifiOff className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">Gunakan Wi-Fi kantor WIG untuk presensi</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => void serverContext.refresh()}
+                                    className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> Cek
+                                </button>
+                            </div>
+                        </FeedbackMessage>
+                    )}
+
+                    {!hasNetworkBlocker && hasGpsBlocker && (
+                        <FeedbackMessage variant="error" compact>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2 min-w-0">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">Lokasi GPS belum sesuai radius kantor</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={checkGpsStatus}
+                                    className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> Cek
+                                </button>
+                            </div>
+                        </FeedbackMessage>
+                    )}
+
+                    {message && status === "error" && (
+                        <FeedbackMessage variant="error" compact>
+                            <span className="flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                <span className="flex-1">{message}</span>
+                            </span>
+                        </FeedbackMessage>
+                    )}
+
+                    {/* Viewfinder Card (kamera = fitur utama, selalu paling atas) */}
                     <div className="relative w-full aspect-[3/4] sm:aspect-[4/5] rounded-3xl overflow-hidden bg-zinc-950 border border-zinc-800 shadow-2xl flex flex-col justify-between select-none">
                         
                         {/* Video Live Stream (Clean, Unobstructed) */}
@@ -601,48 +668,25 @@ export default function AttendancePage() {
                             </div>
                         )}
 
-                        {/* Fallback jika Kamera Gagal / Izin Ditolak */}
-                        {cameraError && !streaming && !photo && (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center z-20 bg-zinc-950/95">
-                                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400">
-                                    <VideoOff className="w-6 h-6" />
-                                </div>
-                                <div className="max-w-xs space-y-1">
-                                    <p className="text-sm font-bold text-white">Kamera Tidak Tersedia</p>
-                                    <p className="text-xs text-zinc-400 leading-relaxed">{cameraError}</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => void startCamera()}
-                                    className="btn btn-primary text-xs py-2.5 px-5 font-bold rounded-2xl flex items-center gap-2"
-                                >
-                                    <RefreshCw className="w-3.5 h-3.5" />
-                                    Coba Lagi
-                                </button>
-                            </div>
-                        )}
-
-                        {/* ── 1. Smart Integrated Top HUD Bar ── */}
+                        {/* ── Top HUD Bar: status aksi + jam live + ikon Wi-Fi & GPS (kaca untuk keterbacaan di atas video) ── */}
                         <div className="relative z-20 m-3 p-2 px-3 rounded-2xl bg-black/45 backdrop-blur-md border border-white/10 flex items-center justify-between shadow-lg">
-                            {/* Kiri: Action Badge (Clock In / Clock Out) & Waktu Live */}
-                            <div className="flex items-center gap-2">
-                                <span className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white shadow-sm tracking-wide ${
-                                    isClockIn && isOffDay ? "bg-amber-600" : "bg-[var(--primary)]"
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white shadow-sm tracking-wide shrink-0 ${
+                                    cameraError ? "bg-rose-600" : isClockIn && isOffDay ? "bg-amber-600" : "bg-[var(--primary)]"
                                 }`}>
-                                    {serverContext.loading && !activeMode
-                                        ? "MEMUAT"
-                                        : isClockIn
-                                            ? (isOffDay ? "CLOCK IN (HARI LIBUR)" : "CLOCK IN")
-                                            : isOffDay ? "CLOCK OUT (HARI LIBUR)" : "CLOCK OUT"}
+                                    {cameraError
+                                        ? "KAMERA ERROR"
+                                        : serverContext.loading && !activeMode
+                                            ? "MEMUAT"
+                                            : isClockIn
+                                                ? (isOffDay ? "CLOCK IN (HARI LIBUR)" : "CLOCK IN")
+                                                : isOffDay ? "CLOCK OUT (HARI LIBUR)" : "CLOCK OUT"}
                                 </span>
                                 {serverContext.context?.serverWibNow && (
                                     <HudClock key={serverContext.context.serverWibNow} serverWibNow={serverContext.context.serverWibNow} />
                                 )}
                             </div>
-
-                            {/* Kanan: Live Status Chips (Wi-Fi & GPS) */}
-                            <div className="flex items-center gap-1.5">
-                                {/* Wi-Fi Chip */}
+                            <div className="flex items-center gap-1.5 shrink-0">
                                 <div
                                     title={isNetworkOk ? "Terhubung ke jaringan resmi" : "Belum terhubung ke Wi-Fi kantor"}
                                     className={`flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-semibold border ${
@@ -662,8 +706,6 @@ export default function AttendancePage() {
                                     )}
                                     <span>{isNetworkOk ? "Wi-Fi" : "No Wi-Fi"}</span>
                                 </div>
-
-                                {/* GPS Chip */}
                                 <div
                                     title={isGpsOk ? `Akurasi GPS: ±${Math.round(gpsInfo?.accuracy || 0)}m` : "GPS di luar area"}
                                     className={`flex items-center gap-1 px-2 py-1 rounded-xl text-[10px] font-semibold border ${
@@ -686,6 +728,27 @@ export default function AttendancePage() {
                             </div>
                         </div>
 
+                        {/* ── Error kamera di badan canvas (info tetap di dalam, sesuai permintaan pemilik) ── */}
+                        {cameraError && !streaming && !photo && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center z-20 bg-zinc-950/95">
+                                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                                    <VideoOff className="w-6 h-6" />
+                                </div>
+                                <div className="max-w-xs space-y-1">
+                                    <p className="text-sm font-bold text-white">Kamera Tidak Tersedia</p>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">{cameraError}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => void startCamera()}
+                                    className="btn btn-primary text-xs py-2.5 px-5 font-bold rounded-2xl flex items-center gap-2"
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                    Coba Lagi
+                                </button>
+                            </div>
+                        )}
+
                         {/* Hidden Canvas untuk Kompresi Foto */}
                         <canvas ref={canvasRef} className="hidden" />
 
@@ -702,6 +765,7 @@ export default function AttendancePage() {
                                             disabled={isCameraLoading}
                                             className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white flex items-center justify-center backdrop-blur-md border border-white/20 shadow-md transition-all cursor-pointer"
                                             title="Putar Kamera (Depan/Belakang)"
+                                            aria-label="Putar kamera depan atau belakang"
                                         >
                                             <SwitchCamera className="w-5 h-5" />
                                         </button>
@@ -713,6 +777,7 @@ export default function AttendancePage() {
                                             disabled={!streaming}
                                             className="w-[72px] h-[72px] rounded-full border-4 border-white/90 p-1 flex items-center justify-center transition-all duration-200 active:scale-90 shadow-2xl bg-black/40 backdrop-blur-sm cursor-pointer disabled:opacity-40 group"
                                             title="Jepret Foto"
+                                            aria-label="Jepret foto presensi"
                                         >
                                             <div className="w-full h-full rounded-full bg-[var(--primary)] group-hover:brightness-110 flex items-center justify-center text-white transition-all shadow-inner">
                                                 <Camera className="w-7 h-7 drop-shadow" />
@@ -730,14 +795,11 @@ export default function AttendancePage() {
                                                     : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
                                             }`}
                                             title="Balik Cermin"
+                                            aria-label="Balik cermin pratinjau"
                                         >
                                             <FlipHorizontal className="w-5 h-5" />
                                         </button>
                                     </div>
-
-                                    <span className="text-[10px] text-white/70 font-medium tracking-wide">
-                                        {facingMode === "user" ? "Foto selfie atau putar kamera untuk foto lokasi" : "Foto lokasi kerja"}
-                                    </span>
                                 </div>
                             ) : (
                                 /* Post-Capture Action Bar (Ulang & Kirim) */
@@ -784,92 +846,6 @@ export default function AttendancePage() {
                         </div>
                     </div>
 
-                    {/* ── Contextual Off-Day Attendance Banner & Reason Input ── */}
-                    {isClockIn && isOffDay && (
-                        <div className="rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4 space-y-3">
-                            <div className="flex items-start gap-3">
-                                <div className="p-2 rounded-2xl bg-[color-mix(in_srgb,var(--warning-border)_60%,transparent)] text-[var(--warning)] shrink-0">
-                                    <CalendarClock className="w-5 h-5" />
-                                </div>
-                                <div className="space-y-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <h3 className="text-xs font-bold text-[var(--text-primary)]">Jadwal Hari Libur</h3>
-                                        {networkInfo?.shiftName && (
-                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--warning-border)] text-[var(--warning)]">
-                                                {networkInfo.shiftName}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                                        Anda terdeteksi masuk di luar jadwal kerja resmi. Masukkan keperluan/alasan penugasan untuk verifikasi HR.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="pt-0.5">
-                                <input
-                                    type="text"
-                                    value={offDayReason}
-                                    onChange={(e) => setOffDayReason(e.target.value)}
-                                    placeholder="Contoh: Piket darurat pemeliharaan jaringan"
-                                    maxLength={500}
-                                    className="w-full px-3.5 py-2.5 rounded-2xl border border-[var(--warning-border)] bg-[var(--card)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--warning)_50%,transparent)] transition-all"
-                                />
-                                {offDayReason.length > 0 && offDayReason.trim().length < 3 && (
-                                    <p className="text-[10px] text-[var(--warning)] mt-1">
-                                        Alasan kehadiran minimal 3 karakter.
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── Single Contextual Alert: Hanya Muncul Jika Ada Kendala Validasi ── */}
-                    {hasNetworkBlocker && (
-                        <FeedbackMessage variant="warning" compact>
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="flex items-center gap-2 min-w-0">
-                                    <WifiOff className="w-4 h-4 shrink-0" />
-                                    <span className="truncate">Gunakan Wi-Fi kantor WIG untuk presensi</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => void serverContext.refresh()}
-                                    className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
-                                >
-                                    <RefreshCw className="w-3 h-3" /> Cek
-                                </button>
-                            </div>
-                        </FeedbackMessage>
-                    )}
-
-                    {!hasNetworkBlocker && hasGpsBlocker && (
-                        <FeedbackMessage variant="error" compact>
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="flex items-center gap-2 min-w-0">
-                                    <AlertCircle className="w-4 h-4 shrink-0" />
-                                    <span className="truncate">Lokasi GPS belum sesuai radius kantor</span>
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={checkGpsStatus}
-                                    className="text-[11px] font-bold text-[var(--primary)] hover:underline shrink-0 flex items-center gap-1"
-                                >
-                                    <RefreshCw className="w-3 h-3" /> Cek
-                                </button>
-                            </div>
-                        </FeedbackMessage>
-                    )}
-
-                    {/* Error Feedback Message jika request gagal */}
-                    {message && status === "error" && (
-                        <FeedbackMessage variant="error" compact>
-                            <span className="flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                <span className="flex-1">{message}</span>
-                            </span>
-                        </FeedbackMessage>
-                    )}
                 </div>
             )}
         </div>
