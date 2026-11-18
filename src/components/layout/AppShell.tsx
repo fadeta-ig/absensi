@@ -205,7 +205,10 @@ export default function AppShell({
                         <div className="w-7 h-7 relative shrink-0 rounded-md overflow-hidden">
                             <Image src="/assets/wits.png" alt="WITS" fill sizes="28px" className="object-contain" priority />
                         </div>
-                        <span className="text-sm font-bold tracking-tight text-[var(--primary)]">{mobileTitle}</span>
+                        <span className="flex flex-col leading-tight">
+                            <span className="text-sm font-bold tracking-tight text-[var(--primary)]">{mobileTitle}</span>
+                            <span className="text-[9px] font-medium text-[var(--text-muted)]">Wijaya Integrated Talent System</span>
+                        </span>
                     </div>
                 ) : (
                     <>
@@ -219,7 +222,10 @@ export default function AppShell({
                             <div className="w-6 h-6 relative rounded-md overflow-hidden">
                                 <Image src="/assets/wits.png" alt="WITS" fill sizes="24px" className="object-contain" />
                             </div>
-                            <span className="text-sm font-bold text-[var(--primary)]">{mobileTitle}</span>
+                            <span className="flex flex-col leading-tight text-left">
+                                <span className="text-sm font-bold text-[var(--primary)]">{mobileTitle}</span>
+                                <span className="text-[9px] font-medium text-[var(--text-muted)]">Wijaya Integrated Talent System</span>
+                            </span>
                         </div>
                     </>
                 )}
