@@ -140,7 +140,7 @@ export default function LeavePage() {
     const [monthCursor, setMonthCursor] = useState<MonthCursor>(() => monthCursorOf(addDaysKey(getWIBTodayKey(), 1)));
     // Kalender global (nasional + cuti bersama): disable tanggal libur resmi di grid.
     // Diambil per tahun kalender yang sedang dilihat; cache hook dipakai ulang semua kalender.
-    const { holidaysByDate } = useGlobalHolidays(showForm ? monthCursor.y : null);
+    const { holidays, holidaysByDate } = useGlobalHolidays(showForm ? monthCursor.y : null);
     const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
     const [scheduleLoading, setScheduleLoading] = useState(false);
     const [scheduleError, setScheduleError] = useState("");
@@ -248,6 +248,14 @@ export default function LeavePage() {
     const monthLen = daysInMonthOf(monthCursor);
     const monthLeadBlanks = getUTCDayKey(monthStart);
     const monthScheduleKey = `${monthStart}:${monthLen}`;
+    // Daftar tanggal merah bulan yang sedang dilihat (untuk info di bawah grid).
+    const monthLabel = `${MONTH_NAMES[monthCursor.m]} ${monthCursor.y}`;
+    const monthHolidays = useMemo(() => {
+        const prefix = `${monthCursor.y}-${String(monthCursor.m + 1).padStart(2, "0")}-`;
+        return holidays
+            .filter((holiday) => holiday.date.startsWith(prefix))
+            .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+    }, [holidays, monthCursor.y, monthCursor.m]);
     const yearOptions = useMemo(() => {
         const opts: number[] = [];
         for (let y = baseMonth.y; y <= maxMonth.y; y++) opts.push(y);
@@ -724,8 +732,28 @@ export default function LeavePage() {
                                         </button>
                                     </div>
                                 )}
-                                {form.type === "annual" && (
-                                    <p className="text-xs text-[var(--text-muted)] mt-1">Sisa disetujui {remainingLeave} hari − menunggu persetujuan {pendingAnnualDays} hari = maks {maxSelectable} tanggal.</p>
+                                {isDiscrete && (
+                                    <div className="mt-1 rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40 px-3 py-2">
+                                        <p className="text-xs font-bold text-red-700 dark:text-red-300">
+                                            Tanggal Merah {monthLabel} ({monthHolidays.length})
+                                        </p>
+                                        {monthHolidays.length === 0 ? (
+                                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                                Tidak ada libur nasional/cuti bersama bulan ini.
+                                            </p>
+                                        ) : (
+                                            <ul className="mt-1 space-y-0.5">
+                                                {monthHolidays.map((holiday) => (
+                                                    <li key={`${holiday.date}-${holiday.name}`} className="text-[11px] text-[var(--text-secondary)]">
+                                                        <span className="font-bold text-red-700 dark:text-red-300">
+                                                            Tanggal {Number(holiday.date.slice(8, 10))}
+                                                        </span>
+                                                        {` : ${holiday.name}`}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         ) : (
