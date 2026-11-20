@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, Eye, EyeOff, Loader2, Lock, ShieldCheck, LogIn } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { clearAllEmployeeDrafts } from "@/lib/formPersistence";
 import { useToast } from "@/components/Toast";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { SettingCard } from "@/components/ui/SettingCard";
@@ -72,6 +73,7 @@ export function ChangePasswordCard({ locked = false }: { locked?: boolean }) {
 
             setMessage({ type: "success", text: successMsg });
             setIsSuccess(true);
+            clearAllEmployeeDrafts();
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");

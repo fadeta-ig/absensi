@@ -28,6 +28,7 @@ hriswig/
 │   │   └── page.tsx           # Entry point halaman depan / redirection
 │   ├── components/            # Komponen antarmuka React
 │   │   ├── dashboard/         # Komponen spesifik portal HR & GA
+│   │   ├── employee/          # Context & helper khusus portal employee (`EmployeeDraftContext`)
 │   │   ├── employee-form/     # Form multi-step profil dan data karyawan
 │   │   ├── equipment/         # Komponen inspeksi alat produksi (badge, evidence, picker)
 │   │   ├── layout/            # Komponen shell (Sidebar, Navbar, MobileNav)
@@ -44,6 +45,7 @@ hriswig/
 │   │   ├── prisma.ts          # Singleton PrismaClient database client
 │   │   ├── networkValidator.ts# Validasi IP Citranet dan subnet Wi-Fi kantor
 │   │   ├── gpsValidator.ts    # Validasi koordinat dan geofencing Haversine
+│   │   ├── formPersistence.ts # Engine draf form portal employee (owner-scoped, TTL, baseline)
 │   │   └── timezone.ts        # Utilitas normalisasi tanggal & zona waktu WIB
 │   ├── proxy.ts               # Next.js 16 Edge Runtime Route Guard
 │   └── types/                 # Definisi TypeScript global & deklarasi modul

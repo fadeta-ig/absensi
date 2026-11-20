@@ -9,6 +9,9 @@ import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ClockOutModalProps {
@@ -19,10 +22,56 @@ interface ClockOutModalProps {
 
 export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps) {
     const [photos, setPhotos] = useState<VisitPhotoDraft[]>([]);
+    const [pendingPhotoNotice, setPendingPhotoNotice] = useState<{ count: number; captions: string[] } | null>(null);
     const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
     const [result, setResult] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const activePhotoCaptions = photos
+        .map((p) => (p.caption ?? "").trim())
+        .filter(Boolean);
+
+    const {
+        restored: draftRestored,
+        clearDraft,
+        discardDraft,
+    } = useEmployeeDraft<{
+        result: string;
+        hadPhotoCount: number;
+        hadCaptions: string[];
+    }>({
+        formKey: `visits:clock-out:${visit.id}`,
+        value: {
+            result,
+            hadPhotoCount: photos.length > 0 ? photos.length : (pendingPhotoNotice?.count ?? 0),
+            hadCaptions: photos.length > 0 ? activePhotoCaptions : (pendingPhotoNotice?.captions ?? []),
+        },
+        isDirty: (draft) =>
+            draft.result.trim().length > 0 ||
+            draft.hadPhotoCount > 0 ||
+            draft.hadCaptions.length > 0,
+        validate: (raw): raw is { result: string; hadPhotoCount: number; hadCaptions: string[] } =>
+            isPlainObject(raw) &&
+            typeof raw.result === "string" &&
+            typeof raw.hadPhotoCount === "number" &&
+            raw.hadPhotoCount >= 0 &&
+            Array.isArray(raw.hadCaptions) &&
+            raw.hadCaptions.every((c) => typeof c === "string"),
+        onRestore: (draft) => {
+            setResult(draft.result);
+            if (draft.hadPhotoCount > 0 || draft.hadCaptions.length > 0) {
+                setPendingPhotoNotice({ count: draft.hadPhotoCount, captions: draft.hadCaptions });
+            }
+        },
+    });
+
+    const handlePhotosChange = useCallback((next: VisitPhotoDraft[]) => {
+        setPhotos(next);
+        if (next.length > 0) {
+            setPendingPhotoNotice(null);
+        }
+    }, []);
 
     const handleLocationResult = useCallback((r: LocationResult) => {
         setLocationResult(r);
@@ -56,6 +105,7 @@ export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps
             }
 
             const data = await res.json();
+            clearDraft();
             onClockOut(data);
             onClose();
         } catch (error) {
@@ -103,6 +153,21 @@ export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps
                     </FeedbackMessage>
                 )}
 
+                <DraftNotice
+                    compact
+                    visible={draftRestored && result.trim().length > 0}
+                    attachmentHint={
+                        pendingPhotoNotice && photos.length === 0
+                            ? `${pendingPhotoNotice.count} foto bukti sebelumnya perlu diambil ulang sebelum Clock Out${pendingPhotoNotice.captions.length > 0 ? ` (catatan sebelumnya: ${pendingPhotoNotice.captions.join("; ")})` : ""}.`
+                            : null
+                    }
+                    onDiscard={() => {
+                        discardDraft();
+                        setResult("");
+                        setPendingPhotoNotice(null);
+                    }}
+                />
+
                 {visit.clockInTime && (
                     <FeedbackMessage variant="info" compact>
                         Clock In: {formatDisplayTime(visit.clockInTime)}
@@ -117,7 +182,7 @@ export function ClockOutModal({ visit, onClose, onClockOut }: ClockOutModalProps
 
                 <MultiPhotoCapture
                     photos={photos}
-                    onPhotosChange={setPhotos}
+                    onPhotosChange={handlePhotosChange}
                     minPhotos={2}
                     maxPhotos={5}
                     defaultCategory="HASIL"

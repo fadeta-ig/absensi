@@ -17,6 +17,15 @@ import { fetchMonthAppointments, fetchPastAppointments, fetchUpcomingAppointment
 import { useGlobalHolidays } from "@/hooks/useGlobalHolidays";
 import { toDateString, formatIndonesianDate } from "@/lib/utils";
 import { formatWIBDateTime, getWIBHoursMinutes, toWIBDateString } from "@/lib/timezone";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import {
+    isPlainObject,
+    readEmployeeDraft,
+    removeEmployeeDraft,
+    writeEmployeeDraft,
+} from "@/lib/formPersistence";
 
 type ViewMode = "upcoming" | "day" | "month";
 type ModalState = { type: "none" } | { type: "create" };
@@ -269,6 +278,65 @@ export default function EmployeeAppointmentsPage() {
     const [busyReason, setBusyReason] = useState("");
     const [savingBusy, setSavingBusy] = useState(false);
     const [blocksError, setBlocksError] = useState<string | null>(null);
+    const draftOwner = useEmployeeDraftOwner();
+    const [createModalChecked, setCreateModalChecked] = useState(false);
+
+    const {
+        restored: busyDraftRestored,
+        clearDraft: clearBusyDraft,
+        discardDraft: discardBusyDraft,
+    } = useEmployeeDraft<{
+        showBusy: boolean;
+        busyFrom: string;
+        busyTo: string;
+        busyReason: string;
+    }>({
+        formKey: "appointments:busy",
+        value: { showBusy, busyFrom, busyTo, busyReason },
+        isDirty: (draft) =>
+            draft.busyFrom.length > 0 ||
+            draft.busyTo.length > 0 ||
+            draft.busyReason.trim().length > 0,
+        validate: (raw): raw is { showBusy: boolean; busyFrom: string; busyTo: string; busyReason: string } =>
+            isPlainObject(raw) &&
+            typeof raw.showBusy === "boolean" &&
+            typeof raw.busyFrom === "string" &&
+            typeof raw.busyTo === "string" &&
+            typeof raw.busyReason === "string",
+        onRestore: (draft) => {
+            setBusyFrom(draft.busyFrom);
+            setBusyTo(draft.busyTo);
+            setBusyReason(draft.busyReason);
+            if (draft.showBusy) {
+                setShowBusy(true);
+            }
+        },
+    });
+
+    // Pulihkan modal Buat Meeting bila pengguna reload saat sedang mengisi form.
+    useEffect(() => {
+        if (!draftOwner || createModalChecked) return;
+        setCreateModalChecked(true);
+        const openFlag = readEmployeeDraft<{ open: boolean }>(draftOwner, "appointments:create:modal-open", {
+            validate: (raw): raw is { open: boolean } => isPlainObject(raw) && raw.open === true,
+        });
+        if (openFlag.status === "found") {
+            if (readEmployeeDraft(draftOwner, "appointments:create").status === "found") {
+                setModal({ type: "create" });
+            } else {
+                removeEmployeeDraft(draftOwner, "appointments:create:modal-open");
+            }
+        }
+    }, [draftOwner, createModalChecked]);
+
+    useEffect(() => {
+        if (!draftOwner || !createModalChecked) return;
+        if (modal.type === "create") {
+            writeEmployeeDraft(draftOwner, "appointments:create:modal-open", { open: true });
+        } else {
+            removeEmployeeDraft(draftOwner, "appointments:create:modal-open");
+        }
+    }, [draftOwner, createModalChecked, modal.type]);
 
     const loadBlocks = useCallback(async () => {
         try {
@@ -307,6 +375,7 @@ export default function EmployeeAppointmentsPage() {
                 body: JSON.stringify({ startDate: busyFrom, endDate: busyTo, reason: busyReason.trim() || null }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan."));
+            clearBusyDraft();
             setBusyFrom("");
             setBusyTo("");
             setBusyReason("");
@@ -404,6 +473,16 @@ export default function EmployeeAppointmentsPage() {
                                 ))}
                             </ul>
                         )}
+                        <DraftNotice
+                            compact
+                            visible={busyDraftRestored}
+                            onDiscard={() => {
+                                discardBusyDraft();
+                                setBusyFrom("");
+                                setBusyTo("");
+                                setBusyReason("");
+                            }}
+                        />
                         <form onSubmit={handleSaveBusy} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="form-group !mb-0">
                                 <label className="form-label" htmlFor="busy-from">Tanggal Mulai *</label>

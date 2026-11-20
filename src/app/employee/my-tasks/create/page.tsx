@@ -6,6 +6,9 @@ import { ArrowLeft, Briefcase, Loader2, Search, ShieldAlert, ShieldCheck } from 
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import PageHeader from "@/components/ui/PageHeader";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface Recipient {
@@ -33,6 +36,48 @@ export default function CreateMyTaskPage() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    const {
+        restored: draftRestored,
+        clearDraft,
+        discardDraft,
+    } = useEmployeeDraft<{
+        title: string;
+        detail: string;
+        picked: string[];
+        dueDate: string;
+        dueTime: string;
+    }>({
+        formKey: "my-tasks:create",
+        value: { title, detail, picked, dueDate, dueTime },
+        isDirty: (draft) =>
+            draft.title.trim().length > 0 ||
+            draft.detail.trim().length > 0 ||
+            draft.picked.length > 0 ||
+            draft.dueDate.length > 0 ||
+            draft.dueTime.length > 0,
+        validate: (raw): raw is {
+            title: string;
+            detail: string;
+            picked: string[];
+            dueDate: string;
+            dueTime: string;
+        } =>
+            isPlainObject(raw) &&
+            typeof raw.title === "string" &&
+            typeof raw.detail === "string" &&
+            Array.isArray(raw.picked) &&
+            raw.picked.every((id) => typeof id === "string") &&
+            typeof raw.dueDate === "string" &&
+            typeof raw.dueTime === "string",
+        onRestore: (draft) => {
+            setTitle(draft.title);
+            setDetail(draft.detail);
+            setPicked(draft.picked);
+            setDueDate(draft.dueDate);
+            setDueTime(draft.dueTime);
+        },
+    });
 
     useEffect(() => {
         const controller = new AbortController();
@@ -65,6 +110,16 @@ export default function CreateMyTaskPage() {
         () => recipients.filter((r) => r.employeeId !== myEmployeeId),
         [recipients, myEmployeeId]
     );
+
+    // Pastikan penerima yang dipulihkan dari draf masih valid & bukan diri sendiri.
+    useEffect(() => {
+        if (loadingRecipients || recipients.length === 0) return;
+        const allowed = new Set(eligibleRecipients.map((r) => r.employeeId));
+        setPicked((prev) => {
+            const next = prev.filter((id) => allowed.has(id));
+            return next.length === prev.length ? prev : next;
+        });
+    }, [loadingRecipients, recipients.length, eligibleRecipients]);
     const filteredRecipients = useMemo(() => {
         const q = recipientQuery.trim().toLowerCase();
         if (!q) return eligibleRecipients;
@@ -109,6 +164,7 @@ export default function CreateMyTaskPage() {
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membuat tugas. Periksa kolom wajib, lalu coba lagi."));
             const json = await res.json();
+            clearDraft();
             setSuccess("Tugas berhasil dibuat. Menunggu persetujuan penerima.");
             router.push(`/employee/my-tasks/${json.data.id}`);
         } catch (err) {
@@ -163,6 +219,18 @@ export default function CreateMyTaskPage() {
             </section>
 
             <section className="emp-surface p-4 space-y-3" aria-label="Form tugas operasional">
+                <DraftNotice
+                    compact
+                    visible={draftRestored}
+                    onDiscard={() => {
+                        discardDraft();
+                        setTitle("");
+                        setDetail("");
+                        setPicked([]);
+                        setDueDate("");
+                        setDueTime("");
+                    }}
+                />
                 <div>
                     <span className="form-label">Pemberi Tugas</span>
                     <p className="form-input bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] flex items-center min-h-10 text-sm" aria-readonly="true">

@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Loader2, Lock, Pencil, Trash2, UserCheck, Users } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { isPlainObject, removeEmployeeDraft } from "@/lib/formPersistence";
 
 interface EligibleMember {
     employeeId: string;
@@ -50,6 +54,52 @@ export default function MeetingMinutesSection({
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+    const draftOwner = useEmployeeDraftOwner();
+
+    const requiresReason = Boolean(data?.requiresChangeReason);
+    const canModify = !readOnly && Boolean(data?.canWriteMinutes);
+    const isBeforeStart = data?.lifecycle === "SCHEDULED";
+    const serverMinutes = data?.minutes ?? "";
+    const minutesBaseline = useMemo(
+        () =>
+            data
+                ? { minutes: data.minutes ?? "", updatedAt: data.minutesUpdatedAt ?? null }
+                : undefined,
+        [data]
+    );
+    const minutesDraftKey = `appointments:detail:${appointmentId}:minutes`;
+
+    const {
+        restored: minutesDraftRestored,
+        clearDraft: clearMinutesDraft,
+        discardDraft: discardMinutesDraft,
+    } = useEmployeeDraft<{ editing: boolean; text: string; reason: string }>({
+        formKey: minutesDraftKey,
+        value: { editing, text, reason },
+        enabled: Boolean(data && canModify && !isBeforeStart),
+        baseline: minutesBaseline,
+        hasBaseline: Boolean(data),
+        isDirty: (draft) => draft.text !== serverMinutes || draft.reason.trim().length > 0,
+        validate: (raw): raw is { editing: boolean; text: string; reason: string } =>
+            isPlainObject(raw) &&
+            typeof raw.editing === "boolean" &&
+            typeof raw.text === "string" &&
+            typeof raw.reason === "string",
+        onRestore: (draft) => {
+            setText(draft.text);
+            setReason(draft.reason);
+            if (draft.editing) {
+                setEditing(true);
+            }
+        },
+    });
+
+    useEffect(() => {
+        if (!draftOwner || !data) return;
+        if (!canModify || isBeforeStart) {
+            removeEmployeeDraft(draftOwner, minutesDraftKey);
+        }
+    }, [draftOwner, data, canModify, isBeforeStart, minutesDraftKey]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -86,6 +136,7 @@ export default function MeetingMinutesSection({
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan notulensi."));
             const json = await res.json();
+            clearMinutesDraft();
             setData(json.data);
             setEditing(false);
             setReason("");
@@ -111,6 +162,7 @@ export default function MeetingMinutesSection({
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus notulensi."));
             const json = await res.json();
+            clearMinutesDraft();
             setData(json.data);
             setText("");
             setDeleting(false);
@@ -123,10 +175,6 @@ export default function MeetingMinutesSection({
             setSaving(false);
         }
     }
-
-    const requiresReason = Boolean(data?.requiresChangeReason);
-    const canModify = !readOnly && Boolean(data?.canWriteMinutes);
-    const isBeforeStart = data?.lifecycle === "SCHEDULED";
 
     return (
         <div className="space-y-2.5">
@@ -255,8 +303,6 @@ export default function MeetingMinutesSection({
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setText(data?.minutes ?? "");
-                                            setReason("");
                                             setError("");
                                             setEditing(true);
                                         }}
@@ -283,6 +329,15 @@ export default function MeetingMinutesSection({
                     ) : (
                         <div className="space-y-2.5 rounded-xl border border-[var(--border)] p-3">
                             {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
+                            <DraftNotice
+                                compact
+                                visible={minutesDraftRestored && (text !== serverMinutes || reason.trim().length > 0)}
+                                onDiscard={() => {
+                                    discardMinutesDraft();
+                                    setText(serverMinutes);
+                                    setReason("");
+                                }}
+                            />
                             <label className="form-label" htmlFor="meeting-minutes">
                                 Isi Notulensi *
                             </label>

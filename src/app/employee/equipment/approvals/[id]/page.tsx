@@ -10,8 +10,12 @@ import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBad
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
 import ListSkeleton from "@/components/ui/ListSkeleton";
 import StateCard from "@/components/ui/StateCard";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { isPlainObject, removeEmployeeDraft } from "@/lib/formPersistence";
 
 interface ApprovalItem {
     id: string;
@@ -59,6 +63,7 @@ function formatDateTime(value: string | null): string {
 export default function QcDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const toast = useToast();
     const confirm = useConfirm();
+    const draftOwner = useEmployeeDraftOwner();
     const [detail, setDetail] = useState<ApprovalDto | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -70,6 +75,38 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
     const [uploading, setUploading] = useState(false);
     const [photoNote, setPhotoNote] = useState("");
     const fileRef = useRef<HTMLInputElement | null>(null);
+
+    const canEditQc = Boolean(detail && detail.status === "SUBMITTED");
+    const serverQcNote = detail?.qcNote ?? "";
+    const qcDraftKey = detail ? `equipment:qc:${detail.id}` : null;
+
+    const {
+        restored: qcDraftRestored,
+        clearDraft: clearQcDraft,
+        discardDraft: discardQcDraft,
+    } = useEmployeeDraft<{ qcNote: string; photoNote: string }>({
+        formKey: qcDraftKey,
+        value: { qcNote, photoNote },
+        enabled: canEditQc,
+        baseline: serverQcNote,
+        hasBaseline: Boolean(detail),
+        isDirty: (draft) => draft.qcNote !== serverQcNote || draft.photoNote.trim().length > 0,
+        validate: (raw): raw is { qcNote: string; photoNote: string } =>
+            isPlainObject(raw) &&
+            typeof raw.qcNote === "string" &&
+            typeof raw.photoNote === "string",
+        onRestore: (draft) => {
+            setQcNote(draft.qcNote);
+            setPhotoNote(draft.photoNote);
+        },
+    });
+
+    useEffect(() => {
+        if (!draftOwner || !detail) return;
+        if (detail.status !== "SUBMITTED") {
+            removeEmployeeDraft(draftOwner, `equipment:qc:${detail.id}`);
+        }
+    }, [draftOwner, detail]);
 
     const fetchQcPhotos = useCallback(async (inspectionId: string) => {
         setQcPhotosLoading(true);
@@ -159,6 +196,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                         if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyelesaikan inspeksi."));
                         const json = await res.json();
                         const dto = json.data as ApprovalDto;
+                        clearQcDraft();
                         setDetail(dto);
                         toast(`Pemeriksaan QC oleh ${stripGelar(dto.checkedByNameSnapshot ?? dto.checkedBy?.name ?? "")} telah dicatat.`, "success");
                     } catch (err) {
@@ -171,7 +209,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                 })();
             },
         });
-    }, [detail, doneBusy, qcNote, confirm, toast]);
+    }, [detail, doneBusy, qcNote, confirm, toast, clearQcDraft]);
 
     if (loading) {
         return (
@@ -239,7 +277,16 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                 </FeedbackMessage>
             ) : (
                 <div className="sticky top-2 z-10">
-                    <div className="emp-surface p-3">
+                    <div className="emp-surface p-3 space-y-2">
+                        <DraftNotice
+                            compact
+                            visible={qcDraftRestored && (qcNote !== serverQcNote || photoNote.trim().length > 0)}
+                            onDiscard={() => {
+                                discardQcDraft();
+                                setQcNote(serverQcNote);
+                                setPhotoNote("");
+                            }}
+                        />
                         <label htmlFor="qc-note" className="text-[10px] font-semibold text-[var(--text-muted)]">
                             Catatan QC (opsional)
                         </label>

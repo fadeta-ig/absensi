@@ -4,6 +4,9 @@ import { useMemo, useState } from "react";
 import { Loader2, Search, X, Paperclip } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { deepEqual, formatReattachHint, isPlainObject } from "@/lib/formPersistence";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import type { TaskParticipant } from "@/components/appointments/MeetingTaskSection";
@@ -50,6 +53,7 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
     const [reason, setReason] = useState("");
     const [note, setNote] = useState("");
     const [files, setFiles] = useState<File[]>([]);
+    const [pendingFileNames, setPendingFileNames] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [assigneeQuery, setAssigneeQuery] = useState("");
@@ -60,6 +64,128 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
         () => participants.filter((p) => !p.isExternal && p.employeeId),
         [participants]
     );
+    const internalIdSet = useMemo(
+        () => new Set(internalParticipants.map((p) => p.employeeId as string)),
+        [internalParticipants]
+    );
+
+    const originalPicked = useMemo(() => task?.assigneeIds ?? [], [task]);
+    const editBaseline = useMemo(
+        () =>
+            mode === "edit" && task
+                ? {
+                      title: task.title,
+                      detail: task.detail ?? "",
+                      dueDate: task.dueDate ?? "",
+                      assigneeIds: [...originalPicked].sort(),
+                  }
+                : undefined,
+        [mode, task, originalPicked]
+    );
+
+    interface TaskModalDraft {
+        title: string;
+        detail: string;
+        picked: string[];
+        date: string;
+        dueTime: string;
+        reason: string;
+        note: string;
+        giverId: string;
+        hadFileNames: string[];
+    }
+
+    const {
+        restored: draftRestored,
+        clearDraft,
+        discardDraft,
+    } = useEmployeeDraft<TaskModalDraft>({
+        formKey: `appointments:detail:${appointmentId}:task:${mode}:${task?.id ?? "new"}`,
+        value: {
+            title,
+            detail,
+            picked,
+            date,
+            dueTime,
+            reason,
+            note,
+            giverId,
+            hadFileNames: files.length > 0 ? files.map((f) => f.name) : pendingFileNames,
+        },
+        baseline: editBaseline,
+        hasBaseline: mode === "edit" && Boolean(task),
+        isDirty: (draft) => {
+            if (mode === "create") {
+                return (
+                    draft.title.trim().length > 0 ||
+                    draft.detail.trim().length > 0 ||
+                    draft.picked.length > 0 ||
+                    draft.date.length > 0 ||
+                    draft.dueTime.length > 0 ||
+                    draft.giverId !== (defaultAssignerEmployeeId ?? "")
+                );
+            }
+            if (mode === "extend") {
+                return draft.date !== (task?.dueDate ?? "") || draft.reason.trim().length > 0;
+            }
+            if (mode === "cancel") {
+                return draft.reason.trim().length > 0;
+            }
+            if (mode === "submit") {
+                return draft.note.trim().length > 0 || draft.hadFileNames.length > 0;
+            }
+            return editBaseline
+                ? !deepEqual(
+                      {
+                          title: draft.title,
+                          detail: draft.detail,
+                          dueDate: draft.date,
+                          assigneeIds: [...draft.picked].sort(),
+                      },
+                      editBaseline
+                  )
+                : false;
+        },
+        validate: (raw): raw is TaskModalDraft =>
+            isPlainObject(raw) &&
+            typeof raw.title === "string" &&
+            typeof raw.detail === "string" &&
+            Array.isArray(raw.picked) &&
+            raw.picked.every((id) => typeof id === "string") &&
+            typeof raw.date === "string" &&
+            typeof raw.dueTime === "string" &&
+            typeof raw.reason === "string" &&
+            typeof raw.note === "string" &&
+            typeof raw.giverId === "string" &&
+            Array.isArray(raw.hadFileNames) &&
+            raw.hadFileNames.every((n) => typeof n === "string"),
+        onRestore: (draft) => {
+            if (mode === "create" || mode === "edit") {
+                setTitle(draft.title);
+                setDetail(draft.detail);
+                setPicked(
+                    internalIdSet.size > 0
+                        ? draft.picked.filter((id) => internalIdSet.has(id))
+                        : draft.picked
+                );
+                setDate(draft.date);
+                if (mode === "create") {
+                    setDueTime(draft.dueTime);
+                    if (!draft.giverId || internalIdSet.size === 0 || internalIdSet.has(draft.giverId)) {
+                        setGiverId(draft.giverId);
+                    }
+                }
+            } else if (mode === "extend") {
+                setDate(draft.date);
+                setReason(draft.reason);
+            } else if (mode === "cancel") {
+                setReason(draft.reason);
+            } else if (mode === "submit") {
+                setNote(draft.note);
+                setPendingFileNames(draft.hadFileNames);
+            }
+        },
+    });
 
     const filteredAssignees = useMemo(() => {
         const q = assigneeQuery.trim().toLowerCase();
@@ -82,7 +208,6 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
     }, [giverQuery, internalParticipants]);
     const selectedGiver = internalParticipants.find((p) => p.employeeId === giverId) ?? null;
 
-    const originalPicked = useMemo(() => task?.assigneeIds ?? [], [task]);
     const editChanged =
         mode !== "edit" ||
         title.trim() !== (task?.title ?? "") ||
@@ -105,6 +230,7 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
 
     function handleFiles(selected: FileList | null) {
         if (!selected) return;
+        setPendingFileNames([]);
         setFiles((prev) => [...prev, ...Array.from(selected)].slice(0, MAX_SUBMIT_FILES));
     }
 
@@ -163,6 +289,7 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
                 });
             }
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan task."));
+            clearDraft();
             onSaved();
             onClose();
         } catch (err) {
@@ -192,6 +319,28 @@ export default function TaskFormModal({ mode, appointmentId, task, participants,
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+                <DraftNotice
+                    compact
+                    visible={draftRestored}
+                    attachmentHint={
+                        mode === "submit" && files.length === 0
+                            ? formatReattachHint(pendingFileNames)
+                            : null
+                    }
+                    onDiscard={() => {
+                        discardDraft();
+                        setTitle(task?.title ?? "");
+                        setDetail(task?.detail ?? "");
+                        setPicked(task?.assigneeIds ?? []);
+                        setDate(task?.dueDate ?? "");
+                        setDueTime("");
+                        setReason("");
+                        setNote("");
+                        setGiverId(defaultAssignerEmployeeId ?? "");
+                        setFiles([]);
+                        setPendingFileNames([]);
+                    }}
+                />
                 {mode === "create" && (
                     <>
                         <div>

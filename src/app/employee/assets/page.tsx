@@ -10,6 +10,15 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import PageHeader from "@/components/ui/PageHeader";
 import StateCard from "@/components/ui/StateCard";
 import StatusBadge from "@/components/ui/StatusBadge";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import {
+    isPlainObject,
+    readEmployeeDraft,
+    removeEmployeeDraft,
+    writeEmployeeDraft,
+} from "@/lib/formPersistence";
 
 interface Asset {
     id: string;
@@ -39,12 +48,44 @@ export default function EmployeeAssetsPage() {
     const [submitting, setSubmitting] = useState(false);
     const [loadError, setLoadError] = useState("");
     const toast = useToast();
+    const draftOwner = useEmployeeDraftOwner();
 
     // Modal state
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState<"NEW_REQUEST" | "DAMAGE_REPORT">("NEW_REQUEST");
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [form, setForm] = useState({ title: "", description: "" });
+    const [activeModalChecked, setActiveModalChecked] = useState(false);
+
+    const activeTicketFormKey = showModal
+        ? modalType === "NEW_REQUEST"
+            ? "assets:ticket:new"
+            : selectedAsset
+              ? `assets:ticket:damage:${selectedAsset.id}`
+              : null
+        : null;
+    const defaultTicketTitle =
+        modalType === "DAMAGE_REPORT" && selectedAsset
+            ? `Lapor Kerusakan: ${selectedAsset.name}`
+            : "";
+
+    const {
+        restored: ticketDraftRestored,
+        clearDraft: clearTicketDraft,
+        discardDraft: discardTicketDraft,
+    } = useEmployeeDraft<{ title: string; description: string }>({
+        formKey: activeTicketFormKey,
+        value: form,
+        enabled: showModal && Boolean(activeTicketFormKey),
+        isDirty: (draft) =>
+            draft.description.trim().length > 0 ||
+            (draft.title.trim().length > 0 && draft.title !== defaultTicketTitle),
+        validate: (raw): raw is { title: string; description: string } =>
+            isPlainObject(raw) &&
+            typeof raw.title === "string" &&
+            typeof raw.description === "string",
+        onRestore: (draft) => setForm({ title: draft.title, description: draft.description }),
+    });
 
     const fetchData = async () => {
         setLoading(true);
@@ -75,6 +116,61 @@ export default function EmployeeAssetsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Reopen last active modal after refresh/navigation only if its target context is still valid.
+    useEffect(() => {
+        if (loading || activeModalChecked || !draftOwner) return;
+        setActiveModalChecked(true);
+        const saved = readEmployeeDraft<{ type: "NEW_REQUEST" | "DAMAGE_REPORT"; assetId: string | null }>(
+            draftOwner,
+            "assets:ticket:active",
+            {
+                validate: (raw): raw is { type: "NEW_REQUEST" | "DAMAGE_REPORT"; assetId: string | null } =>
+                    isPlainObject(raw) &&
+                    (raw.type === "NEW_REQUEST" || raw.type === "DAMAGE_REPORT") &&
+                    (raw.assetId === null || typeof raw.assetId === "string"),
+            }
+        );
+        if (saved.status !== "found") return;
+        if (saved.data.type === "NEW_REQUEST") {
+            if (readEmployeeDraft(draftOwner, "assets:ticket:new").status === "found") {
+                setModalType("NEW_REQUEST");
+                setSelectedAsset(null);
+                setForm({ title: "", description: "" });
+                setShowModal(true);
+            } else {
+                removeEmployeeDraft(draftOwner, "assets:ticket:active");
+            }
+            return;
+        }
+        const matchedAsset = assets.find((a) => a.id === saved.data.assetId);
+        if (
+            matchedAsset &&
+            readEmployeeDraft(draftOwner, `assets:ticket:damage:${matchedAsset.id}`).status === "found"
+        ) {
+            setModalType("DAMAGE_REPORT");
+            setSelectedAsset(matchedAsset);
+            setForm({ title: `Lapor Kerusakan: ${matchedAsset.name}`, description: "" });
+            setShowModal(true);
+        } else {
+            removeEmployeeDraft(draftOwner, "assets:ticket:active");
+        }
+    }, [loading, activeModalChecked, draftOwner, assets]);
+
+    useEffect(() => {
+        if (!draftOwner || !activeModalChecked) return;
+        const isCurrentDirty =
+            form.description.trim().length > 0 ||
+            (form.title.trim().length > 0 && form.title !== defaultTicketTitle);
+        if (showModal && isCurrentDirty) {
+            writeEmployeeDraft(draftOwner, "assets:ticket:active", {
+                type: modalType,
+                assetId: modalType === "DAMAGE_REPORT" ? (selectedAsset?.id ?? null) : null,
+            });
+        } else if (!showModal) {
+            removeEmployeeDraft(draftOwner, "assets:ticket:active");
+        }
+    }, [draftOwner, activeModalChecked, showModal, modalType, selectedAsset, form.title, form.description, defaultTicketTitle]);
+
     const handleOpenModal = (type: "NEW_REQUEST" | "DAMAGE_REPORT", asset: Asset | null = null) => {
         setModalType(type);
         setSelectedAsset(asset);
@@ -98,6 +194,8 @@ export default function EmployeeAssetsPage() {
             });
 
             if (res.ok) {
+                clearTicketDraft();
+                removeEmployeeDraft(draftOwner, "assets:ticket:active");
                 toast(modalType === "NEW_REQUEST" ? "Permintaan berhasil diajukan." : "Laporan kerusakan berhasil dikirim.", "success");
                 setShowModal(false);
                 fetchData();
@@ -259,6 +357,15 @@ export default function EmployeeAssetsPage() {
                             <button className="modal-close" onClick={() => !submitting && setShowModal(false)} disabled={submitting} aria-label="Tutup modal tiket aset"><X className="w-4 h-4" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            <DraftNotice
+                                compact
+                                visible={ticketDraftRestored}
+                                onDiscard={() => {
+                                    discardTicketDraft();
+                                    removeEmployeeDraft(draftOwner, "assets:ticket:active");
+                                    setForm({ title: defaultTicketTitle, description: "" });
+                                }}
+                            />
                             {modalType === "DAMAGE_REPORT" && selectedAsset && (
                                 <div className="p-3 bg-[var(--warning-bg)] border border-[var(--warning-border)] rounded-xl">
                                     <p className="text-xs font-bold text-[var(--warning)] mb-1">Aset yang dilaporkan:</p>

@@ -18,6 +18,9 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatDisplayDateTime } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,6 +86,32 @@ export default function DocumentsPage() {
     const [selectedType, setSelectedType] = useState<LetterType>("SK_KERJA");
     const [purpose, setPurpose]           = useState("");
 
+    const {
+        restored: letterDraftRestored,
+        clearDraft: clearLetterDraft,
+        discardDraft: discardLetterDraft,
+    } = useEmployeeDraft<{ showForm: boolean; selectedType: LetterType; purpose: string }>({
+        formKey: "documents:letter-request",
+        value: { showForm, selectedType, purpose },
+        isDirty: (draft) =>
+            draft.purpose.trim().length > 0 || draft.selectedType !== "SK_KERJA",
+        validate: (raw): raw is { showForm: boolean; selectedType: LetterType; purpose: string } =>
+            isPlainObject(raw) &&
+            typeof raw.showForm === "boolean" &&
+            typeof raw.purpose === "string" &&
+            (raw.selectedType === "SK_KERJA" ||
+                raw.selectedType === "KET_PENGHASILAN" ||
+                raw.selectedType === "KET_MASIH_BEKERJA" ||
+                raw.selectedType === "BPJS"),
+        onRestore: (draft) => {
+            setSelectedType(draft.selectedType);
+            setPurpose(draft.purpose);
+            if (draft.showForm) {
+                setShowForm(true);
+            }
+        },
+    });
+
     // ── Fetch List ─────────────────────────────────────────────────────────────
     useEffect(() => {
         const loadRequests = async () => {
@@ -120,7 +149,9 @@ export default function DocumentsPage() {
             if (res.ok) {
                 const data = await res.json() as LetterRequest;
                 setRequests((prev) => [data, ...prev]);
+                clearLetterDraft();
                 setShowForm(false);
+                setSelectedType("SK_KERJA");
                 setPurpose("");
                 toast("Permintaan surat berhasil dikirim ke HR!", "success");
             } else {
@@ -177,6 +208,15 @@ export default function DocumentsPage() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <DraftNotice
+                            compact
+                            visible={letterDraftRestored}
+                            onDiscard={() => {
+                                discardLetterDraft();
+                                setSelectedType("SK_KERJA");
+                                setPurpose("");
+                            }}
+                        />
                         {/* Pilih Jenis Surat */}
                         <div className="form-group !mb-0">
                             <div className="flex items-center justify-between mb-2">

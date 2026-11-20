@@ -6,6 +6,7 @@ import { useToast } from "@/components/Toast";
 import { unsubscribePush } from "@/lib/pushClient";
 import { notifyAuthChanged } from "@/lib/authEvents";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { clearAllEmployeeDrafts } from "@/lib/formPersistence";
 
 /**
  * Urutan logout employee (satu-satunya definisi):
@@ -27,6 +28,7 @@ export function useEmployeeLogout() {
             void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
+            clearAllEmployeeDrafts();
             notifyAuthChanged("logout");
             router.replace("/");
         } catch (error) {

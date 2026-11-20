@@ -20,6 +20,15 @@ import {
     type AppointmentListItem,
 } from "@/components/appointments/useAppointments";
 import { formatWIBDateTime } from "@/lib/timezone";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import {
+    isPlainObject,
+    readEmployeeDraft,
+    removeEmployeeDraft,
+    writeEmployeeDraft,
+} from "@/lib/formPersistence";
 
 function fmtDT(iso: string): string {
     return formatWIBDateTime(new Date(iso), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -42,6 +51,7 @@ function DetailContent({ id }: { id: string }) {
     const router = useRouter();
     const confirm = useConfirm();
     const toast = useToast();
+    const draftOwner = useEmployeeDraftOwner();
     const [item, setItem] = useState<AppointmentListItem | null>(null);
     const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
     const [myEmployeeName, setMyEmployeeName] = useState<string | null>(null);
@@ -58,6 +68,152 @@ function DetailContent({ id }: { id: string }) {
     const [askingDecline, setAskingDecline] = useState(false);
     const [editing, setEditing] = useState(false);
     const [syncKey, setSyncKey] = useState(0);
+    const [editModalChecked, setEditModalChecked] = useState(false);
+
+    const canManage = Boolean(
+        item &&
+            (canManageAll ||
+                (!!myEmployeeId &&
+                    (item.requesterEmployeeId === myEmployeeId ||
+                        item.leaderEmployeeId === myEmployeeId ||
+                        item.notulisEmployeeId === myEmployeeId)))
+    );
+    const isFrozen = Boolean(item && (item.status === "COMPLETED" || item.status === "CANCELLED"));
+    const isOverdueStored = Boolean(
+        item && item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED")
+    );
+    // Pengaturan Meeting (termasuk pimpinan rapat & PIC) juga dibuka saat
+    // meeting berjalan; perubahan jadwal/ruang tetap ditolak service.
+    const canMeetingSettings = Boolean(
+        item && canManage && item.status === "SCHEDULED" && (item.lifecycle === "SCHEDULED" || item.lifecycle === "IN_PROGRESS")
+    );
+    const canCancel = Boolean(item && canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED");
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    const meetingStartMs = item ? new Date(item.startAt).getTime() : 0;
+    const meetingEndMs = item ? new Date(item.endAt).getTime() : 0;
+    const canComplete = Boolean(item && canManage && item.status === "SCHEDULED" && nowMs >= meetingStartMs);
+    const isInvolved = Boolean(
+        item && (!myEmployeeId || item.requesterEmployeeId === myEmployeeId || item.participants.some((p) => p.employeeId === myEmployeeId))
+    );
+    const canAccessWorkspace = item ? (item.canAccessWorkspace ?? isInvolved) : false;
+    const canCreateMeetingTask = Boolean(
+        item &&
+            item.status === "SCHEDULED" &&
+            nowMs >= meetingStartMs &&
+            nowMs < meetingEndMs &&
+            myEmployeeId &&
+            (myEmployeeId === item.notulisEmployeeId || myEmployeeId === item.leaderEmployeeId)
+    );
+    const canMark = Boolean(
+        item && canManage && item.status !== "CANCELLED" && nowMs >= meetingStartMs && nowMs <= meetingEndMs + 24 * 60 * 60 * 1000
+    );
+    const myParticipant = item && myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
+    const myResponse = myParticipant?.inviteStatus ?? "PENDING";
+    const rsvpLocked = myResponse === "ACCEPTED" || myResponse === "DECLINED";
+    const canRsvp = Boolean(item && myParticipant !== null && !rsvpLocked && item.status === "SCHEDULED" && nowMs <= meetingEndMs);
+
+    const {
+        restored: declineDraftRestored,
+        clearDraft: clearDeclineDraft,
+        discardDraft: discardDeclineDraft,
+    } = useEmployeeDraft<{ askingDecline: boolean; declineNote: string }>({
+        formKey: `appointments:detail:${id}:decline`,
+        value: { askingDecline, declineNote },
+        enabled: Boolean(item && canRsvp),
+        isDirty: (draft) => draft.declineNote.trim().length > 0,
+        validate: (raw): raw is { askingDecline: boolean; declineNote: string } =>
+            isPlainObject(raw) &&
+            typeof raw.askingDecline === "boolean" &&
+            typeof raw.declineNote === "string",
+        onRestore: (draft) => {
+            setDeclineNote(draft.declineNote);
+            if (draft.askingDecline) setAskingDecline(true);
+        },
+    });
+
+    const {
+        restored: cancelDraftRestored,
+        clearDraft: clearCancelDraft,
+        discardDraft: discardCancelDraft,
+    } = useEmployeeDraft<{ askingCancel: boolean; cancelReason: string }>({
+        formKey: `appointments:detail:${id}:cancel`,
+        value: { askingCancel, cancelReason },
+        enabled: Boolean(item && canCancel),
+        isDirty: (draft) => draft.cancelReason.trim().length > 0,
+        validate: (raw): raw is { askingCancel: boolean; cancelReason: string } =>
+            isPlainObject(raw) &&
+            typeof raw.askingCancel === "boolean" &&
+            typeof raw.cancelReason === "string",
+        onRestore: (draft) => {
+            setCancelReason(draft.cancelReason);
+            if (draft.askingCancel) setAskingCancel(true);
+        },
+    });
+
+    const {
+        restored: marksDraftRestored,
+        clearDraft: clearMarksDraft,
+        discardDraft: discardMarksDraft,
+    } = useEmployeeDraft<{ marks: Record<string, "HADIR" | "TIDAK_HADIR"> }>({
+        formKey: `appointments:detail:${id}:marks`,
+        value: { marks },
+        enabled: Boolean(item && canMark),
+        isDirty: (draft) => Object.keys(draft.marks).length > 0,
+        validate: (raw): raw is { marks: Record<string, "HADIR" | "TIDAK_HADIR"> } => {
+            if (!isPlainObject(raw) || !isPlainObject(raw.marks)) return false;
+            return Object.values(raw.marks).every((v) => v === "HADIR" || v === "TIDAK_HADIR");
+        },
+        onRestore: (draft) => {
+            if (!item) return;
+            const validIds = new Map(item.participants.map((p) => [p.id, p.attendance]));
+            const filtered: Record<string, "HADIR" | "TIDAK_HADIR"> = {};
+            for (const [pid, mark] of Object.entries(draft.marks)) {
+                if (validIds.has(pid) && validIds.get(pid) !== mark) {
+                    filtered[pid] = mark;
+                }
+            }
+            if (Object.keys(filtered).length > 0) {
+                setMarks(filtered);
+            }
+        },
+    });
+
+    // Bersihkan draf aksi detail jika status meeting tidak lagi mengizinkan aksi tersebut.
+    useEffect(() => {
+        if (!draftOwner || !item) return;
+        if (!canRsvp) removeEmployeeDraft(draftOwner, `appointments:detail:${id}:decline`);
+        if (!canCancel) removeEmployeeDraft(draftOwner, `appointments:detail:${id}:cancel`);
+        if (!canMark) removeEmployeeDraft(draftOwner, `appointments:detail:${id}:marks`);
+        if (!canMeetingSettings) {
+            removeEmployeeDraft(draftOwner, `appointments:detail:${id}:edit-open`);
+            removeEmployeeDraft(draftOwner, `appointments:edit:${id}`);
+        }
+    }, [draftOwner, item, id, canRsvp, canCancel, canMark, canMeetingSettings]);
+
+    useEffect(() => {
+        if (!draftOwner || !item || editModalChecked) return;
+        setEditModalChecked(true);
+        if (!canMeetingSettings) return;
+        const flag = readEmployeeDraft<{ open: boolean }>(draftOwner, `appointments:detail:${id}:edit-open`, {
+            validate: (raw): raw is { open: boolean } => isPlainObject(raw) && raw.open === true,
+        });
+        if (flag.status === "found") {
+            if (readEmployeeDraft(draftOwner, `appointments:edit:${id}`).status === "found") {
+                setEditing(true);
+            } else {
+                removeEmployeeDraft(draftOwner, `appointments:detail:${id}:edit-open`);
+            }
+        }
+    }, [draftOwner, item, editModalChecked, canMeetingSettings, id]);
+
+    useEffect(() => {
+        if (!draftOwner || !editModalChecked) return;
+        if (editing && canMeetingSettings) {
+            writeEmployeeDraft(draftOwner, `appointments:detail:${id}:edit-open`, { open: true });
+        } else {
+            removeEmployeeDraft(draftOwner, `appointments:detail:${id}:edit-open`);
+        }
+    }, [draftOwner, editModalChecked, editing, canMeetingSettings, id]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -81,6 +237,7 @@ function DetailContent({ id }: { id: string }) {
             }
             if (!detailRes.ok) throw new Error(await getResponseErrorMessage(detailRes, "Gagal memuat detail meeting."));
             const json = await detailRes.json();
+            setNowMs(Date.now());
             setItem(json.data);
             setSyncKey((k) => k + 1);
         } catch (err) {
@@ -110,6 +267,9 @@ function DetailContent({ id }: { id: string }) {
                 body: JSON.stringify({ action, note: note?.trim() || null }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal merespons undangan meeting."));
+            clearDeclineDraft();
+            setAskingDecline(false);
+            setDeclineNote("");
             await load();
         } catch (err) {
             reportClientError("MeetingDetailPage", "Gagal RSVP", err);
@@ -134,6 +294,10 @@ function DetailContent({ id }: { id: string }) {
                 body: JSON.stringify({ reason: cancelReason.trim() }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan meeting."));
+            clearCancelDraft();
+            clearMarksDraft();
+            removeEmployeeDraft(draftOwner, `appointments:edit:${id}`);
+            removeEmployeeDraft(draftOwner, `appointments:detail:${id}:edit-open`);
             toast("Meeting dibatalkan.", "success");
             router.push("/employee/appointments");
         } catch (err) {
@@ -173,6 +337,7 @@ function DetailContent({ id }: { id: string }) {
                 body: JSON.stringify({ marks: payload }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan data kehadiran."));
+            clearMarksDraft();
             setMarks({});
             await load();
         } catch (err) {
@@ -210,29 +375,6 @@ function DetailContent({ id }: { id: string }) {
         );
     }
 
-    const canManage = canManageAll || (!!myEmployeeId && (item.requesterEmployeeId === myEmployeeId || item.leaderEmployeeId === myEmployeeId || item.notulisEmployeeId === myEmployeeId));
-    const isFrozen = item.status === "COMPLETED" || item.status === "CANCELLED";
-    const isOverdueStored = item.status === "SCHEDULED" && (item.lifecycle === "COMPLETED" || item.lifecycle === "CANCELLED");
-    // Pengaturan Meeting (termasuk pimpinan rapat & PIC) juga dibuka saat
-    // meeting berjalan; perubahan jadwal/ruang tetap ditolak service.
-    const canMeetingSettings = canManage && item.status === "SCHEDULED" && (item.lifecycle === "SCHEDULED" || item.lifecycle === "IN_PROGRESS");
-    const canCancel = canManage && item.status === "SCHEDULED" && item.lifecycle === "SCHEDULED";
-    const canComplete = canManage && item.status === "SCHEDULED" && Date.now() >= new Date(item.startAt).getTime();
-    const nowMs = Date.now();
-    const meetingStartMs = new Date(item.startAt).getTime();
-    const meetingEndMs = new Date(item.endAt).getTime();
-    // Task: buat HANYA selama meeting berjalan; kerjakan HANYA setelah meeting selesai.
-    // Pemantau (bukan penyelenggara/peserta) hanya membaca: tanpa Beri Task,
-    // tanpa kelola, tanpa tulis notulensi. WIG002 tanpa employeeId tetap bisa.
-    const isInvolved = !myEmployeeId || item.requesterEmployeeId === myEmployeeId || item.participants.some((p) => p.employeeId === myEmployeeId);
-    const canAccessWorkspace = item.canAccessWorkspace ?? isInvolved;
-    // Beri task hanya oleh PIC notulensi atau pimpinan rapat (bukan semua peserta), selama meeting berjalan.
-    const canCreateMeetingTask = item.status === "SCHEDULED" && nowMs >= meetingStartMs && nowMs < meetingEndMs && Boolean(myEmployeeId) && (myEmployeeId === item.notulisEmployeeId || myEmployeeId === item.leaderEmployeeId);
-    const canMark = canManage && item.status !== "CANCELLED" && nowMs >= new Date(item.startAt).getTime() && nowMs <= new Date(item.endAt).getTime() + 24 * 60 * 60 * 1000;
-    const myParticipant = myEmployeeId ? item.participants.find((p) => p.employeeId === myEmployeeId) ?? null : null;
-    const myResponse = myParticipant?.inviteStatus ?? "PENDING";
-    const rsvpLocked = myResponse === "ACCEPTED" || myResponse === "DECLINED";
-    const canRsvp = myParticipant !== null && !rsvpLocked && item.status === "SCHEDULED" && nowMs <= new Date(item.endAt).getTime();
     const rsvpCounts = {
         accepted: item.participants.filter((p) => p.inviteStatus === "ACCEPTED").length,
         declined: item.participants.filter((p) => p.inviteStatus === "DECLINED").length,
@@ -393,6 +535,14 @@ function DetailContent({ id }: { id: string }) {
                             </div>
                             {askingDecline && (
                                 <div className="space-y-2 rounded-xl border border-[var(--border)] p-2.5">
+                                    <DraftNotice
+                                        compact
+                                        visible={declineDraftRestored && declineNote.trim().length > 0}
+                                        onDiscard={() => {
+                                            discardDeclineDraft();
+                                            setDeclineNote("");
+                                        }}
+                                    />
                                     <label className="form-label" htmlFor="decline-note">Alasan Penolakan * (dapat dibaca oleh penyelenggara)</label>
                                     <textarea
                                         id="decline-note"
@@ -471,10 +621,21 @@ function DetailContent({ id }: { id: string }) {
                 </div>
 
                 {canMark && Object.keys(marks).length > 0 && (
-                    <button type="button" onClick={handleSaveMarks} disabled={marking} className="btn btn-secondary w-full">
-                        {marking ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
-                        {marking ? "Menyimpan…" : `Simpan Kehadiran (${Object.keys(marks).length})`}
-                    </button>
+                    <div className="space-y-2">
+                        <DraftNotice
+                            compact
+                            visible={marksDraftRestored}
+                            message="Pilihan kehadiran belum tersimpan dipulihkan."
+                            onDiscard={() => {
+                                discardMarksDraft();
+                                setMarks({});
+                            }}
+                        />
+                        <button type="button" onClick={handleSaveMarks} disabled={marking} className="btn btn-secondary w-full">
+                            {marking ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+                            {marking ? "Menyimpan…" : `Simpan Kehadiran (${Object.keys(marks).length})`}
+                        </button>
+                    </div>
                 )}
 
                 <div className="flex gap-2">
@@ -522,6 +683,14 @@ function DetailContent({ id }: { id: string }) {
                 </div>
                 {askingCancel && (
                     <div className="space-y-2 rounded-xl border border-[var(--border)] p-3">
+                        <DraftNotice
+                            compact
+                            visible={cancelDraftRestored && cancelReason.trim().length > 0}
+                            onDiscard={() => {
+                                discardCancelDraft();
+                                setCancelReason("");
+                            }}
+                        />
                         <label className="form-label" htmlFor="cancel-reason">Alasan Pembatalan *</label>
                         <textarea
                             id="cancel-reason"

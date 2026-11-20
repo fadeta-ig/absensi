@@ -7,6 +7,9 @@ import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
 import PageHeader from "@/components/ui/PageHeader";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 
 interface TodoItem {
     id: string;
@@ -20,6 +23,19 @@ export default function TodosPage() {
     const [todos, setTodos] = useState<TodoItem[]>([]);
     const [newTodo, setNewTodo] = useState("");
     const [loading, setLoading] = useState(false);
+
+    const {
+        restored: todoDraftRestored,
+        clearDraft: clearTodoDraft,
+        discardDraft: discardTodoDraft,
+    } = useEmployeeDraft<{ newTodo: string }>({
+        formKey: "todos:create",
+        value: { newTodo },
+        isDirty: (draft) => draft.newTodo.trim().length > 0,
+        validate: (raw): raw is { newTodo: string } =>
+            isPlainObject(raw) && typeof raw.newTodo === "string",
+        onRestore: (draft) => setNewTodo(draft.newTodo),
+    });
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [busyId, setBusyId] = useState<string | null>(null);
@@ -59,6 +75,7 @@ export default function TodosPage() {
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menambahkan catatan."));
             const todo = await res.json();
             setTodos((prev) => [todo, ...prev]);
+            clearTodoDraft();
             setNewTodo("");
             toast("Catatan berhasil ditambahkan.", "success");
         } catch (error) {
@@ -134,6 +151,14 @@ export default function TodosPage() {
             )}
 
             {/* Add */}
+            <DraftNotice
+                compact
+                visible={todoDraftRestored && newTodo.trim().length > 0}
+                onDiscard={() => {
+                    discardTodoDraft();
+                    setNewTodo("");
+                }}
+            />
             <form onSubmit={addTodo} className="flex gap-2">
                 <input
                     type="text"

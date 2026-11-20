@@ -9,6 +9,10 @@ import {
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { isPlainObject, readEmployeeDraft } from "@/lib/formPersistence";
+import DraftNotice from "@/components/ui/DraftNotice";
 import { NoticeBox } from "@/components/ui/NoticeBox";
 import { DestructiveButton } from "@/components/ui/DestructiveButton";
 import PageHeader from "@/components/ui/PageHeader";
@@ -118,6 +122,7 @@ export default function ProfilePage() {
     const toast = useToast();
     const confirm = useConfirm();
     const { logout, loggingOut } = useEmployeeLogout();
+    const draftOwner = useEmployeeDraftOwner();
 
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -158,7 +163,7 @@ export default function ProfilePage() {
         void loadProfile();
     }, [toast]);
 
-    // ── Deep-link #keamanan (mis. dari PasskeyPrompt) ───────────────────────────
+    // ── Deep-link #keamanan (mis. dari PasskeyPrompt) & auto-open passkey draft ─
     useEffect(() => {
         if (typeof window === "undefined") return;
         if (window.location.hash === "#keamanan") {
@@ -166,13 +171,39 @@ export default function ProfilePage() {
             requestAnimationFrame(() => {
                 document.getElementById("keamanan")?.scrollIntoView({ block: "start" });
             });
+            return;
         }
-    }, []);
+        if (draftOwner && readEmployeeDraft(draftOwner, "profile:passkey-label").status === "found") {
+            setSecOpen(true);
+        }
+    }, [draftOwner]);
+
+    const serverPhone = profile?.phone ?? "";
+    const {
+        restored: phoneDraftRestored,
+        clearDraft: clearPhoneDraft,
+        discardDraft: discardPhoneDraft,
+    } = useEmployeeDraft<{ phone: string }>({
+        formKey: "profile:phone",
+        value: { phone },
+        enabled: Boolean(profile),
+        baseline: serverPhone,
+        hasBaseline: Boolean(profile),
+        isDirty: (draft) => draft.phone !== serverPhone,
+        validate: (raw): raw is { phone: string } =>
+            isPlainObject(raw) && typeof raw.phone === "string",
+        onRestore: (draft) => {
+            setPhone(draft.phone);
+            setIsDirty(draft.phone !== serverPhone);
+            setDataOpen(true);
+        },
+    });
 
     // ── Phone Change Handler ───────────────────────────────────────────────────
     const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPhone(e.target.value);
-        setIsDirty(true);
+        const nextPhone = e.target.value;
+        setPhone(nextPhone);
+        setIsDirty(nextPhone !== serverPhone);
     };
 
     // ── Save Handler ───────────────────────────────────────────────────────────
@@ -196,6 +227,7 @@ export default function ProfilePage() {
             const data = await res.json() as { success?: boolean; error?: string };
 
             if (data.success) {
+                clearPhoneDraft();
                 setIsDirty(false);
                 toast("Profil berhasil disimpan!", "success");
                 // Update local state tanpa refetch
@@ -332,6 +364,16 @@ export default function ProfilePage() {
                                 <Phone className="w-4 h-4 text-[var(--primary)]" />
                                 Informasi yang Dapat Diubah
                             </h3>
+
+                            <DraftNotice
+                                compact
+                                visible={phoneDraftRestored && isDirty}
+                                onDiscard={() => {
+                                    discardPhoneDraft();
+                                    setPhone(serverPhone);
+                                    setIsDirty(false);
+                                }}
+                            />
 
                             <div className="form-group !mb-0">
                                 <label className="form-label flex items-center gap-1">

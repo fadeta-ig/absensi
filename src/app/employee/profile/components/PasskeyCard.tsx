@@ -7,6 +7,9 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { SettingCard } from "@/components/ui/SettingCard";
 import { NoticeBox } from "@/components/ui/NoticeBox";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 
 interface PasskeyDevice {
     id: string;
@@ -30,6 +33,19 @@ export default function PasskeyCard() {
     const [supported, setSupported] = useState<boolean | null>(null);
     const [label, setLabel] = useState("");
     const [message, setMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+    const {
+        restored: labelDraftRestored,
+        clearDraft: clearLabelDraft,
+        discardDraft: discardLabelDraft,
+    } = useEmployeeDraft<{ label: string }>({
+        formKey: "profile:passkey-label",
+        value: { label },
+        isDirty: (draft) => draft.label.trim().length > 0,
+        validate: (raw): raw is { label: string } =>
+            isPlainObject(raw) && typeof raw.label === "string",
+        onRestore: (draft) => setLabel(draft.label),
+    });
 
     useEffect(() => {
         let cancelled = false;
@@ -114,6 +130,7 @@ export default function PasskeyCard() {
             });
             const data = await verifyRes.json();
             if (!verifyRes.ok) throw new Error(data.error || "Gagal mendaftarkan perangkat.");
+            clearLabelDraft();
             setLabel("");
             toast("Perangkat berhasil didaftarkan. Login berikutnya bisa pakai sidik jari / Face ID.", "success");
             await load();
@@ -196,6 +213,14 @@ export default function PasskeyCard() {
 
                     {supported !== false && (
                         <div className="space-y-2">
+                            <DraftNotice
+                                compact
+                                visible={labelDraftRestored && label.trim().length > 0}
+                                onDiscard={() => {
+                                    discardLabelDraft();
+                                    setLabel("");
+                                }}
+                            />
                             <label className="form-label" htmlFor="passkey-label">Nama Perangkat (opsional)</label>
                             <input
                                 id="passkey-label"
