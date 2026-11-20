@@ -43,10 +43,12 @@ import {
     createEquipmentUnit,
     getActiveEquipmentSettingsScopes,
     getEmployeeEquipmentCapabilities,
+    getEquipmentApproversForAdmin,
     getEquipmentAssignments,
     getEquipmentQcMembersForAdmin,
     getEquipmentSettingsDelegatesForAdmin,
     getEquipmentTemplates,
+    getEquipmentTopViewersForAdmin,
     getEquipmentUnits,
     invalidateEquipmentQcMembersCache,
     setEquipmentApprovers,
@@ -208,25 +210,37 @@ describe("meta-governance lock (delegates WIG002-only)", () => {
 });
 
 describe("per-tab scoped delegation & read dependencies", () => {
-    it("PIC scope assignments boleh baca units/products/checklist dan kelola assignments, tapi ditolak tulis template/unit/produk/atasan", async () => {
-        mockDelegatesConfig([{ employeeId: "PIC-001", scopes: ["assignments"] }]);
+    it("PIC scope assignments boleh baca units/products/checklist, kelola assignments & anggota QC, tapi ditolak tulis template/unit/produk/atasan", async () => {
+        mockDelegatesConfig(
+            [{ employeeId: "PIC-001", scopes: ["assignments"] }],
+            { "equipment.qcMembers.WIG": ["QC-001"] }
+        );
         mockActiveEmployee("PIC-001");
         mocked.equipmentAssignment.findMany.mockResolvedValue([] as never);
         mocked.equipmentUnit.findMany.mockResolvedValue([] as never);
         mocked.equipmentProduct.findMany.mockResolvedValue([] as never);
         mocked.equipmentProduct.findUnique.mockResolvedValue({ id: "p1", company: "WIG", name: "P1" } as never);
         mocked.equipmentProductTool.findMany.mockResolvedValue([] as never);
+        mocked.employee.findMany.mockResolvedValue([
+            { employeeId: "QC-001", name: "Siti QC", isActive: true, email: null },
+        ] as never);
 
         await expect(getEquipmentAssignments(picSession())).resolves.toEqual([]);
         await expect(getEquipmentUnits(picSession())).resolves.toEqual([]);
         await expect(listEquipmentProducts(picSession(), "WIG")).resolves.toEqual([]);
         await expect(getProductToolChecklist(picSession(), "p1")).resolves.toMatchObject({ totalCount: 0 });
+        await expect(getEquipmentQcMembersForAdmin(picSession(), "WIG")).resolves.toHaveLength(1);
+        await expect(setEquipmentQcMembers(picSession(), "WIG", ["QC-001", "QC-002"], actor)).resolves.toEqual([
+            "QC-001",
+            "QC-002",
+        ]);
 
-        // Deny-by-default pada scope di luar assignments
+        // Deny-by-default pada scope di luar assignments (termasuk atasan: Top Reviewer & Approver Final)
         await expect(createEquipmentTemplate(picSession(), "T1")).rejects.toMatchObject({ statusCode: 403 });
         await expect(createEquipmentUnit(picSession(), { name: "U1", templateId: "t1" })).rejects.toMatchObject({ statusCode: 403 });
         await expect(createEquipmentProduct(picSession(), { company: "WIG", name: "P2" })).rejects.toMatchObject({ statusCode: 403 });
-        await expect(getEquipmentQcMembersForAdmin(picSession(), "WIG")).rejects.toMatchObject({ statusCode: 403 });
+        await expect(getEquipmentApproversForAdmin(picSession(), "WIG")).rejects.toMatchObject({ statusCode: 403 });
+        await expect(getEquipmentTopViewersForAdmin(picSession())).rejects.toMatchObject({ statusCode: 403 });
     });
 
     it("PIC scope units boleh baca templates (read dependency) dan tulis units, tapi ditolak tulis template atau assignments", async () => {
@@ -253,8 +267,19 @@ describe("per-tab scoped delegation & read dependencies", () => {
     });
 });
 
-describe("SoD anti self-elevation pada scope atasan", () => {
-    it("PIC delegasi scope atasan diblokir 403 bila menambahkan dirinya sendiri ke QC, Approver, atau Top Viewer", async () => {
+describe("SoD anti self-elevation pada Anggota QC (assignments) dan Atasan (atasan)", () => {
+    it("PIC delegasi scope assignments diblokir 403 bila menambahkan dirinya sendiri ke Anggota QC, tapi boleh menambahkan orang lain", async () => {
+        mockDelegatesConfig(
+            [{ employeeId: "PIC-001", scopes: ["assignments"] }],
+            { "equipment.qcMembers.WIG": ["QC-001"] }
+        );
+        mockActiveEmployee("PIC-001");
+
+        await expect(setEquipmentQcMembers(picSession(), "WIG", ["QC-001", "PIC-001"], actor)).rejects.toMatchObject({ statusCode: 403 });
+        await expect(setEquipmentQcMembers(picSession(), "WIG", ["QC-001", "QC-002"], actor)).resolves.toEqual(["QC-001", "QC-002"]);
+    });
+
+    it("PIC delegasi scope atasan diblokir 403 mengelola Anggota QC dan diblokir 403 menambahkan dirinya sendiri ke Approver/Top Viewer", async () => {
         mockDelegatesConfig(
             [{ employeeId: "PIC-001", scopes: ["atasan"] }],
             {
@@ -265,17 +290,22 @@ describe("SoD anti self-elevation pada scope atasan", () => {
         );
         mockActiveEmployee("PIC-001");
 
-        await expect(setEquipmentQcMembers(picSession(), "WIG", ["QC-001", "PIC-001"], actor)).rejects.toMatchObject({ statusCode: 403 });
+        // Anggota QC sudah masuk ranah assignments — scope atasan saja tidak boleh baca/tulis QC
+        await expect(getEquipmentQcMembersForAdmin(picSession(), "WIG")).rejects.toMatchObject({ statusCode: 403 });
+        await expect(setEquipmentQcMembers(picSession(), "WIG", ["QC-001", "QC-002"], actor)).rejects.toMatchObject({ statusCode: 403 });
+
+        // SoD anti self-elevation pada Approver Final & Top Reviewer
         await expect(setEquipmentApprovers(picSession(), "WIG", ["AP-001", "PIC-001"], actor)).rejects.toMatchObject({ statusCode: 403 });
         await expect(setEquipmentTopViewers(picSession(), ["TOP-001", "PIC-001"], actor)).rejects.toMatchObject({ statusCode: 403 });
 
-        // Boleh menambahkan orang lain (bukan diri sendiri)
-        await expect(setEquipmentQcMembers(picSession(), "WIG", ["QC-001", "QC-002"], actor)).resolves.toEqual(["QC-001", "QC-002"]);
+        // Boleh menambahkan orang lain (bukan diri sendiri) pada Top Reviewer & Approver Final
+        await expect(setEquipmentApprovers(picSession(), "WIG", ["AP-001", "AP-002"], actor)).resolves.toEqual(["AP-001", "AP-002"]);
+        await expect(setEquipmentTopViewers(picSession(), ["TOP-001", "TOP-002"], actor)).resolves.toEqual(["TOP-001", "TOP-002"]);
     });
 
-    it("PIC yang sebelumnya sudah ditetapkan WIG002 sebagai QC tetap dapat memperbarui anggota QC lain tanpa harus menghapus dirinya sendiri", async () => {
+    it("PIC scope assignments yang sebelumnya sudah ditetapkan WIG002 sebagai QC tetap dapat memperbarui anggota QC lain tanpa harus menghapus dirinya sendiri", async () => {
         mockDelegatesConfig(
-            [{ employeeId: "PIC-001", scopes: ["atasan"] }],
+            [{ employeeId: "PIC-001", scopes: ["assignments"] }],
             { "equipment.qcMembers.WIG": ["PIC-001"] }
         );
         mockActiveEmployee("PIC-001");

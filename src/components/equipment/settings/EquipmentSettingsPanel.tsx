@@ -139,16 +139,16 @@ export default function EquipmentSettingsPanel({
                         units={data.units}
                         fetchAssignments={data.fetchAssignments}
                         fetchUnits={data.fetchUnits}
-                    />
-                )}
-
-                {activeTab === "atasan" && allowedScopes.includes("atasan") && (
-                    <AtasanTab
                         qcMembers={data.qcMembers}
                         qcError={data.qcError}
                         qcCompany={data.qcCompany}
                         setQcCompany={data.setQcCompany}
                         fetchQcMembers={data.fetchQcMembers}
+                    />
+                )}
+
+                {activeTab === "atasan" && allowedScopes.includes("atasan") && (
+                    <AtasanTab
                         topViewers={data.topViewers}
                         topViewerError={data.topViewerError}
                         fetchTopViewers={data.fetchTopViewers}

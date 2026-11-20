@@ -39,14 +39,14 @@ const SCOPE_META: Record<
         description: "Kelola daftar produk WIG/MKI dan pemetaan alat per produk.",
     },
     assignments: {
-        label: "Penugasan",
+        label: "Penugasan & Anggota QC",
         shortLabel: "Penugasan",
-        description: "Tugaskan atau akhiri penugasan inspeksi ke karyawan.",
+        description: "Kelola penugasan inspeksi operator dan daftar Anggota QC (tanpa hak menambahkan diri sendiri ke QC).",
     },
     atasan: {
-        label: "Atasan (QC, Approver & Top Reviewer)",
+        label: "Atasan (Top Reviewer & Approver Final)",
         shortLabel: "Atasan",
-        description: "Kelola daftar QC, approver final, dan top reviewer (tanpa hak mengangkat diri sendiri).",
+        description: "Kelola daftar top reviewer dan approver final (tanpa hak mengangkat diri sendiri).",
         sensitive: true,
     },
 };
@@ -285,8 +285,7 @@ export default function DelegatesTab({
                                 <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
                                 <span>
                                     <strong>Pengamanan SoD aktif:</strong> Meskipun diberi akses tab Atasan, PIC delegasi
-                                    diblokir sistem untuk menambahkan dirinya sendiri ke daftar QC, Approver Final, atau
-                                    Top Reviewer.
+                                    diblokir sistem untuk menambahkan dirinya sendiri sebagai Top Reviewer atau Approver Final.
                                 </span>
                             </div>
                         )}

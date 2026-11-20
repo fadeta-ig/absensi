@@ -143,7 +143,7 @@ export async function getEquipmentQcMembersForAdmin(
     session: SessionPayload,
     company: EquipmentCompany
 ): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
-    await requireEquipmentSettingsScope(session, "atasan");
+    await requireEquipmentSettingsScope(session, "assignments");
     return getEquipmentQcMembers(company);
 }
 
@@ -160,7 +160,7 @@ export async function setEquipmentQcMembers(
     employeeIds: string[],
     actor: { userId?: string | null; username: string }
 ): Promise<string[]> {
-    await requireEquipmentSettingsScope(session, "atasan");
+    await requireEquipmentSettingsScope(session, "assignments");
     const ids = [...new Set(employeeIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length > EQUIPMENT_QC_MEMBERS_MAX) {
         throw new EquipmentError(`Anggota QC ${company} maksimal ${EQUIPMENT_QC_MEMBERS_MAX} orang.`, 409);

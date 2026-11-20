@@ -6,11 +6,11 @@ import { equipmentQcMembersSchema } from "@/lib/validations/validationSchemas";
 
 /**
  * GET/POST /api/ga/equipment/qc-members?company=WIG|MKI
- * Daftar employee QC per perusahaan (di-set WIG002 / PIC delegasi scope atasan).
+ * Daftar employee QC per perusahaan (di-set WIG002 / PIC delegasi scope assignments).
  * Semua anggota melihat semua antrean perusahaannya.
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireEquipmentSettingsAuth("atasan");
+    const auth = await requireEquipmentSettingsAuth("assignments");
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireEquipmentSettingsAuth("atasan");
+    const auth = await requireEquipmentSettingsAuth("assignments");
     if (auth.error) return auth.error;
     const { session } = auth;
 
