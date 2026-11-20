@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     AlertTriangle,
     CalendarDays,
@@ -16,6 +16,16 @@ import {
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import {
+    deepEqual,
+    isPlainObject,
+    readEmployeeDraft,
+    removeEmployeeDraft,
+    writeEmployeeDraft,
+} from "@/lib/formPersistence";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import {
     GREETING_DAYS,
@@ -75,9 +85,28 @@ function toRuleInput(rule: GreetingRuleView): GreetingRuleInput {
     };
 }
 
+function isValidGreetingRuleInput(raw: unknown): raw is GreetingRuleInput {
+    if (!isPlainObject(raw)) return false;
+    return (
+        typeof raw.name === "string" &&
+        typeof raw.greeting === "string" &&
+        typeof raw.subGreeting === "string" &&
+        typeof raw.startTime === "string" &&
+        typeof raw.endTime === "string" &&
+        typeof raw.repeatWeekly === "boolean" &&
+        Array.isArray(raw.daysOfWeek) &&
+        raw.daysOfWeek.every((d) => typeof d === "number" && Number.isInteger(d) && d >= 0 && d <= 6) &&
+        (raw.specificDate === null || typeof raw.specificDate === "string") &&
+        typeof raw.priority === "number" &&
+        Number.isFinite(raw.priority) &&
+        typeof raw.isActive === "boolean"
+    );
+}
+
 export default function GreetingSettingsPanel({ canManageEditor = false }: GreetingSettingsPanelProps) {
     const toast = useToast();
     const confirm = useConfirm();
+    const draftOwner = useEmployeeDraftOwner();
 
     const [rules, setRules] = useState<GreetingRuleView[]>([]);
     const [loading, setLoading] = useState(true);
@@ -85,6 +114,7 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
 
     const [form, setForm] = useState<GreetingRuleInput | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [activeEditorRestored, setActiveEditorRestored] = useState(false);
     const [saving, setSaving] = useState(false);
     const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -133,6 +163,100 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
     useEffect(() => {
         if (canManageEditor) void fetchEditor();
     }, [canManageEditor, fetchEditor]);
+
+    const editingServerRule = useMemo(
+        () => (editingId ? rules.find((r) => r.id === editingId) ?? null : null),
+        [editingId, rules]
+    );
+    const editingBaseline = useMemo(
+        () => (editingServerRule ? toRuleInput(editingServerRule) : undefined),
+        [editingServerRule]
+    );
+    const defaultCreateRule = useMemo(() => emptyRule(), []);
+    const activeRuleFormKey = form ? (editingId ? `greeting:edit:${editingId}` : "greeting:create") : null;
+
+    const {
+        restored: ruleDraftRestored,
+        clearDraft: clearRuleDraft,
+        discardDraft: discardRuleDraft,
+    } = useEmployeeDraft<GreetingRuleInput>({
+        formKey: activeRuleFormKey,
+        value: form ?? defaultCreateRule,
+        enabled: Boolean(form && (!editingId || editingServerRule)),
+        baseline: editingId ? editingBaseline : undefined,
+        hasBaseline: Boolean(editingId && editingServerRule),
+        isDirty: (draft) =>
+            editingId && editingBaseline
+                ? !deepEqual(draft, editingBaseline)
+                : !deepEqual(draft, defaultCreateRule),
+        validate: isValidGreetingRuleInput,
+        onRestore: (draft) => setForm(draft),
+    });
+
+    // Pulihkan editor sapaan terakhir bila refresh saat formulir masih terbuka.
+    useEffect(() => {
+        if (loading || activeEditorRestored || !draftOwner) return;
+        setActiveEditorRestored(true);
+        const pointer = readEmployeeDraft<{ mode: "create" } | { mode: "edit"; ruleId: string }>(
+            draftOwner,
+            "greeting:active-editor",
+            {
+                validate: (raw): raw is { mode: "create" } | { mode: "edit"; ruleId: string } =>
+                    isPlainObject(raw) &&
+                    (raw.mode === "create" ||
+                        (raw.mode === "edit" && typeof raw.ruleId === "string" && raw.ruleId.length > 0)),
+            }
+        );
+        if (pointer.status !== "found") return;
+        const activeEditor = pointer.data;
+        if (activeEditor.mode === "create") {
+            if (readEmployeeDraft(draftOwner, "greeting:create", { validate: isValidGreetingRuleInput }).status === "found") {
+                setEditingId(null);
+                setForm(emptyRule());
+            } else {
+                removeEmployeeDraft(draftOwner, "greeting:active-editor");
+            }
+            return;
+        }
+        const matched = rules.find((r) => r.id === activeEditor.ruleId);
+        if (!matched) {
+            removeEmployeeDraft(draftOwner, `greeting:edit:${activeEditor.ruleId}`);
+            removeEmployeeDraft(draftOwner, "greeting:active-editor");
+            return;
+        }
+        const editDraft = readEmployeeDraft(draftOwner, `greeting:edit:${matched.id}`, {
+            validate: isValidGreetingRuleInput,
+            expectedBaseline: toRuleInput(matched),
+            hasExpectedBaseline: true,
+        });
+        if (editDraft.status === "found") {
+            setEditingId(matched.id);
+            setForm(toRuleInput(matched));
+        } else {
+            removeEmployeeDraft(draftOwner, "greeting:active-editor");
+        }
+    }, [loading, activeEditorRestored, draftOwner, rules]);
+
+    useEffect(() => {
+        if (!draftOwner || !activeEditorRestored) return;
+        if (!form) {
+            removeEmployeeDraft(draftOwner, "greeting:active-editor");
+            return;
+        }
+        const isCurrentDirty =
+            editingId && editingBaseline
+                ? !deepEqual(form, editingBaseline)
+                : !deepEqual(form, defaultCreateRule);
+        if (isCurrentDirty) {
+            writeEmployeeDraft(
+                draftOwner,
+                "greeting:active-editor",
+                editingId ? { mode: "edit", ruleId: editingId } : { mode: "create" }
+            );
+        } else {
+            removeEmployeeDraft(draftOwner, "greeting:active-editor");
+        }
+    }, [draftOwner, activeEditorRestored, form, editingId, editingBaseline, defaultCreateRule]);
 
     const startCreate = useCallback(() => {
         setEditingId(null);
@@ -184,6 +308,8 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
                 throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan sapaan."));
             }
             toast(editingId ? "Sapaan diperbarui." : "Sapaan ditambahkan.", "success");
+            clearRuleDraft();
+            removeEmployeeDraft(draftOwner, "greeting:active-editor");
             closeForm();
             await fetchRules();
         } catch (err) {
@@ -193,7 +319,7 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
         } finally {
             setSaving(false);
         }
-    }, [closeForm, editingId, fetchRules, form, saving, toast]);
+    }, [clearRuleDraft, closeForm, draftOwner, editingId, fetchRules, form, saving, toast]);
 
     const toggleActive = useCallback(async (rule: GreetingRuleView) => {
         if (busyId) return;
@@ -231,7 +357,12 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
                         throw new Error(await getResponseErrorMessage(res, "Gagal menghapus sapaan."));
                     }
                     toast("Sapaan dihapus.", "success");
-                    if (editingId === rule.id) closeForm();
+                    removeEmployeeDraft(draftOwner, `greeting:edit:${rule.id}`);
+                    if (editingId === rule.id) {
+                        clearRuleDraft();
+                        removeEmployeeDraft(draftOwner, "greeting:active-editor");
+                        closeForm();
+                    }
                     await fetchRules();
                 } catch (err) {
                     const message = err instanceof Error ? err.message : "Gagal menghapus sapaan.";
@@ -240,7 +371,7 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
                 }
             },
         });
-    }, [closeForm, confirm, editingId, fetchRules, toast]);
+    }, [clearRuleDraft, closeForm, confirm, draftOwner, editingId, fetchRules, toast]);
 
     const saveEditor = useCallback(async (employeeId: string | null) => {
         if (savingEditor) return;
@@ -329,6 +460,16 @@ export default function GreetingSettingsPanel({ canManageEditor = false }: Greet
                             <X className="h-4 w-4" />
                         </button>
                     </div>
+
+                    <DraftNotice
+                        compact
+                        visible={ruleDraftRestored}
+                        onDiscard={() => {
+                            discardRuleDraft();
+                            removeEmployeeDraft(draftOwner, "greeting:active-editor");
+                            setForm(editingServerRule ? toRuleInput(editingServerRule) : emptyRule());
+                        }}
+                    />
 
                     <div className="form-group !mb-0">
                         <label className="form-label" htmlFor="greeting-rule-name">Nama sapaan</label>

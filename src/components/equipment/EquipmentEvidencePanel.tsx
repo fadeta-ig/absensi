@@ -5,6 +5,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/Toast";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 
 export interface EquipmentEvidencePhoto {
@@ -70,6 +73,20 @@ export function EquipmentEvidencePanel({
     const [open, setOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
+    const {
+        restored: noteDraftRestored,
+        clearDraft: clearNoteDraft,
+        discardDraft: discardNoteDraft,
+    } = useEmployeeDraft<{ note: string }>({
+        formKey: canUpload ? `equipment:evidence-note:${inspectionId}` : null,
+        value: { note },
+        enabled: canUpload,
+        isDirty: (draft) => draft.note.trim().length > 0,
+        validate: (raw): raw is { note: string } =>
+            isPlainObject(raw) && typeof raw.note === "string",
+        onRestore: (draft) => setNote(draft.note),
+    });
+
     const fetchPhotos = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -114,6 +131,7 @@ export function EquipmentEvidencePanel({
 
                 const res = await fetch("/api/employee/equipment/evidence", { method: "POST", body: form });
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengunggah foto."));
+                clearNoteDraft();
                 setNote("");
                 toast("Foto bukti berhasil diunggah.", "success");
                 await fetchPhotos();
@@ -128,7 +146,7 @@ export function EquipmentEvidencePanel({
                 if (fileRef.current) fileRef.current.value = "";
             }
         },
-        [uploading, inspectionId, note, toast, fetchPhotos, onChanged]
+        [uploading, inspectionId, note, toast, fetchPhotos, onChanged, clearNoteDraft]
     );
 
     return (
@@ -237,6 +255,14 @@ export function EquipmentEvidencePanel({
 
             {canUpload && !loading && (!collapsible || open) && photos.length < maxPhotos && (
                 <div className="space-y-2">
+                    <DraftNotice
+                        compact
+                        visible={noteDraftRestored && note.trim().length > 0}
+                        onDiscard={() => {
+                            discardNoteDraft();
+                            setNote("");
+                        }}
+                    />
                     <input
                         type="text"
                         value={note}

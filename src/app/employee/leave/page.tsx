@@ -14,6 +14,9 @@ import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { formatDisplayDate, formatIndonesianDate } from "@/lib/utils";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useGlobalHolidays } from "@/hooks/useGlobalHolidays";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { formatReattachHint, isPlainObject } from "@/lib/formPersistence";
+import DraftNotice from "@/components/ui/DraftNotice";
 
 interface LeaveRequest {
     id: string;
@@ -136,6 +139,7 @@ export default function LeavePage() {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
     const [attachmentName, setAttachmentName] = useState("");
+    const [pendingAttachmentHint, setPendingAttachmentHint] = useState<string | null>(null);
     const [selectedDates, setSelectedDates] = useState<string[]>([]);
     const [monthCursor, setMonthCursor] = useState<MonthCursor>(() => monthCursorOf(addDaysKey(getWIBTodayKey(), 1)));
     // Kalender global (nasional + cuti bersama): disable tanggal libur resmi di grid.
@@ -244,6 +248,78 @@ export default function LeavePage() {
         if (compareMonth(c, maxMonth) > 0) return maxMonth;
         return c;
     }, [baseMonth, maxMonth]);
+
+    const {
+        restored: leaveDraftRestored,
+        clearDraft: clearLeaveDraft,
+        discardDraft: discardLeaveDraft,
+    } = useEmployeeDraft<{
+        showForm: boolean;
+        type: string;
+        startDate: string;
+        endDate: string;
+        reason: string;
+        selectedDates: string[];
+        monthCursor: MonthCursor;
+        hadAttachmentName: string | null;
+    }>({
+        formKey: "leave:create",
+        value: {
+            showForm,
+            type: form.type,
+            startDate: form.startDate,
+            endDate: form.endDate,
+            reason: form.reason,
+            selectedDates,
+            monthCursor,
+            hadAttachmentName: form.attachment ? (attachmentName || "lampiran") : pendingAttachmentHint,
+        },
+        isDirty: (draft) =>
+            draft.reason.trim().length > 0 ||
+            draft.selectedDates.length > 0 ||
+            draft.startDate.length > 0 ||
+            draft.endDate.length > 0 ||
+            draft.type !== "annual" ||
+            Boolean(draft.hadAttachmentName),
+        validate: (raw): raw is {
+            showForm: boolean;
+            type: string;
+            startDate: string;
+            endDate: string;
+            reason: string;
+            selectedDates: string[];
+            monthCursor: MonthCursor;
+            hadAttachmentName: string | null;
+        } => {
+            if (!isPlainObject(raw)) return false;
+            const validTypes = ["annual", "sick", "personal", "maternity", "paternity"];
+            if (typeof raw.showForm !== "boolean") return false;
+            if (typeof raw.type !== "string" || !validTypes.includes(raw.type)) return false;
+            if (typeof raw.startDate !== "string" || typeof raw.endDate !== "string" || typeof raw.reason !== "string") return false;
+            if (!Array.isArray(raw.selectedDates) || !raw.selectedDates.every((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))) return false;
+            if (!isPlainObject(raw.monthCursor) || typeof raw.monthCursor.y !== "number" || typeof raw.monthCursor.m !== "number") return false;
+            if (raw.hadAttachmentName !== null && typeof raw.hadAttachmentName !== "string") return false;
+            return true;
+        },
+        onRestore: (draft) => {
+            setForm({
+                type: draft.type,
+                startDate: draft.startDate,
+                endDate: draft.endDate,
+                reason: draft.reason,
+                attachment: "",
+            });
+            const validDates = draft.type === "annual"
+                ? draft.selectedDates.filter((d) => d > wibToday).sort()
+                : [...draft.selectedDates].sort();
+            setSelectedDates(validDates);
+            setMonthCursor(clampCursor(draft.monthCursor));
+            setPendingAttachmentHint(draft.hadAttachmentName);
+            if (draft.showForm) {
+                setShowForm(true);
+            }
+        },
+    });
     const monthStart = monthStartOf(monthCursor);
     const monthLen = daysInMonthOf(monthCursor);
     const monthLeadBlanks = getUTCDayKey(monthStart);
@@ -414,6 +490,7 @@ export default function LeavePage() {
         reader.onloadend = () => {
             setForm((prev) => ({ ...prev, attachment: reader.result as string }));
             setAttachmentName(file.name);
+            setPendingAttachmentHint(null);
             toast("Bukti berhasil dipilih!", "success");
         };
         reader.onerror = () => {
@@ -426,6 +503,7 @@ export default function LeavePage() {
     const clearAttachment = () => {
         setForm((prev) => ({ ...prev, attachment: "" }));
         setAttachmentName("");
+        setPendingAttachmentHint(null);
     };
 
     const handleSubmitDiscrete = async (e: React.FormEvent) => {
@@ -462,10 +540,12 @@ export default function LeavePage() {
             }
             const payload = await res.json();
             const createdCount = typeof payload?.count === "number" ? payload.count : sorted.length;
+            clearLeaveDraft();
             setShowForm(false);
             setSelectedDates([]);
             setAttachmentName("");
-            setForm({ type: form.type, startDate: "", endDate: "", reason: "", attachment: "" });
+            setPendingAttachmentHint(null);
+            setForm({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
             toast(`Pengajuan cuti berhasil dikirim (${createdCount} hari).`, "success");
             await loadLeaves();
         } catch (error) {
@@ -494,9 +574,11 @@ export default function LeavePage() {
             if (!res.ok) {
                 throw new Error(await getResponseErrorMessage(res, "Gagal mengirim pengajuan cuti"));
             }
+            clearLeaveDraft();
             setShowForm(false);
             setAttachmentName("");
-            setForm({ type: form.type, startDate: "", endDate: "", reason: "", attachment: "" });
+            setPendingAttachmentHint(null);
+            setForm({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
             toast("Pengajuan cuti berhasil dikirim!", "success");
             await loadLeaves();
         } catch (error) {
@@ -611,6 +693,23 @@ export default function LeavePage() {
                         </button>
                     </div>
                     <form onSubmit={isDiscrete ? handleSubmitDiscrete : handleSubmitRange} className="space-y-4">
+                        <DraftNotice
+                            compact
+                            visible={leaveDraftRestored}
+                            attachmentHint={
+                                form.attachment
+                                    ? null
+                                    : formatReattachHint(pendingAttachmentHint ? [pendingAttachmentHint] : null)
+                            }
+                            onDiscard={() => {
+                                discardLeaveDraft();
+                                setSelectedDates([]);
+                                setAttachmentName("");
+                                setPendingAttachmentHint(null);
+                                setMonthCursor(baseMonth);
+                                setForm({ type: "annual", startDate: "", endDate: "", reason: "", attachment: "" });
+                            }}
+                        />
                         <div className="form-group !mb-0">
                             <label className="form-label">Jenis Cuti/Izin</label>
                             <select className="form-select" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value }); setSelectedDates([]); setMonthCursor(baseMonth); }}>

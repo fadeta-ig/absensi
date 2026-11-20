@@ -12,6 +12,10 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { useRouter } from "next/navigation";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { isPlainObject, removeEmployeeDraft } from "@/lib/formPersistence";
+import DraftNotice from "@/components/ui/DraftNotice";
 
 const log = createClientLogger("AttendancePage");
 
@@ -103,7 +107,8 @@ export default function AttendancePage() {
     const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
     const [isNetworkChecking, setIsNetworkChecking] = useState(true);
 
-    // Off-day attendance reason state
+    // Off-day attendance reason state (hanya teks alasan; foto/GPS/Wi-Fi wajib live anti-fraud)
+    const draftOwner = useEmployeeDraftOwner();
     const [offDayReason, setOffDayReason] = useState("");
 
     // Submission & attendance record
@@ -113,6 +118,32 @@ export default function AttendancePage() {
     const submitLockRef = useRef(false);
     const redirectTimerRef = useRef<number | null>(null);
     const shiftDate = serverContext.context?.shiftDate;
+    const activeMode = serverContext.context?.activeMode;
+    const isClockIn = activeMode === "CLOCK_IN";
+    const isOffDay = networkInfo?.isOffDay ?? serverContext.context?.isOffDay ?? false;
+    const offDayDraftKey = shiftDate && isClockIn && isOffDay ? `attendance:offday:${shiftDate}` : null;
+
+    const {
+        restored: offDayDraftRestored,
+        clearDraft: clearOffDayDraft,
+        discardDraft: discardOffDayDraft,
+    } = useEmployeeDraft<{ offDayReason: string }>({
+        formKey: offDayDraftKey,
+        value: { offDayReason },
+        enabled: Boolean(offDayDraftKey),
+        isDirty: (draft) => draft.offDayReason.trim().length > 0,
+        validate: (raw): raw is { offDayReason: string } =>
+            isPlainObject(raw) && typeof raw.offDayReason === "string",
+        onRestore: (draft) => setOffDayReason(draft.offDayReason),
+    });
+
+    // Jika shift sudah selesai atau sudah berpindah ke CLOCK_OUT, bersihkan draf alasan hari libur shift tersebut.
+    useEffect(() => {
+        if (!draftOwner || !shiftDate || !activeMode) return;
+        if (activeMode === "CLOCK_OUT" || activeMode === "ALREADY_COMPLETED") {
+            removeEmployeeDraft(draftOwner, `attendance:offday:${shiftDate}`);
+        }
+    }, [draftOwner, shiftDate, activeMode]);
 
     useEffect(() => {
         if (!serverContext.context) return;
@@ -429,6 +460,7 @@ export default function AttendancePage() {
 
             const data = await res.json();
             void data;
+            clearOffDayDraft();
             keepLockedForNavigation = true;
             const doneAction = serverContext.context.activeMode;
             const doneShiftDate = serverContext.context.shiftDate;
@@ -453,17 +485,14 @@ export default function AttendancePage() {
         } finally {
             if (!keepLockedForNavigation) submitLockRef.current = false;
         }
-    }, [photoBlob, gpsInfo, networkInfo, offDayReason, router, serverContext, toast]);
+    }, [photoBlob, gpsInfo, networkInfo, offDayReason, router, serverContext, toast, clearOffDayDraft]);
 
-    const activeMode = serverContext.context?.activeMode;
-    const isClockIn = activeMode === "CLOCK_IN";
     const isClockOut = activeMode === "CLOCK_OUT";
     const isDone = activeMode === "ALREADY_COMPLETED";
 
     const isBypass = networkInfo?.bypassLocation ?? false;
     const isNetworkOk = isBypass || (networkInfo?.isOfficeWifi ?? false);
     const isGpsOk = isBypass || (gpsInfo?.isValid ?? false);
-    const isOffDay = networkInfo?.isOffDay ?? serverContext.context?.isOffDay ?? false;
     const isReasonValid = !isClockIn || !isOffDay || offDayReason.trim().length >= 3;
     const canSubmit = Boolean(photoBlob && isNetworkOk && isGpsOk && isReasonValid && serverContext.context && serverContext.isFresh && serverContext.isOnline && activeMode !== "ALREADY_COMPLETED" && status !== "submitting" && status !== "success");
 
@@ -561,7 +590,15 @@ export default function AttendancePage() {
                                 </div>
                             </div>
 
-                            <div className="pt-0.5">
+                            <div className="pt-0.5 space-y-2">
+                                <DraftNotice
+                                    compact
+                                    visible={offDayDraftRestored && offDayReason.trim().length > 0}
+                                    onDiscard={() => {
+                                        discardOffDayDraft();
+                                        setOffDayReason("");
+                                    }}
+                                />
                                 <input
                                     type="text"
                                     value={offDayReason}

@@ -15,6 +15,9 @@ import PageHeader from "@/components/ui/PageHeader";
 import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import { useAttendanceServerContext } from "@/hooks/useAttendanceServerContext";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { formatReattachHint, isPlainObject } from "@/lib/formPersistence";
+import DraftNotice from "@/components/ui/DraftNotice";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -99,7 +102,70 @@ export default function AttendanceCorrectionPage() {
 
     const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
     const [attachmentName, setAttachmentName] = useState<string | null>(null);
+    const [pendingAttachmentHint, setPendingAttachmentHint] = useState<string | null>(null);
     const [clockOutIsNextDay, setClockOutIsNextDay] = useState(false);
+
+    const {
+        restored: correctionDraftRestored,
+        clearDraft: clearCorrectionDraft,
+        discardDraft: discardCorrectionDraft,
+    } = useEmployeeDraft<{
+        showForm: boolean;
+        targetDate: string;
+        proposedClockIn: string;
+        proposedClockOut: string;
+        reason: string;
+        clockOutIsNextDay: boolean;
+        hadAttachmentName: string | null;
+    }>({
+        formKey: "attendance:correction",
+        value: {
+            showForm,
+            targetDate: form.targetDate,
+            proposedClockIn: form.proposedClockIn,
+            proposedClockOut: form.proposedClockOut,
+            reason: form.reason,
+            clockOutIsNextDay,
+            hadAttachmentName: attachmentFile ? attachmentName : pendingAttachmentHint,
+        },
+        isDirty: (draft) =>
+            draft.proposedClockIn.trim().length > 0 ||
+            draft.proposedClockOut.trim().length > 0 ||
+            draft.reason.trim().length > 0 ||
+            draft.clockOutIsNextDay ||
+            Boolean(draft.hadAttachmentName) ||
+            (Boolean(draft.targetDate) && Boolean(yesterdayStr) && draft.targetDate !== yesterdayStr),
+        validate: (raw): raw is {
+            showForm: boolean;
+            targetDate: string;
+            proposedClockIn: string;
+            proposedClockOut: string;
+            reason: string;
+            clockOutIsNextDay: boolean;
+            hadAttachmentName: string | null;
+        } =>
+            isPlainObject(raw) &&
+            typeof raw.showForm === "boolean" &&
+            typeof raw.targetDate === "string" &&
+            typeof raw.proposedClockIn === "string" &&
+            typeof raw.proposedClockOut === "string" &&
+            typeof raw.reason === "string" &&
+            typeof raw.clockOutIsNextDay === "boolean" &&
+            (raw.hadAttachmentName === null || typeof raw.hadAttachmentName === "string"),
+        onRestore: (draft) => {
+            setForm({
+                targetDate: draft.targetDate || yesterdayStr,
+                proposedClockIn: draft.proposedClockIn,
+                proposedClockOut: draft.proposedClockOut,
+                reason: draft.reason,
+            });
+            setClockOutIsNextDay(draft.clockOutIsNextDay);
+            setPendingAttachmentHint(draft.hadAttachmentName);
+            if (draft.showForm) {
+                setShowForm(true);
+            }
+        },
+    });
     const [shiftSchedule, setShiftSchedule] = useState<{
         startTime: string; endTime: string; isOff: boolean; isOvernight: boolean; shiftName: string;
     } | null>(null);
@@ -178,6 +244,7 @@ export default function AttendanceCorrectionPage() {
 
         setAttachmentFile(file);
         setAttachmentName(file.name);
+        setPendingAttachmentHint(null);
         toast("Dokumen berhasil dilampirkan", "success");
     }, [toast]);
 
@@ -240,10 +307,12 @@ export default function AttendanceCorrectionPage() {
 
             const data = await res.json() as CorrectionRequest;
             setRequests((prev) => [data, ...prev]);
+            clearCorrectionDraft();
             setShowForm(false);
             setForm({ targetDate: yesterdayStr, proposedClockIn: "", proposedClockOut: "", reason: "" });
             setAttachmentFile(null);
             setAttachmentName(null);
+            setPendingAttachmentHint(null);
             setClockOutIsNextDay(false);
             toast("Pengajuan koreksi berhasil dikirim!", "success");
         } catch (error) {
@@ -311,6 +380,24 @@ export default function AttendanceCorrectionPage() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <DraftNotice
+                            compact
+                            visible={correctionDraftRestored}
+                            attachmentHint={
+                                attachmentFile
+                                    ? null
+                                    : formatReattachHint(pendingAttachmentHint ? [pendingAttachmentHint] : null)
+                            }
+                            onDiscard={() => {
+                                discardCorrectionDraft();
+                                setForm({ targetDate: yesterdayStr, proposedClockIn: "", proposedClockOut: "", reason: "" });
+                                setAttachmentFile(null);
+                                setAttachmentName(null);
+                                setPendingAttachmentHint(null);
+                                setClockOutIsNextDay(false);
+                                if (fileInputRef.current) fileInputRef.current.value = "";
+                            }}
+                        />
                         {/* Tanggal Target */}
                         <div className="form-group !mb-0">
                             <label htmlFor="correction-target-date" className="form-label flex items-center gap-1">

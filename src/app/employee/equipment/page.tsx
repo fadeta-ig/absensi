@@ -6,6 +6,7 @@ import { ArrowUpDown, ChevronRight, Eye, Loader2, RefreshCw, ThumbsDown, ThumbsU
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
 import EmptyState from "@/components/ui/EmptyState";
 import StateCard from "@/components/ui/StateCard";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -15,6 +16,9 @@ import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { isPlainObject, removeEmployeeDraft } from "@/lib/formPersistence";
 
 interface ProductToolsData {
     product: { id: string; company: string; name: string };
@@ -158,6 +162,7 @@ const STATUS_CHIPS: Array<{ key: StatusFilter; label: string }> = [
 export default function EmployeeEquipmentPage() {
     const toast = useToast();
     const confirm = useConfirm();
+    const draftOwner = useEmployeeDraftOwner();
     const [units, setUnits] = useState<MyUnit[]>([]);
     const [selectedUnit, setSelectedUnit] = useState<MyUnit | null>(null);
     const [inspection, setInspection] = useState<InspectionDto | null>(null);
@@ -412,6 +417,145 @@ export default function EmployeeEquipmentPage() {
         [toast]
     );
 
+    // Draf catatan item yang belum disimpan ke server (cek baseline per item agar tidak menimpa catatan terbaru).
+    const dirtyItemNotes = useMemo(() => {
+        if (!inspection || inspection.status !== "OPEN" || readOnly) return {} as Record<string, { draft: string; baseline: string }>;
+        const map: Record<string, { draft: string; baseline: string }> = {};
+        for (const item of inspection.items) {
+            if (!item.isActive) continue;
+            const current = notes[item.id];
+            const serverNote = item.note ?? "";
+            if (current !== undefined && current !== serverNote) {
+                map[item.id] = { draft: current, baseline: serverNote };
+            }
+        }
+        return map;
+    }, [inspection, readOnly, notes]);
+
+    const {
+        restored: itemNotesDraftRestored,
+        clearDraft: clearItemNotesDraft,
+        discardDraft: discardItemNotesDraft,
+    } = useEmployeeDraft<Record<string, { draft: string; baseline: string }>>({
+        formKey: inspection && inspection.status === "OPEN" && !readOnly ? `equipment:inspection:${inspection.id}:notes` : null,
+        value: dirtyItemNotes,
+        enabled: Boolean(inspection && inspection.status === "OPEN" && !readOnly),
+        isDirty: (draft) => Object.keys(draft).length > 0,
+        validate: (raw): raw is Record<string, { draft: string; baseline: string }> => {
+            if (!isPlainObject(raw)) return false;
+            return Object.values(raw).every(
+                (v) => isPlainObject(v) && typeof v.draft === "string" && typeof v.baseline === "string"
+            );
+        },
+        onRestore: (draft) => {
+            if (!inspection) return;
+            const serverMap = new Map(inspection.items.map((i) => [i.id, i.note ?? ""]));
+            setNotes((prev) => {
+                const next = { ...prev };
+                for (const [itemId, entry] of Object.entries(draft)) {
+                    if (serverMap.has(itemId) && serverMap.get(itemId) === entry.baseline) {
+                        next[itemId] = entry.draft;
+                    }
+                }
+                return next;
+            });
+        },
+    });
+
+    // Pulihkan langkah navigasi 3-level + inspeksi OPEN yang sedang dikerjakan saat refresh/kembali.
+    interface EquipmentNavDraft {
+        mainTab: "alat" | "riwayat";
+        nav: AlatNav;
+        activeInspectionId: string | null;
+        activeUnitId: string | null;
+    }
+
+    const activeEditableInspectionId =
+        inspection && inspection.status === "OPEN" && !readOnly ? inspection.id : null;
+    const activeEditableUnitId =
+        activeEditableInspectionId && selectedUnit ? selectedUnit.unit.id : null;
+
+    useEmployeeDraft<EquipmentNavDraft>({
+        formKey: "equipment:nav",
+        value: {
+            mainTab,
+            nav,
+            activeInspectionId: activeEditableInspectionId,
+            activeUnitId: activeEditableUnitId,
+        },
+        enabled: !loading && !productsLoading && !isTopOnly,
+        isDirty: (draft) =>
+            draft.mainTab !== "alat" ||
+            draft.nav.level !== 1 ||
+            Boolean(draft.activeInspectionId),
+        validate: (raw): raw is EquipmentNavDraft => {
+            if (!isPlainObject(raw)) return false;
+            if (raw.mainTab !== "alat" && raw.mainTab !== "riwayat") return false;
+            if (raw.activeInspectionId !== null && typeof raw.activeInspectionId !== "string") return false;
+            if (raw.activeUnitId !== null && typeof raw.activeUnitId !== "string") return false;
+            if (!isPlainObject(raw.nav)) return false;
+            if (raw.nav.level === 1) return true;
+            if (raw.nav.level === 2 && (raw.nav.company === "WIG" || raw.nav.company === "MKI")) return true;
+            if (
+                raw.nav.level === 3 &&
+                (raw.nav.company === "WIG" || raw.nav.company === "MKI") &&
+                typeof raw.nav.productId === "string" &&
+                raw.nav.productId.length > 0
+            ) {
+                return true;
+            }
+            return false;
+        },
+        onRestore: (draft) => {
+            setMainTab(draft.mainTab);
+            if (draft.nav.level === 1 || companies.includes(draft.nav.company)) {
+                setNav(draft.nav);
+            }
+            if (draft.activeInspectionId) {
+                const inspectionId = draft.activeInspectionId;
+                const matchedUnit = draft.activeUnitId ? unitById.get(draft.activeUnitId) ?? null : null;
+                void (async () => {
+                    try {
+                        const res = await fetch(`/api/employee/equipment/inspections/${encodeURIComponent(inspectionId)}`);
+                        if (!res.ok) return;
+                        const json = await res.json();
+                        const dto = json.data as InspectionDto;
+                        if (dto.status !== "OPEN") {
+                            removeEmployeeDraft(draftOwner, `equipment:inspection:${inspectionId}:notes`);
+                            removeEmployeeDraft(draftOwner, `equipment:evidence-note:${inspectionId}`);
+                            return;
+                        }
+                        setSelectedUnit(
+                            matchedUnit ?? {
+                                unit: {
+                                    id: dto.unit.id,
+                                    name: dto.unit.name,
+                                    brand: dto.unit.brand,
+                                    location: null,
+                                    company: dto.unit.company,
+                                    isSharedBoth: dto.unit.isSharedBoth,
+                                    companies: dto.unit.companies,
+                                    template: { name: "" },
+                                    inspections: [],
+                                    productTools: [],
+                                },
+                            }
+                        );
+                        setReadOnly(false);
+                        setNoExecute(false);
+                        setUnitChoice(null);
+                        const seeded: Record<string, string> = {};
+                        for (const item of dto.items) seeded[item.id] = item.note ?? "";
+                        setNotes(seeded);
+                        setInspection(dto);
+                    } catch {
+                        // Abaikan jika gagal memuat ulang inspeksi aktif; navigasi tetap terjaga.
+                    }
+                })();
+            }
+        },
+    });
+
     const startInspection = useCallback(
         async (unitId: string) => {
             setStarting(true);
@@ -424,7 +568,11 @@ export default function EmployeeEquipmentPage() {
                 });
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memulai pemeriksaan."));
                 const json = await res.json();
-                setInspection(json.data as InspectionDto);
+                const dto = json.data as InspectionDto;
+                const seeded: Record<string, string> = {};
+                for (const it of dto.items) seeded[it.id] = it.note ?? "";
+                setNotes(seeded);
+                setInspection(dto);
                 await fetchUnits();
             } catch (err) {
                 const msg = err instanceof Error ? err.message : "Gagal memulai pemeriksaan.";
@@ -443,6 +591,7 @@ export default function EmployeeEquipmentPage() {
             // Bila ada draf OPEN milik saya → lanjutkan; bila tidak → pilihan eksplisit.
             setSelectedUnit(entry);
             setInspection(null);
+            setNotes({});
             setStartError(null);
             setReadOnly(false);
             setNoExecute(false);
@@ -491,7 +640,10 @@ export default function EmployeeEquipmentPage() {
                 });
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan penilaian."));
                 const json = await res.json();
-                setInspection(json.data as InspectionDto);
+                const dto = json.data as InspectionDto;
+                const savedItem = dto.items.find((i) => i.id === item.id);
+                setNotes((prev) => ({ ...prev, [item.id]: savedItem?.note ?? "" }));
+                setInspection(dto);
             } catch (err) {
                 setInspection((prev) => {
                     if (!prev) return prev;
@@ -538,6 +690,7 @@ export default function EmployeeEquipmentPage() {
     const backToUnits = useCallback(() => {
         setSelectedUnit(null);
         setInspection(null);
+        setNotes({});
         setStartError(null);
         setReadOnly(false);
         setNoExecute(false);
@@ -578,6 +731,8 @@ export default function EmployeeEquipmentPage() {
                         try {
                             const res = await fetch(`/api/employee/equipment/inspections/${row.id}/cancel`, { method: "POST" });
                             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membatalkan pemeriksaan."));
+                            removeEmployeeDraft(draftOwner, `equipment:inspection:${row.id}:notes`);
+                            removeEmployeeDraft(draftOwner, `equipment:evidence-note:${row.id}`);
                             toast("Pemeriksaan dibatalkan.", "success");
                             await fetchHistory();
                             await fetchUnits();
@@ -592,7 +747,7 @@ export default function EmployeeEquipmentPage() {
                 },
             });
         },
-        [cancellingId, confirm, toast, fetchHistory, fetchUnits]
+        [cancellingId, confirm, toast, fetchHistory, fetchUnits, draftOwner]
     );
 
     const openHistoryDetail = useCallback(
@@ -617,7 +772,11 @@ export default function EmployeeEquipmentPage() {
                 const res = await fetch(`/api/employee/equipment/inspections/${row.id}`);
                 if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat detail."));
                 const json = await res.json();
-                setInspection(json.data as InspectionDto);
+                const dto = json.data as InspectionDto;
+                const seeded: Record<string, string> = {};
+                for (const it of dto.items) seeded[it.id] = it.note ?? "";
+                setNotes(seeded);
+                setInspection(dto);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : "Gagal memuat detail.";
                 toast(msg, "error");
@@ -667,6 +826,7 @@ export default function EmployeeEquipmentPage() {
             };
             setSelectedUnit(entry);
             setInspection(null);
+            setNotes({});
             setStartError(null);
             setReadOnly(true);
             setNoExecute(true);
@@ -761,6 +921,8 @@ export default function EmployeeEquipmentPage() {
                         });
                         if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengirim inspeksi."));
                         const json = await res.json();
+                        clearItemNotesDraft();
+                        removeEmployeeDraft(draftOwner, `equipment:evidence-note:${inspection.id}`);
                         setInspection(json.data as InspectionDto);
                         toast("Inspeksi terkirim. Menunggu pemeriksaan QC.", "success");
                         await fetchUnits();
@@ -772,7 +934,7 @@ export default function EmployeeEquipmentPage() {
                 })();
             },
         });
-    }, [inspection, submitting, readOnly, confirm, toast, fetchUnits]);
+    }, [inspection, submitting, readOnly, confirm, toast, fetchUnits, clearItemNotesDraft, draftOwner]);
 
     if (loading) {
         return (
@@ -980,6 +1142,20 @@ export default function EmployeeEquipmentPage() {
                                 </span>
                             </FeedbackMessage>
                         </div>
+
+                        {itemNotesDraftRestored && Object.keys(dirtyItemNotes).length > 0 && (
+                            <DraftNotice
+                                compact
+                                visible
+                                message="Catatan item yang belum disimpan dipulihkan."
+                                onDiscard={() => {
+                                    discardItemNotesDraft();
+                                    const reset: Record<string, string> = {};
+                                    for (const i of inspection.items) reset[i.id] = i.note ?? "";
+                                    setNotes(reset);
+                                }}
+                            />
+                        )}
 
                         {activeItems.map((item) => {
                             const noteDirty = (notes[item.id] ?? "") !== (item.note ?? "");

@@ -7,6 +7,9 @@ import { MultiPhotoCapture } from "./MultiPhotoCapture";
 import { LocationValidator, LocationResult } from "./LocationValidator";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 interface ClockInModalProps {
@@ -17,9 +20,46 @@ interface ClockInModalProps {
 
 export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
     const [photos, setPhotos] = useState<VisitPhotoDraft[]>([]);
+    const [pendingPhotoNotice, setPendingPhotoNotice] = useState<{ count: number; captions: string[] } | null>(null);
     const [locationResult, setLocationResult] = useState<LocationResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const activePhotoCaptions = photos
+        .map((p) => (p.caption ?? "").trim())
+        .filter(Boolean);
+
+    // GPS dan gambar kamera tidak disimpan di localStorage (integritas anti-fraud & batas kuota);
+    // simpan metadata ringan saja agar pengguna mendapat pengingat jika reload sebelum kirim.
+    const {
+        clearDraft,
+        discardDraft,
+    } = useEmployeeDraft<{ hadPhotoCount: number; hadCaptions: string[] }>({
+        formKey: `visits:clock-in:${visit.id}`,
+        value: {
+            hadPhotoCount: photos.length > 0 ? photos.length : (pendingPhotoNotice?.count ?? 0),
+            hadCaptions: photos.length > 0 ? activePhotoCaptions : (pendingPhotoNotice?.captions ?? []),
+        },
+        isDirty: (draft) => draft.hadPhotoCount > 0 || draft.hadCaptions.length > 0,
+        validate: (raw): raw is { hadPhotoCount: number; hadCaptions: string[] } =>
+            isPlainObject(raw) &&
+            typeof raw.hadPhotoCount === "number" &&
+            raw.hadPhotoCount >= 0 &&
+            Array.isArray(raw.hadCaptions) &&
+            raw.hadCaptions.every((c) => typeof c === "string"),
+        onRestore: (draft) => {
+            if (draft.hadPhotoCount > 0 || draft.hadCaptions.length > 0) {
+                setPendingPhotoNotice({ count: draft.hadPhotoCount, captions: draft.hadCaptions });
+            }
+        },
+    });
+
+    const handlePhotosChange = useCallback((next: VisitPhotoDraft[]) => {
+        setPhotos(next);
+        if (next.length > 0) {
+            setPendingPhotoNotice(null);
+        }
+    }, []);
 
     const handleLocationResult = useCallback((result: LocationResult) => {
         setLocationResult(result);
@@ -52,6 +92,7 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
             }
 
             const data = await res.json();
+            clearDraft();
             onClockIn(data);
             onClose();
         } catch (error) {
@@ -99,6 +140,18 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
                     </FeedbackMessage>
                 )}
 
+                {pendingPhotoNotice && photos.length === 0 && (
+                    <DraftNotice
+                        compact
+                        visible={false}
+                        attachmentHint={`${pendingPhotoNotice.count} foto bukti sebelumnya perlu diambil ulang sebelum Clock In${pendingPhotoNotice.captions.length > 0 ? ` (catatan sebelumnya: ${pendingPhotoNotice.captions.join("; ")})` : ""}.`}
+                        onDiscard={() => {
+                            discardDraft();
+                            setPendingPhotoNotice(null);
+                        }}
+                    />
+                )}
+
                 <LocationValidator
                     targetLocation={visit.visitLocation}
                     targetRadius={visit.visitRadius}
@@ -107,7 +160,7 @@ export function ClockInModal({ visit, onClose, onClockIn }: ClockInModalProps) {
 
                 <MultiPhotoCapture
                     photos={photos}
-                    onPhotosChange={setPhotos}
+                    onPhotosChange={handlePhotosChange}
                     minPhotos={2}
                     maxPhotos={5}
                     defaultCategory="LOKASI"

@@ -16,6 +16,13 @@ import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import {
+    isPlainObject,
+    readEmployeeDraft,
+    removeEmployeeDraft,
+    writeEmployeeDraft,
+} from "@/lib/formPersistence";
 
 const VISITS_FILTER_KEY = "employee-visits-filter";
 
@@ -40,9 +47,11 @@ type ModalState =
 
 export default function VisitsPage() {
     const confirm = useConfirm();
+    const draftOwner = useEmployeeDraftOwner();
     const [visits, setVisits] = useState<VisitReport[]>([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState<VisitFilter>(() => readVisitsFilter());
+    const [activeModalRestored, setActiveModalRestored] = useState(false);
 
     useEffect(() => {
         try {
@@ -97,21 +106,90 @@ export default function VisitsPage() {
         return () => clearTimeout(timer);
     }, [message]);
 
+    // Restore active visit modal after refresh/navigation only while its target visit & status remain valid.
+    useEffect(() => {
+        if (loading || activeModalRestored || !draftOwner) return;
+        setActiveModalRestored(true);
+        const saved = readEmployeeDraft<
+            | { type: "create_draft" }
+            | { type: "clock_in"; visitId: string }
+            | { type: "clock_out"; visitId: string }
+        >(draftOwner, "visits:active-modal", {
+            validate: (raw): raw is
+                | { type: "create_draft" }
+                | { type: "clock_in"; visitId: string }
+                | { type: "clock_out"; visitId: string } =>
+                isPlainObject(raw) &&
+                (raw.type === "create_draft" ||
+                    ((raw.type === "clock_in" || raw.type === "clock_out") &&
+                        typeof raw.visitId === "string" &&
+                        raw.visitId.length > 0)),
+        });
+        if (saved.status !== "found") return;
+        const savedModal = saved.data;
+        if (savedModal.type === "create_draft") {
+            if (readEmployeeDraft(draftOwner, "visits:create-draft").status === "found") {
+                setModal({ type: "create_draft" });
+            } else {
+                removeEmployeeDraft(draftOwner, "visits:active-modal");
+            }
+            return;
+        }
+        const target = visits.find((v) => v.id === savedModal.visitId);
+        if (
+            savedModal.type === "clock_in" &&
+            target &&
+            target.status === "draft" &&
+            readEmployeeDraft(draftOwner, `visits:clock-in:${target.id}`).status === "found"
+        ) {
+            setModal({ type: "clock_in", visit: target });
+            return;
+        }
+        if (
+            savedModal.type === "clock_out" &&
+            target &&
+            target.status === "clocked_in" &&
+            readEmployeeDraft(draftOwner, `visits:clock-out:${target.id}`).status === "found"
+        ) {
+            setModal({ type: "clock_out", visit: target });
+            return;
+        }
+        removeEmployeeDraft(draftOwner, "visits:active-modal");
+    }, [loading, activeModalRestored, draftOwner, visits]);
+
+    useEffect(() => {
+        if (!draftOwner || !activeModalRestored) return;
+        if (modal.type === "create_draft") {
+            writeEmployeeDraft(draftOwner, "visits:active-modal", { type: "create_draft" });
+        } else if (modal.type === "clock_in") {
+            writeEmployeeDraft(draftOwner, "visits:active-modal", { type: "clock_in", visitId: modal.visit.id });
+        } else if (modal.type === "clock_out") {
+            writeEmployeeDraft(draftOwner, "visits:active-modal", { type: "clock_out", visitId: modal.visit.id });
+        } else {
+            removeEmployeeDraft(draftOwner, "visits:active-modal");
+        }
+    }, [draftOwner, activeModalRestored, modal]);
+
     const updateVisitInList = (updated: VisitReport) => {
         setVisits((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
     };
 
     const handleCreated = (visit: VisitReport) => {
+        removeEmployeeDraft(draftOwner, "visits:active-modal");
         setVisits((prev) => [visit, ...prev]);
         setMessage({ type: "success", text: "Draft kunjungan berhasil dibuat!" });
     };
 
     const handleClockIn = (updated: VisitReport) => {
+        removeEmployeeDraft(draftOwner, "visits:active-modal");
+        removeEmployeeDraft(draftOwner, `visits:clock-in:${updated.id}`);
         updateVisitInList(updated);
         setMessage({ type: "success", text: "Clock In berhasil!" });
     };
 
     const handleClockOut = (updated: VisitReport) => {
+        removeEmployeeDraft(draftOwner, "visits:active-modal");
+        removeEmployeeDraft(draftOwner, `visits:clock-out:${updated.id}`);
         updateVisitInList(updated);
         setMessage({ type: "success", text: "Clock Out berhasil! Menunggu persetujuan HR." });
     };
@@ -127,6 +205,8 @@ export default function VisitsPage() {
                 try {
                     const res = await fetch(`/api/visits?id=${visit.id}`, { method: "DELETE" });
                     if (res.ok) {
+                        removeEmployeeDraft(draftOwner, `visits:clock-in:${visit.id}`);
+                        removeEmployeeDraft(draftOwner, `visits:clock-out:${visit.id}`);
                         setVisits((prev) => prev.filter((v) => v.id !== visit.id));
                         setMessage({ type: "success", text: "Draft kunjungan berhasil dihapus." });
                     } else {

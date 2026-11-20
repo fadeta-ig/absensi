@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileText, CalendarDays, Clock3, X, Loader2, StickyNote, UserCheck, Search } from "lucide-react";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { deepEqual, isPlainObject } from "@/lib/formPersistence";
 import ParticipantPicker, { type PickedParticipant } from "@/components/appointments/ParticipantPicker";
 import RoomSelect from "@/components/appointments/RoomSelect";
 import TimeRangeFields, { minutesToHm } from "@/components/appointments/TimeRangeFields";
@@ -22,25 +25,69 @@ interface AppointmentFormModalProps {
     onSaved: () => void;
 }
 
+interface AppointmentDraftData {
+    title: string;
+    agenda: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    isFullDay: boolean;
+    roomId: string;
+    participants: PickedParticipant[];
+    notulisEmployeeId: string;
+    leaderEmployeeId: string;
+    changeReason: string;
+}
+
+function isValidAppointmentDraft(raw: unknown): raw is AppointmentDraftData {
+    if (!isPlainObject(raw)) return false;
+    return (
+        typeof raw.title === "string" &&
+        typeof raw.agenda === "string" &&
+        typeof raw.date === "string" &&
+        typeof raw.startTime === "string" &&
+        typeof raw.endTime === "string" &&
+        typeof raw.isFullDay === "boolean" &&
+        typeof raw.roomId === "string" &&
+        typeof raw.notulisEmployeeId === "string" &&
+        typeof raw.leaderEmployeeId === "string" &&
+        typeof raw.changeReason === "string" &&
+        Array.isArray(raw.participants) &&
+        raw.participants.every(
+            (p) =>
+                isPlainObject(p) &&
+                typeof p.key === "string" &&
+                (p.employeeId === null || typeof p.employeeId === "string") &&
+                typeof p.name === "string"
+        )
+    );
+}
+
 export default function AppointmentFormModal({ initialDate, editing, myEmployeeId, myEmployeeName, onClose, onSaved }: AppointmentFormModalProps) {
+    const [createSlot] = useState(() => (!editing ? nextWibSlot(initialDate) : null));
+    const defaultStartTime = editing && !editing.isFullDay ? toHM(editing.startAt) : createSlot?.start ?? "09:00";
+    const defaultEndTime = editing && !editing.isFullDay ? toHM(editing.endAt) : createSlot?.end ?? "10:00";
+    const initialEditParticipants = useMemo<PickedParticipant[]>(
+        () =>
+            (editing?.participants ?? []).map((p) => ({
+                key: p.employeeId ? `e:${p.employeeId}` : `g:${(p.guestName ?? "").toLowerCase()}`,
+                employeeId: p.employeeId,
+                name: participantDisplayName(p),
+            })),
+        [editing]
+    );
+
     const [title, setTitle] = useState(editing?.title ?? "");
-    const createSlot = !editing ? nextWibSlot(initialDate) : null;
     const [date, setDate] = useState(() => {
         if (editing) return toWIBDateString(new Date(editing.startAt));
         return initialDate;
     });
-    const [startTime, setStartTime] = useState(() => (editing && !editing.isFullDay ? toHM(editing.startAt) : createSlot?.start ?? "09:00"));
-    const [endTime, setEndTime] = useState(() => (editing && !editing.isFullDay ? toHM(editing.endAt) : createSlot?.end ?? "10:00"));
+    const [startTime, setStartTime] = useState(defaultStartTime);
+    const [endTime, setEndTime] = useState(defaultEndTime);
     const [isFullDay, setIsFullDay] = useState(editing?.isFullDay ?? false);
     const [roomId, setRoomId] = useState(editing?.room?.id ?? "");
     const [agenda, setAgenda] = useState(editing?.agenda ?? "");
-    const [participants, setParticipants] = useState<PickedParticipant[]>(() =>
-        (editing?.participants ?? []).map((p) => ({
-            key: p.employeeId ? `e:${p.employeeId}` : `g:${(p.guestName ?? "").toLowerCase()}`,
-            employeeId: p.employeeId,
-            name: participantDisplayName(p),
-        }))
-    );
+    const [participants, setParticipants] = useState<PickedParticipant[]>(initialEditParticipants);
     const [changeReason, setChangeReason] = useState("");
     const [notulisEmployeeId, setNotulisEmployeeId] = useState(editing?.notulisEmployeeId ?? "");
     const [notulisQuery, setNotulisQuery] = useState("");
@@ -57,6 +104,76 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
     const initialEditEnd = editing && !editing.isFullDay ? toHM(editing.endAt) : "10:00";
     const initialEditFullDay = editing?.isFullDay ?? false;
     const initialEditRoomId = editing?.room?.id ?? "";
+
+    const editBaseline = useMemo<AppointmentDraftData | undefined>(
+        () =>
+            editing
+                ? {
+                      title: editing.title,
+                      agenda: editing.agenda ?? "",
+                      date: initialEditDate,
+                      startTime: initialEditStart,
+                      endTime: initialEditEnd,
+                      isFullDay: initialEditFullDay,
+                      roomId: initialEditRoomId,
+                      participants: initialEditParticipants,
+                      notulisEmployeeId: editing.notulisEmployeeId ?? "",
+                      leaderEmployeeId: editing.leaderEmployeeId ?? "",
+                      changeReason: "",
+                  }
+                : undefined,
+        [editing, initialEditDate, initialEditStart, initialEditEnd, initialEditFullDay, initialEditRoomId, initialEditParticipants]
+    );
+
+    const {
+        restored: draftRestored,
+        clearDraft,
+        discardDraft,
+    } = useEmployeeDraft<AppointmentDraftData>({
+        formKey: editing ? `appointments:edit:${editing.id}` : "appointments:create",
+        value: {
+            title,
+            agenda,
+            date,
+            startTime,
+            endTime,
+            isFullDay,
+            roomId,
+            participants,
+            notulisEmployeeId,
+            leaderEmployeeId,
+            changeReason,
+        },
+        baseline: editBaseline,
+        hasBaseline: Boolean(editing),
+        isDirty: (draft) =>
+            editing && editBaseline
+                ? !deepEqual(draft, editBaseline)
+                : draft.title.trim().length > 0 ||
+                  draft.agenda.trim().length > 0 ||
+                  draft.roomId.length > 0 ||
+                  draft.participants.length > 0 ||
+                  draft.notulisEmployeeId.length > 0 ||
+                  draft.leaderEmployeeId.length > 0 ||
+                  draft.isFullDay ||
+                  draft.date !== initialDate ||
+                  draft.startTime !== defaultStartTime ||
+                  draft.endTime !== defaultEndTime,
+        validate: isValidAppointmentDraft,
+        onRestore: (draft) => {
+            setTitle(draft.title);
+            setAgenda(draft.agenda);
+            setDate(draft.date);
+            setStartTime(draft.startTime);
+            setEndTime(draft.endTime);
+            setIsFullDay(draft.isFullDay);
+            setRoomId(draft.roomId);
+            setParticipants(draft.participants);
+            setNotulisEmployeeId(draft.notulisEmployeeId);
+            setLeaderEmployeeId(draft.leaderEmployeeId);
+            setChangeReason(draft.changeReason);
+        },
+    });
 
     const isScheduleOrPlaceChanged = Boolean(
         editing && (
@@ -216,6 +333,7 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
                 body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan meeting."));
+            clearDraft();
             onSaved();
             onClose();
         } catch (err) {
@@ -255,6 +373,38 @@ export default function AppointmentFormModal({ initialDate, editing, myEmployeeI
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+                <DraftNotice
+                    compact
+                    visible={draftRestored}
+                    onDiscard={() => {
+                        discardDraft();
+                        if (editBaseline) {
+                            setTitle(editBaseline.title);
+                            setAgenda(editBaseline.agenda);
+                            setDate(editBaseline.date);
+                            setStartTime(editBaseline.startTime);
+                            setEndTime(editBaseline.endTime);
+                            setIsFullDay(editBaseline.isFullDay);
+                            setRoomId(editBaseline.roomId);
+                            setParticipants(editBaseline.participants);
+                            setNotulisEmployeeId(editBaseline.notulisEmployeeId);
+                            setLeaderEmployeeId(editBaseline.leaderEmployeeId);
+                            setChangeReason("");
+                        } else {
+                            setTitle("");
+                            setAgenda("");
+                            setDate(initialDate);
+                            setStartTime(defaultStartTime);
+                            setEndTime(defaultEndTime);
+                            setIsFullDay(false);
+                            setRoomId("");
+                            setParticipants([]);
+                            setNotulisEmployeeId("");
+                            setLeaderEmployeeId("");
+                            setChangeReason("");
+                        }
+                    }}
+                />
                 <div className="form-group !mb-0">
                     <label className="form-label" htmlFor="appt-title">
                         <span className="flex items-center gap-1">

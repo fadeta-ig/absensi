@@ -10,6 +10,13 @@ import { formatWIBDateTime } from "@/lib/timezone";
 import TaskFormModal from "@/components/appointments/TaskFormModal";
 import type { TaskParticipant } from "@/components/appointments/MeetingTaskSection";
 import { meetingTaskStatusLabel } from "@/components/appointments/AppointmentBadges";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import {
+    isPlainObject,
+    readEmployeeDraft,
+    removeEmployeeDraft,
+    writeEmployeeDraft,
+} from "@/lib/formPersistence";
 
 interface SummaryTask {
     id: string;
@@ -45,6 +52,38 @@ export default function MeetingTaskSummary({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [creating, setCreating] = useState(false);
+    const draftOwner = useEmployeeDraftOwner();
+    const [createChecked, setCreateChecked] = useState(false);
+
+    useEffect(() => {
+        if (!draftOwner || createChecked) return;
+        setCreateChecked(true);
+        const openKey = `appointments:detail:${appointmentId}:task-create-open`;
+        if (!canCreateTask) {
+            removeEmployeeDraft(draftOwner, openKey);
+            return;
+        }
+        const saved = readEmployeeDraft<{ open: boolean }>(draftOwner, openKey, {
+            validate: (raw): raw is { open: boolean } => isPlainObject(raw) && raw.open === true,
+        });
+        if (saved.status === "found") {
+            if (readEmployeeDraft(draftOwner, `appointments:detail:${appointmentId}:task:create:new`).status === "found") {
+                setCreating(true);
+            } else {
+                removeEmployeeDraft(draftOwner, openKey);
+            }
+        }
+    }, [draftOwner, createChecked, canCreateTask, appointmentId]);
+
+    useEffect(() => {
+        if (!draftOwner || !createChecked) return;
+        const openKey = `appointments:detail:${appointmentId}:task-create-open`;
+        if (creating && canCreateTask) {
+            writeEmployeeDraft(draftOwner, openKey, { open: true });
+        } else {
+            removeEmployeeDraft(draftOwner, openKey);
+        }
+    }, [draftOwner, createChecked, creating, canCreateTask, appointmentId]);
 
     const load = useCallback(async () => {
         setLoading(true);

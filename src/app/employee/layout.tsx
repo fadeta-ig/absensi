@@ -15,6 +15,16 @@ import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { subscribeAuthChanged } from "@/lib/authEvents";
 import { reportClientError } from "@/lib/clientErrors";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
+import { EmployeeDraftProvider } from "@/components/employee/EmployeeDraftContext";
+import {
+    buildOwnerScope,
+    clearAllEmployeeDrafts,
+    syncActiveDraftOwner,
+} from "@/lib/formPersistence";
+
+interface EmployeeSessionUser extends AppShellUser {
+    userId?: string;
+}
 
 
 const navItems: NavItem[] = [
@@ -95,7 +105,7 @@ function MobileBottomNav({ items, pathname, onNavigate }: {
 export default function EmployeeLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const [user, setUser] = useState<AppShellUser | null>(null);
+    const [user, setUser] = useState<EmployeeSessionUser | null>(null);
     const [authChecked, setAuthChecked] = useState(false);
     const { logout: handleLogout, loggingOut } = useEmployeeLogout();
     const [equipmentVisible, setEquipmentVisible] = useState(false);
@@ -118,6 +128,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
                 router.replace(data.permissions?.includes("hr.manage") ? "/dashboard" : data.permissions?.includes("ga.manage") ? "/ga" : "/");
                 return;
+            }
+            const ownerScope = buildOwnerScope(data.userId ?? data.employeeId, data.employeeId);
+            if (ownerScope) {
+                syncActiveDraftOwner(ownerScope);
             }
             setUser({
                 ...data,
@@ -175,6 +189,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
 
     useEffect(() => subscribeAuthChanged((event) => {
         if (event.reason === "logout") {
+            clearAllEmployeeDrafts();
             setUser(null);
             setAuthChecked(true);
             router.replace("/");
@@ -250,9 +265,11 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 />
             }
         >
-            <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") ? "max-w-4xl" : "max-w-md"}`}>
-                {children}
-            </div>
+            <EmployeeDraftProvider userId={user.userId ?? user.employeeId} employeeId={user.employeeId}>
+                <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") ? "max-w-4xl" : "max-w-md"}`}>
+                    {children}
+                </div>
+            </EmployeeDraftProvider>
             <PasskeyPrompt ownerKey={user.employeeId} />
         </AppShell>
     );

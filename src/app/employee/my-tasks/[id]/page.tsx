@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, FileText, ListChecks, UploadCloud } from "lucide-react";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import EmptyState from "@/components/ui/EmptyState";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
 import PageHeader from "@/components/ui/PageHeader";
 import StateCard from "@/components/ui/StateCard";
 import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
@@ -15,6 +16,9 @@ import { stripGelar } from "@/lib/utils/formatters";
 import { formatWIBDateTime } from "@/lib/timezone";
 import { useConfirm } from "@/components/ConfirmModal";
 import { meetingTaskStatusLabel } from "@/components/appointments/AppointmentBadges";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
+import { deepEqual, formatReattachHint, isPlainObject, removeEmployeeDraft } from "@/lib/formPersistence";
 
 interface Assignee {
     employeeId: string;
@@ -60,6 +64,7 @@ export default function MyTaskDetailPage() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
     const confirm = useConfirm();
+    const draftOwner = useEmployeeDraftOwner();
     const [task, setTask] = useState<WorkTask | null>(null);
     const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -68,6 +73,7 @@ export default function MyTaskDetailPage() {
     const [success, setSuccess] = useState("");
     const [note, setNote] = useState("");
     const [files, setFiles] = useState<File[]>([]);
+    const [pendingFileNames, setPendingFileNames] = useState<string[]>([]);
     const [revNote, setRevNote] = useState<Record<string, string>>({});
     const [revDue, setRevDue] = useState<Record<string, string>>({});
     const [extendDate, setExtendDate] = useState("");
@@ -143,6 +149,176 @@ export default function MyTaskDetailPage() {
         : false;
     const meetingFinished = task ? isOperational || !task.appointment || task.appointment.status === "COMPLETED" || new Date(task.appointment.endAt).getTime() <= Date.now() : false;
     const canSubmit = Boolean(task && !task.isCancelled && meetingFinished && mine && (mine.status === "OPEN" || mine.status === "BELUM_DIKERJAKAN"));
+    const canRespond = Boolean(task && !task.isCancelled && mine?.status === "MENUNGGU_PERSETUJUAN");
+    const canManageTask = Boolean(task && (iAmAssigner || isMeetingManager) && !task.isCancelled && !isFullyFinal);
+    const pendingSubmissionIds = useMemo(
+        () => (task ? task.submissions.filter((s) => s.verdict === "PENDING").map((s) => s.id) : []),
+        [task]
+    );
+    const canVerifyAny = Boolean(task && iAmAssigner && !task.isCancelled && pendingSubmissionIds.length > 0);
+    const serverEditBaseline = useMemo(
+        () =>
+            task
+                ? {
+                      title: task.title,
+                      detail: task.detail ?? "",
+                      assigneeIds: [...task.assignees.map((a) => a.employeeId)].sort(),
+                  }
+                : undefined,
+        [task]
+    );
+
+    const {
+        restored: rejectDraftRestored,
+        clearDraft: clearRejectDraft,
+        discardDraft: discardRejectDraft,
+    } = useEmployeeDraft<{ rejectReason: string }>({
+        formKey: `my-tasks:${params.id}:reject`,
+        value: { rejectReason },
+        enabled: canRespond,
+        isDirty: (draft) => draft.rejectReason.trim().length > 0,
+        validate: (raw): raw is { rejectReason: string } =>
+            isPlainObject(raw) && typeof raw.rejectReason === "string",
+        onRestore: (draft) => setRejectReason(draft.rejectReason),
+    });
+
+    const {
+        restored: submitDraftRestored,
+        clearDraft: clearSubmitDraft,
+        discardDraft: discardSubmitDraft,
+    } = useEmployeeDraft<{ note: string; hadFileNames: string[] }>({
+        formKey: `my-tasks:${params.id}:submit`,
+        value: {
+            note,
+            hadFileNames: files.length > 0 ? files.map((f) => f.name) : pendingFileNames,
+        },
+        enabled: canSubmit,
+        isDirty: (draft) => draft.note.trim().length > 0 || draft.hadFileNames.length > 0,
+        validate: (raw): raw is { note: string; hadFileNames: string[] } =>
+            isPlainObject(raw) &&
+            typeof raw.note === "string" &&
+            Array.isArray(raw.hadFileNames) &&
+            raw.hadFileNames.every((n) => typeof n === "string"),
+        onRestore: (draft) => {
+            setNote(draft.note);
+            setPendingFileNames(draft.hadFileNames);
+        },
+    });
+
+    const {
+        restored: verifyDraftRestored,
+        clearDraft: clearVerifyDraft,
+        discardDraft: discardVerifyDraft,
+    } = useEmployeeDraft<{ revNote: Record<string, string>; revDue: Record<string, string> }>({
+        formKey: `my-tasks:${params.id}:verify`,
+        value: { revNote, revDue },
+        enabled: canVerifyAny,
+        isDirty: (draft) =>
+            Object.values(draft.revNote).some((v) => v.trim().length > 0) ||
+            Object.values(draft.revDue).some((v) => v.trim().length > 0),
+        validate: (raw): raw is { revNote: Record<string, string>; revDue: Record<string, string> } =>
+            isPlainObject(raw) &&
+            isPlainObject(raw.revNote) &&
+            isPlainObject(raw.revDue) &&
+            Object.values(raw.revNote).every((v) => typeof v === "string") &&
+            Object.values(raw.revDue).every((v) => typeof v === "string"),
+        onRestore: (draft) => {
+            const pendingSet = new Set(pendingSubmissionIds);
+            const nextNote: Record<string, string> = {};
+            const nextDue: Record<string, string> = {};
+            for (const [k, v] of Object.entries(draft.revNote)) {
+                if (pendingSet.has(k) && v) nextNote[k] = v;
+            }
+            for (const [k, v] of Object.entries(draft.revDue)) {
+                if (pendingSet.has(k) && v) nextDue[k] = v;
+            }
+            if (Object.keys(nextNote).length > 0) setRevNote(nextNote);
+            if (Object.keys(nextDue).length > 0) setRevDue(nextDue);
+        },
+    });
+
+    const {
+        restored: manageEditDraftRestored,
+        clearDraft: clearManageEditDraft,
+        discardDraft: discardManageEditDraft,
+    } = useEmployeeDraft<{
+        editTitle: string;
+        editDetail: string;
+        editDue: string;
+        editAssigneeIds: string[];
+    }>({
+        formKey: `my-tasks:${params.id}:manage-edit`,
+        value: { editTitle, editDetail, editDue, editAssigneeIds },
+        enabled: canManageTask,
+        baseline: serverEditBaseline,
+        hasBaseline: Boolean(task),
+        isDirty: (draft) =>
+            serverEditBaseline
+                ? !deepEqual(
+                      {
+                          title: draft.editTitle,
+                          detail: draft.editDetail,
+                          assigneeIds: [...draft.editAssigneeIds].sort(),
+                      },
+                      serverEditBaseline
+                  ) || draft.editDue.length > 0
+                : false,
+        validate: (raw): raw is {
+            editTitle: string;
+            editDetail: string;
+            editDue: string;
+            editAssigneeIds: string[];
+        } =>
+            isPlainObject(raw) &&
+            typeof raw.editTitle === "string" &&
+            typeof raw.editDetail === "string" &&
+            typeof raw.editDue === "string" &&
+            Array.isArray(raw.editAssigneeIds) &&
+            raw.editAssigneeIds.every((id) => typeof id === "string"),
+        onRestore: (draft) => {
+            setEditTitle(draft.editTitle);
+            setEditDetail(draft.editDetail);
+            setEditDue(draft.editDue);
+            setEditAssigneeIds(draft.editAssigneeIds);
+        },
+    });
+
+    const {
+        restored: manageActionsDraftRestored,
+        clearDraft: clearManageActionsDraft,
+        discardDraft: discardManageActionsDraft,
+    } = useEmployeeDraft<{ extendDate: string; extendReason: string; cancelReason: string }>({
+        formKey: `my-tasks:${params.id}:manage-actions`,
+        value: { extendDate, extendReason, cancelReason },
+        enabled: canManageTask,
+        isDirty: (draft) =>
+            draft.extendDate.length > 0 ||
+            draft.extendReason.trim().length > 0 ||
+            draft.cancelReason.trim().length > 0,
+        validate: (raw): raw is { extendDate: string; extendReason: string; cancelReason: string } =>
+            isPlainObject(raw) &&
+            typeof raw.extendDate === "string" &&
+            typeof raw.extendReason === "string" &&
+            typeof raw.cancelReason === "string",
+        onRestore: (draft) => {
+            setExtendDate(draft.extendDate);
+            setExtendReason(draft.extendReason);
+            setCancelReason(draft.cancelReason);
+        },
+    });
+
+    // Bersihkan draf sub-form yang tidak lagi relevan dengan status tugas saat ini.
+    useEffect(() => {
+        if (!draftOwner || !task) return;
+        if (!canRespond) removeEmployeeDraft(draftOwner, `my-tasks:${params.id}:reject`);
+        if (!canSubmit) removeEmployeeDraft(draftOwner, `my-tasks:${params.id}:submit`);
+        if (!canVerifyAny) removeEmployeeDraft(draftOwner, `my-tasks:${params.id}:verify`);
+        if (!canManageTask) {
+            removeEmployeeDraft(draftOwner, `my-tasks:${params.id}:manage-edit`);
+            removeEmployeeDraft(draftOwner, `my-tasks:${params.id}:manage-actions`);
+        }
+    }, [draftOwner, task, params.id, canRespond, canSubmit, canVerifyAny, canManageTask]);
+
     const nameOf = (employeeId: string) => {
         const a = task?.assignees.find((x) => x.employeeId === employeeId);
         return a ? stripGelar(a.name) : employeeId;
@@ -158,6 +334,7 @@ export default function MyTaskDetailPage() {
                 body: JSON.stringify(decision === "TERIMA" ? { action: "accept" } : { action: "reject", reason: rejectReason.trim() }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan persetujuan tugas."));
+            clearRejectDraft();
             setRejectReason("");
             setSuccess(decision === "TERIMA" ? "Tugas diterima. Kerjakan dan kumpulkan hasilnya sebelum deadline." : "Tugas ditolak. Pemberi tugas sudah menerima pemberitahuan.");
             await load();
@@ -176,7 +353,8 @@ export default function MyTaskDetailPage() {
             for (const f of files.slice(0, 5)) form.append("files", f);
             const res = await fetch(`/api/my-tasks/${task.id}/submissions`, { method: "POST", credentials: "same-origin", body: form });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengirim hasil. Periksa lampiran Anda, lalu coba lagi."));
-            setNote(""); setFiles([]);
+            clearSubmitDraft();
+            setNote(""); setFiles([]); setPendingFileNames([]);
             setSuccess("Hasil terkirim. Menunggu verifikasi dari pemberi tugas.");
             await load();
         } catch (err) {
@@ -206,6 +384,17 @@ export default function MyTaskDetailPage() {
                 body: JSON.stringify(decision === "TERIMA" ? { decision } : { decision, note: revNote[submissionId].trim(), resubmitDue: revDue[submissionId] }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan verifikasi. Periksa isian Anda, lalu coba lagi."));
+            setRevNote((prev) => {
+                const next = { ...prev };
+                delete next[submissionId];
+                return next;
+            });
+            setRevDue((prev) => {
+                const next = { ...prev };
+                delete next[submissionId];
+                return next;
+            });
+            if (pendingSubmissionIds.length <= 1) clearVerifyDraft();
             setSuccess(decision === "TERIMA" ? "Hasil pekerjaan diterima. Tugas penerima dinyatakan selesai." : "Revisi berhasil dikirim. Penerima dapat mengumpulkan ulang hasil pekerjaannya.");
             await load();
         } catch (err) {
@@ -239,8 +428,22 @@ export default function MyTaskDetailPage() {
                 method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan perubahan. Periksa isian Anda, lalu coba lagi."));
+            if (action === "edit") {
+                clearManageEditDraft();
+                setEditDue("");
+            } else if (action === "extend") {
+                setExtendDate("");
+                setExtendReason("");
+                if (!cancelReason.trim()) clearManageActionsDraft();
+            } else {
+                clearManageActionsDraft();
+                clearManageEditDraft();
+                clearSubmitDraft();
+                clearRejectDraft();
+                clearVerifyDraft();
+                setExtendDate(""); setExtendReason(""); setCancelReason(""); setEditDue("");
+            }
             setSuccess(action === "extend" ? "Deadline tugas berhasil diperpanjang." : action === "cancel" ? "Tugas berhasil dibatalkan." : "Tugas berhasil diperbarui.");
-            setExtendDate(""); setExtendReason(""); setCancelReason(""); setEditDue("");
             await load();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Gagal menyimpan perubahan. Periksa isian Anda, lalu coba lagi.");
@@ -295,6 +498,14 @@ export default function MyTaskDetailPage() {
 
             {mine?.status === "MENUNGGU_PERSETUJUAN" && !task.isCancelled && (
                 <SectionCard title="Persetujuan Tugas" icon={CheckCircle2} ariaLabel="Persetujuan tugas" bodyClassName="space-y-3">
+                    <DraftNotice
+                        compact
+                        visible={rejectDraftRestored && rejectReason.trim().length > 0}
+                        onDiscard={() => {
+                            discardRejectDraft();
+                            setRejectReason("");
+                        }}
+                    />
                     <p className="text-xs text-[var(--text-secondary)]">Tugas ini menunggu persetujuan Anda. Terima tugas untuk mulai mengerjakan sebelum deadline.</p>
                     <button type="button" disabled={busy} onClick={() => confirm({ title: "Terima tugas ini?", message: "Setelah diterima, Anda perlu mengumpulkan hasil sebelum deadline.", confirmLabel: "Ya, Terima Tugas", variant: "info", onConfirm: () => { void handleRespond("TERIMA"); } })} className="btn btn-primary w-full min-h-11 text-sm">Terima Tugas</button>
                     <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} maxLength={1000} placeholder="Alasan penolakan (wajib, min. 5 karakter)" className="form-input" aria-label="Alasan penolakan tugas" />
@@ -306,9 +517,20 @@ export default function MyTaskDetailPage() {
                 <SectionCard title="Pengumpulan Hasil" icon={UploadCloud} ariaLabel="Pengumpulan hasil" bodyClassName="space-y-3">
                     {canSubmit ? (
                         <>
+                            <DraftNotice
+                                compact
+                                visible={submitDraftRestored}
+                                attachmentHint={files.length === 0 ? formatReattachHint(pendingFileNames) : null}
+                                onDiscard={() => {
+                                    discardSubmitDraft();
+                                    setNote("");
+                                    setFiles([]);
+                                    setPendingFileNames([]);
+                                }}
+                            />
                             <p className="text-xs text-[var(--text-muted)]">Lampirkan 1–5 file hasil pekerjaan (JPG, PNG, WEBP, atau PDF), lalu kumpulkan untuk diverifikasi pemberi tugas.</p>
                             <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={3} placeholder="Catatan hasil pekerjaan (opsional)" className="form-textarea" aria-label="Catatan hasil pekerjaan" />
-                            <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 5))} className="form-input" aria-label="Pilih lampiran hasil pekerjaan" />
+                            <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={(e) => { setPendingFileNames([]); setFiles(Array.from(e.target.files ?? []).slice(0, 5)); }} className="form-input" aria-label="Pilih lampiran hasil pekerjaan" />
                             {files.length > 0 && <p className="text-xs text-[var(--text-muted)]">{files.length} file dipilih: {files.map((f) => f.name).join(", ")}</p>}
                             <button type="button" disabled={busy} onClick={() => void handleSubmit()} className="btn btn-primary w-full min-h-11 text-sm">{busy ? "Mengirim…" : "Kumpulkan Hasil"}</button>
                         </>
@@ -355,6 +577,15 @@ export default function MyTaskDetailPage() {
                         )}
                         {iAmAssigner && s.verdict === "PENDING" && !task.isCancelled && (
                             <div className="border-t border-[var(--border)] pt-2 space-y-2">
+                                <DraftNotice
+                                    compact
+                                    visible={verifyDraftRestored && Boolean((revNote[s.id] ?? "").trim() || (revDue[s.id] ?? "").trim())}
+                                    onDiscard={() => {
+                                        discardVerifyDraft();
+                                        setRevNote({});
+                                        setRevDue({});
+                                    }}
+                                />
                                 <div className="flex gap-1.5">
                                     <button type="button" disabled={busy} onClick={() => confirmTerima(s.id)} className="btn btn-primary btn-sm flex-1 min-h-10">Terima Hasil</button>
                                 </div>
@@ -376,6 +607,21 @@ export default function MyTaskDetailPage() {
             {(iAmAssigner || isMeetingManager) && !task.isCancelled && !isFullyFinal && (
                 <section className="emp-surface p-4 space-y-4" aria-label="Kelola tugas">
                     <h2 className="text-sm font-bold text-[var(--text-primary)]">Kelola Tugas</h2>
+                    <DraftNotice
+                        compact
+                        visible={manageEditDraftRestored || manageActionsDraftRestored}
+                        onDiscard={() => {
+                            discardManageEditDraft();
+                            discardManageActionsDraft();
+                            setExtendDate("");
+                            setExtendReason("");
+                            setCancelReason("");
+                            setEditTitle(task.title ?? "");
+                            setEditDetail(task.detail ?? "");
+                            setEditDue("");
+                            setEditAssigneeIds(task.assignees.map((a) => a.employeeId));
+                        }}
+                    />
                     <div className="space-y-2">
                         <p className="text-xs font-semibold text-[var(--text-secondary)]">Perpanjang deadline</p>
                         <div className="grid grid-cols-1 gap-2">

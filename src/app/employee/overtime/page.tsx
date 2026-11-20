@@ -16,6 +16,9 @@ import ListSkeleton from "@/components/ui/ListSkeleton";
 import PageHeader from "@/components/ui/PageHeader";
 import StateCard from "@/components/ui/StateCard";
 import StatusBadge, { type StatusTone } from "@/components/ui/StatusBadge";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 
 interface OvertimeRequest {
     id: string;
@@ -47,12 +50,62 @@ export default function EmployeeOvertimePage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(5);
 
+    const [defaultDate] = useState(() => new Date().toISOString().split("T")[0]);
     const [form, setForm] = useState({
-        date: new Date().toISOString().split("T")[0],
+        date: defaultDate,
         startTime: "17:00",
         endTime: "19:00",
         reason: "",
         isHoliday: false,
+    });
+
+    const {
+        restored: overtimeDraftRestored,
+        clearDraft: clearOvertimeDraft,
+        discardDraft: discardOvertimeDraft,
+    } = useEmployeeDraft<{
+        showForm: boolean;
+        date: string;
+        startTime: string;
+        endTime: string;
+        reason: string;
+        isHoliday: boolean;
+    }>({
+        formKey: "overtime:create",
+        value: { showForm, ...form },
+        isDirty: (draft) =>
+            draft.reason.trim().length > 0 ||
+            draft.isHoliday ||
+            draft.startTime !== "17:00" ||
+            draft.endTime !== "19:00" ||
+            draft.date !== defaultDate,
+        validate: (raw): raw is {
+            showForm: boolean;
+            date: string;
+            startTime: string;
+            endTime: string;
+            reason: string;
+            isHoliday: boolean;
+        } =>
+            isPlainObject(raw) &&
+            typeof raw.showForm === "boolean" &&
+            typeof raw.date === "string" &&
+            typeof raw.startTime === "string" &&
+            typeof raw.endTime === "string" &&
+            typeof raw.reason === "string" &&
+            typeof raw.isHoliday === "boolean",
+        onRestore: (draft) => {
+            setForm({
+                date: draft.date || defaultDate,
+                startTime: draft.startTime || "17:00",
+                endTime: draft.endTime || "19:00",
+                reason: draft.reason,
+                isHoliday: draft.isHoliday,
+            });
+            if (draft.showForm) {
+                setShowForm(true);
+            }
+        },
     });
 
     useEffect(() => {
@@ -97,6 +150,7 @@ export default function EmployeeOvertimePage() {
             if (res.ok) {
                 const data = await res.json();
                 setRequests((prev) => [data, ...prev]);
+                clearOvertimeDraft();
                 setShowForm(false);
                 resetForm();
                 toast("Pengajuan lembur berhasil dikirim!", "success");
@@ -123,7 +177,7 @@ export default function EmployeeOvertimePage() {
                 subtitle={`Total disetujui: ${Number(totalApproved.toFixed(2))} jam`}
                 icon={Clock4}
                 action={
-                    <button className="btn btn-primary" onClick={() => { setShowForm(true); resetForm(); }}>
+                    <button className="btn btn-primary" onClick={() => setShowForm(true)}>
                         <Plus className="w-4 h-4" /> Ajukan Lembur
                     </button>
                 }
@@ -202,6 +256,14 @@ export default function EmployeeOvertimePage() {
                             </button>
                         </div>
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            <DraftNotice
+                                compact
+                                visible={overtimeDraftRestored}
+                                onDiscard={() => {
+                                    discardOvertimeDraft();
+                                    resetForm();
+                                }}
+                            />
                             <div className="form-group !mb-0">
                                 <label className="form-label">
                                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Tanggal Lembur</span>

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Building2, Navigation, FileText, MapPin, X, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { DEFAULT_VISIT_RADIUS } from "../visitTypes";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
+import DraftNotice from "@/components/ui/DraftNotice";
+import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
+import { isPlainObject } from "@/lib/formPersistence";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 
 const LocationMap = dynamic(() => import("@/components/LocationMap"), { ssr: false });
@@ -15,6 +18,8 @@ interface CreateDraftModalProps {
     onCreated: (visit: import("@/types").VisitReport) => void;
 }
 
+const DEFAULT_LOCATION = { lat: -6.2088, lng: 106.8456 };
+
 export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) {
     const [form, setForm] = useState({
         clientName: "",
@@ -22,7 +27,9 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
         purpose: "",
         notes: "",
     });
-    const [visitLocation, setVisitLocation] = useState({ lat: -6.2088, lng: 106.8456 });
+    const [visitLocation, setVisitLocation] = useState(DEFAULT_LOCATION);
+    const [locationTouched, setLocationTouched] = useState(false);
+    const locationTouchedRef = useRef(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [locationWarning, setLocationWarning] = useState<string | null>(() =>
@@ -31,20 +38,81 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
             : null
     );
 
-    // Get current device location as initial map center
+    const {
+        restored: draftRestored,
+        clearDraft,
+        discardDraft,
+    } = useEmployeeDraft<{
+        clientName: string;
+        clientAddress: string;
+        purpose: string;
+        notes: string;
+        visitLocation: { lat: number; lng: number };
+        locationTouched: boolean;
+    }>({
+        formKey: "visits:create-draft",
+        value: { ...form, visitLocation, locationTouched },
+        isDirty: (draft) =>
+            draft.clientName.trim().length > 0 ||
+            draft.clientAddress.trim().length > 0 ||
+            draft.purpose.trim().length > 0 ||
+            draft.notes.trim().length > 0 ||
+            draft.locationTouched,
+        validate: (raw): raw is {
+            clientName: string;
+            clientAddress: string;
+            purpose: string;
+            notes: string;
+            visitLocation: { lat: number; lng: number };
+            locationTouched: boolean;
+        } =>
+            isPlainObject(raw) &&
+            typeof raw.clientName === "string" &&
+            typeof raw.clientAddress === "string" &&
+            typeof raw.purpose === "string" &&
+            typeof raw.notes === "string" &&
+            typeof raw.locationTouched === "boolean" &&
+            isPlainObject(raw.visitLocation) &&
+            typeof raw.visitLocation.lat === "number" &&
+            Number.isFinite(raw.visitLocation.lat) &&
+            typeof raw.visitLocation.lng === "number" &&
+            Number.isFinite(raw.visitLocation.lng),
+        onRestore: (draft) => {
+            setForm({
+                clientName: draft.clientName,
+                clientAddress: draft.clientAddress,
+                purpose: draft.purpose,
+                notes: draft.notes,
+            });
+            if (draft.locationTouched) {
+                locationTouchedRef.current = true;
+                setLocationTouched(true);
+                setVisitLocation(draft.visitLocation);
+            }
+        },
+    });
+
+    // Get current device location as initial map center (only if user hasn't picked/restored a manual pin)
     useEffect(() => {
-        if (!navigator.geolocation) return;
+        if (!navigator.geolocation || locationTouchedRef.current) return;
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                if (locationTouchedRef.current) return;
                 setVisitLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
                 setLocationWarning(null);
             },
-            () => setLocationWarning("Lokasi perangkat tidak dapat digunakan. Tentukan titik kunjungan secara manual pada peta.")
+            () => {
+                if (!locationTouchedRef.current) {
+                    setLocationWarning("Lokasi perangkat tidak dapat digunakan. Tentukan titik kunjungan secara manual pada peta.");
+                }
+            }
         );
     }, []);
 
     const handleMapClick = useCallback((lat: number, lng: number) => {
+        locationTouchedRef.current = true;
+        setLocationTouched(true);
         setVisitLocation({ lat, lng });
     }, []);
 
@@ -74,6 +142,7 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
             }
 
             const data = await res.json();
+            clearDraft();
             onCreated(data);
             onClose();
         } catch (error) {
@@ -105,6 +174,17 @@ export function CreateDraftModal({ onClose, onCreated }: CreateDraftModalProps) 
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    <DraftNotice
+                        compact
+                        visible={draftRestored}
+                        onDiscard={() => {
+                            discardDraft();
+                            locationTouchedRef.current = false;
+                            setLocationTouched(false);
+                            setVisitLocation(DEFAULT_LOCATION);
+                            setForm({ clientName: "", clientAddress: "", purpose: "", notes: "" });
+                        }}
+                    />
                     <div className="form-group !mb-0">
                         <label className="form-label">
                             <span className="flex items-center gap-1">
