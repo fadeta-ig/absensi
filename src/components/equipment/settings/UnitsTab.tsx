@@ -11,11 +11,11 @@ import { useTablePagination } from "@/hooks/useTablePagination";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentCompanyBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { inputClass } from "@/app/ga/equipment/settings/_components/useSettingsData";
+import { inputClass } from "@/components/equipment/settings/useSettingsData";
 import type {
     EquipmentTemplate,
     EquipmentUnit,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 
 type UnitCompanyFilter = "SEMUA" | "WIG" | "MKI" | "BOTH" | "TANPA";
 

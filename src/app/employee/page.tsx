@@ -35,7 +35,7 @@ export default function EmployeeHomePage() {
     const [news, setNews] = useState<NewsItem[]>([]);
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [cleaningCaps, setCleaningCaps] = useState<{ isReviewer: boolean; isTopViewer: boolean } | null>(null);
-    const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean; canApprove: boolean } | null>(null);
+    const [equipmentCaps, setEquipmentCaps] = useState<{ canExecute: boolean; canReview: boolean; canTopView: boolean; canApprove: boolean; canManageSettings: boolean } | null>(null);
     const [canMonitorMeeting, setCanMonitorMeeting] = useState<boolean | null>(null);
     const [loadingData, setLoadingData] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -93,7 +93,13 @@ export default function EmployeeHomePage() {
                     const equip = equipJson?.data;
                     setEquipmentCaps(
                         equip && typeof equip.canExecute === "boolean"
-                            ? { canExecute: equip.canExecute, canReview: Boolean(equip.canReview), canTopView: Boolean(equip.canTopView), canApprove: Boolean(equip.canApprove) }
+                            ? {
+                                  canExecute: equip.canExecute,
+                                  canReview: Boolean(equip.canReview),
+                                  canTopView: Boolean(equip.canTopView),
+                                  canApprove: Boolean(equip.canApprove),
+                                  canManageSettings: Boolean(equip.canManageSettings),
+                              }
                             : null
                     );
                 } catch {
@@ -328,6 +334,7 @@ export default function EmployeeHomePage() {
                 canReviewEquipment={equipmentCaps ? equipmentCaps.canReview : null}
                 canTopViewEquipment={equipmentCaps ? equipmentCaps.canTopView : null}
                 canApproveEquipment={equipmentCaps ? equipmentCaps.canApprove : null}
+                canManageEquipmentSettings={equipmentCaps ? equipmentCaps.canManageSettings : null}
                 canMonitorMeeting={canMonitorMeeting}
                 canEditGreeting={canEditGreeting}
             />

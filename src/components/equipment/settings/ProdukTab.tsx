@@ -12,14 +12,14 @@ import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentCompanyBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import {
     inputClass,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 import type {
     EquipmentCompanyFilter,
     EquipmentProduct,
     EquipmentUnit,
     ProductChecklist,
     ProductToolRow,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 
 interface ProdukTabProps {
     products: EquipmentProduct[];
@@ -36,6 +36,7 @@ interface ProdukTabProps {
     fetchChecklist: (productId: string) => Promise<void>;
     setChecklist: React.Dispatch<React.SetStateAction<ProductChecklist | null>>;
     setInitialChecked: React.Dispatch<React.SetStateAction<string[]>>;
+    canEditUnits?: boolean;
 }
 
 export default function ProdukTab({
@@ -53,6 +54,7 @@ export default function ProdukTab({
     fetchChecklist,
     setChecklist,
     setInitialChecked,
+    canEditUnits = true,
 }: ProdukTabProps) {
     const toast = useToast();
     const confirm = useConfirm();
@@ -318,6 +320,11 @@ export default function ProdukTab({
                 {uncategorizedUnits.length === 0 ? (
                     <FeedbackMessage variant="success">
                         Semua alat aktif sudah berkategori perusahaan.
+                    </FeedbackMessage>
+                ) : !canEditUnits ? (
+                    <FeedbackMessage variant="warning">
+                        Ada {uncategorizedUnits.length} alat aktif yang belum berkategori perusahaan.
+                        Hubungi admin GA atau PIC Alat/Unit untuk mengategorikannya terlebih dahulu.
                     </FeedbackMessage>
                 ) : (
                     <>

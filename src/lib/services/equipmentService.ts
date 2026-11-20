@@ -7,7 +7,16 @@ import { toWIBDateString, isValidCalendarDate, addCalendarDays } from "@/lib/tim
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma, EquipmentCompany } from "@prisma/client";
 import { actorFromSession } from "@/lib/services/auditService";
-import { hasEmployeePortalAccess, isEquipmentMasterAdmin as isWig002, normalizeEquipmentName as normalizeName } from "@/lib/services/equipmentAuth";
+import {
+    EQUIPMENT_SETTINGS_DELEGATES_KEY,
+    EQUIPMENT_SETTINGS_DELEGATES_MAX,
+    EQUIPMENT_SETTINGS_SCOPES,
+    hasEmployeePortalAccess,
+    isEquipmentMasterAdmin as isWig002,
+    isEquipmentSettingsScope,
+    normalizeEquipmentName as normalizeName,
+    type EquipmentSettingsScope,
+} from "@/lib/services/equipmentAuth";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
 
 // ─── Error ────────────────────────────────────────────────────────
@@ -134,7 +143,7 @@ export async function getEquipmentQcMembersForAdmin(
     session: SessionPayload,
     company: EquipmentCompany
 ): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "atasan");
     return getEquipmentQcMembers(company);
 }
 
@@ -151,10 +160,16 @@ export async function setEquipmentQcMembers(
     employeeIds: string[],
     actor: { userId?: string | null; username: string }
 ): Promise<string[]> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "atasan");
     const ids = [...new Set(employeeIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length > EQUIPMENT_QC_MEMBERS_MAX) {
         throw new EquipmentError(`Anggota QC ${company} maksimal ${EQUIPMENT_QC_MEMBERS_MAX} orang.`, 409);
+    }
+    if (!isWig002(session) && session.employeeId && ids.includes(session.employeeId)) {
+        const existingIds = await getEquipmentQcMemberIds(company);
+        if (!existingIds.includes(session.employeeId)) {
+            throw new EquipmentError("PIC delegasi tidak dapat menambahkan dirinya sendiri sebagai anggota QC.", 403);
+        }
     }
     const today = toWIBDateString();
     for (const id of ids) await assertActiveInternalEmployee(prisma, id, today);
@@ -164,6 +179,10 @@ export async function setEquipmentQcMembers(
         create: { key: qcMembersKey(company), value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
     });
     invalidateEquipmentQcMembersCache(company);
+    await logCreated("SET_EQUIPMENT_QC_MEMBERS", "EQUIPMENT_SETTINGS", qcMembersKey(company), session, {
+        company,
+        count: ids.length,
+    });
     return ids;
 }
 
@@ -232,19 +251,189 @@ export async function requireQcMemberForInspection(session: SessionPayload, insp
     await requireQcMemberForUnit(session, insp.unit);
 }
 
-// ─── Guard internal ───────────────────────────────────────────────
+// ─── Guard internal & Delegasi PIC Settings ──────────────────────
+
+export interface EquipmentSettingsDelegateConfig {
+    employeeId: string;
+    scopes: EquipmentSettingsScope[];
+    expiresOnWibDate: string | null;
+}
+
+export interface EquipmentSettingsDelegateView extends EquipmentSettingsDelegateConfig {
+    name: string | null;
+    isActive: boolean;
+    isExpired: boolean;
+}
+
+function parseDelegateEntries(raw: string | null | undefined): EquipmentSettingsDelegateConfig[] {
+    if (!raw) return [];
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        const seen = new Set<string>();
+        const out: EquipmentSettingsDelegateConfig[] = [];
+        for (const item of parsed) {
+            if (!item || typeof item !== "object") continue;
+            const rec = item as Record<string, unknown>;
+            const employeeId = typeof rec.employeeId === "string" ? rec.employeeId.trim() : "";
+            if (!employeeId || seen.has(employeeId)) continue;
+            const rawScopes = Array.isArray(rec.scopes) ? rec.scopes : [];
+            const scopes = EQUIPMENT_SETTINGS_SCOPES.filter((s) => rawScopes.includes(s));
+            if (scopes.length === 0) continue;
+            const rawExp = typeof rec.expiresOnWibDate === "string" ? rec.expiresOnWibDate.trim() : "";
+            const expiresOnWibDate = rawExp && isValidCalendarDate(rawExp) ? rawExp : null;
+            seen.add(employeeId);
+            out.push({ employeeId, scopes, expiresOnWibDate });
+            if (out.length >= EQUIPMENT_SETTINGS_DELEGATES_MAX) break;
+        }
+        return out;
+    } catch {
+        return [];
+    }
+}
+
+async function readDelegateConfigs(): Promise<EquipmentSettingsDelegateConfig[]> {
+    try {
+        const row = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_SETTINGS_DELEGATES_KEY } });
+        return parseDelegateEntries(row?.value);
+    } catch {
+        return [];
+    }
+}
 
 export function requireWig002(session: SessionPayload): void {
     if (!isWig002(session)) throw new EquipmentError("Hanya WIG002 yang dapat mengelola master inspeksi alat.", 403);
 }
 
+/**
+ * Daftar scope pengaturan Equipment yang aktif untuk sesi saat ini:
+ * - WIG002: semua 5 scope (tanpa query DB).
+ * - Karyawan PIC delegasi: scope yang ditetapkan WIG002 bila belum kedaluwarsa (inklusif)
+ *   DAN karyawan masih internal aktif dengan akun aktif (live check, tanpa cache).
+ */
+export async function getActiveEquipmentSettingsScopes(session: SessionPayload): Promise<EquipmentSettingsScope[]> {
+    if (isWig002(session)) return [...EQUIPMENT_SETTINGS_SCOPES];
+    if (!hasEmployeePortalAccess(session) || !session.employeeId) return [];
+    const configs = await readDelegateConfigs();
+    const entry = configs.find((c) => c.employeeId === session.employeeId);
+    if (!entry) return [];
+    const today = toWIBDateString();
+    if (entry.expiresOnWibDate && today > entry.expiresOnWibDate) return [];
+    try {
+        await assertActiveInternalEmployee(prisma, session.employeeId, today);
+        return entry.scopes;
+    } catch {
+        return [];
+    }
+}
+
+export async function hasAnyEquipmentSettingsScope(
+    session: SessionPayload,
+    requiredAnyOf: EquipmentSettingsScope | readonly EquipmentSettingsScope[]
+): Promise<boolean> {
+    if (isWig002(session)) return true;
+    const needed = typeof requiredAnyOf === "string" ? [requiredAnyOf] : requiredAnyOf;
+    if (needed.length === 0) return false;
+    const active = await getActiveEquipmentSettingsScopes(session);
+    return needed.some((scope) => active.includes(scope));
+}
+
+export async function requireEquipmentSettingsScope(
+    session: SessionPayload,
+    requiredAnyOf: EquipmentSettingsScope | readonly EquipmentSettingsScope[]
+): Promise<void> {
+    if (await hasAnyEquipmentSettingsScope(session, requiredAnyOf)) return;
+    throw new EquipmentError("Anda tidak memiliki akses ke pengaturan peralatan ini.", 403);
+}
+
+/** Baca daftar PIC delegasi — ketat WIG002-only (mencegah delegasi transitif). */
+export async function getEquipmentSettingsDelegatesForAdmin(
+    session: SessionPayload
+): Promise<EquipmentSettingsDelegateView[]> {
+    requireWig002(session);
+    const configs = await readDelegateConfigs();
+    if (configs.length === 0) return [];
+    const ids = configs.map((c) => c.employeeId);
+    const employees = await prisma.employee.findMany({
+        where: { employeeId: { in: ids } },
+        select: { employeeId: true, name: true, isActive: true },
+    });
+    const byId = new Map(employees.map((e) => [e.employeeId, e]));
+    const today = toWIBDateString();
+    return configs.map((c) => {
+        const emp = byId.get(c.employeeId);
+        return {
+            ...c,
+            name: emp?.name ?? null,
+            isActive: emp?.isActive === true,
+            isExpired: Boolean(c.expiresOnWibDate && today > c.expiresOnWibDate),
+        };
+    });
+}
+
+/** Simpan daftar penuh PIC delegasi — ketat WIG002-only. */
+export async function setEquipmentSettingsDelegates(
+    session: SessionPayload,
+    delegates: Array<{ employeeId: string; scopes: EquipmentSettingsScope[]; expiresOnWibDate?: string | null }>,
+    actor: { userId?: string | null; username: string }
+): Promise<EquipmentSettingsDelegateView[]> {
+    requireWig002(session);
+    if (delegates.length > EQUIPMENT_SETTINGS_DELEGATES_MAX) {
+        throw new EquipmentError(`PIC delegasi maksimal ${EQUIPMENT_SETTINGS_DELEGATES_MAX} orang.`, 409);
+    }
+    const today = toWIBDateString();
+    const seen = new Set<string>();
+    const normalized: EquipmentSettingsDelegateConfig[] = [];
+    for (const item of delegates) {
+        const employeeId = item.employeeId.trim();
+        if (!employeeId) throw new EquipmentError("ID karyawan wajib diisi.", 400);
+        if (seen.has(employeeId)) throw new EquipmentError(`Karyawan ${employeeId} terduplikasi di daftar PIC.`, 400);
+        seen.add(employeeId);
+
+        const scopes = EQUIPMENT_SETTINGS_SCOPES.filter(
+            (s) => item.scopes.includes(s) && isEquipmentSettingsScope(s)
+        );
+        if (scopes.length === 0) {
+            throw new EquipmentError(`Pilih minimal satu area pengaturan untuk ${employeeId}.`, 400);
+        }
+
+        const rawExp = item.expiresOnWibDate?.trim() || "";
+        if (rawExp && !isValidCalendarDate(rawExp)) {
+            throw new EquipmentError(`Tanggal kedaluwarsa tidak valid untuk ${employeeId} (YYYY-MM-DD).`, 400);
+        }
+
+        await assertActiveInternalEmployee(prisma, employeeId, today);
+        normalized.push({ employeeId, scopes, expiresOnWibDate: rawExp || null });
+    }
+
+    await prisma.appSetting.upsert({
+        where: { key: EQUIPMENT_SETTINGS_DELEGATES_KEY },
+        update: { value: JSON.stringify(normalized), updatedByUserId: actor.userId ?? null },
+        create: { key: EQUIPMENT_SETTINGS_DELEGATES_KEY, value: JSON.stringify(normalized), updatedByUserId: actor.userId ?? null },
+    });
+    await logCreated("SET_EQUIPMENT_SETTINGS_DELEGATES", "EQUIPMENT_SETTINGS", EQUIPMENT_SETTINGS_DELEGATES_KEY, session, {
+        count: normalized.length,
+        delegates: normalized.map((d) => ({ employeeId: d.employeeId, scopes: d.scopes, expiresOnWibDate: d.expiresOnWibDate })),
+    });
+    return getEquipmentSettingsDelegatesForAdmin(session);
+}
+
+async function getEquipmentTopViewerIds(): Promise<string[]> {
+    try {
+        const row = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_TOP_VIEWERS_KEY } });
+        if (!row?.value) return [];
+        const parsed = JSON.parse(row.value) as unknown;
+        if (!Array.isArray(parsed)) return [];
+        return [...new Set(parsed.filter((v): v is string => typeof v === "string").map((v) => v.trim()).filter(Boolean))].slice(0, EQUIPMENT_TOP_VIEWERS_MAX);
+    } catch {
+        return [];
+    }
+}
+
 async function isEquipmentTopViewer(session: SessionPayload): Promise<boolean> {
     if (!session.employeeId) return false;
     try {
-        const row = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_TOP_VIEWERS_KEY } });
-        if (!row?.value) return false;
-        const ids = JSON.parse(row.value) as unknown;
-        if (!Array.isArray(ids)) return false;
+        const ids = await getEquipmentTopViewerIds();
         if (!ids.includes(session.employeeId)) return false;
         const emp = await prisma.employee.findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } });
         return emp?.isActive === true;
@@ -259,17 +448,16 @@ export async function requireWig002OrTopViewer(session: SessionPayload): Promise
     throw new EquipmentError("Hanya WIG002 atau atasan yang ditunjuk yang dapat melihat.", 403);
 }
 
+/** Baca daftar master unit: WIG002, Top Viewer (rekap), atau PIC delegasi tab unit/produk/penugasan. */
+export async function requireEquipmentUnitsReadAccess(session: SessionPayload): Promise<void> {
+    if (isWig002(session)) return;
+    if (await isEquipmentTopViewer(session)) return;
+    if (await hasAnyEquipmentSettingsScope(session, ["units", "products", "assignments"])) return;
+    throw new EquipmentError("Anda tidak memiliki akses membaca daftar unit alat.", 403);
+}
+
 export async function getEquipmentTopViewers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
-    let ids: string[] = [];
-    try {
-        const row = await prisma.appSetting.findUnique({ where: { key: EQUIPMENT_TOP_VIEWERS_KEY } });
-        if (row?.value) {
-            const parsed = JSON.parse(row.value) as unknown;
-            if (Array.isArray(parsed)) ids = parsed.filter((v): v is string => typeof v === "string").slice(0, EQUIPMENT_TOP_VIEWERS_MAX);
-        }
-    } catch {
-        ids = [];
-    }
+    const ids = await getEquipmentTopViewerIds();
     if (ids.length === 0) return [];
     const employees = await prisma.employee.findMany({
         where: { employeeId: { in: ids } },
@@ -282,7 +470,7 @@ export async function getEquipmentTopViewers(): Promise<Array<{ employeeId: stri
 export async function getEquipmentTopViewersForAdmin(
     session: SessionPayload
 ): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "atasan");
     return getEquipmentTopViewers();
 }
 
@@ -291,10 +479,16 @@ export async function setEquipmentTopViewers(
     employeeIds: string[],
     actor: { userId?: string | null; username: string }
 ): Promise<string[]> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "atasan");
     const ids = [...new Set(employeeIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length > EQUIPMENT_TOP_VIEWERS_MAX) {
         throw new EquipmentError(`Atasan maksimal ${EQUIPMENT_TOP_VIEWERS_MAX} orang.`, 409);
+    }
+    if (!isWig002(session) && session.employeeId && ids.includes(session.employeeId)) {
+        const existingIds = await getEquipmentTopViewerIds();
+        if (!existingIds.includes(session.employeeId)) {
+            throw new EquipmentError("PIC delegasi tidak dapat menambahkan dirinya sendiri sebagai top reviewer.", 403);
+        }
     }
     const today = toWIBDateString();
     for (const id of ids) await assertActiveInternalEmployee(prisma, id, today);
@@ -302,6 +496,9 @@ export async function setEquipmentTopViewers(
         where: { key: EQUIPMENT_TOP_VIEWERS_KEY },
         update: { value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
         create: { key: EQUIPMENT_TOP_VIEWERS_KEY, value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
+    });
+    await logCreated("SET_EQUIPMENT_TOP_VIEWERS", "EQUIPMENT_SETTINGS", EQUIPMENT_TOP_VIEWERS_KEY, session, {
+        count: ids.length,
     });
     return ids;
 }
@@ -334,7 +531,7 @@ export async function getEquipmentApproversForAdmin(
     session: SessionPayload,
     company: EquipmentCompany
 ): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "atasan");
     return getEquipmentApprovers(company);
 }
 
@@ -356,10 +553,16 @@ export async function setEquipmentApprovers(
     employeeIds: string[],
     actor: { userId?: string | null; username: string }
 ): Promise<string[]> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "atasan");
     const ids = [...new Set(employeeIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length > EQUIPMENT_APPROVERS_MAX) {
         throw new EquipmentError(`Approver ${company} maksimal ${EQUIPMENT_APPROVERS_MAX} orang.`, 409);
+    }
+    if (!isWig002(session) && session.employeeId && ids.includes(session.employeeId)) {
+        const existingIds = await getEquipmentApproverIds(company);
+        if (!existingIds.includes(session.employeeId)) {
+            throw new EquipmentError("PIC delegasi tidak dapat menambahkan dirinya sendiri sebagai approver final.", 403);
+        }
     }
     const today = toWIBDateString();
     for (const id of ids) await assertActiveInternalEmployee(prisma, id, today);
@@ -367,6 +570,10 @@ export async function setEquipmentApprovers(
         where: { key: approversKey(company) },
         update: { value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
         create: { key: approversKey(company), value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
+    });
+    await logCreated("SET_EQUIPMENT_APPROVERS", "EQUIPMENT_SETTINGS", approversKey(company), session, {
+        company,
+        count: ids.length,
     });
     return ids;
 }
@@ -498,7 +705,7 @@ export async function requireActiveInternalEmployee(
 // ─── Template ─────────────────────────────────────────────────────
 
 export async function getEquipmentTemplates(session: SessionPayload) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, ["templates", "units"]);
     return prisma.equipmentTemplate.findMany({
         orderBy: { name: "asc" },
         include: { items: { orderBy: { sortOrder: "asc" } }, _count: { select: { units: true } } },
@@ -506,7 +713,7 @@ export async function getEquipmentTemplates(session: SessionPayload) {
 }
 
 export async function createEquipmentTemplate(session: SessionPayload, name: string) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "templates");
     const clean = normalizeName(name);
     if (!clean) throw new EquipmentError("Nama template wajib diisi.", 400);
     try {
@@ -520,7 +727,7 @@ export async function createEquipmentTemplate(session: SessionPayload, name: str
 }
 
 export async function updateEquipmentTemplate(session: SessionPayload, id: string, input: { name?: string; isActive?: boolean }) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "templates");
     const existing = await prisma.equipmentTemplate.findUnique({ where: { id }, include: { _count: { select: { units: true } } } });
     if (!existing) throw new EquipmentError("Template tidak ditemukan.", 404);
     if (input.isActive === false && existing._count.units > 0) {
@@ -543,7 +750,7 @@ export async function updateEquipmentTemplate(session: SessionPayload, id: strin
 }
 
 export async function createEquipmentTemplateItem(session: SessionPayload, input: { templateId: string; name: string; requirePhoto?: boolean }) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "templates");
     const template = await prisma.equipmentTemplate.findUnique({ where: { id: input.templateId } });
     if (!template || !template.isActive) throw new EquipmentError("Template tidak ditemukan atau nonaktif.", 422);
     const clean = normalizeName(input.name);
@@ -566,7 +773,7 @@ export async function updateEquipmentTemplateItem(
     id: string,
     input: { name?: string; sortOrder?: number; requirePhoto?: boolean; isActive?: boolean }
 ) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "templates");
     const existing = await prisma.equipmentTemplateItem.findUnique({ where: { id }, include: { template: true } });
     if (!existing) throw new EquipmentError("Item template tidak ditemukan.", 404);
     if (input.isActive === false) {
@@ -594,7 +801,7 @@ export async function updateEquipmentTemplateItem(
 }
 
 export async function deleteEquipmentTemplateItem(session: SessionPayload, id: string) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "templates");
     const existing = await prisma.equipmentTemplateItem.findUnique({ where: { id } });
     if (!existing) throw new EquipmentError("Item template tidak ditemukan.", 404);
     // Snapshot riwayat dipertahankan (templateItemId di-set null otomatis).
@@ -605,8 +812,8 @@ export async function deleteEquipmentTemplateItem(session: SessionPayload, id: s
 // ─── Unit ─────────────────────────────────────────────────────────
 
 export async function getEquipmentUnits(session: SessionPayload, activeOnly = false) {
-    // Baca master boleh WIG002/top reviewer (dropdown rekap); tulis tetap WIG002 di create/update.
-    await requireWig002OrTopViewer(session);
+    // Baca master boleh WIG002, top reviewer (rekap), atau PIC delegasi unit/produk/penugasan.
+    await requireEquipmentUnitsReadAccess(session);
     const rows = await prisma.equipmentUnit.findMany({
         where: activeOnly ? { isActive: true } : {},
         orderBy: { name: "asc" },
@@ -652,7 +859,7 @@ function normalizeInputCompanies(input: {
 }
 
 export async function createEquipmentUnit(session: SessionPayload, input: EquipmentUnitInput) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "units");
     const clean = normalizeName(input.name);
     if (!clean) throw new EquipmentError("Nama alat wajib diisi.", 400);
     const template = await prisma.equipmentTemplate.findUnique({ where: { id: input.templateId } });
@@ -682,7 +889,7 @@ export async function createEquipmentUnit(session: SessionPayload, input: Equipm
 }
 
 export async function updateEquipmentUnit(session: SessionPayload, id: string, input: Partial<EquipmentUnitInput> & { isActive?: boolean }) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "units");
     const existing = await prisma.equipmentUnit.findUnique({ where: { id } });
     if (!existing) throw new EquipmentError("Unit alat tidak ditemukan.", 404);
     if (input.isActive === false) {
@@ -869,7 +1076,7 @@ export async function assignEquipmentUnit(
     session: SessionPayload,
     input: { unitId?: string | null; employeeId: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "assignments");
     if (input.unitId) await assertAssignableUnit(input.unitId);
     const today = toWIBDateString();
     const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
@@ -891,7 +1098,7 @@ export async function assignEquipmentUnitsBulk(
     session: SessionPayload,
     input: { unitIds: string[]; employeeId: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ): Promise<EquipmentAssignBulkResult> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "assignments");
     const ids = [...new Set(input.unitIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length === 0) throw new EquipmentError("Pilih minimal satu alat.", 400);
     if (ids.length > 200) throw new EquipmentError("Maksimal 200 alat per penugasan bulk.", 400);
@@ -924,7 +1131,7 @@ export async function assignEquipmentUnitsBulk(
 }
 
 export async function getEquipmentAssignments(session: SessionPayload) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "assignments");
     const rows = await prisma.equipmentAssignment.findMany({
         orderBy: { startsOnWibDate: "desc" },
         take: 200,
@@ -940,7 +1147,7 @@ export async function getEquipmentAssignments(session: SessionPayload) {
 }
 
 export async function endEquipmentAssignment(session: SessionPayload, assignmentId: string, endsOnWibDate?: string) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "assignments");
     const existing = await prisma.equipmentAssignment.findUnique({ where: { id: assignmentId } });
     if (!existing) throw new EquipmentError("Penugasan tidak ditemukan.", 404);
     if (existing.endsOnWibDate) throw new EquipmentError("Penugasan sudah berakhir.", 409);
@@ -957,7 +1164,7 @@ export interface EquipmentEndBulkResult {
 }
 
 export async function endEquipmentAssignmentsBulk(session: SessionPayload, assignmentIds: string[]): Promise<EquipmentEndBulkResult> {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "assignments");
     const ids = [...new Set(assignmentIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length === 0) throw new EquipmentError("Pilih minimal satu penugasan.", 400);
     if (ids.length > 200) throw new EquipmentError("Maksimal 200 penugasan per aksi bulk.", 400);
@@ -990,7 +1197,7 @@ export async function updateEquipmentAssignment(
     assignmentId: string,
     input: { unitId?: string | null; employeeId?: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "assignments");
     const existing = await prisma.equipmentAssignment.findUnique({ where: { id: assignmentId } });
     if (!existing) throw new EquipmentError("Penugasan tidak ditemukan.", 404);
     const today = toWIBDateString();
@@ -1108,6 +1315,8 @@ export async function getEmployeeEquipmentCapabilities(
     canReview: boolean;
     canTopView: boolean;
     canApprove: boolean;
+    canManageSettings: boolean;
+    manageScopes: EquipmentSettingsScope[];
     executeCompanies: EquipmentCompany[];
     reviewCompanies: EquipmentCompany[];
     approveCompanies: EquipmentCompany[];
@@ -1117,13 +1326,15 @@ export async function getEmployeeEquipmentCapabilities(
         canReview: false,
         canTopView: false,
         canApprove: false,
+        canManageSettings: false,
+        manageScopes: [] as EquipmentSettingsScope[],
         executeCompanies: [] as EquipmentCompany[],
         reviewCompanies: [] as EquipmentCompany[],
         approveCompanies: [] as EquipmentCompany[],
     };
     if (!session.employeeId || !session.userId) return none;
     const today = toWIBDateString();
-    const [assignCount, reviewCompanies, isTop, approveCompanies, executeCompanies] = await Promise.all([
+    const [assignCount, reviewCompanies, isTop, approveCompanies, executeCompanies, manageScopes] = await Promise.all([
         prisma.equipmentAssignment.count({
             where: {
                 userId: session.userId,
@@ -1135,12 +1346,25 @@ export async function getEmployeeEquipmentCapabilities(
         isEquipmentTopViewer(session).catch(() => false),
         getEquipmentApproverCompanies(session).catch(() => [] as EquipmentCompany[]),
         getExecuteCompanies(session).catch(() => [] as EquipmentCompany[]),
-    ]).catch(() => [0, [], false, [], []] as [number, EquipmentCompany[], boolean, EquipmentCompany[], EquipmentCompany[]]);
+        getActiveEquipmentSettingsScopes(session).catch(() => [] as EquipmentSettingsScope[]),
+    ]).catch(
+        () =>
+            [0, [], false, [], [], []] as [
+                number,
+                EquipmentCompany[],
+                boolean,
+                EquipmentCompany[],
+                EquipmentCompany[],
+                EquipmentSettingsScope[],
+            ]
+    );
     return {
         canExecute: assignCount > 0,
         canReview: reviewCompanies.length > 0,
         canTopView: isTop,
         canApprove: approveCompanies.length > 0,
+        canManageSettings: manageScopes.length > 0,
+        manageScopes,
         executeCompanies,
         reviewCompanies,
         approveCompanies,

@@ -12,7 +12,7 @@ import type {
     EquipmentCompanyFilter,
     QcMember,
     TopViewer,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 
 interface AtasanTabProps {
     qcMembers: QcMember[];

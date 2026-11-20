@@ -4,10 +4,10 @@ import {
     getEquipmentUnits,
     createEquipmentUnit,
     updateEquipmentUnit,
-    requireWig002OrTopViewer,
+    requireEquipmentUnitsReadAccess,
     EquipmentError,
 } from "@/lib/services/equipmentService";
-import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentSettingsAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentUnitCreateSchema, equipmentUnitUpdateSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET(request: NextRequest) {
@@ -15,9 +15,9 @@ export async function GET(request: NextRequest) {
     if (!session) return unauthorizedResponse();
 
     try {
-        // Baca master boleh top reviewer (dropdown rekap); tulis tetap WIG002 (di service).
+        // Baca master boleh WIG002, top reviewer (dropdown rekap), atau PIC delegasi unit/produk/penugasan.
         // Tanpa syarat employeeId: WIG002 belum tentu punya employee.
-        await requireWig002OrTopViewer(session);
+        await requireEquipmentUnitsReadAccess(session);
         const { searchParams } = new URL(request.url);
         const activeOnly = searchParams.get("activeOnly") === "1";
         const units = await getEquipmentUnits(session, activeOnly);
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("units");
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("units");
     if (auth.error) return auth.error;
     const { session } = auth;
 

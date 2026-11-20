@@ -5,7 +5,7 @@ import {
     setProductTools,
 } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
-import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentSettingsAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentProductToolsSchema } from "@/lib/validations/validationSchemas";
 
 async function resolveId(params: Promise<{ id: string }>): Promise<string | null> {
@@ -17,7 +17,7 @@ export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth(["products", "assignments"]);
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -38,7 +38,7 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("products");
     if (auth.error) return auth.error;
     const { session } = auth;
 

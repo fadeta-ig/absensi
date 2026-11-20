@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    EQUIPMENT_SETTINGS_SCOPES,
+    type EquipmentSettingsScope,
+} from "@/lib/services/equipmentAuth";
 
 export interface TemplateItem {
     id: string;
@@ -45,6 +49,15 @@ export interface TopViewer {
     name: string;
     isActive: boolean;
     email?: string | null;
+}
+
+export interface SettingsDelegateRow {
+    employeeId: string;
+    name: string | null;
+    isActive: boolean;
+    scopes: EquipmentSettingsScope[];
+    expiresOnWibDate: string | null;
+    isExpired: boolean;
 }
 
 export interface EquipmentAssignment {
@@ -108,6 +121,11 @@ export function isAssignmentActive(a: { endsOnWibDate: string | null }): boolean
     return !a.endsOnWibDate || a.endsOnWibDate > wibTodayStr();
 }
 
+export interface UseSettingsDataOptions {
+    allowedScopes?: readonly EquipmentSettingsScope[];
+    canManageDelegates?: boolean;
+}
+
 export interface SettingsData {
     templates: EquipmentTemplate[];
     units: EquipmentUnit[];
@@ -122,6 +140,8 @@ export interface SettingsData {
     approverError: string | null;
     approverCompany: EquipmentCompanyFilter;
     setApproverCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
+    delegates: SettingsDelegateRow[];
+    delegatesError: string | null;
     products: EquipmentProduct[];
     productError: string | null;
     productCompany: EquipmentCompanyFilter;
@@ -138,6 +158,7 @@ export interface SettingsData {
     fetchTopViewers: () => Promise<void>;
     fetchQcMembers: (company: EquipmentCompanyFilter) => Promise<void>;
     fetchApprovers: (company: EquipmentCompanyFilter) => Promise<void>;
+    fetchDelegates: () => Promise<void>;
     fetchProducts: (company: EquipmentCompanyFilter) => Promise<void>;
     fetchChecklist: (productId: string) => Promise<void>;
     fetchAll: () => Promise<void>;
@@ -145,7 +166,19 @@ export interface SettingsData {
     setInitialChecked: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-export function useSettingsData(): SettingsData {
+export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsData {
+    const allowedScopes = options.allowedScopes ?? EQUIPMENT_SETTINGS_SCOPES;
+    const canManageDelegates = options.canManageDelegates === true;
+
+    // Stabilkan ketergantungan fetch berdasarkan scope agar tidak re-fetch saat array literal baru dirender.
+    const needTemplates = allowedScopes.includes("templates") || allowedScopes.includes("units");
+    const needUnits =
+        allowedScopes.includes("units") ||
+        allowedScopes.includes("products") ||
+        allowedScopes.includes("assignments");
+    const needAssignments = allowedScopes.includes("assignments");
+    const needAtasan = allowedScopes.includes("atasan");
+
     const [templates, setTemplates] = useState<EquipmentTemplate[]>([]);
     const [units, setUnits] = useState<EquipmentUnit[]>([]);
     const [assignments, setAssignments] = useState<EquipmentAssignment[]>([]);
@@ -157,6 +190,8 @@ export function useSettingsData(): SettingsData {
     const [approvers, setApprovers] = useState<Array<{ employeeId: string; name: string | null; isActive: boolean }>>([]);
     const [approverError, setApproverError] = useState<string | null>(null);
     const [approverCompany, setApproverCompany] = useState<EquipmentCompanyFilter>("WIG");
+    const [delegates, setDelegates] = useState<SettingsDelegateRow[]>([]);
+    const [delegatesError, setDelegatesError] = useState<string | null>(null);
     const [products, setProducts] = useState<EquipmentProduct[]>([]);
     const [productError, setProductError] = useState<string | null>(null);
     const [productCompany, setProductCompany] = useState<EquipmentCompanyFilter>("WIG");
@@ -245,6 +280,20 @@ export function useSettingsData(): SettingsData {
         }
     }, []);
 
+    const fetchDelegates = useCallback(async () => {
+        setDelegatesError(null);
+        try {
+            const res = await fetch("/api/ga/equipment/settings/delegates");
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat PIC delegasi."));
+            const json = await res.json();
+            setDelegates(json.data ?? []);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Gagal memuat PIC delegasi.";
+            setDelegatesError(msg);
+            reportClientError("EquipmentSettings", msg, err);
+        }
+    }, []);
+
     const fetchProducts = useCallback(async (company: EquipmentCompanyFilter) => {
         setProductError(null);
         try {
@@ -281,18 +330,35 @@ export function useSettingsData(): SettingsData {
         setLoading(true);
         setError(null);
         try {
-            const [tplRes, unitRes, assignRes] = await Promise.all([
-                fetch("/api/ga/equipment/templates"),
-                fetch("/api/ga/equipment/units"),
-                fetch("/api/ga/equipment/assignments"),
-            ]);
-            if (!tplRes.ok) throw new Error(await getResponseErrorMessage(tplRes, "Gagal memuat template."));
-            if (!unitRes.ok) throw new Error(await getResponseErrorMessage(unitRes, "Gagal memuat unit alat."));
-            if (!assignRes.ok) throw new Error(await getResponseErrorMessage(assignRes, "Gagal memuat penugasan."));
-            const [tplJson, unitJson, assignJson] = await Promise.all([tplRes.json(), unitRes.json(), assignRes.json()]);
-            setTemplates(tplJson.data ?? []);
-            setUnits(unitJson.data ?? []);
-            setAssignments(assignJson.data ?? []);
+            const tasks: Array<Promise<void>> = [];
+            if (needTemplates) {
+                tasks.push(
+                    fetch("/api/ga/equipment/templates").then(async (res) => {
+                        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat template."));
+                        const json = await res.json();
+                        setTemplates(json.data ?? []);
+                    })
+                );
+            }
+            if (needUnits) {
+                tasks.push(
+                    fetch("/api/ga/equipment/units").then(async (res) => {
+                        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat unit alat."));
+                        const json = await res.json();
+                        setUnits(json.data ?? []);
+                    })
+                );
+            }
+            if (needAssignments) {
+                tasks.push(
+                    fetch("/api/ga/equipment/assignments").then(async (res) => {
+                        if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat penugasan."));
+                        const json = await res.json();
+                        setAssignments(json.data ?? []);
+                    })
+                );
+            }
+            await Promise.all(tasks);
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Gagal memuat data.";
             setError(msg);
@@ -300,12 +366,13 @@ export function useSettingsData(): SettingsData {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [needTemplates, needUnits, needAssignments]);
 
     useEffect(() => {
         void fetchAll();
-        void fetchTopViewers();
-    }, [fetchAll, fetchTopViewers]);
+        if (needAtasan) void fetchTopViewers();
+        if (canManageDelegates) void fetchDelegates();
+    }, [fetchAll, needAtasan, fetchTopViewers, canManageDelegates, fetchDelegates]);
 
     return {
         templates,
@@ -321,6 +388,8 @@ export function useSettingsData(): SettingsData {
         approverError,
         approverCompany,
         setApproverCompany,
+        delegates,
+        delegatesError,
         products,
         productError,
         productCompany,
@@ -337,6 +406,7 @@ export function useSettingsData(): SettingsData {
         fetchTopViewers,
         fetchQcMembers,
         fetchApprovers,
+        fetchDelegates,
         fetchProducts,
         fetchChecklist,
         fetchAll,

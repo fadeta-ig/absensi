@@ -10,12 +10,12 @@ import DataTablePagination from "@/components/ui/DataTablePagination";
 import { useTablePagination } from "@/hooks/useTablePagination";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentCompanyBadge, EquipmentGlobalBadge } from "@/components/equipment/EquipmentStatusBadge";
-import { isAssignmentActive } from "@/app/ga/equipment/settings/_components/useSettingsData";
+import { isAssignmentActive } from "@/components/equipment/settings/useSettingsData";
 import type {
     EquipmentAssignment,
     EquipmentUnit,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
-import { CreateAssignmentModal, EditAssignmentModal } from "@/app/ga/equipment/settings/_components/AssignModals";
+} from "@/components/equipment/settings/useSettingsData";
+import { CreateAssignmentModal, EditAssignmentModal } from "@/components/equipment/settings/AssignModals";
 
 type AssignmentGroup = {
     userId: string;
