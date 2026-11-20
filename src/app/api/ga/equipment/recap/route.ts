@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { EquipmentError, getEquipmentRecap } from "@/lib/services/equipmentService";
 
-const STATUSES = ["OPEN", "SUBMITTED", "DONE"] as const;
+const STATUSES = ["OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         const productId = searchParams.get("productId")?.trim() || undefined;
         const data = await getEquipmentRecap(session, {
             unitId: searchParams.get("unitId") ?? undefined,
-            status: status as "OPEN" | "SUBMITTED" | "DONE" | undefined,
+            status: status as "OPEN" | "SUBMITTED" | "DONE" | "APPROVED" | undefined,
             from: searchParams.get("from") ?? undefined,
             to: searchParams.get("to") ?? undefined,
             company: company as "WIG" | "MKI" | undefined,

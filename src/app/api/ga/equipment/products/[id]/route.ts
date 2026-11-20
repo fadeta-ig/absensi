@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { deleteEquipmentProduct, updateEquipmentProduct } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
 import { equipmentProductUpdateSchema } from "@/lib/validations/validationSchemas";
-import { isWig002 } from "@/lib/services/cleaningService";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
 
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     const validation = await validateBody(request, equipmentProductUpdateSchema);
     if ("error" in validation) return validation.error;
@@ -35,9 +35,9 @@ export async function DELETE(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { id } = await params;

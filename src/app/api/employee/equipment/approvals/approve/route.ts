@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    requireAuth,
-    unauthorizedResponse,
-    forbiddenResponse,
-    validateBody,
-    serverErrorResponse,
-} from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, approveEquipmentInspection } from "@/lib/services/equipmentService";
 import { equipmentApproveSchema } from "@/lib/validations/validationSchemas";
 
 /**
  * POST /api/employee/equipment/approvals/approve
- * Approver final (atasan lapangan, tunggal via setting WIG002) menyetujui
- * inspeksi: DONE → APPROVED. Satu arah, tanpa reject.
+ * Approver final (dinamis maks 5 per perusahaan via setting WIG002, kuorum 1)
+ * menyetujui inspeksi: DONE → APPROVED. Satu arah, tanpa reject.
  */
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentApproveSchema);

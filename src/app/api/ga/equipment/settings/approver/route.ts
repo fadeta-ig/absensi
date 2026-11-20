@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { isWig002 } from "@/lib/services/cleaningService";
-import { EquipmentError, getEquipmentApprovers, setEquipmentApprovers } from "@/lib/services/equipmentService";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { EquipmentError, getEquipmentApproversForAdmin, setEquipmentApprovers } from "@/lib/services/equipmentService";
 import { equipmentApproversSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { searchParams } = new URL(request.url);
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
         if (company !== "WIG" && company !== "MKI") {
             return NextResponse.json({ error: "Parameter company wajib WIG atau MKI." }, { status: 400 });
         }
-        const data = await getEquipmentApprovers(company);
+        const data = await getEquipmentApproversForAdmin(session, company);
         return NextResponse.json({ success: true, data });
     } catch (err) {
         if (err instanceof EquipmentError) {
@@ -26,9 +26,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentApproversSchema);

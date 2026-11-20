@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, getUnitInspectionHistory } from "@/lib/services/equipmentService";
 
 /**
  * GET /api/employee/equipment/units/[unitId]/history — riwayat inspeksi
  * satu unit (semua pelaksana) untuk yang ditugaskan di unit itu, QC,
- * topViewer, atau WIG002. Read-only, header ringan.
+ * approver, topViewer, atau WIG002. Read-only, header ringan.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ unitId: string }> }) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { unitId } = await params;

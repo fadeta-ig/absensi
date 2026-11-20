@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import {
     getProductToolChecklist,
     setProductTools,
 } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
-import { isWig002 } from "@/lib/services/cleaningService";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentProductToolsSchema } from "@/lib/validations/validationSchemas";
 
 async function resolveId(params: Promise<{ id: string }>): Promise<string | null> {
@@ -17,9 +17,9 @@ export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const id = await resolveId(params);
@@ -38,9 +38,9 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const id = await resolveId(params);

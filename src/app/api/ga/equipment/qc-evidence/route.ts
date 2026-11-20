@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, unauthorizedResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { EquipmentError, listQcEvidence, requireWig002OrTopViewer } from "@/lib/services/equipmentService";
+import { EquipmentError, listQcEvidenceForGA, requireWig002OrTopViewer } from "@/lib/services/equipmentService";
 
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         if (!inspectionId) {
             return NextResponse.json({ error: "Parameter inspectionId wajib diisi." }, { status: 400 });
         }
-        const data = await listQcEvidence(inspectionId);
+        const data = await listQcEvidenceForGA(session, inspectionId);
         return NextResponse.json({ success: true, data });
     } catch (err) {
         if (err instanceof EquipmentError) {

@@ -68,6 +68,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const toast = useToast();
     const [user, setUser] = useState<{ name: string; employeeId: string | null; username: string; permissions: string[] } | null>(null);
+    const [canTopViewEquipment, setCanTopViewEquipment] = useState(false);
     const [loading, setLoading] = useState(true);
     const [loggingOut, setLoggingOut] = useState(false);
     const fetchedRef = useRef(false);
@@ -75,6 +76,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
     const checkAuth = useCallback(async () => {
         setLoading(true);
         setUser(null);
+        setCanTopViewEquipment(false);
 
         try {
             const res = await fetch("/api/auth/me");
@@ -96,6 +98,12 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
                 return;
             }
             setUser(data);
+            if (data.username !== "WIG002" && data.employeeId && data.permissions?.includes("employee.self")) {
+                fetch("/api/employee/equipment/capabilities")
+                    .then((capRes) => (capRes.ok ? capRes.json() : null))
+                    .then((capJson) => setCanTopViewEquipment(capJson?.data?.canTopView === true))
+                    .catch(() => setCanTopViewEquipment(false));
+            }
         } catch (error) {
             reportClientError("GaLayout", "Gagal memverifikasi sesi GA", error);
             storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
@@ -141,9 +149,22 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
 
     if (loading || !user) return <AppShellLoading message="Memuat portal GA..." />;
 
-    const navItems: NavItem[] = user.username === "WIG002"
-        ? [...GA_NAV_ITEMS, { href: "/ga/greeting-settings", icon: MessageSquareText, label: "Sapaan Beranda" }]
-        : GA_NAV_ITEMS;
+    const isWig002User = user.username === "WIG002";
+    const filteredNavItems: NavItem[] = isWig002User
+        ? GA_NAV_ITEMS
+        : GA_NAV_ITEMS.map((item) => {
+              if (!item.subItems) return item;
+              const subItems = item.subItems.filter((sub) => {
+                  if (sub.href === "/ga/equipment/settings") return false;
+                  if (sub.href === "/ga/equipment/recap") return canTopViewEquipment;
+                  return true;
+              });
+              return { ...item, subItems };
+          });
+
+    const navItems: NavItem[] = isWig002User
+        ? [...filteredNavItems, { href: "/ga/greeting-settings", icon: MessageSquareText, label: "Sapaan Beranda" }]
+        : filteredNavItems;
 
     return (
         <AppShell

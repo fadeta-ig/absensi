@@ -179,11 +179,11 @@ RBAC: tanpa permission baru. Akses meeting = peserta/requester atau WIG002 (`ga.
 4. `EquipmentInspection` 1 ── * `EquipmentInspectionItem` (snapshot nama + `requirePhoto`; hasil `isPass` null = belum dinilai).
 5. `EquipmentInspection` 1 ── * `EquipmentInspectionEvidence` (`equipment_inspection_evidence`; FK `inspectionId` per inspeksi, bukan per item; maks 5 JPEG, mewakili semua item; gate submit ≥1 bila ada item `requirePhoto`).
 6. `EquipmentInspection` 1 ── * `EquipmentQcEvidence` (`equipment_qc_evidence`; foto QC opsional per inspeksi via `inspectionId`, maks 5; hanya saat `SUBMITTED`).
-7. Config: `AppSetting` `equipment.qcMembers` (pool QC, maks 20, di-set WIG002) + `equipment.topViewers` (maks 5, baca rekap/monitor); limit `upload.equipmentEvidence.maxMb` (default 2, dipakai foto dokumentasi + QC).
+7. Config: `AppSetting` `equipment.qcMembers.{WIG|MKI}` (pool QC per perusahaan, maks 20/perusahaan, cache 60 detik), `equipment.approvers.{WIG|MKI}` (daftar approver final per perusahaan, maks 5/perusahaan, kuorum 1, tanpa fallback legacy), `equipment.topViewers` (maks 5 global, baca rekap/monitor); limit `upload.equipmentEvidence.maxMb` (default 10 MB, clamp 0.5–50 MB via `/api/settings/uploads` oleh WIG001 + `hr.manage`, dipakai foto dokumentasi + QC).
 
-Aturan: master + penugasan = WIG002 (hanya karyawan yang ditugaskan yang melihat modul dan boleh checklist; tanpa penugasan = tanpa akses); QC = anggota pool (DONE + catatan/foto opsional, tanpa paraf/tanda tangan); foto wajib ditegakkan di server sebelum submit; menu QC/pantau sesuai peran.
+Aturan: master + penugasan = WIG002 (hanya karyawan yang ditugaskan yang melihat modul dan boleh checklist; tanpa penugasan = tanpa akses); QC = anggota pool per perusahaan (DONE + catatan/foto opsional, tanpa paraf/tanda tangan); Approver = daftar approver final per perusahaan (`DONE → APPROVED`, kuorum 1); foto wajib ditegakkan di server sebelum submit; menu QC/approval/pantau sesuai peran.
 
-RBAC: tanpa permission baru. Master = WIG002; checklist = karyawan internal aktif; antrean QC = anggota pool `equipment.qcMembers`; rekap/monitor = WIG002 atau `equipment.topViewers`.
+RBAC: tanpa permission baru. Master = WIG002 (`ga.manage`); akses portal employee = `employeeId` + `employee.self` (ditegakkan seragam oleh `requireEmployeeEquipmentAuth` dan service); antrean QC = `equipment.qcMembers.{WIG|MKI}`; approval final = `equipment.approvers.{WIG|MKI}`; rekap/monitor = WIG002 atau `equipment.topViewers`.
 
 ---
 

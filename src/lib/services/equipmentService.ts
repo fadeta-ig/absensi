@@ -7,7 +7,7 @@ import { toWIBDateString, isValidCalendarDate, addCalendarDays } from "@/lib/tim
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma, EquipmentCompany } from "@prisma/client";
 import { actorFromSession } from "@/lib/services/auditService";
-import { isWig002, normalizeName } from "@/lib/services/cleaningService";
+import { hasEmployeePortalAccess, isEquipmentMasterAdmin as isWig002, normalizeEquipmentName as normalizeName } from "@/lib/services/equipmentAuth";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
 
 // ─── Error ────────────────────────────────────────────────────────
@@ -130,6 +130,14 @@ export async function getEquipmentQcMembers(company: EquipmentCompany): Promise<
     return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
 }
 
+export async function getEquipmentQcMembersForAdmin(
+    session: SessionPayload,
+    company: EquipmentCompany
+): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
+    requireWig002(session);
+    return getEquipmentQcMembers(company);
+}
+
 /** Gabungan anggota QC semua perusahaan (untuk roster email rekap global). */
 export async function getAllEquipmentQcMembers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
     const [wig, mki] = await Promise.all([getEquipmentQcMembers("WIG"), getEquipmentQcMembers("MKI")]);
@@ -245,7 +253,8 @@ async function isEquipmentTopViewer(session: SessionPayload): Promise<boolean> {
     }
 }
 
-export async function requireWig002OrTopViewer(session: SessionPayload): Promise<void> {    if (isWig002(session)) return;
+export async function requireWig002OrTopViewer(session: SessionPayload): Promise<void> {
+    if (isWig002(session)) return;
     if (await isEquipmentTopViewer(session)) return;
     throw new EquipmentError("Hanya WIG002 atau atasan yang ditunjuk yang dapat melihat.", 403);
 }
@@ -268,6 +277,13 @@ export async function getEquipmentTopViewers(): Promise<Array<{ employeeId: stri
     });
     const order = new Map(ids.map((id, idx) => [id, idx]));
     return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
+}
+
+export async function getEquipmentTopViewersForAdmin(
+    session: SessionPayload
+): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
+    requireWig002(session);
+    return getEquipmentTopViewers();
 }
 
 export async function setEquipmentTopViewers(
@@ -312,6 +328,14 @@ export async function getEquipmentApprovers(company: EquipmentCompany): Promise<
     });
     const order = new Map(ids.map((id, idx) => [id, idx]));
     return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
+}
+
+export async function getEquipmentApproversForAdmin(
+    session: SessionPayload,
+    company: EquipmentCompany
+): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+    requireWig002(session);
+    return getEquipmentApprovers(company);
 }
 
 /** Gabungan approver semua perusahaan (untuk roster email rekap global). */
@@ -744,6 +768,7 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
 
 export async function getMyEquipmentUnits(session: SessionPayload, filters: { productId?: string } = {}) {
     if (!session.userId) throw new EquipmentError("Sesi tidak valid.", 401);
+    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya karyawan yang dapat mengakses modul ini.", 403);
     const today = toWIBDateString();
     const rows = await prisma.equipmentAssignment.findMany({
         where: { userId: session.userId },
@@ -1187,7 +1212,9 @@ async function loadInspectionOrThrow(id: string): Promise<InspectionRow> {
 }
 
 export async function startEquipmentInspection(session: SessionPayload, unitId: string): Promise<EquipmentInspectionDto> {
-    if (!session.userId || !session.employeeId) throw new EquipmentError("Hanya karyawan yang dapat memulai inspeksi.", 403);
+    if (!session.userId || !hasEmployeePortalAccess(session)) {
+        throw new EquipmentError("Hanya karyawan yang dapat memulai inspeksi.", 403);
+    }
     const unit = await prisma.equipmentUnit.findUnique({
         where: { id: unitId },
         include: { template: { include: { items: { where: { isActive: true }, orderBy: { sortOrder: "asc" } } } } },
@@ -1252,10 +1279,10 @@ export async function getEquipmentInspection(session: SessionPayload, id: string
 }
 
 export async function getMyEquipmentInspections(session: SessionPayload, status?: string): Promise<EquipmentInspectionDto[]> {
-    if (!session.employeeId) throw new EquipmentError("Hanya karyawan yang dapat melihat inspeksi.", 403);
+    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya karyawan yang dapat melihat inspeksi.", 403);
     const rows = await prisma.equipmentInspection.findMany({
         where: {
-            startedByEmployeeId: session.employeeId,
+            startedByEmployeeId: session.employeeId as string,
             ...(status ? { status: status as "OPEN" | "SUBMITTED" | "DONE" | "APPROVED" } : {}),
         },
         orderBy: { createdAt: "desc" },
@@ -1267,14 +1294,16 @@ export async function getMyEquipmentInspections(session: SessionPayload, status?
 
 /**
  * Riwayat inspeksi per unit untuk karyawan yang ditugaskan di unit itu
- * (melihat kerja employee lain, read-only). QC/topViewer/WIG002 juga boleh.
+ * (melihat kerja employee lain, read-only). QC/approver/topViewer/WIG002 juga boleh.
  * Header ringan — detail penuh via getEquipmentInspection.
  */
 export async function getUnitInspectionHistory(session: SessionPayload, unitId: string) {
-    if (!session.employeeId || !session.userId) throw new EquipmentError("Hanya karyawan yang dapat melihat riwayat unit.", 403);
+    if (!session.userId || !hasEmployeePortalAccess(session)) {
+        throw new EquipmentError("Hanya karyawan yang dapat melihat riwayat unit.", 403);
+    }
     const today = toWIBDateString();
     const unit = await prisma.equipmentUnit.findUnique({ where: { id: unitId }, select: { company: true, isSharedBoth: true } });
-    const [{ isQc }, isTop] = await Promise.all([
+    const [{ isQc, isApprover }, isTop] = await Promise.all([
         isQcOrApproverForUnit(session, unit),
         isEquipmentTopViewer(session).catch(() => false),
     ]);
@@ -1285,7 +1314,7 @@ export async function getUnitInspectionHistory(session: SessionPayload, unitId: 
     const assigned = assignments.some(
         (a) => (a.unitId === null || a.unitId === unitId) && isEffectiveOn(today, a.startsOnWibDate, a.endsOnWibDate)
     );
-    if (!isWig002(session) && !isTop && !isQc && !assigned) {
+    if (!isWig002(session) && !isTop && !isQc && !isApprover && !assigned) {
         throw new EquipmentError("Anda tidak ditugaskan pada unit ini.", 403);
     }
     const rows = await prisma.equipmentInspection.findMany({
@@ -1309,6 +1338,7 @@ export async function getUnitInspectionHistory(session: SessionPayload, unitId: 
 }
 
 export async function getPendingEquipmentApprovals(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
+    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya karyawan QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
     // Wadah QC per perusahaan: anggota QC melihat SUBMITTED perusahaannya (termasuk alat shared WIG+MKI), terbaru di atas.
     const companies = await getEquipmentQcCompanies(session);
     if (companies.length === 0) throw new EquipmentError("Hanya karyawan QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
@@ -1337,6 +1367,7 @@ export interface ApprovalQueueFilters {
 }
 
 export async function getApprovalQueue(session: SessionPayload, filters: ApprovalQueueFilters = {}): Promise<EquipmentInspectionDto[]> {
+    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
     const companies = await getEquipmentApproverCompanies(session);
     if (companies.length === 0) throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
     const status = filters.status ?? "DONE";
@@ -1402,7 +1433,9 @@ export async function updateEquipmentInspectionItem(
     itemId: string,
     input: { isPass: boolean; note?: string | null }
 ): Promise<EquipmentInspectionDto> {
-    if (!session.userId || !session.employeeId) throw new EquipmentError("Hanya karyawan yang dapat mengisi.", 403);
+    if (!session.userId || !hasEmployeePortalAccess(session)) {
+        throw new EquipmentError("Hanya karyawan yang dapat mengisi.", 403);
+    }
     const item = await prisma.equipmentInspectionItem.findUnique({
         where: { id: itemId },
         include: { inspection: { select: { id: true, status: true, unitId: true, unit: { select: { company: true } } } } },
@@ -1421,7 +1454,9 @@ export async function updateEquipmentInspectionItem(
 }
 
 export async function submitEquipmentInspection(session: SessionPayload, inspectionId: string): Promise<EquipmentInspectionDto> {
-    if (!session.userId || !session.employeeId) throw new EquipmentError("Hanya karyawan yang dapat mengirim.", 403);
+    if (!session.userId || !hasEmployeePortalAccess(session)) {
+        throw new EquipmentError("Hanya karyawan yang dapat mengirim.", 403);
+    }
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "OPEN") throw new EquipmentError("Inspeksi sudah dikirim.", 409);
     if (!insp.unit.company) throw new EquipmentError("Alat belum dikategorikan perusahaan (WIG/MKI).", 422);
@@ -1436,7 +1471,11 @@ export async function submitEquipmentInspection(session: SessionPayload, inspect
         throw new EquipmentError("Tambahkan minimal 1 foto dokumentasi dulu.", 422);
     }
     await prisma.$transaction(async (tx) => {
-        await tx.equipmentInspection.update({ where: { id: inspectionId }, data: { status: "SUBMITTED", submittedAt: new Date() } });
+        const updated = await tx.equipmentInspection.updateMany({
+            where: { id: inspectionId, status: "OPEN" },
+            data: { status: "SUBMITTED", submittedAt: new Date() },
+        });
+        if (updated.count === 0) throw new EquipmentError("Inspeksi sudah dikirim.", 409);
         await tx.auditLog.create({
             data: {
                 action: "SUBMIT_EQUIPMENT_INSPECTION",
@@ -1462,7 +1501,7 @@ export async function checkEquipmentDone(
     note?: string | null
 ): Promise<EquipmentInspectionDto> {
     if (!session.employeeId) throw new EquipmentError("Hanya karyawan QC yang dapat menyelesaikan inspeksi.", 403);
-    if (!session.permissions.includes("employee.self")) throw new EquipmentError("Akses ditolak.", 403);
+    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Akses ditolak.", 403);
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "SUBMITTED") throw new EquipmentError("Hanya inspeksi yang sudah dikirim yang dapat diselesaikan QC.", 409);
     await requireQcMemberForUnit(session, insp.unit);
@@ -1470,8 +1509,8 @@ export async function checkEquipmentDone(
     const qc = await assertActiveInternalEmployee(prisma, session.employeeId, today);
     const cleanNote = note?.trim().slice(0, 1000) || null;
     await prisma.$transaction(async (tx) => {
-        await tx.equipmentInspection.update({
-            where: { id: inspectionId },
+        const updated = await tx.equipmentInspection.updateMany({
+            where: { id: inspectionId, status: "SUBMITTED" },
             data: {
                 status: "DONE",
                 checkedByEmployeeId: qc.employeeId,
@@ -1480,6 +1519,9 @@ export async function checkEquipmentDone(
                 qcNote: cleanNote,
             },
         });
+        if (updated.count === 0) {
+            throw new EquipmentError("Hanya inspeksi yang sudah dikirim yang dapat diselesaikan QC.", 409);
+        }
         await tx.auditLog.create({
             data: {
                 action: "QC_DONE_EQUIPMENT_INSPECTION",
@@ -1496,7 +1538,7 @@ export async function checkEquipmentDone(
 }
 
 /**
- * Approver final (atasan lapangan, tunggal, dinamis via setting WIG002)
+ * Approver final (dinamis maks 5 per perusahaan via setting WIG002, kuorum 1)
  * menyetujui inspeksi: DONE → APPROVED. Satu arah, tanpa reject.
  * DONE lama (periode sebelum approval) di-grandfather sebagai final.
  */
@@ -1505,15 +1547,15 @@ export async function approveEquipmentInspection(
     inspectionId: string
 ): Promise<EquipmentInspectionDto> {
     if (!session.employeeId) throw new EquipmentError("Hanya approver yang dapat menyetujui inspeksi.", 403);
-    if (!session.permissions.includes("employee.self")) throw new EquipmentError("Akses ditolak.", 403);
+    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Akses ditolak.", 403);
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "DONE") throw new EquipmentError("Hanya inspeksi yang sudah diperiksa QC yang dapat disetujui.", 409);
     await requireApproverForUnit(session, insp.unit);
     const today = toWIBDateString();
     const approver = await assertActiveInternalEmployee(prisma, session.employeeId, today);
     await prisma.$transaction(async (tx) => {
-        await tx.equipmentInspection.update({
-            where: { id: inspectionId },
+        const updated = await tx.equipmentInspection.updateMany({
+            where: { id: inspectionId, status: "DONE" },
             data: {
                 status: "APPROVED",
                 approvedByEmployeeId: approver.employeeId,
@@ -1521,6 +1563,9 @@ export async function approveEquipmentInspection(
                 approvedAt: new Date(),
             },
         });
+        if (updated.count === 0) {
+            throw new EquipmentError("Hanya inspeksi yang sudah diperiksa QC yang dapat disetujui.", 409);
+        }
         await tx.auditLog.create({
             data: {
                 action: "APPROVE_EQUIPMENT_INSPECTION",
@@ -1546,17 +1591,22 @@ export async function cancelEquipmentInspection(
     session: SessionPayload,
     inspectionId: string
 ): Promise<EquipmentInspectionDto> {
-    if (!session.employeeId) throw new EquipmentError("Hanya pemulai yang dapat membatalkan checklist.", 403);
+    if (!hasEmployeePortalAccess(session)) {
+        throw new EquipmentError("Hanya pemulai yang dapat membatalkan checklist.", 403);
+    }
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.startedByEmployeeId !== session.employeeId) {
         throw new EquipmentError("Hanya yang memulai checklist ini yang dapat membatalkannya.", 403);
     }
     if (insp.status !== "OPEN") throw new EquipmentError("Hanya checklist yang masih berjalan yang dapat dibatalkan.", 409);
     await prisma.$transaction(async (tx) => {
-        await tx.equipmentInspection.update({
-            where: { id: inspectionId },
+        const updated = await tx.equipmentInspection.updateMany({
+            where: { id: inspectionId, status: "OPEN" },
             data: { status: "CANCELLED" },
         });
+        if (updated.count === 0) {
+            throw new EquipmentError("Hanya checklist yang masih berjalan yang dapat dibatalkan.", 409);
+        }
         await tx.auditLog.create({
             data: {
                 action: "CANCEL_EQUIPMENT_INSPECTION",
@@ -1667,7 +1717,12 @@ export async function hasEquipmentEvidenceAccess(
     }
 }
 
-export async function listEquipmentEvidenceForGA(inspectionId: string) {
+function isFileNotFoundError(err: unknown): boolean {
+    return typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "ENOENT";
+}
+
+export async function listEquipmentEvidenceForGA(session: SessionPayload, inspectionId: string) {
+    await requireWig002OrTopViewer(session);
     const insp = await prisma.equipmentInspection.findUnique({ where: { id: inspectionId }, select: { id: true } });
     if (!insp) throw new EquipmentError("Inspeksi tidak ditemukan.", 404);
     return prisma.equipmentInspectionEvidence.findMany({
@@ -1700,8 +1755,15 @@ export async function readEquipmentEvidenceFile(session: SessionPayload, evidenc
     if (!row) throw new EquipmentError("Bukti foto tidak ditemukan.", 404);
     const allowed = await hasEquipmentEvidenceAccess(session, { inspectionId: row.inspectionId });
     if (!allowed) throw new EquipmentError("Anda tidak memiliki akses ke bukti ini.", 403);
-    const buffer = await readFile(resolveEquipmentEvidencePath(row.filePath));
-    return { buffer, mimeType: row.mimeType };
+    try {
+        const buffer = await readFile(resolveEquipmentEvidencePath(row.filePath));
+        return { buffer, mimeType: row.mimeType };
+    } catch (err) {
+        if (isFileNotFoundError(err)) {
+            throw new EquipmentError("Berkas bukti foto tidak ditemukan di storage.", 404);
+        }
+        throw err;
+    }
 }
 
 // ─── Foto QC (opsional, per inspeksi) ───────────────────────────────
@@ -1715,12 +1777,17 @@ function resolveQcEvidencePath(filePath: string): string {
 }
 
 export async function saveQcEvidence(input: {
+    session: SessionPayload;
     inspectionId: string;
     buffer: Buffer;
     mime: string;
     uploaderUserId: string;
     note?: string | null;
 }): Promise<{ id: string; filePath: string }> {
+    if (!hasEmployeePortalAccess(input.session)) {
+        throw new EquipmentError("Hanya karyawan QC yang dapat mengunggah foto QC.", 403);
+    }
+    await requireQcMemberForInspection(input.session, input.inspectionId);
     if (input.mime !== "image/jpeg" || !isJpegBytes(input.buffer)) {
         throw new EquipmentError("Foto harus JPEG valid dari kamera.", 400);
     }
@@ -1787,7 +1854,7 @@ export async function hasQcEvidenceAccess(session: SessionPayload, inspectionId:
     }
 }
 
-export async function listQcEvidence(inspectionId: string) {
+async function listQcEvidenceInternal(inspectionId: string) {
     const insp = await prisma.equipmentInspection.findUnique({ where: { id: inspectionId }, select: { id: true } });
     if (!insp) throw new EquipmentError("Inspeksi tidak ditemukan.", 404);
     return prisma.equipmentQcEvidence.findMany({
@@ -1797,11 +1864,16 @@ export async function listQcEvidence(inspectionId: string) {
     });
 }
 
+export async function listQcEvidenceForGA(session: SessionPayload, inspectionId: string) {
+    await requireWig002OrTopViewer(session);
+    return listQcEvidenceInternal(inspectionId);
+}
+
 export async function listQcEvidenceFor(session: SessionPayload, inspectionId: string) {
     if (!(await hasQcEvidenceAccess(session, inspectionId))) {
         throw new EquipmentError("Anda tidak terlibat inspeksi ini.", 403);
     }
-    return listQcEvidence(inspectionId);
+    return listQcEvidenceInternal(inspectionId);
 }
 
 export async function readQcEvidenceFile(session: SessionPayload, evidenceId: string): Promise<{ buffer: Buffer; mimeType: string }> {
@@ -1810,8 +1882,15 @@ export async function readQcEvidenceFile(session: SessionPayload, evidenceId: st
     if (!(await hasQcEvidenceAccess(session, row.inspectionId))) {
         throw new EquipmentError("Anda tidak memiliki akses ke foto ini.", 403);
     }
-    const buffer = await readFile(resolveQcEvidencePath(row.filePath));
-    return { buffer, mimeType: row.mimeType };
+    try {
+        const buffer = await readFile(resolveQcEvidencePath(row.filePath));
+        return { buffer, mimeType: row.mimeType };
+    } catch (err) {
+        if (isFileNotFoundError(err)) {
+            throw new EquipmentError("Berkas foto QC tidak ditemukan di storage.", 404);
+        }
+        throw err;
+    }
 }
 
 // ─── Util ─────────────────────────────────────────────────────────

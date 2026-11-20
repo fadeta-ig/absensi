@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    requireAuth,
-    unauthorizedResponse,
-    forbiddenResponse,
-    parseFormData,
-    serverErrorResponse,
-} from "@/lib/middleware/apiGuard";
+import { parseFormData, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sanitizeString } from "@/lib/middleware/sanitize";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import {
     EquipmentError,
     listEquipmentEvidenceByInspection,
@@ -29,9 +24,9 @@ function evidenceServeUrl(id: string): string {
  * Auth: karyawan internal aktif (dicek di service).
  */
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         // Mode bebas: cukup karyawan internal aktif.
@@ -107,9 +102,9 @@ export async function POST(request: NextRequest) {
  * Auth: karyawan internal yang terlibat (QC / pemulai / karyawan aktif — dicek service).
  */
 export async function GET(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { searchParams } = new URL(request.url);

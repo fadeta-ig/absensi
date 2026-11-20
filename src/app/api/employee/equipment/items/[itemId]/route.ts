@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    requireAuth,
-    unauthorizedResponse,
-    forbiddenResponse,
-    validateBody,
-    serverErrorResponse,
-} from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, updateEquipmentInspectionItem } from "@/lib/services/equipmentService";
 import { equipmentItemUpdateSchema } from "@/lib/validations/validationSchemas";
 
@@ -13,9 +8,9 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ itemId: string }> }
 ) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { itemId } = await params;

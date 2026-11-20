@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    requireAuth,
-    unauthorizedResponse,
-    forbiddenResponse,
-    validateBody,
-    serverErrorResponse,
-} from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sanitizeString } from "@/lib/middleware/sanitize";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, checkEquipmentDone } from "@/lib/services/equipmentService";
 import { equipmentQcDoneSchema } from "@/lib/validations/validationSchemas";
 
@@ -16,9 +11,9 @@ import { equipmentQcDoneSchema } from "@/lib/validations/validationSchemas";
  * Riwayat mencatat "checked by QC - [nama]".
  */
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentQcDoneSchema);

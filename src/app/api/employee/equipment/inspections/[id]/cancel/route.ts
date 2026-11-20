@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, cancelEquipmentInspection } from "@/lib/services/equipmentService";
 
 /**
@@ -8,9 +9,9 @@ import { EquipmentError, cancelEquipmentInspection } from "@/lib/services/equipm
  * Riwayat dipertahankan, disembunyikan dari antrean/rekap/terakhir-dicek.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { id } = await params;
