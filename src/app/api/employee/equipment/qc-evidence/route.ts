@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    requireAuth,
-    unauthorizedResponse,
-    forbiddenResponse,
-    parseFormData,
-    serverErrorResponse,
-} from "@/lib/middleware/apiGuard";
+import { parseFormData, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sanitizeString } from "@/lib/middleware/sanitize";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import {
     EquipmentError,
     listQcEvidenceFor,
@@ -28,9 +23,9 @@ function qcEvidenceServeUrl(id: string): string {
  * Hanya anggota QC perusahaan inspeksi, hanya saat inspeksi SUBMITTED.
  */
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const contentLength = Number(request.headers.get("content-length") ?? "0");
@@ -76,6 +71,7 @@ export async function POST(request: NextRequest) {
 
         const buffer = Buffer.from(await file.arrayBuffer());
         const saved = await saveQcEvidence({
+            session,
             inspectionId,
             buffer,
             mime: file.type,
@@ -103,9 +99,9 @@ export async function POST(request: NextRequest) {
  * Auth: yang terlibat (QC / pemulai / karyawan aktif / WIG002 / atasan — dicek service).
  */
 export async function GET(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { searchParams } = new URL(request.url);

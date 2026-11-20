@@ -158,19 +158,24 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/equipment/templates` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Template inspeksi alat + item (flag foto wajib per item). |
 | `/api/ga/equipment/template-items` | `POST`, `PATCH`, `DELETE` | WIG002 + `ga.manage` | Kelola item template (hapus aman: snapshot riwayat dipertahankan). |
 | `/api/ga/equipment/units` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` (`GET` boleh atasan) | Master alat/mesin (tanpa reviewer per unit). |
+| `/api/ga/equipment/products` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar (`?company=WIG\|MKI`) & tambah produk alat per perusahaan. |
+| `/api/ga/equipment/products/[id]` | `PATCH`, `DELETE` | WIG002 + `ga.manage` | Ubah nama atau hapus produk (cascade `equipment_product_tools`). |
+| `/api/ga/equipment/products/[id]/tools` | `GET`, `POST` | WIG002 + `ga.manage` | Checklist unit sesuai perusahaan produk & simpan pemetaan (`equipmentUnitIds`, maks 200). |
 | `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | List + penugasan employee internal (gerbang modul); `unitId` null = global; `POST {unitIds[]}` bulk parsial (`created` + `skipped` beralasan, semua-skip → `409`); `PATCH` akhiri satu / `{assignmentIds[]}` akhiri massal parsial / edit baris aktif (unit/karyawan/tanggal, riwayat berakhir terkunci). |
-| `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar employee QC (maks 20); semua anggota melihat semua antrean. |
-| `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 + `ga.manage` | Atasan tertinggi maks 5 (baca rekap/monitor, pola cleaning). |
-| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar approver final maks 5 (`equipment.approvers`, dinamis; terima `{employeeIds}`; kunci lama tunggal tetap dibaca). |
-| `/api/ga/equipment/recap` | `GET` | WIG002 / atasan | Rekap inspeksi + ringkasan status (filter unit/status/tanggal). |
+| `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar employee QC per perusahaan (`?company=WIG\|MKI`, maks 20/perusahaan). |
+| `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 + `ga.manage` | Atasan tertinggi maks 5 global (baca rekap/monitor, penerima email rekap). |
+| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar approver final per perusahaan (`?company=WIG\|MKI`, maks 5/perusahaan, kuorum 1, `equipment.approvers.{WIG\|MKI}`). |
+| `/api/ga/equipment/recap` | `GET` | WIG002 / atasan | Rekap inspeksi + ringkasan status (filter unit/status `OPEN\|SUBMITTED\|DONE\|APPROVED`/perusahaan/produk/tanggal). |
 | `/api/ga/equipment/inspections/[id]` | `GET` | WIG002 / atasan | Drill-down detail + foto (read-only). |
 | `/api/ga/equipment/evidence` | `GET` | WIG002 / atasan | List foto dokumentasi per inspeksi (`?inspectionId=`, drill-down rekap). |
 | `/api/ga/equipment/evidence/[id]` | `GET` | WIG002 / atasan | Serve berkas foto bukti. |
 | `/api/ga/equipment/qc-evidence` | `GET` | WIG002 / atasan | List foto QC per inspeksi (`?inspectionId=`, drill-down rekap). |
 | `/api/ga/equipment/qc-evidence/[id]` | `GET` | WIG002 / atasan | Serve berkas foto QC. |
-| `/api/employee/equipment/units` | `GET` | Employee yang ditugaskan | Unit yang ditugaskan + info terakhir dicek. |
-| `/api/employee/equipment/units/[unitId]/history` | `GET` | Ditugaskan/QC/atasan | Riwayat inspeksi satu unit lintas pelaksana (read-only, 20 terakhir). |
-| `/api/employee/equipment/capabilities` | `GET` | Employee | Kapabilitas ringan untuk gating menu (`canExecute/canReview/canTopView/canApprove`). |
+| `/api/employee/equipment/products` | `GET` | `employee.self` | Daftar produk aktif sesuai cakupan perusahaan sesi (`?company=WIG\|MKI`). |
+| `/api/employee/equipment/products/[id]/tools` | `GET` | `employee.self` | Daftar alat aktif pada produk dengan flag `assigned` (eksekusi vs read-only). |
+| `/api/employee/equipment/units` | `GET` | `employee.self` + ditugaskan | Unit yang ditugaskan + info terakhir dicek (`?productId=`). |
+| `/api/employee/equipment/units/[unitId]/history` | `GET` | `employee.self` + ditugaskan/QC/approver/atasan | Riwayat inspeksi satu unit lintas pelaksana (read-only, 20 terakhir). |
+| `/api/employee/equipment/capabilities` | `GET` | `employee.self` | Kapabilitas ringan untuk gating menu (`canExecute/canReview/canTopView/canApprove` + cakupan perusahaan). |
 | `/api/employee/equipment/overview` | `GET` | WIG002 / atasan (Top Viewer) | Rekap pantauan lintas unit + ringkasan (filter unit/status/tanggal). |
 | `/api/employee/equipment/inspections` | `GET`, `POST` | Employee yang ditugaskan | Mulai checklist unit yang ditugaskan (`POST {unitId}`) + riwayat milik sendiri (filter `?status=OPEN/SUBMITTED/DONE/APPROVED`). |
 | `/api/employee/equipment/inspections/[id]` | `GET` | Terlibat | Detail inspeksi + item + foto + info QC. |

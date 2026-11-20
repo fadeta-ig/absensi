@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { isWig002 } from "@/lib/services/cleaningService";
-import { EquipmentError, getEquipmentTopViewers, setEquipmentTopViewers } from "@/lib/services/equipmentService";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { EquipmentError, getEquipmentTopViewersForAdmin, setEquipmentTopViewers } from "@/lib/services/equipmentService";
 import { equipmentTopViewersSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET() {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
-        const data = await getEquipmentTopViewers();
+        const data = await getEquipmentTopViewersForAdmin(session);
         return NextResponse.json({ success: true, data });
     } catch (err) {
         if (err instanceof EquipmentError) {
@@ -21,9 +21,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentTopViewersSchema);

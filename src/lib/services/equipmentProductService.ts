@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/auth";
 import type { EquipmentCompany } from "@prisma/client";
 import { toWIBDateString } from "@/lib/timezone";
-import { normalizeName } from "@/lib/services/cleaningService";
+import { hasEmployeePortalAccess, normalizeEquipmentName as normalizeName } from "@/lib/services/equipmentAuth";
 import {
     EquipmentError,
     requireWig002,
@@ -91,7 +91,9 @@ export async function listProductUnitsForEmployee(
     session: SessionPayload,
     productId: string
 ): Promise<{ product: { id: string; company: EquipmentCompany; name: string }; tools: ProductUnitRow[] }> {
-    if (!session.employeeId || !session.userId) throw new EquipmentError("Hanya karyawan yang dapat mengakses modul ini.", 403);
+    if (!session.userId || !hasEmployeePortalAccess(session)) {
+        throw new EquipmentError("Hanya karyawan yang dapat mengakses modul ini.", 403);
+    }
     const product = await prisma.equipmentProduct.findUnique({ where: { id: productId } });
     if (!product || !product.isActive) throw new EquipmentError("Produk tidak ditemukan.", 404);
     const isSuper = await requireWig002OrTopViewer(session)

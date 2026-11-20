@@ -94,9 +94,10 @@ hriswig/
   - `src/app/employee/payslips/page.tsx`: Daftar dan unduh slip gaji terenkripsi.
   - `src/app/employee/news/page.tsx`: Papan pengumuman dan berita internal perusahaan dengan detail modal.
   - `src/app/employee/green-meeting/page.tsx`: Pemantauan notulensi rapat, tindak lanjut tugas pribadi/departemen, dan transparansi presensi unit dengan antarmuka mobile-first responsif (zero-leak).
-  - `src/app/employee/equipment/page.tsx`: Daftar unit alat produksi dan entry inspeksi harian karyawan.
-  - `src/app/employee/equipment/overview/`: Ringkasan status inspeksi per unit (`page.tsx` + `overview/[id]/page.tsx`).
-  - `src/app/employee/equipment/approvals/`: Antrean dan detail persetujuan inspeksi (`page.tsx` + `approvals/[id]/page.tsx`).
+  - `src/app/employee/equipment/page.tsx`: Daftar unit alat produksi (drilldown perusahaan → produk → alat) dan entry inspeksi harian karyawan.
+  - `src/app/employee/equipment/overview/`: Ringkasan status inspeksi per unit (`page.tsx` + `overview/[id]/page.tsx` sekaligus detail aksi final approval).
+  - `src/app/employee/equipment/approvals/`: Antrean dan detail verifikasi QC (`page.tsx` + `approvals/[id]/page.tsx`).
+  - `src/app/employee/equipment/approval-queue/page.tsx`: Antrean persetujuan final approver (`DONE/APPROVED/ALL`) menuju `overview/[id]?from=approval-queue`.
   - `src/app/employee/greeting-settings/page.tsx`: Editor aturan sapaan beranda untuk karyawan yang ditunjuk WIG002.
 
 ### C. Portal General Affairs (`src/app/ga/`)
@@ -118,9 +119,9 @@ hriswig/
   - `src/app/ga/greeting-settings/page.tsx`: CRUD aturan sapaan beranda (jam, hari/tanggal, prioritas, status aktif) dan penunjukan satu karyawan editor (khusus WIG002).
   - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
   - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
-  - `src/app/ga/equipment/settings/page.tsx`: Pengaturan template/unit alat produksi, anggota QC, dan top viewers.
+  - `src/app/ga/equipment/settings/`: Pengaturan template, unit alat, produk & pemetaan alat, penugasan, QC, approver, dan top viewers (`page.tsx` + `_components/`).
   - `src/app/ga/equipment/recap/page.tsx`: Rekap inspeksi alat produksi.
-  - `src/components/equipment/`: Komponen bersama inspeksi alat (`EquipmentStatusBadge`, `EquipmentSearchField`, `EquipmentEvidencePanel`, `EmployeeSearchPicker`).
+  - `src/components/equipment/`: Komponen bersama inspeksi alat (`EquipmentStatusBadge`, `EquipmentEvidencePanel`). Pencarian bersama (`EquipmentSearchField`, `EmployeeSearchPicker`) berada di `src/components/ui/`.
   - `src/components/calendar/`: `NationalHolidayBadge` (penanda "Tanggal Merah" global, dipakai header/session Green Meeting) + hook `src/hooks/useGlobalHolidays.ts` (fetch cache `/api/calendar/holidays`).
 
 ### D. Portal Inspeksi Harian (`src/app/cleaning/`)
@@ -146,8 +147,8 @@ hriswig/
   - `src/app/api/cleaning/`: Tiga route handler untuk petugas inspeksi: rooms (GET), checklists (GET/POST), dan checklist-items/[id] (PATCH).
   - `src/app/api/ga/cleaning/`: Dua belas route handler untuk WIG002: master ruangan/template, assignment dan kandidat user, akun outsource, checklist/recap, serta persetujuan bulanan, reopen, reviewer, dan ekspor PDF.
   - `src/app/api/employee/cleaning/`: Dua route handler bagi reviewer employee untuk membaca dan menandatangani persetujuan bulanan.
-  - `src/app/api/employee/equipment/`: Route handler inspeksi alat sisi karyawan: capabilities, units, inspections (+[id], +[id]/submit), items/[itemId], evidence (+[id]), qc-evidence (+[id]), overview, dan approvals (+done).
-  - `src/app/api/ga/equipment/`: Route handler inspeksi alat sisi GA: templates, template-items, units, inspections/[id], evidence (+[id]), qc-members, qc-evidence (+[id]), recap, dan settings/top-viewers.
+  - `src/app/api/employee/equipment/`: 19 route handler inspeksi alat sisi karyawan (dilindungi `requireEmployeeEquipmentAuth`): capabilities, products (+[id]/tools), units (+[unitId]/history), inspections (+[id], +submit, +cancel), items/[itemId], evidence (+[id]), qc-evidence (+[id]), overview, dan approvals (+done, +pending-approval, +approve).
+  - `src/app/api/ga/equipment/`: 16 route handler inspeksi alat sisi GA (`requireGaEquipmentAdminAuth` untuk master/settings; `requireWig002OrTopViewer` untuk rekap/drill-down): templates, template-items, units, products (+[id], +[id]/tools), assignments, inspections/[id], evidence (+[id]), qc-members, qc-evidence (+[id]), recap, settings/approver, dan settings/top-viewers.
   - `src/app/api/ga/greeting-settings/`: Route handler CRUD aturan sapaan (`GET`/`POST`, `PUT`/`DELETE` per id) dan penunjukan editor (`GET`/`PUT`, WIG002-only).
   - `src/app/api/employee/greeting/route.ts`: Baca aturan sapaan aktif + `canEditGreeting` untuk beranda employee.
 
@@ -169,7 +170,8 @@ hriswig/
   - `greenMeetingService.ts`: Otorisasi pengelola, lifecycle sesi, kalender, presensi per-orang + izin dept + arsip legacy, notulen DARI → KEPADA, multi-deadline, pencarian target, dan rekap ringan Green Meeting.
   - `cleaningService.ts`: Domain service inspeksi harian: CRUD ruangan/template/item, akun outsource, penetapan petugas, sinkronisasi role CLEANING_WORKER, snapshot checklist harian, perubahan item, dan rekap bulanan.
   - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
-  - `equipmentService.ts`: Domain service inspeksi alat produksi: template/unit, lifecycle inspeksi + submit, evidence foto (operator & QC), anggota QC, top viewers, capabilities, approvals, dan rekap.
+  - `equipmentAuth.ts` & `src/lib/middleware/equipmentGuard.ts`: Single source of truth predikat otorisasi Equipment (`isEquipmentMasterAdmin`, `hasEmployeePortalAccess`, `normalizeEquipmentName`) dan wrapper guard HTTP (`requireGaEquipmentAdminAuth`, `requireEmployeeEquipmentAuth`).
+  - `equipmentService.ts` & `equipmentProductService.ts`: Domain service inspeksi alat produksi (template/unit/produk/penugasan, lifecycle inspeksi dengan optimistic lock transisi status, evidence foto operator & QC, pool QC/approver per perusahaan, top viewers, capabilities, approvals, dan rekap).
   - `greetingSettingsService.ts`: CRUD `GreetingRule`, `AppSetting` `greeting.editorEmployeeId`, cache 60 detik, validasi aturan, dan guard WIG002/editor aktif.
   - `holidayService.ts`: Kalender libur global (logic kalenderbali.com) — normalisasi payload nasional/cuti bersama, loader vendored `data/holidays/` + fallback upstream, cache memori, `findHolidaysInDates` untuk blocker cuti.
 

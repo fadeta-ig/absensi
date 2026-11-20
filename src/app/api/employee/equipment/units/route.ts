@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    requireAuth,
-    unauthorizedResponse,
-    forbiddenResponse,
-    serverErrorResponse,
-} from "@/lib/middleware/apiGuard";
+import { serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, getMyEquipmentUnits } from "@/lib/services/equipmentService";
 
 export async function GET(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { searchParams } = new URL(request.url);

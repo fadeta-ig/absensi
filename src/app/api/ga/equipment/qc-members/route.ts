@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { EquipmentError, getEquipmentQcMembers, setEquipmentQcMembers } from "@/lib/services/equipmentService";
-import { isWig002 } from "@/lib/services/cleaningService";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { EquipmentError, getEquipmentQcMembersForAdmin, setEquipmentQcMembers } from "@/lib/services/equipmentService";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentQcMembersSchema } from "@/lib/validations/validationSchemas";
 
 /**
@@ -10,9 +10,9 @@ import { equipmentQcMembersSchema } from "@/lib/validations/validationSchemas";
  * Semua anggota melihat semua antrean perusahaannya.
  */
 export async function GET(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { searchParams } = new URL(request.url);
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         if (company !== "WIG" && company !== "MKI") {
             return NextResponse.json({ error: "Parameter company wajib WIG atau MKI." }, { status: 400 });
         }
-        const ids = await getEquipmentQcMembers(company);
+        const ids = await getEquipmentQcMembersForAdmin(session, company);
         return NextResponse.json({ success: true, data: ids });
     } catch (err) {
         if (err instanceof EquipmentError) {
@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentQcMembersSchema);

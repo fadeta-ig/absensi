@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireAuth, unauthorizedResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import {
     getEquipmentUnits,
     createEquipmentUnit,
@@ -7,7 +7,7 @@ import {
     requireWig002OrTopViewer,
     EquipmentError,
 } from "@/lib/services/equipmentService";
-import { isWig002 } from "@/lib/services/cleaningService";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentUnitCreateSchema, equipmentUnitUpdateSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET(request: NextRequest) {
@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentUnitCreateSchema);
@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const result = await validateBody(request, equipmentUnitUpdateSchema);

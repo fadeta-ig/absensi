@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { listScopedEquipmentProducts } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
 
@@ -9,9 +10,9 @@ import { EquipmentError } from "@/lib/services/equipmentService";
  * Tanpa parameter = semua perusahaan cakupan; di luar cakupan = 403.
  */
 export async function GET(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId) return forbiddenResponse();
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const { searchParams } = new URL(request.url);

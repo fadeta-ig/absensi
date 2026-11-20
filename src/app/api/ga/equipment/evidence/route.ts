@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         if (!inspectionId) {
             return NextResponse.json({ error: "Parameter inspectionId wajib diisi." }, { status: 400 });
         }
-        const data = await listEquipmentEvidenceForGA(inspectionId);
+        const data = await listEquipmentEvidenceForGA(session, inspectionId);
         return NextResponse.json({ success: true, data });
     } catch (err) {
         if (err instanceof EquipmentError) {

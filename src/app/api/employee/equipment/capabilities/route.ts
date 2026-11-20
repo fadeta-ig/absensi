@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { PERMISSIONS } from "@/lib/permissions";
+import { serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, getEmployeeEquipmentCapabilities } from "@/lib/services/equipmentService";
 
 /**
@@ -8,11 +8,9 @@ import { EquipmentError, getEmployeeEquipmentCapabilities } from "@/lib/services
  * untuk gating menu employee (tanpa fetch berat). Guard: employee-self.
  */
 export async function GET() {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!session.employeeId || !session.permissions.includes(PERMISSIONS.EMPLOYEE_SELF)) {
-        return forbiddenResponse();
-    }
+    const auth = await requireEmployeeEquipmentAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const capabilities = await getEmployeeEquipmentCapabilities(session);

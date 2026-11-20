@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, unauthorizedResponse, forbiddenResponse, validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
+import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import {
     assignEquipmentUnit,
     assignEquipmentUnitsBulk,
@@ -9,13 +9,13 @@ import {
     updateEquipmentAssignment,
     EquipmentError,
 } from "@/lib/services/equipmentService";
-import { isWig002 } from "@/lib/services/cleaningService";
+import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentAssignSchema, equipmentAssignBulkSchema, equipmentEndAssignSchema, equipmentEndAssignBulkSchema, equipmentUpdateAssignSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET() {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const data = await getEquipmentAssignments(session);
@@ -29,9 +29,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const raw = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -61,9 +61,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const session = await requireAuth();
-    if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) return forbiddenResponse();
+    const auth = await requireGaEquipmentAdminAuth();
+    if (auth.error) return auth.error;
+    const { session } = auth;
 
     try {
         const raw = (await request.json().catch(() => null)) as Record<string, unknown> | null;
