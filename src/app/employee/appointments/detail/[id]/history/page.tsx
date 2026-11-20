@@ -183,13 +183,13 @@ function HistoryContent({ id }: { id: string }) {
                 {a.agenda && (
                     <div className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_40%,transparent)] px-3 py-2.5 mt-1">
                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Agenda / Pokok Bahasan</p>
-                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{a.agenda}</p>
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{a.agenda}</p>
                     </div>
                 )}
                 {a.minutes && (
                     <div className="rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_50%,transparent)] px-3 py-2.5 mt-1">
                         <p className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Notulensi Final</p>
-                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{a.minutes}</p>
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{a.minutes}</p>
                     </div>
                 )}
             </div>
@@ -233,7 +233,11 @@ function HistoryContent({ id }: { id: string }) {
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-semibold text-[var(--text-primary)]">{e.title}</p>
-                                    {e.detail && <p className="text-xs text-[var(--text-secondary)] mt-0.5 whitespace-pre-wrap">{e.detail}</p>}
+                                    {e.detail && (
+                                        <p className="text-xs text-[var(--text-secondary)] mt-0.5 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                            {e.detail}
+                                        </p>
+                                    )}
                                     <p className="text-[11px] text-[var(--text-muted)] mt-1">
                                         {fmtDT(e.at)}
                                         {e.actorName ? ` · ${e.actorName}` : ""}
