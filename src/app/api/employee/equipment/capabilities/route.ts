@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, getEmployeeEquipmentCapabilities } from "@/lib/services/equipmentService";
 
 /**
@@ -8,7 +8,7 @@ import { EquipmentError, getEmployeeEquipmentCapabilities } from "@/lib/services
  * untuk gating menu employee (tanpa fetch berat). Guard: employee-self.
  */
 export async function GET() {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth();
     if (auth.error) return auth.error;
     const { session } = auth;
 

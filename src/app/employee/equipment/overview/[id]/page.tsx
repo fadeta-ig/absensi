@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, Camera, CheckCircle2, Clock, Loader2, X } from "lucide-react";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
@@ -50,6 +51,8 @@ function formatDateTime(value: string | null): string {
 }
 
 export default function EmployeeEquipmentOverviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [detail, setDetail] = useState<InspectionDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -67,8 +70,8 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
             setFromParam(null);
         }
     }, []);
-    const backHref = fromParam === "approval-queue" ? "/employee/equipment/approval-queue" : "/employee/equipment/overview";
-    const backLabel = backHref === "/employee/equipment/approval-queue" ? "← Kembali ke approval" : "← Kembali ke pantauan";
+    const backHref = fromParam === "approval-queue" ? `${equipmentBase}/approval-queue` : `${equipmentBase}/overview`;
+    const backLabel = fromParam === "approval-queue" ? "← Kembali ke approval" : "← Kembali ke pantauan";
     const toast = useToast();
     const confirm = useConfirm();
 

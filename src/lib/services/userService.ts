@@ -171,6 +171,12 @@ export async function updateAdminUser(input: UpdateAdminUserInput) {
         if (!target) throw new UserManagementError("User tidak ditemukan.", 404);
 
         const targetRoles = target.roles.map(({ role }) => role.code);
+        const isAdminTarget = targetRoles.some(
+            (code) => code === SYSTEM_ROLES.SUPER_ADMIN || MANAGEABLE_ADMIN_ROLES.includes(code as ManageableAdminRole)
+        );
+        if (!isAdminTarget) {
+            throw new UserManagementError("Akun bukan user admin.", 400);
+        }
         const isSuperAdmin = targetRoles.includes(SYSTEM_ROLES.SUPER_ADMIN);
         if (isSuperAdmin && (input.roleCode || input.isActive === false)) {
             throw new UserManagementError("Role dan status super admin tidak dapat diubah dari menu ini.", 409);

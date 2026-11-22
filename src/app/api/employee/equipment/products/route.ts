@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
 import { listScopedEquipmentProducts } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
 
@@ -10,7 +10,7 @@ import { EquipmentError } from "@/lib/services/equipmentService";
  * Tanpa parameter = semua perusahaan cakupan; di luar cakupan = 403.
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth();
     if (auth.error) return auth.error;
     const { session } = auth;
 

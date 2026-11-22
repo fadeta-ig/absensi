@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FileCheck2, RefreshCw } from "lucide-react";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
@@ -60,6 +61,8 @@ function taskStats(task: ApprovalDto) {
 }
 
 export default function EmployeeEquipmentApprovalsPage() {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [tasks, setTasks] = useState<ApprovalDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -257,7 +260,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                                         </div>
                                     </div>
                                     <Link
-                                        href={`/employee/equipment/approvals/${task.id}`}
+                                        href={`${equipmentBase}/approvals/${task.id}`}
                                         className="btn btn-primary mt-3 w-full min-h-[48px]"
                                     >
                                         Lihat &amp; Selesaikan

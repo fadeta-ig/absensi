@@ -154,8 +154,9 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     const dayStart = new Date(wibDate + "T00:00:00+07:00");
     const nextStart = new Date(nextDay + "T00:00:00+07:00");
     const data = await queryEquipmentRecap({ from: wibDate, to: nextDay });
-    const lines: EquipmentRecapLine[] = data.inspections.map((row) => ({        unitName: row.unit.name,
-        starterName: stripGelar(row.startedBy.name),
+    const lines: EquipmentRecapLine[] = data.inspections.map((row) => ({
+        unitName: row.unit.name,
+        starterName: stripGelar(row.startedBy?.name ?? row.startedByNameSnapshot ?? "-"),
         status: row.status,
         createdAt: row.createdAt,
         submittedAt: row.submittedAt,
@@ -172,15 +173,31 @@ export async function getDailyEquipmentRecap(wibDate: string) {
         getAllEquipmentApprovers().catch(() => []),
         prisma.equipmentInspection.findMany({
             where: { submittedAt: { gte: dayStart, lt: nextStart } },
-            select: { startedByEmployeeId: true, startedBy: { select: { name: true } } },
+            select: {
+                startedByEmployeeId: true,
+                startedByUserId: true,
+                startedByNameSnapshot: true,
+                startedBy: { select: { name: true } },
+                startedByUser: { select: { displayName: true } },
+            },
         }).catch(() => []),
         prisma.equipmentInspection.findMany({
             where: { checkedAt: { gte: dayStart, lt: nextStart } },
-            select: { checkedByEmployeeId: true, checkedByNameSnapshot: true, checkedBy: { select: { name: true } } },
+            select: {
+                checkedByEmployeeId: true,
+                checkedByUserId: true,
+                checkedByNameSnapshot: true,
+                checkedBy: { select: { name: true } },
+            },
         }).catch(() => []),
         prisma.equipmentInspection.findMany({
             where: { approvedAt: { gte: dayStart, lt: nextStart } },
-            select: { approvedByEmployeeId: true, approvedByNameSnapshot: true, approvedBy: { select: { name: true } } },
+            select: {
+                approvedByEmployeeId: true,
+                approvedByUserId: true,
+                approvedByNameSnapshot: true,
+                approvedBy: { select: { name: true } },
+            },
         }).catch(() => []),
     ]);
     const verifiers = qcMembers.map((m) => stripGelar(m.name ?? m.employeeId)).filter(Boolean);
@@ -197,13 +214,14 @@ export async function getDailyEquipmentRecap(wibDate: string) {
         include: {
             unit: { select: { id: true, name: true, brand: true, location: true } },
             startedBy: { select: { employeeId: true, name: true } },
+            startedByUser: { select: { username: true, displayName: true } },
             checkedBy: { select: { employeeId: true, name: true } },
             approvedBy: { select: { employeeId: true, name: true } },
         },
     }).catch(() => []);
     const susulanLines: EquipmentRecapLine[] = susulanRows.map((row) => ({
         unitName: row.unit.name,
-        starterName: stripGelar(row.startedBy.name),
+        starterName: stripGelar(row.startedBy?.name ?? row.startedByNameSnapshot ?? row.startedByUser?.displayName ?? "-"),
         status: row.status,
         createdAt: row.createdAt,
         submittedAt: row.submittedAt,
@@ -216,9 +234,11 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     // Inspektor: cukup angka diajukan hari itu (basis tanggal-tindakan).
     const inspMap = new Map<string, EquipmentInspectorStat>();
     for (const r of submittedToday) {
-        const cur = inspMap.get(r.startedByEmployeeId) ?? { name: stripGelar(r.startedBy.name) || r.startedByEmployeeId, submitted: 0 };
+        const key = r.startedByEmployeeId ?? (r.startedByUserId ? `user:${r.startedByUserId}` : "unknown");
+        const name = stripGelar(r.startedBy?.name ?? r.startedByNameSnapshot ?? r.startedByUser?.displayName ?? key) || key;
+        const cur = inspMap.get(key) ?? { name, submitted: 0 };
         cur.submitted += 1;
-        inspMap.set(r.startedByEmployeeId, cur);
+        inspMap.set(key, cur);
     }
     const inspectorStats = [...inspMap.values()].sort((a, b) => b.submitted - a.submitted || a.name.localeCompare(b.name));
     // Rantai pecahan: penyebut = keluaran tahap sebelumnya hari itu.
@@ -251,7 +271,7 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     const verifierStats = toChainedStats(
         qcMembers,
         checkedToday.map((r) => ({
-            employeeId: r.checkedByEmployeeId,
+            employeeId: r.checkedByEmployeeId ?? (r.checkedByUserId ? `user:${r.checkedByUserId}` : null),
             name: stripGelar(r.checkedBy?.name ?? r.checkedByNameSnapshot ?? r.checkedByEmployeeId ?? "-") || "-",
         })),
         submittedToday.length
@@ -259,7 +279,7 @@ export async function getDailyEquipmentRecap(wibDate: string) {
     const approverStats = toChainedStats(
         approvers,
         approvedToday.map((r) => ({
-            employeeId: r.approvedByEmployeeId,
+            employeeId: r.approvedByEmployeeId ?? (r.approvedByUserId ? `user:${r.approvedByUserId}` : null),
             name: stripGelar(r.approvedBy?.name ?? r.approvedByNameSnapshot ?? r.approvedByEmployeeId ?? "-") || "-",
         })),
         checkedToday.length

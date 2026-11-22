@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, getPendingEquipmentApprovals } from "@/lib/services/equipmentService";
 
 export async function GET() {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_QC);
     if (auth.error) return auth.error;
     const { session } = auth;
 

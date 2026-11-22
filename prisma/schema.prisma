@@ -143,6 +143,9 @@ model UserAccount {
   meetingTaskAttachmentUploads MeetingTaskAttachment[]
   equipmentItemChanges       EquipmentInspectionItem[]
   equipmentAssignments       EquipmentAssignment[]
+  startedEquipmentInspections  EquipmentInspection[] @relation("EquipmentInspectionStartedByUser")
+  checkedEquipmentInspections  EquipmentInspection[] @relation("EquipmentInspectionCheckedByUser")
+  approvedEquipmentInspections EquipmentInspection[] @relation("EquipmentInspectionApprovedByUser")
   passkeyCredentials       PasskeyCredential[]
   passkeyChallenges        PasskeyChallenge[]
 
@@ -401,29 +404,37 @@ model EquipmentInspection {
   id                    String                    @id @default(uuid())
   unitId                String                    @map("unit_id")
   unitNameSnapshot      String                    @map("unit_name_snapshot") @db.VarChar(200)
-  startedByEmployeeId   String                    @map("started_by_employee_id")
+  startedByEmployeeId   String?                   @map("started_by_employee_id")
+  startedByUserId       String?                   @map("started_by_user_id")
+  startedByNameSnapshot String?                   @map("started_by_name_snapshot") @db.VarChar(200)
   status                EquipmentInspectionStatus @default(OPEN)
   submittedAt           DateTime?                 @map("submitted_at")
   checkedByEmployeeId   String?                   @map("checked_by_employee_id")
-  checkedByNameSnapshot String?                  @map("checked_by_name_snapshot") @db.VarChar(200)
+  checkedByUserId       String?                   @map("checked_by_user_id")
+  checkedByNameSnapshot String?                   @map("checked_by_name_snapshot") @db.VarChar(200)
   checkedAt             DateTime?                 @map("checked_at")
   qcNote                String?                   @map("qc_note") @db.Text
   approvedByEmployeeId   String?                  @map("approved_by_employee_id")
-  approvedByNameSnapshot String?                 @map("approved_by_name_snapshot") @db.VarChar(200)
+  approvedByUserId       String?                  @map("approved_by_user_id")
+  approvedByNameSnapshot String?                  @map("approved_by_name_snapshot") @db.VarChar(200)
   approvedAt            DateTime?                 @map("approved_at")
   createdAt             DateTime                  @default(now()) @map("created_at")
   updatedAt             DateTime                  @updatedAt @map("updated_at")
 
-  unit      EquipmentUnit           @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  startedBy Employee                @relation("EquipmentInspectionStartedBy", fields: [startedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
-  checkedBy Employee?               @relation("EquipmentInspectionCheckedBy", fields: [checkedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
-  approvedBy Employee?              @relation("EquipmentInspectionApprovedBy", fields: [approvedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
-  items     EquipmentInspectionItem[]
-  evidence  EquipmentInspectionEvidence[]
-  qcEvidence EquipmentQcEvidence[]
+  unit           EquipmentUnit           @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  startedBy      Employee?               @relation("EquipmentInspectionStartedBy", fields: [startedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  startedByUser  UserAccount?            @relation("EquipmentInspectionStartedByUser", fields: [startedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  checkedBy      Employee?               @relation("EquipmentInspectionCheckedBy", fields: [checkedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  checkedByUser  UserAccount?            @relation("EquipmentInspectionCheckedByUser", fields: [checkedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  approvedBy     Employee?               @relation("EquipmentInspectionApprovedBy", fields: [approvedByEmployeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+  approvedByUser UserAccount?            @relation("EquipmentInspectionApprovedByUser", fields: [approvedByUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  items          EquipmentInspectionItem[]
+  evidence       EquipmentInspectionEvidence[]
+  qcEvidence     EquipmentQcEvidence[]
 
   @@index([unitId, status], map: "idx_equipment_inspection_unit_status")
   @@index([startedByEmployeeId], map: "idx_equipment_inspection_starter")
+  @@index([startedByUserId], map: "idx_equipment_inspection_starter_user")
   @@index([status, submittedAt], map: "idx_equipment_inspection_status_submitted")
   @@map("equipment_inspections")
 }

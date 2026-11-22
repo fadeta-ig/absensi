@@ -8,6 +8,12 @@ export const RBAC_DEFINITIONS = {
         ["employee.self", "Portal Karyawan"],
         ["asset.read", "Baca Aset"],
         ["cleaning.execute", "Eksekusi Kebersihan"],
+        ["cleaning.overview", "Pantau Rekap Kebersihan"],
+        ["outsource.portal", "Portal Outsource E-Checklist"],
+        ["equipment.execute", "Eksekusi Inspeksi Alat"],
+        ["equipment.qc", "QC Inspeksi Alat"],
+        ["equipment.approve", "Approver Final Alat"],
+        ["equipment.overview", "Pantau Rekap Alat"],
     ] as const,
     roles: [
         ["SUPER_ADMIN", "Super Admin HR", ["user.manage", "hr.manage", "ga.manage", "employee.self", "asset.read"]],
@@ -15,6 +21,12 @@ export const RBAC_DEFINITIONS = {
         ["GA_ADMIN", "Admin GA", ["ga.manage", "employee.self", "asset.read"]],
         ["EMPLOYEE_USER", "Karyawan", ["employee.self"]],
         ["CLEANING_WORKER", "Petugas Kebersihan", ["cleaning.execute"]],
+        ["OUTSOURCE_USER", "Akun Outsource", ["outsource.portal"]],
+        ["CLEANING_VIEWER", "Pemantau Kebersihan", ["cleaning.overview"]],
+        ["EQUIPMENT_OPERATOR", "Operator Inspeksi Alat", ["equipment.execute"]],
+        ["EQUIPMENT_QC", "QC Inspeksi Alat", ["equipment.qc"]],
+        ["EQUIPMENT_APPROVER", "Approver Final Alat", ["equipment.approve"]],
+        ["EQUIPMENT_VIEWER", "Pemantau Inspeksi Alat", ["equipment.overview"]],
     ] as const,
 };
 

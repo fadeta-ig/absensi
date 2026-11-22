@@ -7,16 +7,24 @@ import { toWIBDateString, isValidCalendarDate, addCalendarDays } from "@/lib/tim
 import type { SessionPayload } from "@/lib/auth";
 import type { Prisma, EquipmentCompany } from "@prisma/client";
 import { actorFromSession } from "@/lib/services/auditService";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
     EQUIPMENT_SETTINGS_DELEGATES_KEY,
     EQUIPMENT_SETTINGS_DELEGATES_MAX,
     EQUIPMENT_SETTINGS_SCOPES,
+    extractOsUserIdFromToken,
     hasEmployeePortalAccess,
+    hasEquipmentPortalAccess,
     isEquipmentMasterAdmin as isWig002,
     isEquipmentSettingsScope,
     normalizeEquipmentName as normalizeName,
+    toOsActorToken,
     type EquipmentSettingsScope,
 } from "@/lib/services/equipmentAuth";
+import {
+    OutsourceUserError,
+    assertActiveOutsourceWithPermission,
+} from "@/lib/services/outsourceUserService";
 import { getUploadLimit } from "@/lib/services/appSettingsService";
 
 // ─── Error ────────────────────────────────────────────────────────
@@ -128,27 +136,102 @@ export async function getEquipmentQcMemberIds(company: EquipmentCompany): Promis
     }
 }
 
-export async function getEquipmentQcMembers(company: EquipmentCompany): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
-    const ids = await getEquipmentQcMemberIds(company);
+export interface EquipmentRosterActor {
+    employeeId: string;
+    name: string | null;
+    isActive: boolean;
+    email: string | null;
+    isOutsource?: boolean;
+    username?: string | null;
+}
+
+async function hydrateEquipmentRosterActors(ids: string[]): Promise<EquipmentRosterActor[]> {
     if (ids.length === 0) return [];
-    const employees = await prisma.employee.findMany({
-        where: { employeeId: { in: ids } },
-        select: { employeeId: true, name: true, isActive: true, email: true },
-    });
-    const order = new Map(ids.map((id, idx) => [id, idx]));
-    return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
+    const empIds: string[] = [];
+    const osUserIds: string[] = [];
+    for (const id of ids) {
+        const osId = extractOsUserIdFromToken(id);
+        if (osId) osUserIds.push(osId);
+        else empIds.push(id);
+    }
+
+    const [employees, osUsers] = await Promise.all([
+        empIds.length > 0
+            ? prisma.employee.findMany({
+                  where: { employeeId: { in: empIds } },
+                  select: { employeeId: true, name: true, isActive: true, email: true },
+              })
+            : Promise.resolve([]),
+        osUserIds.length > 0
+            ? prisma.userAccount.findMany({
+                  where: { id: { in: osUserIds } },
+                  select: { id: true, username: true, displayName: true, isActive: true, email: true },
+              })
+            : Promise.resolve([]),
+    ]);
+
+    const byToken = new Map<string, EquipmentRosterActor>();
+    for (const emp of employees) {
+        byToken.set(emp.employeeId, {
+            employeeId: emp.employeeId,
+            name: emp.name,
+            isActive: emp.isActive,
+            email: emp.email,
+            isOutsource: false,
+            username: null,
+        });
+    }
+    for (const user of osUsers) {
+        const token = toOsActorToken(user.id);
+        byToken.set(token, {
+            employeeId: token,
+            name: user.displayName,
+            isActive: user.isActive,
+            email: user.email,
+            isOutsource: true,
+            username: user.username,
+        });
+    }
+
+    return ids.map((id) => byToken.get(id)).filter((item): item is EquipmentRosterActor => Boolean(item));
+}
+
+async function assertEquipmentRosterActor(
+    id: string,
+    today: string,
+    osPermission: typeof PERMISSIONS.EQUIPMENT_QC | typeof PERMISSIONS.EQUIPMENT_APPROVE,
+    osLabel: string
+): Promise<void> {
+    const osUserId = extractOsUserIdFromToken(id);
+    if (osUserId) {
+        try {
+            await assertActiveOutsourceWithPermission(prisma, osUserId, osPermission, osLabel);
+            return;
+        } catch (err) {
+            if (err instanceof OutsourceUserError) {
+                throw new EquipmentError(err.message, err.statusCode);
+            }
+            throw err;
+        }
+    }
+    await assertActiveInternalEmployee(prisma, id, today);
+}
+
+export async function getEquipmentQcMembers(company: EquipmentCompany): Promise<EquipmentRosterActor[]> {
+    const ids = await getEquipmentQcMemberIds(company);
+    return hydrateEquipmentRosterActors(ids);
 }
 
 export async function getEquipmentQcMembersForAdmin(
     session: SessionPayload,
     company: EquipmentCompany
-): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
+): Promise<EquipmentRosterActor[]> {
     await requireEquipmentSettingsScope(session, "assignments");
     return getEquipmentQcMembers(company);
 }
 
 /** Gabungan anggota QC semua perusahaan (untuk roster email rekap global). */
-export async function getAllEquipmentQcMembers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean; email: string | null }>> {
+export async function getAllEquipmentQcMembers(): Promise<EquipmentRosterActor[]> {
     const [wig, mki] = await Promise.all([getEquipmentQcMembers("WIG"), getEquipmentQcMembers("MKI")]);
     const seen = new Set<string>();
     return [...wig, ...mki].filter((m) => (seen.has(m.employeeId) ? false : (seen.add(m.employeeId), true)));
@@ -172,7 +255,9 @@ export async function setEquipmentQcMembers(
         }
     }
     const today = toWIBDateString();
-    for (const id of ids) await assertActiveInternalEmployee(prisma, id, today);
+    for (const id of ids) {
+        await assertEquipmentRosterActor(id, today, PERMISSIONS.EQUIPMENT_QC, "QC Inspeksi Alat");
+    }
     await prisma.appSetting.upsert({
         where: { key: qcMembersKey(company) },
         update: { value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
@@ -186,14 +271,26 @@ export async function setEquipmentQcMembers(
     return ids;
 }
 
-/** true bila sesi milik anggota QC aktif perusahaan tersebut (internal + akun aktif). */
+/** true bila sesi milik anggota QC aktif perusahaan tersebut (karyawan internal ATAU akun OS ber-izin equipment.qc). */
 export async function isEquipmentQcMember(session: SessionPayload, company: EquipmentCompany): Promise<boolean> {
-    if (!session.employeeId) return false;
     try {
         const ids = await getEquipmentQcMemberIds(company);
-        if (!ids.includes(session.employeeId)) return false;
-        const emp = await prisma.employee.findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } });
-        return emp?.isActive === true;
+        if (session.employeeId) {
+            if (!ids.includes(session.employeeId)) return false;
+            const emp = await prisma.employee.findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } });
+            return emp?.isActive === true;
+        }
+        if (
+            session.userId &&
+            session.permissions.includes(PERMISSIONS.OUTSOURCE_PORTAL) &&
+            session.permissions.includes(PERMISSIONS.EQUIPMENT_QC)
+        ) {
+            const token = toOsActorToken(session.userId);
+            if (!ids.includes(token)) return false;
+            const user = await prisma.userAccount.findUnique({ where: { id: session.userId }, select: { isActive: true } });
+            return user?.isActive === true;
+        }
+        return false;
     } catch {
         return false;
     }
@@ -201,14 +298,16 @@ export async function isEquipmentQcMember(session: SessionPayload, company: Equi
 
 /** Perusahaan-perusahaan di mana sesi menjadi anggota QC aktif. */
 export async function getEquipmentQcCompanies(session: SessionPayload): Promise<EquipmentCompany[]> {
-    if (!session.employeeId) return [];
+    if (!session.employeeId && !session.userId) return [];
     const flags = await Promise.all(EQUIPMENT_COMPANIES.map((c) => isEquipmentQcMember(session, c).catch(() => false)));
     return EQUIPMENT_COMPANIES.filter((_, i) => flags[i]);
 }
 
 function requireQc(session: SessionPayload): void {
     // Dipakai sinkron di awal; keanggotaan detail dicek async via isEquipmentQcMember.
-    if (!session.employeeId) throw new EquipmentError("Hanya karyawan QC yang dapat memproses antrean.", 403);
+    if (!session.employeeId && !hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_QC)) {
+        throw new EquipmentError("Hanya petugas QC yang dapat memproses antrean.", 403);
+    }
 }
 
 export async function requireQcMember(session: SessionPayload, company: EquipmentCompany): Promise<void> {
@@ -431,6 +530,12 @@ async function getEquipmentTopViewerIds(): Promise<string[]> {
 }
 
 async function isEquipmentTopViewer(session: SessionPayload): Promise<boolean> {
+    if (
+        session.permissions.includes(PERMISSIONS.OUTSOURCE_PORTAL) &&
+        session.permissions.includes(PERMISSIONS.EQUIPMENT_OVERVIEW)
+    ) {
+        return true;
+    }
     if (!session.employeeId) return false;
     try {
         const ids = await getEquipmentTopViewerIds();
@@ -516,33 +621,27 @@ export async function getEquipmentApproverIds(company: EquipmentCompany): Promis
     }
 }
 
-export async function getEquipmentApprovers(company: EquipmentCompany): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+export async function getEquipmentApprovers(company: EquipmentCompany): Promise<EquipmentRosterActor[]> {
     const ids = await getEquipmentApproverIds(company);
-    if (ids.length === 0) return [];
-    const employees = await prisma.employee.findMany({
-        where: { employeeId: { in: ids } },
-        select: { employeeId: true, name: true, isActive: true },
-    });
-    const order = new Map(ids.map((id, idx) => [id, idx]));
-    return employees.sort((a, b) => (order.get(a.employeeId) ?? 0) - (order.get(b.employeeId) ?? 0));
+    return hydrateEquipmentRosterActors(ids);
 }
 
 export async function getEquipmentApproversForAdmin(
     session: SessionPayload,
     company: EquipmentCompany
-): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+): Promise<EquipmentRosterActor[]> {
     await requireEquipmentSettingsScope(session, "atasan");
     return getEquipmentApprovers(company);
 }
 
 /** Gabungan approver semua perusahaan (untuk roster email rekap global). */
-export async function getAllEquipmentApprovers(): Promise<Array<{ employeeId: string; name: string | null; isActive: boolean }>> {
+export async function getAllEquipmentApprovers(): Promise<EquipmentRosterActor[]> {
     const [wig, mki] = await Promise.all([getEquipmentApprovers("WIG"), getEquipmentApprovers("MKI")]);
     const seen = new Set<string>();
     return [...wig, ...mki].filter((m) => (seen.has(m.employeeId) ? false : (seen.add(m.employeeId), true)));
 }
 
-export async function getEquipmentApprover(company: EquipmentCompany): Promise<{ employeeId: string; name: string | null; isActive: boolean } | null> {
+export async function getEquipmentApprover(company: EquipmentCompany): Promise<EquipmentRosterActor | null> {
     const list = await getEquipmentApprovers(company);
     return list[0] ?? null;
 }
@@ -565,7 +664,9 @@ export async function setEquipmentApprovers(
         }
     }
     const today = toWIBDateString();
-    for (const id of ids) await assertActiveInternalEmployee(prisma, id, today);
+    for (const id of ids) {
+        await assertEquipmentRosterActor(id, today, PERMISSIONS.EQUIPMENT_APPROVE, "Approver Final Alat");
+    }
     await prisma.appSetting.upsert({
         where: { key: approversKey(company) },
         update: { value: JSON.stringify(ids), updatedByUserId: actor.userId ?? null },
@@ -589,12 +690,24 @@ export async function setEquipmentApprover(
 }
 
 export async function isEquipmentApprover(session: SessionPayload, company: EquipmentCompany): Promise<boolean> {
-    if (!session.employeeId) return false;
     try {
         const ids = await getEquipmentApproverIds(company);
-        if (!ids.includes(session.employeeId)) return false;
-        const emp = await prisma.employee.findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } });
-        return emp?.isActive === true;
+        if (session.employeeId) {
+            if (!ids.includes(session.employeeId)) return false;
+            const emp = await prisma.employee.findUnique({ where: { employeeId: session.employeeId }, select: { isActive: true } });
+            return emp?.isActive === true;
+        }
+        if (
+            session.userId &&
+            session.permissions.includes(PERMISSIONS.OUTSOURCE_PORTAL) &&
+            session.permissions.includes(PERMISSIONS.EQUIPMENT_APPROVE)
+        ) {
+            const token = toOsActorToken(session.userId);
+            if (!ids.includes(token)) return false;
+            const user = await prisma.userAccount.findUnique({ where: { id: session.userId }, select: { isActive: true } });
+            return user?.isActive === true;
+        }
+        return false;
     } catch {
         return false;
     }
@@ -602,7 +715,7 @@ export async function isEquipmentApprover(session: SessionPayload, company: Equi
 
 /** Perusahaan-perusahaan di mana sesi menjadi approver aktif. */
 export async function getEquipmentApproverCompanies(session: SessionPayload): Promise<EquipmentCompany[]> {
-    if (!session.employeeId) return [];
+    if (!session.employeeId && !session.userId) return [];
     const flags = await Promise.all(EQUIPMENT_COMPANIES.map((c) => isEquipmentApprover(session, c).catch(() => false)));
     return EQUIPMENT_COMPANIES.filter((_, i) => flags[i]);
 }
@@ -637,7 +750,7 @@ async function isQcOrApproverForUnit(
     session: SessionPayload,
     unit: { company?: EquipmentCompany | null; isSharedBoth?: boolean | null; companies?: EquipmentCompany[] | null } | null | undefined
 ): Promise<{ isQc: boolean; isApprover: boolean }> {
-    if (!session.employeeId) return { isQc: false, isApprover: false };
+    if (!session.employeeId && !session.userId) return { isQc: false, isApprover: false };
     const unitCompanies = getUnitCompanies(unit);
     if (unitCompanies.length === 0) return { isQc: false, isApprover: false };
     const [qcFlags, approverFlags] = await Promise.all([
@@ -973,9 +1086,77 @@ export async function updateEquipmentUnit(session: SessionPayload, id: string, i
 
 // ─── Unit untuk checklist (hanya yang ditugaskan) ────────────────────
 
+function normalizeStartedBy(row: {
+    startedBy?: { employeeId: string; name: string } | null;
+    startedByUser?: { username: string; displayName: string } | null;
+    startedByEmployeeId?: string | null;
+    startedByUserId?: string | null;
+    startedByNameSnapshot?: string | null;
+}): { employeeId: string; name: string; isOutsource: boolean } {
+    if (row.startedBy) {
+        return { employeeId: row.startedBy.employeeId, name: row.startedBy.name, isOutsource: false };
+    }
+    return {
+        employeeId: row.startedByEmployeeId ?? row.startedByUser?.username ?? row.startedByUserId ?? "OS",
+        name: row.startedByNameSnapshot ?? row.startedByUser?.displayName ?? "Petugas Outsource",
+        isOutsource: !row.startedByEmployeeId,
+    };
+}
+
+function isStarterOfInspection(
+    session: SessionPayload,
+    insp: { startedByEmployeeId?: string | null; startedByUserId?: string | null }
+): boolean {
+    if (session.userId && insp.startedByUserId && insp.startedByUserId === session.userId) return true;
+    if (session.employeeId && insp.startedByEmployeeId && insp.startedByEmployeeId === session.employeeId) return true;
+    return false;
+}
+
+async function resolveAssigneeUserId(
+    input: { employeeId?: string; userId?: string },
+    today: string
+): Promise<string> {
+    if (input.userId && !input.employeeId) {
+        try {
+            const os = await assertActiveOutsourceWithPermission(
+                prisma,
+                input.userId,
+                PERMISSIONS.EQUIPMENT_EXECUTE,
+                "Eksekusi Inspeksi Alat"
+            );
+            return os.userId;
+        } catch (err) {
+            if (err instanceof OutsourceUserError) throw new EquipmentError(err.message, err.statusCode);
+            throw err;
+        }
+    }
+    if (input.employeeId) {
+        const osUserId = extractOsUserIdFromToken(input.employeeId);
+        if (osUserId) {
+            try {
+                const os = await assertActiveOutsourceWithPermission(
+                    prisma,
+                    osUserId,
+                    PERMISSIONS.EQUIPMENT_EXECUTE,
+                    "Eksekusi Inspeksi Alat"
+                );
+                return os.userId;
+            } catch (err) {
+                if (err instanceof OutsourceUserError) throw new EquipmentError(err.message, err.statusCode);
+                throw err;
+            }
+        }
+        const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
+        return emp.userId;
+    }
+    throw new EquipmentError("Pilih karyawan atau akun outsource.", 400);
+}
+
 export async function getMyEquipmentUnits(session: SessionPayload, filters: { productId?: string } = {}) {
     if (!session.userId) throw new EquipmentError("Sesi tidak valid.", 401);
-    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya karyawan yang dapat mengakses modul ini.", 403);
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_EXECUTE)) {
+        throw new EquipmentError("Anda tidak memiliki akses eksekusi inspeksi alat.", 403);
+    }
     const today = toWIBDateString();
     const rows = await prisma.equipmentAssignment.findMany({
         where: { userId: session.userId },
@@ -1019,7 +1200,11 @@ export async function getMyEquipmentUnits(session: SessionPayload, filters: { pr
                     status: true,
                     createdAt: true,
                     submittedAt: true,
+                    startedByEmployeeId: true,
+                    startedByUserId: true,
+                    startedByNameSnapshot: true,
                     startedBy: { select: { employeeId: true, name: true } },
+                    startedByUser: { select: { username: true, displayName: true } },
                     checkedBy: { select: { employeeId: true, name: true } },
                     approvedBy: { select: { employeeId: true, name: true } },
                 },
@@ -1027,7 +1212,18 @@ export async function getMyEquipmentUnits(session: SessionPayload, filters: { pr
             productTools: { select: { product: { select: { id: true, name: true, company: true } } } },
         },
     });
-    return units.map((u) => ({ assignmentId: null, startsOn: null, endsOn: null, unit: withUnitCompanies(u) }));
+    return units.map((u) => ({
+        assignmentId: null,
+        startsOn: null,
+        endsOn: null,
+        unit: withUnitCompanies({
+            ...u,
+            inspections: u.inspections.map((insp) => ({
+                ...insp,
+                startedBy: normalizeStartedBy(insp),
+            })),
+        }),
+    }));
 }
 
 // ─── Assignment: WIG002 menentukan siapa dapat modul Inspeksi Alat ───
@@ -1074,17 +1270,17 @@ async function findOverlappingAssignment(
 
 export async function assignEquipmentUnit(
     session: SessionPayload,
-    input: { unitId?: string | null; employeeId: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
+    input: { unitId?: string | null; employeeId?: string; userId?: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ) {
     await requireEquipmentSettingsScope(session, "assignments");
     if (input.unitId) await assertAssignableUnit(input.unitId);
     const today = toWIBDateString();
-    const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
+    const targetUserId = await resolveAssigneeUserId(input, today);
     const { startsOn, endsOn } = resolveAssignmentPeriod(today, input.startsOnWibDate, input.endsOnWibDate);
-    const overlap = await findOverlappingAssignment(emp.userId, input.unitId ?? null, startsOn, endsOn);
+    const overlap = await findOverlappingAssignment(targetUserId, input.unitId ?? null, startsOn, endsOn);
     if (overlap) throw new EquipmentError("Penugasan bertabrakan dengan periode yang sudah ada.", 409);
     return prisma.equipmentAssignment.create({
-        data: { unitId: input.unitId ?? null, userId: emp.userId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
+        data: { unitId: input.unitId ?? null, userId: targetUserId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
     });
 }
 
@@ -1093,17 +1289,17 @@ export interface EquipmentAssignBulkResult {
     skipped: Array<{ unitId: string; unitName: string; reason: string }>;
 }
 
-/** Penugasan bulk: satu karyawan × banyak alat. Per item divalidasi; yang gagal di-skip dengan alasan (bukan gagal semua). */
+/** Penugasan bulk: satu karyawan/OS × banyak alat. Per item divalidasi; yang gagal di-skip dengan alasan (bukan gagal semua). */
 export async function assignEquipmentUnitsBulk(
     session: SessionPayload,
-    input: { unitIds: string[]; employeeId: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
+    input: { unitIds: string[]; employeeId?: string; userId?: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ): Promise<EquipmentAssignBulkResult> {
     await requireEquipmentSettingsScope(session, "assignments");
     const ids = [...new Set(input.unitIds.map((v) => v.trim()).filter(Boolean))];
     if (ids.length === 0) throw new EquipmentError("Pilih minimal satu alat.", 400);
     if (ids.length > 200) throw new EquipmentError("Maksimal 200 alat per penugasan bulk.", 400);
     const today = toWIBDateString();
-    const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
+    const targetUserId = await resolveAssigneeUserId(input, today);
     const { startsOn, endsOn } = resolveAssignmentPeriod(today, input.startsOnWibDate, input.endsOnWibDate);
     const created: EquipmentAssignBulkResult["created"] = [];
     const skipped: EquipmentAssignBulkResult["skipped"] = [];
@@ -1117,13 +1313,13 @@ export async function assignEquipmentUnitsBulk(
             skipped.push({ unitId, unitName: unit.name, reason: "Belum berkategori WIG/MKI." });
             continue;
         }
-        const overlap = await findOverlappingAssignment(emp.userId, unitId, startsOn, endsOn);
+        const overlap = await findOverlappingAssignment(targetUserId, unitId, startsOn, endsOn);
         if (overlap) {
             skipped.push({ unitId, unitName: unit.name, reason: "Bertabrakan dengan periode yang sudah ada." });
             continue;
         }
         const row = await prisma.equipmentAssignment.create({
-            data: { unitId, userId: emp.userId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
+            data: { unitId, userId: targetUserId, startsOnWibDate: startsOn, endsOnWibDate: endsOn },
         });
         created.push({ id: row.id, unitId });
     }
@@ -1137,7 +1333,7 @@ export async function getEquipmentAssignments(session: SessionPayload) {
         take: 200,
         include: {
             unit: { select: { id: true, name: true, company: true, isSharedBoth: true } },
-            user: { select: { id: true, employeeId: true, displayName: true } },
+            user: { select: { id: true, username: true, employeeId: true, displayName: true } },
         },
     });
     return rows.map((r) => ({
@@ -1191,11 +1387,11 @@ export async function endEquipmentAssignmentsBulk(session: SessionPayload, assig
     return { ended, skipped };
 }
 
-/** Ubah baris penugasan aktif (unit/karyawan/tanggal). Riwayat yang sudah berakhir terkunci. */
+/** Ubah baris penugasan aktif (unit/karyawan/OS/tanggal). Riwayat yang sudah berakhir terkunci. */
 export async function updateEquipmentAssignment(
     session: SessionPayload,
     assignmentId: string,
-    input: { unitId?: string | null; employeeId?: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
+    input: { unitId?: string | null; employeeId?: string; userId?: string; startsOnWibDate?: string; endsOnWibDate?: string | null }
 ) {
     await requireEquipmentSettingsScope(session, "assignments");
     const existing = await prisma.equipmentAssignment.findUnique({ where: { id: assignmentId } });
@@ -1208,9 +1404,8 @@ export async function updateEquipmentAssignment(
     const nextUnitId = input.unitId === undefined ? existing.unitId : input.unitId;
     if (nextUnitId) await assertAssignableUnit(nextUnitId);
     let nextUserId = existing.userId;
-    if (input.employeeId !== undefined) {
-        const emp = await assertActiveInternalEmployee(prisma, input.employeeId, today);
-        nextUserId = emp.userId;
+    if (input.employeeId !== undefined || input.userId !== undefined) {
+        nextUserId = await resolveAssigneeUserId(input, today);
     }
     const nextStartsOn = input.startsOnWibDate ?? existing.startsOnWibDate;
     const nextEndsOn = input.endsOnWibDate === undefined ? existing.endsOnWibDate : input.endsOnWibDate;
@@ -1263,6 +1458,7 @@ export async function queryEquipmentRecap(filters: EquipmentRecapFilters) {
             include: {
                 unit: { select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true } },
                 startedBy: { select: { employeeId: true, name: true } },
+                startedByUser: { select: { username: true, displayName: true } },
                 checkedBy: { select: { employeeId: true, name: true } },
                 approvedBy: { select: { employeeId: true, name: true } },
                 _count: { select: { items: true } },
@@ -1275,7 +1471,11 @@ export async function queryEquipmentRecap(filters: EquipmentRecapFilters) {
     ]);
     return {
         summary: { open, submitted, done, approved, total: open + submitted + done + approved },
-        inspections: rows.map((r) => ({ ...r, unit: withUnitCompanies(r.unit) })),
+        inspections: rows.map((r) => ({
+            ...r,
+            startedBy: normalizeStartedBy(r),
+            unit: withUnitCompanies(r.unit),
+        })),
     };
 }
 
@@ -1332,21 +1532,27 @@ export async function getEmployeeEquipmentCapabilities(
         reviewCompanies: [] as EquipmentCompany[],
         approveCompanies: [] as EquipmentCompany[],
     };
-    if (!session.employeeId || !session.userId) return none;
+    if (!session.userId) return none;
+    const isInternal = Boolean(session.employeeId) && session.permissions.includes(PERMISSIONS.EMPLOYEE_SELF);
+    const isOsPortal = !isInternal && session.permissions.includes(PERMISSIONS.OUTSOURCE_PORTAL);
+    if (!isInternal && !isOsPortal) return none;
+    const canExecPerm = isInternal || session.permissions.includes(PERMISSIONS.EQUIPMENT_EXECUTE);
     const today = toWIBDateString();
     const [assignCount, reviewCompanies, isTop, approveCompanies, executeCompanies, manageScopes] = await Promise.all([
-        prisma.equipmentAssignment.count({
-            where: {
-                userId: session.userId,
-                startsOnWibDate: { lte: today },
-                OR: [{ endsOnWibDate: null }, { endsOnWibDate: { gt: today } }],
-            },
-        }),
+        canExecPerm
+            ? prisma.equipmentAssignment.count({
+                  where: {
+                      userId: session.userId,
+                      startsOnWibDate: { lte: today },
+                      OR: [{ endsOnWibDate: null }, { endsOnWibDate: { gt: today } }],
+                  },
+              })
+            : Promise.resolve(0),
         getEquipmentQcCompanies(session).catch(() => [] as EquipmentCompany[]),
         isEquipmentTopViewer(session).catch(() => false),
         getEquipmentApproverCompanies(session).catch(() => [] as EquipmentCompany[]),
-        getExecuteCompanies(session).catch(() => [] as EquipmentCompany[]),
-        getActiveEquipmentSettingsScopes(session).catch(() => [] as EquipmentSettingsScope[]),
+        canExecPerm ? getExecuteCompanies(session).catch(() => [] as EquipmentCompany[]) : Promise.resolve([] as EquipmentCompany[]),
+        isInternal ? getActiveEquipmentSettingsScopes(session).catch(() => [] as EquipmentSettingsScope[]) : Promise.resolve([] as EquipmentSettingsScope[]),
     ]).catch(
         () =>
             [0, [], false, [], [], []] as [
@@ -1359,7 +1565,7 @@ export async function getEmployeeEquipmentCapabilities(
             ]
     );
     return {
-        canExecute: assignCount > 0,
+        canExecute: canExecPerm && assignCount > 0,
         canReview: reviewCompanies.length > 0,
         canTopView: isTop,
         canApprove: approveCompanies.length > 0,
@@ -1376,6 +1582,7 @@ export async function getEmployeeEquipmentCapabilities(
 const inspectionInclude = {
     unit: { select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true } },
     startedBy: { select: { employeeId: true, name: true } },
+    startedByUser: { select: { username: true, displayName: true } },
     checkedBy: { select: { employeeId: true, name: true } },
     approvedBy: { select: { employeeId: true, name: true } },
     items: {
@@ -1409,7 +1616,7 @@ export function toInspectionDto(insp: InspectionRow) {
     return {
         id: insp.id,
         unit: withUnitCompanies(insp.unit),
-        startedBy: insp.startedBy,
+        startedBy: normalizeStartedBy(insp),
         status: insp.status,
         createdAt: insp.createdAt,
         submittedAt: insp.submittedAt,
@@ -1436,8 +1643,8 @@ async function loadInspectionOrThrow(id: string): Promise<InspectionRow> {
 }
 
 export async function startEquipmentInspection(session: SessionPayload, unitId: string): Promise<EquipmentInspectionDto> {
-    if (!session.userId || !hasEmployeePortalAccess(session)) {
-        throw new EquipmentError("Hanya karyawan yang dapat memulai inspeksi.", 403);
+    if (!session.userId || !hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_EXECUTE)) {
+        throw new EquipmentError("Anda tidak memiliki akses memulai inspeksi.", 403);
     }
     const unit = await prisma.equipmentUnit.findUnique({
         where: { id: unitId },
@@ -1454,7 +1661,9 @@ export async function startEquipmentInspection(session: SessionPayload, unitId: 
             data: {
                 unitId,
                 unitNameSnapshot: unit.name,
-                startedByEmployeeId: session.employeeId as string,
+                startedByEmployeeId: session.employeeId ?? null,
+                startedByUserId: session.userId,
+                startedByNameSnapshot: session.name,
             },
         });
         await tx.equipmentInspectionItem.createMany({
@@ -1496,17 +1705,23 @@ export async function getEquipmentInspection(session: SessionPayload, id: string
         });
         const mine = assigned.some((a) => isEffectiveOn(today, a.startsOnWibDate, a.endsOnWibDate));
         const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
-        const isStarter = session.employeeId !== null && insp.startedByEmployeeId === session.employeeId;
+        const isStarter = isStarterOfInspection(session, insp);
         if (!mine && !isQc && !isApprover && !isStarter) throw new EquipmentError("Anda tidak terlibat inspeksi ini.", 403);
     }
     return toInspectionDto(insp);
 }
 
 export async function getMyEquipmentInspections(session: SessionPayload, status?: string): Promise<EquipmentInspectionDto[]> {
-    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya karyawan yang dapat melihat inspeksi.", 403);
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_EXECUTE)) {
+        throw new EquipmentError("Anda tidak memiliki akses melihat inspeksi.", 403);
+    }
+    const starterOr: Prisma.EquipmentInspectionWhereInput[] = [];
+    if (session.employeeId) starterOr.push({ startedByEmployeeId: session.employeeId });
+    if (session.userId) starterOr.push({ startedByUserId: session.userId });
+    if (starterOr.length === 0) return [];
     const rows = await prisma.equipmentInspection.findMany({
         where: {
-            startedByEmployeeId: session.employeeId as string,
+            OR: starterOr,
             ...(status ? { status: status as "OPEN" | "SUBMITTED" | "DONE" | "APPROVED" } : {}),
         },
         orderBy: { createdAt: "desc" },
@@ -1517,13 +1732,13 @@ export async function getMyEquipmentInspections(session: SessionPayload, status?
 }
 
 /**
- * Riwayat inspeksi per unit untuk karyawan yang ditugaskan di unit itu
- * (melihat kerja employee lain, read-only). QC/approver/topViewer/WIG002 juga boleh.
+ * Riwayat inspeksi per unit untuk pelaksana yang ditugaskan di unit itu
+ * (melihat kerja pelaksana lain, read-only). QC/approver/topViewer/WIG002 juga boleh.
  * Header ringan — detail penuh via getEquipmentInspection.
  */
 export async function getUnitInspectionHistory(session: SessionPayload, unitId: string) {
-    if (!session.userId || !hasEmployeePortalAccess(session)) {
-        throw new EquipmentError("Hanya karyawan yang dapat melihat riwayat unit.", 403);
+    if (!session.userId || !hasEquipmentPortalAccess(session)) {
+        throw new EquipmentError("Anda tidak memiliki akses melihat riwayat unit.", 403);
     }
     const today = toWIBDateString();
     const unit = await prisma.equipmentUnit.findUnique({ where: { id: unitId }, select: { company: true, isSharedBoth: true } });
@@ -1552,20 +1767,30 @@ export async function getUnitInspectionHistory(session: SessionPayload, unitId: 
             submittedAt: true,
             checkedAt: true,
             approvedAt: true,
+            startedByEmployeeId: true,
+            startedByUserId: true,
+            startedByNameSnapshot: true,
             unit: { select: { id: true, name: true, brand: true, location: true, company: true, isSharedBoth: true } },
             startedBy: { select: { employeeId: true, name: true } },
+            startedByUser: { select: { username: true, displayName: true } },
             checkedByNameSnapshot: true,
             approvedByNameSnapshot: true,
         },
     });
-    return rows.map((r) => ({ ...r, unit: withUnitCompanies(r.unit) }));
+    return rows.map((r) => ({
+        ...r,
+        startedBy: normalizeStartedBy(r),
+        unit: withUnitCompanies(r.unit),
+    }));
 }
 
 export async function getPendingEquipmentApprovals(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
-    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya karyawan QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_QC)) {
+        throw new EquipmentError("Hanya petugas QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
+    }
     // Wadah QC per perusahaan: anggota QC melihat SUBMITTED perusahaannya (termasuk alat shared WIG+MKI), terbaru di atas.
     const companies = await getEquipmentQcCompanies(session);
-    if (companies.length === 0) throw new EquipmentError("Hanya karyawan QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
+    if (companies.length === 0) throw new EquipmentError("Hanya petugas QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
     const rows = await prisma.equipmentInspection.findMany({
         where: { status: "SUBMITTED", unit: unitWhereForCompanies(companies) },
         orderBy: { submittedAt: "desc" },
@@ -1591,7 +1816,9 @@ export interface ApprovalQueueFilters {
 }
 
 export async function getApprovalQueue(session: SessionPayload, filters: ApprovalQueueFilters = {}): Promise<EquipmentInspectionDto[]> {
-    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_APPROVE)) {
+        throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
+    }
     const companies = await getEquipmentApproverCompanies(session);
     if (companies.length === 0) throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
     const status = filters.status ?? "DONE";
@@ -1657,8 +1884,8 @@ export async function updateEquipmentInspectionItem(
     itemId: string,
     input: { isPass: boolean; note?: string | null }
 ): Promise<EquipmentInspectionDto> {
-    if (!session.userId || !hasEmployeePortalAccess(session)) {
-        throw new EquipmentError("Hanya karyawan yang dapat mengisi.", 403);
+    if (!session.userId || !hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_EXECUTE)) {
+        throw new EquipmentError("Anda tidak memiliki akses mengisi inspeksi.", 403);
     }
     const item = await prisma.equipmentInspectionItem.findUnique({
         where: { id: itemId },
@@ -1678,8 +1905,8 @@ export async function updateEquipmentInspectionItem(
 }
 
 export async function submitEquipmentInspection(session: SessionPayload, inspectionId: string): Promise<EquipmentInspectionDto> {
-    if (!session.userId || !hasEmployeePortalAccess(session)) {
-        throw new EquipmentError("Hanya karyawan yang dapat mengirim.", 403);
+    if (!session.userId || !hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_EXECUTE)) {
+        throw new EquipmentError("Anda tidak memiliki akses mengirim inspeksi.", 403);
     }
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "OPEN") throw new EquipmentError("Inspeksi sudah dikirim.", 409);
@@ -1724,21 +1951,45 @@ export async function checkEquipmentDone(
     inspectionId: string,
     note?: string | null
 ): Promise<EquipmentInspectionDto> {
-    if (!session.employeeId) throw new EquipmentError("Hanya karyawan QC yang dapat menyelesaikan inspeksi.", 403);
-    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Akses ditolak.", 403);
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_QC)) {
+        throw new EquipmentError("Hanya petugas QC yang dapat menyelesaikan inspeksi.", 403);
+    }
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "SUBMITTED") throw new EquipmentError("Hanya inspeksi yang sudah dikirim yang dapat diselesaikan QC.", 409);
     await requireQcMemberForUnit(session, insp.unit);
     const today = toWIBDateString();
-    const qc = await assertActiveInternalEmployee(prisma, session.employeeId, today);
+    let checkedByEmployeeId: string | null = null;
+    let checkedByUserId: string | null = session.userId ?? null;
+    let checkedByName: string;
+    if (session.employeeId) {
+        const qc = await assertActiveInternalEmployee(prisma, session.employeeId, today);
+        checkedByEmployeeId = qc.employeeId;
+        checkedByUserId = qc.userId;
+        checkedByName = qc.name;
+    } else {
+        try {
+            const os = await assertActiveOutsourceWithPermission(
+                prisma,
+                session.userId,
+                PERMISSIONS.EQUIPMENT_QC,
+                "QC Inspeksi Alat"
+            );
+            checkedByUserId = os.userId;
+            checkedByName = os.displayName;
+        } catch (err) {
+            if (err instanceof OutsourceUserError) throw new EquipmentError(err.message, err.statusCode);
+            throw err;
+        }
+    }
     const cleanNote = note?.trim().slice(0, 1000) || null;
     await prisma.$transaction(async (tx) => {
         const updated = await tx.equipmentInspection.updateMany({
             where: { id: inspectionId, status: "SUBMITTED" },
             data: {
                 status: "DONE",
-                checkedByEmployeeId: qc.employeeId,
-                checkedByNameSnapshot: qc.name,
+                checkedByEmployeeId,
+                checkedByUserId,
+                checkedByNameSnapshot: checkedByName,
                 checkedAt: new Date(),
                 qcNote: cleanNote,
             },
@@ -1751,7 +2002,7 @@ export async function checkEquipmentDone(
                 action: "QC_DONE_EQUIPMENT_INSPECTION",
                 entity: "EQUIPMENT_INSPECTION",
                 entityId: inspectionId,
-                details: JSON.stringify({ unitId: insp.unit.id, checkedBy: qc.employeeId }),
+                details: JSON.stringify({ unitId: insp.unit.id, checkedBy: checkedByEmployeeId ?? checkedByUserId }),
                 actorType: "USER",
                 actorUserId: session.userId ?? null,
                 actorIdentifier: session.username,
@@ -1770,20 +2021,44 @@ export async function approveEquipmentInspection(
     session: SessionPayload,
     inspectionId: string
 ): Promise<EquipmentInspectionDto> {
-    if (!session.employeeId) throw new EquipmentError("Hanya approver yang dapat menyetujui inspeksi.", 403);
-    if (!hasEmployeePortalAccess(session)) throw new EquipmentError("Akses ditolak.", 403);
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_APPROVE)) {
+        throw new EquipmentError("Hanya approver yang dapat menyetujui inspeksi.", 403);
+    }
     const insp = await loadInspectionOrThrow(inspectionId);
     if (insp.status !== "DONE") throw new EquipmentError("Hanya inspeksi yang sudah diperiksa QC yang dapat disetujui.", 409);
     await requireApproverForUnit(session, insp.unit);
     const today = toWIBDateString();
-    const approver = await assertActiveInternalEmployee(prisma, session.employeeId, today);
+    let approvedByEmployeeId: string | null = null;
+    let approvedByUserId: string | null = session.userId ?? null;
+    let approvedByName: string;
+    if (session.employeeId) {
+        const approver = await assertActiveInternalEmployee(prisma, session.employeeId, today);
+        approvedByEmployeeId = approver.employeeId;
+        approvedByUserId = approver.userId;
+        approvedByName = approver.name;
+    } else {
+        try {
+            const os = await assertActiveOutsourceWithPermission(
+                prisma,
+                session.userId,
+                PERMISSIONS.EQUIPMENT_APPROVE,
+                "Approver Final Alat"
+            );
+            approvedByUserId = os.userId;
+            approvedByName = os.displayName;
+        } catch (err) {
+            if (err instanceof OutsourceUserError) throw new EquipmentError(err.message, err.statusCode);
+            throw err;
+        }
+    }
     await prisma.$transaction(async (tx) => {
         const updated = await tx.equipmentInspection.updateMany({
             where: { id: inspectionId, status: "DONE" },
             data: {
                 status: "APPROVED",
-                approvedByEmployeeId: approver.employeeId,
-                approvedByNameSnapshot: approver.name,
+                approvedByEmployeeId,
+                approvedByUserId,
+                approvedByNameSnapshot: approvedByName,
                 approvedAt: new Date(),
             },
         });
@@ -1795,7 +2070,7 @@ export async function approveEquipmentInspection(
                 action: "APPROVE_EQUIPMENT_INSPECTION",
                 entity: "EQUIPMENT_INSPECTION",
                 entityId: inspectionId,
-                details: JSON.stringify({ unitId: insp.unit.id, approvedBy: approver.employeeId }),
+                details: JSON.stringify({ unitId: insp.unit.id, approvedBy: approvedByEmployeeId ?? approvedByUserId }),
                 actorType: "USER",
                 actorUserId: session.userId ?? null,
                 actorIdentifier: session.username,
@@ -1815,11 +2090,11 @@ export async function cancelEquipmentInspection(
     session: SessionPayload,
     inspectionId: string
 ): Promise<EquipmentInspectionDto> {
-    if (!hasEmployeePortalAccess(session)) {
+    if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_EXECUTE)) {
         throw new EquipmentError("Hanya pemulai yang dapat membatalkan checklist.", 403);
     }
     const insp = await loadInspectionOrThrow(inspectionId);
-    if (insp.startedByEmployeeId !== session.employeeId) {
+    if (!isStarterOfInspection(session, insp)) {
         throw new EquipmentError("Hanya yang memulai checklist ini yang dapat membatalkannya.", 403);
     }
     if (insp.status !== "OPEN") throw new EquipmentError("Hanya checklist yang masih berjalan yang dapat dibatalkan.", 409);
@@ -1922,16 +2197,14 @@ export async function hasEquipmentEvidenceAccess(
     if (!session.userId) return false;
     const insp = await prisma.equipmentInspection.findUnique({
         where: { id: evidence.inspectionId },
-        select: { id: true, unitId: true, startedByEmployeeId: true, unit: { select: { company: true, isSharedBoth: true } } },
+        select: { id: true, unitId: true, startedByEmployeeId: true, startedByUserId: true, unit: { select: { company: true, isSharedBoth: true } } },
     });
     if (!insp) return false;
     if (await isEquipmentTopViewer(session).catch(() => false)) return true;
     // Terlibat = QC/approver perusahaan inspeksi (termasuk alat shared WIG+MKI), pemulai, atau assignee efektif.
-    if (session.employeeId) {
-        const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
-        if (isQc || isApprover) return true;
-    }
-    if (session.employeeId && insp.startedByEmployeeId === session.employeeId) return true;
+    const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
+    if (isQc || isApprover) return true;
+    if (isStarterOfInspection(session, insp)) return true;
     const today = toWIBDateString();
     try {
         await assertAssignee(prisma, session.userId, insp.unitId, today);
@@ -2008,8 +2281,8 @@ export async function saveQcEvidence(input: {
     uploaderUserId: string;
     note?: string | null;
 }): Promise<{ id: string; filePath: string }> {
-    if (!hasEmployeePortalAccess(input.session)) {
-        throw new EquipmentError("Hanya karyawan QC yang dapat mengunggah foto QC.", 403);
+    if (!hasEquipmentPortalAccess(input.session, PERMISSIONS.EQUIPMENT_QC)) {
+        throw new EquipmentError("Hanya petugas QC yang dapat mengunggah foto QC.", 403);
     }
     await requireQcMemberForInspection(input.session, input.inspectionId);
     if (input.mime !== "image/jpeg" || !isJpegBytes(input.buffer)) {
@@ -2060,15 +2333,13 @@ export async function hasQcEvidenceAccess(session: SessionPayload, inspectionId:
     if (await isEquipmentTopViewer(session).catch(() => false)) return true;
     const insp = await prisma.equipmentInspection.findUnique({
         where: { id: inspectionId },
-        select: { unitId: true, startedByEmployeeId: true, unit: { select: { company: true, isSharedBoth: true } } },
+        select: { unitId: true, startedByEmployeeId: true, startedByUserId: true, unit: { select: { company: true, isSharedBoth: true } } },
     });
     if (!insp) return false;
     // Terlibat = QC/approver perusahaan inspeksi (termasuk alat shared WIG+MKI), pemulai, atau assignee efektif.
-    if (session.employeeId) {
-        const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
-        if (isQc || isApprover) return true;
-    }
-    if (session.employeeId && insp.startedByEmployeeId === session.employeeId) return true;
+    const { isQc, isApprover } = await isQcOrApproverForUnit(session, insp.unit);
+    if (isQc || isApprover) return true;
+    if (isStarterOfInspection(session, insp)) return true;
     const today = toWIBDateString();
     try {
         await assertAssignee(prisma, session.userId, insp.unitId, today);

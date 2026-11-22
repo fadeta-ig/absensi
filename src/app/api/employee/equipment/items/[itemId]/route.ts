@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, updateEquipmentInspectionItem } from "@/lib/services/equipmentService";
 import { equipmentItemUpdateSchema } from "@/lib/validations/validationSchemas";
 
@@ -8,7 +9,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ itemId: string }> }
 ) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_EXECUTE);
     if (auth.error) return auth.error;
     const { session } = auth;
 

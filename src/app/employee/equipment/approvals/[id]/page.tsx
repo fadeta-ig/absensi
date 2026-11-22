@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, Camera, CheckCircle2, Loader2, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
@@ -61,6 +62,8 @@ function formatDateTime(value: string | null): string {
 }
 
 export default function QcDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const toast = useToast();
     const confirm = useConfirm();
     const draftOwner = useEmployeeDraftOwner();
@@ -222,7 +225,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
     if (error || !detail) {
         return (
             <div className="space-y-5">
-                <Link href="/employee/equipment/approvals" className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
+                <Link href={`${equipmentBase}/approvals`} className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
                     ← Kembali ke antrean
                 </Link>
                 <StateCard
@@ -245,7 +248,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
 
     return (
         <div className="space-y-5">
-            <Link href="/employee/equipment/approvals" className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
+            <Link href={`${equipmentBase}/approvals`} className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
                 ← Kembali ke antrean
             </Link>
 

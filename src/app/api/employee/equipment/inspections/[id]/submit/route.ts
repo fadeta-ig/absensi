@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, submitEquipmentInspection } from "@/lib/services/equipmentService";
 
 export async function POST(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_EXECUTE);
     if (auth.error) return auth.error;
     const { session } = auth;
 

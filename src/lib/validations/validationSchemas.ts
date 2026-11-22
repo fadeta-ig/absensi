@@ -1015,29 +1015,42 @@ export const equipmentUnitUpdateSchema = z.object({
     companies: z.array(equipmentCompanySchema).max(2).nullable().optional(),
 });
 
-export const equipmentAssignSchema = z.object({
-    unitId: z.string().trim().min(1).nullable().optional(),
-    employeeId: z.string().trim().min(1).max(100),
-    startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
-    endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
-});
+export const equipmentAssignSchema = z
+    .object({
+        unitId: z.string().trim().min(1).nullable().optional(),
+        employeeId: z.string().trim().min(1).max(100).optional(),
+        userId: z.string().trim().min(1).max(191).optional(),
+        startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
+        endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
+    })
+    .refine((d) => Boolean(d.employeeId || d.userId), {
+        message: "Pilih karyawan atau akun outsource.",
+        path: ["employeeId"],
+    });
 
 export const equipmentEndAssignSchema = z.object({
     assignmentId: z.string().trim().min(1),
     endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
 });
 
-export const equipmentAssignBulkSchema = z.object({
-    unitIds: z.array(z.string().trim().min(1).max(191)).min(1).max(200),
-    employeeId: z.string().trim().min(1).max(100),
-    startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
-    endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
-});
+export const equipmentAssignBulkSchema = z
+    .object({
+        unitIds: z.array(z.string().trim().min(1).max(191)).min(1).max(200),
+        employeeId: z.string().trim().min(1).max(100).optional(),
+        userId: z.string().trim().min(1).max(191).optional(),
+        startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
+        endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
+    })
+    .refine((d) => Boolean(d.employeeId || d.userId), {
+        message: "Pilih karyawan atau akun outsource.",
+        path: ["employeeId"],
+    });
 
 export const equipmentUpdateAssignSchema = z.object({
     assignmentId: z.string().trim().min(1),
     unitId: z.string().trim().min(1).max(191).nullable().optional(),
     employeeId: z.string().trim().min(1).max(100).optional(),
+    userId: z.string().trim().min(1).max(191).optional(),
     startsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").optional(),
     endsOnWibDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal YYYY-MM-DD.").nullable().optional(),
 });
@@ -1125,6 +1138,74 @@ export const equipmentSettingsDelegatesSchema = z.object({
             })
         )
         .max(10, "PIC delegasi maksimal 10 orang."),
+});
+
+export const outsourceModuleKeySchema = z.enum([
+    "cleaning_execute",
+    "cleaning_overview",
+    "equipment_execute",
+    "equipment_qc",
+    "equipment_approve",
+    "equipment_overview",
+]);
+
+export const createOutsourceUserSchema = z.object({
+    username: z
+        .string()
+        .trim()
+        .min(3, "Username minimal 3 karakter.")
+        .max(100, "Username maksimal 100 karakter.")
+        .regex(/^[A-Za-z0-9._-]+$/, "Username hanya boleh huruf, angka, titik, garis bawah, atau tanda hubung."),
+    displayName: z
+        .string()
+        .trim()
+        .min(2, "Nama tampilan minimal 2 karakter.")
+        .max(150, "Nama tampilan maksimal 150 karakter."),
+    password: z
+        .string()
+        .min(8, "Password minimal 8 karakter.")
+        .max(128, "Password maksimal 128 karakter."),
+    email: z
+        .string()
+        .trim()
+        .email("Format email tidak valid.")
+        .max(191)
+        .optional()
+        .or(z.literal("")),
+    modules: z.array(outsourceModuleKeySchema).max(6).optional(),
+});
+
+export const updateOutsourceUserSchema = z
+    .object({
+        displayName: z
+            .string()
+            .trim()
+            .min(2, "Nama tampilan minimal 2 karakter.")
+            .max(150, "Nama tampilan maksimal 150 karakter.")
+            .optional(),
+        email: z
+            .string()
+            .trim()
+            .email("Format email tidak valid.")
+            .max(191)
+            .optional(),
+        isActive: z.boolean().optional(),
+        modules: z.array(outsourceModuleKeySchema).max(6).optional(),
+    })
+    .refine(
+        (d) =>
+            d.displayName !== undefined ||
+            d.email !== undefined ||
+            d.isActive !== undefined ||
+            d.modules !== undefined,
+        { message: "Minimal satu perubahan wajib dikirim." }
+    );
+
+export const resetOutsourcePasswordSchema = z.object({
+    password: z
+        .string()
+        .min(8, "Password minimal 8 karakter.")
+        .max(128, "Password maksimal 128 karakter."),
 });
 
 

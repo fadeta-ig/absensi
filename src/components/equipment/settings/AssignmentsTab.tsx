@@ -8,7 +8,8 @@ import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { useTablePagination } from "@/hooks/useTablePagination";
-import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
+import { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
+import EquipmentActorPicker from "@/components/equipment/settings/EquipmentActorPicker";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EquipmentCompanyBadge, EquipmentGlobalBadge } from "@/components/equipment/EquipmentStatusBadge";
@@ -366,9 +367,16 @@ export default function AssignmentsTab({
                                 <section key={g.userId} className="rounded-lg border border-border overflow-hidden">
                                     <header className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border bg-accent/20">
                                         <div className="min-w-0">
-                                            <p className="text-sm font-semibold truncate">{g.displayName}</p>
+                                            <p className="text-sm font-semibold truncate inline-flex items-center gap-1.5">
+                                                <span className="truncate">{g.displayName}</span>
+                                                {!g.employeeId && (
+                                                    <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 shrink-0">
+                                                        OS
+                                                    </span>
+                                                )}
+                                            </p>
                                             <p className="text-xs text-muted-foreground">
-                                                {g.employeeId ?? ""} · {g.activeItems.length} aktif ·{" "}
+                                                {g.employeeId ?? (g.items[0]?.user.username ? `@${g.items[0].user.username}` : "Outsource")} · {g.activeItems.length} aktif ·{" "}
                                                 {g.items.length - g.activeItems.length} berakhir{" "}
                                                 {g.activeItems.some((a) => !a.unit) && <EquipmentGlobalBadge />}
                                             </p>
@@ -513,8 +521,17 @@ export default function AssignmentsTab({
                             {filteredQcMembers.map((member) => (
                                 <TableRow key={member.employeeId}>
                                     <TableCell>
-                                        <p className="font-medium text-foreground">{member.name}</p>
-                                        <p className="text-xs text-muted-foreground">{member.employeeId}</p>
+                                        <p className="font-medium text-foreground inline-flex items-center gap-1.5">
+                                            <span>{member.name}</span>
+                                            {member.isOutsource && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                                    OS
+                                                </span>
+                                            )}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {member.isOutsource ? `@${member.username ?? member.employeeId}` : member.employeeId}
+                                        </p>
                                     </TableCell>
                                     <TableCell>
                                         <span
@@ -549,8 +566,9 @@ export default function AssignmentsTab({
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                     <div className="flex-1">
-                        <EmployeeSearchPicker
-                            label="Cari karyawan"
+                        <EquipmentActorPicker
+                            role="qc"
+                            label="Cari petugas QC (Karyawan / OS)"
                             value={newQc}
                             onChange={setNewQc}
                         />

@@ -166,6 +166,11 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 / PIC scope `atasan` (anti self-add) | Atasan tertinggi maks 5 global (baca rekap/monitor, penerima email rekap). |
 | `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 / PIC scope `atasan` (anti self-add) | Daftar approver final per perusahaan (`?company=WIG\|MKI`, maks 5/perusahaan, kuorum 1, `equipment.approvers.{WIG\|MKI}`). |
 | `/api/ga/equipment/settings/delegates` | `GET`, `POST` | **WIG002 + `ga.manage` only** | Kelola PIC delegasi pengaturan alat (`equipment.settingsDelegates`, maks 10, per-tab scope + opsional `expiresOnWibDate` WIB inklusif). |
+| `/api/ga/equipment/eligible-outsource` | `GET` | WIG002 / PIC scope `assignments`/`atasan` | Daftar akun OS aktif ber-RBAC sesuai `?role=operator\|qc\|approver` untuk picker penugasan/QC/approver. |
+| `/api/ga/outsource-users` | `GET`, `POST` | **WIG002 + `ga.manage` only** | Daftar (filter `?q=&status=&module=`) & buat akun Outsource (OS) beserta matriks RBAC E-Checklist (`OUTSOURCE_USER` + modul dipilih). |
+| `/api/ga/outsource-users/[id]` | `PATCH`, `DELETE` | **WIG002 + `ga.manage` only** | Ubah profil/status aktif/RBAC OS (nonaktif otomatis akhiri penugasan & putus sesi) atau hapus permanen khusus akun tanpa riwayat (`409` jika punya riwayat). |
+| `/api/ga/outsource-users/[id]/reset-password` | `POST` | **WIG002 + `ga.manage` only** | Setel ulang kata sandi akun OS & putus sesi lama (`sessionVersion` increment). |
+| `/api/outsource/capabilities` | `GET` | `outsource.portal` | Kapabilitas ringan untuk gating sidebar & beranda portal terisolasi `/outsource/*`. |
 | `/api/ga/equipment/recap` | `GET` | WIG002 / atasan | Rekap inspeksi + ringkasan status (filter unit/status `OPEN\|SUBMITTED\|DONE\|APPROVED`/perusahaan/produk/tanggal). |
 | `/api/ga/equipment/inspections/[id]` | `GET` | WIG002 / atasan | Drill-down detail + foto (read-only). |
 | `/api/ga/equipment/evidence` | `GET` | WIG002 / atasan | List foto dokumentasi per inspeksi (`?inspectionId=`, drill-down rekap). |

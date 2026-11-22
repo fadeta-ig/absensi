@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowUpDown, ChevronRight, Eye, Loader2, RefreshCw, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
@@ -160,6 +161,8 @@ const STATUS_CHIPS: Array<{ key: StatusFilter; label: string }> = [
 ];
 
 export default function EmployeeEquipmentPage() {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const toast = useToast();
     const confirm = useConfirm();
     const draftOwner = useEmployeeDraftOwner();
@@ -967,7 +970,7 @@ export default function EmployeeEquipmentPage() {
                         Peran Anda sebagai atasan. Silakan pantau hasil pemeriksaan melalui tombol di bawah.
                     </p>
                     <Link
-                        href="/employee/equipment/overview"
+                        href={`${equipmentBase}/overview`}
                         className="btn btn-primary mt-4"
                     >
                         Buka Pantau Inspeksi Alat

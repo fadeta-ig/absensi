@@ -6,7 +6,9 @@ import { useToast } from "@/components/Toast";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
-import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
+import { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
+import EquipmentActorPicker from "@/components/equipment/settings/EquipmentActorPicker";
+import { extractOsUserIdFromToken, toOsActorToken } from "@/lib/services/equipmentAuth";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentCompanyBadge, EquipmentGlobalBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
 import { inputClass, isAssignmentActive } from "@/components/equipment/settings/useSettingsData";
@@ -192,7 +194,11 @@ export function CreateAssignmentModal({
                 ? assignProductChecked.length
                 : 0;
     const assignEmployeeActive = assignEmployee
-        ? assignments.filter((a) => a.user.employeeId === assignEmployee.employeeId && isAssignmentActive(a))
+        ? assignments.filter((a) => {
+              const osId = extractOsUserIdFromToken(assignEmployee.employeeId);
+              const matched = osId ? a.user.id === osId : a.user.employeeId === assignEmployee.employeeId;
+              return matched && isAssignmentActive(a);
+          })
         : [];
 
     if (!open) return null;
@@ -435,8 +441,9 @@ export function CreateAssignmentModal({
                 )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <EmployeeSearchPicker
-                                label="Karyawan"
+                            <EquipmentActorPicker
+                                role="operator"
+                                label="Petugas (Karyawan / OS)"
                                 value={assignEmployee}
                                 onChange={setAssignEmployee}
                             />
@@ -581,7 +588,7 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
         setEditEmployee(
             assignment.user.employeeId
                 ? { employeeId: assignment.user.employeeId, name: assignment.user.displayName }
-                : null
+                : { employeeId: toOsActorToken(assignment.user.id), name: assignment.user.displayName }
         );
         setEditStartsOn(assignment.startsOnWibDate);
         setEditEndsOn(assignment.endsOnWibDate ?? "");
@@ -765,8 +772,9 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
                                 </>
                             )}
                         </div>
-                        <EmployeeSearchPicker
-                            label="Karyawan"
+                        <EquipmentActorPicker
+                            role="operator"
+                            label="Petugas (Karyawan / OS)"
                             value={editEmployee}
                             onChange={setEditEmployee}
                         />

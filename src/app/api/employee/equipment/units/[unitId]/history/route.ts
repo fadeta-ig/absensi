@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, getUnitInspectionHistory } from "@/lib/services/equipmentService";
 
 /**
@@ -9,7 +9,7 @@ import { EquipmentError, getUnitInspectionHistory } from "@/lib/services/equipme
  * approver, topViewer, atau WIG002. Read-only, header ringan.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ unitId: string }> }) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth();
     if (auth.error) return auth.error;
     const { session } = auth;
 

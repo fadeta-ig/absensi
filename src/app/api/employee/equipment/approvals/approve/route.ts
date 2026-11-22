@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, approveEquipmentInspection } from "@/lib/services/equipmentService";
 import { equipmentApproveSchema } from "@/lib/validations/validationSchemas";
 
@@ -10,7 +11,7 @@ import { equipmentApproveSchema } from "@/lib/validations/validationSchemas";
  * menyetujui inspeksi: DONE → APPROVED. Satu arah, tanpa reject.
  */
 export async function POST(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_APPROVE);
     if (auth.error) return auth.error;
     const { session } = auth;
 

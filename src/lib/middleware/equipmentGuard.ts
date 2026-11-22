@@ -1,8 +1,10 @@
 import type { NextResponse } from "next/server";
 import type { SessionPayload } from "@/lib/auth";
+import type { PermissionCode } from "@/lib/permissions";
 import { forbiddenResponse, requireAuth, unauthorizedResponse } from "@/lib/middleware/apiGuard";
 import {
     hasEmployeePortalAccess,
+    hasEquipmentPortalAccess,
     isEquipmentMasterAdmin,
     type EquipmentSettingsScope,
 } from "@/lib/services/equipmentAuth";
@@ -48,5 +50,18 @@ export async function requireEmployeeEquipmentAuth(): Promise<EquipmentAuthGuard
     const session = await requireAuth();
     if (!session) return { error: unauthorizedResponse() };
     if (!hasEmployeePortalAccess(session)) return { error: forbiddenResponse() };
+    return { session };
+}
+
+/**
+ * Guard route API operasional Equipment untuk karyawan internal (`employee.self`)
+ * ATAU akun Outsource (`outsource.portal`) yang memegang izin modul Equipment terkait.
+ */
+export async function requireEquipmentPortalAuth(
+    requiredOsPerm?: PermissionCode | readonly PermissionCode[]
+): Promise<EquipmentAuthGuardResult> {
+    const session = await requireAuth();
+    if (!session) return { error: unauthorizedResponse() };
+    if (!hasEquipmentPortalAccess(session, requiredOsPerm)) return { error: forbiddenResponse() };
     return { session };
 }

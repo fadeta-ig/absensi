@@ -42,6 +42,16 @@ export interface QcMember {
     name: string;
     isActive: boolean;
     email?: string | null;
+    isOutsource?: boolean;
+    username?: string | null;
+}
+
+export interface ApproverMember {
+    employeeId: string;
+    name: string | null;
+    isActive: boolean;
+    isOutsource?: boolean;
+    username?: string | null;
 }
 
 export interface TopViewer {
@@ -72,7 +82,7 @@ export interface EquipmentAssignment {
         isSharedBoth?: boolean;
         companies?: Array<"WIG" | "MKI">;
     } | null;
-    user: { id: string; employeeId: string | null; displayName: string };
+    user: { id: string; username?: string; employeeId: string | null; displayName: string };
 }
 
 export interface EquipmentProduct {
@@ -136,7 +146,7 @@ export interface SettingsData {
     setQcCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
     topViewers: TopViewer[];
     topViewerError: string | null;
-    approvers: Array<{ employeeId: string; name: string | null; isActive: boolean }>;
+    approvers: ApproverMember[];
     approverError: string | null;
     approverCompany: EquipmentCompanyFilter;
     setApproverCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
@@ -187,7 +197,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
     const [qcCompany, setQcCompany] = useState<EquipmentCompanyFilter>("WIG");
     const [topViewers, setTopViewers] = useState<TopViewer[]>([]);
     const [topViewerError, setTopViewerError] = useState<string | null>(null);
-    const [approvers, setApprovers] = useState<Array<{ employeeId: string; name: string | null; isActive: boolean }>>([]);
+    const [approvers, setApprovers] = useState<ApproverMember[]>([]);
     const [approverError, setApproverError] = useState<string | null>(null);
     const [approverCompany, setApproverCompany] = useState<EquipmentCompanyFilter>("WIG");
     const [delegates, setDelegates] = useState<SettingsDelegateRow[]>([]);

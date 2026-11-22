@@ -42,9 +42,11 @@ export default function CleaningLayout({ children }: { children: React.ReactNode
                         ? "/dashboard"
                         : data.permissions?.includes("ga.manage")
                             ? "/ga"
-                            : data.employeeId && data.permissions?.includes("employee.self")
-                                ? "/employee"
-                                : "/"
+                            : data.permissions?.includes("outsource.portal")
+                                ? "/outsource"
+                                : data.employeeId && data.permissions?.includes("employee.self")
+                                    ? "/employee"
+                                    : "/"
                 );
                 return;
             }

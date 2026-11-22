@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Eye, RefreshCw } from "lucide-react";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
@@ -97,6 +98,8 @@ function saveFilter(f: { status: string; from: string; to: string; company: stri
 }
 
 export default function EmployeeEquipmentOverviewPage() {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [inspections, setInspections] = useState<OverviewInspection[]>([]);
     const [summary, setSummary] = useState<OverviewSummary | null>(null);
     const [status, setStatus] = useState<string>(() => loadSavedFilter().status);
@@ -329,7 +332,7 @@ export default function EmployeeEquipmentOverviewPage() {
                             {visibleInspections.map((item) => (
                                 <Link
                                     key={item.id}
-                                    href={`/employee/equipment/overview/${item.id}`}
+                                    href={`${equipmentBase}/overview/${item.id}`}
                                     className="emp-surface emp-surface-hover block p-4 active:scale-[0.99] transition-colors"
                                 >
                                     <div className="flex items-start justify-between gap-2">

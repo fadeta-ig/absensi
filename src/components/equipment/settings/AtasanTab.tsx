@@ -6,8 +6,10 @@ import { useConfirm } from "@/components/ConfirmModal";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
+import EquipmentActorPicker from "@/components/equipment/settings/EquipmentActorPicker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type {
+    ApproverMember,
     EquipmentCompanyFilter,
     TopViewer,
 } from "@/components/equipment/settings/useSettingsData";
@@ -16,7 +18,7 @@ interface AtasanTabProps {
     topViewers: TopViewer[];
     topViewerError: string | null;
     fetchTopViewers: () => Promise<void>;
-    approvers: Array<{ employeeId: string; name: string | null; isActive: boolean }>;
+    approvers: ApproverMember[];
     approverError: string | null;
     approverCompany: EquipmentCompanyFilter;
     setApproverCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
@@ -300,8 +302,17 @@ export default function AtasanTab({
                                 className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
                             >
                                 <span className="min-w-0">
-                                    <span className="block text-sm font-medium truncate">{m.name ?? m.employeeId}</span>
-                                    <span className="block text-xs text-muted-foreground truncate">{m.employeeId}</span>
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium truncate">
+                                        <span className="truncate">{m.name ?? m.employeeId}</span>
+                                        {m.isOutsource && (
+                                            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 shrink-0">
+                                                OS
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground truncate">
+                                        {m.isOutsource ? `@${m.username ?? m.employeeId}` : m.employeeId}
+                                    </span>
                                 </span>
                                 <button
                                     type="button"
@@ -317,8 +328,9 @@ export default function AtasanTab({
                 )}
                 <div className="flex flex-col sm:flex-row gap-2">
                     <div className="flex-1">
-                        <EmployeeSearchPicker
-                            label="Cari karyawan"
+                        <EquipmentActorPicker
+                            role="approver"
+                            label="Cari approver (Karyawan / OS)"
                             value={newApprover}
                             onChange={setNewApprover}
                         />

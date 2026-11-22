@@ -55,6 +55,7 @@ const GA_NAV_ITEMS: NavItem[] = [
         icon: ClipboardCheck,
         label: "Inspeksi",
         subItems: [
+            { href: "/ga/outsource-users", label: "Akun Outsource (OS)" },
             { href: "/ga/cleaning/settings", label: "Pengaturan" },
             { href: "/ga/cleaning/recap", label: "Rekap Bulanan" },
             { href: "/ga/cleaning/approvals", label: "Tanda Tangan Bulanan" },
@@ -155,6 +156,7 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
         : GA_NAV_ITEMS.map((item) => {
               if (!item.subItems) return item;
               const subItems = item.subItems.filter((sub) => {
+                  if (sub.href === "/ga/outsource-users") return false;
                   if (sub.href === "/ga/equipment/settings") return false;
                   if (sub.href === "/ga/equipment/recap") return canTopViewEquipment;
                   return true;

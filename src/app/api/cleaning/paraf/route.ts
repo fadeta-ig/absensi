@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
         const status = await getParafStatus(roomId, wibDate);
 
-        if (isWig002(session)) {
+        if (isWig002(session) || session.permissions.includes(PERMISSIONS.CLEANING_OVERVIEW)) {
             return NextResponse.json({ success: true, data: status });
         }
 
