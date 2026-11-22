@@ -267,7 +267,9 @@ export default function MeetingMinutesSection({
                         <div className="rounded-xl border border-[var(--border)] bg-[var(--secondary)]/50 px-3 py-2.5">
                             {data?.minutes ? (
                                 <>
-                                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap">{data.minutes}</p>
+                                    <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                        {data.minutes}
+                                    </p>
                                     {data.minutesUpdatedAt && (
                                         <p className="text-[11px] text-[var(--text-muted)] mt-2 pt-1.5 border-t border-[var(--border)]">
                                             Diinput/diperbarui oleh{" "}

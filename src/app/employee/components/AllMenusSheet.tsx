@@ -26,6 +26,7 @@ import {
     Wrench,
     Eye,
     MessageSquareText,
+    SlidersHorizontal,
 } from "lucide-react";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
 
@@ -58,6 +59,8 @@ interface AllMenusSheetProps {
     canTopViewEquipment?: boolean | null;
     /** Approver Equipment: memberi approval final (tanpa perlu assignment/QC/topViewer). */
     canApproveEquipment?: boolean | null;
+    /** PIC delegasi Pengaturan Peralatan yang ditunjuk WIG002. */
+    canManageEquipmentSettings?: boolean | null;
     /** Pemantau e-meeting WIG002. null = belum dimuat → sembunyikan dulu. */
     canMonitorMeeting?: boolean | null;
     /** Karyawan yang ditunjuk WIG002 sebagai editor aturan sapaan beranda. */
@@ -75,6 +78,7 @@ export default function AllMenusSheet({
     canReviewEquipment,
     canTopViewEquipment,
     canApproveEquipment,
+    canManageEquipmentSettings,
     canMonitorMeeting,
     canEditGreeting = false,
 }: AllMenusSheetProps) {
@@ -130,6 +134,7 @@ export default function AllMenusSheet({
             ? canTopViewEquipment
             : canUseEquipment !== false && canUseEquipment !== null;
     const showApproveEquipment = canApproveEquipment === true;
+    const showManageEquipmentSettings = canManageEquipmentSettings === true;
 
     const categories: MenuCategory[] = [
         {
@@ -265,6 +270,18 @@ export default function AllMenusSheet({
                               icon: Eye,
                               bg: "bg-cyan-50 dark:bg-cyan-950/40",
                               color: "text-cyan-600 dark:text-cyan-400",
+                          },
+                      ]
+                    : []),
+                ...(showManageEquipmentSettings
+                    ? [
+                          {
+                              href: "/employee/equipment/settings",
+                              label: "Pengaturan Peralatan",
+                              description: "Kelola master alat, produk, template, penugasan, atau atasan sesuai delegasi GA",
+                              icon: SlidersHorizontal,
+                              bg: "bg-indigo-50 dark:bg-indigo-950/40",
+                              color: "text-indigo-600 dark:text-indigo-400",
                           },
                       ]
                     : []),

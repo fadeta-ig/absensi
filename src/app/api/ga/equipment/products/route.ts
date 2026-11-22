@@ -5,11 +5,11 @@ import {
     createEquipmentProduct,
 } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
-import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentSettingsAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentProductCreateSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth(["products", "assignments"]);
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("products");
     if (auth.error) return auth.error;
     const { session } = auth;
 

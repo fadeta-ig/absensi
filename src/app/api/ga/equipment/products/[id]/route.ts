@@ -3,13 +3,13 @@ import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { deleteEquipmentProduct, updateEquipmentProduct } from "@/lib/services/equipmentProductService";
 import { EquipmentError } from "@/lib/services/equipmentService";
 import { equipmentProductUpdateSchema } from "@/lib/validations/validationSchemas";
-import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentSettingsAuth } from "@/lib/middleware/equipmentGuard";
 
 export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("products");
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -35,7 +35,7 @@ export async function DELETE(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("products");
     if (auth.error) return auth.error;
     const { session } = auth;
 

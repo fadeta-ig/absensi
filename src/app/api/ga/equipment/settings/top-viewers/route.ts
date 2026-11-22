@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentSettingsAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, getEquipmentTopViewersForAdmin, setEquipmentTopViewers } from "@/lib/services/equipmentService";
 import { equipmentTopViewersSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET() {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("atasan");
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("atasan");
     if (auth.error) return auth.error;
     const { session } = auth;
 

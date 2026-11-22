@@ -9,13 +9,13 @@ import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentCompanyBadge, EquipmentGlobalBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
-import { inputClass, isAssignmentActive } from "@/app/ga/equipment/settings/_components/useSettingsData";
+import { inputClass, isAssignmentActive } from "@/components/equipment/settings/useSettingsData";
 import type {
     EquipmentAssignment,
     EquipmentProduct,
     EquipmentUnit,
     ProductToolRow,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 
 export type AssignMode = "units" | "company" | "product" | "global";
 

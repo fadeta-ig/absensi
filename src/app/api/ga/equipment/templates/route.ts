@@ -6,11 +6,11 @@ import {
     updateEquipmentTemplate,
     EquipmentError,
 } from "@/lib/services/equipmentService";
-import { requireGaEquipmentAdminAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentSettingsAuth } from "@/lib/middleware/equipmentGuard";
 import { equipmentTemplateCreateSchema, equipmentTemplateUpdateSchema } from "@/lib/validations/validationSchemas";
 
 export async function GET() {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth(["templates", "units"]);
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -26,7 +26,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("templates");
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-    const auth = await requireGaEquipmentAdminAuth();
+    const auth = await requireEquipmentSettingsAuth("templates");
     if (auth.error) return auth.error;
     const { session } = auth;
 

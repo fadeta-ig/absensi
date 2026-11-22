@@ -485,7 +485,7 @@ function DetailContent({ id }: { id: string }) {
                         <p className="emp-eyebrow flex items-center gap-1.5">
                             <StickyNote className="w-3.5 h-3.5" /> Agenda / Pokok Bahasan
                         </p>
-                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap leading-relaxed">
+                        <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed">
                             {item.agenda}
                         </p>
                     </div>

@@ -98,6 +98,7 @@ hriswig/
   - `src/app/employee/equipment/overview/`: Ringkasan status inspeksi per unit (`page.tsx` + `overview/[id]/page.tsx` sekaligus detail aksi final approval).
   - `src/app/employee/equipment/approvals/`: Antrean dan detail verifikasi QC (`page.tsx` + `approvals/[id]/page.tsx`).
   - `src/app/employee/equipment/approval-queue/page.tsx`: Antrean persetujuan final approver (`DONE/APPROVED/ALL`) menuju `overview/[id]?from=approval-queue`.
+  - `src/app/employee/equipment/settings/page.tsx`: Panel Pengaturan Peralatan berbasis scope untuk karyawan PIC delegasi yang ditunjuk WIG002 (Server Component guard + shared `EquipmentSettingsPanel`).
   - `src/app/employee/greeting-settings/page.tsx`: Editor aturan sapaan beranda untuk karyawan yang ditunjuk WIG002.
 
 ### C. Portal General Affairs (`src/app/ga/`)
@@ -119,9 +120,9 @@ hriswig/
   - `src/app/ga/greeting-settings/page.tsx`: CRUD aturan sapaan beranda (jam, hari/tanggal, prioritas, status aktif) dan penunjukan satu karyawan editor (khusus WIG002).
   - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
   - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
-  - `src/app/ga/equipment/settings/`: Pengaturan template, unit alat, produk & pemetaan alat, penugasan, QC, approver, dan top viewers (`page.tsx` + `_components/`).
+  - `src/app/ga/equipment/settings/page.tsx`: Server Component guard WIG002 yang merender shared `EquipmentSettingsPanel` (Template, Unit, Produk, Penugasan, Atasan, dan Delegasi PIC).
   - `src/app/ga/equipment/recap/page.tsx`: Rekap inspeksi alat produksi.
-  - `src/components/equipment/`: Komponen bersama inspeksi alat (`EquipmentStatusBadge`, `EquipmentEvidencePanel`). Pencarian bersama (`EquipmentSearchField`, `EmployeeSearchPicker`) berada di `src/components/ui/`.
+  - `src/components/equipment/`: Komponen bersama inspeksi alat (`EquipmentStatusBadge`, `EquipmentEvidencePanel`) serta modul shared pengaturan di `src/components/equipment/settings/` (`EquipmentSettingsPanel`, `DelegatesTab`, dll.). Pencarian bersama (`EquipmentSearchField`, `EmployeeSearchPicker`) berada di `src/components/ui/`.
   - `src/components/calendar/`: `NationalHolidayBadge` (penanda "Tanggal Merah" global, dipakai header/session Green Meeting) + hook `src/hooks/useGlobalHolidays.ts` (fetch cache `/api/calendar/holidays`).
 
 ### D. Portal Inspeksi Harian (`src/app/cleaning/`)

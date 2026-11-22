@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
     Newspaper, NotebookPen, MapPinned, Clock4, Users, Monitor, User,
-    CalendarCheck, CalendarClock, CalendarDays, Wrench, Eye,
+    CalendarCheck, CalendarClock, CalendarDays, Wrench, Eye, SlidersHorizontal,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
     { href: "/employee/documents", icon: FileText, label: "Dokumen" },
     { href: "/employee/assets", icon: Monitor, label: "Aset Saya" },
     { href: "/employee/equipment", icon: Wrench, label: "Inspeksi Alat" },
+    { href: "/employee/equipment/settings", icon: SlidersHorizontal, label: "Pengaturan Alat" },
     { href: "/employee/news", icon: Newspaper, label: "Berita" },
     { href: "/employee/appointments", icon: CalendarClock, label: "E Meeting" },
     { href: "/employee/my-tasks", icon: ClipboardList, label: "Tugas Saya" },
@@ -109,6 +110,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
     const [authChecked, setAuthChecked] = useState(false);
     const { logout: handleLogout, loggingOut } = useEmployeeLogout();
     const [equipmentVisible, setEquipmentVisible] = useState(false);
+    const [equipmentSettingsVisible, setEquipmentSettingsVisible] = useState(false);
     const [monitorVisible, setMonitorVisible] = useState(false);
     const fetchedRef = useRef(false);
 
@@ -177,9 +179,10 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             .then((res) => (res.ok ? res.json() : null))
             .then((json: unknown) => {
                 if (cancelled || !json || typeof json !== "object") return;
-                const data = (json as { data?: { canExecute?: boolean; canReview?: boolean; canTopView?: boolean } }).data;
+                const data = (json as { data?: { canExecute?: boolean; canReview?: boolean; canTopView?: boolean; canManageSettings?: boolean } }).data;
                 const isTopOnly = data?.canTopView === true && data?.canReview !== true;
                 if ((data?.canExecute || data?.canReview) && !isTopOnly) setEquipmentVisible(true);
+                if (data?.canManageSettings === true) setEquipmentSettingsVisible(true);
             })
             .catch(() => undefined);
         return () => {
@@ -237,6 +240,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                 navItems.filter(
                     (i) =>
                         (i.href !== "/employee/equipment" || equipmentVisible) &&
+                        (i.href !== "/employee/equipment/settings" || equipmentSettingsVisible) &&
                         (i.href !== "/employee/my-tasks/monitoring" || monitorVisible)
                 )
             }
@@ -266,7 +270,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             }
         >
             <EmployeeDraftProvider userId={user.userId ?? user.employeeId} employeeId={user.employeeId}>
-                <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") ? "max-w-4xl" : "max-w-md"}`}>
+                <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") || pathname.startsWith("/employee/equipment/settings") ? "max-w-4xl" : "max-w-md"}`}>
                     {children}
                 </div>
             </EmployeeDraftProvider>

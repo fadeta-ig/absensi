@@ -1099,3 +1099,32 @@ export const equipmentProductToolsSchema = z.object({
     equipmentUnitIds: z.array(z.string().trim().min(1).max(191)).max(200),
 });
 
+export const equipmentSettingsScopeSchema = z.enum([
+    "templates",
+    "units",
+    "products",
+    "assignments",
+    "atasan",
+]);
+
+export const equipmentSettingsDelegatesSchema = z.object({
+    delegates: z
+        .array(
+            z.object({
+                employeeId: z.string().trim().min(1, "ID karyawan wajib diisi.").max(100),
+                scopes: z
+                    .array(equipmentSettingsScopeSchema)
+                    .min(1, "Pilih minimal satu area pengaturan.")
+                    .max(5),
+                expiresOnWibDate: z
+                    .string()
+                    .trim()
+                    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal kedaluwarsa harus YYYY-MM-DD.")
+                    .nullable()
+                    .optional(),
+            })
+        )
+        .max(10, "PIC delegasi maksimal 10 orang."),
+});
+
+

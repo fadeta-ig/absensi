@@ -5,7 +5,7 @@ import { toWIBDateString } from "@/lib/timezone";
 import { hasEmployeePortalAccess, normalizeEquipmentName as normalizeName } from "@/lib/services/equipmentAuth";
 import {
     EquipmentError,
-    requireWig002,
+    requireEquipmentSettingsScope,
     isPrismaUniqueViolation,
     logCreated,
     requireWig002OrTopViewer,
@@ -16,10 +16,10 @@ import {
     unitWhereForCompany,
 } from "@/lib/services/equipmentService";
 
-// ─── Produk per perusahaan (master WIG002) ───────────────────────────
+// ─── Produk per perusahaan (master WIG002 / PIC delegasi) ────────────
 
 export async function listEquipmentProducts(session: SessionPayload, company: EquipmentCompany) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, ["products", "assignments"]);
     return prisma.equipmentProduct.findMany({
         where: { company },
         orderBy: { name: "asc" },
@@ -28,7 +28,7 @@ export async function listEquipmentProducts(session: SessionPayload, company: Eq
 }
 
 export async function createEquipmentProduct(session: SessionPayload, input: { company: EquipmentCompany; name: string }) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "products");
     const clean = normalizeName(input.name);
     if (!clean) throw new EquipmentError("Nama produk wajib diisi.", 400);
     try {
@@ -47,7 +47,7 @@ export async function createEquipmentProduct(session: SessionPayload, input: { c
 }
 
 export async function deleteEquipmentProduct(session: SessionPayload, id: string) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "products");
     const existing = await prisma.equipmentProduct.findUnique({ where: { id }, select: { id: true } });
     if (!existing) throw new EquipmentError("Produk tidak ditemukan.", 404);
     await prisma.equipmentProduct.delete({ where: { id } });
@@ -56,7 +56,7 @@ export async function deleteEquipmentProduct(session: SessionPayload, id: string
 }
 
 export async function updateEquipmentProduct(session: SessionPayload, id: string, input: { name: string }) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "products");
     const existing = await prisma.equipmentProduct.findUnique({ where: { id }, select: { id: true, company: true } });
     if (!existing) throw new EquipmentError("Produk tidak ditemukan.", 404);
     const clean = normalizeName(input.name);
@@ -142,7 +142,7 @@ export interface ProductToolChecklistRow {
 }
 
 export async function getProductToolChecklist(session: SessionPayload, productId: string) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, ["products", "assignments"]);
     const product = await prisma.equipmentProduct.findUnique({ where: { id: productId } });
     if (!product) throw new EquipmentError("Produk tidak ditemukan.", 404);
     const [units, mapped] = await Promise.all([
@@ -168,7 +168,7 @@ export async function getProductToolChecklist(session: SessionPayload, productId
 }
 
 export async function setProductTools(session: SessionPayload, productId: string, equipmentUnitIds: string[]) {
-    requireWig002(session);
+    await requireEquipmentSettingsScope(session, "products");
     const product = await prisma.equipmentProduct.findUnique({ where: { id: productId } });
     if (!product) throw new EquipmentError("Produk tidak ditemukan.", 404);
     const ids = [...new Set(equipmentUnitIds.map((v) => v.trim()).filter(Boolean))];

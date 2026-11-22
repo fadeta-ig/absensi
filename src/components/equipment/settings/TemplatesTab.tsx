@@ -6,11 +6,11 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
-import { inputClass } from "@/app/ga/equipment/settings/_components/useSettingsData";
+import { inputClass } from "@/components/equipment/settings/useSettingsData";
 import type {
     EquipmentTemplate,
     TemplateItem,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 
 interface TemplatesTabProps {
     templates: EquipmentTemplate[];

@@ -1,25 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
-import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type {
     EquipmentCompanyFilter,
-    QcMember,
     TopViewer,
-} from "@/app/ga/equipment/settings/_components/useSettingsData";
+} from "@/components/equipment/settings/useSettingsData";
 
 interface AtasanTabProps {
-    qcMembers: QcMember[];
-    qcError: string | null;
-    qcCompany: EquipmentCompanyFilter;
-    setQcCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
-    fetchQcMembers: (company: EquipmentCompanyFilter) => Promise<void>;
     topViewers: TopViewer[];
     topViewerError: string | null;
     fetchTopViewers: () => Promise<void>;
@@ -31,11 +24,6 @@ interface AtasanTabProps {
 }
 
 export default function AtasanTab({
-    qcMembers,
-    qcError,
-    qcCompany,
-    setQcCompany,
-    fetchQcMembers,
     topViewers,
     topViewerError,
     fetchTopViewers,
@@ -48,11 +36,6 @@ export default function AtasanTab({
     const toast = useToast();
     const confirm = useConfirm();
 
-    // ─── Anggota QC ───
-    const [newQc, setNewQc] = useState<EmployeePick | null>(null);
-    const [savingQc, setSavingQc] = useState(false);
-    const [qcQuery, setQcQuery] = useState("");
-
     // ─── Top reviewer (atasan global) ───
     const [newTopViewer, setNewTopViewer] = useState<EmployeePick | null>(null);
     const [savingTopViewers, setSavingTopViewers] = useState(false);
@@ -62,80 +45,8 @@ export default function AtasanTab({
     const [savingApprover, setSavingApprover] = useState(false);
 
     useEffect(() => {
-        void fetchQcMembers(qcCompany);
-    }, [fetchQcMembers, qcCompany]);
-
-    useEffect(() => {
         void fetchApprovers(approverCompany);
     }, [fetchApprovers, approverCompany]);
-
-    const filteredQcMembers = useMemo(() => {
-        const q = qcQuery.trim().toLowerCase();
-        if (!q) return qcMembers;
-        return qcMembers.filter((m) => `${m.name} ${m.employeeId}`.toLowerCase().includes(q));
-    }, [qcMembers, qcQuery]);
-
-    // ─── Anggota QC ───
-
-    const persistQcMembers = useCallback(
-        async (employeeIds: string[], successMessage: string) => {
-            setSavingQc(true);
-            try {
-                const res = await fetch("/api/ga/equipment/qc-members", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ company: qcCompany, employeeIds }),
-                });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan anggota QC."));
-                toast(successMessage, "success");
-                setNewQc(null);
-                await fetchQcMembers(qcCompany);
-            } catch (err) {
-                toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
-                reportClientError("EquipmentSettings", "Qc members save failed", err);
-            } finally {
-                setSavingQc(false);
-            }
-        },
-        [toast, fetchQcMembers, qcCompany]
-    );
-
-    const addQcMember = useCallback(() => {
-        if (!newQc) {
-            toast("Cari dan pilih karyawan terlebih dahulu.", "warning");
-            return;
-        }
-        const id = newQc.employeeId;
-        if (qcMembers.some((v) => v.employeeId.toLowerCase() === id.toLowerCase())) {
-            toast("Karyawan tersebut sudah terdaftar sebagai anggota QC.", "warning");
-            return;
-        }
-        if (qcMembers.length >= 20) {
-            toast(`Anggota QC ${qcCompany} maksimal 20 orang.`, "warning");
-            return;
-        }
-        setNewQc(null);
-        void persistQcMembers([...qcMembers.map((v) => v.employeeId), id], `Anggota QC ${qcCompany} ditambahkan.`);
-    }, [newQc, qcMembers, qcCompany, toast, persistQcMembers]);
-
-    const removeQcMember = useCallback(
-        (member: QcMember) => {
-            confirm({
-                title: `Hapus "${member.name}" dari QC ${qcCompany}?`,
-                message: `Karyawan tersebut tidak lagi melihat antrean pemeriksaan QC ${qcCompany}.`,
-                confirmLabel: "Ya, hapus",
-                cancelLabel: "Batal",
-                variant: "danger",
-                onConfirm: () => {
-                    void persistQcMembers(
-                        qcMembers.filter((v) => v.employeeId !== member.employeeId).map((v) => v.employeeId),
-                        "Anggota QC dihapus."
-                    );
-                },
-            });
-        },
-        [confirm, qcMembers, qcCompany, persistQcMembers]
-    );
 
     // ─── Top reviewers ───
 
@@ -423,116 +334,6 @@ export default function AtasanTab({
                 {approvers.length >= 5 && (
                     <p className="text-xs text-muted-foreground mt-2">
                         Batas 5 approver {approverCompany} tercapai. Hapus salah satu untuk menambah.
-                    </p>
-                )}
-            </div>
-
-            <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-base font-medium mb-1">Anggota QC</h2>
-                <p className="text-xs text-muted-foreground mb-2">
-                    Karyawan QC yang memeriksa hasil inspeksi produksi per perusahaan. Semua anggota
-                    melihat semua yang disubmit perusahaannya, terbaru di atas. Maksimal 20 orang
-                    per perusahaan.
-                </p>
-                <div className="flex gap-1 mb-3 border-b border-border">
-                    {(["WIG", "MKI"] as const).map((c) => (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => setQcCompany(c)}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
-                                qcCompany === c
-                                    ? "border-primary text-primary"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                            {c}
-                        </button>
-                    ))}
-                </div>
-                {qcError && (
-                    <FeedbackMessage variant="error" className="mb-3">
-                        {qcError}{" "}
-                        <button onClick={() => void fetchQcMembers(qcCompany)} className="underline">
-                            Coba lagi
-                        </button>
-                    </FeedbackMessage>
-                )}
-                <div className="mb-3">
-                    <EquipmentSearchField
-                        id="cari-qc"
-                        label="Cari anggota QC"
-                        value={qcQuery}
-                        onChange={setQcQuery}
-                        placeholder="Cari nama atau NIK…"
-                    />
-                </div>
-                <div className="bg-card border border-border rounded-lg overflow-hidden mb-3">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Karyawan</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Aksi</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredQcMembers.map((member) => (
-                                <TableRow key={member.employeeId}>
-                                    <TableCell>
-                                        <p className="font-medium text-foreground">{member.name}</p>
-                                        <p className="text-xs text-muted-foreground">{member.employeeId}</p>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span
-                                            className={`text-xs px-1.5 py-0.5 rounded ${member.isActive ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}
-                                        >
-                                            {member.isActive ? "Aktif" : "Nonaktif"}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <button
-                                            onClick={() => removeQcMember(member)}
-                                            disabled={savingQc}
-                                            className="text-xs text-destructive hover:text-destructive/80 disabled:opacity-50"
-                                        >
-                                            Hapus
-                                        </button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {qcMembers.length === 0 && !qcError && (
-                        <p className="text-center text-muted-foreground py-6 text-sm">
-                            Belum ada anggota QC.
-                        </p>
-                    )}
-                    {qcMembers.length > 0 && filteredQcMembers.length === 0 && !qcError && (
-                        <p className="text-center text-muted-foreground py-6 text-sm">
-                            Tidak ada anggota QC yang cocok dengan pencarian.
-                        </p>
-                    )}
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1">
-                        <EmployeeSearchPicker
-                            label="Cari karyawan"
-                            value={newQc}
-                            onChange={setNewQc}
-                        />
-                    </div>
-                    <button
-                        onClick={addQcMember}
-                        disabled={savingQc || qcMembers.length >= 20}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 self-end min-h-10"
-                    >
-                        {savingQc ? "Menyimpan..." : "Tambah"}
-                    </button>
-                </div>
-                {qcMembers.length >= 20 && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Batas 20 anggota QC {qcCompany} tercapai. Hapus salah satu untuk menambah.
                     </p>
                 )}
             </div>

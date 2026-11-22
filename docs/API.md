@@ -155,16 +155,17 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/cleaning/checklist-items/[id]` | `PATCH` | `cleaning.execute` | Mengubah status item checklist pada tanggal WIB hari ini; tepat satu dari `{isComplete}` / `{isUnavailable}` (tri-state Belum/Selesai/Tidak ada). |
 | `/api/employee/cleaning/approvals` | `GET` | Employee reviewer | Daftar dan detail persetujuan yang ditugaskan kepada employee aktif. |
 | `/api/employee/cleaning/approvals/sign` | `POST` | Employee reviewer | Menandatangani persetujuan untuk role reviewer yang ditetapkan. |
-| `/api/ga/equipment/templates` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | Template inspeksi alat + item (flag foto wajib per item). |
-| `/api/ga/equipment/template-items` | `POST`, `PATCH`, `DELETE` | WIG002 + `ga.manage` | Kelola item template (hapus aman: snapshot riwayat dipertahankan). |
-| `/api/ga/equipment/units` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` (`GET` boleh atasan) | Master alat/mesin (tanpa reviewer per unit). |
-| `/api/ga/equipment/products` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar (`?company=WIG\|MKI`) & tambah produk alat per perusahaan. |
-| `/api/ga/equipment/products/[id]` | `PATCH`, `DELETE` | WIG002 + `ga.manage` | Ubah nama atau hapus produk (cascade `equipment_product_tools`). |
-| `/api/ga/equipment/products/[id]/tools` | `GET`, `POST` | WIG002 + `ga.manage` | Checklist unit sesuai perusahaan produk & simpan pemetaan (`equipmentUnitIds`, maks 200). |
-| `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 + `ga.manage` | List + penugasan employee internal (gerbang modul); `unitId` null = global; `POST {unitIds[]}` bulk parsial (`created` + `skipped` beralasan, semua-skip → `409`); `PATCH` akhiri satu / `{assignmentIds[]}` akhiri massal parsial / edit baris aktif (unit/karyawan/tanggal, riwayat berakhir terkunci). |
-| `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar employee QC per perusahaan (`?company=WIG\|MKI`, maks 20/perusahaan). |
-| `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 + `ga.manage` | Atasan tertinggi maks 5 global (baca rekap/monitor, penerima email rekap). |
-| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 + `ga.manage` | Daftar approver final per perusahaan (`?company=WIG\|MKI`, maks 5/perusahaan, kuorum 1, `equipment.approvers.{WIG\|MKI}`). |
+| `/api/ga/equipment/templates` | `GET`, `POST`, `PATCH` | WIG002 / PIC scope `templates` (`GET` juga `units`) | Template inspeksi alat + item (flag foto wajib per item). |
+| `/api/ga/equipment/template-items` | `POST`, `PATCH`, `DELETE` | WIG002 / PIC scope `templates` | Kelola item template (hapus aman: snapshot riwayat dipertahankan). |
+| `/api/ga/equipment/units` | `GET`, `POST`, `PATCH` | WIG002 / PIC scope `units` (`GET` juga topViewer & PIC `products`/`assignments`) | Master alat/mesin (tanpa reviewer per unit). |
+| `/api/ga/equipment/products` | `GET`, `POST` | WIG002 / PIC scope `products` (`GET` juga `assignments`) | Daftar (`?company=WIG\|MKI`) & tambah produk alat per perusahaan. |
+| `/api/ga/equipment/products/[id]` | `PATCH`, `DELETE` | WIG002 / PIC scope `products` | Ubah nama atau hapus produk (cascade `equipment_product_tools`). |
+| `/api/ga/equipment/products/[id]/tools` | `GET`, `POST` | WIG002 / PIC scope `products` (`GET` juga `assignments`) | Checklist unit sesuai perusahaan produk & simpan pemetaan (`equipmentUnitIds`, maks 200). |
+| `/api/ga/equipment/assignments` | `GET`, `POST`, `PATCH` | WIG002 / PIC scope `assignments` | List + penugasan employee internal (gerbang modul); `unitId` null = global; `POST {unitIds[]}` bulk parsial (`created` + `skipped` beralasan, semua-skip → `409`); `PATCH` akhiri satu / `{assignmentIds[]}` akhiri massal parsial / edit baris aktif (unit/karyawan/tanggal, riwayat berakhir terkunci). |
+| `/api/ga/equipment/qc-members` | `GET`, `POST` | WIG002 / PIC scope `assignments` (anti self-add) | Daftar employee QC per perusahaan (`?company=WIG\|MKI`, maks 20/perusahaan). |
+| `/api/ga/equipment/settings/top-viewers` | `GET`, `POST` | WIG002 / PIC scope `atasan` (anti self-add) | Atasan tertinggi maks 5 global (baca rekap/monitor, penerima email rekap). |
+| `/api/ga/equipment/settings/approver` | `GET`, `POST` | WIG002 / PIC scope `atasan` (anti self-add) | Daftar approver final per perusahaan (`?company=WIG\|MKI`, maks 5/perusahaan, kuorum 1, `equipment.approvers.{WIG\|MKI}`). |
+| `/api/ga/equipment/settings/delegates` | `GET`, `POST` | **WIG002 + `ga.manage` only** | Kelola PIC delegasi pengaturan alat (`equipment.settingsDelegates`, maks 10, per-tab scope + opsional `expiresOnWibDate` WIB inklusif). |
 | `/api/ga/equipment/recap` | `GET` | WIG002 / atasan | Rekap inspeksi + ringkasan status (filter unit/status `OPEN\|SUBMITTED\|DONE\|APPROVED`/perusahaan/produk/tanggal). |
 | `/api/ga/equipment/inspections/[id]` | `GET` | WIG002 / atasan | Drill-down detail + foto (read-only). |
 | `/api/ga/equipment/evidence` | `GET` | WIG002 / atasan | List foto dokumentasi per inspeksi (`?inspectionId=`, drill-down rekap). |
