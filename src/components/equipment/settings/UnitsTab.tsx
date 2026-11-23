@@ -3,7 +3,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { Plus, Pencil, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import DataTablePagination from "@/components/ui/DataTablePagination";
@@ -29,7 +33,6 @@ interface UnitsTabProps {
 export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates }: UnitsTabProps) {
     const toast = useToast();
 
-    // ─── Unit form (modal) ───
     const [showUnitModal, setShowUnitModal] = useState(false);
     const [editingUnit, setEditingUnit] = useState<EquipmentUnit | null>(null);
     const [unitName, setUnitName] = useState("");
@@ -37,13 +40,25 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
     const [unitLocation, setUnitLocation] = useState("");
     const [unitTemplateId, setUnitTemplateId] = useState("");
     const [savingUnit, setSavingUnit] = useState(false);
-
-    // ─── Kategori perusahaan unit (modal unit: multi-pilih WIG / MKI / keduanya) ───
     const [unitCompanies, setUnitCompanies] = useState<Array<"WIG" | "MKI">>([]);
 
-    // ─── Filter & pagination client (tanpa query server) ───
     const [unitQuery, setUnitQuery] = useState("");
     const [unitCompanyFilter, setUnitCompanyFilter] = useState<UnitCompanyFilter>("SEMUA");
+
+    const filterCounts = useMemo(() => {
+        let wig = 0;
+        let mki = 0;
+        let both = 0;
+        let tanpa = 0;
+        for (const u of units) {
+            const comps = resolveDisplayCompanies(u);
+            if (comps.includes("WIG")) wig++;
+            if (comps.includes("MKI")) mki++;
+            if (comps.length >= 2) both++;
+            if (comps.length === 0) tanpa++;
+        }
+        return { SEMUA: units.length, WIG: wig, MKI: mki, BOTH: both, TANPA: tanpa };
+    }, [units]);
 
     const filteredUnits = useMemo(() => {
         const q = unitQuery.trim().toLowerCase();
@@ -57,7 +72,9 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                 if (comps.length > 0) return false;
             }
             if (!q) return true;
-            return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${comps.join(" ")} ${u.template.name ?? ""}`.toLowerCase().includes(q);
+            return `${u.name} ${u.brand ?? ""} ${u.location ?? ""} ${comps.join(" ")} ${u.template.name ?? ""}`
+                .toLowerCase()
+                .includes(q);
         });
     }, [units, unitQuery, unitCompanyFilter]);
 
@@ -68,9 +85,11 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
         setPageSize: setUnitPageSize,
         resetPage: resetUnitPage,
         getSliceIndices: getUnitSlice,
-    } = useTablePagination({ storageKey: "ga-equipment-units", defaultPageSize: 10, totalItems: filteredUnits.length });
-
-    // ─── Unit CRUD ───
+    } = useTablePagination({
+        storageKey: "ga-equipment-units",
+        defaultPageSize: 10,
+        totalItems: filteredUnits.length,
+    });
 
     const openUnitModal = useCallback(
         (unit?: EquipmentUnit) => {
@@ -123,12 +142,15 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                 body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan unit."));
-            toast(isEdit ? "Unit diperbarui." : "Unit dibuat.", "success");
+            toast(isEdit ? "Unit diperbarui." : "Unit ditambahkan.", "success");
             setShowUnitModal(false);
             setEditingUnit(null);
             await Promise.all([fetchUnits(), fetchTemplates()]);
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+            toast(
+                getFriendlyClientErrorMessage(err, "Gagal menyimpan unit. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
             reportClientError("EquipmentSettings", "Unit save failed", err);
         } finally {
             setSavingUnit(false);
@@ -143,11 +165,17 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ id: unit.id, isActive: !unit.isActive }),
                 });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status."));
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status unit."));
                 toast(unit.isActive ? "Unit dinonaktifkan." : "Unit diaktifkan.", "success");
                 await Promise.all([fetchUnits(), fetchTemplates()]);
             } catch (err) {
-                toast(err instanceof Error ? err.message : "Gagal mengubah status.", "error");
+                toast(
+                    getFriendlyClientErrorMessage(
+                        err,
+                        "Gagal mengubah status unit. Periksa koneksi Anda lalu coba lagi."
+                    ),
+                    "error"
+                );
             }
         },
         [toast, fetchUnits, fetchTemplates]
@@ -159,135 +187,161 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
     const unitTotalPages = Math.max(1, Math.ceil(filteredUnits.length / unitPageSize));
 
     return (
-        <div>
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium">Unit Alat</h2>
+        <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                    Master unit alat beserta merek, lokasi, template checklist, dan perusahaan pemiliknya.
+                </p>
                 <button
+                    type="button"
                     onClick={() => openUnitModal()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90"
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 shrink-0 min-h-[42px]"
                 >
-                    <Plus className="h-4 w-4" /> Tambah
+                    <Plus className="h-4 w-4" />
+                    Tambah Unit
                 </button>
             </div>
 
             {activeTemplates.length === 0 && (
-                <FeedbackMessage variant="warning" className="mb-4">
-                    Belum ada template aktif. Buat template di tab Template &amp; Item terlebih dahulu.
+                <FeedbackMessage variant="warning">
+                    Belum ada template aktif. Buat template terlebih dahulu di tab Template.
                 </FeedbackMessage>
             )}
 
-            <div className="mb-3">
-                <EquipmentSearchField
-                    id="cari-unit"
-                    label="Cari unit alat"
-                    value={unitQuery}
-                    onChange={(v) => {
-                        setUnitQuery(v);
-                        resetUnitPage();
-                    }}
-                    placeholder="Cari nama, merek, lokasi, template…"
-                />
-            </div>
-            <div className="flex flex-wrap gap-1 mb-3 border-b border-border">
-                {(["SEMUA", "WIG", "MKI", "BOTH", "TANPA"] as const).map((c) => (
-                    <button
-                        key={c}
-                        type="button"
-                        onClick={() => {
-                            setUnitCompanyFilter(c);
-                            resetUnitPage();
-                        }}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
-                            unitCompanyFilter === c
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                        {c === "SEMUA"
-                            ? "Semua"
-                            : c === "BOTH"
-                              ? "WIG & MKI"
-                              : c === "TANPA"
-                                ? "Belum dikategorikan"
-                                : c}
-                    </button>
-                ))}
-            </div>
-
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Nama</TableHead>
-                            <TableHead>Template</TableHead>
-                            <TableHead>Perusahaan</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Aksi</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {paginatedUnits.map((unit) => {
-                            const comps = resolveDisplayCompanies(unit);
+            <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="flex-1">
+                        <EquipmentSearchField
+                            id="cari-unit"
+                            label="Cari unit alat"
+                            value={unitQuery}
+                            onChange={(v) => {
+                                setUnitQuery(v);
+                                resetUnitPage();
+                            }}
+                            placeholder="Cari nama alat, merek, lokasi, atau template..."
+                        />
+                    </div>
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter perusahaan unit">
+                        {(
+                            [
+                                ["SEMUA", "Semua"],
+                                ["WIG", "WIG"],
+                                ["MKI", "MKI"],
+                                ["BOTH", "WIG & MKI"],
+                                ["TANPA", "Belum dikategorikan"],
+                            ] as const
+                        ).map(([key, label]) => {
+                            const active = unitCompanyFilter === key;
+                            const count = filterCounts[key];
+                            if (key === "TANPA" && count === 0 && !active) return null;
                             return (
-                            <TableRow key={unit.id}>
-                                <TableCell>
-                                    <p className="font-medium text-foreground">{unit.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {[unit.brand, unit.location].filter(Boolean).join(" · ") || "—"}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        {unit._count.assignments} penugasan · {unit._count.inspections} inspeksi
-                                    </p>
-                                </TableCell>
-                                <TableCell>{unit.template.name}</TableCell>
-                                <TableCell>
-                                    {comps.length > 0 ? (
-                                        <EquipmentCompanyBadge
-                                            company={unit.company}
-                                            isSharedBoth={unit.isSharedBoth}
-                                            companies={unit.companies}
-                                        />
-                                    ) : (
-                                        <span className="text-xs text-muted-foreground">—</span>
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    <span
-                                        className={`text-xs px-1.5 py-0.5 rounded ${unit.isActive ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}
-                                    >
-                                        {unit.isActive ? "Aktif" : "Nonaktif"}
-                                    </span>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => openUnitModal(unit)}
-                                            className="p-1 text-muted-foreground hover:text-foreground"
-                                            title="Edit unit"
-                                        >
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </button>
-                                        <button
-                                            onClick={() => void toggleUnitActive(unit)}
-                                            className="text-xs text-muted-foreground hover:text-foreground"
-                                        >
-                                            {unit.isActive ? "Nonaktifkan" : "Aktifkan"}
-                                        </button>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => {
+                                        setUnitCompanyFilter(key);
+                                        resetUnitPage();
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border transition-colors min-h-[34px] ${
+                                        active
+                                            ? "border-primary bg-primary/10 text-primary"
+                                            : "border-border bg-background text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    <span>{label}</span>
+                                    <span className="text-[11px] opacity-80">{count}</span>
+                                </button>
                             );
                         })}
-                    </TableBody>
-                </Table>
-                {units.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8 text-sm">Belum ada unit alat.</p>
-                )}
-                {units.length > 0 && filteredUnits.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8 text-sm">
-                        Tidak ada unit yang cocok dengan pencarian.
-                    </p>
-                )}
+                    </div>
+                </div>
+
+                <div className="border border-border rounded-lg overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Unit Alat</TableHead>
+                                <TableHead>Template</TableHead>
+                                <TableHead>Perusahaan</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paginatedUnits.map((unit) => {
+                                const comps = resolveDisplayCompanies(unit);
+                                const meta = [unit.brand, unit.location].filter(Boolean).join(" · ");
+                                return (
+                                    <TableRow key={unit.id} className={!unit.isActive ? "opacity-65" : undefined}>
+                                        <TableCell>
+                                            <p className="font-medium text-foreground text-sm">{unit.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {meta ? `${meta} · ` : ""}
+                                                {unit._count.assignments} penugasan · {unit._count.inspections} inspeksi
+                                            </p>
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {unit.template.name}
+                                        </TableCell>
+                                        <TableCell>
+                                            {comps.length > 0 ? (
+                                                <EquipmentCompanyBadge
+                                                    company={unit.company}
+                                                    isSharedBoth={unit.isSharedBoth}
+                                                    companies={unit.companies}
+                                                />
+                                            ) : (
+                                                <span className="text-xs text-amber-700 dark:text-amber-300">
+                                                    Belum diatur
+                                                </span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <span
+                                                className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                                                    unit.isActive
+                                                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                                        : "bg-muted text-muted-foreground"
+                                                }`}
+                                            >
+                                                {unit.isActive ? "Aktif" : "Nonaktif"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right whitespace-nowrap">
+                                            <div className="inline-flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openUnitModal(unit)}
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted min-h-[36px]"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                    Ubah
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void toggleUnitActive(unit)}
+                                                    className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md min-h-[36px]"
+                                                >
+                                                    {unit.isActive ? "Nonaktifkan" : "Aktifkan"}
+                                                </button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                    {units.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8 text-sm">Belum ada unit alat.</p>
+                    )}
+                    {units.length > 0 && filteredUnits.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8 text-sm">
+                            Tidak ada unit yang cocok dengan pencarian.
+                        </p>
+                    )}
+                </div>
+
                 <DataTablePagination
                     currentPage={unitPage}
                     totalPages={unitTotalPages}
@@ -300,51 +354,66 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
             </div>
 
             {showUnitModal && (
-                <AccessibleModal ariaLabel={editingUnit ? "Edit Unit Alat" : "Tambah Unit Alat"} onClose={() => setShowUnitModal(false)}>
-                    <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
-                        <div>
-                            <h2 className="modal-title">{editingUnit ? "Edit Unit Alat" : "Unit Alat Baru"}</h2>
-                        </div>
-                        <button type="button" className="modal-close" onClick={() => setShowUnitModal(false)} aria-label="Tutup modal">
+                <AccessibleModal
+                    ariaLabel={editingUnit ? "Ubah Unit Alat" : "Tambah Unit Alat"}
+                    onClose={() => setShowUnitModal(false)}
+                >
+                    <div className="modal-header !mb-4 pb-3 border-b border-[var(--border)]">
+                        <h2 className="modal-title">{editingUnit ? "Ubah Unit Alat" : "Unit Alat Baru"}</h2>
+                        <button
+                            type="button"
+                            className="modal-close"
+                            onClick={() => setShowUnitModal(false)}
+                            aria-label="Tutup jendela"
+                        >
                             <X className="h-5 w-5" />
                         </button>
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-3.5">
                         <div>
-                            <label className="text-xs font-medium">Nama alat</label>
+                            <label htmlFor="unit-name" className="text-xs font-medium">
+                                Nama alat *
+                            </label>
                             <input
+                                id="unit-name"
                                 type="text"
                                 value={unitName}
                                 onChange={(e) => setUnitName(e.target.value)}
-                                placeholder="Nama alat"
+                                placeholder="Contoh: Mixer 50L"
                                 className={`${inputClass} mt-1`}
                             />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs font-medium">Merek (opsional)</label>
+                                <label htmlFor="unit-brand" className="text-xs font-medium">
+                                    Merek (opsional)
+                                </label>
                                 <input
+                                    id="unit-brand"
                                     type="text"
                                     value={unitBrand}
                                     onChange={(e) => setUnitBrand(e.target.value)}
-                                    placeholder="Merek"
+                                    placeholder="Merek alat"
                                     className={`${inputClass} mt-1`}
                                 />
                             </div>
                             <div>
-                                <label className="text-xs font-medium">Lokasi (opsional)</label>
+                                <label htmlFor="unit-location" className="text-xs font-medium">
+                                    Lokasi (opsional)
+                                </label>
                                 <input
+                                    id="unit-location"
                                     type="text"
                                     value={unitLocation}
                                     onChange={(e) => setUnitLocation(e.target.value)}
-                                    placeholder="Lokasi"
+                                    placeholder="Ruang produksi"
                                     className={`${inputClass} mt-1`}
                                 />
                             </div>
                         </div>
                         <div>
                             <div className="flex items-center justify-between gap-2">
-                                <label className="text-xs font-medium">Perusahaan (bisa pilih 1 atau keduanya)</label>
+                                <span className="text-xs font-medium">Perusahaan (bisa pilih 1 atau keduanya)</span>
                                 <button
                                     type="button"
                                     onClick={() =>
@@ -352,7 +421,7 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                                     }
                                     className="text-[11px] font-medium text-primary hover:underline"
                                 >
-                                    {unitCompanies.length === 2 ? "Kosongkan pilihan" : "Pilih WIG & MKI"}
+                                    {unitCompanies.length === 2 ? "Kosongkan" : "Pilih WIG & MKI"}
                                 </button>
                             </div>
                             <div className="grid grid-cols-2 gap-2 mt-1.5">
@@ -373,22 +442,18 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                                                 onChange={() => toggleModalCompany(c)}
                                                 className="rounded border-border"
                                             />
-                                            <span>Perusahaan {c}</span>
+                                            <span>{c}</span>
                                         </label>
                                     );
                                 })}
                             </div>
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                                {unitCompanies.length === 2
-                                    ? "Alat ini dapat dipetakan dan dipakai oleh produk di WIG maupun MKI."
-                                    : unitCompanies.length === 1
-                                      ? `Alat ini terdaftar untuk perusahaan ${unitCompanies[0]}.`
-                                      : "Belum dikategorikan ke perusahaan."}
-                            </p>
                         </div>
                         <div>
-                            <label className="text-xs font-medium">Template</label>
+                            <label htmlFor="unit-tpl" className="text-xs font-medium">
+                                Template checklist *
+                            </label>
                             <select
+                                id="unit-tpl"
                                 value={unitTemplateId}
                                 onChange={(e) => setUnitTemplateId(e.target.value)}
                                 className={`${inputClass} mt-1`}
@@ -401,21 +466,21 @@ export default function UnitsTab({ units, templates, fetchUnits, fetchTemplates 
                                 ))}
                             </select>
                         </div>
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                            <button
+                                type="button"
+                                onClick={() => setShowUnitModal(false)}
+                                className="px-4 py-2 text-sm rounded-md border border-border hover:bg-muted min-h-[42px]"
+                            >
+                                Batal
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => void saveUnit()}
                                 disabled={savingUnit}
-                                className="px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50"
+                                className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[42px]"
                             >
                                 {savingUnit ? "Menyimpan..." : "Simpan"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowUnitModal(false)}
-                                className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                            >
-                                Batal
                             </button>
                         </div>
                     </div>

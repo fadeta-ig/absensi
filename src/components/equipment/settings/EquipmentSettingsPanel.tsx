@@ -61,14 +61,14 @@ export default function EquipmentSettingsPanel({
 
     if (data.error) {
         return (
-            <div className="max-w-4xl mx-auto px-4 py-6">
+            <div className="max-w-5xl mx-auto px-4 py-6">
                 <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-6 text-center">
                     <AlertTriangle className="h-6 w-6 text-destructive mx-auto mb-2" />
-                    <p className="text-destructive">{data.error}</p>
+                    <p className="text-destructive text-sm">{data.error}</p>
                     <button
                         type="button"
                         onClick={() => void data.fetchAll()}
-                        className="mt-3 text-sm text-primary hover:underline"
+                        className="mt-3 text-sm font-medium text-primary hover:underline"
                     >
                         Coba lagi
                     </button>
@@ -80,11 +80,11 @@ export default function EquipmentSettingsPanel({
     const canEditUnits = allowedScopes.includes("units");
     const subtitle =
         mode === "employee"
-            ? "Anda ditunjuk oleh GA (WIG002) sebagai PIC untuk mengelola area pengaturan peralatan berikut."
-            : "Kelola template checklist, unit alat, produk, penugasan, anggota QC, dan delegasi PIC.";
+            ? "Anda ditunjuk Admin GA untuk mengelola area pengaturan peralatan di bawah."
+            : "Atur standar inspeksi, daftar alat, produk, penugasan petugas, dan hak akses.";
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="max-w-5xl mx-auto px-4 py-6">
             <SettingsTabs
                 activeTab={activeTab}
                 onChange={setSelectedTab}
@@ -94,12 +94,12 @@ export default function EquipmentSettingsPanel({
                 counts={{
                     templates: data.templates.length,
                     units: data.units.length,
-                    products: data.products.length,
+                    products: data.totalProductsCount,
                     activeAssignments: data.assignments.filter(isAssignmentActive).length,
                     delegates: data.delegates.length,
                 }}
             />
-            <div className="pt-4">
+            <div className="pt-5">
                 {activeTab === "templates" && allowedScopes.includes("templates") && (
                     <TemplatesTab templates={data.templates} fetchTemplates={data.fetchTemplates} />
                 )}

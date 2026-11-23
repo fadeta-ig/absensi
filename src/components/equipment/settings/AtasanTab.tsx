@@ -11,7 +11,6 @@ import {
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import EquipmentActorPicker from "@/components/equipment/settings/EquipmentActorPicker";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type {
     ApproverMember,
     EquipmentCompanyFilter,
@@ -42,19 +41,15 @@ export default function AtasanTab({
     const toast = useToast();
     const confirm = useConfirm();
 
-    // ─── Top reviewer (atasan global) ───
     const [newTopViewer, setNewTopViewer] = useState<EmployeePick | null>(null);
     const [savingTopViewers, setSavingTopViewers] = useState(false);
 
-    // ─── Approver final (maks 5 per perusahaan, dinamis) ───
     const [newApprover, setNewApprover] = useState<EmployeePick | null>(null);
     const [savingApprover, setSavingApprover] = useState(false);
 
     useEffect(() => {
         void fetchApprovers(approverCompany);
     }, [fetchApprovers, approverCompany]);
-
-    // ─── Top reviewers ───
 
     const persistTopViewers = useCallback(
         async (employeeIds: string[], successMessage: string) => {
@@ -65,7 +60,7 @@ export default function AtasanTab({
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ employeeIds }),
                 });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan top reviewer."));
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan pemantau utama."));
                 toast(successMessage, "success");
                 setNewTopViewer(null);
                 await fetchTopViewers();
@@ -73,7 +68,7 @@ export default function AtasanTab({
                 toast(
                     getFriendlyClientErrorMessage(
                         err,
-                        "Gagal menyimpan top reviewer. Periksa koneksi Anda lalu coba lagi."
+                        "Gagal menyimpan pemantau utama. Periksa koneksi Anda lalu coba lagi."
                     ),
                     "error"
                 );
@@ -87,26 +82,26 @@ export default function AtasanTab({
 
     const addTopViewer = useCallback(() => {
         if (!newTopViewer) {
-            toast("Cari dan pilih karyawan terlebih dahulu.", "warning");
+            toast("Pilih karyawan terlebih dahulu.", "warning");
             return;
         }
         const id = newTopViewer.employeeId;
         if (topViewers.some((v) => v.employeeId.toLowerCase() === id.toLowerCase())) {
-            toast("Karyawan tersebut sudah terdaftar sebagai top reviewer.", "warning");
+            toast("Karyawan tersebut sudah terdaftar sebagai pemantau utama.", "warning");
             return;
         }
         if (topViewers.length >= 5) {
-            toast("Top reviewer maksimal 5 orang.", "warning");
+            toast("Pemantau utama maksimal 5 orang.", "warning");
             return;
         }
         setNewTopViewer(null);
-        void persistTopViewers([...topViewers.map((v) => v.employeeId), id], "Top reviewer ditambahkan.");
+        void persistTopViewers([...topViewers.map((v) => v.employeeId), id], "Pemantau utama ditambahkan.");
     }, [newTopViewer, topViewers, toast, persistTopViewers]);
 
     const removeTopViewer = useCallback(
         (viewer: TopViewer) => {
             confirm({
-                title: `Hapus ${viewer.name} dari top reviewer?`,
+                title: `Hapus ${viewer.name} dari pemantau utama?`,
                 message: "Karyawan tersebut tidak lagi dapat melihat rekap semua unit.",
                 confirmLabel: "Hapus",
                 cancelLabel: "Batal",
@@ -114,15 +109,13 @@ export default function AtasanTab({
                 onConfirm: () => {
                     void persistTopViewers(
                         topViewers.filter((v) => v.employeeId !== viewer.employeeId).map((v) => v.employeeId),
-                        "Top reviewer dihapus."
+                        "Pemantau utama dihapus."
                     );
                 },
             });
         },
         [confirm, topViewers, persistTopViewers]
     );
-
-    // ─── Approver ───
 
     const persistApprovers = useCallback(
         async (employeeIds: string[], successMessage: string) => {
@@ -200,157 +193,71 @@ export default function AtasanTab({
     );
 
     return (
-        <div className="space-y-6">
-            <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-base font-medium mb-1">Top Reviewer</h2>
-                <p className="text-xs text-muted-foreground mb-3">
-                    Atasan global yang bisa melihat rekap semua unit. Maksimal 5 orang.
-                </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            {/* Kiri: Pemantau Utama */}
+            <section className="bg-card border border-border rounded-xl p-4 space-y-4">
+                <div className="flex items-start justify-between gap-2">
+                    <div>
+                        <h2 className="text-base font-semibold text-foreground">Pemantau Utama</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Melihat rekap semua unit dan menerima email rekap harian. Maksimal 5 karyawan.
+                        </p>
+                    </div>
+                    <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-muted text-muted-foreground shrink-0">
+                        {topViewers.length}/5
+                    </span>
+                </div>
+
                 {topViewerError && (
-                    <FeedbackMessage variant="error" className="mb-3">
+                    <FeedbackMessage variant="error">
                         {topViewerError}{" "}
-                        <button onClick={() => void fetchTopViewers()} className="underline">
+                        <button type="button" onClick={() => void fetchTopViewers()} className="underline ml-1">
                             Coba lagi
                         </button>
                     </FeedbackMessage>
                 )}
-                <div className="bg-card border border-border rounded-lg overflow-hidden mb-3">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Karyawan</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Aksi</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {topViewers.map((viewer) => (
-                                <TableRow key={viewer.employeeId}>
-                                    <TableCell>
-                                        <p className="font-medium text-foreground">{viewer.name}</p>
-                                        <p className="text-xs text-muted-foreground">{viewer.employeeId}</p>
-                                        {viewer.email ? (
-                                            <p className="text-xs text-muted-foreground">{viewer.email}</p>
-                                        ) : (
-                                            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                                                Tanpa email — rekap harian tidak terkirim
-                                            </p>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
+
+                {topViewers.length === 0 && !topViewerError ? (
+                    <p className="text-xs text-muted-foreground text-center py-6 border border-dashed border-border rounded-lg">
+                        Belum ada pemantau utama.
+                    </p>
+                ) : (
+                    <ul className="space-y-2">
+                        {topViewers.map((viewer) => (
+                            <li
+                                key={viewer.employeeId}
+                                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5"
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-sm font-medium text-foreground truncate">
+                                            {viewer.name}
+                                        </span>
                                         <span
-                                            className={`text-xs px-1.5 py-0.5 rounded ${viewer.isActive ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"}`}
+                                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                                                viewer.isActive
+                                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                                    : "bg-muted text-muted-foreground"
+                                            }`}
                                         >
                                             {viewer.isActive ? "Aktif" : "Nonaktif"}
                                         </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <button
-                                            onClick={() => removeTopViewer(viewer)}
-                                            disabled={savingTopViewers}
-                                            className="text-xs text-destructive hover:text-destructive/80 disabled:opacity-50"
-                                        >
-                                            Hapus
-                                        </button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {topViewers.length === 0 && !topViewerError && (
-                        <p className="text-center text-muted-foreground py-6 text-sm">
-                            Belum ada top reviewer.
-                        </p>
-                    )}
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1">
-                        <EmployeeSearchPicker
-                            label="Cari karyawan"
-                            value={newTopViewer}
-                            onChange={setNewTopViewer}
-                        />
-                    </div>
-                    <button
-                        onClick={addTopViewer}
-                        disabled={savingTopViewers || topViewers.length >= 5}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 self-end min-h-10"
-                    >
-                        {savingTopViewers ? "Menyimpan..." : "Tambah"}
-                    </button>
-                </div>
-                {topViewers.length >= 5 && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Batas 5 top reviewer tercapai. Hapus salah satu untuk menambah.
-                    </p>
-                )}
-            </div>
-
-            <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-base font-medium mb-1">Persetujuan Akhir</h2>
-                <p className="text-xs text-muted-foreground mb-2">
-                    Pihak yang memberikan persetujuan akhir setelah pemeriksaan QC selesai per perusahaan.
-                    Maksimal 5 orang per perusahaan dan dapat diganti kapan saja.
-                </p>
-                <div className="flex gap-1 mb-3 border-b border-border">
-                    {(["WIG", "MKI"] as const).map((c) => (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => setApproverCompany(c)}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
-                                approverCompany === c
-                                    ? "border-primary text-primary"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                            {c}
-                        </button>
-                    ))}
-                </div>
-                {approverError && (
-                    <FeedbackMessage variant="error" className="mb-3">
-                        {approverError}{" "}
-                        <button onClick={() => void fetchApprovers(approverCompany)} className="underline">
-                            Coba lagi
-                        </button>
-                    </FeedbackMessage>
-                )}
-                {approvers.length === 0 && !approverError ? (
-                    <p className="text-sm text-muted-foreground mb-3">
-                        Belum ada pemberi persetujuan. Persetujuan akhir baru dapat dilakukan setelah daftar ini diisi.
-                    </p>
-                ) : (
-                    <ul className="space-y-2 mb-3">
-                        {approvers.map((m) => (
-                            <li
-                                key={m.employeeId}
-                                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
-                            >
-                                <span className="min-w-0">
-                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium truncate">
-                                        <span className="truncate">
-                                            {m.name ?? (m.isOutsource ? "Petugas Outsource" : m.employeeId)}
-                                        </span>
-                                        {m.isOutsource && (
-                                            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 shrink-0">
-                                                OS
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span className="block text-xs text-muted-foreground truncate">
-                                        {m.isOutsource
-                                            ? m.username
-                                                ? `@${m.username}`
-                                                : "Akun outsource"
-                                            : m.employeeId}
-                                    </span>
-                                </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                        {viewer.employeeId}
+                                        {viewer.email ? ` · ${viewer.email}` : ""}
+                                    </p>
+                                    {!viewer.email && (
+                                        <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300 mt-0.5">
+                                            Belum ada email (rekap harian tidak terkirim)
+                                        </p>
+                                    )}
+                                </div>
                                 <button
                                     type="button"
-                                    onClick={() => removeApprover(m)}
-                                    disabled={savingApprover}
-                                    className="shrink-0 text-xs text-destructive hover:text-destructive/80 disabled:opacity-50 min-h-[44px] px-2"
+                                    onClick={() => removeTopViewer(viewer)}
+                                    disabled={savingTopViewers}
+                                    className="shrink-0 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-md disabled:opacity-50 min-h-[36px]"
                                 >
                                     Hapus
                                 </button>
@@ -358,29 +265,139 @@ export default function AtasanTab({
                         ))}
                     </ul>
                 )}
-                <div className="flex flex-col sm:flex-row gap-2">
+
+                <div className="pt-2 border-t border-border flex flex-col sm:flex-row gap-2 sm:items-end">
+                    <div className="flex-1">
+                        <EmployeeSearchPicker
+                            label="Tambah karyawan pemantau"
+                            value={newTopViewer}
+                            onChange={setNewTopViewer}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={addTopViewer}
+                        disabled={savingTopViewers || topViewers.length >= 5}
+                        className="shrink-0 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[42px]"
+                    >
+                        {savingTopViewers ? "Menyimpan..." : "Tambah"}
+                    </button>
+                </div>
+                {topViewers.length >= 5 && (
+                    <p className="text-xs text-muted-foreground">
+                        Batas 5 pemantau utama tercapai. Hapus salah satu untuk menambah.
+                    </p>
+                )}
+            </section>
+
+            {/* Kanan: Persetujuan Akhir */}
+            <section className="bg-card border border-border rounded-xl p-4 space-y-4">
+                <div className="flex items-start justify-between gap-2">
+                    <div>
+                        <h2 className="text-base font-semibold text-foreground">Persetujuan Akhir</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Memberikan persetujuan akhir setelah pemeriksaan QC selesai. Maksimal 5 orang per
+                            perusahaan.
+                        </p>
+                    </div>
+                    <div className="inline-flex rounded-md border border-border bg-muted/40 p-0.5 text-xs shrink-0">
+                        {(["WIG", "MKI"] as const).map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => setApproverCompany(c)}
+                                className={`px-3 py-1 rounded font-semibold min-h-[32px] transition-colors ${
+                                    approverCompany === c
+                                        ? "bg-background text-primary shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                            >
+                                {c}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {approverError && (
+                    <FeedbackMessage variant="error">
+                        {approverError}{" "}
+                        <button
+                            type="button"
+                            onClick={() => void fetchApprovers(approverCompany)}
+                            className="underline ml-1"
+                        >
+                            Coba lagi
+                        </button>
+                    </FeedbackMessage>
+                )}
+
+                {approvers.length === 0 && !approverError ? (
+                    <p className="text-xs text-muted-foreground text-center py-6 border border-dashed border-border rounded-lg">
+                        Belum ada pemberi persetujuan untuk {approverCompany}.
+                    </p>
+                ) : (
+                    <ul className="space-y-2">
+                        {approvers.map((m) => (
+                            <li
+                                key={m.employeeId}
+                                className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5"
+                            >
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-sm font-medium text-foreground truncate">
+                                            {m.name ?? (m.isOutsource ? "Petugas Outsource" : m.employeeId)}
+                                        </span>
+                                        {m.isOutsource && (
+                                            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 shrink-0">
+                                                OS
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                        {m.isOutsource
+                                            ? m.username
+                                                ? `@${m.username}`
+                                                : "Akun outsource"
+                                            : m.employeeId}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => removeApprover(m)}
+                                    disabled={savingApprover}
+                                    className="shrink-0 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-md disabled:opacity-50 min-h-[36px]"
+                                >
+                                    Hapus
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                <div className="pt-2 border-t border-border flex flex-col sm:flex-row gap-2 sm:items-end">
                     <div className="flex-1">
                         <EquipmentActorPicker
                             role="approver"
-                            label="Cari pemberi persetujuan (Karyawan atau Outsource)"
+                            label={`Tambah pemberi persetujuan ${approverCompany}`}
                             value={newApprover}
                             onChange={setNewApprover}
                         />
                     </div>
                     <button
+                        type="button"
                         onClick={addApprover}
                         disabled={savingApprover || approvers.length >= 5}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 self-end min-h-10"
+                        className="shrink-0 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[42px]"
                     >
                         {savingApprover ? "Menyimpan..." : "Tambah"}
                     </button>
                 </div>
                 {approvers.length >= 5 && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Batas 5 approver {approverCompany} tercapai. Hapus salah satu untuk menambah.
+                    <p className="text-xs text-muted-foreground">
+                        Batas 5 pemberi persetujuan {approverCompany} tercapai. Hapus salah satu untuk menambah.
                     </p>
                 )}
-            </div>
+            </section>
         </div>
     );
 }

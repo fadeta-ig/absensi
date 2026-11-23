@@ -1,18 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, Loader2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Package, Pencil } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import DataTablePagination from "@/components/ui/DataTablePagination";
 import { useTablePagination } from "@/hooks/useTablePagination";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentCompanyBadge, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
-import {
-    inputClass,
-} from "@/components/equipment/settings/useSettingsData";
+import { inputClass } from "@/components/equipment/settings/useSettingsData";
 import type {
     EquipmentCompanyFilter,
     EquipmentProduct,
@@ -59,7 +61,6 @@ export default function ProdukTab({
     const toast = useToast();
     const confirm = useConfirm();
 
-    // ─── Produk & pemetaan alat (per perusahaan) ───
     const [newProductName, setNewProductName] = useState("");
     const [savingProduct, setSavingProduct] = useState(false);
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export default function ProdukTab({
     const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
     const [toolQuery, setToolQuery] = useState("");
     const [uncategorizedQuery, setUncategorizedQuery] = useState("");
+    const [showUncategorized, setShowUncategorized] = useState(false);
     const [savingChecklist, setSavingChecklist] = useState(false);
     const [bulkSelected, setBulkSelected] = useState<string[]>([]);
     const [bulkSaving, setBulkSaving] = useState(false);
@@ -79,7 +81,7 @@ export default function ProdukTab({
         return products.filter((p) => p.name.toLowerCase().includes(q));
     }, [products, productQuery]);
 
-    const filteredToolsForPaging = useMemo(() => {
+    const filteredTools = useMemo(() => {
         const tools = checklist?.tools ?? [];
         const q = toolQuery.trim().toLowerCase();
         if (!q) return tools;
@@ -93,7 +95,11 @@ export default function ProdukTab({
         setPageSize: setProductPageSize,
         resetPage: resetProductPage,
         getSliceIndices: getProductSlice,
-    } = useTablePagination({ storageKey: "ga-equipment-products", defaultPageSize: 10, totalItems: filteredProducts.length });
+    } = useTablePagination({
+        storageKey: "ga-equipment-products",
+        defaultPageSize: 10,
+        totalItems: filteredProducts.length,
+    });
 
     const {
         currentPage: toolPage,
@@ -102,7 +108,11 @@ export default function ProdukTab({
         setPageSize: setToolPageSize,
         resetPage: resetToolPage,
         getSliceIndices: getToolSlice,
-    } = useTablePagination({ storageKey: "ga-equipment-product-tools", defaultPageSize: 20, totalItems: filteredToolsForPaging.length });
+    } = useTablePagination({
+        storageKey: "ga-equipment-product-tools",
+        defaultPageSize: 20,
+        totalItems: filteredTools.length,
+    });
 
     useEffect(() => {
         setSelectedProductId(null);
@@ -111,8 +121,6 @@ export default function ProdukTab({
         setToolQuery("");
         void fetchProducts(productCompany);
     }, [productCompany, fetchProducts, setChecklist, setInitialChecked]);
-
-    // ─── Produk & pemetaan alat ───
 
     const createProduct = useCallback(async () => {
         if (savingProduct || !newProductName.trim()) {
@@ -131,7 +139,10 @@ export default function ProdukTab({
             setNewProductName("");
             await fetchProducts(productCompany);
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal.", "error");
+            toast(
+                getFriendlyClientErrorMessage(err, "Gagal menambah produk. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
             reportClientError("EquipmentSettings", "Product create failed", err);
         } finally {
             setSavingProduct(false);
@@ -163,25 +174,39 @@ export default function ProdukTab({
                 );
             }
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal.", "error");
+            toast(
+                getFriendlyClientErrorMessage(err, "Gagal mengubah nama produk. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
             reportClientError("EquipmentSettings", "Product rename failed", err);
         } finally {
             setSavingProductRename(false);
         }
-    }, [editingProductId, savingProductRename, editProductName, toast, fetchProducts, productCompany, selectedProductId, setChecklist]);
+    }, [
+        editingProductId,
+        savingProductRename,
+        editProductName,
+        toast,
+        fetchProducts,
+        productCompany,
+        selectedProductId,
+        setChecklist,
+    ]);
 
     const deleteProduct = useCallback(
         (product: EquipmentProduct) => {
             confirm({
                 title: `Hapus produk "${product.name}"?`,
-                message: "Pemetaan alatnya ikut terhapus. Master alat tidak berubah.",
-                confirmLabel: "Ya, hapus",
+                message: "Pemetaan alat untuk produk ini ikut terhapus. Data master alat tetap utuh.",
+                confirmLabel: "Hapus",
                 cancelLabel: "Batal",
                 variant: "danger",
                 onConfirm: () => {
                     void (async () => {
                         try {
-                            const res = await fetch(`/api/ga/equipment/products/${product.id}`, { method: "DELETE" });
+                            const res = await fetch(`/api/ga/equipment/products/${product.id}`, {
+                                method: "DELETE",
+                            });
                             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus produk."));
                             toast("Produk dihapus.", "success");
                             if (selectedProductId === product.id) {
@@ -191,7 +216,13 @@ export default function ProdukTab({
                             }
                             await fetchProducts(productCompany);
                         } catch (err) {
-                            toast(err instanceof Error ? err.message : "Gagal menghapus.", "error");
+                            toast(
+                                getFriendlyClientErrorMessage(
+                                    err,
+                                    "Gagal menghapus produk. Periksa koneksi Anda lalu coba lagi."
+                                ),
+                                "error"
+                            );
                         }
                     })();
                 },
@@ -200,11 +231,16 @@ export default function ProdukTab({
         [confirm, toast, fetchProducts, productCompany, selectedProductId, setChecklist, setInitialChecked]
     );
 
-    const toggleToolCheck = useCallback((toolId: string) => {
-        setChecklist((prev) =>
-            prev ? { ...prev, tools: prev.tools.map((t) => (t.id === toolId ? { ...t, checked: !t.checked } : t)) } : prev
-        );
-    }, [setChecklist]);
+    const toggleToolCheck = useCallback(
+        (toolId: string) => {
+            setChecklist((prev) =>
+                prev
+                    ? { ...prev, tools: prev.tools.map((t) => (t.id === toolId ? { ...t, checked: !t.checked } : t)) }
+                    : prev
+            );
+        },
+        [setChecklist]
+    );
 
     const saveChecklist = useCallback(async () => {
         if (savingChecklist || !checklist) return;
@@ -213,16 +249,23 @@ export default function ProdukTab({
             const res = await fetch(`/api/ga/equipment/products/${checklist.product.id}/tools`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ equipmentUnitIds: checklist.tools.filter((t) => t.checked).map((t) => t.id) }),
+                body: JSON.stringify({
+                    equipmentUnitIds: checklist.tools.filter((t) => t.checked).map((t) => t.id),
+                }),
             });
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan pemetaan."));
             const json = await res.json();
             setChecklist(json.data);
-            setInitialChecked((json.data.tools ?? []).filter((t: ProductToolRow) => t.checked).map((t: ProductToolRow) => t.id));
+            setInitialChecked(
+                (json.data.tools ?? []).filter((t: ProductToolRow) => t.checked).map((t: ProductToolRow) => t.id)
+            );
             toast("Pemetaan alat disimpan.", "success");
             await fetchProducts(productCompany);
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+            toast(
+                getFriendlyClientErrorMessage(err, "Gagal menyimpan pemetaan. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
             reportClientError("EquipmentSettings", "Checklist save failed", err);
         } finally {
             setSavingChecklist(false);
@@ -243,7 +286,13 @@ export default function ProdukTab({
                 await fetchProducts(productCompany);
                 if (selectedProductId) await fetchChecklist(selectedProductId);
             } catch (err) {
-                toast(err instanceof Error ? err.message : "Gagal.", "error");
+                toast(
+                    getFriendlyClientErrorMessage(
+                        err,
+                        "Gagal menetapkan perusahaan. Periksa koneksi Anda lalu coba lagi."
+                    ),
+                    "error"
+                );
             }
         },
         [toast, fetchUnits, fetchProducts, productCompany, selectedProductId, fetchChecklist]
@@ -252,7 +301,7 @@ export default function ProdukTab({
     const bulkSetCompany = useCallback(
         async (companies: Array<"WIG" | "MKI">) => {
             if (bulkSelected.length === 0) {
-                toast("Pilih dulu alat yang akan dikategorikan.", "warning");
+                toast("Pilih alat yang akan dikategorikan terlebih dahulu.", "warning");
                 return;
             }
             setBulkSaving(true);
@@ -274,7 +323,9 @@ export default function ProdukTab({
                 const ok = results.filter(Boolean).length;
                 const fail = results.length - ok;
                 toast(
-                    fail === 0 ? `${ok} alat dikategorikan ke ${companies.join(" & ")}.` : `${ok} berhasil, ${fail} gagal.`,
+                    fail === 0
+                        ? `${ok} alat dikategorikan ke ${companies.join(" & ")}.`
+                        : `${ok} berhasil, ${fail} gagal.`,
                     fail === 0 ? "success" : "warning"
                 );
                 setBulkSelected([]);
@@ -297,11 +348,7 @@ export default function ProdukTab({
     const checkedIds = checklist?.tools.filter((t) => t.checked).map((t) => t.id) ?? [];
     const checklistDirty =
         checkedIds.length !== initialChecked.length || checkedIds.some((id) => !initialChecked.includes(id));
-    const filteredTools = (checklist?.tools ?? []).filter((t) => {
-        const q = toolQuery.trim().toLowerCase();
-        if (!q) return true;
-        return `${t.name} ${t.brand ?? ""} ${t.location ?? ""}`.toLowerCase().includes(q);
-    });
+
     const [productSliceStart, productSliceEnd] = getProductSlice(filteredProducts.length);
     const paginatedProducts = filteredProducts.slice(productSliceStart, productSliceEnd);
     const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / productPageSize));
@@ -310,416 +357,482 @@ export default function ProdukTab({
     const toolTotalPages = Math.max(1, Math.ceil(filteredTools.length / toolPageSize));
 
     return (
-        <div className="space-y-6">
-            <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-base font-medium mb-1">Alat Belum Berkategori</h2>
-                <p className="text-xs text-muted-foreground mb-3">
-                    Alat aktif yang belum dikategorikan tidak tampil di checklist produk maupun
-                    portal employee. Kategorikan dulu sebelum memetakan.
-                </p>
-                {uncategorizedUnits.length === 0 ? (
-                    <FeedbackMessage variant="success">
-                        Semua alat aktif sudah berkategori perusahaan.
-                    </FeedbackMessage>
-                ) : !canEditUnits ? (
-                    <FeedbackMessage variant="warning">
-                        Ada {uncategorizedUnits.length} alat aktif yang belum berkategori perusahaan.
-                        Hubungi admin GA atau PIC Alat/Unit untuk mengategorikannya terlebih dahulu.
-                    </FeedbackMessage>
-                ) : (
-                    <>
-                        <div className="mb-3">
+        <div className="space-y-4">
+            {/* Panel alat belum berkategori: hanya muncul jika benar-benar ada */}
+            {uncategorizedUnits.length > 0 && (
+                <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 px-4 py-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-200">
+                                <strong>{uncategorizedUnits.length} unit alat aktif</strong> belum memiliki perusahaan
+                                (tidak bisa dipetakan ke produk).
+                            </p>
+                        </div>
+                        {canEditUnits && (
+                            <button
+                                type="button"
+                                onClick={() => setShowUncategorized((v) => !v)}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:underline shrink-0"
+                            >
+                                {showUncategorized ? (
+                                    <>
+                                        <ChevronDown className="h-3.5 w-3.5" /> Tutup
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronRight className="h-3.5 w-3.5" /> Kategorikan sekarang
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
+
+                    {canEditUnits && showUncategorized && (
+                        <div className="border-t border-amber-200 dark:border-amber-800/60 bg-card p-4 space-y-3">
                             <EquipmentSearchField
                                 id="cari-alat-belum-berkategori"
                                 label="Cari alat belum berkategori"
                                 value={uncategorizedQuery}
                                 onChange={setUncategorizedQuery}
-                                placeholder="Cari nama, merek, atau lokasi…"
+                                placeholder="Cari nama, merek, atau lokasi..."
                             />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const ids = filteredUncategorizedUnits.map((u) => u.id);
-                                    const allVisibleSelected =
-                                        ids.length > 0 && ids.every((id) => bulkSelected.includes(id));
-                                    setBulkSelected((prev) =>
-                                        allVisibleSelected
-                                            ? prev.filter((id) => !ids.includes(id))
-                                            : [...new Set([...prev, ...ids])]
-                                    );
-                                }}
-                                className="text-xs font-medium text-primary hover:underline min-h-[44px] px-2"
-                            >
-                                {(() => {
-                                    const visible = filteredUncategorizedUnits.length;
-                                    const allVisibleSelected =
-                                        visible > 0 &&
-                                        filteredUncategorizedUnits.every((u) => bulkSelected.includes(u.id));
-                                    const isFiltering = uncategorizedQuery.trim().length > 0;
-                                    if (allVisibleSelected) return isFiltering ? "Batalkan hasil" : "Batalkan semua";
-                                    return isFiltering
-                                        ? `Pilih hasil (${visible})`
-                                        : `Pilih semua (${uncategorizedUnits.length})`;
-                                })()}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void bulkSetCompany(["WIG"])}
-                                disabled={bulkSaving || bulkSelected.length === 0}
-                                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
-                            >
-                                {bulkSaving ? "Menyimpan..." : `Jadikan WIG (${bulkSelected.length})`}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void bulkSetCompany(["MKI"])}
-                                disabled={bulkSaving || bulkSelected.length === 0}
-                                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
-                            >
-                                {bulkSaving ? "Menyimpan..." : `Jadikan MKI (${bulkSelected.length})`}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void bulkSetCompany(["WIG", "MKI"])}
-                                disabled={bulkSaving || bulkSelected.length === 0}
-                                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
-                            >
-                                {bulkSaving ? "Menyimpan..." : `Jadikan WIG & MKI (${bulkSelected.length})`}
-                            </button>
-                        </div>
-                        {filteredUncategorizedUnits.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                                Tidak ada alat yang cocok dengan pencarian.
-                            </p>
-                        ) : (
-                        <ul className="space-y-1 max-h-[320px] overflow-y-auto">
-                            {filteredUncategorizedUnits.map((u) => (
-                                <li
-                                    key={u.id}
-                                    className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const ids = filteredUncategorizedUnits.map((u) => u.id);
+                                        const allVisibleSelected =
+                                            ids.length > 0 && ids.every((id) => bulkSelected.includes(id));
+                                        setBulkSelected((prev) =>
+                                            allVisibleSelected
+                                                ? prev.filter((id) => !ids.includes(id))
+                                                : [...new Set([...prev, ...ids])]
+                                        );
+                                    }}
+                                    className="text-xs font-medium text-primary hover:underline px-2 min-h-[36px]"
                                 >
-                                    <label className="flex items-center gap-2 min-w-0 cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={bulkSelected.includes(u.id)}
-                                            onChange={(e) =>
-                                                setBulkSelected((prev) =>
-                                                    e.target.checked
-                                                        ? [...prev, u.id]
-                                                        : prev.filter((id) => id !== u.id)
-                                                )
-                                            }
-                                            className="rounded border-border shrink-0"
-                                        />
-                                        <span className="min-w-0">
-                                            <span className="block text-sm font-medium truncate">{u.name}</span>
-                                            <span className="block text-xs text-muted-foreground truncate">
-                                                {[u.brand, u.location].filter(Boolean).join(" · ") || "—"}
-                                            </span>
-                                        </span>
-                                    </label>
-                                    <span className="flex gap-1 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => void setUnitCompanyQuick(u.id, ["WIG"])}
-                                            disabled={bulkSaving}
-                                            className="px-2 py-1 text-[11px] font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[36px]"
+                                    {filteredUncategorizedUnits.length > 0 &&
+                                    filteredUncategorizedUnits.every((u) => bulkSelected.includes(u.id))
+                                        ? "Batalkan semua"
+                                        : `Pilih semua (${filteredUncategorizedUnits.length})`}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void bulkSetCompany(["WIG"])}
+                                    disabled={bulkSaving || bulkSelected.length === 0}
+                                    className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[36px]"
+                                >
+                                    Jadikan WIG ({bulkSelected.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void bulkSetCompany(["MKI"])}
+                                    disabled={bulkSaving || bulkSelected.length === 0}
+                                    className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[36px]"
+                                >
+                                    Jadikan MKI ({bulkSelected.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void bulkSetCompany(["WIG", "MKI"])}
+                                    disabled={bulkSaving || bulkSelected.length === 0}
+                                    className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[36px]"
+                                >
+                                    Jadikan WIG &amp; MKI ({bulkSelected.length})
+                                </button>
+                            </div>
+                            {filteredUncategorizedUnits.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">Tidak ada alat yang cocok.</p>
+                            ) : (
+                                <ul className="space-y-1 max-h-[260px] overflow-y-auto">
+                                    {filteredUncategorizedUnits.map((u) => (
+                                        <li
+                                            key={u.id}
+                                            className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
                                         >
-                                            WIG
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => void setUnitCompanyQuick(u.id, ["MKI"])}
-                                            disabled={bulkSaving}
-                                            className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 min-h-[36px]"
-                                        >
-                                            MKI
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => void setUnitCompanyQuick(u.id, ["WIG", "MKI"])}
-                                            disabled={bulkSaving}
-                                            className="px-2 py-1 text-[11px] font-semibold rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 min-h-[36px]"
-                                        >
-                                            WIG &amp; MKI
-                                        </button>
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                        )}
-                    </>
-                )}
-            </div>
-
-            <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-base font-medium mb-1">Produk per Perusahaan</h2>
-                <p className="text-xs text-muted-foreground mb-3">
-                    Kelola nama produk tiap perusahaan, lalu petakan alat yang dipakai masing-masing produk.
-                </p>
-                <div className="flex gap-1 mb-3 border-b border-border">
-                    {(["WIG", "MKI"] as EquipmentCompanyFilter[]).map((c) => (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => {
-                                setProductCompany(c);
-                                resetProductPage();
-                            }}
-                            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors min-h-[44px] ${
-                                productCompany === c
-                                    ? "border-primary text-primary"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                            {c}
-                        </button>
-                    ))}
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                    <input
-                        type="text"
-                        value={newProductName}
-                        onChange={(e) => setNewProductName(e.target.value)}
-                        placeholder={`Nama produk ${productCompany} baru`}
-                        maxLength={200}
-                        className={`${inputClass} flex-1`}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => void createProduct()}
-                        disabled={savingProduct}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
-                    >
-                        {savingProduct ? "Menyimpan..." : "Tambah"}
-                    </button>
-                </div>
-                {productError && (
-                    <FeedbackMessage variant="error" className="mb-3">
-                        {productError}{" "}
-                        <button onClick={() => void fetchProducts(productCompany)} className="underline">
-                            Coba lagi
-                        </button>
-                    </FeedbackMessage>
-                )}
-                <div className="mb-3">
-                    <EquipmentSearchField
-                        id="cari-produk"
-                        label="Cari produk"
-                        value={productQuery}
-                        onChange={(v) => {
-                            setProductQuery(v);
-                            resetProductPage();
-                        }}
-                        placeholder="Cari nama produk…"
-                    />
-                </div>
-                {products.length === 0 && !productError ? (
-                    <p className="text-sm text-muted-foreground">
-                        Belum ada produk {productCompany}. Tambahkan produk pertama.
-                    </p>
-                ) : filteredProducts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                        Tidak ada produk yang cocok dengan pencarian.
-                    </p>
-                ) : (
-                    <>
-                    <ul className="space-y-2">
-                        {paginatedProducts.map((p) => (
-                            <li
-                                key={p.id}
-                                className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
-                                    selectedProductId === p.id ? "border-primary" : "border-border"
-                                }`}
-                            >
-                                {editingProductId === p.id ? (
-                                    <div className="min-w-0 flex-1 flex flex-col sm:flex-row gap-2 sm:items-center">
-                                        <input
-                                            type="text"
-                                            value={editProductName}
-                                            onChange={(e) => setEditProductName(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter") void saveProductRename();
-                                                if (e.key === "Escape") {
-                                                    setEditingProductId(null);
-                                                    setEditProductName("");
-                                                }
-                                            }}
-                                            maxLength={200}
-                                            placeholder="Nama produk"
-                                            autoFocus
-                                            className={`${inputClass} flex-1`}
-                                        />
-                                        <div className="flex gap-1 shrink-0">
-                                            <button
-                                                type="button"
-                                                onClick={() => void saveProductRename()}
-                                                disabled={savingProductRename}
-                                                className="px-3 py-1.5 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
-                                            >
-                                                {savingProductRename ? "Menyimpan..." : "Simpan"}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setEditingProductId(null);
-                                                    setEditProductName("");
-                                                }}
-                                                className="text-xs text-muted-foreground hover:text-foreground min-h-[44px] px-2"
-                                            >
-                                                Batal
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedProductId(p.id);
-                                                setToolQuery("");
-                                                resetToolPage();
-                                                void fetchChecklist(p.id);
-                                            }}
-                                            className="min-w-0 text-left flex-1 min-h-[44px]"
-                                        >
-                                            <span className="block text-sm font-medium truncate">{p.name}</span>
-                                            <span className="block text-xs text-muted-foreground">
-                                                {p._count.tools} alat terpetakan
-                                            </span>
-                                        </button>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setEditingProductId(p.id);
-                                                    setEditProductName(p.name);
-                                                }}
-                                                className="p-1 text-muted-foreground hover:text-foreground min-h-[44px] min-w-[36px] inline-flex items-center justify-center"
-                                                title="Ubah nama produk"
-                                                aria-label={`Ubah nama produk ${p.name}`}
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => deleteProduct(p)}
-                                                className="shrink-0 text-xs text-destructive hover:text-destructive/80 min-h-[44px] px-2"
-                                            >
-                                                Hapus
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                        <DataTablePagination
-                            currentPage={productPage}
-                            totalPages={productTotalPages}
-                            totalItems={filteredProducts.length}
-                            pageSize={productPageSize}
-                            onPageChange={setProductPage}
-                            onPageSizeChange={setProductPageSize}
-                            itemLabel="produk"
-                        />
-                    </>
-                )}
-            </div>
-
-            {selectedProductId && checklist && (
-                <div className="bg-card border border-border rounded-lg p-4">
-                    <h2 className="text-base font-medium mb-1">Checklist Alat — {checklist.product.name}</h2>
-                    <p className="text-xs text-muted-foreground mb-3" aria-live="polite">
-                        {checklist.tools.filter((t) => t.checked).length} dari {checklist.totalCount} alat tercentang
-                        {checklistDirty ? " · ada perubahan belum disimpan" : ""}
-                    </p>
-                    <div className="mb-3">
-                        <EquipmentSearchField
-                            id="cari-alat-produk"
-                            label="Cari alat"
-                            value={toolQuery}
-                            onChange={(v) => {
-                                setToolQuery(v);
-                                resetToolPage();
-                            }}
-                            placeholder="Cari nama, merek, atau lokasi…"
-                        />
-                    </div>
-                    {checklistLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : checklistError ? (
-                        <FeedbackMessage variant="error">
-                            {checklistError}{" "}
-                            <button onClick={() => void fetchChecklist(selectedProductId)} className="underline">
-                                Coba lagi
-                            </button>
-                        </FeedbackMessage>
-                    ) : checklist.totalCount === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                            Belum ada alat berkategori {checklist.product.company}. Kategorikan alat dulu di
-                            bagian atas atau tab Alat / Unit.
-                        </p>
-                    ) : filteredTools.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                            Tidak ada alat yang cocok dengan pencarian.
-                        </p>
-                    ) : (
-                        <>
-                        <ul className="space-y-1 max-h-[360px] overflow-y-auto mb-3">
-                            {paginatedTools.map((t) => (
-                                <li key={t.id}>
-                                    <label className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 cursor-pointer hover:bg-accent/50 min-h-[48px]">
-                                        <span className="flex items-center gap-2 min-w-0">
-                                            <input
-                                                type="checkbox"
-                                                checked={t.checked}
-                                                onChange={() => toggleToolCheck(t.id)}
-                                                className="rounded border-border shrink-0"
-                                            />
-                                            <span className="min-w-0">
-                                                <span className="block text-sm font-medium truncate">{t.name}</span>
-                                                <span className="block text-xs text-muted-foreground truncate">
-                                                    {[t.brand, t.location].filter(Boolean).join(" · ") || "—"}
+                                            <label className="flex items-center gap-2 min-w-0 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={bulkSelected.includes(u.id)}
+                                                    onChange={(e) =>
+                                                        setBulkSelected((prev) =>
+                                                            e.target.checked
+                                                                ? [...prev, u.id]
+                                                                : prev.filter((id) => id !== u.id)
+                                                        )
+                                                    }
+                                                    className="rounded border-border shrink-0"
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block text-sm font-medium truncate">{u.name}</span>
+                                                    {(u.brand || u.location) && (
+                                                        <span className="block text-xs text-muted-foreground truncate">
+                                                            {[u.brand, u.location].filter(Boolean).join(" · ")}
+                                                        </span>
+                                                    )}
                                                 </span>
+                                            </label>
+                                            <span className="flex gap-1 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void setUnitCompanyQuick(u.id, ["WIG"])}
+                                                    disabled={bulkSaving}
+                                                    className="px-2 py-1 text-[11px] font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 min-h-[32px]"
+                                                >
+                                                    WIG
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void setUnitCompanyQuick(u.id, ["MKI"])}
+                                                    disabled={bulkSaving}
+                                                    className="px-2 py-1 text-[11px] font-semibold rounded bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-50 min-h-[32px]"
+                                                >
+                                                    MKI
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void setUnitCompanyQuick(u.id, ["WIG", "MKI"])}
+                                                    disabled={bulkSaving}
+                                                    className="px-2 py-1 text-[11px] font-semibold rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50 min-h-[32px]"
+                                                >
+                                                    WIG &amp; MKI
+                                                </button>
                                             </span>
-                                        </span>
-                                        <EquipmentCompanyBadge
-                                            company={t.company}
-                                            isSharedBoth={t.isSharedBoth}
-                                            companies={t.companies}
-                                        />
-                                    </label>
-                                </li>
-                            ))}
-                        </ul>
-                        <DataTablePagination
-                            currentPage={toolPage}
-                            totalPages={toolTotalPages}
-                            totalItems={filteredTools.length}
-                            pageSize={toolPageSize}
-                            onPageChange={setToolPage}
-                            onPageSizeChange={setToolPageSize}
-                            itemLabel="alat"
-                        />
-                        </>
-                    )}
-                    {!checklistLoading && !checklistError && checklist.totalCount > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => void saveChecklist()}
-                            disabled={savingChecklist || !checklistDirty}
-                            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[48px]"
-                        >
-                            {savingChecklist ? "Menyimpan..." : "Simpan Pemetaan"}
-                        </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
                     )}
                 </div>
             )}
+
+            {/* Master-Detail 2 kolom di desktop: Kiri Daftar Produk, Kanan Checklist Alat */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                {/* Kiri: Daftar Produk */}
+                <div className="lg:col-span-5 bg-card border border-border rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <h2 className="text-base font-semibold text-foreground">Daftar Produk</h2>
+                        <div className="inline-flex rounded-md border border-border bg-muted/40 p-0.5 text-xs">
+                            {(["WIG", "MKI"] as EquipmentCompanyFilter[]).map((c) => (
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => {
+                                        setProductCompany(c);
+                                        resetProductPage();
+                                    }}
+                                    className={`px-3 py-1 rounded font-semibold min-h-[32px] transition-colors ${
+                                        productCompany === c
+                                            ? "bg-background text-primary shadow-sm"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    {c}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={newProductName}
+                            onChange={(e) => setNewProductName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") void createProduct();
+                            }}
+                            placeholder={`Tambah produk ${productCompany}...`}
+                            maxLength={200}
+                            className={`${inputClass} flex-1`}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => void createProduct()}
+                            disabled={savingProduct}
+                            className="shrink-0 px-3.5 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[40px]"
+                        >
+                            {savingProduct ? "..." : "Tambah"}
+                        </button>
+                    </div>
+
+                    {productError && (
+                        <FeedbackMessage variant="error">
+                            {productError}{" "}
+                            <button
+                                type="button"
+                                onClick={() => void fetchProducts(productCompany)}
+                                className="underline ml-1 font-medium"
+                            >
+                                Coba lagi
+                            </button>
+                        </FeedbackMessage>
+                    )}
+
+                    {products.length > 0 && (
+                        <EquipmentSearchField
+                            id="cari-produk"
+                            label="Cari produk"
+                            value={productQuery}
+                            onChange={(v) => {
+                                setProductQuery(v);
+                                resetProductPage();
+                            }}
+                            placeholder="Cari nama produk..."
+                        />
+                    )}
+
+                    {products.length === 0 && !productError ? (
+                        <p className="text-xs text-muted-foreground text-center py-8 border border-dashed border-border rounded-lg">
+                            Belum ada produk {productCompany}. Tambahkan produk di atas.
+                        </p>
+                    ) : filteredProducts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-6">
+                            Tidak ada produk yang cocok.
+                        </p>
+                    ) : (
+                        <>
+                            <ul className="space-y-1.5">
+                                {paginatedProducts.map((p) => {
+                                    const selected = selectedProductId === p.id;
+                                    return (
+                                        <li
+                                            key={p.id}
+                                            className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${
+                                                selected
+                                                    ? "border-primary bg-primary/5"
+                                                    : "border-border hover:bg-accent/30"
+                                            }`}
+                                        >
+                                            {editingProductId === p.id ? (
+                                                <div className="min-w-0 flex-1 flex flex-col gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={editProductName}
+                                                        onChange={(e) => setEditProductName(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") void saveProductRename();
+                                                            if (e.key === "Escape") {
+                                                                setEditingProductId(null);
+                                                                setEditProductName("");
+                                                            }
+                                                        }}
+                                                        maxLength={200}
+                                                        placeholder="Nama produk"
+                                                        autoFocus
+                                                        className={inputClass}
+                                                    />
+                                                    <div className="flex justify-end gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingProductId(null);
+                                                                setEditProductName("");
+                                                            }}
+                                                            className="px-2.5 py-1 text-xs rounded-md border border-border hover:bg-muted min-h-[32px]"
+                                                        >
+                                                            Batal
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void saveProductRename()}
+                                                            disabled={savingProductRename}
+                                                            className="px-2.5 py-1 text-xs font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[32px]"
+                                                        >
+                                                            {savingProductRename ? "..." : "Simpan"}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedProductId(p.id);
+                                                            setToolQuery("");
+                                                            resetToolPage();
+                                                            void fetchChecklist(p.id);
+                                                        }}
+                                                        className="min-w-0 text-left flex-1 min-h-[36px]"
+                                                    >
+                                                        <span className="block text-sm font-medium text-foreground truncate">
+                                                            {p.name}
+                                                        </span>
+                                                        <span className="block text-xs text-muted-foreground">
+                                                            {p._count.tools} alat terpetakan
+                                                        </span>
+                                                    </button>
+                                                    <div className="flex items-center gap-0.5 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setEditingProductId(p.id);
+                                                                setEditProductName(p.name);
+                                                            }}
+                                                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md min-h-[32px]"
+                                                            title="Ubah nama produk"
+                                                            aria-label={`Ubah nama produk ${p.name}`}
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => deleteProduct(p)}
+                                                            className="px-2 py-1 text-xs text-destructive hover:bg-destructive/10 rounded-md min-h-[32px]"
+                                                        >
+                                                            Hapus
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                            <DataTablePagination
+                                currentPage={productPage}
+                                totalPages={productTotalPages}
+                                totalItems={filteredProducts.length}
+                                pageSize={productPageSize}
+                                onPageChange={setProductPage}
+                                onPageSizeChange={setProductPageSize}
+                                itemLabel="produk"
+                            />
+                        </>
+                    )}
+                </div>
+
+                {/* Kanan: Pemetaan Alat untuk Produk Terpilih */}
+                <div className="lg:col-span-7 bg-card border border-border rounded-xl p-4">
+                    {!selectedProductId ? (
+                        <div className="py-16 text-center space-y-2">
+                            <Package className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+                            <p className="text-sm font-medium text-foreground">Pemetaan Alat per Produk</p>
+                            <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                                Pilih salah satu produk di sebelah kiri untuk mencentang alat yang digunakan produk
+                                tersebut.
+                            </p>
+                        </div>
+                    ) : checklistLoading || !checklist ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2 border-b border-border">
+                                <div>
+                                    <h2 className="text-base font-semibold text-foreground">
+                                        {checklist.product.name}
+                                    </h2>
+                                    <p className="text-xs text-muted-foreground" aria-live="polite">
+                                        {checkedIds.length} dari {checklist.totalCount} alat dipilih
+                                        {checklistDirty ? " · belum disimpan" : ""}
+                                    </p>
+                                </div>
+                                {checklist.totalCount > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => void saveChecklist()}
+                                        disabled={savingChecklist || !checklistDirty}
+                                        className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[40px] shrink-0"
+                                    >
+                                        {savingChecklist ? "Menyimpan..." : "Simpan Pemetaan"}
+                                    </button>
+                                )}
+                            </div>
+
+                            {checklistError ? (
+                                <FeedbackMessage variant="error">
+                                    {checklistError}{" "}
+                                    <button
+                                        type="button"
+                                        onClick={() => void fetchChecklist(selectedProductId)}
+                                        className="underline ml-1 font-medium"
+                                    >
+                                        Coba lagi
+                                    </button>
+                                </FeedbackMessage>
+                            ) : checklist.totalCount === 0 ? (
+                                <p className="text-sm text-muted-foreground py-8 text-center">
+                                    Belum ada alat berkategori {checklist.product.company}. Kategorikan alat terlebih
+                                    dahulu di tab Unit Alat.
+                                </p>
+                            ) : (
+                                <>
+                                    <EquipmentSearchField
+                                        id="cari-alat-produk"
+                                        label="Cari alat"
+                                        value={toolQuery}
+                                        onChange={(v) => {
+                                            setToolQuery(v);
+                                            resetToolPage();
+                                        }}
+                                        placeholder="Cari nama alat, merek, atau lokasi..."
+                                    />
+
+                                    {filteredTools.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground py-6 text-center">
+                                            Tidak ada alat yang cocok dengan pencarian.
+                                        </p>
+                                    ) : (
+                                        <>
+                                            <ul className="space-y-1 max-h-[420px] overflow-y-auto pr-0.5">
+                                                {paginatedTools.map((t) => (
+                                                    <li key={t.id}>
+                                                        <label
+                                                            className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                                                                t.checked
+                                                                    ? "border-primary/50 bg-primary/5"
+                                                                    : "border-border hover:bg-accent/40"
+                                                            }`}
+                                                        >
+                                                            <span className="flex items-center gap-2.5 min-w-0">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={t.checked}
+                                                                    onChange={() => toggleToolCheck(t.id)}
+                                                                    className="rounded border-border shrink-0"
+                                                                />
+                                                                <span className="min-w-0">
+                                                                    <span className="block text-sm font-medium truncate">
+                                                                        {t.name}
+                                                                    </span>
+                                                                    {(t.brand || t.location) && (
+                                                                        <span className="block text-xs text-muted-foreground truncate">
+                                                                            {[t.brand, t.location]
+                                                                                .filter(Boolean)
+                                                                                .join(" · ")}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </span>
+                                                            <EquipmentCompanyBadge
+                                                                company={t.company}
+                                                                isSharedBoth={t.isSharedBoth}
+                                                                companies={t.companies}
+                                                            />
+                                                        </label>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            <DataTablePagination
+                                                currentPage={toolPage}
+                                                totalPages={toolTotalPages}
+                                                totalItems={filteredTools.length}
+                                                pageSize={toolPageSize}
+                                                onPageChange={setToolPage}
+                                                onPageSizeChange={setToolPageSize}
+                                                itemLabel="alat"
+                                            />
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
