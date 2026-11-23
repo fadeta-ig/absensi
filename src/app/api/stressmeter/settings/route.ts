@@ -20,10 +20,13 @@ export async function GET() {
         if (!canManageHr(session)) return forbiddenResponse();
 
         const enabled = await isStressmeterEnabled();
-        return NextResponse.json({
-            success: true,
-            data: { enabled },
-        });
+        return NextResponse.json(
+            {
+                success: true,
+                data: { enabled },
+            },
+            { headers: { "Cache-Control": "private, no-store" } }
+        );
     } catch (error) {
         return serverErrorResponse("HrStressmeterSettingsGET", error);
     }

@@ -44,8 +44,9 @@ export default function StressmeterCheckinSheet({
     const [selectedRating, setSelectedRating] = useState<number | null>(null);
     const [hoveredRating, setHoveredRating] = useState<number | null>(null);
     const [wasSkipped, setWasSkipped] = useState(false);
-    const [submittingCheckin, setSubmittingCheckin] = useState(false);
+    const [submittingAction, setSubmittingAction] = useState<"rating" | "skip" | null>(null);
     const [submittingAnon, setSubmittingAnon] = useState(false);
+    const [anonValid, setAnonValid] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -53,21 +54,23 @@ export default function StressmeterCheckinSheet({
         setSelectedRating(null);
         setHoveredRating(null);
         setWasSkipped(false);
-        setSubmittingCheckin(false);
+        setSubmittingAction(null);
         setSubmittingAnon(false);
+        setAnonValid(false);
     }, [isOpen, initialStep]);
 
     const activePreviewRating = hoveredRating ?? selectedRating;
     const activeScale = getStressmeterScale(activePreviewRating);
+    const submittingCheckin = submittingAction !== null;
 
     const submitCheckin = async (skipped: boolean) => {
-        if (submittingCheckin || !shiftDate) return;
+        if (submittingAction !== null || !shiftDate) return;
         if (!skipped && !selectedRating) {
             toast("Pilih 1 sampai 5 bintang terlebih dahulu, atau klik Lewati.", "warning");
             return;
         }
 
-        setSubmittingCheckin(true);
+        setSubmittingAction(skipped ? "skip" : "rating");
         try {
             const res = await fetch("/api/employee/stressmeter/checkin", {
                 method: "POST",
@@ -94,7 +97,7 @@ export default function StressmeterCheckinSheet({
             toast(msg, "error");
             reportClientError("StressmeterCheckinSheet", msg, err);
         } finally {
-            setSubmittingCheckin(false);
+            setSubmittingAction(null);
         }
     };
 
@@ -127,7 +130,7 @@ export default function StressmeterCheckinSheet({
                     disabled={submittingCheckin}
                     className="btn btn-secondary flex-1 min-h-[44px]"
                 >
-                    {submittingCheckin && !selectedRating ? (
+                    {submittingAction === "skip" ? (
                         <Loader2 className="w-4 h-4 animate-spin mx-auto" />
                     ) : (
                         "Lewati"
@@ -139,10 +142,10 @@ export default function StressmeterCheckinSheet({
                     disabled={submittingCheckin || !selectedRating}
                     className="btn btn-primary flex-[1.5] min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                    {submittingCheckin && selectedRating ? (
+                    {submittingAction === "rating" ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                     ) : null}
-                    {submittingCheckin && selectedRating ? "Menyimpan..." : "Kirim"}
+                    {submittingAction === "rating" ? "Menyimpan..." : "Kirim"}
                 </button>
             </div>
         ) : step === "after" ? (
@@ -169,7 +172,7 @@ export default function StressmeterCheckinSheet({
                 <button
                     type="submit"
                     form="stressmeter-sheet-anon-form"
-                    disabled={submittingAnon}
+                    disabled={submittingAnon || !anonValid}
                     className="btn btn-primary flex-1 min-h-[44px] flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                     {submittingAnon ? (
@@ -345,6 +348,7 @@ export default function StressmeterCheckinSheet({
                     formId="stressmeter-sheet-anon-form"
                     hideSubmitButton
                     onSubmittingChange={setSubmittingAnon}
+                    onValidChange={setAnonValid}
                     onSuccess={() => setStep("anonymous-done")}
                 />
             )}

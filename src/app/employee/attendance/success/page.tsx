@@ -22,18 +22,19 @@ function SuccessContent() {
     useEffect(() => {
         if (isClockOut || !isValidCalendarDate(shiftDate)) return;
 
-        let cancelled = false;
+        const controller = new AbortController();
         const checkPrompt = async () => {
             try {
                 const res = await fetch(
-                    `/api/employee/stressmeter/today?shiftDate=${encodeURIComponent(shiftDate)}`
+                    `/api/employee/stressmeter/today?shiftDate=${encodeURIComponent(shiftDate)}`,
+                    { signal: controller.signal, cache: "no-store" }
                 );
-                if (!res.ok || cancelled) return;
+                if (!res.ok || controller.signal.aborted) return;
                 const json = await res.json();
                 const data = json.data as
                     | { shouldPrompt?: boolean; timePeriodLabel?: string }
                     | undefined;
-                if (cancelled || !data) return;
+                if (controller.signal.aborted || !data) return;
                 if (data.timePeriodLabel) {
                     setTimePeriodLabel(data.timePeriodLabel);
                 }
@@ -48,7 +49,7 @@ function SuccessContent() {
 
         void checkPrompt();
         return () => {
-            cancelled = true;
+            controller.abort();
         };
     }, [isClockOut, shiftDate]);
 

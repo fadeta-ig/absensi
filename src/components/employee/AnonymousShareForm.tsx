@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, Send, ShieldCheck } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import {
@@ -18,6 +18,7 @@ interface AnonymousShareFormProps {
     hideSubmitButton?: boolean;
     onSuccess?: () => void;
     onSubmittingChange?: (submitting: boolean) => void;
+    onValidChange?: (valid: boolean) => void;
 }
 
 export default function AnonymousShareForm({
@@ -25,6 +26,7 @@ export default function AnonymousShareForm({
     hideSubmitButton = false,
     onSuccess,
     onSubmittingChange,
+    onValidChange,
 }: AnonymousShareFormProps) {
     const toast = useToast();
     const [topic, setTopic] = useState<StressmeterTopicValue>("OTHER");
@@ -34,6 +36,10 @@ export default function AnonymousShareForm({
 
     const trimmedLength = message.trim().length;
     const isValid = trimmedLength >= 10 && trimmedLength <= 2000;
+
+    useEffect(() => {
+        onValidChange?.(isValid);
+    }, [isValid, onValidChange]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

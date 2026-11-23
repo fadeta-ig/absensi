@@ -171,7 +171,7 @@ export default function ResponsiveSheet({
                 aria-describedby={hasDescriptionId ? descriptionId : undefined}
                 aria-label={hasTitleId ? undefined : (ariaLabel ?? "Dialog")}
                 tabIndex={-1}
-                className={`relative w-full ${SIZE_CLASSES[size]} max-h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-t-[2rem] lg:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden z-10 animate-in slide-in-from-bottom duration-300 focus:outline-none ${className}`}
+                className={`relative w-full ${SIZE_CLASSES[size]} max-h-[85dvh] bg-[var(--card)] border border-[var(--border)] rounded-t-[2rem] lg:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden z-10 animate-in slide-in-from-bottom duration-300 focus:outline-none ${className}`}
             >
                 {/* Visual Drag Handle (Mobile) */}
                 {showDragHandle && (
@@ -219,7 +219,7 @@ export default function ResponsiveSheet({
 
                 {/* Scrollable Body */}
                 <div
-                    className={`flex-1 overflow-y-auto px-6 py-4 custom-scrollbar ${
+                    className={`flex-1 overflow-y-auto overscroll-contain px-6 py-4 custom-scrollbar ${
                         footer ? "" : "pb-[max(1rem,env(safe-area-inset-bottom))]"
                     } ${bodyClassName}`}
                 >

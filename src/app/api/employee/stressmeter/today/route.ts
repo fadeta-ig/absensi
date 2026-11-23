@@ -19,10 +19,13 @@ export async function GET(request: NextRequest) {
         const shiftDate = request.nextUrl.searchParams.get("shiftDate");
         const status = await getEmployeeTodayCheckinStatus(session.employeeId, shiftDate);
 
-        return NextResponse.json({
-            success: true,
-            data: status,
-        });
+        return NextResponse.json(
+            {
+                success: true,
+                data: status,
+            },
+            { headers: { "Cache-Control": "private, no-store" } }
+        );
     } catch (error) {
         return serverErrorResponse("EmployeeStressmeterTodayGET", error);
     }

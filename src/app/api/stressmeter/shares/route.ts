@@ -27,10 +27,13 @@ export async function GET(request: NextRequest) {
             limit: Number.isFinite(limit) ? limit : 15,
         });
 
-        return NextResponse.json({
-            success: true,
-            data,
-        });
+        return NextResponse.json(
+            {
+                success: true,
+                data,
+            },
+            { headers: { "Cache-Control": "private, no-store" } }
+        );
     } catch (error) {
         return serverErrorResponse("HrStressmeterSharesGET", error);
     }

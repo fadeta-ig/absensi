@@ -8,7 +8,10 @@ import {
 } from "@/lib/middleware/apiGuard";
 import { canUseEmployeePortal } from "@/lib/permissions";
 import { stressmeterCheckinSchema } from "@/lib/validations/validationSchemas";
-import { submitEmployeeCheckin } from "@/lib/services/stressmeterService";
+import {
+    StressmeterDomainError,
+    submitEmployeeCheckin,
+} from "@/lib/services/stressmeterService";
 
 export async function POST(request: NextRequest) {
     try {
@@ -28,6 +31,9 @@ export async function POST(request: NextRequest) {
             data: result,
         });
     } catch (error) {
+        if (error instanceof StressmeterDomainError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return serverErrorResponse("EmployeeStressmeterCheckinPOST", error);
     }
 }

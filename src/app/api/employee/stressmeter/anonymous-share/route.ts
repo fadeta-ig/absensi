@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
     requireAuth,
@@ -11,14 +11,27 @@ import { canUseEmployeePortal } from "@/lib/permissions";
 import { stressmeterAnonymousShareSchema } from "@/lib/validations/validationSchemas";
 import { submitAnonymousShare } from "@/lib/services/stressmeterService";
 
-// Pembatas anti-spam murni di RAM memakai hash ephemeral per proses (tidak pernah ditulis ke DB atau log)
-const EPHEMERAL_SALT = `${Date.now()}-${Math.random()}`;
+// Pembatas anti-spam murni di RAM memakai salt acak kriptografis per proses (tidak pernah ditulis ke DB/log)
+const EPHEMERAL_SALT = randomBytes(32).toString("hex");
 const MAX_SHARES_PER_HOUR = 5;
 const WINDOW_MS = 60 * 60 * 1000;
+const EVICTION_THRESHOLD = 500;
 const shareWindowStore = new Map<string, { count: number; resetAt: number }>();
+
+function evictExpiredBuckets(now: number): void {
+    for (const [key, entry] of shareWindowStore) {
+        if (now > entry.resetAt) {
+            shareWindowStore.delete(key);
+        }
+    }
+}
 
 function isAnonShareRateLimited(sessionKey: string): boolean {
     const now = Date.now();
+    if (shareWindowStore.size > EVICTION_THRESHOLD) {
+        evictExpiredBuckets(now);
+    }
+
     const bucketKey = createHash("sha256")
         .update(`${EPHEMERAL_SALT}:${sessionKey}`)
         .digest("hex");

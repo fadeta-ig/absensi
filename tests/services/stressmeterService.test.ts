@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { toUTCDateKey } from "@/lib/timezone";
+import { addCalendarDays, toUTCDateKey, toWIBDateString } from "@/lib/timezone";
 
 const prismaMock = vi.hoisted(() => ({
     appSetting: {
@@ -31,6 +31,8 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 import {
+    StressmeterDomainError,
+    clearStressmeterSettingCache,
     getEmployeeTodayCheckinStatus,
     getHrStressmeterOverview,
     submitAnonymousShare,
@@ -40,9 +42,10 @@ import {
 describe("stressmeterService", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        clearStressmeterSettingCache();
     });
 
-    it("memunculkan pop-up hanya jika aktif, sudah Clock In, dan belum ada respons hari ini", async () => {
+    it("memunculkan pop-up hanya jika aktif, sudah Clock In, dan belum ada respons hari ini (plus short-circuit saat dijeda)", async () => {
         prismaMock.appSetting.findUnique.mockResolvedValue({ value: "true" });
         prismaMock.attendanceRecord.findUnique.mockResolvedValue({ clockIn: new Date() });
         prismaMock.stressmeterCheckin.findUnique.mockResolvedValue(null);
@@ -52,13 +55,19 @@ describe("stressmeterService", () => {
         expect(active.hasClockedIn).toBe(true);
         expect(active.hasSubmitted).toBe(false);
 
-        // Bila fitur dijeda HR → shouldPrompt = false
+        // Bila fitur dijeda HR -> short-circuit tanpa query attendanceRecord & stressmeterCheckin
+        vi.clearAllMocks();
+        clearStressmeterSettingCache();
         prismaMock.appSetting.findUnique.mockResolvedValue({ value: "false" });
         const paused = await getEmployeeTodayCheckinStatus("EMP-001", "2026-11-23");
         expect(paused.shouldPrompt).toBe(false);
+        expect(prismaMock.attendanceRecord.findUnique).not.toHaveBeenCalled();
+        expect(prismaMock.stressmeterCheckin.findUnique).not.toHaveBeenCalled();
 
-        // Bila sudah pernah skip/isi → shouldPrompt = false
+        // Bila sudah pernah skip/isi -> shouldPrompt = false
+        clearStressmeterSettingCache();
         prismaMock.appSetting.findUnique.mockResolvedValue({ value: "true" });
+        prismaMock.attendanceRecord.findUnique.mockResolvedValue({ clockIn: new Date() });
         prismaMock.stressmeterCheckin.findUnique.mockResolvedValue({
             id: "chk-1",
             rating: null,
@@ -69,7 +78,16 @@ describe("stressmeterService", () => {
         expect(alreadySkipped.hasSubmitted).toBe(true);
     });
 
-    it("mencatat rating maupun SKIP secara idempoten per employeeId + shiftDate", async () => {
+    it("mencatat rating/SKIP secara idempoten dan menolak shiftDate tanpa Clock In", async () => {
+        // Tanpa Clock In -> tolak dengan StressmeterDomainError 400
+        prismaMock.attendanceRecord.findUnique.mockResolvedValueOnce(null);
+        prismaMock.stressmeterCheckin.findUnique.mockResolvedValueOnce(null);
+        await expect(
+            submitEmployeeCheckin("EMP-001", { shiftDate: "2026-11-23", skipped: false, rating: 4 })
+        ).rejects.toBeInstanceOf(StressmeterDomainError);
+
+        // Dengan Clock In -> simpan SKIP
+        prismaMock.attendanceRecord.findUnique.mockResolvedValueOnce({ clockIn: new Date() });
         prismaMock.stressmeterCheckin.findUnique.mockResolvedValueOnce(null);
         prismaMock.stressmeterCheckin.create.mockResolvedValueOnce({
             id: "chk-skip",
@@ -86,6 +104,7 @@ describe("stressmeterService", () => {
         expect(skippedRes.checkin.rating).toBeNull();
 
         // Panggilan kedua di tanggal yang sama mengembalikan data lama tanpa create ulang
+        prismaMock.attendanceRecord.findUnique.mockResolvedValueOnce({ clockIn: new Date() });
         prismaMock.stressmeterCheckin.findUnique.mockResolvedValueOnce({
             id: "chk-skip",
             rating: null,
@@ -124,9 +143,12 @@ describe("stressmeterService", () => {
         expect(callArg.data).not.toHaveProperty("checkinId");
     });
 
-    it("menghitung KPI, partisipasi, breakdown departemen, dan deteksi dini karyawan", async () => {
-        const d1 = toUTCDateKey("2026-11-22");
-        const d2 = toUTCDateKey("2026-11-23");
+    it("menghitung KPI, partisipasi, breakdown departemen, dan deteksi dini dalam 1 kueri saat rentang mencakup 14 hari terakhir", async () => {
+        const todayWib = toWIBDateString();
+        const yesterdayWib = addCalendarDays(todayWib, -1);
+        const fromWib = addCalendarDays(todayWib, -29);
+        const d1 = toUTCDateKey(yesterdayWib);
+        const d2 = toUTCDateKey(todayWib);
 
         prismaMock.appSetting.findUnique.mockResolvedValue({ value: "true" });
         prismaMock.attendanceRecord.count.mockResolvedValue(4);
@@ -171,19 +193,20 @@ describe("stressmeterService", () => {
             },
         ];
 
-        prismaMock.stressmeterCheckin.findMany
-            .mockResolvedValueOnce(periodRows)
-            .mockResolvedValueOnce(periodRows.filter((r) => !r.skipped));
+        prismaMock.stressmeterCheckin.findMany.mockResolvedValueOnce(periodRows);
 
         const overview = await getHrStressmeterOverview({
-            from: "2026-11-01",
-            to: "2026-11-23",
+            from: fromWib,
+            to: todayWib,
         });
+
+        // Hanya 1 kali findMany (tidak memanggil kueri 14 hari kedua secara duplikat)
+        expect(prismaMock.stressmeterCheckin.findMany).toHaveBeenCalledTimes(1);
 
         expect(overview.kpi.totalRated).toBe(3);
         expect(overview.kpi.totalSkipped).toBe(1);
-        expect(overview.kpi.averageRating).toBe(2.7); // (1 + 2 + 5) / 3 = 2.666 -> 2.7
-        expect(overview.kpi.participationRate).toBe(75); // 3 / 4 * 100
+        expect(overview.kpi.averageRating).toBe(2.7);
+        expect(overview.kpi.participationRate).toBe(75);
         expect(overview.kpi.lowMoodCount).toBe(2);
         expect(overview.kpi.newAnonymousShares).toBe(2);
 

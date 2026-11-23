@@ -13,6 +13,26 @@ import {
     type StressmeterTopicValue,
 } from "@/lib/stressmeterConstants";
 
+const MAX_RANGE_DAYS = 366;
+const SETTING_CACHE_TTL_MS = 30_000;
+
+let enabledCache: { value: boolean; expiresAt: number } | null = null;
+
+/** Hanya untuk kebutuhan pengujian unit agar cache antar-test bersih. */
+export function clearStressmeterSettingCache(): void {
+    enabledCache = null;
+}
+
+export class StressmeterDomainError extends Error {
+    public readonly status: number;
+
+    constructor(message: string, status = 400) {
+        super(message);
+        this.name = "StressmeterDomainError";
+        this.status = status;
+    }
+}
+
 function formatDateKey(date: Date): string {
     const year = String(date.getUTCFullYear()).padStart(4, "0");
     const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -31,22 +51,39 @@ function resolveDateRange(from?: string | null, to?: string | null): {
     const todayWib = toWIBDateString();
     const resolvedTo = to && isValidCalendarDate(to) ? to : todayWib;
     const defaultFrom = addCalendarDays(resolvedTo, -29);
-    const resolvedFrom = from && isValidCalendarDate(from) ? from : defaultFrom;
-    if (resolvedFrom > resolvedTo) {
-        return { from: resolvedTo, to: resolvedFrom };
+    let resolvedFrom = from && isValidCalendarDate(from) ? from : defaultFrom;
+    let finalTo = resolvedTo;
+
+    if (resolvedFrom > finalTo) {
+        const tmp = resolvedFrom;
+        resolvedFrom = finalTo;
+        finalTo = tmp;
     }
-    return { from: resolvedFrom, to: resolvedTo };
+
+    // Batasi rentang maksimal 366 hari inklusif agar kueri tetap cepat dan memori terkendali
+    const minAllowedFrom = addCalendarDays(finalTo, -(MAX_RANGE_DAYS - 1));
+    if (resolvedFrom < minAllowedFrom) {
+        resolvedFrom = minAllowedFrom;
+    }
+
+    return { from: resolvedFrom, to: finalTo };
 }
 
-// ─── Feature Toggle Setting (AppSetting) ─────────────────────────
+// ─── Feature Toggle Setting (AppSetting + 30s TTL Cache) ─────────
 
 export async function isStressmeterEnabled(): Promise<boolean> {
+    const now = Date.now();
+    if (enabledCache && now < enabledCache.expiresAt) {
+        return enabledCache.value;
+    }
+
     const row = await prisma.appSetting.findUnique({
         where: { key: STRESSMETER_SETTING_KEY },
         select: { value: true },
     });
-    if (!row) return true;
-    return row.value !== "false";
+    const enabled = row ? row.value !== "false" : true;
+    enabledCache = { value: enabled, expiresAt: now + SETTING_CACHE_TTL_MS };
+    return enabled;
 }
 
 export async function setStressmeterEnabled(
@@ -65,6 +102,7 @@ export async function setStressmeterEnabled(
             updatedByUserId: actorUserId,
         },
     });
+    enabledCache = { value: enabled, expiresAt: Date.now() + SETTING_CACHE_TTL_MS };
     return { enabled };
 }
 
@@ -78,10 +116,24 @@ export async function getEmployeeTodayCheckinStatus(
         shiftDateInput && isValidCalendarDate(shiftDateInput)
             ? shiftDateInput
             : toWIBDateString();
-    const shiftDateKey = toUTCDateKey(shiftDate);
+    const timePeriodLabel = getWibTimePeriodLabel();
 
-    const [enabled, attendance, existing] = await Promise.all([
-        isStressmeterEnabled(),
+    const enabled = await isStressmeterEnabled();
+    // Short-circuit: bila fitur sedang dijeda HR, hemat 2 kueri DB per karyawan pada jam sibuk Clock In
+    if (!enabled) {
+        return {
+            enabled: false,
+            shiftDate,
+            hasClockedIn: false,
+            hasSubmitted: false,
+            shouldPrompt: false,
+            timePeriodLabel,
+            checkin: null,
+        };
+    }
+
+    const shiftDateKey = toUTCDateKey(shiftDate);
+    const [attendance, existing] = await Promise.all([
         prisma.attendanceRecord.findUnique({
             where: {
                 employeeId_date: {
@@ -108,15 +160,15 @@ export async function getEmployeeTodayCheckinStatus(
 
     const hasClockedIn = Boolean(attendance?.clockIn);
     const hasSubmitted = Boolean(existing);
-    const shouldPrompt = enabled && hasClockedIn && !hasSubmitted;
+    const shouldPrompt = hasClockedIn && !hasSubmitted;
 
     return {
-        enabled,
+        enabled: true,
         shiftDate,
         hasClockedIn,
         hasSubmitted,
         shouldPrompt,
-        timePeriodLabel: getWibTimePeriodLabel(),
+        timePeriodLabel,
         checkin: existing
             ? {
                   id: existing.id,
@@ -137,23 +189,34 @@ export async function submitEmployeeCheckin(
     }
 ) {
     if (!isValidCalendarDate(input.shiftDate)) {
-        throw new Error("Tanggal shift tidak valid.");
+        throw new StressmeterDomainError("Tanggal shift tidak valid.", 400);
     }
     const shiftDateKey = toUTCDateKey(input.shiftDate);
 
-    const existing = await prisma.stressmeterCheckin.findUnique({
-        where: {
-            employeeId_shiftDate: {
-                employeeId,
-                shiftDate: shiftDateKey,
+    const [attendance, existing] = await Promise.all([
+        prisma.attendanceRecord.findUnique({
+            where: {
+                employeeId_date: {
+                    employeeId,
+                    date: shiftDateKey,
+                },
             },
-        },
-        select: {
-            id: true,
-            rating: true,
-            skipped: true,
-        },
-    });
+            select: { clockIn: true },
+        }),
+        prisma.stressmeterCheckin.findUnique({
+            where: {
+                employeeId_shiftDate: {
+                    employeeId,
+                    shiftDate: shiftDateKey,
+                },
+            },
+            select: {
+                id: true,
+                rating: true,
+                skipped: true,
+            },
+        }),
+    ]);
 
     if (existing) {
         return {
@@ -165,6 +228,13 @@ export async function submitEmployeeCheckin(
                 skipped: existing.skipped,
             },
         };
+    }
+
+    if (!attendance?.clockIn) {
+        throw new StressmeterDomainError(
+            "Presensi Clock In untuk tanggal shift ini belum tercatat.",
+            400
+        );
     }
 
     const ratingValue = input.skipped ? null : (input.rating ?? null);
@@ -262,6 +332,17 @@ export interface HrStressmeterOverviewParams {
     limit?: number;
 }
 
+interface AttentionSourceRow {
+    employeeId: string;
+    shiftDate: Date;
+    rating: number | null;
+    skipped?: boolean;
+    employee: {
+        name: string;
+        departmentRel: { name: string } | null;
+    };
+}
+
 export async function getHrStressmeterOverview(params: HrStressmeterOverviewParams) {
     const { from, to } = resolveDateRange(params.from, params.to);
     const fromDateKey = toUTCDateKey(from);
@@ -271,8 +352,8 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
     const limit = Math.min(100, Math.max(5, params.limit ?? 20));
 
     const todayWib = toWIBDateString();
-    const attentionFromDateKey = toUTCDateKey(addCalendarDays(todayWib, -13));
-    const attentionToDateKey = toUTCDateKey(todayWib);
+    const attentionFromStr = addCalendarDays(todayWib, -13);
+    const attentionCoveredByPeriod = from <= attentionFromStr && to >= todayWib;
 
     const checkinWhere: Prisma.StressmeterCheckinWhereInput = {
         shiftDate: {
@@ -293,15 +374,16 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
 
     const attentionWhere: Prisma.StressmeterCheckinWhereInput = {
         shiftDate: {
-            gte: attentionFromDateKey,
-            lte: attentionToDateKey,
+            gte: toUTCDateKey(attentionFromStr),
+            lte: toUTCDateKey(todayWib),
         },
         skipped: false,
         rating: { not: null },
         ...(departmentId ? { employee: { departmentId } } : {}),
     };
 
-    const [enabled, checkins, totalClockIns, recent14dCheckins, newAnonymousShares, departments] =
+    // Hindari kueri 14 hari duplikat bila rentang terpilih sudah sepenuhnya mencakup 14 hari terakhir
+    const [enabled, checkins, totalClockIns, separate14dCheckins, newAnonymousShares, departments] =
         await Promise.all([
             isStressmeterEnabled(),
             prisma.stressmeterCheckin.findMany({
@@ -323,21 +405,23 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
                 },
             }),
             prisma.attendanceRecord.count({ where: attendanceWhere }),
-            prisma.stressmeterCheckin.findMany({
-                where: attentionWhere,
-                orderBy: { shiftDate: "desc" },
-                select: {
-                    employeeId: true,
-                    shiftDate: true,
-                    rating: true,
-                    employee: {
-                        select: {
-                            name: true,
-                            departmentRel: { select: { name: true } },
-                        },
-                    },
-                },
-            }),
+            attentionCoveredByPeriod
+                ? Promise.resolve<AttentionSourceRow[] | null>(null)
+                : prisma.stressmeterCheckin.findMany({
+                      where: attentionWhere,
+                      orderBy: { shiftDate: "desc" },
+                      select: {
+                          employeeId: true,
+                          shiftDate: true,
+                          rating: true,
+                          employee: {
+                              select: {
+                                  name: true,
+                                  departmentRel: { select: { name: true } },
+                              },
+                          },
+                      },
+                  }),
             prisma.stressmeterAnonymousShare.count({
                 where: { status: AnonymousShareStatus.NEW },
             }),
@@ -347,60 +431,17 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
             }),
         ]);
 
-    // 1. KPI & Distribusi
-    const ratedCheckins = checkins.filter((c) => !c.skipped && typeof c.rating === "number");
-    const totalRated = ratedCheckins.length;
-    const totalSkipped = checkins.length - totalRated;
-    const ratingSum = ratedCheckins.reduce((sum, c) => sum + (c.rating ?? 0), 0);
-    const averageRating = totalRated > 0 ? roundOneDecimal(ratingSum / totalRated) : null;
-    const lowMoodCount = ratedCheckins.filter((c) => (c.rating ?? 5) <= 2).length;
-    const participationRate =
-        totalClockIns > 0
-            ? Math.min(100, roundOneDecimal((totalRated / totalClockIns) * 100))
-            : 0;
-
+    // Single-pass aggregation untuk KPI, distribusi, tren harian, per departemen, dan filter log
+    let totalRated = 0;
+    let totalSkipped = 0;
+    let ratingSum = 0;
+    let lowMoodCount = 0;
     const countsByRating: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    for (const c of ratedCheckins) {
-        if (c.rating && c.rating >= 1 && c.rating <= 5) {
-            countsByRating[c.rating] += 1;
-        }
-    }
 
-    const distribution = ([5, 4, 3, 2, 1] as const).map((star) => ({
-        rating: star,
-        count: countsByRating[star],
-        percentage: totalRated > 0 ? roundOneDecimal((countsByRating[star] / totalRated) * 100) : 0,
-    }));
-
-    // 2. Tren Harian
     const dailyMap = new Map<
         string,
         { sum: number; ratedCount: number; lowCount: number; skippedCount: number }
     >();
-    for (const c of checkins) {
-        const key = formatDateKey(c.shiftDate);
-        const cur = dailyMap.get(key) ?? { sum: 0, ratedCount: 0, lowCount: 0, skippedCount: 0 };
-        if (c.skipped || c.rating === null) {
-            cur.skippedCount += 1;
-        } else {
-            cur.sum += c.rating;
-            cur.ratedCount += 1;
-            if (c.rating <= 2) cur.lowCount += 1;
-        }
-        dailyMap.set(key, cur);
-    }
-
-    const dailyTrend = Array.from(dailyMap.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, agg]) => ({
-            date,
-            averageRating: agg.ratedCount > 0 ? roundOneDecimal(agg.sum / agg.ratedCount) : null,
-            ratedCount: agg.ratedCount,
-            lowCount: agg.lowCount,
-            skippedCount: agg.skippedCount,
-        }));
-
-    // 3. Per Departemen
     const deptMap = new Map<
         string,
         {
@@ -412,26 +453,120 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
             skippedCount: number;
         }
     >();
+
+    const searchQuery = params.search?.trim().toLowerCase() ?? "";
+    const ratingFilter = params.ratingFilter?.trim().toUpperCase() || "ALL";
+    const ratingFilterNumber = /^[1-5]$/.test(ratingFilter) ? Number(ratingFilter) : null;
+
+    const filteredLogs: Array<{
+        id: string;
+        employeeId: string;
+        employeeName: string;
+        departmentName: string;
+        shiftDate: string;
+        rating: number | null;
+        skipped: boolean;
+    }> = [];
+
+    const attentionSourceRows: AttentionSourceRow[] = separate14dCheckins ?? [];
+
     for (const c of checkins) {
-        const dId = c.employee.departmentId;
-        const dName = c.employee.departmentRel?.name ?? "Tanpa Departemen";
-        const cur = deptMap.get(dId) ?? {
-            departmentId: dId,
-            departmentName: dName,
+        const shiftDateStr = formatDateKey(c.shiftDate);
+        const deptName = c.employee.departmentRel?.name ?? "Tanpa Departemen";
+        const isRated = !c.skipped && typeof c.rating === "number" && c.rating >= 1 && c.rating <= 5;
+
+        // Kumpulkan sumber deteksi dini 14 hari tanpa kueri tambahan bila tercakup rentang
+        if (!separate14dCheckins && isRated && shiftDateStr >= attentionFromStr && shiftDateStr <= todayWib) {
+            attentionSourceRows.push(c);
+        }
+
+        const dailyCur = dailyMap.get(shiftDateStr) ?? {
             sum: 0,
             ratedCount: 0,
             lowCount: 0,
             skippedCount: 0,
         };
-        if (c.skipped || c.rating === null) {
-            cur.skippedCount += 1;
+        const deptCur = deptMap.get(c.employee.departmentId) ?? {
+            departmentId: c.employee.departmentId,
+            departmentName: deptName,
+            sum: 0,
+            ratedCount: 0,
+            lowCount: 0,
+            skippedCount: 0,
+        };
+
+        if (isRated) {
+            const score = c.rating as number;
+            totalRated += 1;
+            ratingSum += score;
+            countsByRating[score] += 1;
+            if (score <= 2) {
+                lowMoodCount += 1;
+                dailyCur.lowCount += 1;
+                deptCur.lowCount += 1;
+            }
+            dailyCur.sum += score;
+            dailyCur.ratedCount += 1;
+            deptCur.sum += score;
+            deptCur.ratedCount += 1;
         } else {
-            cur.sum += c.rating;
-            cur.ratedCount += 1;
-            if (c.rating <= 2) cur.lowCount += 1;
+            totalSkipped += 1;
+            dailyCur.skippedCount += 1;
+            deptCur.skippedCount += 1;
         }
-        deptMap.set(dId, cur);
+
+        dailyMap.set(shiftDateStr, dailyCur);
+        deptMap.set(c.employee.departmentId, deptCur);
+
+        // Evaluasi filter log pada pass yang sama
+        let matchFilter = true;
+        if (ratingFilter === "SKIPPED") {
+            matchFilter = c.skipped;
+        } else if (ratingFilter === "LOW") {
+            matchFilter = isRated && (c.rating as number) <= 2;
+        } else if (ratingFilterNumber !== null) {
+            matchFilter = isRated && c.rating === ratingFilterNumber;
+        }
+
+        if (matchFilter && searchQuery) {
+            const hay = `${c.employee.name} ${c.employeeId} ${deptName}`.toLowerCase();
+            matchFilter = hay.includes(searchQuery);
+        }
+
+        if (matchFilter) {
+            filteredLogs.push({
+                id: c.id,
+                employeeId: c.employeeId,
+                employeeName: c.employee.name,
+                departmentName: c.employee.departmentRel?.name ?? "-",
+                shiftDate: shiftDateStr,
+                rating: c.rating,
+                skipped: c.skipped,
+            });
+        }
     }
+
+    const averageRating = totalRated > 0 ? roundOneDecimal(ratingSum / totalRated) : null;
+    const participationRate =
+        totalClockIns > 0
+            ? Math.min(100, roundOneDecimal((totalRated / totalClockIns) * 100))
+            : 0;
+
+    const distribution = ([5, 4, 3, 2, 1] as const).map((star) => ({
+        rating: star,
+        count: countsByRating[star],
+        percentage: totalRated > 0 ? roundOneDecimal((countsByRating[star] / totalRated) * 100) : 0,
+    }));
+
+    const dailyTrend = Array.from(dailyMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, agg]) => ({
+            date,
+            averageRating: agg.ratedCount > 0 ? roundOneDecimal(agg.sum / agg.ratedCount) : null,
+            ratedCount: agg.ratedCount,
+            lowCount: agg.lowCount,
+            skippedCount: agg.skippedCount,
+        }));
 
     const departmentBreakdown = Array.from(deptMap.values())
         .map((d) => ({
@@ -451,7 +586,7 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
             return a.averageRating - b.averageRating;
         });
 
-    // 4. Deteksi Dini (14 hari terakhir: skor rendah 1–2 berulang >= 2 kali)
+    // Deteksi Dini (14 hari terakhir: skor rendah 1–2 berulang >= 2 kali atau skor 1 terbaru)
     const attentionMap = new Map<
         string,
         {
@@ -465,7 +600,7 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
             latestShiftDate: string;
         }
     >();
-    for (const c of recent14dCheckins) {
+    for (const c of attentionSourceRows) {
         if (c.rating === null) continue;
         const dateStr = formatDateKey(c.shiftDate);
         const cur = attentionMap.get(c.employeeId);
@@ -508,39 +643,11 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
             return a.averageRating - b.averageRating;
         });
 
-    // 5. Log Respons Karyawan (filtered + paginated)
-    const searchQuery = params.search?.trim().toLowerCase() ?? "";
-    const ratingFilter = params.ratingFilter?.trim().toUpperCase() || "ALL";
-
-    const filteredLogs = checkins.filter((c) => {
-        if (ratingFilter === "SKIPPED") {
-            if (!c.skipped) return false;
-        } else if (ratingFilter === "LOW") {
-            if (c.skipped || c.rating === null || c.rating > 2) return false;
-        } else if (/^[1-5]$/.test(ratingFilter)) {
-            if (c.skipped || c.rating !== Number(ratingFilter)) return false;
-        }
-
-        if (searchQuery) {
-            const hay = `${c.employee.name} ${c.employeeId} ${c.employee.departmentRel?.name ?? ""}`.toLowerCase();
-            if (!hay.includes(searchQuery)) return false;
-        }
-        return true;
-    });
-
     const totalLogs = filteredLogs.length;
     const totalPages = Math.max(1, Math.ceil(totalLogs / limit));
     const safePage = Math.min(page, totalPages);
     const startIdx = (safePage - 1) * limit;
-    const logs = filteredLogs.slice(startIdx, startIdx + limit).map((c) => ({
-        id: c.id,
-        employeeId: c.employeeId,
-        employeeName: c.employee.name,
-        departmentName: c.employee.departmentRel?.name ?? "-",
-        shiftDate: formatDateKey(c.shiftDate),
-        rating: c.rating,
-        skipped: c.skipped,
-    }));
+    const logs = filteredLogs.slice(startIdx, startIdx + limit);
 
     return {
         enabled,
@@ -588,7 +695,7 @@ const VALID_TOPICS = new Set<string>([
 ]);
 
 export async function getHrAnonymousShares(params: HrAnonymousSharesParams) {
-    const page = Math.max(1, params.page ?? 1);
+    const requestedPage = Math.max(1, params.page ?? 1);
     const limit = Math.min(50, Math.max(5, params.limit ?? 15));
 
     const dateFilter: Prisma.StringFilter = {};
@@ -614,30 +721,37 @@ export async function getHrAnonymousShares(params: HrAnonymousSharesParams) {
             : {}),
     };
 
-    const [total, items, groupedStatuses] = await Promise.all([
+    const [total, groupedStatuses] = await Promise.all([
         prisma.stressmeterAnonymousShare.count({ where: listWhere }),
-        prisma.stressmeterAnonymousShare.findMany({
-            where: listWhere,
-            // Urutkan berdasarkan tanggal WIB + UUID acak (bukan createdAt) agar urutan jam tidak bocor
-            orderBy: [{ submittedWibDate: "desc" }, { id: "desc" }],
-            skip: (page - 1) * limit,
-            take: limit,
-            select: {
-                id: true,
-                submittedWibDate: true,
-                topic: true,
-                message: true,
-                status: true,
-                hrNote: true,
-                reviewedAt: true,
-            },
-        }),
         prisma.stressmeterAnonymousShare.groupBy({
             by: ["status"],
             where: baseWhere,
             _count: { _all: true },
         }),
     ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(requestedPage, totalPages);
+
+    const items =
+        total === 0
+            ? []
+            : await prisma.stressmeterAnonymousShare.findMany({
+                  where: listWhere,
+                  // Urutkan berdasarkan tanggal WIB + UUID acak (bukan createdAt) agar urutan jam tidak bocor
+                  orderBy: [{ submittedWibDate: "desc" }, { id: "desc" }],
+                  skip: (safePage - 1) * limit,
+                  take: limit,
+                  select: {
+                      id: true,
+                      submittedWibDate: true,
+                      topic: true,
+                      message: true,
+                      status: true,
+                      hrNote: true,
+                      reviewedAt: true,
+                  },
+              });
 
     const counts: Record<"ALL" | AnonymousShareStatusValue, number> = {
         ALL: 0,
@@ -654,10 +768,10 @@ export async function getHrAnonymousShares(params: HrAnonymousSharesParams) {
         items,
         counts,
         pagination: {
-            page,
+            page: safePage,
             limit,
             total,
-            totalPages: Math.max(1, Math.ceil(total / limit)),
+            totalPages,
         },
     };
 }
@@ -667,30 +781,29 @@ export async function updateAnonymousShareStatus(
     input: { status: AnonymousShareStatusValue; hrNote?: string | null },
     actorUserId: string
 ) {
-    const existing = await prisma.stressmeterAnonymousShare.findUnique({
-        where: { id },
-        select: { id: true },
-    });
-    if (!existing) return null;
-
-    const updated = await prisma.stressmeterAnonymousShare.update({
-        where: { id },
-        data: {
-            status: input.status as AnonymousShareStatus,
-            hrNote: input.hrNote?.trim() ? input.hrNote.trim() : null,
-            reviewedAt: new Date(),
-            reviewedByUserId: actorUserId,
-        },
-        select: {
-            id: true,
-            submittedWibDate: true,
-            topic: true,
-            message: true,
-            status: true,
-            hrNote: true,
-            reviewedAt: true,
-        },
-    });
-
-    return updated;
+    try {
+        return await prisma.stressmeterAnonymousShare.update({
+            where: { id },
+            data: {
+                status: input.status as AnonymousShareStatus,
+                hrNote: input.hrNote?.trim() ? input.hrNote.trim() : null,
+                reviewedAt: new Date(),
+                reviewedByUserId: actorUserId,
+            },
+            select: {
+                id: true,
+                submittedWibDate: true,
+                topic: true,
+                message: true,
+                status: true,
+                hrNote: true,
+                reviewedAt: true,
+            },
+        });
+    } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+            return null;
+        }
+        throw error;
+    }
 }

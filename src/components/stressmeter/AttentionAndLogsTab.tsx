@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Search, Star, X } from "lucide-react";
 import {
     Table,
@@ -24,7 +25,7 @@ interface AttentionAndLogsTabProps {
     onPageChange: (page: number) => void;
 }
 
-export default function AttentionAndLogsTab({
+function AttentionAndLogsTab({
     data,
     search,
     onSearchChange,
@@ -229,3 +230,5 @@ export default function AttentionAndLogsTab({
         </div>
     );
 }
+
+export default memo(AttentionAndLogsTab);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     AlertTriangle,
     BarChart3,
@@ -27,18 +27,24 @@ import type {
 type HrTab = "overview" | "attention" | "shares";
 type RangePreset = "7d" | "14d" | "30d" | "custom";
 
+function isAbortError(error: unknown): boolean {
+    return error instanceof DOMException && error.name === "AbortError";
+}
+
 export default function HrStressmeterPage() {
     const toast = useToast();
-    const todayWib = toWIBDateString();
+    const toastRef = useRef(toast);
+    toastRef.current = toast;
 
     const [activeTab, setActiveTab] = useState<HrTab>("overview");
     const [rangePreset, setRangePreset] = useState<RangePreset>("30d");
-    const [fromDate, setFromDate] = useState(() => addCalendarDays(todayWib, -29));
-    const [toDate, setToDate] = useState(todayWib);
+    const [fromDate, setFromDate] = useState(() => addCalendarDays(toWIBDateString(), -29));
+    const [toDate, setToDate] = useState(() => toWIBDateString());
     const [departmentId, setDepartmentId] = useState("");
 
-    // Log filters
+    // Log filters (search di-debounce 300ms agar tidak memicu request di setiap ketukan tombol)
     const [logSearch, setLogSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [logRatingFilter, setLogRatingFilter] = useState("ALL");
     const [logPage, setLogPage] = useState(1);
 
@@ -57,7 +63,17 @@ export default function HrStressmeterPage() {
 
     const [togglingEnabled, setTogglingEnabled] = useState(false);
 
-    const applyPreset = (preset: "7d" | "14d" | "30d") => {
+    const overviewAbortRef = useRef<AbortController | null>(null);
+    const sharesAbortRef = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            setDebouncedSearch(logSearch.trim());
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [logSearch]);
+
+    const applyPreset = useCallback((preset: "7d" | "14d" | "30d") => {
         const nowWib = toWIBDateString();
         const offset = preset === "7d" ? -6 : preset === "14d" ? -13 : -29;
         setRangePreset(preset);
@@ -65,9 +81,13 @@ export default function HrStressmeterPage() {
         setToDate(nowWib);
         setLogPage(1);
         setSharePage(1);
-    };
+    }, []);
 
     const fetchOverview = useCallback(async () => {
+        overviewAbortRef.current?.abort();
+        const controller = new AbortController();
+        overviewAbortRef.current = controller;
+
         setLoadingOverview(true);
         setOverviewError(null);
         try {
@@ -79,17 +99,23 @@ export default function HrStressmeterPage() {
             });
             if (departmentId) qs.set("departmentId", departmentId);
             if (logRatingFilter !== "ALL") qs.set("rating", logRatingFilter);
-            if (logSearch.trim()) qs.set("search", logSearch.trim());
+            if (debouncedSearch) qs.set("search", debouncedSearch);
 
-            const res = await fetch(`/api/stressmeter?${qs.toString()}`);
+            const res = await fetch(`/api/stressmeter?${qs.toString()}`, {
+                signal: controller.signal,
+                cache: "no-store",
+            });
             if (!res.ok) {
                 throw new Error(
                     await getResponseErrorMessage(res, "Gagal memuat data Stressmeter.")
                 );
             }
             const json = await res.json();
-            setOverview(json.data as StressmeterOverviewData);
+            if (!controller.signal.aborted) {
+                setOverview(json.data as StressmeterOverviewData);
+            }
         } catch (err) {
+            if (isAbortError(err)) return;
             const msg = getFriendlyClientErrorMessage(
                 err,
                 "Gagal memuat data Stressmeter. Periksa koneksi Anda lalu coba lagi."
@@ -97,11 +123,17 @@ export default function HrStressmeterPage() {
             setOverviewError(msg);
             reportClientError("HrStressmeterPage", msg, err);
         } finally {
-            setLoadingOverview(false);
+            if (overviewAbortRef.current === controller) {
+                setLoadingOverview(false);
+            }
         }
-    }, [fromDate, toDate, departmentId, logRatingFilter, logSearch, logPage]);
+    }, [fromDate, toDate, departmentId, logRatingFilter, debouncedSearch, logPage]);
 
     const fetchShares = useCallback(async () => {
+        sharesAbortRef.current?.abort();
+        const controller = new AbortController();
+        sharesAbortRef.current = controller;
+
         setLoadingShares(true);
         try {
             const qs = new URLSearchParams({
@@ -113,34 +145,44 @@ export default function HrStressmeterPage() {
             if (shareStatusFilter !== "ALL") qs.set("status", shareStatusFilter);
             if (shareTopicFilter !== "ALL") qs.set("topic", shareTopicFilter);
 
-            const res = await fetch(`/api/stressmeter/shares?${qs.toString()}`);
+            const res = await fetch(`/api/stressmeter/shares?${qs.toString()}`, {
+                signal: controller.signal,
+                cache: "no-store",
+            });
             if (!res.ok) {
                 throw new Error(
                     await getResponseErrorMessage(res, "Gagal memuat kotak curhat anonim.")
                 );
             }
             const json = await res.json();
-            setShares(json.data as AnonymousSharesData);
+            if (!controller.signal.aborted) {
+                setShares(json.data as AnonymousSharesData);
+            }
         } catch (err) {
+            if (isAbortError(err)) return;
             const msg = getFriendlyClientErrorMessage(
                 err,
                 "Gagal memuat kotak curhat anonim. Periksa koneksi Anda lalu coba lagi."
             );
-            toast(msg, "error");
+            toastRef.current(msg, "error");
             reportClientError("HrStressmeterShares", msg, err);
         } finally {
-            setLoadingShares(false);
+            if (sharesAbortRef.current === controller) {
+                setLoadingShares(false);
+            }
         }
-    }, [fromDate, toDate, shareStatusFilter, shareTopicFilter, sharePage, toast]);
+    }, [fromDate, toDate, shareStatusFilter, shareTopicFilter, sharePage]);
 
     useEffect(() => {
         void fetchOverview();
+        return () => overviewAbortRef.current?.abort();
     }, [fetchOverview]);
 
     useEffect(() => {
         if (activeTab === "shares") {
             void fetchShares();
         }
+        return () => sharesAbortRef.current?.abort();
     }, [activeTab, fetchShares]);
 
     const handleToggleEnabled = async () => {
@@ -159,7 +201,7 @@ export default function HrStressmeterPage() {
                 );
             }
             setOverview((prev) => (prev ? { ...prev, enabled: nextEnabled } : prev));
-            toast(
+            toastRef.current(
                 nextEnabled
                     ? "Pop-up Stressmeter pasca Clock In diaktifkan."
                     : "Pop-up Stressmeter pasca Clock In dijeda sementara.",
@@ -170,18 +212,30 @@ export default function HrStressmeterPage() {
                 err,
                 "Gagal mengubah status pop-up. Periksa koneksi Anda lalu coba lagi."
             );
-            toast(msg, "error");
+            toastRef.current(msg, "error");
             reportClientError("HrStressmeterToggle", msg, err);
         } finally {
             setTogglingEnabled(false);
         }
     };
 
-    const handleShareUpdated = async () => {
+    const handleShareUpdated = useCallback(async () => {
         await Promise.all([fetchShares(), fetchOverview()]);
-    };
+    }, [fetchShares, fetchOverview]);
+
+    const handleOpenSharesTab = useCallback(() => setActiveTab("shares"), []);
+    const handleOpenAttentionTab = useCallback(() => setActiveTab("attention"), []);
+    const handleLogSearchChange = useCallback((val: string) => {
+        setLogSearch(val);
+        setLogPage(1);
+    }, []);
+    const handleLogRatingChange = useCallback((val: string) => {
+        setLogRatingFilter(val);
+        setLogPage(1);
+    }, []);
 
     const isPopupEnabled = overview?.enabled ?? true;
+    const isRefreshing = loadingOverview && Boolean(overview);
 
     return (
         <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
@@ -258,6 +312,7 @@ export default function HrStressmeterPage() {
                             aria-label="Tanggal mulai"
                             value={fromDate}
                             onChange={(e) => {
+                                if (!e.target.value) return;
                                 setRangePreset("custom");
                                 setFromDate(e.target.value);
                                 setLogPage(1);
@@ -271,6 +326,7 @@ export default function HrStressmeterPage() {
                             aria-label="Tanggal selesai"
                             value={toDate}
                             onChange={(e) => {
+                                if (!e.target.value) return;
                                 setRangePreset("custom");
                                 setToDate(e.target.value);
                                 setLogPage(1);
@@ -279,6 +335,13 @@ export default function HrStressmeterPage() {
                             className="px-2.5 py-1.5 rounded-md border border-border bg-background text-foreground text-xs"
                         />
                     </div>
+
+                    {isRefreshing && (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Memperbarui...
+                        </span>
+                    )}
                 </div>
 
                 {activeTab !== "shares" && (
@@ -300,6 +363,23 @@ export default function HrStressmeterPage() {
                     </select>
                 )}
             </div>
+
+            {/* Banner Error Non-blocking saat Refresh */}
+            {overviewError && overview && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-xs text-destructive">
+                    <span className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        {overviewError}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => void fetchOverview()}
+                        className="font-semibold underline shrink-0"
+                    >
+                        Coba lagi
+                    </button>
+                </div>
+            )}
 
             {/* Sticky Tabs */}
             <div className="sticky top-0 z-10 bg-background/95 backdrop-blur -mx-4 px-4 border-b border-border">
@@ -385,8 +465,8 @@ export default function HrStressmeterPage() {
                     {activeTab === "overview" && overview && (
                         <OverviewTab
                             data={overview}
-                            onOpenSharesTab={() => setActiveTab("shares")}
-                            onOpenAttentionTab={() => setActiveTab("attention")}
+                            onOpenSharesTab={handleOpenSharesTab}
+                            onOpenAttentionTab={handleOpenAttentionTab}
                         />
                     )}
 
@@ -394,15 +474,9 @@ export default function HrStressmeterPage() {
                         <AttentionAndLogsTab
                             data={overview}
                             search={logSearch}
-                            onSearchChange={(val) => {
-                                setLogSearch(val);
-                                setLogPage(1);
-                            }}
+                            onSearchChange={handleLogSearchChange}
                             ratingFilter={logRatingFilter}
-                            onRatingFilterChange={(val) => {
-                                setLogRatingFilter(val);
-                                setLogPage(1);
-                            }}
+                            onRatingFilterChange={handleLogRatingChange}
                             onPageChange={setLogPage}
                         />
                     )}

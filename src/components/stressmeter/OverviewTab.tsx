@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { AlertTriangle, BarChart3, MessageSquareHeart, Star, Users } from "lucide-react";
 import {
     Table,
@@ -29,7 +30,7 @@ function getScoreBadgeClass(avg: number | null): string {
     return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
 }
 
-export default function OverviewTab({
+function OverviewTab({
     data,
     onOpenSharesTab,
     onOpenAttentionTab,
@@ -294,3 +295,5 @@ export default function OverviewTab({
         </div>
     );
 }
+
+export default memo(OverviewTab);
