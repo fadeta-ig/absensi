@@ -1155,20 +1155,20 @@ export const createOutsourceUserSchema = z.object({
         .trim()
         .min(3, "Username minimal 3 karakter.")
         .max(100, "Username maksimal 100 karakter.")
-        .regex(/^[A-Za-z0-9._-]+$/, "Username hanya boleh huruf, angka, titik, garis bawah, atau tanda hubung."),
+        .regex(/^[A-Za-z0-9._-]+$/, "Username hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung."),
     displayName: z
         .string()
         .trim()
-        .min(2, "Nama tampilan minimal 2 karakter.")
-        .max(150, "Nama tampilan maksimal 150 karakter."),
+        .min(2, "Nama lengkap minimal 2 karakter.")
+        .max(150, "Nama lengkap maksimal 150 karakter."),
     password: z
         .string()
-        .min(8, "Password minimal 8 karakter.")
-        .max(128, "Password maksimal 128 karakter."),
+        .min(8, "Kata sandi minimal 8 karakter.")
+        .max(128, "Kata sandi maksimal 128 karakter."),
     email: z
         .string()
         .trim()
-        .email("Format email tidak valid.")
+        .email("Format email belum benar. Periksa kembali alamat email yang dimasukkan.")
         .max(191)
         .optional()
         .or(z.literal("")),
@@ -1180,13 +1180,13 @@ export const updateOutsourceUserSchema = z
         displayName: z
             .string()
             .trim()
-            .min(2, "Nama tampilan minimal 2 karakter.")
-            .max(150, "Nama tampilan maksimal 150 karakter.")
+            .min(2, "Nama lengkap minimal 2 karakter.")
+            .max(150, "Nama lengkap maksimal 150 karakter.")
             .optional(),
         email: z
             .string()
             .trim()
-            .email("Format email tidak valid.")
+            .email("Format email belum benar. Periksa kembali alamat email yang dimasukkan.")
             .max(191)
             .optional(),
         isActive: z.boolean().optional(),
@@ -1198,14 +1198,14 @@ export const updateOutsourceUserSchema = z
             d.email !== undefined ||
             d.isActive !== undefined ||
             d.modules !== undefined,
-        { message: "Minimal satu perubahan wajib dikirim." }
+        { message: "Belum ada perubahan yang dipilih untuk disimpan." }
     );
 
 export const resetOutsourcePasswordSchema = z.object({
     password: z
         .string()
-        .min(8, "Password minimal 8 karakter.")
-        .max(128, "Password maksimal 128 karakter."),
+        .min(8, "Kata sandi minimal 8 karakter.")
+        .max(128, "Kata sandi maksimal 128 karakter."),
 });
 
 

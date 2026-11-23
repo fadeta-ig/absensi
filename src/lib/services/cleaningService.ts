@@ -213,7 +213,7 @@ async function validateEligibility(tx: TxClient, userId: string, workerType: "IN
         if (isManagedOutsource) {
             if (!userRoles.includes(SYSTEM_ROLES.CLEANING_WORKER)) {
                 throw new CleaningError(
-                    "Akun outsource ini belum diberi izin Eksekusi Kebersihan oleh WIG002 di menu Akun Outsource.",
+                    "Akun outsource ini belum memiliki akses Checklist Kebersihan. Aktifkan terlebih dahulu di menu Akun Outsource.",
                     422
                 );
             }

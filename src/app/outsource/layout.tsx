@@ -17,7 +17,11 @@ import { EmployeeDraftProvider } from "@/components/employee/EmployeeDraftContex
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
 import { unsubscribePush } from "@/lib/pushClient";
-import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 
 interface OutsourceCaps {
     canExecuteCleaning: boolean;
@@ -56,13 +60,13 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
         try {
             const res = await fetch("/api/auth/me");
             if (!res.ok) {
-                storeAuthRedirectMessage("Sesi Anda berakhir atau belum login. Silakan masuk kembali.");
+                storeAuthRedirectMessage("Sesi Anda berakhir atau belum masuk. Silakan masuk kembali.");
                 router.replace("/");
                 return;
             }
             const data = await res.json();
             if (!data.permissions?.includes("outsource.portal")) {
-                storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
+                storeAuthRedirectMessage("Halaman ini tidak tersedia untuk akun Anda. Anda dialihkan ke beranda yang sesuai.");
                 router.replace(
                     data.permissions?.includes("hr.manage")
                         ? "/dashboard"
@@ -84,7 +88,7 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
             }
         } catch (error) {
             reportClientError("OutsourceLayout", "Gagal memverifikasi sesi outsource", error);
-            storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Silakan masuk kembali.");
+            storeAuthRedirectMessage("Sesi tidak dapat diverifikasi. Periksa koneksi Anda lalu masuk kembali.");
             router.replace("/");
         } finally {
             setLoading(false);
@@ -115,16 +119,19 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
     const handleLogout = useCallback(async () => {
         if (loggingOut) return;
         setLoggingOut(true);
-        toast("Memproses logout...", "info");
+        toast("Sedang keluar...", "info");
         try {
             void unsubscribePush();
             const res = await fetch("/api/auth/logout", { method: "POST" });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal logout."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal keluar dari akun."));
             notifyAuthChanged("logout");
             router.replace("/");
         } catch (error) {
             reportClientError("OutsourceLayout", "Logout outsource gagal", error);
-            toast(error instanceof Error ? error.message : "Gagal logout.", "error");
+            toast(
+                getFriendlyClientErrorMessage(error, "Gagal keluar dari akun. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
             setLoggingOut(false);
         }
     }, [loggingOut, router, toast]);
@@ -152,7 +159,7 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
             items.push({
                 href: "/outsource/equipment/approval-queue",
                 icon: CheckCircle2,
-                label: "Approval Final Alat",
+                label: "Persetujuan Akhir Alat",
             });
         }
         if (perms.includes("equipment.overview")) {
@@ -161,7 +168,7 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
         return items;
     }, [user, caps]);
 
-    if (loading || !user) return <AppShellLoading message="Memuat portal E-Checklist Outsource..." />;
+    if (loading || !user) return <AppShellLoading message="Memuat portal E-Checklist..." />;
 
     return (
         <EmployeeDraftProvider userId={user.userId} employeeId={null}>
@@ -170,7 +177,7 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
                 navItems={navItems}
                 brandTitle="WITS Outsource"
                 brandSubtitle="Portal E-Checklist"
-                mobileTitle="E-Checklist OS"
+                mobileTitle="Portal E-Checklist"
                 storageKey="outsource-sidebar-collapsed"
                 onLogout={handleLogout}
                 logoutLoading={loggingOut}

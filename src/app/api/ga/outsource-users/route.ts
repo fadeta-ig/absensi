@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         if (rawModule && rawModule !== "all") {
             const parsed = outsourceModuleKeySchema.safeParse(rawModule);
             if (!parsed.success) {
-                return NextResponse.json({ error: "Filter modul tidak valid." }, { status: 400 });
+                return NextResponse.json({ error: "Pilihan filter modul tidak dikenali." }, { status: 400 });
             }
             moduleFilter = parsed.data;
         }

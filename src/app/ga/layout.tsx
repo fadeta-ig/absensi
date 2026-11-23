@@ -55,7 +55,7 @@ const GA_NAV_ITEMS: NavItem[] = [
         icon: ClipboardCheck,
         label: "Inspeksi",
         subItems: [
-            { href: "/ga/outsource-users", label: "Akun Outsource (OS)" },
+            { href: "/ga/outsource-users", label: "Akun Outsource" },
             { href: "/ga/cleaning/settings", label: "Pengaturan" },
             { href: "/ga/cleaning/recap", label: "Rekap Bulanan" },
             { href: "/ga/cleaning/approvals", label: "Tanda Tangan Bulanan" },

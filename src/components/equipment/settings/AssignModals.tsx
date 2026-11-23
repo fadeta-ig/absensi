@@ -443,7 +443,7 @@ export function CreateAssignmentModal({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <EquipmentActorPicker
                                 role="operator"
-                                label="Petugas (Karyawan / OS)"
+                                label="Petugas (Karyawan atau Outsource)"
                                 value={assignEmployee}
                                 onChange={setAssignEmployee}
                             />
@@ -774,7 +774,7 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
                         </div>
                         <EquipmentActorPicker
                             role="operator"
-                            label="Petugas (Karyawan / OS)"
+                            label="Petugas (Karyawan atau Outsource)"
                             value={editEmployee}
                             onChange={setEditEmployee}
                         />

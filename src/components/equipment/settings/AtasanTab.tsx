@@ -303,7 +303,9 @@ export default function AtasanTab({
                             >
                                 <span className="min-w-0">
                                     <span className="inline-flex items-center gap-1.5 text-sm font-medium truncate">
-                                        <span className="truncate">{m.name ?? m.employeeId}</span>
+                                        <span className="truncate">
+                                            {m.name ?? (m.isOutsource ? "Petugas Outsource" : m.employeeId)}
+                                        </span>
                                         {m.isOutsource && (
                                             <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 shrink-0">
                                                 OS
@@ -311,7 +313,11 @@ export default function AtasanTab({
                                         )}
                                     </span>
                                     <span className="block text-xs text-muted-foreground truncate">
-                                        {m.isOutsource ? `@${m.username ?? m.employeeId}` : m.employeeId}
+                                        {m.isOutsource
+                                            ? m.username
+                                                ? `@${m.username}`
+                                                : "Akun outsource"
+                                            : m.employeeId}
                                     </span>
                                 </span>
                                 <button
@@ -330,7 +336,7 @@ export default function AtasanTab({
                     <div className="flex-1">
                         <EquipmentActorPicker
                             role="approver"
-                            label="Cari approver (Karyawan / OS)"
+                            label="Cari pemberi persetujuan (Karyawan atau Outsource)"
                             value={newApprover}
                             onChange={setNewApprover}
                         />

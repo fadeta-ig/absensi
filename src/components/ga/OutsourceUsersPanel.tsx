@@ -18,7 +18,11 @@ import { useConfirm } from "@/components/ConfirmModal";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { formatWIBDateTime } from "@/lib/timezone";
 import {
     OUTSOURCE_MODULE_DEFINITIONS,
@@ -48,7 +52,7 @@ const inputClass =
     "w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm";
 
 function formatShortDate(iso: string | null): string {
-    if (!iso) return "Belum pernah";
+    if (!iso) return "Belum pernah masuk";
     try {
         return formatWIBDateTime(new Date(iso), {
             day: "2-digit",
@@ -58,7 +62,7 @@ function formatShortDate(iso: string | null): string {
             minute: "2-digit",
         });
     } catch {
-        return iso;
+        return "-";
     }
 }
 
@@ -98,11 +102,18 @@ export default function OutsourceUsersPanel() {
         setError(null);
         try {
             const res = await fetch("/api/ga/outsource-users");
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat daftar akun outsource."));
+            if (!res.ok) {
+                throw new Error(
+                    await getResponseErrorMessage(res, "Gagal memuat daftar akun outsource.")
+                );
+            }
             const json = await res.json();
             setUsers(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat data.";
+            const msg = getFriendlyClientErrorMessage(
+                err,
+                "Gagal memuat daftar akun outsource. Periksa koneksi Anda lalu coba lagi."
+            );
             setError(msg);
             reportClientError("OutsourceUsersPanel", msg, err);
         } finally {
@@ -178,7 +189,7 @@ export default function OutsourceUsersPanel() {
                 return;
             }
             if (password.length < 8) {
-                toast("Password minimal 8 karakter.", "warning");
+                toast("Kata sandi minimal 8 karakter.", "warning");
                 return;
             }
         }
@@ -201,8 +212,12 @@ export default function OutsourceUsersPanel() {
                         modules: selectedModules,
                     }),
                 });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal membuat akun outsource."));
-                toast(`Akun outsource "${username.trim().toLowerCase()}" berhasil dibuat.`, "success");
+                if (!res.ok) {
+                    throw new Error(
+                        await getResponseErrorMessage(res, "Gagal membuat akun outsource.")
+                    );
+                }
+                toast(`Akun ${displayName.trim()} berhasil dibuat.`, "success");
             } else {
                 const res = await fetch(`/api/ga/outsource-users/${editingUser.id}`, {
                     method: "PATCH",
@@ -213,13 +228,23 @@ export default function OutsourceUsersPanel() {
                         modules: selectedModules,
                     }),
                 });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memperbarui akun outsource."));
-                toast(`Akun & RBAC "${editingUser.username}" berhasil diperbarui.`, "success");
+                if (!res.ok) {
+                    throw new Error(
+                        await getResponseErrorMessage(res, "Gagal menyimpan perubahan akun.")
+                    );
+                }
+                toast(`Perubahan akun ${displayName.trim()} berhasil disimpan.`, "success");
             }
             setModalOpen(false);
             await fetchUsers();
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+            toast(
+                getFriendlyClientErrorMessage(
+                    err,
+                    "Gagal menyimpan perubahan. Periksa koneksi Anda lalu coba lagi."
+                ),
+                "error"
+            );
             reportClientError("OutsourceUsersPanel", "Submit form failed", err);
         } finally {
             setSaving(false);
@@ -230,11 +255,11 @@ export default function OutsourceUsersPanel() {
         (row: OutsourceUserRow) => {
             const nextActive = !row.isActive;
             confirm({
-                title: nextActive ? `Aktifkan akun "${row.displayName}"?` : `Nonaktifkan akun "${row.displayName}"?`,
+                title: nextActive ? `Aktifkan akun ${row.displayName}?` : `Nonaktifkan akun ${row.displayName}?`,
                 message: nextActive
-                    ? `Akun ${row.username} akan kembali bisa login ke portal /outsource sesuai RBAC E-Checklist yang dipilih.`
-                    : `Akun ${row.username} akan langsung diputus sesinya, tidak bisa login, dan semua penugasan Cleaning/Equipment aktif akan diakhiri hari ini. Data historis tetap utuh.`,
-                confirmLabel: nextActive ? "Ya, Aktifkan" : "Ya, Nonaktifkan",
+                    ? `Akun @${row.username} dapat kembali masuk ke portal E-Checklist sesuai akses modul yang dipilih.`
+                    : `Akun @${row.username} akan langsung keluar dari semua perangkat, tidak bisa masuk lagi, dan seluruh penugasan kebersihan serta peralatan aktif akan diakhiri hari ini. Riwayat pekerjaan tetap tersimpan.`,
+                confirmLabel: nextActive ? "Aktifkan" : "Nonaktifkan",
                 cancelLabel: "Batal",
                 variant: nextActive ? "info" : "warning",
                 onConfirm: () => {
@@ -246,16 +271,26 @@ export default function OutsourceUsersPanel() {
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ isActive: nextActive }),
                             });
-                            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal mengubah status akun."));
+                            if (!res.ok) {
+                                throw new Error(
+                                    await getResponseErrorMessage(res, "Gagal mengubah status akun.")
+                                );
+                            }
                             toast(
                                 nextActive
-                                    ? `Akun "${row.username}" diaktifkan.`
-                                    : `Akun "${row.username}" dinonaktifkan dan penugasan aktif diakhiri.`,
+                                    ? `Akun ${row.displayName} kembali aktif.`
+                                    : `Akun ${row.displayName} dinonaktifkan dan penugasan aktifnya diakhiri.`,
                                 "success"
                             );
                             await fetchUsers();
                         } catch (err) {
-                            toast(err instanceof Error ? err.message : "Gagal mengubah status.", "error");
+                            toast(
+                                getFriendlyClientErrorMessage(
+                                    err,
+                                    "Gagal mengubah status akun. Periksa koneksi Anda lalu coba lagi."
+                                ),
+                                "error"
+                            );
                             reportClientError("OutsourceUsersPanel", "Toggle active failed", err);
                         } finally {
                             setBusyId(null);
@@ -271,11 +306,11 @@ export default function OutsourceUsersPanel() {
         e.preventDefault();
         if (!resetTarget || resetting) return;
         if (newPassword.length < 8) {
-            toast("Password baru minimal 8 karakter.", "warning");
+            toast("Kata sandi baru minimal 8 karakter.", "warning");
             return;
         }
         if (newPassword !== confirmPassword) {
-            toast("Konfirmasi password tidak cocok.", "warning");
+            toast("Konfirmasi kata sandi belum sama. Periksa kembali ketikan Anda.", "warning");
             return;
         }
         setResetting(true);
@@ -285,13 +320,26 @@ export default function OutsourceUsersPanel() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ password: newPassword }),
             });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyetel ulang password."));
-            toast(`Password "${resetTarget.username}" berhasil direset & sesi lama diputus.`, "success");
+            if (!res.ok) {
+                throw new Error(
+                    await getResponseErrorMessage(res, "Gagal memperbarui kata sandi.")
+                );
+            }
+            toast(
+                `Kata sandi ${resetTarget.displayName} diperbarui. Petugas perlu masuk ulang.`,
+                "success"
+            );
             setResetTarget(null);
             setNewPassword("");
             setConfirmPassword("");
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal reset password.", "error");
+            toast(
+                getFriendlyClientErrorMessage(
+                    err,
+                    "Gagal memperbarui kata sandi. Periksa koneksi Anda lalu coba lagi."
+                ),
+                "error"
+            );
             reportClientError("OutsourceUsersPanel", "Reset password failed", err);
         } finally {
             setResetting(false);
@@ -301,9 +349,9 @@ export default function OutsourceUsersPanel() {
     const handleDelete = useCallback(
         (row: OutsourceUserRow) => {
             confirm({
-                title: `Hapus permanen "${row.displayName}"?`,
-                message: `Akun "${row.username}" belum memiliki riwayat penugasan/inspeksi dan akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`,
-                confirmLabel: "Ya, Hapus Permanen",
+                title: `Hapus akun ${row.displayName}?`,
+                message: `Akun @${row.username} belum memiliki riwayat penugasan atau inspeksi. Data yang dihapus tidak bisa dikembalikan.`,
+                confirmLabel: "Hapus Akun",
                 cancelLabel: "Batal",
                 variant: "danger",
                 onConfirm: () => {
@@ -313,11 +361,21 @@ export default function OutsourceUsersPanel() {
                             const res = await fetch(`/api/ga/outsource-users/${row.id}`, {
                                 method: "DELETE",
                             });
-                            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menghapus akun."));
-                            toast(`Akun "${row.username}" berhasil dihapus permanen.`, "success");
+                            if (!res.ok) {
+                                throw new Error(
+                                    await getResponseErrorMessage(res, "Gagal menghapus akun.")
+                                );
+                            }
+                            toast(`Akun ${row.displayName} berhasil dihapus.`, "success");
                             await fetchUsers();
                         } catch (err) {
-                            toast(err instanceof Error ? err.message : "Gagal menghapus akun.", "error");
+                            toast(
+                                getFriendlyClientErrorMessage(
+                                    err,
+                                    "Gagal menghapus akun. Periksa koneksi Anda lalu coba lagi."
+                                ),
+                                "error"
+                            );
                             reportClientError("OutsourceUsersPanel", "Delete failed", err);
                         } finally {
                             setBusyId(null);
@@ -333,10 +391,9 @@ export default function OutsourceUsersPanel() {
         <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-semibold text-foreground">Manajemen Akun Outsource (OS)</h1>
+                    <h1 className="text-2xl font-semibold text-foreground">Akun Outsource</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Kelola akun petugas eksternal (tanpa data karyawan HR) beserta RBAC akses modul E-Checklist
-                        pada portal terisolasi <code className="text-xs">/outsource</code>. Khusus <strong>WIG002</strong>.
+                        Kelola akun petugas outsource dan pilih menu E-Checklist yang dapat mereka akses.
                     </p>
                 </div>
                 <button
@@ -345,22 +402,24 @@ export default function OutsourceUsersPanel() {
                     className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 shrink-0 min-h-[44px]"
                 >
                     <Plus className="h-4 w-4" />
-                    Tambah Akun OS
+                    Tambah Akun
                 </button>
             </div>
 
             {/* Ringkasan */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-card border border-border rounded-lg p-3.5">
-                    <p className="text-xs text-muted-foreground">Total Akun OS</p>
+                    <p className="text-xs text-muted-foreground">Total Akun</p>
                     <p className="text-xl font-semibold mt-0.5">{stats.total}</p>
                 </div>
                 <div className="bg-card border border-border rounded-lg p-3.5">
-                    <p className="text-xs text-muted-foreground">Akun Aktif</p>
-                    <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">{stats.active}</p>
+                    <p className="text-xs text-muted-foreground">Aktif</p>
+                    <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        {stats.active}
+                    </p>
                 </div>
                 <div className="bg-card border border-border rounded-lg p-3.5">
-                    <p className="text-xs text-muted-foreground">Akses Cleaning</p>
+                    <p className="text-xs text-muted-foreground">Akses Kebersihan</p>
                     <p className="text-xl font-semibold mt-0.5">{stats.withCleaning}</p>
                 </div>
                 <div className="bg-card border border-border rounded-lg p-3.5">
@@ -372,7 +431,7 @@ export default function OutsourceUsersPanel() {
             {error && (
                 <FeedbackMessage variant="error">
                     {error}{" "}
-                    <button type="button" onClick={() => void fetchUsers()} className="underline ml-1">
+                    <button type="button" onClick={() => void fetchUsers()} className="underline ml-1 font-medium">
                         Coba lagi
                     </button>
                 </FeedbackMessage>
@@ -387,7 +446,7 @@ export default function OutsourceUsersPanel() {
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Cari nama, username, atau email…"
+                            placeholder="Cari nama, username, atau email..."
                             className={`${inputClass} pl-9`}
                             aria-label="Cari akun outsource"
                         />
@@ -398,7 +457,7 @@ export default function OutsourceUsersPanel() {
                         className={inputClass}
                         aria-label="Filter status akun"
                     >
-                        <option value="all">Semua Status</option>
+                        <option value="all">Semua status</option>
                         <option value="active">Aktif</option>
                         <option value="inactive">Nonaktif</option>
                     </select>
@@ -406,9 +465,9 @@ export default function OutsourceUsersPanel() {
                         value={moduleFilter}
                         onChange={(e) => setModuleFilter(e.target.value as "all" | OutsourceModuleKey)}
                         className={inputClass}
-                        aria-label="Filter modul RBAC"
+                        aria-label="Filter akses modul"
                     >
-                        <option value="all">Semua Modul E-Checklist</option>
+                        <option value="all">Semua akses modul</option>
                         {OUTSOURCE_MODULE_DEFINITIONS.map((m) => (
                             <option key={m.key} value={m.key}>
                                 {m.label}
@@ -420,23 +479,23 @@ export default function OutsourceUsersPanel() {
                 {loading ? (
                     <div className="flex items-center justify-center py-10 text-sm text-muted-foreground gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Memuat daftar akun outsource…
+                        Memuat daftar akun outsource...
                     </div>
                 ) : filteredUsers.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-8 border border-dashed border-border rounded-lg">
                         {users.length === 0
-                            ? "Belum ada akun outsource terdaftar. Klik Tambah Akun OS untuk memulai."
-                            : "Tidak ada akun outsource yang cocok dengan filter."}
+                            ? "Belum ada akun outsource. Klik Tambah Akun untuk membuat akun pertama."
+                            : "Tidak ada akun yang cocok dengan filter pencarian."}
                     </p>
                 ) : (
                     <div className="border border-border rounded-lg overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Akun OS</TableHead>
-                                    <TableHead>RBAC Modul E-Checklist</TableHead>
+                                    <TableHead>Petugas</TableHead>
+                                    <TableHead>Akses Modul</TableHead>
                                     <TableHead>Penugasan Aktif</TableHead>
-                                    <TableHead>Status & Login</TableHead>
+                                    <TableHead>Status &amp; Masuk Terakhir</TableHead>
                                     <TableHead className="text-right">Aksi</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -484,20 +543,20 @@ export default function OutsourceUsersPanel() {
                                                 )}
                                                 {row.isLegacyAccount && (
                                                     <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1">
-                                                        Akun OS lama — klik Ubah untuk migrasi ke portal /outsource
+                                                        Perlu pembaruan akses. Klik Ubah lalu simpan untuk mengaktifkan portal baru.
                                                     </p>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground">
                                                 <div>
-                                                    Cleaning:{" "}
+                                                    Kebersihan:{" "}
                                                     <strong className="text-foreground">
                                                         {row.cleaningAssignments.length}
                                                     </strong>{" "}
                                                     ruang
                                                 </div>
                                                 <div>
-                                                    Alat:{" "}
+                                                    Peralatan:{" "}
                                                     <strong className="text-foreground">
                                                         {row.activeEquipmentAssignmentsCount}
                                                     </strong>{" "}
@@ -524,7 +583,7 @@ export default function OutsourceUsersPanel() {
                                                         type="button"
                                                         onClick={() => openEditModal(row)}
                                                         disabled={isBusy}
-                                                        title="Ubah profil & RBAC modul"
+                                                        title="Ubah profil dan akses modul"
                                                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted min-h-[36px] disabled:opacity-50"
                                                     >
                                                         <Pencil className="h-3.5 w-3.5" />
@@ -538,7 +597,8 @@ export default function OutsourceUsersPanel() {
                                                             setConfirmPassword("");
                                                         }}
                                                         disabled={isBusy}
-                                                        title="Reset password"
+                                                        title="Atur ulang kata sandi"
+                                                        aria-label={`Atur ulang kata sandi ${row.displayName}`}
                                                         className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-border hover:bg-muted min-h-[36px] disabled:opacity-50"
                                                     >
                                                         <KeyRound className="h-3.5 w-3.5" />
@@ -548,6 +608,11 @@ export default function OutsourceUsersPanel() {
                                                         onClick={() => handleToggleActive(row)}
                                                         disabled={isBusy}
                                                         title={row.isActive ? "Nonaktifkan akun" : "Aktifkan akun"}
+                                                        aria-label={
+                                                            row.isActive
+                                                                ? `Nonaktifkan akun ${row.displayName}`
+                                                                : `Aktifkan akun ${row.displayName}`
+                                                        }
                                                         className={`inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-border min-h-[36px] disabled:opacity-50 ${
                                                             row.isActive
                                                                 ? "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
@@ -561,7 +626,8 @@ export default function OutsourceUsersPanel() {
                                                             type="button"
                                                             onClick={() => handleDelete(row)}
                                                             disabled={isBusy}
-                                                            title="Hapus permanen (hanya akun tanpa riwayat)"
+                                                            title="Hapus akun permanen"
+                                                            aria-label={`Hapus akun ${row.displayName}`}
                                                             className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md text-destructive hover:bg-destructive/10 min-h-[36px] disabled:opacity-50"
                                                         >
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -578,10 +644,10 @@ export default function OutsourceUsersPanel() {
                 )}
             </div>
 
-            {/* Modal Tambah / Ubah Akun OS + RBAC */}
+            {/* Modal Tambah / Ubah Akun Outsource */}
             {modalOpen && (
                 <AccessibleModal
-                    ariaLabel={editingUser ? "Ubah Akun & RBAC Outsource" : "Tambah Akun Outsource"}
+                    ariaLabel={editingUser ? "Ubah Akun Outsource" : "Tambah Akun Outsource"}
                     onClose={() => !saving && setModalOpen(false)}
                     className="!max-w-2xl !p-6"
                 >
@@ -591,25 +657,24 @@ export default function OutsourceUsersPanel() {
                                 {editingUser ? (
                                     <>
                                         <ShieldCheck className="h-5 w-5 text-primary" />
-                                        Ubah Akun & RBAC Outsource
+                                        Ubah Akun Outsource
                                     </>
                                 ) : (
                                     <>
                                         <UserPlus className="h-5 w-5 text-primary" />
-                                        Tambah Akun Outsource Baru
+                                        Tambah Akun Outsource
                                     </>
                                 )}
                             </h2>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                                Atur identitas akun dan centang modul E-Checklist yang diizinkan di portal{" "}
-                                <code className="text-[11px]">/outsource</code>.
+                                Atur identitas petugas dan pilih menu E-Checklist yang boleh dibuka.
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={() => setModalOpen(false)}
                             disabled={saving}
-                            aria-label="Tutup modal"
+                            aria-label="Tutup jendela"
                             className="p-1.5 rounded-md hover:bg-muted"
                         >
                             <X className="h-5 w-5" />
@@ -620,7 +685,7 @@ export default function OutsourceUsersPanel() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label htmlFor="os-username" className="block text-xs font-medium mb-1">
-                                    Username {editingUser ? "(tetap)" : "*"}
+                                    Username {editingUser ? "(tidak bisa diubah)" : "*"}
                                 </label>
                                 <input
                                     id="os-username"
@@ -630,7 +695,7 @@ export default function OutsourceUsersPanel() {
                                     onChange={(e) =>
                                         setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))
                                     }
-                                    placeholder="contoh: os.budi"
+                                    placeholder="Contoh: os.budi"
                                     className={`${inputClass} disabled:opacity-60`}
                                     required={!editingUser}
                                 />
@@ -644,7 +709,7 @@ export default function OutsourceUsersPanel() {
                                     type="text"
                                     value={displayName}
                                     onChange={(e) => setDisplayName(e.target.value)}
-                                    placeholder="contoh: Budi Santoso (OS)"
+                                    placeholder="Contoh: Budi Santoso"
                                     className={inputClass}
                                     required
                                 />
@@ -658,7 +723,7 @@ export default function OutsourceUsersPanel() {
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="otomatis @outsource.wig.co.id bila kosong"
+                                    placeholder="Otomatis pakai @outsource.wig.co.id jika kosong"
                                     className={inputClass}
                                     required={Boolean(editingUser)}
                                 />
@@ -666,7 +731,7 @@ export default function OutsourceUsersPanel() {
                             {!editingUser && (
                                 <div>
                                     <label htmlFor="os-password" className="block text-xs font-medium mb-1">
-                                        Password Awal * (min 8 karakter)
+                                        Kata Sandi Awal * (minimal 8 karakter)
                                     </label>
                                     <input
                                         id="os-password"
@@ -683,21 +748,20 @@ export default function OutsourceUsersPanel() {
                             )}
                         </div>
 
-                        {/* Matriks RBAC Modul E-Checklist */}
+                        {/* Pilihan Akses Menu E-Checklist */}
                         <div className="space-y-3 pt-2 border-t border-border">
                             <div>
                                 <p className="text-sm font-medium text-foreground">
-                                    RBAC Akses Modul E-Checklist
+                                    Akses Menu E-Checklist
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                    Akun OS otomatis masuk portal terisolasi <code className="text-[11px]">/outsource</code>{" "}
-                                    (tidak bisa mengakses portal HR/Karyawan). Pilih modul yang boleh dibuka akun ini:
+                                    Akun ini hanya dapat membuka menu E-Checklist yang Anda pilih di bawah.
                                 </p>
                             </div>
 
                             <div className="space-y-2">
                                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    E-Checklist Kebersihan (Cleaning)
+                                    E-Checklist Kebersihan
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {CLEANING_MODULES.map((m) => {
@@ -733,7 +797,7 @@ export default function OutsourceUsersPanel() {
 
                             <div className="space-y-2">
                                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    E-Checklist Peralatan Produksi (Equipment)
+                                    E-Checklist Peralatan Produksi
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {EQUIPMENT_MODULES.map((m) => {
@@ -783,36 +847,36 @@ export default function OutsourceUsersPanel() {
                                 className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[44px]"
                             >
                                 {saving
-                                    ? "Menyimpan…"
+                                    ? "Menyimpan..."
                                     : editingUser
                                         ? "Simpan Perubahan"
-                                        : "Buat Akun OS"}
+                                        : "Buat Akun"}
                             </button>
                         </div>
                     </form>
                 </AccessibleModal>
             )}
 
-            {/* Modal Reset Password */}
+            {/* Modal Atur Ulang Kata Sandi */}
             {resetTarget && (
                 <AccessibleModal
-                    ariaLabel="Reset Password Akun Outsource"
+                    ariaLabel="Atur Ulang Kata Sandi"
                     onClose={() => !resetting && setResetTarget(null)}
                     className="!max-w-md !p-6"
                 >
                     <div className="flex items-start justify-between gap-2 pb-3 mb-4 border-b border-border">
                         <div>
-                            <h2 className="text-base font-semibold">Reset Password OS</h2>
+                            <h2 className="text-base font-semibold">Atur Ulang Kata Sandi</h2>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                                {resetTarget.displayName} (@{resetTarget.username}) — sesi login lama akan langsung
-                                diputus.
+                                {resetTarget.displayName} (@{resetTarget.username}). Setelah disimpan, petugas perlu
+                                masuk ulang di semua perangkat.
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={() => setResetTarget(null)}
                             disabled={resetting}
-                            aria-label="Tutup modal"
+                            aria-label="Tutup jendela"
                             className="p-1.5 rounded-md hover:bg-muted"
                         >
                             <X className="h-4 w-4" />
@@ -821,7 +885,7 @@ export default function OutsourceUsersPanel() {
                     <form onSubmit={handleResetPassword} className="space-y-3">
                         <div>
                             <label htmlFor="os-new-pass" className="block text-xs font-medium mb-1">
-                                Password Baru (min 8 karakter)
+                                Kata Sandi Baru (minimal 8 karakter)
                             </label>
                             <input
                                 id="os-new-pass"
@@ -836,7 +900,7 @@ export default function OutsourceUsersPanel() {
                         </div>
                         <div>
                             <label htmlFor="os-confirm-pass" className="block text-xs font-medium mb-1">
-                                Konfirmasi Password Baru
+                                Ulangi Kata Sandi Baru
                             </label>
                             <input
                                 id="os-confirm-pass"
@@ -863,7 +927,7 @@ export default function OutsourceUsersPanel() {
                                 disabled={resetting}
                                 className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 min-h-[40px]"
                             >
-                                {resetting ? "Menyimpan…" : "Reset Password"}
+                                {resetting ? "Menyimpan..." : "Simpan Kata Sandi"}
                             </button>
                         </div>
                     </form>

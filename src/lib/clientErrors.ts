@@ -78,3 +78,20 @@ export async function getResponseErrorMessage(response: Response, fallback: stri
 
     return message;
 }
+
+const RAW_CLIENT_ERROR_PATTERN =
+    /^(failed to fetch|load failed|networkerror|fetch failed|unexpected token|unexpected end of json|syntaxerror|typeerror|aborterror|the operation was aborted)/i;
+
+/**
+ * Mengubah error client menjadi pesan bahasa Indonesia yang ramah pengguna.
+ * Pesan jaringan/runtime mentah (mis. "Failed to fetch") selalu diganti fallback.
+ */
+export function getFriendlyClientErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error) {
+        const msg = error.message.trim();
+        if (msg && !RAW_CLIENT_ERROR_PATTERN.test(msg)) {
+            return msg;
+        }
+    }
+    return fallback;
+}

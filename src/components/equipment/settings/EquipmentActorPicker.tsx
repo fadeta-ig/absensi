@@ -93,7 +93,7 @@ export default function EquipmentActorPicker({
                                 : "text-muted-foreground hover:text-foreground"
                         }`}
                     >
-                        Outsource (OS)
+                        Outsource
                     </button>
                 </div>
             </div>
@@ -118,7 +118,7 @@ export default function EquipmentActorPicker({
                             const found = osUsers.find((u) => u.userId === uid);
                             onChange({
                                 employeeId: toOsActorToken(uid),
-                                name: found ? `${found.displayName} (@${found.username})` : uid,
+                                name: found ? `${found.displayName} (@${found.username})` : "Petugas Outsource",
                             });
                         }}
                         disabled={loadingOs}
@@ -127,10 +127,10 @@ export default function EquipmentActorPicker({
                     >
                         <option value="">
                             {loadingOs
-                                ? "Memuat daftar akun OS…"
+                                ? "Memuat daftar akun outsource..."
                                 : osUsers.length === 0
-                                    ? "Belum ada akun OS ber-RBAC aktif untuk peran ini"
-                                    : "-- Pilih akun Outsource (OS) --"}
+                                    ? "Belum ada akun outsource yang memiliki akses untuk peran ini"
+                                    : "Pilih akun outsource"}
                         </option>
                         {osUsers.map((u) => (
                             <option key={u.userId} value={u.userId}>
@@ -140,8 +140,8 @@ export default function EquipmentActorPicker({
                     </select>
                     {!loadingOs && osUsers.length === 0 && (
                         <p className="text-[11px] text-muted-foreground mt-1">
-                            Aktifkan izin modul pada akun OS terlebih dahulu di menu <strong>Akun Outsource (OS)</strong>{" "}
-                            (WIG002).
+                            Minta Admin GA mengaktifkan akses modul untuk akun ini di menu{" "}
+                            <strong>Akun Outsource</strong>.
                         </p>
                     )}
                 </div>

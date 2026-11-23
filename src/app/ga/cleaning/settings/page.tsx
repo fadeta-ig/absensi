@@ -1080,11 +1080,12 @@ export default function CleaningSettingsPage() {
                         <div>
                             <h2 className="modal-title">Kelola Petugas Outsource</h2>
                             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                Daftarkan cepat akun petugas outsource kebersihan. Untuk edit profil, reset password,
-                                status aktif, dan RBAC modul E-Checklist lengkap, buka{" "}
+                                Daftarkan cepat akun petugas outsource kebersihan. Untuk mengubah profil, mengatur ulang
+                                kata sandi, menonaktifkan akun, atau mengatur akses modul E-Checklist lengkap, buka{" "}
                                 <a href="/ga/outsource-users" className="text-[var(--primary)] underline font-medium">
-                                    Manajemen Akun Outsource →
+                                    Akun Outsource
                                 </a>
+                                .
                             </p>
                         </div>
                         <button

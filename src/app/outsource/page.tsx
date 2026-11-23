@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
     CheckCircle2,
@@ -15,7 +15,11 @@ import {
 import EmptyState from "@/components/ui/EmptyState";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import PageHeader from "@/components/ui/PageHeader";
-import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 
 interface OutsourceCaps {
     canExecuteCleaning: boolean;
@@ -46,29 +50,36 @@ export default function OutsourceHomePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
-        async function load() {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch("/api/outsource/capabilities");
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat kapabilitas akun."));
-                const json = await res.json();
-                if (!cancelled) setCaps(json.data);
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal memuat portal.";
-                if (!cancelled) setError(msg);
-                reportClientError("OutsourceHomePage", msg, err);
-            } finally {
-                if (!cancelled) setLoading(false);
+    const loadCapabilities = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/outsource/capabilities");
+            if (!res.ok) {
+                throw new Error(
+                    await getResponseErrorMessage(
+                        res,
+                        "Gagal memuat daftar menu Anda. Silakan muat ulang halaman."
+                    )
+                );
             }
+            const json = await res.json();
+            setCaps(json.data);
+        } catch (err) {
+            const msg = getFriendlyClientErrorMessage(
+                err,
+                "Gagal memuat daftar menu Anda. Periksa koneksi lalu coba lagi."
+            );
+            setError(msg);
+            reportClientError("OutsourceHomePage", msg, err);
+        } finally {
+            setLoading(false);
         }
-        void load();
-        return () => {
-            cancelled = true;
-        };
     }, []);
+
+    useEffect(() => {
+        void loadCapabilities();
+    }, [loadCapabilities]);
 
     const cards: ModuleCard[] = [];
     if (caps) {
@@ -76,7 +87,8 @@ export default function OutsourceHomePage() {
             cards.push({
                 href: "/outsource/cleaning",
                 title: "Checklist Kebersihan Harian",
-                description: "Isi item kebersihan ruangan dan unggah foto bukti untuk ruangan yang ditugaskan hari ini.",
+                description:
+                    "Isi checklist kebersihan dan unggah foto bukti untuk ruangan yang ditugaskan hari ini.",
                 badge:
                     caps.cleaningRoomsCount > 0
                         ? `${caps.cleaningRoomsCount} ruang aktif`
@@ -88,8 +100,9 @@ export default function OutsourceHomePage() {
             cards.push({
                 href: "/outsource/cleaning/overview",
                 title: "Pantau Rekap Kebersihan",
-                description: "Lihat progres bulanan, detail checklist harian, status paraf, dan foto bukti (read-only).",
-                badge: "Read-only",
+                description:
+                    "Lihat perkembangan bulanan, detail checklist harian, status paraf, dan foto bukti.",
+                badge: "Hanya lihat",
                 icon: Eye,
             });
         }
@@ -97,7 +110,8 @@ export default function OutsourceHomePage() {
             cards.push({
                 href: "/outsource/equipment",
                 title: "Inspeksi Alat Produksi",
-                description: "Mulai checklist unit yang ditugaskan, nilai setiap item, unggah foto bukti, dan kirim ke QC.",
+                description:
+                    "Mulai pemeriksaan unit yang ditugaskan, nilai setiap item, unggah foto bukti, dan kirim ke QC.",
                 badge: caps.canExecuteEquipment
                     ? caps.executeCompanies.length > 0
                         ? caps.executeCompanies.join(" · ")
@@ -110,21 +124,22 @@ export default function OutsourceHomePage() {
             cards.push({
                 href: "/outsource/equipment/approvals",
                 title: "Antrean QC Inspeksi Alat",
-                description: "Periksa hasil inspeksi yang disubmit operator, unggah foto QC opsional, dan tandai selesai.",
+                description:
+                    "Periksa hasil inspeksi yang dikirim operator, unggah foto QC jika perlu, lalu tandai selesai.",
                 badge: caps.canQcEquipment
                     ? `QC ${caps.qcCompanies.join(" · ")}`
-                    : "Belum masuk daftar QC WIG/MKI",
+                    : "Belum terdaftar di tim QC",
                 icon: FileCheck2,
             });
         }
         if (caps.hasEquipmentApprovePerm) {
             cards.push({
                 href: "/outsource/equipment/approval-queue",
-                title: "Approval Final Peralatan",
-                description: "Tinjau inspeksi berstatus DONE dari QC dan berikan persetujuan final.",
+                title: "Persetujuan Akhir Alat",
+                description: "Tinjau hasil pemeriksaan QC dan berikan persetujuan akhir.",
                 badge: caps.canApproveEquipment
-                    ? `Approver ${caps.approveCompanies.join(" · ")}`
-                    : "Belum masuk daftar Approver WIG/MKI",
+                    ? `Persetujuan ${caps.approveCompanies.join(" · ")}`
+                    : "Belum terdaftar sebagai pemberi persetujuan",
                 icon: CheckCircle2,
             });
         }
@@ -132,8 +147,9 @@ export default function OutsourceHomePage() {
             cards.push({
                 href: "/outsource/equipment/overview",
                 title: "Pantau Rekap Inspeksi Alat",
-                description: "Pantau rekap status inspeksi lintas unit beserta detail dan foto dokumentasi (read-only).",
-                badge: "Read-only",
+                description:
+                    "Lihat rekap status pemeriksaan lintas unit beserta detail dan foto dokumentasi.",
+                badge: "Hanya lihat",
                 icon: Eye,
             });
         }
@@ -143,22 +159,33 @@ export default function OutsourceHomePage() {
         <div className="space-y-5">
             <PageHeader
                 icon={ClipboardList}
-                title="Portal E-Checklist Outsource"
-                subtitle="Pilih modul E-Checklist yang telah diberikan oleh admin GA (WIG002)."
+                title="Portal E-Checklist"
+                subtitle="Pilih menu E-Checklist yang tersedia untuk akun Anda."
             />
 
-            {error && <FeedbackMessage variant="error">{error}</FeedbackMessage>}
+            {error && (
+                <FeedbackMessage variant="error">
+                    {error}{" "}
+                    <button
+                        type="button"
+                        onClick={() => void loadCapabilities()}
+                        className="underline ml-1 font-medium"
+                    >
+                        Coba lagi
+                    </button>
+                </FeedbackMessage>
+            )}
 
             {loading ? (
                 <div className="emp-surface p-8 flex items-center justify-center gap-2 text-sm text-[var(--text-muted)]">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Memuat modul E-Checklist…
+                    Memuat menu E-Checklist...
                 </div>
             ) : cards.length === 0 ? (
                 <EmptyState
                     icon={ClipboardList}
-                    title="Belum ada modul E-Checklist yang aktif"
-                    description="Hubungi admin GA (WIG002) untuk mengaktifkan hak akses modul E-Checklist pada akun Anda."
+                    title="Belum ada menu E-Checklist yang aktif"
+                    description="Hubungi Admin GA untuk mengaktifkan akses menu E-Checklist pada akun Anda."
                 />
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

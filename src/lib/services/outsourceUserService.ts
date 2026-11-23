@@ -70,7 +70,7 @@ export function isWig002Session(session: SessionPayload): boolean {
 
 export function requireWig002ForOutsource(session: SessionPayload): void {
     if (!isWig002Session(session)) {
-        throw new OutsourceUserError("Hanya WIG002 yang dapat mengelola akun outsource.", 403);
+        throw new OutsourceUserError("Hanya Admin GA yang dapat mengelola akun outsource.", 403);
     }
 }
 
@@ -272,25 +272,25 @@ export async function createOutsourceUserAccount(
     const username = data.username.trim().toLowerCase();
     if (username.length < 3 || username.length > 100 || !/^[a-z0-9._-]+$/.test(username)) {
         throw new OutsourceUserError(
-            "Username harus 3-100 karakter (huruf, angka, titik, garis bawah, tanda hubung).",
+            "Username harus 3 sampai 100 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung.",
             400
         );
     }
 
     const displayName = data.displayName.trim();
     if (displayName.length < 2 || displayName.length > 150) {
-        throw new OutsourceUserError("Nama tampilan harus 2-150 karakter.", 400);
+        throw new OutsourceUserError("Nama lengkap harus 2 sampai 150 karakter.", 400);
     }
 
     const rawPassword = data.password;
     if (!rawPassword || rawPassword.length < 8 || rawPassword.length > 128) {
-        throw new OutsourceUserError("Password harus 8-128 karakter.", 400);
+        throw new OutsourceUserError("Kata sandi harus 8 sampai 128 karakter.", 400);
     }
 
     const rawEmail = data.email?.trim().toLowerCase() ?? "";
     const finalEmail = rawEmail || `${username}@outsource.wig.co.id`;
     if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
-        throw new OutsourceUserError("Format email tidak valid.", 400);
+        throw new OutsourceUserError("Format email belum benar. Periksa kembali alamat email yang dimasukkan.", 400);
     }
 
     const modules = normalizeModules(data.modules);
@@ -302,8 +302,8 @@ export async function createOutsourceUserAccount(
     if (existing) {
         throw new OutsourceUserError(
             existing.username.toLowerCase() === username
-                ? "Username sudah digunakan oleh akun lain."
-                : "Email sudah digunakan oleh akun lain.",
+                ? "Username sudah dipakai akun lain. Gunakan username yang berbeda."
+                : "Email sudah dipakai akun lain. Gunakan email yang berbeda.",
             409
         );
     }
@@ -324,7 +324,7 @@ export async function createOutsourceUserAccount(
                 select: { id: true, code: true },
             });
             if (roles.length !== targetRoleCodes.length) {
-                throw new OutsourceUserError("Konfigurasi role outsource belum lengkap di database.", 500);
+                throw new OutsourceUserError("Pengaturan akses akun belum siap. Coba lagi sebentar atau hubungi tim IT.", 500);
             }
 
             const user = await tx.userAccount.create({
@@ -353,7 +353,7 @@ export async function createOutsourceUserAccount(
     } catch (err) {
         if (err instanceof OutsourceUserError) throw err;
         if (isPrismaUniqueError(err)) {
-            throw new OutsourceUserError("Username atau email sudah digunakan oleh akun lain.", 409);
+            throw new OutsourceUserError("Username atau email sudah dipakai akun lain. Gunakan data yang berbeda.", 409);
         }
         throw err;
     }
@@ -368,7 +368,7 @@ export async function createOutsourceUserAccount(
     const list = await listOutsourceUsersForAdmin(session);
     const found = list.find((u) => u.id === createdId);
     if (!found) {
-        throw new OutsourceUserError("Akun outsource gagal dimuat setelah dibuat.", 500);
+        throw new OutsourceUserError("Akun berhasil dibuat, tetapi datanya gagal dimuat ulang. Muat ulang halaman untuk melihat hasilnya.", 500);
     }
     return found;
 }
@@ -397,14 +397,14 @@ export async function updateOutsourceUserAccount(
     if (data.email !== undefined) {
         const cleanEmail = data.email.trim().toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-            throw new OutsourceUserError("Format email tidak valid.", 400);
+            throw new OutsourceUserError("Format email belum benar. Periksa kembali alamat email yang dimasukkan.", 400);
         }
         if (cleanEmail !== target.email.toLowerCase()) {
             const clash = await prisma.userAccount.findFirst({
                 where: { email: cleanEmail, id: { not: id } },
                 select: { id: true },
             });
-            if (clash) throw new OutsourceUserError("Email sudah digunakan oleh akun lain.", 409);
+            if (clash) throw new OutsourceUserError("Email sudah dipakai akun lain. Gunakan email yang berbeda.", 409);
         }
         nextEmail = cleanEmail;
     }
@@ -413,7 +413,7 @@ export async function updateOutsourceUserAccount(
     if (data.displayName !== undefined) {
         const cleanName = data.displayName.trim();
         if (cleanName.length < 2 || cleanName.length > 150) {
-            throw new OutsourceUserError("Nama tampilan harus 2-150 karakter.", 400);
+            throw new OutsourceUserError("Nama lengkap harus 2 sampai 150 karakter.", 400);
         }
         nextDisplayName = cleanName;
     }
@@ -446,7 +446,7 @@ export async function updateOutsourceUserAccount(
                     select: { id: true, code: true },
                 });
                 if (desiredRoles.length !== desiredRoleCodes.length) {
-                    throw new OutsourceUserError("Konfigurasi role outsource belum lengkap di database.", 500);
+                    throw new OutsourceUserError("Pengaturan akses akun belum siap. Coba lagi sebentar atau hubungi tim IT.", 500);
                 }
 
                 await tx.userRoleAssignment.deleteMany({ where: { userId: target.id } });
@@ -528,7 +528,7 @@ export async function resetOutsourceUserPassword(
     requireWig002ForOutsource(session);
 
     if (!newPassword || newPassword.length < 8 || newPassword.length > 128) {
-        throw new OutsourceUserError("Password baru harus 8-128 karakter.", 400);
+        throw new OutsourceUserError("Kata sandi baru harus 8 sampai 128 karakter.", 400);
     }
 
     const target = await prisma.userAccount.findFirst({
@@ -600,7 +600,7 @@ export async function deleteOutsourceUserAccount(
 
     if (hasHistory) {
         throw new OutsourceUserError(
-            "Akun outsource sudah memiliki riwayat penugasan atau inspeksi sehingga tidak dapat dihapus permanen. Gunakan tombol Nonaktifkan agar data historis tetap utuh.",
+            "Akun ini sudah memiliki riwayat penugasan atau inspeksi sehingga tidak bisa dihapus permanen. Gunakan tombol Nonaktifkan agar riwayat tetap tersimpan.",
             409
         );
     }
@@ -685,7 +685,7 @@ export async function assertActiveOutsourceWithPermission(
     });
     if (!user) {
         throw new OutsourceUserError(
-            `Akun outsource tidak aktif atau belum diberi izin "${moduleLabel}" oleh WIG002.`,
+            `Akun outsource ini tidak aktif atau belum diberi akses "${moduleLabel}" oleh Admin GA.`,
             422
         );
     }

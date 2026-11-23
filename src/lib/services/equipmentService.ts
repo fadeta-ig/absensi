@@ -1097,7 +1097,7 @@ function normalizeStartedBy(row: {
         return { employeeId: row.startedBy.employeeId, name: row.startedBy.name, isOutsource: false };
     }
     return {
-        employeeId: row.startedByEmployeeId ?? row.startedByUser?.username ?? row.startedByUserId ?? "OS",
+        employeeId: row.startedByEmployeeId ?? row.startedByUser?.username ?? "Outsource",
         name: row.startedByNameSnapshot ?? row.startedByUser?.displayName ?? "Petugas Outsource",
         isOutsource: !row.startedByEmployeeId,
     };
@@ -1786,11 +1786,11 @@ export async function getUnitInspectionHistory(session: SessionPayload, unitId: 
 
 export async function getPendingEquipmentApprovals(session: SessionPayload): Promise<EquipmentInspectionDto[]> {
     if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_QC)) {
-        throw new EquipmentError("Hanya petugas QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
+        throw new EquipmentError("Hanya anggota QC yang terdaftar yang dapat memproses antrean ini.", 403);
     }
     // Wadah QC per perusahaan: anggota QC melihat SUBMITTED perusahaannya (termasuk alat shared WIG+MKI), terbaru di atas.
     const companies = await getEquipmentQcCompanies(session);
-    if (companies.length === 0) throw new EquipmentError("Hanya petugas QC yang ditunjuk WIG002 yang dapat memproses antrean.", 403);
+    if (companies.length === 0) throw new EquipmentError("Hanya anggota QC yang terdaftar yang dapat memproses antrean ini.", 403);
     const rows = await prisma.equipmentInspection.findMany({
         where: { status: "SUBMITTED", unit: unitWhereForCompanies(companies) },
         orderBy: { submittedAt: "desc" },
@@ -1817,10 +1817,10 @@ export interface ApprovalQueueFilters {
 
 export async function getApprovalQueue(session: SessionPayload, filters: ApprovalQueueFilters = {}): Promise<EquipmentInspectionDto[]> {
     if (!hasEquipmentPortalAccess(session, PERMISSIONS.EQUIPMENT_APPROVE)) {
-        throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
+        throw new EquipmentError("Hanya pemberi persetujuan yang terdaftar yang dapat membuka antrean ini.", 403);
     }
     const companies = await getEquipmentApproverCompanies(session);
-    if (companies.length === 0) throw new EquipmentError("Hanya approver yang ditunjuk WIG002 yang dapat menyetujui inspeksi.", 403);
+    if (companies.length === 0) throw new EquipmentError("Hanya pemberi persetujuan yang terdaftar yang dapat membuka antrean ini.", 403);
     const status = filters.status ?? "DONE";
     if (status !== "DONE" && status !== "APPROVED" && status !== "ALL") {
         throw new EquipmentError("Status antrean tidak valid.", 400);

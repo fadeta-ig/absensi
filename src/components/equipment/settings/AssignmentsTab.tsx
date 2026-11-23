@@ -171,7 +171,9 @@ export default function AssignmentsTab({
 
     const endAssignment = useCallback(
         (assignment: EquipmentAssignment) => {
-            const who = assignment.user.displayName ?? assignment.user.employeeId ?? "karyawan";
+            const who =
+                assignment.user.displayName ??
+                (assignment.user.username ? `@${assignment.user.username}` : assignment.user.employeeId ?? "petugas");
             const scope = assignment.unit ? assignment.unit.name : "Semua unit";
             confirm({
                 title: `Akhiri penugasan ${who}?`,
@@ -206,7 +208,12 @@ export default function AssignmentsTab({
             const targets = assignments.filter((a) => ids.includes(a.id));
             const preview = targets
                 .slice(0, 5)
-                .map((a) => `• ${a.user.displayName ?? a.user.employeeId} — ${a.unit ? a.unit.name : "Semua unit"}`)
+                .map((a) => {
+                    const who =
+                        a.user.displayName ??
+                        (a.user.username ? `@${a.user.username}` : a.user.employeeId ?? "Petugas");
+                    return `• ${who} (${a.unit ? a.unit.name : "Semua unit"})`;
+                })
                 .join("\n");
             confirm({
                 title: `Akhiri ${targets.length} penugasan?`,
@@ -530,7 +537,11 @@ export default function AssignmentsTab({
                                             )}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            {member.isOutsource ? `@${member.username ?? member.employeeId}` : member.employeeId}
+                                            {member.isOutsource
+                                                ? member.username
+                                                    ? `@${member.username}`
+                                                    : "Akun outsource"
+                                                : member.employeeId}
                                         </p>
                                     </TableCell>
                                     <TableCell>
@@ -568,7 +579,7 @@ export default function AssignmentsTab({
                     <div className="flex-1">
                         <EquipmentActorPicker
                             role="qc"
-                            label="Cari petugas QC (Karyawan / OS)"
+                            label="Cari petugas QC (Karyawan atau Outsource)"
                             value={newQc}
                             onChange={setNewQc}
                         />

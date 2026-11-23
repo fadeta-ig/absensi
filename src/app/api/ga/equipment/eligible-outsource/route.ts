@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const cfg = ROLE_CONFIG[roleKey];
     if (!cfg) {
         return NextResponse.json(
-            { error: "Parameter role wajib salah satu dari: operator, qc, approver." },
+            { error: "Jenis peran petugas tidak dikenali. Pilih operator, QC, atau pemberi persetujuan." },
             { status: 400 }
         );
     }
