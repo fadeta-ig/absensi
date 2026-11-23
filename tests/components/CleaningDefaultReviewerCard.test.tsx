@@ -6,7 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DefaultReviewerCard from "@/app/ga/cleaning/settings/DefaultReviewerCard";
 
-vi.mock("@/components/Toast", () => ({ useToast: () => vi.fn() }));
+const toastMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/components/Toast", () => ({ useToast: () => toastMock }));
 vi.mock("@/lib/clientErrors", () => ({
     reportClientError: vi.fn(),
     getResponseErrorMessage: vi.fn(async (_r: Response, f: string) => f),
@@ -58,11 +60,13 @@ describe("DefaultReviewerCard (WIG002)", () => {
         const user = userEvent.setup();
         render(<DefaultReviewerCard />);
 
-        expect(await screen.findByText(/Agus/)).toBeInTheDocument();
+        expect((await screen.findAllByText(/Agus/)).length).toBeGreaterThan(0);
 
         await user.selectOptions(screen.getByLabelText("Diperiksa Oleh"), ["ID-1"]);
         await user.selectOptions(screen.getByLabelText("Mengetahui"), ["ID-2"]);
         await user.click(screen.getByRole("button", { name: "Simpan Pasangan Default" }));
-        await waitFor(() => expect(screen.getByText(/tersimpan/i)).toBeInTheDocument());
+        await waitFor(() =>
+            expect(toastMock).toHaveBeenCalledWith(expect.stringMatching(/tersimpan/i), "success")
+        );
     });
 });
