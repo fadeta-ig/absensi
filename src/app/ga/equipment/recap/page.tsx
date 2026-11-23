@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Loader2, Wrench, X } from "lucide-react";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
@@ -36,7 +40,7 @@ interface RecapInspection {
         isSharedBoth?: boolean;
         companies?: Array<"WIG" | "MKI">;
     };
-    startedBy: { employeeId: string; name: string };
+    startedBy: { employeeId: string; name: string; isOutsource?: boolean };
     status: string;
     createdAt: string;
 }
@@ -58,7 +62,7 @@ interface RecapDetail {
         isSharedBoth?: boolean;
         companies?: Array<"WIG" | "MKI">;
     };
-    startedBy: { employeeId: string; name: string };
+    startedBy: { employeeId: string; name: string; isOutsource?: boolean };
     status: string;
     createdAt: string;
     submittedAt: string | null;
@@ -148,7 +152,10 @@ export default function EquipmentRecapPage() {
                 setSummary(json.data?.summary ?? null);
                 setInspections(json.data?.inspections ?? []);
             } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal memuat rekap.";
+                const msg = getFriendlyClientErrorMessage(
+                    err,
+                    "Gagal memuat rekap peralatan. Periksa koneksi Anda lalu coba lagi."
+                );
                 setError(msg);
                 reportClientError("EquipmentRecap", msg, err);
             } finally {
@@ -225,7 +232,10 @@ export default function EquipmentRecapPage() {
             const json = await res.json();
             setDetail(json.data as RecapDetail);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat detail.";
+            const msg = getFriendlyClientErrorMessage(
+                err,
+                "Gagal memuat detail inspeksi. Periksa koneksi Anda lalu coba lagi."
+            );
             setDetailError(msg);
             reportClientError("EquipmentRecap", msg, err);
         } finally {
@@ -441,8 +451,21 @@ export default function EquipmentRecapPage() {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                <p className="text-sm text-foreground">{item.startedBy.name}</p>
-                                                <p className="text-xs text-muted-foreground">{item.startedBy.employeeId}</p>
+                                                <p className="text-sm text-foreground inline-flex items-center gap-1.5">
+                                                    <span>{item.startedBy.name}</span>
+                                                    {item.startedBy.isOutsource && (
+                                                        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                                            OS
+                                                        </span>
+                                                    )}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {item.startedBy.isOutsource
+                                                        ? item.startedBy.employeeId && item.startedBy.employeeId !== "Outsource"
+                                                            ? `@${item.startedBy.employeeId}`
+                                                            : "Outsource"
+                                                        : item.startedBy.employeeId}
+                                                </p>
                                             </TableCell>
                                             <TableCell>
                                                 <span className={`text-xs px-1.5 py-0.5 rounded ${statusBadgeClass(item.status)}`}>

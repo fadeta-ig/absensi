@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest) {
         // Update bila body membawa field edit; selain itu akhiri penugasan (kompatibel lama).
         const isUpdate =
             !!raw &&
-            ("unitId" in raw || "employeeId" in raw || "startsOnWibDate" in raw);
+            ("unitId" in raw || "employeeId" in raw || "userId" in raw || "startsOnWibDate" in raw);
         if (isUpdate) {
             const result = await validateBody(request, equipmentUpdateAssignSchema, raw);
             if ("error" in result) return result.error;
@@ -89,6 +89,7 @@ export async function PATCH(request: NextRequest) {
             const assignment = await updateEquipmentAssignment(session, result.data.assignmentId, {
                 unitId: result.data.unitId,
                 employeeId: result.data.employeeId,
+                userId: result.data.userId,
                 startsOnWibDate: result.data.startsOnWibDate,
                 endsOnWibDate: result.data.endsOnWibDate,
             });

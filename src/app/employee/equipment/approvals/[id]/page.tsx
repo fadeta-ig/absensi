@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, Camera, CheckCircle2, Loader2, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import DraftNotice from "@/components/ui/DraftNotice";
@@ -61,6 +66,8 @@ function formatDateTime(value: string | null): string {
 }
 
 export default function QcDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const toast = useToast();
     const confirm = useConfirm();
     const draftOwner = useEmployeeDraftOwner();
@@ -136,7 +143,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
             setQcNote(dto.qcNote ?? "");
             await fetchQcPhotos(dto.id);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat detail.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat detail inspeksi. Periksa koneksi Anda lalu coba lagi.");
             setError(msg);
             reportClientError("EmployeeEquipmentQc", msg, err);
         } finally {
@@ -164,7 +171,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                 toast("Foto QC tersimpan.", "success");
                 await fetchQcPhotos(detail.id);
             } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal mengunggah foto.";
+                const msg = getFriendlyClientErrorMessage(err, "Gagal mengunggah foto QC. Periksa koneksi Anda lalu coba lagi.");
                 toast(msg, "error");
                 reportClientError("EmployeeEquipmentQc", msg, err);
             } finally {
@@ -200,7 +207,10 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
                         setDetail(dto);
                         toast(`Pemeriksaan QC oleh ${stripGelar(dto.checkedByNameSnapshot ?? dto.checkedBy?.name ?? "")} telah dicatat.`, "success");
                     } catch (err) {
-                        const msg = err instanceof Error ? err.message : "Gagal menyelesaikan inspeksi.";
+                        const msg = getFriendlyClientErrorMessage(
+                            err,
+                            "Gagal menyelesaikan inspeksi. Periksa koneksi Anda lalu coba lagi."
+                        );
                         toast(msg, "error");
                         reportClientError("EmployeeEquipmentQc", msg, err);
                     } finally {
@@ -222,7 +232,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
     if (error || !detail) {
         return (
             <div className="space-y-5">
-                <Link href="/employee/equipment/approvals" className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
+                <Link href={`${equipmentBase}/approvals`} className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
                     ← Kembali ke antrean
                 </Link>
                 <StateCard
@@ -245,7 +255,7 @@ export default function QcDetailPage({ params }: { params: Promise<{ id: string 
 
     return (
         <div className="space-y-5">
-            <Link href="/employee/equipment/approvals" className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
+            <Link href={`${equipmentBase}/approvals`} className="text-[11px] font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center min-h-[44px] px-2 -ml-2">
                 ← Kembali ke antrean
             </Link>
 

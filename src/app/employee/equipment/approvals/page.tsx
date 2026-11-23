@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FileCheck2, RefreshCw } from "lucide-react";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
@@ -9,7 +10,11 @@ import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
 import PageHeader from "@/components/ui/PageHeader";
 import StateCard from "@/components/ui/StateCard";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface ApprovalItem {
@@ -60,6 +65,8 @@ function taskStats(task: ApprovalDto) {
 }
 
 export default function EmployeeEquipmentApprovalsPage() {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [tasks, setTasks] = useState<ApprovalDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -82,7 +89,7 @@ export default function EmployeeEquipmentApprovalsPage() {
             const json = await res.json();
             setTasks(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat antrean.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat antrean QC. Periksa koneksi Anda lalu coba lagi.");
             setError(msg);
             reportClientError("EmployeeEquipmentQc", msg, err);
         } finally {
@@ -257,7 +264,7 @@ export default function EmployeeEquipmentApprovalsPage() {
                                         </div>
                                     </div>
                                     <Link
-                                        href={`/employee/equipment/approvals/${task.id}`}
+                                        href={`${equipmentBase}/approvals/${task.id}`}
                                         className="btn btn-primary mt-3 w-full min-h-[48px]"
                                     >
                                         Lihat &amp; Selesaikan

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, getEquipmentRecap } from "@/lib/services/equipmentService";
 
 const STATUSES = ["OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
@@ -11,7 +12,7 @@ const STATUSES = ["OPEN", "SUBMITTED", "DONE", "APPROVED"] as const;
  * Otorisasi penuh di service (requireWig002OrTopViewer).
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_OVERVIEW);
     if (auth.error) return auth.error;
     const { session } = auth;
 

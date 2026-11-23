@@ -8,7 +8,7 @@ import { isValidCalendarDate } from "@/lib/timezone";
 export async function GET(request: NextRequest) {
     const session = await requireAuth();
     if (!session) return unauthorizedResponse();
-    if (!isWig002(session)) {
+    if (!isWig002(session) && !session.permissions.includes(PERMISSIONS.CLEANING_OVERVIEW)) {
         // Atasan tertinggi viewer boleh baca semua ruangan (tanpa ini
         // halaman pantau mendapat 403 "tidak memiliki akses").
         const { isCleaningTopViewer } = await import("@/lib/services/appSettingsService");

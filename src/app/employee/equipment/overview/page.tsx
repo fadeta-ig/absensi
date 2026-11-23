@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Eye, RefreshCw } from "lucide-react";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusBadge, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
@@ -97,6 +102,8 @@ function saveFilter(f: { status: string; from: string; to: string; company: stri
 }
 
 export default function EmployeeEquipmentOverviewPage() {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [inspections, setInspections] = useState<OverviewInspection[]>([]);
     const [summary, setSummary] = useState<OverviewSummary | null>(null);
     const [status, setStatus] = useState<string>(() => loadSavedFilter().status);
@@ -149,7 +156,10 @@ export default function EmployeeEquipmentOverviewPage() {
                 setSummary(json.data?.summary ?? null);
                 setInspections(json.data?.inspections ?? []);
             } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal memuat pantauan.";
+                const msg = getFriendlyClientErrorMessage(
+                    err,
+                    "Gagal memuat pantauan inspeksi. Periksa koneksi Anda lalu coba lagi."
+                );
                 setError(msg);
                 reportClientError("EmployeeEquipmentOverview", msg, err);
             } finally {
@@ -329,7 +339,7 @@ export default function EmployeeEquipmentOverviewPage() {
                             {visibleInspections.map((item) => (
                                 <Link
                                     key={item.id}
-                                    href={`/employee/equipment/overview/${item.id}`}
+                                    href={`${equipmentBase}/overview/${item.id}`}
                                     className="emp-surface emp-surface-hover block p-4 active:scale-[0.99] transition-colors"
                                 >
                                     <div className="flex items-start justify-between gap-2">

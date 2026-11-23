@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, cancelEquipmentInspection } from "@/lib/services/equipmentService";
 
 /**
@@ -9,7 +10,7 @@ import { EquipmentError, cancelEquipmentInspection } from "@/lib/services/equipm
  * Riwayat dipertahankan, disembunyikan dari antrean/rekap/terakhir-dicek.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_EXECUTE);
     if (auth.error) return auth.error;
     const { session } = auth;
 

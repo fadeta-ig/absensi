@@ -7,9 +7,10 @@
  * Alur:
  * - Request ke / (login) → jika sudah login, redirect ke portal sesuai role
  * - Request ke /dashboard/* → hanya role "hr"
- * - Request ke /employee/* → hanya role "employee"
+ * - Request ke /employee/* → karyawan internal (employeeId + employee.self)
  * - Request ke /ga/* → hanya role "ga"
- * - Request ke /cleaning/* → role CLEANING_WORKER dan permission "cleaning.execute"
+ * - Request ke /outsource/* → akun outsource (permission "outsource.portal")
+ * - Request ke /cleaning/* → permission "cleaning.execute"
  * - Token tidak valid / tidak ada → redirect ke / (login)
  * - Role salah → redirect ke portal yang sesuai
  */
@@ -22,6 +23,7 @@ import { PERMISSIONS, SYSTEM_ROLES } from "@/lib/permissions";
 const HR_ONLY_PREFIX = "/dashboard";
 const EMPLOYEE_PREFIX = "/employee";
 const GA_PREFIX = "/ga";
+const OUTSOURCE_PREFIX = "/outsource";
 const CLEANING_PREFIX = "/cleaning";
 
 // ─── Session Helper ───────────────────────────────────────────
@@ -59,6 +61,31 @@ async function getSession(request: NextRequest): Promise<SessionPayload | null> 
     }
 }
 
+function resolvePortalFlags(session: SessionPayload) {
+    const permissions = Array.isArray(session.permissions) ? session.permissions : [];
+    const roles = Array.isArray(session.roles) ? session.roles : [];
+    const canHr = permissions.includes(PERMISSIONS.HR_MANAGE);
+    const canGa = permissions.includes(PERMISSIONS.GA_MANAGE);
+    const canManageUsers = permissions.includes(PERMISSIONS.USER_MANAGE);
+    const canOutsource = permissions.includes(PERMISSIONS.OUTSOURCE_PORTAL);
+    const canCleaning =
+        roles.includes(SYSTEM_ROLES.CLEANING_WORKER) &&
+        permissions.includes(PERMISSIONS.CLEANING_EXECUTE);
+    const canEmployee = Boolean(session.employeeId) && permissions.includes(PERMISSIONS.EMPLOYEE_SELF);
+    const landing = canHr
+        ? HR_ONLY_PREFIX
+        : canGa
+            ? GA_PREFIX
+            : canOutsource
+                ? OUTSOURCE_PREFIX
+                : canCleaning
+                    ? CLEANING_PREFIX
+                    : canEmployee
+                        ? EMPLOYEE_PREFIX
+                        : null;
+    return { canHr, canGa, canManageUsers, canOutsource, canCleaning, canEmployee, landing };
+}
+
 // ─── Proxy Function (Next.js 16) ──────────────────────────────
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -67,19 +94,14 @@ export async function proxy(request: NextRequest) {
     const isUserManagement = pathname.startsWith("/dashboard/users");
     const isEmployee = pathname.startsWith(EMPLOYEE_PREFIX);
     const isGa = pathname.startsWith(GA_PREFIX);
+    const isOutsource = pathname.startsWith(OUTSOURCE_PREFIX);
     const isCleaning = pathname.startsWith(CLEANING_PREFIX);
 
     // Route root login (/) → jika sesi masih aktif, arahkan langsung ke portal
     if (pathname === "/") {
         const session = await getSession(request);
         if (session) {
-            const permissions = Array.isArray(session.permissions) ? session.permissions : [];
-            const canHr = permissions.includes(PERMISSIONS.HR_MANAGE);
-            const canGa = permissions.includes(PERMISSIONS.GA_MANAGE);
-            const roles = Array.isArray(session.roles) ? session.roles : [];
-            const canCleaning = roles.includes(SYSTEM_ROLES.CLEANING_WORKER) && permissions.includes(PERMISSIONS.CLEANING_EXECUTE);
-            const canEmployee = Boolean(session.employeeId) && permissions.includes(PERMISSIONS.EMPLOYEE_SELF);
-            const landing = canHr ? HR_ONLY_PREFIX : canGa ? GA_PREFIX : canCleaning ? CLEANING_PREFIX : canEmployee ? EMPLOYEE_PREFIX : null;
+            const { landing } = resolvePortalFlags(session);
             if (landing) {
                 return NextResponse.redirect(new URL(landing, request.url));
             }
@@ -88,7 +110,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // Route tidak memerlukan auth → lewatkan
-    if (!isDashboard && !isEmployee && !isGa && !isCleaning) {
+    if (!isDashboard && !isEmployee && !isGa && !isOutsource && !isCleaning) {
         return NextResponse.next();
     }
 
@@ -101,27 +123,24 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Authorization checks
-    const permissions = Array.isArray(session.permissions) ? session.permissions : [];
-    const roles = Array.isArray(session.roles) ? session.roles : [];
-    const canHr = permissions.includes(PERMISSIONS.HR_MANAGE);
-    const canGa = permissions.includes(PERMISSIONS.GA_MANAGE);
-    const canManageUsers = permissions.includes(PERMISSIONS.USER_MANAGE);
-    const canCleaning = roles.includes(SYSTEM_ROLES.CLEANING_WORKER) && permissions.includes(PERMISSIONS.CLEANING_EXECUTE);
-    const canEmployee = Boolean(session.employeeId) && permissions.includes(PERMISSIONS.EMPLOYEE_SELF);
-    const landing = canHr ? HR_ONLY_PREFIX : canGa ? GA_PREFIX : canCleaning ? CLEANING_PREFIX : canEmployee ? EMPLOYEE_PREFIX : "/";
+    const { canHr, canGa, canManageUsers, canOutsource, canCleaning, canEmployee, landing } =
+        resolvePortalFlags(session);
+    const fallbackLanding = landing ?? "/";
 
-    if (isDashboard && !canHr) return NextResponse.redirect(new URL(landing, request.url));
+    if (isDashboard && !canHr) return NextResponse.redirect(new URL(fallbackLanding, request.url));
     if (isUserManagement && !canManageUsers) return NextResponse.redirect(new URL(HR_ONLY_PREFIX, request.url));
 
-    // /employee/* → HR dan GA diarahkan ke portal masing-masing
-    if (isEmployee && !canEmployee) return NextResponse.redirect(new URL(landing, request.url));
+    // /employee/* → khusus karyawan internal
+    if (isEmployee && !canEmployee) return NextResponse.redirect(new URL(fallbackLanding, request.url));
 
     // /ga/* → hanya GA
-    if (isGa && !canGa) return NextResponse.redirect(new URL(landing, request.url));
+    if (isGa && !canGa) return NextResponse.redirect(new URL(fallbackLanding, request.url));
 
-    // /cleaning/* → role CLEANING_WORKER dan cleaning.execute
-    if (isCleaning && !canCleaning) return NextResponse.redirect(new URL(landing, request.url));
+    // /outsource/* → khusus portal outsource (permission outsource.portal)
+    if (isOutsource && !canOutsource) return NextResponse.redirect(new URL(fallbackLanding, request.url));
+
+    // /cleaning/* → permission cleaning.execute (karyawan internal maupun OS)
+    if (isCleaning && !canCleaning) return NextResponse.redirect(new URL(fallbackLanding, request.url));
 
     return NextResponse.next();
 }

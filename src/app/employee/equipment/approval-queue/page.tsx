@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CheckCircle2, RefreshCw } from "lucide-react";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
@@ -85,6 +90,8 @@ function saveFilter(f: { status: QueueStatus; from: string; to: string }) {
 const inputClass = "form-input mt-1 min-h-[44px]";
 
 export default function EquipmentApprovalQueuePage() {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [rows, setRows] = useState<QueueRow[]>([]);
     const [status, setStatus] = useState<QueueStatus>(() => loadSavedFilter().status);
     const [from, setFrom] = useState<string>(() => loadSavedFilter().from);
@@ -119,7 +126,10 @@ export default function EquipmentApprovalQueuePage() {
                 const json = await res.json();
                 setRows(json.data ?? []);
             } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal memuat antrean.";
+                const msg = getFriendlyClientErrorMessage(
+                    err,
+                    "Gagal memuat antrean persetujuan. Periksa koneksi Anda lalu coba lagi."
+                );
                 setError(msg);
                 reportClientError("EquipmentApprovalQueue", msg, err);
             } finally {
@@ -362,7 +372,7 @@ export default function EquipmentApprovalQueuePage() {
                         {visibleRows.map((row) => (
                             <Link
                                 key={row.id}
-                                href={`/employee/equipment/overview/${row.id}?from=approval-queue`}
+                                href={`${equipmentBase}/overview/${row.id}?from=approval-queue`}
                                 aria-label={`Periksa ${row.unit.name}`}
                                 className="emp-surface emp-surface-hover block p-4 active:scale-[0.99] transition-colors"
                             >

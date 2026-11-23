@@ -70,6 +70,7 @@ export async function hasCleaningEvidenceAccess(
     evidence: Pick<CleaningEvidenceRecord, "roomId" | "wibDate">
 ): Promise<boolean> {
     if (isWig002(session)) return true;
+    if (session.permissions?.includes("cleaning.overview")) return true;
     const { isCleaningTopViewer } = await import("@/lib/services/appSettingsService");
     if (await isCleaningTopViewer(session).catch(() => false)) return true;
 

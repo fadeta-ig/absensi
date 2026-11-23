@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseFormData, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sanitizeString } from "@/lib/middleware/sanitize";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
     EquipmentError,
     listEquipmentEvidenceByInspection,
-    requireActiveInternalEmployee,
     saveEquipmentEvidence,
 } from "@/lib/services/equipmentService";
 import {
@@ -24,13 +24,11 @@ function evidenceServeUrl(id: string): string {
  * Auth: karyawan internal aktif (dicek di service).
  */
 export async function POST(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_EXECUTE);
     if (auth.error) return auth.error;
     const { session } = auth;
 
     try {
-        // Mode bebas: cukup karyawan internal aktif.
-        await requireActiveInternalEmployee(session);
         // Tolak dini berkas raksasa sebelum seluruh body dibaca ke memori.
         const contentLength = Number(request.headers.get("content-length") ?? "0");
         if (Number.isFinite(contentLength) && contentLength > 0) {
@@ -102,7 +100,7 @@ export async function POST(request: NextRequest) {
  * Auth: karyawan internal yang terlibat (QC / pemulai / karyawan aktif — dicek service).
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth();
     if (auth.error) return auth.error;
     const { session } = auth;
 

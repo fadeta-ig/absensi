@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBody, serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
     EquipmentError,
     getMyEquipmentInspections,
@@ -15,7 +16,7 @@ const startSchema = z.object({
 const ALLOWED_STATUS = new Set(["OPEN", "SUBMITTED", "DONE", "APPROVED"]);
 
 export async function GET(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_EXECUTE);
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_EXECUTE);
     if (auth.error) return auth.error;
     const { session } = auth;
 

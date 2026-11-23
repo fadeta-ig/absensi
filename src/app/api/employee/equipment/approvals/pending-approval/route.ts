@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import { EquipmentError, getApprovalQueue } from "@/lib/services/equipmentService";
 
 const QUEUE_STATUSES = ["DONE", "APPROVED", "ALL"] as const;
@@ -14,7 +15,7 @@ const QUEUE_STATUSES = ["DONE", "APPROVED", "ALL"] as const;
  * - from/to inklusif YYYY-MM-DD WIB; tanpa tanggal = semua backlog.
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_APPROVE);
     if (auth.error) return auth.error;
     const { session } = auth;
 

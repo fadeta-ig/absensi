@@ -1080,7 +1080,12 @@ export default function CleaningSettingsPage() {
                         <div>
                             <h2 className="modal-title">Kelola Petugas Outsource</h2>
                             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                Daftarkan akun petugas inspeksi eksternal (outsource) tanpa data karyawan internal.
+                                Daftarkan cepat akun petugas outsource kebersihan. Untuk mengubah profil, mengatur ulang
+                                kata sandi, menonaktifkan akun, atau mengatur akses modul E-Checklist lengkap, buka{" "}
+                                <a href="/ga/outsource-users" className="text-[var(--primary)] underline font-medium">
+                                    Akun Outsource
+                                </a>
+                                .
                             </p>
                         </div>
                         <button
@@ -1239,7 +1244,7 @@ export default function CleaningSettingsPage() {
                                 Atasan tertinggi (pemantau)
                             </h3>
                             <p className="text-xs text-[var(--text-muted)] mb-3">
-                                Tunjuk karyawan yang boleh memantau seluruh inspeksi (read-only, tanpa paraf/TTD).
+                                Tunjuk karyawan yang boleh memantau seluruh inspeksi (hanya lihat, tanpa paraf atau tanda tangan).
                             </p>
                             <TopViewerCard />
                         </div>

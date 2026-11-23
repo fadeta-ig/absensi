@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
+import { toWIBDateString } from "@/lib/timezone";
 import {
     EQUIPMENT_SETTINGS_SCOPES,
     type EquipmentSettingsScope,
@@ -42,6 +47,16 @@ export interface QcMember {
     name: string;
     isActive: boolean;
     email?: string | null;
+    isOutsource?: boolean;
+    username?: string | null;
+}
+
+export interface ApproverMember {
+    employeeId: string;
+    name: string | null;
+    isActive: boolean;
+    isOutsource?: boolean;
+    username?: string | null;
 }
 
 export interface TopViewer {
@@ -72,7 +87,7 @@ export interface EquipmentAssignment {
         isSharedBoth?: boolean;
         companies?: Array<"WIG" | "MKI">;
     } | null;
-    user: { id: string; employeeId: string | null; displayName: string };
+    user: { id: string; username?: string; employeeId: string | null; displayName: string };
 }
 
 export interface EquipmentProduct {
@@ -106,14 +121,9 @@ export type EquipmentCompanyFilter = "WIG" | "MKI";
 export const inputClass =
     "w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm";
 
-/** Tanggal WIB hari ini (YYYY-MM-DD). Jangan pakai toISOString (UTC, meleset ±1 hari). */
+/** Tanggal WIB hari ini (YYYY-MM-DD) memakai helper timezone global. */
 export function wibTodayStr(): string {
-    return new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Jakarta",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-    }).format(new Date());
+    return toWIBDateString();
 }
 
 /** Aktif bila belum ada tanggal selesai, atau tanggal selesai masih di depan hari ini (eksklusif). */
@@ -136,7 +146,7 @@ export interface SettingsData {
     setQcCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
     topViewers: TopViewer[];
     topViewerError: string | null;
-    approvers: Array<{ employeeId: string; name: string | null; isActive: boolean }>;
+    approvers: ApproverMember[];
     approverError: string | null;
     approverCompany: EquipmentCompanyFilter;
     setApproverCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
@@ -187,7 +197,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
     const [qcCompany, setQcCompany] = useState<EquipmentCompanyFilter>("WIG");
     const [topViewers, setTopViewers] = useState<TopViewer[]>([]);
     const [topViewerError, setTopViewerError] = useState<string | null>(null);
-    const [approvers, setApprovers] = useState<Array<{ employeeId: string; name: string | null; isActive: boolean }>>([]);
+    const [approvers, setApprovers] = useState<ApproverMember[]>([]);
     const [approverError, setApproverError] = useState<string | null>(null);
     const [approverCompany, setApproverCompany] = useState<EquipmentCompanyFilter>("WIG");
     const [delegates, setDelegates] = useState<SettingsDelegateRow[]>([]);
@@ -246,7 +256,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
             const json = await res.json();
             setTopViewers(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat top reviewer.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat top reviewer. Periksa koneksi Anda lalu coba lagi.");
             setTopViewerError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
@@ -260,7 +270,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
             const json = await res.json();
             setQcMembers(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat anggota QC.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat anggota QC. Periksa koneksi Anda lalu coba lagi.");
             setQcError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
@@ -270,11 +280,11 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
         setApproverError(null);
         try {
             const res = await fetch(`/api/ga/equipment/settings/approver?company=${company}`);
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat approver."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat pemberi persetujuan."));
             const json = await res.json();
             setApprovers(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat approver.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat pemberi persetujuan. Periksa koneksi Anda lalu coba lagi.");
             setApproverError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
@@ -288,7 +298,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
             const json = await res.json();
             setDelegates(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat PIC delegasi.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat PIC delegasi. Periksa koneksi Anda lalu coba lagi.");
             setDelegatesError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
@@ -298,11 +308,11 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
         setProductError(null);
         try {
             const res = await fetch(`/api/ga/equipment/products?company=${company}`);
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat produk."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat daftar produk."));
             const json = await res.json();
             setProducts(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat produk.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat daftar produk. Periksa koneksi Anda lalu coba lagi.");
             setProductError(msg);
             reportClientError("EquipmentSettings", msg, err);
         }
@@ -318,7 +328,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
             setChecklist(json.data);
             setInitialChecked((json.data.tools ?? []).filter((t: ProductToolRow) => t.checked).map((t: ProductToolRow) => t.id));
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat checklist.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat checklist alat. Periksa koneksi Anda lalu coba lagi.");
             setChecklistError(msg);
             reportClientError("EquipmentSettings", msg, err);
         } finally {
@@ -360,7 +370,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
             }
             await Promise.all(tasks);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat data.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat pengaturan. Periksa koneksi Anda lalu coba lagi.");
             setError(msg);
             reportClientError("EquipmentSettings", msg, err);
         } finally {

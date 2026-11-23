@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseFormData, serverErrorResponse } from "@/lib/middleware/apiGuard";
 import { sanitizeString } from "@/lib/middleware/sanitize";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
     EquipmentError,
     listQcEvidenceFor,
@@ -23,7 +24,7 @@ function qcEvidenceServeUrl(id: string): string {
  * Hanya anggota QC perusahaan inspeksi, hanya saat inspeksi SUBMITTED.
  */
 export async function POST(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth(PERMISSIONS.EQUIPMENT_QC);
     if (auth.error) return auth.error;
     const { session } = auth;
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
  * Auth: yang terlibat (QC / pemulai / karyawan aktif / WIG002 / atasan — dicek service).
  */
 export async function GET(request: NextRequest) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth();
     if (auth.error) return auth.error;
     const { session } = auth;
 

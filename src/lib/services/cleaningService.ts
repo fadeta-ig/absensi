@@ -53,6 +53,7 @@ function requireWig002(session: SessionPayload): void {
  */
 export async function requireWig002OrTopViewer(session: SessionPayload): Promise<void> {
     if (isWig002(session)) return;
+    if (session.permissions.includes(PERMISSIONS.CLEANING_OVERVIEW)) return;
     const { isCleaningTopViewer } = await import("@/lib/services/appSettingsService");
     if (await isCleaningTopViewer(session).catch(() => false)) return;
     throw new CleaningError("Hanya WIG002 dengan ga.manage yang dapat mengelola kebersihan.", 403);
@@ -137,6 +138,14 @@ async function hasOverlappingAssignment(
 
 /** Add or remove the CLEANING_WORKER role based on assignments effective today in WIB. */
 export async function syncCleaningWorkerRole(tx: TxClient, userId: string, wibToday: string) {
+    // Akun OS dengan RBAC eksplisit (OUTSOURCE_USER) dikelola manual oleh WIG002;
+    // penugasan ruangan hanya bertindak sebagai data scope, tidak mengubah role.
+    const managedOutsourceRole = await tx.userRoleAssignment.findFirst({
+        where: { userId, role: { code: SYSTEM_ROLES.OUTSOURCE_USER } },
+        select: { role: { select: { code: true } } },
+    });
+    if (managedOutsourceRole?.role?.code === SYSTEM_ROLES.OUTSOURCE_USER) return;
+
     const eligibleAssignmentCount = await tx.cleaningWorkerAssignment.count({
         where: {
             userId,
@@ -200,7 +209,15 @@ async function validateEligibility(tx: TxClient, userId: string, workerType: "IN
         if (user.employeeId) {
             throw new CleaningError("Petugas outsource tidak boleh terhubung ke employee.", 422);
         }
-        if (user.createdByUserId !== currentSessionUserId) {
+        const isManagedOutsource = userRoles.includes(SYSTEM_ROLES.OUTSOURCE_USER);
+        if (isManagedOutsource) {
+            if (!userRoles.includes(SYSTEM_ROLES.CLEANING_WORKER)) {
+                throw new CleaningError(
+                    "Akun outsource ini belum memiliki akses Checklist Kebersihan. Aktifkan terlebih dahulu di menu Akun Outsource.",
+                    422
+                );
+            }
+        } else if (user.createdByUserId !== currentSessionUserId) {
             throw new CleaningError("Akun outsource tidak dikelola oleh akun GA ini.", 422);
         }
     }
@@ -870,7 +887,7 @@ export async function getAvailableUsersForAssignment(session: SessionPayload, wo
         });
     }
 
-    // OUTSOURCE: active accounts without employee relation
+    // OUTSOURCE: akun OS aktif buatan WIG002 (RBAC eksplisit yang punya cleaning.execute, atau akun OS legacy)
     return prisma.userAccount.findMany({
         where: {
             isActive: true,
@@ -882,6 +899,18 @@ export async function getAvailableUsersForAssignment(session: SessionPayload, wo
                     role: { code: { in: EXCLUDED_ASSIGNMENT_ROLES } },
                 },
             },
+            OR: [
+                {
+                    roles: {
+                        some: { role: { code: SYSTEM_ROLES.CLEANING_WORKER } },
+                    },
+                },
+                {
+                    roles: {
+                        none: { role: { code: SYSTEM_ROLES.OUTSOURCE_USER } },
+                    },
+                },
+            ],
         },
         select: {
             id: true,
@@ -1480,7 +1509,7 @@ export async function getChecklistDetail(session: SessionPayload, roomId: string
     // detail ruangan-tanggal yang ditugaskan kepadanya; atasan tertinggi
     // viewer boleh baca semua ruangan. Tanpa ini dashboard paraf atasan
     // selalu 403 saat membuka detail checklist.
-    if (!isWig002(session)) {
+    if (!isWig002(session) && !session.permissions.includes(PERMISSIONS.CLEANING_OVERVIEW)) {
         const { isCleaningTopViewer } = await import("@/lib/services/appSettingsService");
         if (await isCleaningTopViewer(session).catch(() => false)) {
             // lolos sebagai viewer global

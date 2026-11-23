@@ -2,9 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, Camera, CheckCircle2, Clock, Loader2, X } from "lucide-react";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
 import { EquipmentStatusBadge, EquipmentCompanyBadge } from "@/components/equipment/EquipmentStatusBadge";
@@ -50,6 +55,8 @@ function formatDateTime(value: string | null): string {
 }
 
 export default function EmployeeEquipmentOverviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const pathname = usePathname();
+    const equipmentBase = pathname?.startsWith("/outsource/equipment") ? "/outsource/equipment" : "/employee/equipment";
     const [detail, setDetail] = useState<InspectionDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -67,8 +74,8 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
             setFromParam(null);
         }
     }, []);
-    const backHref = fromParam === "approval-queue" ? "/employee/equipment/approval-queue" : "/employee/equipment/overview";
-    const backLabel = backHref === "/employee/equipment/approval-queue" ? "← Kembali ke approval" : "← Kembali ke pantauan";
+    const backHref = fromParam === "approval-queue" ? `${equipmentBase}/approval-queue` : `${equipmentBase}/overview`;
+    const backLabel = fromParam === "approval-queue" ? "← Kembali ke persetujuan" : "← Kembali ke pantauan";
     const toast = useToast();
     const confirm = useConfirm();
 
@@ -87,7 +94,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
             const json = await res.json();
             setDetail(json.data as InspectionDetail);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat detail.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat detail inspeksi. Periksa koneksi Anda lalu coba lagi.");
             setError(msg);
             reportClientError("EmployeeEquipmentOverviewDetail", msg, err);
         } finally {
@@ -126,7 +133,10 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                         await fetchDetail();
                         toast("Inspeksi telah disetujui.", "success");
                     } catch (err) {
-                        const msg = err instanceof Error ? err.message : "Gagal menyetujui inspeksi.";
+                        const msg = getFriendlyClientErrorMessage(
+                            err,
+                            "Gagal menyetujui inspeksi. Periksa koneksi Anda lalu coba lagi."
+                        );
                         reportClientError("EmployeeEquipmentOverviewDetail", msg, err, { inspectionId: detail.id });
                         toast(msg, "error");
                     } finally {
@@ -150,7 +160,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
             <div className="space-y-5">
                 <EmptyState
                     title="Detail tidak tersedia untuk akun Anda."
-                    description="Halaman ini hanya untuk atasan yang ditunjuk."
+                    description="Halaman ini hanya tersedia untuk pihak yang memiliki akses pantau atau persetujuan."
                     action={
                         <Link href={backHref} className="btn btn-secondary btn-sm min-h-[44px]">
                             {backLabel}
@@ -229,7 +239,7 @@ export default function EmployeeEquipmentOverviewDetailPage({ params }: { params
                         </span>
                     </li>
                     <li className="flex gap-2">
-                        <span className="text-[var(--text-muted)] shrink-0 w-16">Submit</span>
+                        <span className="text-[var(--text-muted)] shrink-0 w-16">Dikirim</span>
                         <span className="text-[var(--text-primary)]">{formatDateTime(detail.submittedAt)}</span>
                     </li>
                     <li className="flex gap-2">

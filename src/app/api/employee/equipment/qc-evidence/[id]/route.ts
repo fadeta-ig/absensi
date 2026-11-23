@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/middleware/apiGuard";
-import { requireEmployeeEquipmentAuth } from "@/lib/middleware/equipmentGuard";
+import { requireEquipmentPortalAuth } from "@/lib/middleware/equipmentGuard";
 import { EquipmentError, readQcEvidenceFile } from "@/lib/services/equipmentService";
 
 export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await requireEmployeeEquipmentAuth();
+    const auth = await requireEquipmentPortalAuth();
     if (auth.error) return auth.error;
     const { session } = auth;
 
