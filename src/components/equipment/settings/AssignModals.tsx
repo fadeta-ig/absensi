@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import AccessibleModal from "@/components/ui/AccessibleModal";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
@@ -67,7 +71,7 @@ export function CreateAssignmentModal({
             const json = await res.json();
             setAssignProducts(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat produk.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat daftar produk. Coba lagi.");
             toast(msg, "error");
             reportClientError("EquipmentSettings", msg, err);
         } finally {
@@ -79,11 +83,11 @@ export function CreateAssignmentModal({
         setAssignProductLoading(true);
         try {
             const res = await fetch(`/api/ga/equipment/products/${productId}/tools`);
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat alat produk."));
+            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat daftar alat produk."));
             const json = await res.json();
             setAssignProductTools(json.data.tools ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat alat produk.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat daftar alat produk. Coba lagi.");
             setAssignProductTools([]);
             toast(msg, "error");
             reportClientError("EquipmentSettings", msg, err);
@@ -102,7 +106,7 @@ export function CreateAssignmentModal({
     const saveAssignment = useCallback(async () => {
         if (savingAssign) return;
         if (!assignEmployee) {
-            toast("Pilih karyawan terlebih dahulu.", "warning");
+            toast("Pilih petugas terlebih dahulu.", "warning");
             return;
         }
         const previewIds =
@@ -149,7 +153,7 @@ export function CreateAssignmentModal({
                 const json = await res.json().catch(() => ({}));
                 if (res.status === 409 && Array.isArray(json.details)) {
                     setAssignBulkResult({ created: 0, skipped: json.details });
-                    toast("Semua alat di-skip (sudah ditugaskan).", "warning");
+                    toast("Semua alat dilewati karena sudah ditugaskan sebelumnya.", "warning");
                 } else {
                     if (!res.ok) throw new Error(json.error ?? "Gagal menyimpan penugasan.");
                     const data = json.data as { created: unknown[]; skipped: Array<{ unitName: string; reason: string }> };
@@ -157,21 +161,24 @@ export function CreateAssignmentModal({
                     toast(
                         data.skipped.length === 0
                             ? `${data.created.length} penugasan dibuat.`
-                            : `${data.created.length} dibuat, ${data.skipped.length} di-skip.`,
+                            : `${data.created.length} dibuat, ${data.skipped.length} dilewati.`,
                         data.skipped.length === 0 ? "success" : "warning"
                     );
                 }
             }
             setAssignUnitIds([]);
             setAssignUnitQuery("");
-            // Karyawan dipertahankan agar panel "Penugasan aktif" langsung memverifikasi hasil.
+            // Petugas dipertahankan agar panel "Penugasan aktif" langsung memverifikasi hasil.
             setAssignStartsOn("");
             setAssignEndsOn("");
             setAssignProductId("");
             setAssignProductTools([]);
             await Promise.all([fetchAssignments(), fetchUnits()]);
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal.", "error");
+            toast(
+                getFriendlyClientErrorMessage(err, "Gagal menyimpan penugasan. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
         } finally {
             setSavingAssign(false);
         }
@@ -209,7 +216,7 @@ export function CreateAssignmentModal({
                         <div>
                             <h2 className="modal-title">Penugasan Baru</h2>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Hanya karyawan yang ditugaskan yang melihat modul Inspeksi Alat.
+                                Hanya petugas yang ditugaskan yang dapat membuka menu Inspeksi Alat.
                             </p>
                         </div>
                         <button
@@ -317,7 +324,7 @@ export function CreateAssignmentModal({
                         )}
                         {units.some((u) => u.isActive && resolveDisplayCompanies(u).length === 0) && (
                             <p className="text-xs text-muted-foreground mt-2">
-                                Alat yang belum berkategori tidak tampil di sini — kategorikan dulu di tab Produk.
+                                Alat yang belum berkategori tidak tampil di sini. Kategorikan terlebih dahulu di tab Produk.
                             </p>
                         )}
                     </div>
@@ -487,15 +494,15 @@ export function CreateAssignmentModal({
                                 {assignBulkResult.created} penugasan dibuat
                                 {assignBulkResult.skipped.length > 0 && (
                                     <>
-                                        {`, ${assignBulkResult.skipped.length} di-skip:`}
+                                        {`, ${assignBulkResult.skipped.length} dilewati:`}
                                         <ul className="mt-1 list-disc pl-5">
                                             {assignBulkResult.skipped.slice(0, 5).map((s) => (
                                                 <li key={s.unitName}>
-                                                    {s.unitName} — {s.reason}
+                                                    {s.unitName}: {s.reason}
                                                 </li>
                                             ))}
                                             {assignBulkResult.skipped.length > 5 && (
-                                                <li>…dan {assignBulkResult.skipped.length - 5} lainnya.</li>
+                                                <li>...dan {assignBulkResult.skipped.length - 5} lainnya.</li>
                                             )}
                                         </ul>
                                     </>
@@ -504,8 +511,18 @@ export function CreateAssignmentModal({
                         )}
                         {assignEmployee && (
                             <div className="mt-3 rounded-lg border border-border p-3">
-                                <h3 className="text-sm font-medium mb-1">
-                                    Penugasan aktif {assignEmployee.name} ({assignEmployee.employeeId})
+                                <h3 className="text-sm font-medium mb-1 flex items-center gap-1.5 flex-wrap">
+                                    <span>
+                                        Penugasan aktif {assignEmployee.name}
+                                        {!extractOsUserIdFromToken(assignEmployee.employeeId)
+                                            ? ` (${assignEmployee.employeeId})`
+                                            : ""}
+                                    </span>
+                                    {extractOsUserIdFromToken(assignEmployee.employeeId) && (
+                                        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                            OS
+                                        </span>
+                                    )}
                                 </h3>
                                 {assignEmployeeActive.length === 0 ? (
                                     <p className="text-xs text-muted-foreground">Belum ada penugasan aktif.</p>
@@ -598,7 +615,7 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
     const saveEditAssignment = useCallback(async () => {
         if (!assignment || savingEdit) return;
         if (!editEmployee) {
-            toast("Pilih karyawan terlebih dahulu.", "warning");
+            toast("Pilih petugas terlebih dahulu.", "warning");
             return;
         }
         if (!editIsGlobal && editUnitIds.length === 0) {
@@ -641,21 +658,24 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
             const json = await bulkRes.json().catch(() => ({}));
             if (bulkRes.status === 409 && Array.isArray(json.details)) {
                 setEditBulkResult({ created: 0, skipped: json.details });
-                toast("Baris ini diperbarui; alat tambahan semuanya di-skip.", "warning");
+                toast("Baris ini diperbarui; semua alat tambahan dilewati.", "warning");
             } else {
                 if (!bulkRes.ok) throw new Error(json.error ?? "Gagal menambah penugasan.");
                 const data = json.data as { created: unknown[]; skipped: Array<{ unitName: string; reason: string }> };
                 setEditBulkResult({ created: data.created.length, skipped: data.skipped });
                 if (data.skipped.length === 0) {
-                    toast(`Penugasan diperbarui + ${data.created.length} baris tambahan dibuat.`, "success");
+                    toast(`Penugasan diperbarui dan ${data.created.length} baris tambahan dibuat.`, "success");
                     onClose();
                 } else {
-                    toast(`Baris diperbarui; ${data.created.length} tambahan dibuat, ${data.skipped.length} di-skip.`, "warning");
+                    toast(`Baris diperbarui; ${data.created.length} tambahan dibuat, ${data.skipped.length} dilewati.`, "warning");
                 }
             }
             await Promise.all([fetchAssignments(), fetchUnits()]);
         } catch (err) {
-            toast(err instanceof Error ? err.message : "Gagal.", "error");
+            toast(
+                getFriendlyClientErrorMessage(err, "Gagal menyimpan perubahan. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
         } finally {
             setSavingEdit(false);
         }
@@ -680,10 +700,10 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
                 <AccessibleModal ariaLabel="Edit Penugasan" onClose={() => onClose()}>
                     <div className="modal-header !mb-4 pb-4 border-b border-[var(--border)]">
                         <div>
-                            <h2 className="modal-title">Edit Penugasan</h2>
+                            <h2 className="modal-title">Ubah Penugasan</h2>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Centang satu alat untuk mengganti, atau beberapa alat sekaligus — baris ini
-                                memakai alat pertama, sisanya jadi baris penugasan baru.
+                                Centang satu alat untuk mengganti, atau beberapa alat sekaligus. Baris ini memakai
+                                alat pertama dan sisanya dibuat sebagai penugasan baru.
                             </p>
                         </div>
                         <button type="button" className="modal-close" onClick={() => onClose()} aria-label="Tutup modal">
@@ -802,15 +822,15 @@ export function EditAssignmentModal({ assignment, units, fetchAssignments, fetch
                         </div>
                         {editBulkResult && editBulkResult.skipped.length > 0 && (
                             <FeedbackMessage variant="warning">
-                                {editBulkResult.created} baris tambahan dibuat, {editBulkResult.skipped.length} di-skip:
+                                {editBulkResult.created} baris tambahan dibuat, {editBulkResult.skipped.length} dilewati:
                                 <ul className="mt-1 list-disc pl-5">
                                     {editBulkResult.skipped.slice(0, 5).map((s) => (
                                         <li key={s.unitName}>
-                                            {s.unitName} — {s.reason}
+                                            {s.unitName}: {s.reason}
                                         </li>
                                     ))}
                                     {editBulkResult.skipped.length > 5 && (
-                                        <li>…dan {editBulkResult.skipped.length - 5} lainnya.</li>
+                                        <li>...dan {editBulkResult.skipped.length - 5} lainnya.</li>
                                     )}
                                 </ul>
                             </FeedbackMessage>

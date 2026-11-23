@@ -9,7 +9,11 @@ import { useToast } from "@/components/Toast";
 import { storeAuthRedirectMessage } from "@/lib/authRedirectMessage";
 import { notifyAuthChanged, subscribeAuthChanged } from "@/lib/authEvents";
 import { unsubscribePush } from "@/lib/pushClient";
-import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 
 const CLEANING_NAV_ITEMS: NavItem[] = [
     { href: "/cleaning", icon: SprayCan, label: "Checklist Hari Ini" },
@@ -36,7 +40,7 @@ export default function CleaningLayout({ children }: { children: React.ReactNode
             }
             const data = await res.json();
             if (!data.roles?.includes("CLEANING_WORKER") || !data.permissions?.includes("cleaning.execute")) {
-                storeAuthRedirectMessage("Akses dialihkan sesuai role akun Anda.");
+                storeAuthRedirectMessage("Halaman ini tidak tersedia untuk akun Anda. Anda dialihkan ke beranda yang sesuai.");
                 router.replace(
                     data.permissions?.includes("hr.manage")
                         ? "/dashboard"
@@ -89,7 +93,10 @@ export default function CleaningLayout({ children }: { children: React.ReactNode
             router.replace("/");
         } catch (error) {
             reportClientError("CleaningLayout", "Logout petugas gagal", error);
-            toast(error instanceof Error ? error.message : "Gagal logout.", "error");
+            toast(
+                getFriendlyClientErrorMessage(error, "Gagal keluar dari akun. Periksa koneksi Anda lalu coba lagi."),
+                "error"
+            );
             setLoggingOut(false);
         }
     }, [loggingOut, router, toast]);

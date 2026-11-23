@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CheckCircle2, RefreshCw } from "lucide-react";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel } from "@/components/equipment/EquipmentStatusBadge";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
@@ -122,7 +126,10 @@ export default function EquipmentApprovalQueuePage() {
                 const json = await res.json();
                 setRows(json.data ?? []);
             } catch (err) {
-                const msg = err instanceof Error ? err.message : "Gagal memuat antrean.";
+                const msg = getFriendlyClientErrorMessage(
+                    err,
+                    "Gagal memuat antrean persetujuan. Periksa koneksi Anda lalu coba lagi."
+                );
                 setError(msg);
                 reportClientError("EquipmentApprovalQueue", msg, err);
             } finally {

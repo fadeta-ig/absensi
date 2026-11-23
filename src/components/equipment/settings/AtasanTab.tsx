@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "@/components/ConfirmModal";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import EmployeeSearchPicker, { type EmployeePick } from "@/components/ui/EmployeeSearchPicker";
 import EquipmentActorPicker from "@/components/equipment/settings/EquipmentActorPicker";
@@ -66,7 +70,13 @@ export default function AtasanTab({
                 setNewTopViewer(null);
                 await fetchTopViewers();
             } catch (err) {
-                toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+                toast(
+                    getFriendlyClientErrorMessage(
+                        err,
+                        "Gagal menyimpan top reviewer. Periksa koneksi Anda lalu coba lagi."
+                    ),
+                    "error"
+                );
                 reportClientError("EquipmentSettings", "Top viewers save failed", err);
             } finally {
                 setSavingTopViewers(false);
@@ -96,9 +106,9 @@ export default function AtasanTab({
     const removeTopViewer = useCallback(
         (viewer: TopViewer) => {
             confirm({
-                title: `Hapus "${viewer.name}" dari top reviewer?`,
-                message: "Karyawan tersebut tidak lagi bisa melihat rekap semua unit.",
-                confirmLabel: "Ya, hapus",
+                title: `Hapus ${viewer.name} dari top reviewer?`,
+                message: "Karyawan tersebut tidak lagi dapat melihat rekap semua unit.",
+                confirmLabel: "Hapus",
                 cancelLabel: "Batal",
                 variant: "danger",
                 onConfirm: () => {
@@ -123,12 +133,18 @@ export default function AtasanTab({
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ company: approverCompany, employeeIds }),
                 });
-                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan approver."));
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menyimpan pemberi persetujuan."));
                 toast(successMessage, "success");
                 setNewApprover(null);
                 await fetchApprovers(approverCompany);
             } catch (err) {
-                toast(err instanceof Error ? err.message : "Gagal menyimpan.", "error");
+                toast(
+                    getFriendlyClientErrorMessage(
+                        err,
+                        "Gagal menyimpan pemberi persetujuan. Periksa koneksi Anda lalu coba lagi."
+                    ),
+                    "error"
+                );
                 reportClientError("EquipmentSettings", "Approvers save failed", err);
             } finally {
                 setSavingApprover(false);
@@ -139,33 +155,43 @@ export default function AtasanTab({
 
     const addApprover = useCallback(() => {
         if (!newApprover) {
-            toast("Cari dan pilih karyawan terlebih dahulu.", "warning");
+            toast("Pilih petugas terlebih dahulu.", "warning");
             return;
         }
         const id = newApprover.employeeId;
         if (approvers.some((v) => v.employeeId.toLowerCase() === id.toLowerCase())) {
-            toast("Karyawan tersebut sudah terdaftar sebagai approver.", "warning");
+            toast("Petugas tersebut sudah terdaftar sebagai pemberi persetujuan.", "warning");
             return;
         }
         if (approvers.length >= 5) {
-            toast(`Approver ${approverCompany} maksimal 5 orang.`, "warning");
+            toast(`Pemberi persetujuan ${approverCompany} maksimal 5 orang.`, "warning");
             return;
         }
-        void persistApprovers([...approvers.map((v) => v.employeeId), id], `Approver ${approverCompany} ditambahkan.`);
+        void persistApprovers(
+            [...approvers.map((v) => v.employeeId), id],
+            `Pemberi persetujuan ${approverCompany} ditambahkan.`
+        );
     }, [newApprover, approvers, approverCompany, toast, persistApprovers]);
 
     const removeApprover = useCallback(
-        (member: { employeeId: string; name: string | null }) => {
+        (member: ApproverMember) => {
+            const label =
+                member.name ??
+                (member.isOutsource
+                    ? member.username
+                        ? `@${member.username}`
+                        : "Petugas Outsource"
+                    : member.employeeId);
             confirm({
-                title: `Hapus "${member.name ?? member.employeeId}" dari approver ${approverCompany}?`,
-                message: `Karyawan tersebut tidak lagi bisa memberi approval final untuk ${approverCompany}.`,
-                confirmLabel: "Ya, hapus",
+                title: `Hapus ${label} dari pemberi persetujuan ${approverCompany}?`,
+                message: `Petugas tersebut tidak lagi dapat memberikan persetujuan akhir untuk ${approverCompany}.`,
+                confirmLabel: "Hapus",
                 cancelLabel: "Batal",
                 variant: "danger",
                 onConfirm: () => {
                     void persistApprovers(
                         approvers.filter((v) => v.employeeId !== member.employeeId).map((v) => v.employeeId),
-                        "Approver dihapus."
+                        "Pemberi persetujuan dihapus."
                     );
                 },
             });
@@ -261,10 +287,10 @@ export default function AtasanTab({
             </div>
 
             <div className="bg-card border border-border rounded-lg p-4">
-                <h2 className="text-base font-medium mb-1">Approver Final</h2>
+                <h2 className="text-base font-medium mb-1">Persetujuan Akhir</h2>
                 <p className="text-xs text-muted-foreground mb-2">
-                    Atasan yang memberi approval final (DONE → Selesai) per perusahaan. Maksimal 5 orang
-                    per perusahaan, dinamis dan bisa diganti kapan saja.
+                    Pihak yang memberikan persetujuan akhir setelah pemeriksaan QC selesai per perusahaan.
+                    Maksimal 5 orang per perusahaan dan dapat diganti kapan saja.
                 </p>
                 <div className="flex gap-1 mb-3 border-b border-border">
                     {(["WIG", "MKI"] as const).map((c) => (
@@ -292,7 +318,7 @@ export default function AtasanTab({
                 )}
                 {approvers.length === 0 && !approverError ? (
                     <p className="text-sm text-muted-foreground mb-3">
-                        Belum ada approver — approval final terkunci sampai ditetapkan.
+                        Belum ada pemberi persetujuan. Persetujuan akhir baru dapat dilakukan setelah daftar ini diisi.
                     </p>
                 ) : (
                     <ul className="space-y-2 mb-3">

@@ -1244,7 +1244,7 @@ export default function CleaningSettingsPage() {
                                 Atasan tertinggi (pemantau)
                             </h3>
                             <p className="text-xs text-[var(--text-muted)] mb-3">
-                                Tunjuk karyawan yang boleh memantau seluruh inspeksi (read-only, tanpa paraf/TTD).
+                                Tunjuk karyawan yang boleh memantau seluruh inspeksi (hanya lihat, tanpa paraf atau tanda tangan).
                             </p>
                             <TopViewerCard />
                         </div>

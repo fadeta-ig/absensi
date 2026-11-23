@@ -132,6 +132,11 @@ export default function EquipmentActorPicker({
                                     ? "Belum ada akun outsource yang memiliki akses untuk peran ini"
                                     : "Pilih akun outsource"}
                         </option>
+                        {selectedOsUserId && !loadingOs && !osUsers.some((u) => u.userId === selectedOsUserId) && (
+                            <option value={selectedOsUserId}>
+                                {value?.name ?? "Petugas Outsource"}
+                            </option>
+                        )}
                         {osUsers.map((u) => (
                             <option key={u.userId} value={u.userId}>
                                 {u.displayName} (@{u.username})

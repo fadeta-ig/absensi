@@ -10,7 +10,11 @@ import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
 import PageHeader from "@/components/ui/PageHeader";
 import StateCard from "@/components/ui/StateCard";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 
 interface ApprovalItem {
@@ -85,7 +89,7 @@ export default function EmployeeEquipmentApprovalsPage() {
             const json = await res.json();
             setTasks(json.data ?? []);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "Gagal memuat antrean.";
+            const msg = getFriendlyClientErrorMessage(err, "Gagal memuat antrean QC. Periksa koneksi Anda lalu coba lagi.");
             setError(msg);
             reportClientError("EmployeeEquipmentQc", msg, err);
         } finally {

@@ -15,7 +15,11 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { EquipmentEvidencePanel } from "@/components/equipment/EquipmentEvidencePanel";
 import { EquipmentSearchField } from "@/components/ui/EquipmentSearchField";
 import { EquipmentStatusDot, EquipmentCompanyBadge, equipmentStatusLabel, resolveDisplayCompanies } from "@/components/equipment/EquipmentStatusBadge";
-import { reportClientError, getResponseErrorMessage } from "@/lib/clientErrors";
+import {
+    getFriendlyClientErrorMessage,
+    getResponseErrorMessage,
+    reportClientError,
+} from "@/lib/clientErrors";
 import { stripGelar } from "@/lib/utils/formatters";
 import { useEmployeeDraft } from "@/hooks/useEmployeeDraft";
 import { useEmployeeDraftOwner } from "@/components/employee/EmployeeDraftContext";
@@ -930,7 +934,13 @@ export default function EmployeeEquipmentPage() {
                         toast("Inspeksi terkirim. Menunggu pemeriksaan QC.", "success");
                         await fetchUnits();
                     } catch (err) {
-                        toast(err instanceof Error ? err.message : "Gagal mengirim.", "error");
+                        toast(
+                            getFriendlyClientErrorMessage(
+                                err,
+                                "Gagal mengirim inspeksi. Periksa koneksi Anda lalu coba lagi."
+                            ),
+                            "error"
+                        );
                     } finally {
                         setSubmitting(false);
                     }
@@ -967,7 +977,7 @@ export default function EmployeeEquipmentPage() {
                 <div className="emp-surface p-6 text-center">
                     <p className="text-sm font-semibold text-[var(--text-primary)]">Halaman ini untuk pelaksana pemeriksaan.</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">
-                        Peran Anda sebagai atasan. Silakan pantau hasil pemeriksaan melalui tombol di bawah.
+                        Peran Anda sebagai pemantau. Silakan lihat hasil pemeriksaan melalui tombol di bawah.
                     </p>
                     <Link
                         href={`${equipmentBase}/overview`}
