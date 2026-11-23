@@ -102,6 +102,7 @@ export const POST = apiGuard(
 | `/api/shifts/assignments` | `PATCH` | `hr.manage` | Ubah tanggal akhir (eksklusif) satu assignment: `{employeeId, effectiveFrom, effectiveTo \| null}`. Akhir lama/baru tidak boleh < hari ini dan tidak boleh melewati awal assignment berikutnya (`409 OVERLAP`). Audit `ROSTER_UPDATE_END`. |
 | `/api/shifts/assignments` | `DELETE` | `hr.manage` | Batalkan satu assignment yang dimulai hari ini atau setelahnya:
 `{employeeId, effectiveFrom}`. Assignment sebelumnya yang terpotong tepat pada tanggal mulai dibuka kembali hingga akhir assignment yang dibatalkan; bila penerus bershift sama dan bersambung, keduanya digabung (merge). Audit `ROSTER_CANCEL`. |
+| `/api/shifts/smart-rotation` | `GET`, `PUT` | `hr.manage` (`PUT` khusus `WIG001`) | Daftar karyawan peserta Rotasi 3-Shift (Pilih Shift di Kamera Presensi, `attendance.smartShiftEmployees`, default `ID-26100110` & `ID-26070101`). `PUT {employeeIds: string[]}` hanya oleh `WIG001` + `hr.manage`; audit `UPDATE_SMART_SHIFT_EMPLOYEES`. |
 | `/api/employee/shift-schedule?days=14` | `GET` | `employee.self` | Jadwal shift N hari (1-31, default 14) untuk employee yang login: tanggal, hari, nama/jam shift, libur, lintas-hari, sumber. Param opsional `start=YYYY-MM-DD` (default hari ini WIB) untuk jendela patokan cuti tahunan lintas bulan/tahun. |
 
 ### C. Manajemen Karyawan (`/api/employees`)

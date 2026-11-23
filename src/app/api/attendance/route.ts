@@ -53,6 +53,10 @@ export async function POST(request: NextRequest) {
         const action = form.get("action");
         const shiftDate = form.get("shiftDate");
         const offDayReasonRaw = form.get("offDayReason");
+        const selectedShiftIdRaw = form.get("selectedShiftId");
+        const selectedShiftId = typeof selectedShiftIdRaw === "string" && selectedShiftIdRaw.trim()
+            ? selectedShiftIdRaw.trim()
+            : undefined;
         const photo = form.get("photo");
 
         // Kontrak lama (string base64) yang diselundupkan via multipart tetap ditolak.
@@ -224,6 +228,7 @@ export async function POST(request: NextRequest) {
             photoPath,
             location: locationWithNetwork,
             offDayReason,
+            selectedShiftId,
         });
 
         logger.info("Attendance mutation success", {

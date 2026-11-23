@@ -179,6 +179,14 @@ export function AttendanceLogTab({
                                         <td className="text-sm text-[var(--text-secondary)]">
                                             <div className="flex flex-col gap-1 items-start">
                                                 <span>{r.shiftDate ?? r.date}</span>
+                                                {r.shiftName && !r.isOffDay && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)] border border-[var(--border)]"
+                                                        title={r.shiftStartTime && r.shiftEndTime ? `${r.shiftName} (${r.shiftStartTime}–${r.shiftEndTime} WIB)` : r.shiftName}
+                                                    >
+                                                        {r.shiftName}
+                                                    </span>
+                                                )}
                                                 {r.isOffDay && (
                                                     <span
                                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"

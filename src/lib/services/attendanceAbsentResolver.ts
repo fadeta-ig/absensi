@@ -1,4 +1,5 @@
 import { addCalendarDays, getWIBDayOfWeek, getWIBHoursMinutes, isValidCalendarDate, toUTCDateKey, toWIBDateString } from "@/lib/timezone";
+import { inferSmartShiftFromClockIn, mapToThreeSmartShifts } from "@/lib/services/smartShiftResolver";
 import type {
     AbsentEmployee,
     AbsentStatusType,
@@ -31,6 +32,8 @@ export interface ResolveAbsentParams {
     targetDateShiftOverrides?: Record<string, string | null>;
     /** Effective shiftId per employee for H-1. Used only to evaluate an open overnight shift. */
     previousDateShiftOverrides?: Record<string, string | null>;
+    /** Daftar employeeId peserta Rotasi 3-Shift (Smart 3-Shift). */
+    smartShiftEmployeeIds?: string[];
 }
 
 function effectiveShift(
@@ -85,6 +88,7 @@ function hasActiveOvernightShift(
     shifts: WorkShiftInfo[],
     now: Date,
     previousDateShiftOverrides?: Record<string, string | null>,
+    isSmartShift = false,
 ): boolean {
     if (normalizeWibDate(toWIBDateString(now)) !== targetDate) return false;
 
@@ -96,6 +100,17 @@ function hasActiveOvernightShift(
         !record.clockOut
     );
     if (!previousRecord) return false;
+
+    if (isSmartShift) {
+        const threeShifts = mapToThreeSmartShifts(shifts);
+        const inferred = inferSmartShiftFromClockIn(previousDate, previousRecord.clockIn, threeShifts);
+        if (!inferred || !inferred.isOvernight) return false;
+        const [endHour, endMinute] = inferred.scheduleDay.endTime.split(":").map(Number);
+        const endMinutes = endHour * 60 + endMinute;
+        const { hours, minutes } = getWIBHoursMinutes(now);
+        const currentRelativeMinutes = (hours + 24) * 60 + minutes;
+        return currentRelativeMinutes <= endMinutes + 24 * 60;
+    }
 
     const employeeShift = effectiveShift(employee, shifts, previousDateShiftOverrides);
     const previousDayOfWeek = getWIBDayOfWeek(toUTCDateKey(previousDate));
@@ -119,10 +134,24 @@ function hasShiftStartedForCurrentDate(
     shifts: WorkShiftInfo[],
     now: Date,
     shiftOverrides?: Record<string, string | null>,
+    isSmartShift = false,
 ): boolean {
     if (toWIBDateString(now) !== targetDate) return true;
+    const dayOfWeek = getWIBDayOfWeek(toUTCDateKey(targetDate));
+    if (isSmartShift) {
+        const threeShifts = mapToThreeSmartShifts(shifts);
+        const shift3Day = threeShifts[2].days.find((d) => d.dayOfWeek === dayOfWeek);
+        // Bila hari tersebut libur pada ketiga shift (mis. Minggu), tampilkan langsung sebagai Libur Shift.
+        if (!shift3Day || shift3Day.isOff) return true;
+        // Peserta Rotasi 3-Shift bisa masuk di Shift 1, Shift 2, atau Shift 3.
+        // Baru dianggap Belum Hadir (Alpa) setelah jam mulai Shift 3 (mengikuti Master Jam Kerja) tiba.
+        const [s3Hour, s3Minute] = shift3Day.startTime.split(":").map(Number);
+        const lastShiftStartMinutes = s3Hour * 60 + s3Minute;
+        const { hours, minutes } = getWIBHoursMinutes(now);
+        return hours * 60 + minutes >= lastShiftStartMinutes;
+    }
     const employeeShift = effectiveShift(employee, shifts, shiftOverrides);
-    const schedule = employeeShift?.days.find((day) => day.dayOfWeek === getWIBDayOfWeek(toUTCDateKey(targetDate)));
+    const schedule = employeeShift?.days.find((day) => day.dayOfWeek === dayOfWeek);
     if (!schedule || schedule.isOff) return true;
     const [startHour, startMinute] = schedule.startTime.split(":").map(Number);
     const { hours, minutes } = getWIBHoursMinutes(now);
@@ -148,9 +177,11 @@ export function resolveAbsentEmployees({
     now = new Date(),
     targetDateShiftOverrides,
     previousDateShiftOverrides,
+    smartShiftEmployeeIds = [],
 }: ResolveAbsentParams): AbsentEmployee[] {
     const authoritativeTargetDate = normalizeWibDate(targetDate);
     if (!isValidCalendarDate(authoritativeTargetDate)) return [];
+    const smartShiftSet = new Set(smartShiftEmployeeIds);
     const recordsOnDate = records.filter((r) => normalizeWibDate(r.date) === authoritativeTargetDate);
     const attendedIds = new Set(recordsOnDate.map((r) => r.employeeId));
     const activeEmployees = employees.filter((e) => e.isActive !== false);
@@ -169,8 +200,9 @@ export function resolveAbsentEmployees({
             if (approvedLeaveForDate(e.employeeId, authoritativeTargetDate, leaves)) return true;
             if (pendingLeaveForDate(e.employeeId, authoritativeTargetDate, leaves)) return true;
             if (holidayMatch) return true;
-            if (hasActiveOvernightShift(e, authoritativeTargetDate, records, shifts, now, previousDateShiftOverrides)) return false;
-            return hasShiftStartedForCurrentDate(e, authoritativeTargetDate, shifts, now, targetDateShiftOverrides);
+            const isSmart = smartShiftSet.has(e.employeeId);
+            if (hasActiveOvernightShift(e, authoritativeTargetDate, records, shifts, now, previousDateShiftOverrides, isSmart)) return false;
+            return hasShiftStartedForCurrentDate(e, authoritativeTargetDate, shifts, now, targetDateShiftOverrides, isSmart);
         })
         .map((emp) => {
             // 1. Check approved leave
@@ -193,6 +225,21 @@ export function resolveAbsentEmployees({
                 statusLabel = "Menunggu Persetujuan";
                 const leaveLabel = LEAVE_TYPE_MAP[pendingLeave.type] || `Cuti (${pendingLeave.type})`;
                 notes = `Pengajuan ${leaveLabel} menunggu persetujuan HR${pendingLeave.reason ? `: ${pendingLeave.reason}` : ""}`;
+            } else if (smartShiftSet.has(emp.employeeId)) {
+                const isShiftOff = targetDayOfWeek === 0;
+                if (holidayMatch) {
+                    statusType = "off_day";
+                    statusLabel = `Libur Nasional (${holidayMatch.name})`;
+                    notes = `Hari Libur Nasional: ${holidayMatch.name}`;
+                } else if (isShiftOff) {
+                    statusType = "off_day";
+                    statusLabel = "Libur Shift";
+                    notes = "Jadwal Libur Shift: Rotasi 3-Shift";
+                } else {
+                    statusType = "unpresent";
+                    statusLabel = "Belum Hadir";
+                    notes = "Rotasi 3-Shift (Shift 1 / 2 / 3)";
+                }
             } else {
                 // 2. Resolve shift (roster override, assigned, or default fallback)
                 const empShift = effectiveShift(emp, shifts, targetDateShiftOverrides);

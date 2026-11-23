@@ -9,6 +9,11 @@ import {
     type ScheduleDay,
     type ShiftTolerance,
 } from "@/lib/services/attendanceShiftHelper";
+import { isSmartShiftEmployee } from "@/lib/services/appSettingsService";
+import {
+    inferSmartShiftFromClockIn,
+    loadThreeRotationShifts,
+} from "@/lib/services/smartShiftResolver";
 
 type AttendanceCorrectionRow = Prisma.AttendanceCorrectionGetPayload<Record<string, never>>;
 
@@ -116,9 +121,22 @@ export async function validateProposedClockInDate(
             400,
         );
     }
-    const shift = await loadActiveShift(tx, employeeId, targetDateKey);
-    const scheduleDay = shift?.days.find((day) => day.dayOfWeek === toUTCDateKey(targetDateKey).getUTCDay()) ?? null;
-    if (!shift || !scheduleDay || scheduleDay.isOff || !isOvernightSchedule(scheduleDay.startTime, scheduleDay.endTime)) {
+
+    let scheduleDay: ScheduleDay | null = null;
+    let shiftTolerance: ShiftTolerance | null = null;
+
+    if (await isSmartShiftEmployee(employeeId)) {
+        const threeShifts = await loadThreeRotationShifts(tx);
+        const shift3 = threeShifts[2];
+        scheduleDay = shift3.days.find((day) => day.dayOfWeek === toUTCDateKey(targetDateKey).getUTCDay()) ?? null;
+        shiftTolerance = shift3.tolerance;
+    } else {
+        const shift = await loadActiveShift(tx, employeeId, targetDateKey);
+        scheduleDay = shift?.days.find((day) => day.dayOfWeek === toUTCDateKey(targetDateKey).getUTCDay()) ?? null;
+        shiftTolerance = shift?.tolerance ?? null;
+    }
+
+    if (!shiftTolerance || !scheduleDay || scheduleDay.isOff || !isOvernightSchedule(scheduleDay.startTime, scheduleDay.endTime)) {
         throw new AttendanceCorrectionError(
             "Usulan jam masuk H+1 hanya dapat digunakan untuk shift lintas hari.",
             "INVALID_CLOCK_IN_DATE",
@@ -127,7 +145,7 @@ export async function validateProposedClockInDate(
     }
     const { hours, minutes } = getWIBHoursMinutes(proposed);
     const wallMinutes = hours * 60 + minutes;
-    const upper = overnightClockInUpperMinutes(scheduleDay, shift.tolerance);
+    const upper = overnightClockInUpperMinutes(scheduleDay, shiftTolerance);
     // wallMinutes 00:xx H+1 dinilai dalam koordinat hari shift: +1440.
     // Syarat: 00:00 <= wall <= endTime + lateCheckOut.
     if (wallMinutes > upper) {
@@ -177,6 +195,14 @@ export async function computeCorrectedStatus(
         select: { employeeId: true },
     });
     if (!employeeExists) return null;
+
+    if (await isSmartShiftEmployee(record.employeeId)) {
+        if (existing?.isOffDay) return "present";
+        const threeShifts = await loadThreeRotationShifts(tx);
+        const inferred = inferSmartShiftFromClockIn(targetKey, proposed, threeShifts);
+        if (!inferred || inferred.scheduleDay.isOff) return "present";
+        return inferred.computedStatus;
+    }
 
     const shift = await loadActiveShift(tx, record.employeeId, targetKey);
     if (!shift || shift.days.length === 0) return null;

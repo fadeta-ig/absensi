@@ -15,6 +15,26 @@ export interface AttendanceSchedule {
     isOff: boolean;
 }
 
+export interface SmartShiftOption {
+    shiftNumber: 1 | 2 | 3;
+    shiftId: string;
+    name: string;
+    shortLabel: string;
+    startTime: string;
+    endTime: string;
+    isOvernight: boolean;
+    isOff: boolean;
+    isAvailable: boolean;
+    lockedReason: string | null;
+}
+
+export interface SmartShiftContext {
+    enabled: boolean;
+    activeShiftId: string | null;
+    activeShiftNumber: 1 | 2 | 3 | null;
+    options: SmartShiftOption[];
+}
+
 export interface AttendanceServerContext {
     serverWibNow: string;
     serverWibDate: string;
@@ -28,6 +48,7 @@ export interface AttendanceServerContext {
     networkName: string;
     isOffDay: boolean;
     shiftName: string | null;
+    smartShift?: SmartShiftContext;
 }
 
 interface ContextState {
@@ -70,6 +91,35 @@ function parseContext(value: unknown): AttendanceServerContext {
         throw new Error("Konteks waktu server presensi belum tersedia.");
     }
 
+    const rawSmart = data.smartShift && typeof data.smartShift === "object"
+        ? data.smartShift as Record<string, unknown>
+        : null;
+    let smartShift: SmartShiftContext | undefined;
+    if (rawSmart && rawSmart.enabled === true && Array.isArray(rawSmart.options)) {
+        const options: SmartShiftOption[] = rawSmart.options
+            .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+            .map((item) => ({
+                shiftNumber: (item.shiftNumber === 1 || item.shiftNumber === 2 || item.shiftNumber === 3 ? item.shiftNumber : 1),
+                shiftId: typeof item.shiftId === "string" ? item.shiftId : "",
+                name: typeof item.name === "string" ? item.name : "",
+                shortLabel: typeof item.shortLabel === "string" ? item.shortLabel : "",
+                startTime: typeof item.startTime === "string" ? item.startTime : "00:00",
+                endTime: typeof item.endTime === "string" ? item.endTime : "00:00",
+                isOvernight: item.isOvernight === true,
+                isOff: item.isOff === true,
+                isAvailable: item.isAvailable === true,
+                lockedReason: typeof item.lockedReason === "string" ? item.lockedReason : null,
+            }));
+        smartShift = {
+            enabled: true,
+            activeShiftId: typeof rawSmart.activeShiftId === "string" ? rawSmart.activeShiftId : null,
+            activeShiftNumber: (rawSmart.activeShiftNumber === 1 || rawSmart.activeShiftNumber === 2 || rawSmart.activeShiftNumber === 3)
+                ? rawSmart.activeShiftNumber
+                : null,
+            options,
+        };
+    }
+
     return {
         serverWibNow: data.serverWibNow,
         serverWibDate: data.serverWibDate,
@@ -87,6 +137,7 @@ function parseContext(value: unknown): AttendanceServerContext {
         networkName: typeof data.networkName === "string" ? data.networkName : "",
         isOffDay: data.isOffDay === true,
         shiftName: typeof data.shiftName === "string" ? data.shiftName : null,
+        ...(smartShift ? { smartShift } : {}),
     };
 }
 

@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, memo } from "react";
 import {
     Camera, Clock, CheckCircle2, AlertCircle, Loader2,
     Wifi, WifiOff, FlipHorizontal, RotateCcw, SwitchCamera,
-    ArrowRight, VideoOff, RefreshCw, CalendarClock, MapPin
+    ArrowRight, VideoOff, RefreshCw, CalendarClock, MapPin, Lock
 } from "lucide-react";
 import { createClientLogger } from "@/lib/clientLogger";
 import { useToast } from "@/components/Toast";
@@ -121,7 +121,21 @@ export default function AttendancePage() {
     const activeMode = serverContext.context?.activeMode;
     const isClockIn = activeMode === "CLOCK_IN";
     const isOffDay = networkInfo?.isOffDay ?? serverContext.context?.isOffDay ?? false;
+    const smartShift = serverContext.context?.smartShift;
+    const isSmartShiftEnabled = Boolean(smartShift?.enabled);
+    const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
     const offDayDraftKey = shiftDate && isClockIn && isOffDay ? `attendance:offday:${shiftDate}` : null;
+
+    // Bersihkan pilihan shift bila jendela waktu server berganti dan shift tersebut tidak lagi tersedia.
+    useEffect(() => {
+        if (!smartShift?.enabled || !selectedShiftId) return;
+        const stillAvailable = smartShift.options.some(
+            (opt) => opt.shiftId === selectedShiftId && opt.isAvailable
+        );
+        if (!stillAvailable) {
+            setSelectedShiftId(null);
+        }
+    }, [smartShift, selectedShiftId]);
 
     const {
         restored: offDayDraftRestored,
@@ -423,6 +437,23 @@ export default function AttendancePage() {
             }
         }
 
+        if (isClockInAction && !isOffDay && isSmartShiftEnabled) {
+            if (!smartShift?.activeShiftId) {
+                const err = "Belum ada jendela Shift 1 / 2 / 3 yang terbuka pada jam server saat ini.";
+                setMessage(err);
+                toast(err, "warning");
+                setStatus("idle");
+                return;
+            }
+            if (!selectedShiftId || selectedShiftId !== smartShift.activeShiftId) {
+                const err = "Silakan klik tombol Shift yang aktif terlebih dahulu sebelum mengirim Clock In.";
+                setMessage(err);
+                toast(err, "warning");
+                setStatus("idle");
+                return;
+            }
+        }
+
         submitLockRef.current = true;
         setStatus("submitting");
         setMessage("");
@@ -438,6 +469,9 @@ export default function AttendancePage() {
                 form.append("location", JSON.stringify({ lat: gpsInfo.lat, lng: gpsInfo.lng, accuracyMeters: gpsInfo.accuracy }));
             }
             if (isClockInAction && isOffDay) form.append("offDayReason", offDayReason.trim());
+            if (isClockInAction && !isOffDay && isSmartShiftEnabled && selectedShiftId) {
+                form.append("selectedShiftId", selectedShiftId);
+            }
             const res = await fetch("/api/attendance", {
                 method: "POST",
                 body: form,
@@ -485,7 +519,7 @@ export default function AttendancePage() {
         } finally {
             if (!keepLockedForNavigation) submitLockRef.current = false;
         }
-    }, [photoBlob, gpsInfo, networkInfo, offDayReason, router, serverContext, toast, clearOffDayDraft]);
+    }, [photoBlob, gpsInfo, networkInfo, offDayReason, router, serverContext, toast, clearOffDayDraft, isSmartShiftEnabled, smartShift, selectedShiftId]);
 
     const isClockOut = activeMode === "CLOCK_OUT";
     const isDone = activeMode === "ALREADY_COMPLETED";
@@ -494,7 +528,8 @@ export default function AttendancePage() {
     const isNetworkOk = isBypass || (networkInfo?.isOfficeWifi ?? false);
     const isGpsOk = isBypass || (gpsInfo?.isValid ?? false);
     const isReasonValid = !isClockIn || !isOffDay || offDayReason.trim().length >= 3;
-    const canSubmit = Boolean(photoBlob && isNetworkOk && isGpsOk && isReasonValid && serverContext.context && serverContext.isFresh && serverContext.isOnline && activeMode !== "ALREADY_COMPLETED" && status !== "submitting" && status !== "success");
+    const isSmartShiftReady = !isSmartShiftEnabled || !isClockIn || isOffDay || Boolean(selectedShiftId && selectedShiftId === smartShift?.activeShiftId);
+    const canSubmit = Boolean(photoBlob && isNetworkOk && isGpsOk && isReasonValid && isSmartShiftReady && serverContext.context && serverContext.isFresh && serverContext.isOnline && activeMode !== "ALREADY_COMPLETED" && status !== "submitting" && status !== "success");
 
     // Has blocker warning?
     const hasNetworkBlocker = !isNetworkChecking && !isNetworkOk;
@@ -568,6 +603,111 @@ export default function AttendancePage() {
             ) : (
                 /* ── Layar Utama Presensi (Kamera Bersih, Tanpa Biometrik Palsu, Satu Layar Penuh) ── */
                 <div className="space-y-2.5">
+                    {/* ── Panel Pilih Shift Manual untuk Peserta Rotasi 3-Shift (Hanya saat CLOCK_IN Hari Kerja) ── */}
+                    {isSmartShiftEnabled && isClockIn && !isOffDay && smartShift && (
+                        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3.5 shadow-sm space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <CalendarClock className="w-4 h-4 text-[var(--primary)] shrink-0" />
+                                    <span className="text-xs font-bold text-[var(--text-primary)] truncate">
+                                        Pilih Shift Kerja Hari Ini
+                                    </span>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                    selectedShiftId && selectedShiftId === smartShift.activeShiftId
+                                        ? "bg-[var(--success-bg)] text-[var(--success)]"
+                                        : "bg-[var(--warning-bg)] text-[var(--warning)]"
+                                }`}>
+                                    {selectedShiftId && selectedShiftId === smartShift.activeShiftId
+                                        ? "Shift Terpilih"
+                                        : "Wajib Klik Shift Aktif"}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                {smartShift.options.map((opt) => {
+                                    const isSelected = selectedShiftId === opt.shiftId && opt.isAvailable;
+                                    return (
+                                        <button
+                                            key={opt.shiftNumber}
+                                            type="button"
+                                            disabled={!opt.isAvailable}
+                                            onClick={() => {
+                                                if (!opt.isAvailable) return;
+                                                setSelectedShiftId(opt.shiftId);
+                                            }}
+                                            className={`relative flex flex-col items-start justify-between p-2.5 rounded-xl border text-left transition-all ${
+                                                isSelected
+                                                    ? "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_12%,var(--card))] ring-2 ring-[color-mix(in_srgb,var(--primary)_30%,transparent)] shadow-sm cursor-pointer"
+                                                    : opt.isAvailable
+                                                        ? "border-[var(--primary)]/50 bg-[var(--card)] hover:bg-[var(--secondary)] cursor-pointer active:scale-[0.98]"
+                                                        : "border-[var(--border)] bg-[var(--secondary)]/60 opacity-55 cursor-not-allowed"
+                                            }`}
+                                        >
+                                            <div className="w-full flex items-center justify-between gap-1">
+                                                <span className={`text-xs font-extrabold ${
+                                                    isSelected
+                                                        ? "text-[var(--primary)]"
+                                                        : opt.isAvailable
+                                                            ? "text-[var(--text-primary)]"
+                                                            : "text-[var(--text-muted)]"
+                                                }`}>
+                                                    {opt.shortLabel}
+                                                </span>
+                                                {isSelected ? (
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
+                                                ) : opt.isAvailable ? (
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                                                ) : (
+                                                    <Lock className="w-3 h-3 text-[var(--text-muted)] shrink-0" />
+                                                )}
+                                            </div>
+                                            <span className="text-[11px] font-semibold text-[var(--text-secondary)] tabular-nums mt-1">
+                                                {opt.startTime}–{opt.endTime}
+                                            </span>
+                                            <span className={`text-[9px] font-medium mt-1 leading-tight line-clamp-2 ${
+                                                isSelected
+                                                    ? "text-[var(--primary)] font-bold"
+                                                    : opt.isAvailable
+                                                        ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                                                        : "text-[var(--text-muted)]"
+                                            }`}>
+                                                {isSelected
+                                                    ? "Siap Clock-In"
+                                                    : opt.isAvailable
+                                                        ? "Aktif • Klik pilih"
+                                                        : (opt.lockedReason || "Terkunci")}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Info Shift Aktif saat CLOCK_OUT untuk Peserta Rotasi 3-Shift (Otomatis, Tanpa Pilih Tombol Lagi) ── */}
+                    {isSmartShiftEnabled && isClockOut && serverContext.context?.shiftName && (
+                        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 flex items-center justify-between gap-2 shadow-sm">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <Clock className="w-4 h-4 text-[var(--primary)] shrink-0" />
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-bold text-[var(--text-primary)] truncate">
+                                        Pulang {serverContext.context.shiftName}
+                                    </p>
+                                    <p className="text-[10px] text-[var(--text-muted)] truncate">
+                                        Shift tanggal {serverContext.context.shiftDate}
+                                        {serverContext.context.todaySchedule
+                                            ? ` • Jadwal ${serverContext.context.todaySchedule.startTime}–${serverContext.context.todaySchedule.endTime} WIB`
+                                            : ""}
+                                    </p>
+                                </div>
+                            </div>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--text-secondary)] shrink-0">
+                                Otomatis
+                            </span>
+                        </div>
+                    )}
+
                     {/* ── Info validasi di atas viewfinder agar terbaca lebih dulu ── */}
                     {isClockIn && isOffDay && (
                         <div className="rounded-2xl border border-[var(--warning-border)] bg-[var(--warning-bg)] p-4 space-y-3">

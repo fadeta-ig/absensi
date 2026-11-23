@@ -50,6 +50,7 @@ export default function AttendanceMonitorPage() {
     const [leaves, setLeaves] = useState<LeaveRecordLite[]>([]);
     const [shifts, setShifts] = useState<WorkShiftInfo[]>([]);
     const [holidays, setHolidays] = useState<Array<{ date: string; name: string }>>([]);
+    const [smartShiftEmployeeIds, setSmartShiftEmployeeIds] = useState<string[]>([]);
     const [targetDateAbsent, setTargetDateAbsent] = useState("");
     const [targetDateShiftOverrides, setTargetDateShiftOverrides] = useState<Record<string, string | null>>({});
     const [previousDateShiftOverrides, setPreviousDateShiftOverrides] = useState<Record<string, string | null>>({});
@@ -103,17 +104,22 @@ export default function AttendanceMonitorPage() {
         if (Number.isNaN(serverNow.getTime())) throw new Error("Waktu server tidak valid.");
         const serverDate = context.serverWibDate;
         const currentYear = Number(serverDate.slice(0, 4));
-        const [attendanceRes, leaveRes, shiftRes, holidayRes] = await Promise.all([
+        const [attendanceRes, leaveRes, shiftRes, holidayRes, smartRotationRes] = await Promise.all([
             fetch("/api/attendance", { cache: "no-store" }),
             fetch("/api/leave", { cache: "no-store" }),
             fetch("/api/shifts", { cache: "no-store" }),
             fetch(`/api/holidays?year=${currentYear}`, { cache: "no-store" }),
+            fetch("/api/shifts/smart-rotation", { cache: "no-store" }).catch(() => null),
         ]);
         const failedResponse = [attendanceRes, leaveRes, shiftRes, holidayRes].find((res) => !res.ok);
         if (failedResponse) throw new Error(await getResponseErrorMessage(failedResponse, "Gagal memuat data evaluasi presensi."));
 
-        const [attendanceData, leaveData, shiftData, holidayPayload] = await Promise.all([
-            attendanceRes.json(), leaveRes.json(), shiftRes.json(), holidayRes.json(),
+        const [attendanceData, leaveData, shiftData, holidayPayload, smartRotationPayload] = await Promise.all([
+            attendanceRes.json(),
+            leaveRes.json(),
+            shiftRes.json(),
+            holidayRes.json(),
+            smartRotationRes && smartRotationRes.ok ? smartRotationRes.json().catch(() => null) : Promise.resolve(null),
         ]);
         if (!Array.isArray(attendanceData) || !Array.isArray(leaveData) || !Array.isArray(shiftData) || !Array.isArray(holidayPayload?.data)) {
             throw new Error("Format data evaluasi presensi tidak sesuai.");
@@ -123,6 +129,9 @@ export default function AttendanceMonitorPage() {
         setLeaves(leaveData);
         setShifts(shiftData);
         setHolidays(holidayPayload.data);
+        if (Array.isArray(smartRotationPayload?.employeeIds)) {
+            setSmartShiftEmployeeIds(smartRotationPayload.employeeIds);
+        }
         setAuthoritativeDate(serverDate);
         setAuthoritativeNow(serverNow);
         if (initializeDates) {
@@ -358,8 +367,9 @@ export default function AttendanceMonitorPage() {
             previousDateShiftOverrides: shiftOverrideDate === targetDateAbsent
                 ? previousDateShiftOverrides
                 : EMPTY_SHIFT_OVERRIDES,
+            smartShiftEmployeeIds,
         });
-    }, [records, employees, leaves, shifts, holidays, targetDateAbsent, authoritativeNow, shiftOverrideDate, targetDateShiftOverrides, previousDateShiftOverrides]);
+    }, [records, employees, leaves, shifts, holidays, targetDateAbsent, authoritativeNow, shiftOverrideDate, targetDateShiftOverrides, previousDateShiftOverrides, smartShiftEmployeeIds]);
 
     // Count only employees who are scheduled to work today but have not clocked in (True Alpa/Belum Hadir)
     const unpresentCount = useMemo(() => {

@@ -4,46 +4,63 @@ type ShiftSeedClient = PrismaClient | Prisma.TransactionClient;
 
 export const STANDARD_3_SHIFTS = [
     {
-        name: "Shift 1 — Pagi (07:00 – 15:00)",
+        name: "Shift 1 — Pagi",
+        matchNames: ["Shift 1 — Pagi", "Shift 1 — Pagi (07:00 – 15:00)"],
         isDefault: false,
-        earlyCheckIn: 30,  // Mulai presensi 06:30
-        lateCheckIn: 15,   // Batas tepat waktu 07:15
-        earlyCheckOut: 0,  // Jam pulang minimal 15:00
-        lateCheckOut: 60,  // Batas toleransi pulang 16:00
-        startTime: "07:00",
-        endTime: "15:00",
+        earlyCheckIn: 120, // Mulai presensi 2 jam sebelum masuk (05:00 WIB)
+        lateCheckIn: 0,    // Toleransi terlambat 0 menit
+        earlyCheckOut: 0,  // Boleh pulang lebih awal 0 menit
+        lateCheckOut: 120, // Boleh pulang lebih lambat 120 menit
+        weekdayStart: "07:00",
+        weekdayEnd: "15:00",
+        saturdayStart: "07:00",
+        saturdayEnd: "12:00",
     },
     {
-        name: "Shift 2 — Siang (15:00 – 23:00)",
+        name: "Shift 2 — Siang",
+        matchNames: ["Shift 2 — Siang", "Shift 2 — Siang (15:00 – 23:00)"],
         isDefault: false,
-        earlyCheckIn: 30,  // Mulai presensi 14:30
-        lateCheckIn: 15,   // Batas tepat waktu 15:15
-        earlyCheckOut: 0,  // Jam pulang minimal 23:00
-        lateCheckOut: 60,  // Batas toleransi pulang 00:00
-        startTime: "15:00",
-        endTime: "23:00",
+        earlyCheckIn: 120, // Mulai presensi 2 jam sebelum masuk (13:00 / Sabtu 10:00 WIB)
+        lateCheckIn: 0,    // Toleransi terlambat 0 menit
+        earlyCheckOut: 0,  // Boleh pulang lebih awal 0 menit
+        lateCheckOut: 120, // Boleh pulang lebih lambat 120 menit
+        weekdayStart: "15:00",
+        weekdayEnd: "23:00",
+        saturdayStart: "12:00",
+        saturdayEnd: "17:00",
     },
     {
-        name: "Shift 3 — Malam (23:00 – 07:00)",
+        name: "Shift 3 — Malam",
+        matchNames: ["Shift 3 — Malam", "Shift 3 — Malam (23:00 – 07:00)"],
         isDefault: false,
-        earlyCheckIn: 30,  // Mulai presensi 22:30
-        lateCheckIn: 15,   // Batas tepat waktu 23:15
-        earlyCheckOut: 0,  // Jam pulang minimal 07:00 (+1)
-        lateCheckOut: 60,  // Batas toleransi pulang 08:00 (+1)
-        startTime: "23:00",
-        endTime: "07:00",
+        earlyCheckIn: 120, // Mulai presensi 2 jam sebelum masuk (21:00 / Sabtu 15:00 WIB)
+        lateCheckIn: 0,    // Toleransi terlambat 0 menit
+        earlyCheckOut: 0,  // Boleh pulang lebih awal 0 menit
+        lateCheckOut: 120, // Boleh pulang lebih lambat 120 menit
+        weekdayStart: "23:00",
+        weekdayEnd: "07:00",
+        saturdayStart: "17:00",
+        saturdayEnd: "22:00",
     },
 ];
 
 export async function seed3Shifts(client: ShiftSeedClient) {
-    console.log("🌱 Menjalankan Seeding Paket 3-Shift 24 Jam (Format 07:00)...");
+    console.log("🌱 Menjalankan Seeding Paket 3-Shift Lapangan (Sen-Jum 8 Jam, Sabtu 5 Jam, Toleransi 120/0/0/120)...");
     const results: string[] = [];
 
     for (const shiftConfig of STANDARD_3_SHIFTS) {
         let shift = await client.workShift.findFirst({
-            where: { name: shiftConfig.name },
+            where: { name: { in: shiftConfig.matchNames } },
             include: { days: true },
         });
+
+        const buildDays = () =>
+            Array.from({ length: 7 }, (_, i) => ({
+                dayOfWeek: i,
+                startTime: i === 6 ? shiftConfig.saturdayStart : shiftConfig.weekdayStart,
+                endTime: i === 6 ? shiftConfig.saturdayEnd : shiftConfig.weekdayEnd,
+                isOff: i === 0,
+            }));
 
         if (!shift) {
             shift = await client.workShift.create({
@@ -55,12 +72,7 @@ export async function seed3Shifts(client: ShiftSeedClient) {
                     earlyCheckOut: shiftConfig.earlyCheckOut,
                     lateCheckOut: shiftConfig.lateCheckOut,
                     days: {
-                        create: Array.from({ length: 7 }, (_, i) => ({
-                            dayOfWeek: i,
-                            startTime: shiftConfig.startTime,
-                            endTime: shiftConfig.endTime,
-                            isOff: false, // Operasional 24/7 aktif 7 hari (rotasi off day diatur per roster/karyawan)
-                        })),
+                        create: buildDays(),
                     },
                 },
                 include: { days: true },
@@ -68,8 +80,22 @@ export async function seed3Shifts(client: ShiftSeedClient) {
             console.log(`  ✅ Shift baru dibuat: ${shift.name} (${shift.id})`);
             results.push(`Dibuat: ${shift.name}`);
         } else {
-            console.log(`  ℹ️ Shift sudah ada: ${shift.name} (${shift.id})`);
-            results.push(`Sudah ada: ${shift.name}`);
+            await client.workShiftDay.deleteMany({ where: { shiftId: shift.id } });
+            shift = await client.workShift.update({
+                where: { id: shift.id },
+                data: {
+                    earlyCheckIn: shiftConfig.earlyCheckIn,
+                    lateCheckIn: shiftConfig.lateCheckIn,
+                    earlyCheckOut: shiftConfig.earlyCheckOut,
+                    lateCheckOut: shiftConfig.lateCheckOut,
+                    days: {
+                        create: buildDays(),
+                    },
+                },
+                include: { days: true },
+            });
+            console.log(`  ✅ Shift disinkronkan: ${shift.name} (${shift.id})`);
+            results.push(`Disinkronkan: ${shift.name}`);
         }
     }
 

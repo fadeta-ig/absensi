@@ -1020,3 +1020,142 @@ export async function updateCleaningWeeklyOffDays(
     invalidateCleaningWeeklyOffDaysCache();
     return { key: CLEANING_WEEKLY_OFF_DAYS_KEY, value: normalized, csv };
 }
+
+// ─── Peserta Rotasi 3-Shift / Smart Shift Detection (milik WIG001) ────
+// Karyawan dalam daftar ini memilih [Shift 1 / Shift 2 / Shift 3] sesuai
+// zona jam server saat Clock-In di kamera presensi, tanpa mengubah tabel
+// Roster HR (shift_assignments) dan tanpa mengubah karyawan lainnya.
+
+export const SMART_SHIFT_EMPLOYEES_KEY = "attendance.smartShiftEmployees" as const;
+export const DEFAULT_SMART_SHIFT_EMPLOYEE_IDS: readonly string[] = ["ID-26100110", "ID-26070101"];
+export const MAX_SMART_SHIFT_EMPLOYEES = 100 as const;
+
+let smartShiftEmployeesCache: { value: string[]; expiresAt: number } | null = null;
+
+export function invalidateSmartShiftEmployeesCache(): void {
+    smartShiftEmployeesCache = null;
+}
+
+export function parseSmartShiftEmployeeIds(raw: string | null | undefined): string[] {
+    if (raw === null || raw === undefined) {
+        return [...DEFAULT_SMART_SHIFT_EMPLOYEE_IDS];
+    }
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!Array.isArray(parsed)) return [...DEFAULT_SMART_SHIFT_EMPLOYEE_IDS];
+        const unique = new Set<string>();
+        for (const item of parsed) {
+            if (typeof item === "string" && item.trim()) {
+                unique.add(item.trim());
+            }
+        }
+        return [...unique].slice(0, MAX_SMART_SHIFT_EMPLOYEES);
+    } catch {
+        return [...DEFAULT_SMART_SHIFT_EMPLOYEE_IDS];
+    }
+}
+
+/**
+ * Daftar employeeId yang mengikuti Smart 3-Shift Detection.
+ * Bila belum pernah dikonfigurasi di app_settings, fallback ke ["ID-26100110", "ID-26070101"].
+ */
+export async function getSmartShiftEmployeeIds(): Promise<string[]> {
+    const cached = smartShiftEmployeesCache;
+    if (cached && Date.now() <= cached.expiresAt) return [...cached.value];
+    if (!prisma?.appSetting?.findUnique) {
+        return [...DEFAULT_SMART_SHIFT_EMPLOYEE_IDS];
+    }
+    try {
+        const row = await prisma.appSetting.findUnique({ where: { key: SMART_SHIFT_EMPLOYEES_KEY } });
+        const ids = parseSmartShiftEmployeeIds(row?.value);
+        smartShiftEmployeesCache = { value: ids, expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return [...ids];
+    } catch {
+        const fallback = [...DEFAULT_SMART_SHIFT_EMPLOYEE_IDS];
+        smartShiftEmployeesCache = { value: fallback, expiresAt: Date.now() + UPLOAD_LIMIT_CACHE_TTL_MS };
+        return fallback;
+    }
+}
+
+/** True bila employeeId terdaftar dalam mode Rotasi 3-Shift (Smart Shift). */
+export async function isSmartShiftEmployee(employeeId: string | null | undefined): Promise<boolean> {
+    if (!employeeId) return false;
+    const ids = await getSmartShiftEmployeeIds();
+    return ids.includes(employeeId.trim());
+}
+
+export interface SmartShiftEmployeeInfo {
+    employeeId: string;
+    name: string | null;
+    department: string | null;
+    position: string | null;
+    baseShiftName: string | null;
+    isActive: boolean;
+}
+
+/** Info lengkap peserta Rotasi 3-Shift untuk panel pengelolaan WIG001 di /dashboard/shifts. */
+export async function getSmartShiftEmployeeInfos(): Promise<SmartShiftEmployeeInfo[]> {
+    const ids = await getSmartShiftEmployeeIds();
+    if (ids.length === 0) return [];
+    const employees = await prisma.employee.findMany({
+        where: { employeeId: { in: ids } },
+        select: {
+            employeeId: true,
+            name: true,
+            isActive: true,
+            departmentRel: { select: { name: true } },
+            positionRel: { select: { name: true } },
+            shift: { select: { name: true } },
+        },
+    });
+    const byId = new Map(employees.map((e) => [e.employeeId, e]));
+    return ids.map((id) => {
+        const emp = byId.get(id);
+        if (!emp) {
+            return {
+                employeeId: id,
+                name: null,
+                department: null,
+                position: null,
+                baseShiftName: null,
+                isActive: false,
+            };
+        }
+        return {
+            employeeId: emp.employeeId,
+            name: emp.name,
+            department: emp.departmentRel?.name ?? null,
+            position: emp.positionRel?.name ?? null,
+            baseShiftName: emp.shift?.name ?? null,
+            isActive: emp.isActive,
+        };
+    });
+}
+
+/**
+ * Simpan daftar penuh peserta Rotasi 3-Shift (hanya oleh WIG001 + hr.manage).
+ * Setiap ID divalidasi sebagai karyawan internal aktif.
+ */
+export async function setSmartShiftEmployees(
+    rawIds: string[],
+    actorUserId?: string | null
+): Promise<{ key: typeof SMART_SHIFT_EMPLOYEES_KEY; employeeIds: string[] }> {
+    const ids = [...new Set(rawIds.map((v) => v.trim()).filter(Boolean))];
+    if (ids.length > MAX_SMART_SHIFT_EMPLOYEES) {
+        throw new AppSettingsError(`Maksimal ${MAX_SMART_SHIFT_EMPLOYEES} karyawan Rotasi 3-Shift.`, 409);
+    }
+    for (const id of ids) {
+        if (id.length > 100) throw new AppSettingsError("ID karyawan terlalu panjang.", 400);
+    }
+    const validated: string[] = [];
+    for (const id of ids) {
+        validated.push(await assertActiveInternalEmployee(id, "Peserta Rotasi 3-Shift"));
+    }
+    await prisma.appSetting.upsert({
+        where: { key: SMART_SHIFT_EMPLOYEES_KEY },
+        update: { value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+        create: { key: SMART_SHIFT_EMPLOYEES_KEY, value: JSON.stringify(validated), updatedByUserId: actorUserId ?? null },
+    });
+    invalidateSmartShiftEmployeesCache();
+    return { key: SMART_SHIFT_EMPLOYEES_KEY, employeeIds: validated };
+}

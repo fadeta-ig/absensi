@@ -2,7 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CalendarClock, Clock, Plus, Pencil, Trash2, X, Loader2, Star, ShieldAlert, Timer, Copy } from "lucide-react";
+import {
+    AlertCircle,
+    CalendarClock,
+    Clock,
+    Plus,
+    Pencil,
+    Trash2,
+    X,
+    Loader2,
+    Star,
+    ShieldAlert,
+    Timer,
+    Copy,
+    Sparkles,
+} from "lucide-react";
 import { useConfirm } from "@/components/ConfirmModal";
 import { useToast } from "@/components/Toast";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
@@ -84,39 +98,39 @@ export default function ShiftsPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const doSave = async () => {
-        setLoading(true);
-        setActionError("");
-        const method = editId ? "PUT" : "POST";
-        const body = editId ? { ...form, id: editId } : form;
-        try {
-            const res = await fetch("/api/shifts", {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift."));
+            setLoading(true);
+            setActionError("");
+            const method = editId ? "PUT" : "POST";
+            const body = editId ? { ...form, id: editId } : form;
+            try {
+                const res = await fetch("/api/shifts", {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error(await getResponseErrorMessage(res, editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift."));
 
-            const latestRes = await fetch("/api/shifts");
-            if (!latestRes.ok) throw new Error(await getResponseErrorMessage(latestRes, "Shift tersimpan, tetapi data terbaru gagal dimuat."));
-            const latest = await latestRes.json();
-            setShifts(Array.isArray(latest) ? latest : []);
-            closeForm();
-            toast(editId ? "Shift berhasil diperbarui." : "Shift berhasil ditambahkan.", "success");
-        } catch (error) {
-            reportClientError("ShiftsPage", editId ? "Gagal menyimpan perubahan shift" : "Gagal menambahkan shift", error, { shiftId: editId });
-            const message = error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift.";
-            setActionError(message);
-            toast(message, "error");
-        } finally {
-            setLoading(false);
-        }
+                const latestRes = await fetch("/api/shifts");
+                if (!latestRes.ok) throw new Error(await getResponseErrorMessage(latestRes, "Shift tersimpan, tetapi data terbaru gagal dimuat."));
+                const latest = await latestRes.json();
+                setShifts(Array.isArray(latest) ? latest : []);
+                closeForm();
+                toast(editId ? "Shift berhasil diperbarui." : "Shift berhasil ditambahkan.", "success");
+            } catch (error) {
+                reportClientError("ShiftsPage", editId ? "Gagal menyimpan perubahan shift" : "Gagal menambahkan shift", error, { shiftId: editId });
+                const message = error instanceof Error ? error.message : editId ? "Gagal menyimpan perubahan shift." : "Gagal menambahkan shift.";
+                setActionError(message);
+                toast(message, "error");
+            } finally {
+                setLoading(false);
+            }
         };
         if (editId) {
             confirm({
                 title: "Ubah Definisi Shift",
                 message: "Mengubah jam/hari shift akan mempengaruhi cara roster yang memakai shift ini dibaca, termasuk jadwal yang sudah berjalan. Lanjutkan?",
                 variant: "warning",
-                confirmLabel: "Ya, Simpan",
+                confirmLabel: "Simpan Perubahan",
                 onConfirm: () => { void doSave(); },
             });
             return;
@@ -127,9 +141,9 @@ export default function ShiftsPage() {
     const handleDelete = async (id: string) => {
         confirm({
             title: "Hapus Shift",
-            message: "Yakin ingin menghapus shift ini?",
+            message: "Hapus definisi shift ini dari Master Jam Kerja?",
             variant: "danger",
-            confirmLabel: "Ya, Hapus",
+            confirmLabel: "Hapus Shift",
             onConfirm: async () => {
                 setActionError("");
                 try {
@@ -150,43 +164,43 @@ export default function ShiftsPage() {
     const handleSetDefault = (shift: WorkShift) => {
         confirm({
             title: "Jadikan Shift Default",
-            message: `"${shift.name}" akan dijadikan shift default global. Karyawan tanpa jadwal roster dan tanpa shift dasar akan ikut shift ini, termasuk penilaian presensi dan cuti. Lanjutkan?`,
+            message: `"${shift.name}" akan dijadikan shift default global. Karyawan tanpa jadwal roster dan tanpa shift dasar akan mengikuti shift ini. Lanjutkan?`,
             variant: "warning",
-            confirmLabel: "Ya, Jadikan Default",
+            confirmLabel: "Jadikan Default",
             onConfirm: async () => {
                 setActionId(shift.id);
                 setActionError("");
                 try {
-            const res = await fetch("/api/shifts", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id: shift.id, isDefault: true }),
-            });
-            if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menjadikan shift sebagai default."));
+                    const res = await fetch("/api/shifts", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id: shift.id, isDefault: true }),
+                    });
+                    if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal menjadikan shift sebagai default."));
 
-            const latestRes = await fetch("/api/shifts");
-            if (!latestRes.ok) throw new Error(await getResponseErrorMessage(latestRes, "Default shift tersimpan, tetapi data terbaru gagal dimuat."));
-            const latest = await latestRes.json();
-            setShifts(Array.isArray(latest) ? latest : []);
-            toast("Shift default berhasil diperbarui.", "success");
-        } catch (error) {
-            reportClientError("ShiftsPage", "Gagal menjadikan shift default", error, { shiftId: shift.id });
-            const message = error instanceof Error ? error.message : "Gagal menjadikan shift sebagai default.";
-            setActionError(message);
-            toast(message, "error");
-        } finally {
-            setActionId(null);
-        }
+                    const latestRes = await fetch("/api/shifts");
+                    if (!latestRes.ok) throw new Error(await getResponseErrorMessage(latestRes, "Default shift tersimpan, tetapi data terbaru gagal dimuat."));
+                    const latest = await latestRes.json();
+                    setShifts(Array.isArray(latest) ? latest : []);
+                    toast("Shift default berhasil diperbarui.", "success");
+                } catch (error) {
+                    reportClientError("ShiftsPage", "Gagal menjadikan shift default", error, { shiftId: shift.id });
+                    const message = error instanceof Error ? error.message : "Gagal menjadikan shift sebagai default.";
+                    setActionError(message);
+                    toast(message, "error");
+                } finally {
+                    setActionId(null);
+                }
             },
         });
     };
 
     const handleInitializePackage = () => {
         confirm({
-            title: "Inisialisasi Paket 3-Shift 24 Jam",
-            message: "Sistem akan membuat otomatis 3 Master Shift standar format 07:00 (Pagi 07:00–15:00, Siang 15:00–23:00, dan Malam 23:00–07:00) ke database jika belum ada. Lanjutkan?",
+            title: "Sinkronkan Paket 3-Shift Lapangan",
+            message: "Sistem akan membuat atau menyinkronkan 3 Master Shift standar lapangan: Senin–Jumat 8 Jam (07:00–15:00, 15:00–23:00, 23:00–07:00), Sabtu 5 Jam (07:00–12:00, 12:00–17:00, 17:00–22:00), Minggu Libur, dengan toleransi lapangan (Masuk Awal 120m, Terlambat 0m, Pulang Awal 0m, Pulang Lambat 120m). Lanjutkan?",
             variant: "info",
-            confirmLabel: "Ya, Inisialisasi",
+            confirmLabel: "Sinkronkan Paket 3-Shift",
             onConfirm: async () => {
                 setInitializingPackage(true);
                 setActionError("");
@@ -200,7 +214,7 @@ export default function ShiftsPage() {
                         const latestRes = await fetch("/api/shifts");
                         if (latestRes.ok) setShifts(await latestRes.json());
                     }
-                    toast("Paket 3-Shift 24 Jam berhasil diinisialisasi!", "success");
+                    toast("Paket 3-Shift Lapangan berhasil disinkronkan.", "success");
                 } catch (err) {
                     reportClientError("ShiftsPage", "Gagal inisialisasi paket 3 shift", err);
                     const message = err instanceof Error ? err.message : "Gagal menginisialisasi paket shift.";
@@ -217,7 +231,6 @@ export default function ShiftsPage() {
         setActionError("");
         setEditId(shift.id);
         const sortedDays = [...shift.days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-        // Fill missing days
         const filledDays: ShiftDay[] = Array.from({ length: 7 }, (_, i) => {
             const existing = sortedDays.find((d) => d.dayOfWeek === i);
             return existing ?? { dayOfWeek: i, startTime: "08:00", endTime: "16:00", isOff: true };
@@ -286,42 +299,45 @@ export default function ShiftsPage() {
             setForm((f) => ({
                 ...f,
                 name: f.name || "Shift 1 — Pagi",
-                earlyCheckIn: 30,
-                lateCheckIn: 15,
+                earlyCheckIn: 120,
+                lateCheckIn: 0,
                 earlyCheckOut: 0,
-                lateCheckOut: 60,
+                lateCheckOut: 120,
                 days: f.days.map((d) => ({
                     ...d,
                     startTime: "07:00",
-                    endTime: "15:00",
+                    endTime: d.dayOfWeek === 6 ? "12:00" : "15:00",
+                    isOff: d.dayOfWeek === 0,
                 })),
             }));
         } else if (type === "siang") {
             setForm((f) => ({
                 ...f,
                 name: f.name || "Shift 2 — Siang",
-                earlyCheckIn: 30,
-                lateCheckIn: 15,
+                earlyCheckIn: 120,
+                lateCheckIn: 0,
                 earlyCheckOut: 0,
-                lateCheckOut: 60,
+                lateCheckOut: 120,
                 days: f.days.map((d) => ({
                     ...d,
-                    startTime: "15:00",
-                    endTime: "23:00",
+                    startTime: d.dayOfWeek === 6 ? "12:00" : "15:00",
+                    endTime: d.dayOfWeek === 6 ? "17:00" : "23:00",
+                    isOff: d.dayOfWeek === 0,
                 })),
             }));
         } else if (type === "malam") {
             setForm((f) => ({
                 ...f,
                 name: f.name || "Shift 3 — Malam",
-                earlyCheckIn: 30,
-                lateCheckIn: 15,
+                earlyCheckIn: 120,
+                lateCheckIn: 0,
                 earlyCheckOut: 0,
-                lateCheckOut: 60,
+                lateCheckOut: 120,
                 days: f.days.map((d) => ({
                     ...d,
-                    startTime: "23:00",
-                    endTime: "07:00",
+                    startTime: d.dayOfWeek === 6 ? "17:00" : "23:00",
+                    endTime: d.dayOfWeek === 6 ? "22:00" : "07:00",
+                    isOff: d.dayOfWeek === 0,
                 })),
             }));
         }
@@ -345,18 +361,20 @@ export default function ShiftsPage() {
                         <Clock className="w-5 h-5 text-[var(--primary)]" />
                         Pengaturan Jam Kerja
                     </h1>
-                    <p className="text-sm text-[var(--text-muted)] mt-1">Kelola shift dan jadwal kerja per hari</p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1">
+                        Kelola master pola jam kerja dan toleransi presensi per hari
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                     <button
                         type="button"
                         className="btn btn-secondary text-xs flex items-center gap-1.5 border border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
                         onClick={handleInitializePackage}
                         disabled={initializingPackage}
-                        title="Inisialisasi otomatis Shift 1 (Pagi), Shift 2 (Siang), dan Shift 3 (Malam) ke database"
+                        title="Sinkronkan Shift 1 (Pagi), Shift 2 (Siang), dan Shift 3 (Malam) sesuai jadwal lapangan"
                     >
                         {initializingPackage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>⚡</span>}
-                        Paket 3-Shift 24 Jam
+                        Sinkronkan Paket 3-Shift
                     </button>
                     <button className="btn btn-primary" onClick={() => { setActionError(""); setShowForm(true); setEditId(null); setForm(INIT_FORM); }}>
                         <Plus className="w-4 h-4" /> Tambah Shift
@@ -364,9 +382,16 @@ export default function ShiftsPage() {
                     <Link
                         href="/dashboard/shifts/roster"
                         className="btn btn-secondary text-xs flex items-center gap-1.5"
-                        title="Atur rotasi shift karyawan per tanggal berlaku"
+                        title="Atur jadwal shift karyawan terjadwal per tanggal"
                     >
                         <CalendarClock className="w-4 h-4" /> Roster Shift
+                    </Link>
+                    <Link
+                        href="/dashboard/shifts/smart-rotation"
+                        className="btn btn-secondary text-xs flex items-center gap-1.5"
+                        title="Kelola karyawan peserta Rotasi 3-Shift Otomatis (pilih shift di kamera presensi)"
+                    >
+                        <Sparkles className="w-4 h-4 text-[var(--primary)]" /> Rotasi 3-Shift Otomatis
                     </Link>
                 </div>
             </div>
@@ -508,7 +533,7 @@ export default function ShiftsPage() {
                             <div className="rounded-lg border border-[var(--border)] p-3 bg-[var(--bg-secondary)] space-y-2">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                                        ⚡ Template Cepat 3-Shift 24 Jam (Format 07:00):
+                                        ⚡ Template Cepat 3-Shift Lapangan (Sen–Jum 8 Jam, Sabtu 5 Jam, Toleransi 120/0/0/120):
                                     </span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
@@ -516,25 +541,25 @@ export default function ShiftsPage() {
                                         type="button"
                                         onClick={() => apply3ShiftPreset("pagi")}
                                         className="px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition-colors"
-                                        title="Atur otomatis ke Shift Pagi 07:00 – 15:00"
+                                        title="Atur otomatis ke Shift 1 Pagi (Sen-Jum 07:00–15:00, Sabtu 07:00–12:00)"
                                     >
-                                        ☀️ Shift 1: Pagi (07:00 – 15:00)
+                                        ☀️ Shift 1: Pagi (07:00–15:00 / Sab 07:00–12:00)
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => apply3ShiftPreset("siang")}
                                         className="px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors"
-                                        title="Atur otomatis ke Shift Siang 15:00 – 23:00"
+                                        title="Atur otomatis ke Shift 2 Siang (Sen-Jum 15:00–23:00, Sabtu 12:00–17:00)"
                                     >
-                                        🌤️ Shift 2: Siang (15:00 – 23:00)
+                                        🌤️ Shift 2: Siang (15:00–23:00 / Sab 12:00–17:00)
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => apply3ShiftPreset("malam")}
                                         className="px-2.5 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition-colors"
-                                        title="Atur otomatis ke Shift Malam 23:00 – 07:00 (Lintas Hari)"
+                                        title="Atur otomatis ke Shift 3 Malam (Sen-Jum 23:00–07:00 H+1, Sabtu 17:00–22:00)"
                                     >
-                                        🌙 Shift 3: Malam (23:00 – 07:00)
+                                        🌙 Shift 3: Malam (23:00–07:00 / Sab 17:00–22:00)
                                     </button>
                                 </div>
                             </div>

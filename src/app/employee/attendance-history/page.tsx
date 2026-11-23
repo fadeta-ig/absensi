@@ -459,6 +459,14 @@ export default function AttendanceHistoryPage() {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-xs font-semibold text-[var(--text-primary)]">{fmtDate(r.shiftDate ?? r.date)}</span>
+                                            {r.shiftName && !r.isOffDay && (
+                                                <StatusBadge
+                                                    tone="info"
+                                                    title={r.shiftStartTime && r.shiftEndTime ? `${r.shiftName}: ${r.shiftStartTime}–${r.shiftEndTime} WIB` : r.shiftName}
+                                                >
+                                                    {r.shiftName}
+                                                </StatusBadge>
+                                            )}
                                             {r.isOffDay && <StatusBadge tone="neutral">Hari Libur</StatusBadge>}
                                             {r.isOvernight && (
                                                 <StatusBadge

@@ -14,6 +14,13 @@ import {
 } from "@/lib/services/attendanceShiftHelper";
 import { Prisma } from "@prisma/client";
 import { resolveShiftForDate } from "@/lib/services/shiftAssignmentService";
+import { getSmartShiftEmployeeIds, isSmartShiftEmployee } from "@/lib/services/appSettingsService";
+import {
+    inferSmartShiftFromClockIn,
+    loadThreeRotationShifts,
+    mapToThreeSmartShifts,
+    resolveSmartAttendanceTarget,
+} from "@/lib/services/smartShiftResolver";
 
 // ─── Date helpers imported from @/lib/utils ────────────────────
 
@@ -177,7 +184,7 @@ export async function getAttendanceRecords(employeeId?: string): Promise<Attenda
     const recordDates = rows.map((row) => toDateString(row.date)).sort();
     const minDate = toUTCDateKey(recordDates[0]);
     const maxDate = toUTCDateKey(recordDates[recordDates.length - 1]);
-    const [assignments, employees, shifts] = await Promise.all([
+    const [assignments, employees, shifts, smartShiftIdsList] = await Promise.all([
         prisma.shiftAssignment.findMany({
             where: {
                 employeeId: { in: employeeIds },
@@ -194,7 +201,10 @@ export async function getAttendanceRecords(employeeId?: string): Promise<Attenda
         prisma.workShift.findMany({
             include: { days: true },
         }),
+        getSmartShiftEmployeeIds(),
     ]);
+    const smartShiftIds = new Set(smartShiftIdsList);
+    const threeSmartShifts = mapToThreeSmartShifts(shifts);
     const assignmentsByEmployee = new Map<string, typeof assignments>();
     for (const assignment of assignments) {
         const list = assignmentsByEmployee.get(assignment.employeeId) ?? [];
@@ -211,6 +221,25 @@ export async function getAttendanceRecords(employeeId?: string): Promise<Attenda
         const assignment = assignmentsByEmployee.get(row.employeeId)?.find((candidate) =>
             candidate.effectiveFrom <= dateKey && (!candidate.effectiveTo || dateKey < candidate.effectiveTo)
         );
+
+        if (!assignment && smartShiftIds.has(row.employeeId) && row.clockIn) {
+            const inferredSmart = inferSmartShiftFromClockIn(shiftDate, row.clockIn, threeSmartShifts);
+            if (inferredSmart) {
+                return toAttendanceRecord({
+                    ...row,
+                    hasClockInPhoto: clockInPhotoIds.has(row.id),
+                    hasClockOutPhoto: clockOutPhotoIds.has(row.id),
+                    shiftDate,
+                    shiftId: inferredSmart.shift.id,
+                    shiftName: inferredSmart.shift.name,
+                    shiftStartTime: inferredSmart.scheduleDay?.startTime ?? null,
+                    shiftEndTime: inferredSmart.scheduleDay?.endTime ?? null,
+                    shiftSource: "assignment",
+                    isOvernight: inferredSmart.isOvernight,
+                });
+            }
+        }
+
         const fallbackShiftId = fallbackByEmployee.get(row.employeeId);
         const assignedShift = assignment ? shiftById.get(assignment.shiftId) : null;
         const fallbackShift = fallbackShiftId ? shiftById.get(fallbackShiftId) : null;
@@ -299,6 +328,7 @@ interface AttendanceMutationBaseInput {
     now: Date;
     location: AttendanceRecord["clockInLocation"];
     offDayReason?: string | null;
+    selectedShiftId?: string | null;
 }
 
 type AttendanceMutationInput = AttendanceMutationBaseInput &
@@ -337,6 +367,120 @@ export async function performAttendanceMutation(input: AttendanceMutationInput):
 
             const today = toWIBDateString(input.now);
             const yesterday = addCalendarDays(today, -1);
+            const isSmart = await isSmartShiftEmployee(input.employeeId);
+
+            if (isSmart) {
+                const [threeShifts, yesterdayRow, todayRow] = await Promise.all([
+                    loadThreeRotationShifts(tx),
+                    tx.attendanceRecord.findUnique({
+                        where: { employeeId_date: { employeeId: input.employeeId, date: toUTCDateKey(yesterday) } },
+                    }),
+                    tx.attendanceRecord.findUnique({
+                        where: { employeeId_date: { employeeId: input.employeeId, date: toUTCDateKey(today) } },
+                    }),
+                ]);
+                const smartResult = resolveSmartAttendanceTarget(input.now, threeShifts, {
+                    yesterday: yesterdayRow ? toAttendanceRecord(yesterdayRow) : undefined,
+                    today: todayRow ? toAttendanceRecord(todayRow) : undefined,
+                });
+                const target = smartResult.target;
+
+                if (target.mode === "ALREADY_COMPLETED") {
+                    throw new AttendanceMutationError(
+                        "Presensi untuk shift ini sudah tercatat lengkap.",
+                        "ALREADY_COMPLETED",
+                        409,
+                        target,
+                    );
+                }
+                if (target.mode !== input.expectedAction || target.shiftDate !== input.expectedShiftDate) {
+                    throw new AttendanceMutationError(
+                        "Status presensi telah berubah. Muat ulang data terbaru.",
+                        "STATE_CHANGED",
+                        409,
+                        target,
+                    );
+                }
+
+                if (target.mode === "CLOCK_OUT") {
+                    const changed = await tx.attendanceRecord.updateMany({
+                        where: { id: target.existingRecord.id, clockOut: null },
+                        data: {
+                            clockOut: input.now,
+                            clockOutLocation: input.location ? JSON.stringify(input.location) : null,
+                            ...(input.photoPath ? { clockOutPhotoPath: input.photoPath } : {}),
+                            ...(input.photo ? { clockOutPhoto: input.photo } : {}),
+                        },
+                    });
+                    if (changed.count !== 1) {
+                        throw new AttendanceMutationError(
+                            "Presensi pulang sudah tercatat.",
+                            "STATE_CHANGED",
+                            409,
+                            target,
+                        );
+                    }
+                    const row = await tx.attendanceRecord.findUniqueOrThrow({ where: { id: target.existingRecord.id } });
+                    return { record: toAttendanceRecord(row), target, isOffDay: Boolean(row.isOffDay) };
+                }
+
+                const isOffDay = smartResult.isOffDay;
+                const reason = input.offDayReason?.trim();
+                if (isOffDay && (!reason || reason.length < 3)) {
+                    throw new AttendanceMutationError(
+                        "Keperluan/alasan presensi hari libur wajib diisi (minimal 3 karakter).",
+                        "OFF_DAY_REASON_REQUIRED",
+                        400,
+                        target,
+                    );
+                }
+
+                let status: "present" | "late" = "present";
+                if (!isOffDay) {
+                    if (!smartResult.activeShift || !target.scheduleDay) {
+                        throw new AttendanceMutationError(
+                            "Belum waktunya clock-in. Belum ada jendela Shift 1 / 2 / 3 yang terbuka pada jam ini.",
+                            "TOO_EARLY",
+                            400,
+                            target,
+                        );
+                    }
+                    if (input.selectedShiftId && input.selectedShiftId !== smartResult.activeShift.id) {
+                        throw new AttendanceMutationError(
+                            `Shift yang dipilih tidak sesuai dengan jam server saat ini (${smartResult.activeShift.name} sedang aktif). Muat ulang halaman.`,
+                            "STATE_CHANGED",
+                            409,
+                            target,
+                        );
+                    }
+                    const windows = getNormalizedShiftWindows(target.scheduleDay, smartResult.activeShift.tolerance);
+                    if (target.relativeClockMinutes < windows.earliestInMinutes) {
+                        throw new AttendanceMutationError(
+                            `Belum waktunya clock-in. Presensi dapat dilakukan mulai pukul ${formatClockMinutes(windows.earliestInMinutes)}.`,
+                            "TOO_EARLY",
+                            400,
+                            target,
+                        );
+                    }
+                    if (target.relativeClockMinutes > windows.lateDeadlineMinutes) status = "late";
+                }
+
+                const row = await tx.attendanceRecord.create({
+                    data: {
+                        employeeId: input.employeeId,
+                        date: toUTCDateKey(target.shiftDate),
+                        clockIn: input.now,
+                        clockInLocation: input.location ? JSON.stringify(input.location) : null,
+                        ...(input.photoPath ? { clockInPhotoPath: input.photoPath } : {}),
+                        ...(input.photo ? { clockInPhoto: input.photo } : {}),
+                        status,
+                        isOffDay,
+                        offDayReason: isOffDay ? reason ?? null : null,
+                    },
+                });
+                return { record: toAttendanceRecord(row), target, isOffDay };
+            }
+
             const [todayShift, yesterdayShift] = await Promise.all([
                 resolveShiftForDate(tx, input.employeeId, today),
                 resolveShiftForDate(tx, input.employeeId, yesterday),

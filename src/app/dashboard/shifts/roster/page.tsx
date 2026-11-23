@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
     CalendarClock,
     ChevronLeft,
@@ -480,6 +481,14 @@ export default function ShiftRosterPage() {
                     >
                         Hari Ini
                     </button>
+                    <Link
+                        href="/dashboard/shifts/smart-rotation"
+                        className="btn btn-secondary btn-sm text-xs flex items-center gap-1.5"
+                        title="Kelola karyawan lapangan peserta Rotasi 3-Shift Otomatis (pilih shift di kamera presensi)"
+                    >
+                        <Sparkles className="w-3.5 h-3.5 text-[var(--primary)]" />
+                        Rotasi 3-Shift Otomatis
+                    </Link>
                 </div>
             </div>
 

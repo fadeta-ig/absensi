@@ -3,6 +3,7 @@ import { requireAuth, unauthorizedResponse, forbiddenResponse, serverErrorRespon
 import { prisma } from "@/lib/prisma";
 import { isValidCalendarDate, toUTCDateKey } from "@/lib/timezone";
 import { isOvernightSchedule } from "@/lib/services/attendanceShiftHelper";
+import { isSmartShiftEmployee } from "@/lib/services/appSettingsService";
 
 /**
  * Jadwal shift karyawan untuk satu tanggal (data milik sendiri).
@@ -25,6 +26,22 @@ export async function GET(request: NextRequest) {
         });
         if (!employee) {
             return NextResponse.json({ error: "Data karyawan tidak ditemukan." }, { status: 404 });
+        }
+
+        if (await isSmartShiftEmployee(session.employeeId)) {
+            const dayOfWeek = toUTCDateKey(date).getUTCDay();
+            const isOff = dayOfWeek === 0;
+            const isOvernight = dayOfWeek >= 1 && dayOfWeek <= 5;
+            return NextResponse.json({
+                date,
+                schedule: {
+                    shiftName: "Rotasi 3-Shift (Shift 1 / 2 / 3)",
+                    startTime: "07:00",
+                    endTime: isOvernight ? "04:59" : "22:00",
+                    isOff,
+                    isOvernight,
+                },
+            }, { headers: { "Cache-Control": "no-store" } });
         }
 
         const { resolveShiftForDate } = await import("@/lib/services/shiftAssignmentService");
