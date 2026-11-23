@@ -6,7 +6,12 @@ import {
     getResponseErrorMessage,
     reportClientError,
 } from "@/lib/clientErrors";
-import { toWIBDateString } from "@/lib/timezone";
+import {
+    formatWIBDateTime,
+    isValidCalendarDate,
+    toWIBDateString,
+    wibDateTimeToDate,
+} from "@/lib/timezone";
 import {
     EQUIPMENT_SETTINGS_SCOPES,
     type EquipmentSettingsScope,
@@ -126,6 +131,20 @@ export function wibTodayStr(): string {
     return toWIBDateString();
 }
 
+/** Format YYYY-MM-DD ke format ringkas Indonesia WIB (contoh: "12 Okt 2026"). */
+export function formatShortWibDate(wibDate: string): string {
+    if (!isValidCalendarDate(wibDate)) return wibDate;
+    try {
+        return formatWIBDateTime(wibDateTimeToDate(wibDate), {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+        });
+    } catch {
+        return wibDate;
+    }
+}
+
 /** Aktif bila belum ada tanggal selesai, atau tanggal selesai masih di depan hari ini (eksklusif). */
 export function isAssignmentActive(a: { endsOnWibDate: string | null }): boolean {
     return !a.endsOnWibDate || a.endsOnWibDate > wibTodayStr();
@@ -153,6 +172,7 @@ export interface SettingsData {
     delegates: SettingsDelegateRow[];
     delegatesError: string | null;
     products: EquipmentProduct[];
+    totalProductsCount: number | null;
     productError: string | null;
     productCompany: EquipmentCompanyFilter;
     setProductCompany: React.Dispatch<React.SetStateAction<EquipmentCompanyFilter>>;
@@ -187,6 +207,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
         allowedScopes.includes("products") ||
         allowedScopes.includes("assignments");
     const needAssignments = allowedScopes.includes("assignments");
+    const needProducts = allowedScopes.includes("products");
     const needAtasan = allowedScopes.includes("atasan");
 
     const [templates, setTemplates] = useState<EquipmentTemplate[]>([]);
@@ -203,6 +224,10 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
     const [delegates, setDelegates] = useState<SettingsDelegateRow[]>([]);
     const [delegatesError, setDelegatesError] = useState<string | null>(null);
     const [products, setProducts] = useState<EquipmentProduct[]>([]);
+    const [productCountByCompany, setProductCountByCompany] = useState<{ WIG: number | null; MKI: number | null }>({
+        WIG: null,
+        MKI: null,
+    });
     const [productError, setProductError] = useState<string | null>(null);
     const [productCompany, setProductCompany] = useState<EquipmentCompanyFilter>("WIG");
     const [checklist, setChecklist] = useState<ProductChecklist | null>(null);
@@ -310,7 +335,9 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
             const res = await fetch(`/api/ga/equipment/products?company=${company}`);
             if (!res.ok) throw new Error(await getResponseErrorMessage(res, "Gagal memuat daftar produk."));
             const json = await res.json();
-            setProducts(json.data ?? []);
+            const list = (json.data ?? []) as EquipmentProduct[];
+            setProducts(list);
+            setProductCountByCompany((prev) => ({ ...prev, [company]: list.length }));
         } catch (err) {
             const msg = getFriendlyClientErrorMessage(err, "Gagal memuat daftar produk. Periksa koneksi Anda lalu coba lagi.");
             setProductError(msg);
@@ -382,7 +409,34 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
         void fetchAll();
         if (needAtasan) void fetchTopViewers();
         if (canManageDelegates) void fetchDelegates();
-    }, [fetchAll, needAtasan, fetchTopViewers, canManageDelegates, fetchDelegates]);
+        if (needProducts) {
+            void Promise.all(
+                (["WIG", "MKI"] as const).map(async (c) => {
+                    try {
+                        const res = await fetch(`/api/ga/equipment/products?company=${c}`);
+                        if (!res.ok) return null;
+                        const json = await res.json();
+                        return [c, Array.isArray(json.data) ? json.data.length : 0] as const;
+                    } catch {
+                        return null;
+                    }
+                })
+            ).then((entries) => {
+                setProductCountByCompany((prev) => {
+                    const next = { ...prev };
+                    for (const item of entries) {
+                        if (item) next[item[0]] = item[1];
+                    }
+                    return next;
+                });
+            });
+        }
+    }, [fetchAll, needAtasan, fetchTopViewers, canManageDelegates, fetchDelegates, needProducts]);
+
+    const totalProductsCount =
+        productCountByCompany.WIG === null && productCountByCompany.MKI === null
+            ? null
+            : (productCountByCompany.WIG ?? 0) + (productCountByCompany.MKI ?? 0);
 
     return {
         templates,
@@ -401,6 +455,7 @@ export function useSettingsData(options: UseSettingsDataOptions = {}): SettingsD
         delegates,
         delegatesError,
         products,
+        totalProductsCount,
         productError,
         productCompany,
         setProductCompany,
