@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
     Camera,
@@ -16,7 +16,6 @@ import {
     User,
     Users,
     LogOut,
-    X,
     ChevronRight,
     LucideIcon,
     CalendarCheck,
@@ -26,9 +25,11 @@ import {
     Wrench,
     Eye,
     MessageSquareText,
+    MessageSquareHeart,
     SlidersHorizontal,
 } from "lucide-react";
 import { useEmployeeLogout } from "@/hooks/useEmployeeLogout";
+import ResponsiveSheet from "@/components/ui/ResponsiveSheet";
 
 interface MenuItem {
     href: string;
@@ -84,24 +85,6 @@ export default function AllMenusSheet({
 }: AllMenusSheetProps) {
     const router = useRouter();
     const { logout } = useEmployeeLogout();
-
-    // Tutup dengan tombol Escape & kunci scroll latar belakang saat sheet terbuka
-    useEffect(() => {
-        if (!isOpen) return;
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        const originalOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-
-        return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-            document.body.style.overflow = originalOverflow;
-        };
-    }, [isOpen, onClose]);
 
     const handleNavigate = useCallback((href: string) => {
         onClose();
@@ -366,6 +349,14 @@ export default function AllMenusSheet({
                     bg: "bg-violet-50 dark:bg-violet-950/40",
                     color: "text-violet-600 dark:text-violet-400",
                 },
+                {
+                    href: "/employee/anonymous-sharing",
+                    label: "Ruang Sharing Anonim",
+                    description: "Sampaikan cerita atau masukan ke HR tanpa identitas pengirim",
+                    icon: MessageSquareHeart,
+                    bg: "bg-rose-50 dark:bg-rose-950/40",
+                    color: "text-rose-600 dark:text-rose-400",
+                },
                 ...(hasSubordinates ? [{
                     href: "/employee/monitoring",
                     label: "Monitoring Tim",
@@ -392,86 +383,57 @@ export default function AllMenusSheet({
     ];
 
     return (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end lg:justify-center items-center">
-            {/* Backdrop */}
-            <div
-                onClick={onClose}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
-            />
-
-            {/* Bottom Sheet Modal Container */}
-            <div className="relative w-full max-w-lg max-h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-t-[2rem] lg:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden z-10 animate-in slide-in-from-bottom duration-300">
-                {/* Visual Drag Handle (Mobile) */}
-                <div className="pt-3 pb-1 flex justify-center lg:hidden">
-                    <div className="w-12 h-1.5 rounded-full bg-[var(--border)]" />
-                </div>
-
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
-                    <div>
-                        <h2 className="text-base font-extrabold tracking-tight text-[var(--text-primary)]">
-                            Menu & Layanan WITS
-                        </h2>
-                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                            Daftar lengkap seluruh fitur portal karyawan
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-[var(--secondary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                        aria-label="Tutup menu"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-
-                {/* Content List per Category */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5 custom-scrollbar">
-                    {categories.map((cat, idx) => (
-                        <div key={idx} className="space-y-2.5">
-                            <h3 className="emp-eyebrow pl-1">
-                                {cat.title}
-                            </h3>
-                            <div className="grid grid-cols-1 gap-2">
-                                {cat.items.map((item, itemIdx) => {
-                                    const Icon = item.icon;
-                                    return (
-                                        <button
-                                            key={itemIdx}
-                                            onClick={() => handleNavigate(item.href)}
-                                            className="emp-row-hover w-full flex items-center gap-3.5 p-3 rounded-2xl border border-transparent hover:border-[var(--border)] active:scale-[0.99] text-left group"
-                                        >
-                                            <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
-                                                <Icon className={`w-5 h-5 ${item.color} stroke-[1.8]`} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[13px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors leading-snug truncate">
-                                                    {item.label}
-                                                </p>
-                                                <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
-                                                    {item.description}
-                                                </p>
-                                            </div>
-                                            <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--primary)] group-hover:translate-x-0.5 transition-all shrink-0" />
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Sesi Logout */}
-                    <div className="pt-2 pb-4">
-                        <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-[var(--destructive-bg)] text-[var(--destructive-text)] border border-[var(--destructive-border)] text-sm font-semibold hover:opacity-90 transition-opacity active:scale-[0.99]"
-                        >
-                            <LogOut className="w-4 h-4 stroke-[2]" />
-                            <span>Keluar dari Akun</span>
-                        </button>
+        <ResponsiveSheet
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Menu & Layanan WITS"
+            description="Daftar lengkap seluruh fitur portal karyawan"
+            closeLabel="Tutup menu"
+            bodyClassName="space-y-5"
+        >
+            {categories.map((cat, idx) => (
+                <div key={idx} className="space-y-2.5">
+                    <h3 className="emp-eyebrow pl-1">
+                        {cat.title}
+                    </h3>
+                    <div className="grid grid-cols-1 gap-2">
+                        {cat.items.map((item, itemIdx) => {
+                            const Icon = item.icon;
+                            return (
+                                <button
+                                    key={itemIdx}
+                                    onClick={() => handleNavigate(item.href)}
+                                    className="emp-row-hover w-full flex items-center gap-3.5 p-3 rounded-2xl border border-transparent hover:border-[var(--border)] active:scale-[0.99] text-left group"
+                                >
+                                    <div className={`w-10 h-10 rounded-xl ${item.bg} flex items-center justify-center shrink-0`}>
+                                        <Icon className={`w-5 h-5 ${item.color} stroke-[1.8]`} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[13px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--primary)] transition-colors leading-snug truncate">
+                                            {item.label}
+                                        </p>
+                                        <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                                            {item.description}
+                                        </p>
+                                    </div>
+                                    <ChevronRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--primary)] group-hover:translate-x-0.5 transition-all shrink-0" />
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
+            ))}
+
+            {/* Sesi Logout */}
+            <div className="pt-2 pb-4">
+                <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-[var(--destructive-bg)] text-[var(--destructive-text)] border border-[var(--destructive-border)] text-sm font-semibold hover:opacity-90 transition-opacity active:scale-[0.99]"
+                >
+                    <LogOut className="w-4 h-4 stroke-[2]" />
+                    <span>Keluar dari Akun</span>
+                </button>
             </div>
-        </div>
+        </ResponsiveSheet>
     );
 }

@@ -17,6 +17,7 @@ import {
     ShieldAlert,
     Cake,
     CalendarCheck,
+    HeartPulse,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import PushNotificationManager from "@/components/PushNotificationManager";
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
     { href: "/dashboard/visits", icon: MapPinned, label: "Kunjungan" },
     { href: "/dashboard/leave", icon: CalendarOff, label: "Cuti" },
     { href: "/dashboard/birthdays", icon: Cake, label: "Ulang Tahun" },
+    { href: "/dashboard/stressmeter", icon: HeartPulse, label: "Stressmeter" },
     {
         label: "Master Data",
         icon: Database,

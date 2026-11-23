@@ -185,6 +185,14 @@ Aturan: master + penugasan = WIG002 / PIC delegasi (hanya pelaksana yang ditugas
 
 RBAC (lihat ADR-023): Master = WIG002 (`ga.manage`); karyawan internal mengakses lewat `/employee/*` (`employeeId` + `employee.self`), sedangkan akun Outsource mengakses lewat portal terisolasi `/outsource/*` (`outsource.portal` + permission modul `equipment.execute` / `equipment.qc` / `equipment.approve` / `equipment.overview` yang diatur WIG002 di `/ga/outsource-users`); antrean QC = `equipment.qcMembers.{WIG|MKI}`; approval final = `equipment.approvers.{WIG|MKI}`; rekap/monitor = WIG002, `equipment.topViewers`, atau OS ber-izin `equipment.overview`.
 
+## 7. Stressmeter & Ruang Sharing Anonim (2026-11-23)
+
+1. `Employee` 1 ── * `StressmeterCheckin` (`stressmeter_checkins`; unik `[employeeId, shiftDate]`; `rating` 1..5 nullable saat `skipped = true`). Digunakan untuk pencatatan rating harian pasca Clock In, pencegahan pop-up ganda per shift, perhitungan rasio partisipasi, dan deteksi dini karyawan berisiko kelelahan.
+2. `StressmeterAnonymousShare` (`stressmeter_anonymous_shares`; berdiri sendiri **tanpa** `employeeId`, **tanpa** `userId`, **tanpa** `checkinId`). Menyimpan `submittedWibDate` (`YYYY-MM-DD`), `topic` (`StressmeterTopic`: `WORKLOAD|TEAM_LEADERSHIP|FACILITIES|PERSONAL|OTHER`), `message`, `status` (`AnonymousShareStatus`: `NEW|READ|FOLLOWED_UP`), `hrNote`, `reviewedAt`, `reviewedByUserId`. Anonimitas dijaga secara struktural; tampilan HR hanya memperlihatkan tanggal WIB dan mengurutkan berdasarkan `[submittedWibDate desc, id desc]` tanpa jam presisi.
+3. Config: `AppSetting` key `stressmeter.enabled` (`"true"` / `"false"`, default aktif bila belum ada) untuk menjeda/mengaktifkan pop-up pasca Clock In oleh HR (`hr.manage`).
+
+RBAC: tanpa permission baru. Karyawan internal memakai `employee.self` + `employeeId`; dashboard & pengaturan HR memakai `hr.manage`.
+
 ---
 
 ## 3. Migration & Synchronization Strategy

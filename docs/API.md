@@ -323,3 +323,14 @@ Endpoint kanonik pengelolaan task lintas sumber (`APPOINTMENTS` E-Meeting dan `O
 | `/api/my-tasks/verifications` | `GET` | Pemberi | Antrean tugas menunggu verifikasi saya. |
 | `/api/my-tasks/monitoring` | `GET` | Pemantau/WIG002 | Pantau Tugas: ketepatan per karyawan ter-pagination (`from/to`, `source`, filter server `q`/`division`, `page`/`limit` maks 50 bawaan 10; respons `total/page/limit/totalPages/divisions`). |
 | `/api/my-tasks/capabilities` | `GET` | Karyawan | `{ canMonitor }` untuk gating menu Pantau Tugas. |
+
+### N. Stressmeter & Ruang Sharing Anonim (`/api/employee/stressmeter/*`, `/api/stressmeter/*`)
+| Rute | Metode | Akses | Deskripsi |
+|---|---|---|---|
+| `/api/employee/stressmeter/today` | `GET` | `employee.self` | Cek kelayakan pop-up untuk `?shiftDate=YYYY-MM-DD` (`enabled`, `hasClockedIn`, `hasSubmitted`, `shouldPrompt`, `timePeriodLabel` WIB). |
+| `/api/employee/stressmeter/checkin` | `POST` | `employee.self` | Simpan rating 1–5 (`skipped: false`) atau lewati (`skipped: true`, `rating: null`) secara idempoten per `(employeeId, shiftDate)`. |
+| `/api/employee/stressmeter/anonymous-share` | `POST` | `employee.self` | Kirim curhat anonim (`topic`, `message` 10–2000 karakter) tanpa menyimpan `employeeId`/`userId`; anti-spam maks 5/jam di RAM (hash ephemeral, tanpa DB/log identitas). |
+| `/api/stressmeter` | `GET` | `hr.manage` | Analitik Stressmeter HR (`from`, `to`, `departmentId`, `rating`, `search`, `page`, `limit`): KPI, distribusi 1–5, tren harian, per departemen, deteksi dini 14 hari, dan log respons. |
+| `/api/stressmeter/shares` | `GET` | `hr.manage` | Daftar curhat anonim (`status`, `topic`, `from`, `to`, `page`, `limit`) tanpa identitas & tanpa jam kirim presisi. |
+| `/api/stressmeter/shares/[id]` | `PATCH` | `hr.manage` | Perbarui status tindak lanjut curhat anonim (`NEW\|READ\|FOLLOWED_UP`) dan catatan internal HR (`hrNote`). |
+| `/api/stressmeter/settings` | `GET`, `PUT` | `hr.manage` | Baca/ubah switch aktif/jeda pop-up Stressmeter pasca Clock In (`AppSetting` `stressmeter.enabled`). |

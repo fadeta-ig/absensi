@@ -1,10 +1,12 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, Clock, CalendarCheck } from "lucide-react";
+import { CheckCircle2, Clock, CalendarCheck, ShieldCheck } from "lucide-react";
 import StateCard from "@/components/ui/StateCard";
+import StressmeterCheckinSheet from "@/components/employee/StressmeterCheckinSheet";
+import { isValidCalendarDate } from "@/lib/timezone";
 
 function SuccessContent() {
     const searchParams = useSearchParams();
@@ -12,6 +14,48 @@ function SuccessContent() {
     const shiftDate = searchParams.get("shiftDate") ?? "";
 
     const isClockOut = action === "CLOCK_OUT";
+
+    const [sheetOpen, setSheetOpen] = useState(false);
+    const [sheetInitialStep, setSheetInitialStep] = useState<"rating" | "anonymous">("rating");
+    const [timePeriodLabel, setTimePeriodLabel] = useState("pagi ini");
+
+    useEffect(() => {
+        if (isClockOut || !isValidCalendarDate(shiftDate)) return;
+
+        let cancelled = false;
+        const checkPrompt = async () => {
+            try {
+                const res = await fetch(
+                    `/api/employee/stressmeter/today?shiftDate=${encodeURIComponent(shiftDate)}`
+                );
+                if (!res.ok || cancelled) return;
+                const json = await res.json();
+                const data = json.data as
+                    | { shouldPrompt?: boolean; timePeriodLabel?: string }
+                    | undefined;
+                if (cancelled || !data) return;
+                if (data.timePeriodLabel) {
+                    setTimePeriodLabel(data.timePeriodLabel);
+                }
+                if (data.shouldPrompt) {
+                    setSheetInitialStep("rating");
+                    setSheetOpen(true);
+                }
+            } catch {
+                // Pop-up bersifat opsional; kegagalan jaringan tidak mengganggu halaman sukses presensi.
+            }
+        };
+
+        void checkPrompt();
+        return () => {
+            cancelled = true;
+        };
+    }, [isClockOut, shiftDate]);
+
+    const openAnonymousSheet = () => {
+        setSheetInitialStep("anonymous");
+        setSheetOpen(true);
+    };
 
     return (
         <div className="space-y-5 animate-[fadeIn_0.3s_ease]">
@@ -43,6 +87,39 @@ function SuccessContent() {
                     Beranda
                 </Link>
             </div>
+
+            {!isClockOut && (
+                <div className="emp-surface p-4 flex items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center shrink-0">
+                            <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs font-bold text-[var(--text-primary)]">
+                                Perlu sharing lebih lanjut?
+                            </p>
+                            <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                                Cerita atau masukan Anda dikirim 100% secara anonim ke tim HR.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={openAnonymousSheet}
+                        className="shrink-0 text-xs font-semibold text-[var(--primary)] hover:underline"
+                    >
+                        Share anonim
+                    </button>
+                </div>
+            )}
+
+            <StressmeterCheckinSheet
+                isOpen={sheetOpen}
+                onClose={() => setSheetOpen(false)}
+                shiftDate={shiftDate}
+                timePeriodLabel={timePeriodLabel}
+                initialStep={sheetInitialStep}
+            />
         </div>
     );
 }

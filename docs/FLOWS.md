@@ -297,3 +297,24 @@ Rujukan: `src/lib/services/meetingTaskService.ts`, `tests/services/meetingTaskSe
 4. **Riwayat dilindungi**: baris yang dimulai < hari ini tidak pernah dihapus/digeser oleh operasi apa pun — konflik `HISTORY` memaksa HR memajukan tanggal mulai.
 
 Rujukan: `src/lib/services/shiftAssignmentService.ts`, `src/app/dashboard/shifts/roster/page.tsx`, `tests/services/shiftAssignmentService.test.ts`, `tests/components/ShiftRosterPage.test.tsx`.
+
+---
+
+## 11. Flow: Stressmeter Pasca Clock In & Ruang Sharing Anonim
+
+```text
+[ Karyawan ]                         [ /employee/attendance/success ]           [ stressmeterService.ts ]
+     │── Clock In sukses ──────────>│── GET /api/employee/stressmeter/today ──>│── cek enabled + clockIn + belum isi
+     │                              │<── shouldPrompt + timePeriodLabel ───────│
+     │── Auto-buka ResponsiveSheet  │                                          │
+     │── Pilih 1–5★ atau Lewati ───>│── POST /api/employee/stressmeter/checkin>│── simpan 1x/shift (idempoten)
+     │<── Layar After Pengisian ────│                                          │
+     │── Share secara anonim ──────>│── POST .../anonymous-share ─────────────>│── simpan TANPA employeeId/userId
+[ HR (hr.manage) ] ── /dashboard/stressmeter ──> KPI, Tren, Deteksi Dini, Kotak Curhat Anonim, Toggle Aktif/Jeda
+```
+
+1. **Pemicu Pasca Clock In**: Setelah `POST /api/attendance` sukses pada mode `CLOCK_IN`, halaman sukses memeriksa status hari ini. Bila `stressmeter.enabled` aktif, karyawan sudah `clockIn`, dan belum ada baris pada `(employeeId, shiftDate)`, `ResponsiveSheet` terbuka otomatis 1× per shift.
+2. **Rating vs Lewati (`[SKIP]`)**: Kedua aksi tercatat di `stressmeter_checkins` (dengan `rating: null` saat `skipped: true`) sehingga refresh tidak memunculkan pop-up lagi dan HR mendapatkan rasio partisipasi terhadap total Clock In. Keduanya masuk ke layar *After Pengisian* dengan opsi **"Share secara anonim di sini"**.
+3. **Anonimitas Struktural**: Pengiriman curhat anonim (baik dari sheet maupun dari halaman `/employee/anonymous-sharing`) tidak meneruskan `employeeId`/`userId` ke service, tidak menyimpan relasi ke check-in, diurutkan per `[submittedWibDate desc, id desc]` tanpa jam presisi, dan dibatasi anti-spam 5×/jam murni di RAM.
+
+Rujukan: `src/lib/services/stressmeterService.ts`, `src/components/employee/StressmeterCheckinSheet.tsx`, `src/app/dashboard/stressmeter/page.tsx`, `tests/services/stressmeterService.test.ts`, `tests/components/StressmeterCheckinSheet.test.tsx`.
