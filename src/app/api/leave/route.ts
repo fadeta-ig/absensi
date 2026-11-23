@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         if (Array.isArray(body.dates) && body.dates.length > 0) {
             if (body.type === "maternity" || body.type === "paternity") {
                 return NextResponse.json(
-                    { error: "Cuti melahirkan dan paternity harus menggunakan rentang tanggal mulai dan selesai." },
+                    { error: "Cuti Melahirkan dan Cuti Ayah harus menggunakan rentang tanggal mulai dan selesai." },
                     { status: 400 }
                 );
             }
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (employeeData?.gender !== "Perempuan") {
-                return NextResponse.json({ error: "Cuti 'maternity' hanya berlaku untuk karyawan Perempuan." }, { status: 400 });
+                return NextResponse.json({ error: "Cuti Melahirkan hanya berlaku untuk karyawan perempuan." }, { status: 400 });
             }
 
             const start = new Date(`${startDate}T00:00:00Z`).getTime();
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
             const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
             if (days < 90) {
-                return NextResponse.json({ error: "Cuti melahirkan (maternity) minimal 90 hari kalender." }, { status: 400 });
+                return NextResponse.json({ error: "Cuti Melahirkan minimal 90 hari kalender." }, { status: 400 });
             }
         } else if (body.type === "paternity") {
             const employeeData = await prisma.employee.findUnique({
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (employeeData?.gender !== "Laki-Laki") {
-                return NextResponse.json({ error: "Cuti 'paternity' hanya berlaku untuk karyawan Laki-Laki." }, { status: 400 });
+                return NextResponse.json({ error: "Cuti Ayah hanya berlaku untuk karyawan laki-laki." }, { status: 400 });
             }
 
             const start = new Date(`${startDate}T00:00:00Z`).getTime();
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
             const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
 
             if (days > 3) {
-                return NextResponse.json({ error: "Cuti mendampingi istri melahirkan (paternity) maksimal 3 hari." }, { status: 400 });
+                return NextResponse.json({ error: "Cuti Ayah (mendampingi istri melahirkan) maksimal 3 hari kalender." }, { status: 400 });
             }
         }
 
