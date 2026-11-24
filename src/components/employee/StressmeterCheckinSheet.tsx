@@ -207,93 +207,57 @@ export default function StressmeterCheckinSheet({
         >
             {/* ── STEP 1: PILIH RATING BINTANG 1–5 ─────────────────── */}
             {step === "rating" && (
-                <div className="space-y-5 py-1">
-                    {/* 5 Bintang Interaktif */}
-                    <div className="flex flex-col items-center gap-3">
-                        <div
-                            className="flex items-center justify-center gap-2 sm:gap-3"
-                            role="group"
-                            aria-label="Penilaian perasaan 1 sampai 5 bintang"
-                        >
-                            {STRESSMETER_SCALE.map((item) => {
-                                const filled =
-                                    activePreviewRating !== null &&
-                                    item.rating <= activePreviewRating;
-                                const isChosen = selectedRating === item.rating;
-                                return (
-                                    <button
-                                        key={item.rating}
-                                        type="button"
-                                        onClick={() => setSelectedRating(item.rating)}
-                                        onMouseEnter={() => setHoveredRating(item.rating)}
-                                        onMouseLeave={() => setHoveredRating(null)}
-                                        aria-label={`${item.rating} bintang: ${item.label}`}
-                                        aria-pressed={isChosen}
-                                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl border flex items-center justify-center transition-all active:scale-95 ${
-                                            isChosen
-                                                ? "border-amber-400 bg-amber-50 dark:bg-amber-950/40 shadow-sm scale-105"
-                                                : filled
-                                                    ? "border-amber-300/70 bg-amber-50/50 dark:bg-amber-950/20"
-                                                    : "border-[var(--border)] bg-[var(--secondary)]/40 hover:border-amber-300"
-                                        }`}
-                                    >
-                                        <Star
-                                            className={`w-7 h-7 sm:w-8 sm:h-8 transition-colors ${
-                                                filled
-                                                    ? "fill-amber-400 text-amber-400"
-                                                    : "text-[var(--text-muted)]"
-                                            }`}
-                                        />
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="min-h-[28px] flex items-center justify-center" aria-live="polite">
-                            {activeScale ? (
-                                <span
-                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${activeScale.badgeClass}`}
-                                >
-                                    {activeScale.rating} Bintang · {activeScale.label}
-                                </span>
-                            ) : (
-                                <span className="text-xs text-[var(--text-muted)]">
-                                    Ketuk bintang untuk memilih perasaanmu
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Daftar Keterangan Skala (juga bisa diklik langsung) */}
-                    <div className="rounded-2xl border border-[var(--border)] bg-[var(--secondary)]/30 divide-y divide-[var(--border)]/60 overflow-hidden">
+                <div className="py-6 flex flex-col items-center gap-4">
+                    <div
+                        className="flex items-center justify-center gap-1.5 sm:gap-2.5"
+                        role="group"
+                        aria-label="Penilaian perasaan 1 sampai 5 bintang"
+                        onMouseLeave={() => setHoveredRating(null)}
+                    >
                         {STRESSMETER_SCALE.map((item) => {
+                            const filled =
+                                activePreviewRating !== null &&
+                                item.rating <= activePreviewRating;
                             const isChosen = selectedRating === item.rating;
                             return (
                                 <button
                                     key={item.rating}
                                     type="button"
                                     onClick={() => setSelectedRating(item.rating)}
-                                    className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs transition-colors ${
-                                        isChosen
-                                            ? "bg-[var(--primary)]/10 font-bold text-[var(--text-primary)]"
-                                            : "text-[var(--text-secondary)] hover:bg-[var(--secondary)]/60"
-                                    }`}
+                                    onMouseEnter={() => setHoveredRating(item.rating)}
+                                    onFocus={() => setHoveredRating(item.rating)}
+                                    onBlur={() => setHoveredRating(null)}
+                                    aria-label={`${item.rating} bintang: ${item.label}`}
+                                    aria-pressed={isChosen}
+                                    className="group min-w-[48px] min-h-[48px] p-1.5 rounded-full flex items-center justify-center transition-transform duration-150 hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
                                 >
-                                    <span className="flex items-center gap-2">
-                                        <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold w-10">
-                                            {item.rating}
-                                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                        </span>
-                                        <span>{item.label}</span>
-                                    </span>
-                                    {isChosen && (
-                                        <span className="text-[11px] font-semibold text-[var(--primary)]">
-                                            Dipilih
-                                        </span>
-                                    )}
+                                    <Star
+                                        className={`w-10 h-10 sm:w-11 sm:h-11 transition-all duration-150 ${
+                                            filled
+                                                ? "fill-amber-400 text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.35)]"
+                                                : "text-[var(--border)] group-hover:text-amber-300"
+                                        }`}
+                                    />
                                 </button>
                             );
                         })}
+                    </div>
+
+                    <div
+                        className="min-h-[28px] flex items-center justify-center text-center"
+                        aria-live="polite"
+                    >
+                        {activeScale ? (
+                            <p
+                                className={`text-sm font-semibold tracking-tight transition-colors ${activeScale.textClass}`}
+                            >
+                                {activeScale.label}
+                            </p>
+                        ) : (
+                            <p className="text-xs text-[var(--text-muted)]">
+                                Pilih bintang sesuai perasaanmu
+                            </p>
+                        )}
                     </div>
                 </div>
             )}

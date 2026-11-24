@@ -73,9 +73,16 @@ describe("StressmeterCheckinSheet", () => {
         ).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "1 bintang: Feel So Bad" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "5 bintang: Sangat Termotivasi" })).toBeInTheDocument();
+        // Tidak ada daftar 5 baris duplikat sebelum bintang di-hover/dipilih
+        expect(screen.queryByText("Feel So Bad")).not.toBeInTheDocument();
+
+        // Hover bintang 2 menampilkan label tepat di bawah bintang
+        await user.hover(screen.getByRole("button", { name: "2 bintang: Cukup Frustasi" }));
+        expect(screen.getByText("Cukup Frustasi")).toBeInTheDocument();
 
         // Pilih bintang 4 lalu Kirim
         await user.click(screen.getByRole("button", { name: "4 bintang: Cukup Terdorong" }));
+        expect(screen.getByText("Cukup Terdorong")).toBeInTheDocument();
         await user.click(screen.getByRole("button", { name: "Kirim" }));
 
         // Step 2: After Pengisian
