@@ -19,7 +19,8 @@ import {
     CheckSquare,
     Square,
     RotateCcw,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Trash2
 } from "lucide-react";
 import { formatIndonesianDate } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
@@ -48,6 +49,17 @@ interface LeaveRequest {
     createdAt: string;
 }
 
+interface DeleteLeaveResponse {
+    deleted: { id: string; employeeId: string; type: string; status: string };
+    restoredAnnualDays: number;
+    employeeQuota: {
+        employeeId: string;
+        totalLeave: number;
+        usedLeave: number;
+        remainingLeave: number;
+    };
+}
+
 function LeaveManagementContent() {
     const toast = useToast();
     const confirm = useConfirm();
@@ -69,6 +81,7 @@ function LeaveManagementContent() {
     const [editEndDate, setEditEndDate] = useState("");
     const [isUpdating, setIsUpdating] = useState(false);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const [initialLoading, setInitialLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
 
@@ -219,13 +232,17 @@ function LeaveManagementContent() {
         }
     };
 
+    const formatPeriodLabel = (start: string, end: string) => {
+        const isSameDay = start.slice(0, 10) === end.slice(0, 10);
+        return isSameDay
+            ? formatIndonesianDate(start)
+            : `${formatIndonesianDate(start)} s/d ${formatIndonesianDate(end)}`;
+    };
+
     const handleQuickAction = (l: LeaveRequest, status: string) => {
-        if (updatingId) return;
+        if (updatingId || deletingId) return;
         if (status === "rejected") {
-            const isSameDay = l.startDate.slice(0, 10) === l.endDate.slice(0, 10);
-            const periodLabel = isSameDay
-                ? formatIndonesianDate(l.startDate)
-                : `${formatIndonesianDate(l.startDate)} s/d ${formatIndonesianDate(l.endDate)}`;
+            const periodLabel = formatPeriodLabel(l.startDate, l.endDate);
             confirm({
                 title: "Tolak Cuti?",
                 message: `Pengajuan ${l.employee?.name || l.employeeId} (${periodLabel}) akan ditolak.`,
@@ -239,6 +256,92 @@ function LeaveManagementContent() {
             return;
         }
         void doQuickAction(l, status);
+    };
+
+    const doDeleteLeave = async (l: LeaveRequest) => {
+        if (deletingId) return;
+        setDeletingId(l.id);
+        try {
+            const res = await fetch(`/api/leave?id=${encodeURIComponent(l.id)}`, {
+                method: "DELETE",
+            });
+            if (!res.ok) {
+                const message = await getResponseErrorMessage(res, "Gagal menghapus pengajuan cuti.");
+                if (res.status === 404 || res.status === 409) {
+                    await fetchLeaves().catch(() => undefined);
+                    if (selectedLeave?.id === l.id) {
+                        setIsModalOpen(false);
+                        setSelectedLeave(null);
+                    }
+                }
+                throw new Error(message);
+            }
+            const data: DeleteLeaveResponse = await res.json();
+            const quota = data.employeeQuota;
+
+            // Sinkronisasi state lokal langsung dari respons server tanpa refetch penuh.
+            setLeaves((prev) =>
+                prev
+                    .filter((item) => item.id !== l.id)
+                    .map((item) =>
+                        quota && item.employeeId === quota.employeeId && item.employee
+                            ? {
+                                ...item,
+                                employee: {
+                                    ...item.employee,
+                                    totalLeave: quota.totalLeave,
+                                    usedLeave: quota.usedLeave,
+                                },
+                            }
+                            : item
+                    )
+            );
+            setSelectedIds((prev) => {
+                if (!prev.has(l.id)) return prev;
+                const next = new Set(prev);
+                next.delete(l.id);
+                return next;
+            });
+            if (selectedLeave?.id === l.id) {
+                setIsModalOpen(false);
+                setSelectedLeave(null);
+            }
+
+            if (data.restoredAnnualDays > 0) {
+                toast(
+                    `Cuti dihapus. Kuota cuti tahunan dikembalikan ${data.restoredAnnualDays} hari (sisa ${quota.remainingLeave} hari).`,
+                    "success"
+                );
+            } else {
+                toast("Pengajuan cuti berhasil dihapus permanen.", "success");
+            }
+        } catch (error) {
+            reportClientError("LeaveManagementPage", "Gagal menghapus pengajuan cuti", error, { leaveId: l.id });
+            toast(error instanceof Error ? error.message : "Gagal menghapus pengajuan cuti.", "error");
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const handleDeleteLeave = (l: LeaveRequest) => {
+        if (deletingId || updatingId || isUpdating) return;
+        const periodLabel = formatPeriodLabel(l.startDate, l.endDate);
+        const employeeLabel = l.employee?.name || l.employeeId;
+        const isApprovedAnnual = l.status === "approved" && l.type === "annual";
+        const isApproved = l.status === "approved";
+
+        confirm({
+            title: isApproved ? "Batalkan & Hapus Cuti?" : "Hapus Pengajuan Cuti?",
+            message: isApprovedAnnual
+                ? `Cuti tahunan ${employeeLabel} (${periodLabel}) akan dihapus permanen. Kuota cuti tahunan sesuai hari kerja efektif akan otomatis dikembalikan.`
+                : `Pengajuan cuti ${getTypeLabel(l.type)} ${employeeLabel} (${periodLabel}) akan dihapus permanen dari sistem.`,
+            confirmLabel: isApprovedAnnual ? "Ya, Hapus & Kembalikan Kuota" : "Ya, Hapus Permanen",
+            cancelLabel: "Batal",
+            variant: "danger",
+            onConfirm: async () => {
+                await doDeleteLeave(l);
+            },
+        });
     };
 
     const handleUpdate = async (id: string, status: string) => {
@@ -762,10 +865,28 @@ function LeaveManagementContent() {
                                                             })()}
                                                         </>
                                                     )}
+                                                    {l.status === "approved" && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteLeave(l)}
+                                                            disabled={Boolean(deletingId || updatingId)}
+                                                            className="btn btn-ghost btn-sm !p-1.5 text-red-600 hover:!bg-red-50 disabled:opacity-40 min-w-[44px] min-h-[44px] inline-flex items-center justify-center"
+                                                            title={
+                                                                l.type === "annual"
+                                                                    ? "Batalkan & hapus permanen cuti (kuota tahunan dikembalikan)"
+                                                                    : "Batalkan & hapus permanen cuti"
+                                                            }
+                                                            aria-label={`Batalkan dan hapus cuti ${l.employee?.name || l.employeeId}`}
+                                                        >
+                                                            {deletingId === l.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                                        </button>
+                                                    )}
                                                     <button
+                                                        type="button"
                                                         onClick={() => handleOpenDetail(l)}
                                                         className="btn btn-ghost btn-sm !p-1.5"
                                                         title="Lihat Detail"
+                                                        aria-label={`Lihat detail cuti ${l.employee?.name || l.employeeId}`}
                                                     >
                                                         <Eye className="w-3.5 h-3.5" />
                                                     </button>
@@ -958,6 +1079,12 @@ function LeaveManagementContent() {
                                                 * Sisa kuota cuti tahunan karyawan sudah habis (0 hari). Pengajuan ini tidak dapat disetujui.
                                             </p>
                                         )}
+                                    {selectedLeave.status === "approved" && selectedLeave.type === "annual" && (
+                                        <p className="text-xs text-[var(--text-muted)] flex items-start gap-1.5">
+                                            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[var(--primary)]" />
+                                            <span>Menghapus permanen cuti ini akan otomatis mengembalikan kuota cuti tahunan sesuai hari kerja efektif.</span>
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -966,7 +1093,8 @@ function LeaveManagementContent() {
                             {selectedLeave.status === "pending" ? (
                                 <div className="flex gap-3">
                                     <button
-                                        disabled={isUpdating}
+                                        type="button"
+                                        disabled={isUpdating || Boolean(deletingId)}
                                         onClick={() => handleUpdate(selectedLeave.id, "rejected")}
                                         className="btn btn-danger flex-1"
                                     >
@@ -974,8 +1102,10 @@ function LeaveManagementContent() {
                                         Tolak
                                     </button>
                                     <button
+                                        type="button"
                                         disabled={
                                             isUpdating ||
+                                            Boolean(deletingId) ||
                                             (selectedLeave.type === "annual" &&
                                                 Boolean(selectedLeave.employee) &&
                                                 (selectedLeave.employee!.totalLeave - selectedLeave.employee!.usedLeave) <= 0)
@@ -988,12 +1118,29 @@ function LeaveManagementContent() {
                                     </button>
                                 </div>
                             ) : (
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="btn btn-secondary w-full"
-                                >
-                                    Tutup
-                                </button>
+                                <div className="flex gap-3">
+                                    <button
+                                        type="button"
+                                        disabled={deletingId === selectedLeave.id}
+                                        onClick={() => setIsModalOpen(false)}
+                                        className="btn btn-secondary flex-1"
+                                    >
+                                        Tutup
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={Boolean(deletingId)}
+                                        onClick={() => handleDeleteLeave(selectedLeave)}
+                                        className="btn btn-danger flex-1 disabled:opacity-50"
+                                    >
+                                        {deletingId === selectedLeave.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-4 h-4" />
+                                        )}
+                                        {selectedLeave.status === "approved" ? "Batalkan & Hapus" : "Hapus Permanen"}
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>

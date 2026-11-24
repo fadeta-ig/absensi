@@ -834,6 +834,150 @@ export interface BulkLeaveUpdateOutcome {
     failed: Array<{ id: string; error: string }>;
 }
 
+export interface DeletedLeaveResult {
+    deleted: LeaveRequestWithAttachment;
+    restoredAnnualDays: number;
+    employeeQuota: {
+        employeeId: string;
+        totalLeave: number;
+        usedLeave: number;
+        remainingLeave: number;
+    };
+}
+
+/**
+ * Menghapus pengajuan cuti secara permanen (hard delete) oleh HR dalam satu transaksi atomik:
+ * - Jika cuti berstatus `approved` dan bertipe `annual`, kuota hari kerja efektif dikembalikan ke `employees.usedLeave` (clamped >= 0).
+ * - Menggunakan `deleteMany({ where: { id, status } })` agar request paralel tidak dapat mengembalikan kuota lebih dari sekali.
+ * - File lampiran di disk hanya dihapus setelah transaksi commit dan bila tidak lagi direferensikan baris batch lain.
+ */
+export async function deleteLeaveRequest(id: string): Promise<DeletedLeaveResult | null> {
+    const { countWorkingDaysForEmployee } = await import("@/lib/services/shiftAssignmentService");
+
+    const txResult = await prisma.$transaction(async (tx) => {
+        const existing = await tx.leaveRequest.findUnique({
+            where: { id },
+            include: {
+                employee: {
+                    select: {
+                        employeeId: true,
+                        totalLeave: true,
+                        usedLeave: true,
+                    },
+                },
+            },
+        });
+
+        if (!existing) return null;
+
+        const existingStartDate = toDateString(existing.startDate);
+        const existingEndDate = toDateString(existing.endDate);
+
+        let workingDaysToRestore = 0;
+        if (existing.type === "annual" && existing.status === "approved") {
+            const rangeCheck = validateLeaveDateRange(existingStartDate, existingEndDate);
+            if (rangeCheck.success) {
+                workingDaysToRestore = await countWorkingDaysForEmployee(
+                    tx,
+                    existing.employeeId,
+                    existingStartDate,
+                    existingEndDate,
+                );
+            }
+        }
+
+        const deletedBatch = await tx.leaveRequest.deleteMany({
+            where: { id: existing.id, status: existing.status },
+        });
+
+        if (deletedBatch.count === 0) {
+            const stillExists = await tx.leaveRequest.findUnique({
+                where: { id: existing.id },
+                select: { id: true },
+            });
+            if (!stillExists) return null;
+            throw new LeaveConflictError("Status pengajuan cuti baru saja berubah. Muat ulang data dan coba lagi.");
+        }
+
+        let restoredAnnualDays = 0;
+        let totalLeave = existing.employee.totalLeave;
+        let usedLeave = existing.employee.usedLeave;
+
+        if (workingDaysToRestore > 0) {
+            const latestEmployee = await tx.employee.findUnique({
+                where: { employeeId: existing.employeeId },
+                select: { totalLeave: true, usedLeave: true },
+            });
+            const currentUsed = latestEmployee?.usedLeave ?? existing.employee.usedLeave;
+            totalLeave = latestEmployee?.totalLeave ?? existing.employee.totalLeave;
+
+            if (currentUsed < 0) {
+                const clamped = await tx.employee.update({
+                    where: { employeeId: existing.employeeId },
+                    data: { usedLeave: 0 },
+                    select: { totalLeave: true, usedLeave: true },
+                });
+                totalLeave = clamped.totalLeave;
+                usedLeave = clamped.usedLeave;
+            } else {
+                const actualRestore = Math.min(workingDaysToRestore, currentUsed);
+                if (actualRestore > 0) {
+                    const updatedEmployee = await tx.employee.update({
+                        where: { employeeId: existing.employeeId },
+                        data: { usedLeave: { decrement: actualRestore } },
+                        select: { totalLeave: true, usedLeave: true },
+                    });
+                    if (updatedEmployee.usedLeave < 0) {
+                        const clamped = await tx.employee.update({
+                            where: { employeeId: existing.employeeId },
+                            data: { usedLeave: 0 },
+                            select: { totalLeave: true, usedLeave: true },
+                        });
+                        totalLeave = clamped.totalLeave;
+                        usedLeave = clamped.usedLeave;
+                        restoredAnnualDays = Math.max(0, actualRestore + updatedEmployee.usedLeave);
+                    } else {
+                        totalLeave = updatedEmployee.totalLeave;
+                        usedLeave = updatedEmployee.usedLeave;
+                        restoredAnnualDays = actualRestore;
+                    }
+                } else {
+                    usedLeave = currentUsed;
+                }
+            }
+        }
+
+        return {
+            deleted: toLeaveRequest(existing),
+            attachmentPath: existing.attachmentPath ?? null,
+            restoredAnnualDays,
+            employeeQuota: {
+                employeeId: existing.employeeId,
+                totalLeave,
+                usedLeave,
+                remainingLeave: Math.max(0, totalLeave - usedLeave),
+            },
+        };
+    });
+
+    if (!txResult) return null;
+
+    if (txResult.attachmentPath) {
+        const remainingRefs = await prisma.leaveRequest.count({
+            where: { attachmentPath: txResult.attachmentPath },
+        });
+        if (remainingRefs === 0) {
+            await cleanupSavedAttachment(txResult.attachmentPath);
+        }
+    }
+
+    return {
+        deleted: txResult.deleted,
+        restoredAnnualDays: txResult.restoredAnnualDays,
+        employeeQuota: txResult.employeeQuota,
+    };
+}
+
 /**
  * Memproses persetujuan / penolakan cuti massal dalam satu permintaan server
  * agar portal HR tidak perlu menembakkan N HTTP PUT request sekuensial.

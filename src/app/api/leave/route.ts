@@ -7,12 +7,13 @@ import {
     createLeaveRequestsBatch,
     updateLeaveRequest,
     updateLeaveRequestsBulk,
+    deleteLeaveRequest,
     LeaveAttachmentError,
     LeaveQuotaError,
     LeaveConflictError,
     LeaveValidationError,
 } from "@/lib/services/leaveService";
-import { leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validationSchemas";
+import { leaveDeleteSchema, leaveRequestSchema, leaveUpdateSchema } from "@/lib/validations/validationSchemas";
 import { prisma } from "@/lib/prisma";
 import { actorFromSession, logAction } from "@/lib/services/auditService";
 import logger from "@/lib/logger";
@@ -245,5 +246,54 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json(updated);
     } catch (err: unknown) {
         return mapLeaveRouteError("LeavePUT", err);
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    const session = await requireAuth();
+    if (!session) return unauthorizedResponse();
+    if (!canManageHr(session)) return forbiddenResponse();
+
+    try {
+        const queryId = request.nextUrl?.searchParams.get("id");
+        const result = queryId !== null
+            ? await validateBody(request, leaveDeleteSchema, { id: queryId })
+            : await validateBody(request, leaveDeleteSchema);
+        if ("error" in result) return result.error;
+
+        const deletedResult = await deleteLeaveRequest(result.data.id);
+        if (!deletedResult) {
+            return NextResponse.json({ error: "Permohonan cuti tidak ditemukan." }, { status: 404 });
+        }
+
+        logger.info("Leave request hard deleted", {
+            leaveId: deletedResult.deleted.id,
+            employeeId: deletedResult.deleted.employeeId,
+            type: deletedResult.deleted.type,
+            status: deletedResult.deleted.status,
+            restoredAnnualDays: deletedResult.restoredAnnualDays,
+            deletedBy: session.username,
+        });
+
+        await logAction(
+            "DELETE_LEAVE",
+            "LEAVE_REQUEST",
+            actorFromSession(session),
+            deletedResult.deleted.id,
+            {
+                employeeId: deletedResult.deleted.employeeId,
+                type: deletedResult.deleted.type,
+                status: deletedResult.deleted.status,
+                startDate: deletedResult.deleted.startDate,
+                endDate: deletedResult.deleted.endDate,
+                reason: deletedResult.deleted.reason,
+                restoredAnnualDays: deletedResult.restoredAnnualDays,
+                employeeQuotaAfter: deletedResult.employeeQuota,
+            }
+        ).catch((e) => logger.error("Gagal mencatat audit log", { error: e }));
+
+        return NextResponse.json(deletedResult);
+    } catch (err: unknown) {
+        return mapLeaveRouteError("LeaveDELETE", err);
     }
 }

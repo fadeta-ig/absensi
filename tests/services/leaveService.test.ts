@@ -8,12 +8,21 @@ const mocks = vi.hoisted(() => ({
     leaveFindUnique: vi.fn(),
     leaveCreate: vi.fn(),
     leaveUpdate: vi.fn(),
+    leaveDeleteMany: vi.fn(),
+    leaveCount: vi.fn(),
     countWorkingDaysForEmployee: vi.fn(),
     resolveShiftsForRange: vi.fn(),
+    unlink: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-    prisma: {
+vi.mock("fs/promises", () => ({
+    mkdir: vi.fn(async () => undefined),
+    writeFile: vi.fn(async () => undefined),
+    unlink: mocks.unlink,
+}));
+
+const prismaMock = vi.hoisted(() => {
+    const client = {
         employee: {
             findUnique: mocks.employeeFindUnique,
             update: mocks.employeeUpdate,
@@ -24,9 +33,22 @@ vi.mock("@/lib/prisma", () => ({
             findUnique: mocks.leaveFindUnique,
             create: mocks.leaveCreate,
             update: mocks.leaveUpdate,
+            deleteMany: mocks.leaveDeleteMany,
+            count: mocks.leaveCount,
         },
-        $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
-    },
+        $transaction: vi.fn(),
+    };
+    client.$transaction.mockImplementation(async (arg: unknown) => {
+        if (typeof arg === "function") {
+            return (arg as (tx: typeof client) => Promise<unknown>)(client);
+        }
+        return Promise.all(arg as Promise<unknown>[]);
+    });
+    return client;
+});
+
+vi.mock("@/lib/prisma", () => ({
+    prisma: prismaMock,
 }));
 
 vi.mock("@/lib/services/shiftAssignmentService", () => ({
@@ -37,6 +59,7 @@ vi.mock("@/lib/services/shiftAssignmentService", () => ({
 import {
     calculateWorkingDays,
     createLeaveRequestsBatch,
+    deleteLeaveRequest,
     getEmployeeLeaveBalance,
     getLeaveRequests,
     updateLeaveRequestsBulk,
@@ -359,5 +382,190 @@ describe("Leave Service - authoritative balance, dual-reader mapper & batch disc
 
         expect(created).toHaveLength(1);
         expect(created[0].startDate).toBe("2026-06-17");
+    });
+});
+
+describe("Leave Service - deleteLeaveRequest (hard delete & annual quota restoration)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mocks.unlink.mockResolvedValue(undefined);
+    });
+
+    it("hard deletes an approved annual leave and restores effective working days to employee.usedLeave", async () => {
+        mocks.leaveFindUnique.mockResolvedValue({
+            id: "lr-ann-1",
+            employeeId: "ID-24050016",
+            type: "annual",
+            startDate: new Date("2026-12-24T00:00:00.000Z"),
+            endDate: new Date("2026-12-29T00:00:00.000Z"),
+            reason: "Keperluan Keluarga",
+            status: "approved",
+            attachment: null,
+            attachmentPath: null,
+            attachmentMime: null,
+            attachmentSize: null,
+            createdAt: new Date("2026-11-02T00:01:27.000Z"),
+            employee: { employeeId: "ID-24050016", totalLeave: 6, usedLeave: 4 },
+        });
+        mocks.countWorkingDaysForEmployee.mockResolvedValue(4);
+        mocks.leaveDeleteMany.mockResolvedValue({ count: 1 });
+        mocks.employeeFindUnique.mockResolvedValue({ totalLeave: 6, usedLeave: 4 });
+        mocks.employeeUpdate.mockResolvedValue({ totalLeave: 6, usedLeave: 0 });
+
+        const result = await deleteLeaveRequest("lr-ann-1");
+
+        expect(result).toEqual({
+            deleted: expect.objectContaining({
+                id: "lr-ann-1",
+                employeeId: "ID-24050016",
+                type: "annual",
+                status: "approved",
+                startDate: "2026-12-24",
+                endDate: "2026-12-29",
+            }),
+            restoredAnnualDays: 4,
+            employeeQuota: {
+                employeeId: "ID-24050016",
+                totalLeave: 6,
+                usedLeave: 0,
+                remainingLeave: 6,
+            },
+        });
+        expect(mocks.leaveDeleteMany).toHaveBeenCalledWith({
+            where: { id: "lr-ann-1", status: "approved" },
+        });
+        expect(mocks.employeeUpdate).toHaveBeenCalledWith({
+            where: { employeeId: "ID-24050016" },
+            data: { usedLeave: { decrement: 4 } },
+            select: { totalLeave: true, usedLeave: true },
+        });
+    });
+
+    it("clamps restored days so employee.usedLeave never becomes negative", async () => {
+        mocks.leaveFindUnique.mockResolvedValue({
+            id: "lr-ann-clamp",
+            employeeId: "EMP001",
+            type: "annual",
+            startDate: new Date("2026-12-24T00:00:00.000Z"),
+            endDate: new Date("2026-12-29T00:00:00.000Z"),
+            reason: "Cuti",
+            status: "approved",
+            attachment: null,
+            attachmentPath: null,
+            createdAt: new Date("2026-11-02T00:00:00.000Z"),
+            employee: { employeeId: "EMP001", totalLeave: 12, usedLeave: 2 },
+        });
+        mocks.countWorkingDaysForEmployee.mockResolvedValue(4);
+        mocks.leaveDeleteMany.mockResolvedValue({ count: 1 });
+        mocks.employeeFindUnique.mockResolvedValue({ totalLeave: 12, usedLeave: 2 });
+        mocks.employeeUpdate.mockResolvedValue({ totalLeave: 12, usedLeave: 0 });
+
+        const result = await deleteLeaveRequest("lr-ann-clamp");
+
+        expect(result?.restoredAnnualDays).toBe(2);
+        expect(result?.employeeQuota).toEqual({
+            employeeId: "EMP001",
+            totalLeave: 12,
+            usedLeave: 0,
+            remainingLeave: 12,
+        });
+        expect(mocks.employeeUpdate).toHaveBeenCalledWith({
+            where: { employeeId: "EMP001" },
+            data: { usedLeave: { decrement: 2 } },
+            select: { totalLeave: true, usedLeave: true },
+        });
+    });
+
+    it("does not touch employee.usedLeave when deleting pending annual or approved non-annual leave", async () => {
+        mocks.leaveFindUnique.mockResolvedValueOnce({
+            id: "lr-sick-1",
+            employeeId: "EMP001",
+            type: "sick",
+            startDate: new Date("2026-11-12T00:00:00.000Z"),
+            endDate: new Date("2026-11-12T00:00:00.000Z"),
+            reason: "Demam",
+            status: "approved",
+            attachment: null,
+            attachmentPath: null,
+            createdAt: new Date("2026-11-11T00:00:00.000Z"),
+            employee: { employeeId: "EMP001", totalLeave: 12, usedLeave: 3 },
+        });
+        mocks.leaveDeleteMany.mockResolvedValueOnce({ count: 1 });
+
+        const sickRes = await deleteLeaveRequest("lr-sick-1");
+        expect(sickRes?.restoredAnnualDays).toBe(0);
+        expect(sickRes?.employeeQuota.usedLeave).toBe(3);
+        expect(mocks.employeeUpdate).not.toHaveBeenCalled();
+        expect(mocks.countWorkingDaysForEmployee).not.toHaveBeenCalled();
+    });
+
+    it("prevents double quota restoration when concurrent request already deleted or changed status", async () => {
+        mocks.leaveFindUnique
+            .mockResolvedValueOnce({
+                id: "lr-race-gone",
+                employeeId: "EMP001",
+                type: "annual",
+                startDate: new Date("2026-12-24T00:00:00.000Z"),
+                endDate: new Date("2026-12-24T00:00:00.000Z"),
+                reason: "Cuti",
+                status: "approved",
+                attachment: null,
+                attachmentPath: null,
+                createdAt: new Date("2026-11-02T00:00:00.000Z"),
+                employee: { employeeId: "EMP001", totalLeave: 12, usedLeave: 1 },
+            })
+            .mockResolvedValueOnce(null);
+        mocks.countWorkingDaysForEmployee.mockResolvedValueOnce(1);
+        mocks.leaveDeleteMany.mockResolvedValueOnce({ count: 0 });
+
+        const goneResult = await deleteLeaveRequest("lr-race-gone");
+        expect(goneResult).toBeNull();
+        expect(mocks.employeeUpdate).not.toHaveBeenCalled();
+
+        mocks.leaveFindUnique
+            .mockResolvedValueOnce({
+                id: "lr-race-changed",
+                employeeId: "EMP001",
+                type: "annual",
+                startDate: new Date("2026-12-24T00:00:00.000Z"),
+                endDate: new Date("2026-12-24T00:00:00.000Z"),
+                reason: "Cuti",
+                status: "pending",
+                attachment: null,
+                attachmentPath: null,
+                createdAt: new Date("2026-11-02T00:00:00.000Z"),
+                employee: { employeeId: "EMP001", totalLeave: 12, usedLeave: 1 },
+            })
+            .mockResolvedValueOnce({ id: "lr-race-changed" });
+        mocks.leaveDeleteMany.mockResolvedValueOnce({ count: 0 });
+
+        await expect(deleteLeaveRequest("lr-race-changed")).rejects.toBeInstanceOf(LeaveConflictError);
+        expect(mocks.employeeUpdate).not.toHaveBeenCalled();
+    });
+
+    it("unlinks attachment file only when no remaining leave requests reference the same file", async () => {
+        const sharedFile = "123e4567-e89b-12d3-a456-426614174000.pdf";
+        mocks.leaveFindUnique.mockResolvedValue({
+            id: "lr-att-1",
+            employeeId: "EMP001",
+            type: "sick",
+            startDate: new Date("2026-11-12T00:00:00.000Z"),
+            endDate: new Date("2026-11-12T00:00:00.000Z"),
+            reason: "Sakit",
+            status: "approved",
+            attachment: null,
+            attachmentPath: sharedFile,
+            createdAt: new Date("2026-11-11T00:00:00.000Z"),
+            employee: { employeeId: "EMP001", totalLeave: 12, usedLeave: 0 },
+        });
+        mocks.leaveDeleteMany.mockResolvedValue({ count: 1 });
+
+        mocks.leaveCount.mockResolvedValueOnce(1);
+        await deleteLeaveRequest("lr-att-1");
+        expect(mocks.unlink).not.toHaveBeenCalled();
+
+        mocks.leaveCount.mockResolvedValueOnce(0);
+        await deleteLeaveRequest("lr-att-1");
+        expect(mocks.unlink).toHaveBeenCalledTimes(1);
     });
 });

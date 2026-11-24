@@ -7,9 +7,11 @@ const mocks = vi.hoisted(() => ({
     createLeaveRequest: vi.fn(),
     createLeaveRequestsBatch: vi.fn(),
     updateLeaveRequestsBulk: vi.fn(),
+    deleteLeaveRequest: vi.fn(),
     getEmployeeLeaveBalance: vi.fn(),
     employeeFindUnique: vi.fn(),
     workShiftFindUnique: vi.fn(),
+    logAction: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/middleware/apiGuard", () => ({
@@ -27,6 +29,7 @@ vi.mock("@/lib/services/leaveService", () => ({
     createLeaveRequestsBatch: mocks.createLeaveRequestsBatch,
     updateLeaveRequest: vi.fn(),
     updateLeaveRequestsBulk: mocks.updateLeaveRequestsBulk,
+    deleteLeaveRequest: mocks.deleteLeaveRequest,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -38,14 +41,14 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/services/auditService", () => ({
     actorFromSession: vi.fn(() => ({ id: "user-1" })),
-    logAction: vi.fn(async () => undefined),
+    logAction: mocks.logAction,
 }));
 
 vi.mock("@/lib/logger", () => ({
     default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { POST, PUT } from "@/app/api/leave/route";
+import { DELETE, POST, PUT } from "@/app/api/leave/route";
 
 describe("leave POST dated-roster authority", () => {
     beforeEach(() => {
@@ -174,5 +177,78 @@ describe("leave POST dated-roster authority", () => {
         const json = await response.json();
         expect(json.succeededIds).toEqual(["leave-b1", "leave-b2"]);
         expect(mocks.updateLeaveRequestsBulk).toHaveBeenCalledWith(["leave-b1", "leave-b2"], "approved");
+    });
+
+    it("enforces hr.manage permission on DELETE /api/leave and returns restored quota payload", async () => {
+        mocks.requireAuth.mockResolvedValueOnce(null);
+        const unauthRes = await DELETE(new NextRequest("http://localhost/api/leave?id=leave-1", { method: "DELETE" }));
+        expect(unauthRes.status).toBe(401);
+
+        mocks.requireAuth.mockResolvedValueOnce({
+            employeeId: "EMP001",
+            username: "employee-1",
+            role: "hr",
+            permissions: ["employee.self"],
+        });
+        const forbiddenRes = await DELETE(new NextRequest("http://localhost/api/leave?id=leave-1", { method: "DELETE" }));
+        expect(forbiddenRes.status).toBe(403);
+        expect(mocks.deleteLeaveRequest).not.toHaveBeenCalled();
+
+        mocks.requireAuth.mockResolvedValueOnce({
+            employeeId: "HR001",
+            username: "hr-admin",
+            permissions: ["hr.manage"],
+        });
+        mocks.validateBody.mockResolvedValueOnce({ data: { id: "leave-1" } });
+        mocks.deleteLeaveRequest.mockResolvedValueOnce({
+            deleted: {
+                id: "leave-1",
+                employeeId: "ID-24050016",
+                type: "annual",
+                startDate: "2026-12-24",
+                endDate: "2026-12-29",
+                reason: "Keperluan Keluarga",
+                status: "approved",
+                createdAt: "2026-11-02T00:01:27.000Z",
+            },
+            restoredAnnualDays: 4,
+            employeeQuota: {
+                employeeId: "ID-24050016",
+                totalLeave: 6,
+                usedLeave: 0,
+                remainingLeave: 6,
+            },
+        });
+        mocks.logAction.mockResolvedValueOnce(undefined);
+
+        const okRes = await DELETE(new NextRequest("http://localhost/api/leave?id=leave-1", { method: "DELETE" }));
+        expect(okRes.status).toBe(200);
+        const json = await okRes.json();
+        expect(json.restoredAnnualDays).toBe(4);
+        expect(json.employeeQuota.remainingLeave).toBe(6);
+        expect(mocks.deleteLeaveRequest).toHaveBeenCalledWith("leave-1");
+        expect(mocks.logAction).toHaveBeenCalledWith(
+            "DELETE_LEAVE",
+            "LEAVE_REQUEST",
+            expect.anything(),
+            "leave-1",
+            expect.objectContaining({
+                employeeId: "ID-24050016",
+                restoredAnnualDays: 4,
+            }),
+        );
+    });
+
+    it("returns 404 when DELETE /api/leave targets a non-existent leave request", async () => {
+        mocks.requireAuth.mockResolvedValueOnce({
+            employeeId: "HR001",
+            username: "hr-admin",
+            permissions: ["hr.manage"],
+        });
+        mocks.validateBody.mockResolvedValueOnce({ data: { id: "missing-id" } });
+        mocks.deleteLeaveRequest.mockResolvedValueOnce(null);
+
+        const res = await DELETE(new NextRequest("http://localhost/api/leave?id=missing-id", { method: "DELETE" }));
+        expect(res.status).toBe(404);
     });
 });

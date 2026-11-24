@@ -346,6 +346,10 @@ export const leaveUpdateSchema = z.object({
     }
 });
 
+export const leaveDeleteSchema = z.object({
+    id: z.string().trim().min(1, "ID pengajuan cuti harus diisi").max(191, "ID pengajuan cuti tidak valid"),
+});
+
 /* ───────────────────── Overtime ───────────────────── */
 
 export const overtimeCreateSchema = z.object({
