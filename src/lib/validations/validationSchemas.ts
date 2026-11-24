@@ -1252,6 +1252,7 @@ export const stressmeterAnonymousShareSchema = z.object({
         .trim()
         .min(10, "Pesan minimal 10 karakter agar HR dapat memahami masukan Anda.")
         .max(2000, "Pesan maksimal 2000 karakter."),
+    includeSenderName: z.boolean().default(false),
 });
 
 export const stressmeterShareUpdateSchema = z.object({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Send, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, Send, ShieldCheck, UserCheck } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import {
     getFriendlyClientErrorMessage,
@@ -13,12 +13,17 @@ import {
     type StressmeterTopicValue,
 } from "@/lib/stressmeterConstants";
 
+export interface AnonymousShareSubmitResult {
+    includedSenderName: boolean;
+}
+
 interface AnonymousShareFormProps {
     formId?: string;
     hideSubmitButton?: boolean;
-    onSuccess?: () => void;
+    onSuccess?: (result: AnonymousShareSubmitResult) => void;
     onSubmittingChange?: (submitting: boolean) => void;
     onValidChange?: (valid: boolean) => void;
+    onIncludeNameChange?: (includeName: boolean) => void;
 }
 
 export default function AnonymousShareForm({
@@ -27,12 +32,15 @@ export default function AnonymousShareForm({
     onSuccess,
     onSubmittingChange,
     onValidChange,
+    onIncludeNameChange,
 }: AnonymousShareFormProps) {
     const toast = useToast();
     const [topic, setTopic] = useState<StressmeterTopicValue>("OTHER");
     const [message, setMessage] = useState("");
+    const [includeSenderName, setIncludeSenderName] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [lastSentWithName, setLastSentWithName] = useState(false);
 
     const trimmedLength = message.trim().length;
     const isValid = trimmedLength >= 10 && trimmedLength <= 2000;
@@ -40,6 +48,10 @@ export default function AnonymousShareForm({
     useEffect(() => {
         onValidChange?.(isValid);
     }, [isValid, onValidChange]);
+
+    useEffect(() => {
+        onIncludeNameChange?.(includeSenderName);
+    }, [includeSenderName, onIncludeNameChange]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,27 +61,34 @@ export default function AnonymousShareForm({
             return;
         }
 
+        const sentWithName = includeSenderName;
         setSubmitting(true);
         onSubmittingChange?.(true);
         try {
             const res = await fetch("/api/employee/stressmeter/anonymous-share", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ topic, message: message.trim() }),
+                body: JSON.stringify({
+                    topic,
+                    message: message.trim(),
+                    includeSenderName: sentWithName,
+                }),
             });
             if (!res.ok) {
                 throw new Error(
-                    await getResponseErrorMessage(res, "Gagal mengirim pesan anonim.")
+                    await getResponseErrorMessage(res, "Gagal mengirim pesan.")
                 );
             }
+            setLastSentWithName(sentWithName);
             setSubmitted(true);
             setMessage("");
             setTopic("OTHER");
-            onSuccess?.();
+            setIncludeSenderName(false);
+            onSuccess?.({ includedSenderName: sentWithName });
         } catch (err) {
             const msg = getFriendlyClientErrorMessage(
                 err,
-                "Gagal mengirim pesan anonim. Periksa koneksi Anda lalu coba lagi."
+                "Gagal mengirim pesan. Periksa koneksi Anda lalu coba lagi."
             );
             toast(msg, "error");
             reportClientError("AnonymousShareForm", msg, err);
@@ -87,10 +106,12 @@ export default function AnonymousShareForm({
                 </div>
                 <div className="space-y-1">
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                        Pesan Anonim Terkirim
+                        {lastSentWithName ? "Pesan Terkirim" : "Pesan Anonim Terkirim"}
                     </h3>
                     <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                        Terima kasih sudah berbagi. Pesan Anda telah diteruskan ke tim HR tanpa menyimpan identitas pengirim.
+                        {lastSentWithName
+                            ? "Terima kasih sudah berbagi. Pesan beserta nama lengkap Anda telah diteruskan ke tim HR."
+                            : "Terima kasih sudah berbagi. Pesan Anda telah diteruskan ke tim HR tanpa menyimpan identitas pengirim."}
                     </p>
                 </div>
                 <button
@@ -106,10 +127,29 @@ export default function AnonymousShareForm({
 
     return (
         <form id={formId} onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 px-3.5 py-2.5 text-xs text-emerald-800 dark:text-emerald-300">
-                <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+            <div
+                aria-live="polite"
+                className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs transition-colors ${
+                    includeSenderName
+                        ? "border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/30 text-sky-800 dark:text-sky-300"
+                        : "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300"
+                }`}
+            >
+                {includeSenderName ? (
+                    <UserCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                ) : (
+                    <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                )}
                 <p className="leading-relaxed">
-                    <strong>100% Anonim.</strong> Nama, NIP, departemen, dan jam kirim Anda tidak disimpan. HR hanya melihat kategori topik, tanggal, dan isi pesan.
+                    {includeSenderName ? (
+                        <>
+                            <strong>Dengan nama lengkap.</strong> Nama lengkap akun Anda akan ditampilkan pada pesan ini agar tim HR dapat menindaklanjuti secara langsung.
+                        </>
+                    ) : (
+                        <>
+                            <strong>100% Anonim.</strong> Identitas akun dan jam kirim Anda tidak disimpan. HR hanya melihat kategori topik, tanggal, dan isi pesan.
+                        </>
+                    )}
                 </p>
             </div>
 
@@ -161,6 +201,32 @@ export default function AnonymousShareForm({
                 </div>
             </div>
 
+            <label
+                htmlFor={`${formId}-include-name`}
+                className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 cursor-pointer transition-colors select-none ${
+                    includeSenderName
+                        ? "border-sky-300 dark:border-sky-800 bg-sky-50/70 dark:bg-sky-950/30"
+                        : "border-[var(--border)] bg-[var(--secondary)]/35 hover:border-[var(--primary)]/40"
+                }`}
+            >
+                <input
+                    id={`${formId}-include-name`}
+                    type="checkbox"
+                    checked={includeSenderName}
+                    onChange={(e) => setIncludeSenderName(e.target.checked)}
+                    disabled={submitting}
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--border)] text-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/30 shrink-0 cursor-pointer accent-[var(--primary)]"
+                />
+                <span className="space-y-0.5 min-w-0">
+                    <span className="block text-xs font-semibold text-[var(--text-primary)] leading-snug">
+                        Sertakan nama lengkap saya (tidak anonim)
+                    </span>
+                    <span className="block text-[11px] text-[var(--text-muted)] leading-relaxed">
+                        Cocok jika Anda ingin tim HR menindaklanjuti atau menghubungi langsung.
+                    </span>
+                </span>
+            </label>
+
             {!hideSubmitButton && (
                 <button
                     type="submit"
@@ -172,7 +238,11 @@ export default function AnonymousShareForm({
                     ) : (
                         <Send className="w-4 h-4" />
                     )}
-                    {submitting ? "Mengirim..." : "Kirim secara Anonim"}
+                    {submitting
+                        ? "Mengirim..."
+                        : includeSenderName
+                            ? "Kirim dengan Nama"
+                            : "Kirim secara Anonim"}
                 </button>
             )}
         </form>

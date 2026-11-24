@@ -2245,7 +2245,8 @@ model MeetingTaskReminderLog {
 
 // ─── Stressmeter & Ruang Sharing Anonim ─────────────────────────
 // Rating harian (1..5 atau skipped) terkait ke karyawan untuk deteksi dini HR.
-// Curhat anonim disimpan terpisah secara struktural TANPA employeeId/userId/checkinId.
+// Curhat anonim disimpan terpisah secara struktural TANPA employeeId/userId/checkinId;
+// kolom senderName hanya terisi (snapshot nama lengkap) bila karyawan secara sadar memilih opt-in.
 enum StressmeterTopic {
   WORKLOAD
   TEAM_LEADERSHIP
@@ -2281,6 +2282,7 @@ model StressmeterAnonymousShare {
   submittedWibDate String               @map("submitted_wib_date") @db.VarChar(10)
   topic            StressmeterTopic     @default(OTHER)
   message          String               @db.Text
+  senderName       String?              @map("sender_name") @db.VarChar(150)
   status           AnonymousShareStatus @default(NEW)
   hrNote           String?              @map("hr_note") @db.Text
   reviewedAt       DateTime?            @map("reviewed_at")

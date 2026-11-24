@@ -26,6 +26,9 @@ const prismaMock = vi.hoisted(() => ({
     department: {
         findMany: vi.fn(),
     },
+    employee: {
+        findUnique: vi.fn(),
+    },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -33,7 +36,9 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 import {
     StressmeterDomainError,
     clearStressmeterSettingCache,
+    getEmployeeFullNameForShare,
     getEmployeeTodayCheckinStatus,
+    getHrAnonymousShares,
     getHrStressmeterOverview,
     submitAnonymousShare,
     submitEmployeeCheckin,
@@ -119,11 +124,12 @@ describe("stressmeterService", () => {
         expect(prismaMock.stressmeterCheckin.create).toHaveBeenCalledTimes(1);
     });
 
-    it("menyimpan curhat anonim tanpa employeeId, userId, maupun checkinId", async () => {
-        prismaMock.stressmeterAnonymousShare.create.mockResolvedValue({
+    it("menyimpan curhat anonim tanpa employeeId/userId/checkinId, dan menyimpan senderName hanya saat opt-in", async () => {
+        prismaMock.stressmeterAnonymousShare.create.mockResolvedValueOnce({
             id: "anon-1",
             submittedWibDate: "2026-11-23",
             topic: "WORKLOAD",
+            senderName: null,
         });
 
         await submitAnonymousShare({
@@ -132,15 +138,87 @@ describe("stressmeterService", () => {
         });
 
         expect(prismaMock.stressmeterAnonymousShare.create).toHaveBeenCalledTimes(1);
-        const callArg = prismaMock.stressmeterAnonymousShare.create.mock.calls[0][0];
-        expect(callArg.data).toMatchObject({
+        const anonArg = prismaMock.stressmeterAnonymousShare.create.mock.calls[0][0];
+        expect(anonArg.data).toMatchObject({
             topic: "WORKLOAD",
             message: "Beban kerja akhir bulan cukup padat dan butuh prioritas jelas.",
+            senderName: null,
             status: "NEW",
         });
-        expect(callArg.data).not.toHaveProperty("employeeId");
-        expect(callArg.data).not.toHaveProperty("userId");
-        expect(callArg.data).not.toHaveProperty("checkinId");
+        expect(anonArg.data).not.toHaveProperty("employeeId");
+        expect(anonArg.data).not.toHaveProperty("userId");
+        expect(anonArg.data).not.toHaveProperty("checkinId");
+
+        // Opt-in sertakan nama lengkap -> menyimpan snapshot senderName tanpa employeeId/userId
+        prismaMock.stressmeterAnonymousShare.create.mockResolvedValueOnce({
+            id: "anon-2",
+            submittedWibDate: "2026-11-23",
+            topic: "FACILITIES",
+            senderName: "Budi Santoso",
+        });
+
+        await submitAnonymousShare({
+            topic: "FACILITIES",
+            message: "AC ruang produksi lantai 2 perlu dicek ulang.",
+            senderName: "  Budi Santoso  ",
+        });
+
+        const namedArg = prismaMock.stressmeterAnonymousShare.create.mock.calls[1][0];
+        expect(namedArg.data).toMatchObject({
+            topic: "FACILITIES",
+            message: "AC ruang produksi lantai 2 perlu dicek ulang.",
+            senderName: "Budi Santoso",
+            status: "NEW",
+        });
+        expect(namedArg.data).not.toHaveProperty("employeeId");
+        expect(namedArg.data).not.toHaveProperty("userId");
+        expect(namedArg.data).not.toHaveProperty("checkinId");
+    });
+
+    it("mengambil nama lengkap otoritatif dari Employee dan mendukung filter identitas pada kotak curhat HR", async () => {
+        prismaMock.employee.findUnique.mockResolvedValueOnce({ name: "  Daffa Pratama  " });
+        expect(await getEmployeeFullNameForShare("WIG001", "Fallback")).toBe("Daffa Pratama");
+
+        prismaMock.employee.findUnique.mockResolvedValueOnce(null);
+        expect(await getEmployeeFullNameForShare("WIG999", "  Nama Fallback  ")).toBe("Nama Fallback");
+
+        // Filter ANONYMOUS -> where.senderName = null
+        prismaMock.stressmeterAnonymousShare.count.mockResolvedValueOnce(1);
+        prismaMock.stressmeterAnonymousShare.groupBy.mockResolvedValueOnce([
+            { status: "NEW", _count: { _all: 1 } },
+        ]);
+        prismaMock.stressmeterAnonymousShare.findMany.mockResolvedValueOnce([
+            {
+                id: "s-1",
+                submittedWibDate: "2026-11-24",
+                topic: "OTHER",
+                message: "Pesan anonim test",
+                senderName: null,
+                status: "NEW",
+                hrNote: null,
+                reviewedAt: null,
+            },
+        ]);
+
+        const anonRes = await getHrAnonymousShares({ identity: "ANONYMOUS" });
+        expect(anonRes.items).toHaveLength(1);
+        expect(prismaMock.stressmeterAnonymousShare.findMany.mock.calls[0][0].where).toMatchObject({
+            senderName: null,
+        });
+        expect(prismaMock.stressmeterAnonymousShare.findMany.mock.calls[0][0].select).toMatchObject({
+            senderName: true,
+        });
+        expect(prismaMock.stressmeterAnonymousShare.findMany.mock.calls[0][0].select).not.toHaveProperty(
+            "createdAt"
+        );
+
+        // Filter NAMED -> where.senderName = { not: null }
+        prismaMock.stressmeterAnonymousShare.count.mockResolvedValueOnce(0);
+        prismaMock.stressmeterAnonymousShare.groupBy.mockResolvedValueOnce([]);
+        await getHrAnonymousShares({ identity: "NAMED" });
+        expect(prismaMock.stressmeterAnonymousShare.count.mock.calls[1][0].where).toMatchObject({
+            senderName: { not: null },
+        });
     });
 
     it("menghitung KPI, partisipasi, breakdown departemen, dan deteksi dini dalam 1 kueri saat rentang mencakup 14 hari terakhir", async () => {

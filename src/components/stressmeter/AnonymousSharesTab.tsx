@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
     CalendarDays,
     ChevronLeft,
@@ -9,6 +9,7 @@ import {
     Loader2,
     MessageSquareHeart,
     ShieldCheck,
+    UserRound,
 } from "lucide-react";
 import ResponsiveSheet from "@/components/ui/ResponsiveSheet";
 import { useToast } from "@/components/Toast";
@@ -37,17 +38,21 @@ interface AnonymousSharesTabProps {
     onStatusFilterChange: (val: string) => void;
     topicFilter: string;
     onTopicFilterChange: (val: string) => void;
+    identityFilter: string;
+    onIdentityFilterChange: (val: string) => void;
     onPageChange: (page: number) => void;
     onUpdated: () => Promise<void>;
 }
 
-export default function AnonymousSharesTab({
+function AnonymousSharesTab({
     data,
     loading,
     statusFilter,
     onStatusFilterChange,
     topicFilter,
     onTopicFilterChange,
+    identityFilter,
+    onIdentityFilterChange,
     onPageChange,
     onUpdated,
 }: AnonymousSharesTabProps) {
@@ -103,12 +108,12 @@ export default function AnonymousSharesTab({
             <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/60 dark:bg-emerald-950/25 px-4 py-3 text-xs text-emerald-800 dark:text-emerald-300">
                 <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
-                    Seluruh pesan di tab ini <strong>100% anonim secara struktural</strong> tanpa nama, NIP, departemen, maupun jam kirim presisi. Catatan tindak lanjut di bawah hanya terlihat oleh tim HR.
+                    Pesan bawaan bersifat <strong>100% anonim</strong> tanpa identitas dan tanpa jam kirim presisi. Nama lengkap hanya tampil jika karyawan secara sadar mencentang opsi sertakan nama. Catatan tindak lanjut hanya terlihat oleh tim HR.
                 </p>
             </div>
 
             {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
                 <div className="inline-flex flex-wrap rounded-md border border-border bg-muted/40 p-0.5 text-xs">
                     {(
                         [
@@ -133,19 +138,32 @@ export default function AnonymousSharesTab({
                     ))}
                 </div>
 
-                <select
-                    aria-label="Filter kategori topik"
-                    value={topicFilter}
-                    onChange={(e) => onTopicFilterChange(e.target.value)}
-                    className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-52"
-                >
-                    <option value="ALL">Semua Kategori Topik</option>
-                    {STRESSMETER_TOPICS.map((t) => (
-                        <option key={t.value} value={t.value}>
-                            {t.label}
-                        </option>
-                    ))}
-                </select>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                        aria-label="Filter identitas pengirim"
+                        value={identityFilter}
+                        onChange={(e) => onIdentityFilterChange(e.target.value)}
+                        className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-44"
+                    >
+                        <option value="ALL">Semua Pengirim</option>
+                        <option value="ANONYMOUS">Anonim</option>
+                        <option value="NAMED">Dengan Nama</option>
+                    </select>
+
+                    <select
+                        aria-label="Filter kategori topik"
+                        value={topicFilter}
+                        onChange={(e) => onTopicFilterChange(e.target.value)}
+                        className="px-3 py-2 text-sm rounded-md border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 sm:w-52"
+                    >
+                        <option value="ALL">Semua Kategori Topik</option>
+                        {STRESSMETER_TOPICS.map((t) => (
+                            <option key={t.value} value={t.value}>
+                                {t.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             {/* Daftar Pesan */}
@@ -157,7 +175,7 @@ export default function AnonymousSharesTab({
                 <div className="bg-card border border-dashed border-border rounded-xl py-12 text-center space-y-1.5">
                     <MessageSquareHeart className="w-7 h-7 text-muted-foreground mx-auto opacity-60" />
                     <p className="text-sm font-medium text-foreground">
-                        Belum ada pesan anonim pada filter ini.
+                        Belum ada pesan pada filter ini.
                     </p>
                     <p className="text-xs text-muted-foreground">
                         Pesan dari pop-up pasca Clock In maupun menu Ruang Sharing Anonim akan muncul di sini.
@@ -178,6 +196,20 @@ export default function AnonymousSharesTab({
                                             <CalendarDays className="w-3.5 h-3.5" />
                                             {formatStressmeterDate(item.submittedWibDate)}
                                         </span>
+                                        {item.senderName ? (
+                                            <span
+                                                title="Pengirim menyertakan nama lengkap"
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold border bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800"
+                                            >
+                                                <UserRound className="w-3 h-3 shrink-0" />
+                                                {item.senderName}
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border bg-emerald-50/80 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/70">
+                                                <ShieldCheck className="w-3 h-3 shrink-0" />
+                                                Anonim
+                                            </span>
+                                        )}
                                         <span className="px-2 py-0.5 rounded-full bg-muted text-foreground font-medium">
                                             {getStressmeterTopicLabel(item.topic)}
                                         </span>
@@ -256,9 +288,9 @@ export default function AnonymousSharesTab({
                 title="Kelola Tindak Lanjut"
                 description={
                     activeItem
-                        ? `${getStressmeterTopicLabel(activeItem.topic)} · ${formatStressmeterDate(
-                              activeItem.submittedWibDate
-                          )}`
+                        ? `${activeItem.senderName ?? "Anonim"} · ${getStressmeterTopicLabel(
+                              activeItem.topic
+                          )} · ${formatStressmeterDate(activeItem.submittedWibDate)}`
                         : undefined
                 }
                 size="lg"
@@ -341,3 +373,5 @@ export default function AnonymousSharesTab({
         </div>
     );
 }
+
+export default memo(AnonymousSharesTab);

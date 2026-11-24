@@ -51,6 +51,7 @@ export default function HrStressmeterPage() {
     // Anonymous shares filters
     const [shareStatusFilter, setShareStatusFilter] = useState("ALL");
     const [shareTopicFilter, setShareTopicFilter] = useState("ALL");
+    const [shareIdentityFilter, setShareIdentityFilter] = useState("ALL");
     const [sharePage, setSharePage] = useState(1);
 
     // Data state
@@ -144,6 +145,7 @@ export default function HrStressmeterPage() {
             });
             if (shareStatusFilter !== "ALL") qs.set("status", shareStatusFilter);
             if (shareTopicFilter !== "ALL") qs.set("topic", shareTopicFilter);
+            if (shareIdentityFilter !== "ALL") qs.set("identity", shareIdentityFilter);
 
             const res = await fetch(`/api/stressmeter/shares?${qs.toString()}`, {
                 signal: controller.signal,
@@ -171,7 +173,7 @@ export default function HrStressmeterPage() {
                 setLoadingShares(false);
             }
         }
-    }, [fromDate, toDate, shareStatusFilter, shareTopicFilter, sharePage]);
+    }, [fromDate, toDate, shareStatusFilter, shareTopicFilter, shareIdentityFilter, sharePage]);
 
     useEffect(() => {
         void fetchOverview();
@@ -232,6 +234,18 @@ export default function HrStressmeterPage() {
     const handleLogRatingChange = useCallback((val: string) => {
         setLogRatingFilter(val);
         setLogPage(1);
+    }, []);
+    const handleShareStatusChange = useCallback((val: string) => {
+        setShareStatusFilter(val);
+        setSharePage(1);
+    }, []);
+    const handleShareTopicChange = useCallback((val: string) => {
+        setShareTopicFilter(val);
+        setSharePage(1);
+    }, []);
+    const handleShareIdentityChange = useCallback((val: string) => {
+        setShareIdentityFilter(val);
+        setSharePage(1);
     }, []);
 
     const isPopupEnabled = overview?.enabled ?? true;
@@ -486,15 +500,11 @@ export default function HrStressmeterPage() {
                             data={shares}
                             loading={loadingShares}
                             statusFilter={shareStatusFilter}
-                            onStatusFilterChange={(val) => {
-                                setShareStatusFilter(val);
-                                setSharePage(1);
-                            }}
+                            onStatusFilterChange={handleShareStatusChange}
                             topicFilter={shareTopicFilter}
-                            onTopicFilterChange={(val) => {
-                                setShareTopicFilter(val);
-                                setSharePage(1);
-                            }}
+                            onTopicFilterChange={handleShareTopicChange}
+                            identityFilter={shareIdentityFilter}
+                            onIdentityFilterChange={handleShareIdentityChange}
                             onPageChange={setSharePage}
                             onUpdated={handleShareUpdated}
                         />

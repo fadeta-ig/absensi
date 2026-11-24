@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         const data = await getHrAnonymousShares({
             status: sp.get("status"),
             topic: sp.get("topic"),
+            identity: sp.get("identity"),
             from: sp.get("from"),
             to: sp.get("to"),
             page: Number.isFinite(page) ? page : 1,

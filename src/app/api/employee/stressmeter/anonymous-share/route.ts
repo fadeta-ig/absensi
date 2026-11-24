@@ -9,7 +9,10 @@ import {
 } from "@/lib/middleware/apiGuard";
 import { canUseEmployeePortal } from "@/lib/permissions";
 import { stressmeterAnonymousShareSchema } from "@/lib/validations/validationSchemas";
-import { submitAnonymousShare } from "@/lib/services/stressmeterService";
+import {
+    getEmployeeFullNameForShare,
+    submitAnonymousShare,
+} from "@/lib/services/stressmeterService";
 
 // Pembatas anti-spam murni di RAM memakai salt acak kriptografis per proses (tidak pernah ditulis ke DB/log)
 const EPHEMERAL_SALT = randomBytes(32).toString("hex");
@@ -68,10 +71,16 @@ export async function POST(request: NextRequest) {
         const validation = await validateBody(request, stressmeterAnonymousShareSchema);
         if ("error" in validation) return validation.error;
 
-        // Sengaja tidak meneruskan session / userId / employeeId ke service demi anonimitas struktural
+        // Bila karyawan tidak opt-in, jangan query maupun teruskan identitas apa pun demi anonimitas struktural.
+        // Bila opt-in, nama lengkap diambil otoritatif dari server (bukan dari payload klien) agar tidak dapat dipalsukan.
+        const senderName = validation.data.includeSenderName
+            ? await getEmployeeFullNameForShare(session.employeeId, session.name)
+            : null;
+
         const created = await submitAnonymousShare({
             topic: validation.data.topic,
             message: validation.data.message,
+            senderName,
         });
 
         return NextResponse.json(

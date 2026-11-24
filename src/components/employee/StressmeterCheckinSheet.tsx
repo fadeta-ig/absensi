@@ -47,6 +47,8 @@ export default function StressmeterCheckinSheet({
     const [submittingAction, setSubmittingAction] = useState<"rating" | "skip" | null>(null);
     const [submittingAnon, setSubmittingAnon] = useState(false);
     const [anonValid, setAnonValid] = useState(false);
+    const [includeSenderName, setIncludeSenderName] = useState(false);
+    const [sentWithName, setSentWithName] = useState(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -57,6 +59,8 @@ export default function StressmeterCheckinSheet({
         setSubmittingAction(null);
         setSubmittingAnon(false);
         setAnonValid(false);
+        setIncludeSenderName(false);
+        setSentWithName(false);
     }, [isOpen, initialStep]);
 
     const activePreviewRating = hoveredRating ?? selectedRating;
@@ -118,7 +122,9 @@ export default function StressmeterCheckinSheet({
             : step === "after"
                 ? "Masukan Anda sangat berarti bagi kami."
                 : step === "anonymous"
-                    ? "Sampaikan cerita atau masukan secara aman tanpa identitas."
+                    ? includeSenderName
+                        ? "Pesan akan dikirim beserta nama lengkap Anda ke tim HR."
+                        : "Sampaikan cerita atau masukan secara aman tanpa identitas."
                     : "Terima kasih telah berbagi bersama tim HR.";
 
     const footer =
@@ -160,9 +166,14 @@ export default function StressmeterCheckinSheet({
             <div className="flex items-center gap-2.5">
                 <button
                     type="button"
-                    onClick={() =>
-                        initialStep === "rating" ? setStep("after") : onClose()
-                    }
+                    onClick={() => {
+                        if (initialStep === "rating") {
+                            setIncludeSenderName(false);
+                            setStep("after");
+                        } else {
+                            onClose();
+                        }
+                    }}
                     disabled={submittingAnon}
                     className="btn btn-secondary flex items-center justify-center gap-1.5 min-h-[44px] px-4"
                 >
@@ -180,7 +191,11 @@ export default function StressmeterCheckinSheet({
                     ) : (
                         <Send className="w-4 h-4" />
                     )}
-                    {submittingAnon ? "Mengirim..." : "Kirim secara Anonim"}
+                    {submittingAnon
+                        ? "Mengirim..."
+                        : includeSenderName
+                            ? "Kirim dengan Nama"
+                            : "Kirim secara Anonim"}
                 </button>
             </div>
         ) : (
@@ -291,7 +306,7 @@ export default function StressmeterCheckinSheet({
                                     Perlu Sharing Lebih Lanjut?
                                 </p>
                                 <p className="text-xs text-[var(--text-muted)] mt-0.5 leading-relaxed">
-                                    Identitas akun Anda tidak disimpan sama sekali. Pesan hanya dibaca oleh tim HR.
+                                    Bawaan 100% anonim, atau sertakan nama Anda bila ingin ditindaklanjuti langsung oleh tim HR.
                                 </p>
                             </div>
                         </div>
@@ -313,21 +328,29 @@ export default function StressmeterCheckinSheet({
                     hideSubmitButton
                     onSubmittingChange={setSubmittingAnon}
                     onValidChange={setAnonValid}
-                    onSuccess={() => setStep("anonymous-done")}
+                    onIncludeNameChange={setIncludeSenderName}
+                    onSuccess={({ includedSenderName }) => {
+                        setSentWithName(includedSenderName);
+                        setStep("anonymous-done");
+                    }}
                 />
             )}
 
-            {/* ── STEP 4: KONFIRMASI CURHAT ANONIM TERKIRIM ────────── */}
+            {/* ── STEP 4: KONFIRMASI CURHAT TERKIRIM ───────────────── */}
             {step === "anonymous-done" && (
                 <div className="py-4 text-center space-y-3">
                     <div className="w-14 h-14 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                         <CheckCircle2 className="w-7 h-7" />
                     </div>
                     <h3 className="text-base font-bold text-[var(--text-primary)]">
-                        Pesan Anonim Anda Sudah Diterima
+                        {sentWithName
+                            ? "Pesan Anda Sudah Diterima"
+                            : "Pesan Anonim Anda Sudah Diterima"}
                     </h3>
                     <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-sm mx-auto">
-                        Terima kasih sudah berani bercerita. Pesan telah masuk ke kotak anonim HR tanpa nama dan tanpa identitas akun Anda.
+                        {sentWithName
+                            ? "Terima kasih sudah berani bercerita. Pesan beserta nama lengkap Anda telah masuk ke kotak pesan HR."
+                            : "Terima kasih sudah berani bercerita. Pesan telah masuk ke kotak anonim HR tanpa nama dan tanpa identitas akun Anda."}
                     </p>
                 </div>
             )}
