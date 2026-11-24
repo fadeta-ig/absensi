@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
     Home, Camera, ClipboardList, FileText, CalendarOff,
     Newspaper, NotebookPen, MapPinned, Clock4, Users, Monitor, User,
-    CalendarCheck, CalendarClock, CalendarDays, Wrench, Eye, SlidersHorizontal,
+    CalendarCheck, CalendarClock, CalendarDays, Wrench, Eye, SlidersHorizontal, MessageSquareHeart,
 } from "lucide-react";
 import AppShell, { AppShellLoading, AppShellUser, NavItem } from "@/components/layout/AppShell";
 import PasskeyPrompt from "@/components/PasskeyPrompt";
@@ -47,6 +47,7 @@ const navItems: NavItem[] = [
     { href: "/employee/my-tasks/monitoring", icon: Eye, label: "Pantau Tugas" },
     { href: "/employee/green-meeting", icon: CalendarCheck, label: "Green Meeting" },
     { href: "/employee/todos", icon: NotebookPen, label: "To-Do" },
+    { href: "/employee/anonymous-sharing", icon: MessageSquareHeart, label: "Sharing Anonim" },
     { href: "/employee/profile", icon: User, label: "Profil" },
 ];
 

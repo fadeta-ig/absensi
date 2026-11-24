@@ -1212,4 +1212,60 @@ export const resetOutsourcePasswordSchema = z.object({
         .max(128, "Kata sandi maksimal 128 karakter."),
 });
 
+/* ───────────────────── Stressmeter & Sharing Anonim ───────────────────── */
+
+const stressmeterDateSchema = z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal shift tidak valid.");
+
+export const stressmeterTopicSchema = z.enum([
+    "WORKLOAD",
+    "TEAM_LEADERSHIP",
+    "FACILITIES",
+    "PERSONAL",
+    "OTHER",
+]);
+
+export const anonymousShareStatusSchema = z.enum(["NEW", "READ", "FOLLOWED_UP"]);
+
+export const stressmeterCheckinSchema = z
+    .object({
+        shiftDate: stressmeterDateSchema,
+        skipped: z.boolean().default(false),
+        rating: z.number().int().min(1).max(5).nullable().optional(),
+    })
+    .superRefine((v, ctx) => {
+        if (!v.skipped && (v.rating === undefined || v.rating === null)) {
+            ctx.addIssue({
+                code: "custom",
+                path: ["rating"],
+                message: "Pilih penilaian 1 sampai 5 bintang terlebih dahulu.",
+            });
+        }
+    });
+
+export const stressmeterAnonymousShareSchema = z.object({
+    topic: stressmeterTopicSchema.default("OTHER"),
+    message: z
+        .string()
+        .trim()
+        .min(10, "Pesan minimal 10 karakter agar HR dapat memahami masukan Anda.")
+        .max(2000, "Pesan maksimal 2000 karakter."),
+});
+
+export const stressmeterShareUpdateSchema = z.object({
+    status: anonymousShareStatusSchema,
+    hrNote: z
+        .string()
+        .trim()
+        .max(1000, "Catatan internal HR maksimal 1000 karakter.")
+        .nullable()
+        .optional(),
+});
+
+export const stressmeterSettingSchema = z.object({
+    enabled: z.boolean(),
+});
+
 

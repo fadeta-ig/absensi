@@ -153,6 +153,7 @@ hriswig/
   - `src/app/api/ga/outsource-users/` & `src/app/api/outsource/capabilities/`: Manajemen CRUD + RBAC akun OS oleh WIG002 (`GET/POST`, `PATCH/DELETE` per `[id]`, `POST` reset-password) dan kapabilitas portal terisolasi `/outsource/*`.
   - `src/app/api/ga/greeting-settings/`: Route handler CRUD aturan sapaan (`GET`/`POST`, `PUT`/`DELETE` per id) dan penunjukan editor (`GET`/`PUT`, WIG002-only).
   - `src/app/api/employee/greeting/route.ts`: Baca aturan sapaan aktif + `canEditGreeting` untuk beranda employee.
+  - `src/app/api/employee/stressmeter/` & `src/app/api/stressmeter/`: 7 route handler Stressmeter (cek status pop-up harian, simpan check-in/skip, kirim curhat anonim tanpa identitas, analitik & deteksi dini HR, kotak curhat anonim + tindak lanjut HR, dan toggle aktif/nonaktif).
 
 ---
 
@@ -175,6 +176,7 @@ hriswig/
   - `equipmentAuth.ts` & `src/lib/middleware/equipmentGuard.ts`: Single source of truth predikat otorisasi Equipment (`isEquipmentMasterAdmin`, `hasEmployeePortalAccess`, `normalizeEquipmentName`) dan wrapper guard HTTP (`requireGaEquipmentAdminAuth`, `requireEmployeeEquipmentAuth`).
   - `equipmentService.ts` & `equipmentProductService.ts`: Domain service inspeksi alat produksi (template/unit/produk/penugasan, lifecycle inspeksi dengan optimistic lock transisi status, evidence foto operator & QC, pool QC/approver per perusahaan, top viewers, capabilities, approvals, dan rekap).
   - `greetingSettingsService.ts`: CRUD `GreetingRule`, `AppSetting` `greeting.editorEmployeeId`, cache 60 detik, validasi aturan, dan guard WIG002/editor aktif.
+  - `stressmeterService.ts`: Check-in perasaan pasca Clock In (1×/shift, idempoten), penyimpanan curhat anonim struktural tanpa identitas, analitik HR, deteksi dini 14 hari, tindak lanjut curhat, dan toggle `stressmeter.enabled`.
   - `holidayService.ts`: Kalender libur global (logic kalenderbali.com) — normalisasi payload nasional/cuti bersama, loader vendored `data/holidays/` + fallback upstream, cache memori, `findHolidaysInDates` untuk blocker cuti.
 
 ---

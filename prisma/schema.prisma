@@ -88,6 +88,7 @@ model Employee {
   equipmentInspectionsStarted  EquipmentInspection[] @relation("EquipmentInspectionStartedBy")
   equipmentInspectionsChecked  EquipmentInspection[] @relation("EquipmentInspectionCheckedBy")
   equipmentInspectionsApproved EquipmentInspection[] @relation("EquipmentInspectionApprovedBy")
+  stressmeterCheckins          StressmeterCheckin[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -2240,4 +2241,54 @@ model MeetingTaskReminderLog {
   @@index([taskId], map: "idx_meeting_task_reminder_task")
   @@index([employeeId], map: "idx_meeting_task_reminder_employee")
   @@map("meeting_task_reminder_logs")
+}
+
+// ─── Stressmeter & Ruang Sharing Anonim ─────────────────────────
+// Rating harian (1..5 atau skipped) terkait ke karyawan untuk deteksi dini HR.
+// Curhat anonim disimpan terpisah secara struktural TANPA employeeId/userId/checkinId.
+enum StressmeterTopic {
+  WORKLOAD
+  TEAM_LEADERSHIP
+  FACILITIES
+  PERSONAL
+  OTHER
+}
+
+enum AnonymousShareStatus {
+  NEW
+  READ
+  FOLLOWED_UP
+}
+
+model StressmeterCheckin {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  shiftDate  DateTime @map("shift_date") @db.Date
+  rating     Int?
+  skipped    Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([employeeId, shiftDate], map: "uq_stressmeter_employee_shift_date")
+  @@index([shiftDate], map: "idx_stressmeter_shift_date")
+  @@index([rating, shiftDate], map: "idx_stressmeter_rating_date")
+  @@map("stressmeter_checkins")
+}
+
+model StressmeterAnonymousShare {
+  id               String               @id @default(uuid())
+  submittedWibDate String               @map("submitted_wib_date") @db.VarChar(10)
+  topic            StressmeterTopic     @default(OTHER)
+  message          String               @db.Text
+  status           AnonymousShareStatus @default(NEW)
+  hrNote           String?              @map("hr_note") @db.Text
+  reviewedAt       DateTime?            @map("reviewed_at")
+  reviewedByUserId String?              @map("reviewed_by_user_id")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@index([submittedWibDate], map: "idx_anon_share_wib_date")
+  @@index([status, submittedWibDate], map: "idx_anon_share_status_date")
+  @@map("stressmeter_anonymous_shares")
 }
