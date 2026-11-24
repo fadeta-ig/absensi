@@ -100,7 +100,7 @@ function SuccessContent() {
                                 Perlu sharing lebih lanjut?
                             </p>
                             <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                                Cerita atau masukan Anda dikirim 100% secara anonim ke tim HR.
+                                Kirim cerita atau masukan ke tim HR, secara anonim maupun dengan nama Anda.
                             </p>
                         </div>
                     </div>

@@ -329,8 +329,8 @@ Endpoint kanonik pengelolaan task lintas sumber (`APPOINTMENTS` E-Meeting dan `O
 |---|---|---|---|
 | `/api/employee/stressmeter/today` | `GET` | `employee.self` | Cek kelayakan pop-up untuk `?shiftDate=YYYY-MM-DD` (`enabled`, `hasClockedIn`, `hasSubmitted`, `shouldPrompt`, `timePeriodLabel` WIB). |
 | `/api/employee/stressmeter/checkin` | `POST` | `employee.self` | Simpan rating 1–5 (`skipped: false`) atau lewati (`skipped: true`, `rating: null`) secara idempoten per `(employeeId, shiftDate)`. |
-| `/api/employee/stressmeter/anonymous-share` | `POST` | `employee.self` | Kirim curhat anonim (`topic`, `message` 10–2000 karakter) tanpa menyimpan `employeeId`/`userId`; anti-spam maks 5/jam di RAM (hash ephemeral, tanpa DB/log identitas). |
+| `/api/employee/stressmeter/anonymous-share` | `POST` | `employee.self` | Kirim curhat (`topic`, `message` 10–2000 karakter, `includeSenderName` boolean opsional bawaan `false`) tanpa menyimpan `employeeId`/`userId`; bila `includeSenderName: true`, server mengambil snapshot nama lengkap otoritatif dari `Employee` (anti-spoofing); anti-spam maks 5/jam di RAM (hash ephemeral, tanpa DB/log identitas). |
 | `/api/stressmeter` | `GET` | `hr.manage` | Analitik Stressmeter HR (`from`, `to`, `departmentId`, `rating`, `search`, `page`, `limit`): KPI, distribusi 1–5, tren harian, per departemen, deteksi dini 14 hari, dan log respons. |
-| `/api/stressmeter/shares` | `GET` | `hr.manage` | Daftar curhat anonim (`status`, `topic`, `from`, `to`, `page`, `limit`) tanpa identitas & tanpa jam kirim presisi. |
+| `/api/stressmeter/shares` | `GET` | `hr.manage` | Daftar curhat (`status`, `topic`, `identity=ALL\|ANONYMOUS\|NAMED`, `from`, `to`, `page`, `limit`) menampilkan `senderName` (atau `null` bila anonim) tanpa jam kirim presisi. |
 | `/api/stressmeter/shares/[id]` | `PATCH` | `hr.manage` | Perbarui status tindak lanjut curhat anonim (`NEW\|READ\|FOLLOWED_UP`) dan catatan internal HR (`hrNote`). |
 | `/api/stressmeter/settings` | `GET`, `PUT` | `hr.manage` | Baca/ubah switch aktif/jeda pop-up Stressmeter pasca Clock In (`AppSetting` `stressmeter.enabled`). |

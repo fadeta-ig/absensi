@@ -295,25 +295,49 @@ export async function submitEmployeeCheckin(
 }
 
 /**
+ * Mengambil nama lengkap otoritatif karyawan dari master Employee hanya ketika
+ * karyawan secara eksplisit memilih opt-in menyertakan nama pada Ruang Sharing.
+ */
+export async function getEmployeeFullNameForShare(
+    employeeId: string,
+    fallbackName?: string | null
+): Promise<string | null> {
+    const employee = await prisma.employee.findUnique({
+        where: { employeeId },
+        select: { name: true },
+    });
+    const resolved = (employee?.name ?? fallbackName ?? "").trim().slice(0, 150);
+    return resolved || null;
+}
+
+/**
  * Menyimpan curhat anonim tanpa parameter employeeId/userId/checkinId sama sekali
  * sehingga anonimitas terjaga secara struktural di level database.
+ * Field senderName hanya terisi (snapshot nama lengkap) bila karyawan opt-in.
  */
 export async function submitAnonymousShare(input: {
     topic?: StressmeterTopicValue;
     message: string;
+    senderName?: string | null;
 }) {
     const submittedWibDate = toWIBDateString();
+    const normalizedSenderName = input.senderName?.trim()
+        ? input.senderName.trim().slice(0, 150)
+        : null;
+
     const created = await prisma.stressmeterAnonymousShare.create({
         data: {
             submittedWibDate,
             topic: (input.topic ?? "OTHER") as StressmeterTopic,
             message: input.message.trim(),
+            senderName: normalizedSenderName,
             status: AnonymousShareStatus.NEW,
         },
         select: {
             id: true,
             submittedWibDate: true,
             topic: true,
+            senderName: true,
         },
     });
 
@@ -679,6 +703,7 @@ export async function getHrStressmeterOverview(params: HrStressmeterOverviewPara
 export interface HrAnonymousSharesParams {
     status?: string | null;
     topic?: string | null;
+    identity?: string | null;
     from?: string | null;
     to?: string | null;
     page?: number;
@@ -707,11 +732,17 @@ export async function getHrAnonymousShares(params: HrAnonymousSharesParams) {
     }
     const hasDateFilter = Boolean(dateFilter.gte || dateFilter.lte);
 
+    const identityUpper = params.identity?.toUpperCase();
     const baseWhere: Prisma.StressmeterAnonymousShareWhereInput = {
         ...(hasDateFilter ? { submittedWibDate: dateFilter } : {}),
         ...(params.topic && VALID_TOPICS.has(params.topic)
             ? { topic: params.topic as StressmeterTopic }
             : {}),
+        ...(identityUpper === "ANONYMOUS"
+            ? { senderName: null }
+            : identityUpper === "NAMED"
+                ? { senderName: { not: null } }
+                : {}),
     };
 
     const listWhere: Prisma.StressmeterAnonymousShareWhereInput = {
@@ -747,6 +778,7 @@ export async function getHrAnonymousShares(params: HrAnonymousSharesParams) {
                       submittedWibDate: true,
                       topic: true,
                       message: true,
+                      senderName: true,
                       status: true,
                       hrNote: true,
                       reviewedAt: true,
@@ -795,6 +827,7 @@ export async function updateAnonymousShareStatus(
                 submittedWibDate: true,
                 topic: true,
                 message: true,
+                senderName: true,
                 status: true,
                 hrNote: true,
                 reviewedAt: true,

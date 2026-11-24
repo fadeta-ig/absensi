@@ -10,7 +10,7 @@ export default function EmployeeAnonymousSharingPage() {
             <PageHeader
                 icon={MessageSquareHeart}
                 title="Ruang Sharing Anonim"
-                subtitle="Sampaikan cerita, kendala kerja, atau saran ke tim HR tanpa identitas pengirim."
+                subtitle="Sampaikan cerita, kendala kerja, atau saran ke tim HR secara anonim atau dengan nama Anda."
             />
 
             <div className="emp-surface p-5">

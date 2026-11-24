@@ -114,8 +114,78 @@ describe("StressmeterCheckinSheet", () => {
             body: {
                 topic: "WORKLOAD",
                 message: "Perlu pembagian jadwal lembur yang lebih seimbang di tim.",
+                includeSenderName: false,
             },
         });
+    });
+
+    it("mengizinkan karyawan mencentang sertakan nama lengkap (tidak anonim) dengan copy dan payload yang sesuai", async () => {
+        const calls: Array<{ url: string; body: unknown }> = [];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+                const url = String(input);
+                const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+                calls.push({ url, body });
+                return okResponse({
+                    id: "a-named",
+                    submittedWibDate: "2026-11-24",
+                    topic: "FACILITIES",
+                    senderName: "Budi Santoso",
+                });
+            })
+        );
+
+        const user = userEvent.setup();
+        render(
+            <StressmeterCheckinSheet
+                isOpen
+                onClose={vi.fn()}
+                shiftDate="2026-11-24"
+                initialStep="anonymous"
+            />
+        );
+
+        // Default: 100% Anonim
+        expect(screen.getByText(/100% Anonim\./i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Kirim secara Anonim" })).toBeInTheDocument();
+
+        // Centang opsi sertakan nama lengkap
+        const checkbox = screen.getByRole("checkbox", {
+            name: /Sertakan nama lengkap saya \(tidak anonim\)/i,
+        });
+        expect(checkbox).not.toBeChecked();
+        await user.click(checkbox);
+        expect(checkbox).toBeChecked();
+
+        // Banner & tombol langsung berubah dinamis agar tidak kontradiktif
+        expect(screen.getByText(/Dengan nama lengkap\./i)).toBeInTheDocument();
+        const submitBtn = screen.getByRole("button", { name: "Kirim dengan Nama" });
+        expect(submitBtn).toBeDisabled();
+
+        await user.click(screen.getByRole("button", { name: "Fasilitas & Lingkungan" }));
+        await user.type(
+            screen.getByLabelText("Ceritakan hal yang ingin Anda sampaikan"),
+            "Mohon bantu pengecekan kursi kerja di area operasional."
+        );
+        expect(submitBtn).toBeEnabled();
+
+        await user.click(submitBtn);
+
+        expect(await screen.findByText("Pesan Anda Sudah Diterima")).toBeInTheDocument();
+        expect(
+            screen.getByText(/beserta nama lengkap Anda telah masuk ke kotak pesan HR\./i)
+        ).toBeInTheDocument();
+        expect(calls).toEqual([
+            {
+                url: "/api/employee/stressmeter/anonymous-share",
+                body: {
+                    topic: "FACILITIES",
+                    message: "Mohon bantu pengecekan kursi kerja di area operasional.",
+                    includeSenderName: true,
+                },
+            },
+        ]);
     });
 
     it("saat klik Lewati (SKIP) tetap masuk ke layar After Pengisian dengan opsi sharing anonim", async () => {

@@ -73,6 +73,7 @@ export interface AnonymousShareItem {
     submittedWibDate: string;
     topic: StressmeterTopicValue;
     message: string;
+    senderName: string | null;
     status: AnonymousShareStatusValue;
     hrNote: string | null;
     reviewedAt: string | null;
