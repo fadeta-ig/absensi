@@ -18,6 +18,7 @@ import {
     Cake,
     CalendarCheck,
     HeartPulse,
+    MessageSquareText,
 } from "lucide-react";
 import NotificationCenter from "@/components/NotificationCenter";
 import PushNotificationManager from "@/components/PushNotificationManager";
@@ -175,7 +176,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             href: "/dashboard/green-meeting",
             icon: CalendarCheck,
             label: "Green Meeting (GA)",
-        }
+        },
+        ...(user.username === "WIG001" ? [{
+            icon: MessageSquareText,
+            label: "Sapaan Beranda",
+            subItems: [
+                { href: "/dashboard/greeting-settings", label: "Aturan Sapaan" },
+                { href: "/dashboard/greeting-settings?tab=quotes", label: "Quotes Karyawan" },
+            ],
+        }] : []),
     ];
 
     return (

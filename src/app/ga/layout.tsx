@@ -165,7 +165,17 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
           });
 
     const navItems: NavItem[] = isWig002User
-        ? [...filteredNavItems, { href: "/ga/greeting-settings", icon: MessageSquareText, label: "Sapaan Beranda" }]
+        ? [
+              ...filteredNavItems,
+              {
+                  icon: MessageSquareText,
+                  label: "Sapaan Beranda",
+                  subItems: [
+                      { href: "/ga/greeting-settings", label: "Aturan Sapaan" },
+                      { href: "/ga/greeting-settings?tab=quotes", label: "Quotes Karyawan" },
+                  ],
+              },
+          ]
         : filteredNavItems;
 
     return (

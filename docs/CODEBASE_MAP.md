@@ -99,7 +99,7 @@ hriswig/
   - `src/app/employee/equipment/approvals/`: Antrean dan detail verifikasi QC (`page.tsx` + `approvals/[id]/page.tsx`).
   - `src/app/employee/equipment/approval-queue/page.tsx`: Antrean persetujuan final approver (`DONE/APPROVED/ALL`) menuju `overview/[id]?from=approval-queue`.
   - `src/app/employee/equipment/settings/page.tsx`: Panel Pengaturan Peralatan berbasis scope untuk karyawan PIC delegasi yang ditunjuk WIG002 (Server Component guard + shared `EquipmentSettingsPanel`).
-  - `src/app/employee/greeting-settings/page.tsx`: Editor aturan sapaan beranda untuk karyawan yang ditunjuk WIG002.
+  - `src/app/employee/greeting-settings/page.tsx`: Editor aturan sapaan & kurasi quotes karyawan (tab `Aturan Sapaan` | `Quotes Karyawan`) untuk karyawan yang ditunjuk WIG002.
 
 ### C. Portal General Affairs (`src/app/ga/`)
 - **Purpose**: Panel operasional tim GA untuk pengelolaan aset korporat, Green Meeting, dan Inspeksi Harian.
@@ -117,7 +117,7 @@ hriswig/
   - `src/app/ga/green-meeting/recap/page.tsx`: Rekap rentang tanggal serta ekspor Excel/PDF.
   - `src/app/ga/green-meeting/components/`: Komponen native bersama untuk header, navigasi submodul, presensi, notulen, tugas, pengaturan, dan rekap.
   - `src/app/ga/cleaning/settings/page.tsx`: Pengaturan ruangan, template, item, akun outsource, penetapan petugas inspeksi, dan daftar atasan tertinggi max 5 (`TopViewerCard` + `GET/POST/DELETE settings/top-viewers`).
-  - `src/app/ga/greeting-settings/page.tsx`: CRUD aturan sapaan beranda (jam, hari/tanggal, prioritas, status aktif) dan penunjukan satu karyawan editor (khusus WIG002).
+  - `src/app/ga/greeting-settings/page.tsx`: CRUD aturan sapaan beranda, sub-menu kurasi quotes karyawan (`?tab=quotes`), dan penunjukan satu karyawan editor (khusus WIG002); halaman paralel `src/app/dashboard/greeting-settings/page.tsx` melayani `WIG001` (tanpa penunjukan editor), berbagi `src/components/greeting/GreetingSettingsPanel.tsx` & `GreetingQuotesTab.tsx`.
   - `src/app/ga/cleaning/recap/page.tsx`: Rekap matriks bulanan inspeksi per ruangan.
   - `src/app/ga/cleaning/approvals/page.tsx`: Penetapan reviewer, pemantauan tanda tangan, reopen, detail, dan ekspor persetujuan bulanan.
   - `src/app/ga/equipment/settings/page.tsx`: Server Component guard WIG002 yang merender shared `EquipmentSettingsPanel` (Template, Unit, Produk, Penugasan, Atasan, dan Delegasi PIC).
@@ -151,8 +151,8 @@ hriswig/
   - `src/app/api/employee/equipment/`: 19 route handler inspeksi alat sisi operasional (dilindungi `requireEquipmentPortalAuth`, melayani karyawan `/employee` & OS `/outsource`): capabilities, products (+[id]/tools), units (+[unitId]/history), inspections (+[id], +submit, +cancel), items/[itemId], evidence (+[id]), qc-evidence (+[id]), overview, dan approvals (+done, +pending-approval, +approve).
   - `src/app/api/ga/equipment/`: 18 route handler inspeksi alat sisi GA (`requireGaEquipmentAdminAuth` untuk delegasi; `requireEquipmentSettingsAuth` untuk settings & `eligible-outsource`; `requireWig002OrTopViewer` untuk rekap/drill-down): templates, template-items, units, products (+[id], +[id]/tools), assignments, eligible-outsource, inspections/[id], evidence (+[id]), qc-members, qc-evidence (+[id]), recap, settings/approver, settings/delegates, dan settings/top-viewers.
   - `src/app/api/ga/outsource-users/` & `src/app/api/outsource/capabilities/`: Manajemen CRUD + RBAC akun OS oleh WIG002 (`GET/POST`, `PATCH/DELETE` per `[id]`, `POST` reset-password) dan kapabilitas portal terisolasi `/outsource/*`.
-  - `src/app/api/ga/greeting-settings/`: Route handler CRUD aturan sapaan (`GET`/`POST`, `PUT`/`DELETE` per id) dan penunjukan editor (`GET`/`PUT`, WIG002-only).
-  - `src/app/api/employee/greeting/route.ts`: Baca aturan sapaan aktif + `canEditGreeting` untuk beranda employee.
+  - `src/app/api/ga/greeting-settings/`: Route handler CRUD aturan sapaan (`GET`/`POST`, `PUT`/`DELETE` per id), kurasi quotes karyawan (`quotes/route.ts`, `quotes/[id]/route.ts`, 3 peran WIG001/WIG002/editor), dan penunjukan editor (`GET`/`PUT`, WIG002-only).
+  - `src/app/api/employee/greeting/route.ts`: Baca aturan sapaan aktif + quotes karyawan disetujui + `canEditGreeting` untuk beranda employee.
   - `src/app/api/employee/stressmeter/` & `src/app/api/stressmeter/`: 7 route handler Stressmeter (cek status pop-up harian, simpan check-in/skip, kirim curhat anonim tanpa identitas, analitik & deteksi dini HR, kotak curhat anonim + tindak lanjut HR, dan toggle aktif/nonaktif).
 
 ---
@@ -175,7 +175,7 @@ hriswig/
   - `cleaningApprovalService.ts`: Lifecycle reviewer, tanda tangan berversi, reopen, idempotensi, dan data ekspor persetujuan inspeksi bulanan.
   - `equipmentAuth.ts` & `src/lib/middleware/equipmentGuard.ts`: Single source of truth predikat otorisasi Equipment (`isEquipmentMasterAdmin`, `hasEmployeePortalAccess`, `normalizeEquipmentName`) dan wrapper guard HTTP (`requireGaEquipmentAdminAuth`, `requireEmployeeEquipmentAuth`).
   - `equipmentService.ts` & `equipmentProductService.ts`: Domain service inspeksi alat produksi (template/unit/produk/penugasan, lifecycle inspeksi dengan optimistic lock transisi status, evidence foto operator & QC, pool QC/approver per perusahaan, top viewers, capabilities, approvals, dan rekap).
-  - `greetingSettingsService.ts`: CRUD `GreetingRule`, `AppSetting` `greeting.editorEmployeeId`, cache 60 detik, validasi aturan, dan guard WIG002/editor aktif.
+  - `greetingSettingsService.ts`: CRUD `GreetingRule` (termasuk `authorName`), CRUD & kurasi `EmployeeGreetingQuote`, `AppSetting` `greeting.editorEmployeeId`, cache 60 detik (aturan, quotes disetujui, editor), dan guard 3 peran WIG001/WIG002/editor aktif.
   - `stressmeterService.ts`: Check-in perasaan pasca Clock In (1×/shift, idempoten), penyimpanan curhat anonim struktural tanpa identitas, analitik HR, deteksi dini 14 hari, tindak lanjut curhat, dan toggle `stressmeter.enabled`.
   - `holidayService.ts`: Kalender libur global (logic kalenderbali.com) — normalisasi payload nasional/cuti bersama, loader vendored `data/holidays/` + fallback upstream, cache memori, `findHolidaysInDates` untuk blocker cuti.
 

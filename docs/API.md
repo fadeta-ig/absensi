@@ -197,10 +197,12 @@ Endpoint Inspeksi Harian memakai boundary yang lebih sempit: administrasi GA mem
 | `/api/employee/equipment/approvals/pending-approval` | `GET` | Approver terdaftar | Antrean + riwayat: `?status=DONE/APPROVED/ALL&from=&to=` (tanggal WIB inklusif; DONE=checkedAt, APPROVED=approvedAt; tanpa tanggal = semua backlog). |
 | `/api/employee/equipment/qc-evidence` | `GET`, `POST` | Terlibat | List + upload foto QC (opsional, maks 5 per inspeksi). |
 | `/api/employee/equipment/qc-evidence/[id]` | `GET` | Terlibat | Serve berkas foto QC. |
-| `/api/ga/greeting-settings` | `GET`, `POST` | WIG002 + `ga.manage` / karyawan editor terpilih | Daftar dan tambah aturan sapaan beranda employee. Setiap aturan: `name`, `greeting`, `subGreeting`, `startTime`/`endTime` (`HH:MM`, lintas hari bila selesai < mulai), `repeatWeekly` + `daysOfWeek` atau `specificDate`, `priority`, `isActive`. Cache baca 60 detik. |
-| `/api/ga/greeting-settings/[id]` | `PUT`, `DELETE` | WIG002 + `ga.manage` / karyawan editor terpilih | Ubah atau hapus satu aturan sapaan. `404` bila aturan tidak ditemukan. |
-| `/api/ga/greeting-settings/editor` | `GET`, `PUT` | WIG002 + `ga.manage` | Penunjukan satu karyawan internal aktif yang boleh ikut mengelola aturan sapaan; `employeeId: null`/kosong mengosongkan. |
-| `/api/employee/greeting` | `GET` | `employee.self` | Aturan sapaan aktif + `canEditGreeting` untuk beranda employee (`Cache-Control: no-store`). Client memilih aturan yang cocok memakai jam/tanggal WIB dari konteks presensi. |
+| `/api/ga/greeting-settings` | `GET`, `POST` | WIG001 (`hr.manage`), WIG002 (`ga.manage`), atau karyawan editor terpilih | Daftar dan tambah aturan sapaan beranda employee. Setiap aturan: `name`, `greeting`, `subGreeting`, `authorName?` (opsional, maks 120), `startTime`/`endTime` (`HH:MM`, lintas hari bila selesai < mulai), `repeatWeekly` + `daysOfWeek` atau `specificDate`, `priority`, `isActive`. Cache baca 60 detik. |
+| `/api/ga/greeting-settings/[id]` | `PUT`, `DELETE` | WIG001, WIG002, atau karyawan editor terpilih | Ubah atau hapus satu aturan sapaan. `404` bila aturan tidak ditemukan. |
+| `/api/ga/greeting-settings/quotes` | `GET` | WIG001, WIG002, atau karyawan editor terpilih | Daftar quotes kiriman karyawan dari Stressmeter untuk kurasi (`status`, `slot`, `search`, `page`, `limit`), disertai `counts` per status (`ALL/PENDING/APPROVED/REJECTED`) dan identitas pengirim (`submitterName`, `employeeId`, `departmentName`) tanpa skor bintang Stressmeter (`Cache-Control: private, no-store`). |
+| `/api/ga/greeting-settings/quotes/[id]` | `PATCH`, `DELETE` | WIG001, WIG002, atau karyawan editor terpilih | Kurasi/ubah (`quote`, `greeting?`, `authorName?`, `slot`, `status`) atau hapus satu quotes karyawan. `404` bila tidak ditemukan; membatalkan cache quotes aktif. |
+| `/api/ga/greeting-settings/editor` | `GET`, `PUT` | WIG002 + `ga.manage` | Penunjukan satu karyawan internal aktif yang boleh ikut mengelola aturan & kurasi quotes; `employeeId: null`/kosong mengosongkan (eksklusif WIG002). |
+| `/api/employee/greeting` | `GET` | `employee.self` | Aturan sapaan aktif + quotes karyawan disetujui (`quotes`, hanya field tampilan) + `canEditGreeting` untuk beranda employee (`Cache-Control: no-store`). Client memilih sapaan memakai jam/tanggal WIB dari konteks presensi. |
 
 ### E. Green Meeting (`/api/green-meeting`)
 
@@ -328,7 +330,7 @@ Endpoint kanonik pengelolaan task lintas sumber (`APPOINTMENTS` E-Meeting dan `O
 | Rute | Metode | Akses | Deskripsi |
 |---|---|---|---|
 | `/api/employee/stressmeter/today` | `GET` | `employee.self` | Cek kelayakan pop-up untuk `?shiftDate=YYYY-MM-DD` (`enabled`, `hasClockedIn`, `hasSubmitted`, `shouldPrompt`, `timePeriodLabel` WIB). |
-| `/api/employee/stressmeter/checkin` | `POST` | `employee.self` | Simpan rating 1–5 (`skipped: false`) atau lewati (`skipped: true`, `rating: null`) secara idempoten per `(employeeId, shiftDate)`. |
+| `/api/employee/stressmeter/checkin` | `POST` | `employee.self` | Simpan rating 1–5 (`skipped: false`) + `quote?` opsional (maks 500 karakter, otomatis masuk `employee_greeting_quotes` berstatus `PENDING` dengan `authorName` tanpa gelar) atau lewati (`skipped: true`, `rating: null`) secara idempoten per `(employeeId, shiftDate)`. |
 | `/api/employee/stressmeter/anonymous-share` | `POST` | `employee.self` | Kirim curhat (`topic`, `message` 10–2000 karakter, `includeSenderName` boolean opsional bawaan `false`) tanpa menyimpan `employeeId`/`userId`; bila `includeSenderName: true`, server mengambil snapshot nama lengkap otoritatif dari `Employee` (anti-spoofing); anti-spam maks 5/jam di RAM (hash ephemeral, tanpa DB/log identitas). |
 | `/api/stressmeter` | `GET` | `hr.manage` | Analitik Stressmeter HR (`from`, `to`, `departmentId`, `rating`, `search`, `page`, `limit`): KPI, distribusi 1–5, tren harian, per departemen, deteksi dini 14 hari, dan log respons. |
 | `/api/stressmeter/shares` | `GET` | `hr.manage` | Daftar curhat (`status`, `topic`, `identity=ALL\|ANONYMOUS\|NAMED`, `from`, `to`, `page`, `limit`) menampilkan `senderName` (atau `null` bila anonim) tanpa jam kirim presisi. |

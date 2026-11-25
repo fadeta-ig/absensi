@@ -214,4 +214,58 @@ describe("StressmeterCheckinSheet", () => {
             await screen.findByRole("button", { name: "Share secara anonim di sini" })
         ).toBeInTheDocument();
     });
+
+    it("mengirim bintang beserta quotes opsional dari grid atas-bawah dan menampilkan konfirmasi antrean kurasi", async () => {
+        const calls: Array<{ url: string; body: unknown }> = [];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+                const url = String(input);
+                const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+                calls.push({ url, body });
+                return okResponse({
+                    alreadySubmitted: false,
+                    quoteSubmitted: true,
+                    checkin: { id: "c-q1", shiftDate: "2026-11-25", rating: 5, skipped: false },
+                });
+            })
+        );
+
+        const user = userEvent.setup();
+        render(
+            <StressmeterCheckinSheet
+                isOpen
+                onClose={vi.fn()}
+                shiftDate="2026-11-25"
+                timePeriodLabel="pagi ini"
+            />
+        );
+
+        // Input quotes tampil langsung bersamaan di bawah bintang
+        const quoteInput = screen.getByLabelText(/Tulis quotes atau sapaan penyemangat/i);
+        expect(quoteInput).toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", { name: "5 bintang: Sangat Termotivasi" }));
+        await user.type(quoteInput, "Kerja tenang, hasil maksimal!");
+        await user.click(screen.getByRole("button", { name: "Kirim" }));
+
+        expect(
+            await screen.findByText(/Quotes kamu masuk antrean kurasi sapaan beranda\./i)
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Share secara anonim di sini" })
+        ).toBeInTheDocument();
+
+        expect(calls).toEqual([
+            {
+                url: "/api/employee/stressmeter/checkin",
+                body: {
+                    shiftDate: "2026-11-25",
+                    skipped: false,
+                    rating: 5,
+                    quote: "Kerja tenang, hasil maksimal!",
+                },
+            },
+        ]);
+    });
 });

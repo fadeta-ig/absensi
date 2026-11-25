@@ -1234,6 +1234,12 @@ export const stressmeterCheckinSchema = z
         shiftDate: stressmeterDateSchema,
         skipped: z.boolean().default(false),
         rating: z.number().int().min(1).max(5).nullable().optional(),
+        quote: z
+            .string()
+            .trim()
+            .max(500, "Quotes maksimal 500 karakter.")
+            .nullable()
+            .optional(),
     })
     .superRefine((v, ctx) => {
         if (!v.skipped && (v.rating === undefined || v.rating === null)) {

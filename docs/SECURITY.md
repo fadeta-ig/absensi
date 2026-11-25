@@ -74,12 +74,13 @@ Aplikasi mengadopsi kontrol akses berbasis peran (*Role-Based Access Control* / 
   - Bukti foto JPEG-only (append-only, tanpa endpoint `DELETE`): klaim MIME + magic-byte (SOI `FFD8` … EOI `FFD9`), batas ukuran dari setting `upload.equipmentEvidence.maxMb` (default `10` MB, pre-check `Content-Length` → `413`), maks 5 foto inspeksi (`OPEN`) + 5 foto QC (`SUBMITTED`).
   - Path traversal guard: `path.resolve` + pemeriksaan prefix direktori storage (`storage/equipment-evidence`, `storage/equipment-qc-evidence`); berkas hilang (`ENOENT`) dipetakan seragam ke `404` di service; penyajian berkas memakai header `Cache-Control: private, no-store` + `X-Content-Type-Options: nosniff`.
   - Halaman equipment menumpang guard portal yang ada (`/ga/*`, `/employee/*` di `proxy.ts`); setiap API route tetap menegakkan `requireAuth()` dan otorisasi sendiri.
-- **Boundary Sapaan Beranda (Employee Home)**:
-  - Aturan sapaan aktif dibaca semua karyawan lewat `GET /api/employee/greeting` (`employee.self`) dan tidak memuat data pribadi.
-  - CRUD aturan sapaan hanya untuk WIG002 (`ga.manage`) atau satu karyawan yang ditunjuk di `AppSetting` `greeting.editorEmployeeId`; guard mengecek employee masih aktif sehingga penunjukan basi mati sendiri.
-  - Penunjukan editor hanya WIG002 (`GET/PUT /api/ga/greeting-settings/editor`); karyawan terpilih tidak dapat mengubah daftar editor.
-  - Input aturan divalidasi di API (Zod) dan service: batas panjang teks, format jam `HH:MM`, minimal satu hari atau satu tanggal, prioritas 0–9999.
-  - Portal `/ga/greeting-settings` hanya untuk WIG002; karyawan terpilih memakai `/employee/greeting-settings`.
+- **Boundary Sapaan Beranda & Kurasi Quotes Karyawan**:
+  - Aturan sapaan aktif dan quotes `APPROVED` dibaca semua karyawan lewat `GET /api/employee/greeting` (`employee.self`); payload hanya menyertakan field tampilan (termasuk `authorName` yang disetujui untuk tayang) tanpa `employeeId`, NIP, atau quotes berstatus `PENDING`/`REJECTED`.
+  - CRUD aturan sapaan (`/api/ga/greeting-settings*`) dan kurasi quotes karyawan (`/api/ga/greeting-settings/quotes*`) hanya untuk 3 peran (`canManageGreeting`): `WIG001` (`hr.manage`), `WIG002` (`ga.manage`), atau satu karyawan internal aktif yang ditunjuk di `AppSetting` `greeting.editorEmployeeId` (guard mengecek `Employee.isActive` secara live agar penunjukan basi mati sendiri).
+  - Penunjukan editor tetap eksklusif `WIG002` (`GET/PUT /api/ga/greeting-settings/editor`); `WIG001` maupun karyawan editor terpilih menerima `403`.
+  - **Isolasi Privasi Stressmeter**: Daftar kurasi quotes menampilkan identitas pengirim (`submitterName`, `employeeId`, `departmentName`, `shiftDate`) tetapi secara struktural tidak memiliki FK maupun akses ke skor bintang `StressmeterCheckin`, sehingga `WIG002` (GA) dan karyawan `editor` tidak pernah melihat skor Stressmeter rekan kerjanya.
+  - Input aturan dan kurasi quotes divalidasi via `validateBody` (`sanitizeObject` + Zod) dan service: batas panjang teks (`authorName` maks 120, `quote` maks 500), format jam `HH:MM`, minimal satu hari atau satu tanggal, prioritas 0–9999.
+  - Portal per peran dengan Server Component guard: `/dashboard/greeting-settings` khusus `WIG001`, `/ga/greeting-settings` khusus `WIG002`, dan `/employee/greeting-settings` untuk karyawan editor terpilih.
 
 ---
 

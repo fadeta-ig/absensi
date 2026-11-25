@@ -2,8 +2,11 @@
  * Kontrak sapaan beranda employee.
  *
  * Modul ini bebas dari Prisma/Node agar dapat dipakai halaman client, service
- * server, dan test. Sapaan dikelola sebagai aturan CRUD: setiap aturan punya
- * jendela jam WIB, hari mingguan atau satu tanggal, prioritas, dan status aktif.
+ * server, dan test. Sapaan dikelola dalam 3 lapis prioritas:
+ * 1. Aturan sapaan terjadwal (`GreetingRule`, prioritas tertinggi yang cocok).
+ * 2. Quotes kiriman karyawan yang telah disetujui (`APPROVED`) untuk slot aktif
+ *    (Pagi/Siang/Sore/Malam + Semua Waktu), berotasi deterministik setiap hari WIB.
+ * 3. Teks bawaan per jam (`DEFAULT_GREETING_COPY`) atau netral (`FALLBACK_GREETING`).
  *
  * "Waktu server belum tersedia" BUKAN sapaan. Kondisi itu dikomunikasikan lewat
  * banner peringatan di beranda; saat jam server belum diketahui, kartu memakai
@@ -12,9 +15,14 @@
 
 export type GreetingSlot = "pagi" | "siang" | "sore" | "malam";
 
+export type GreetingQuoteSlotValue = "ALL" | "PAGI" | "SIANG" | "SORE" | "MALAM";
+
+export type GreetingQuoteStatusValue = "PENDING" | "APPROVED" | "REJECTED";
+
 export interface GreetingCopy {
     greeting: string;
     subGreeting: string;
+    authorName?: string | null;
 }
 
 export type GreetingCopyMap = Record<GreetingSlot, GreetingCopy>;
@@ -22,6 +30,8 @@ export type GreetingCopyMap = Record<GreetingSlot, GreetingCopy>;
 export const MAX_GREETING_NAME_LENGTH = 100;
 export const MAX_GREETING_LENGTH = 120;
 export const MAX_SUB_GREETING_LENGTH = 500;
+export const MAX_GREETING_AUTHOR_LENGTH = 120;
+export const MAX_GREETING_QUOTE_LENGTH = 500;
 export const MAX_GREETING_PRIORITY = 9999;
 
 export const GREETING_DAYS = [
@@ -34,7 +44,50 @@ export const GREETING_DAYS = [
     { value: 6, short: "Sab", label: "Sabtu" },
 ] as const;
 
-/** Teks bawaan saat tidak ada aturan yang cocok (perilaku lama dipertahankan). */
+export const GREETING_QUOTE_SLOTS: readonly {
+    value: GreetingQuoteSlotValue;
+    label: string;
+    shortLabel: string;
+    hours: string;
+}[] = [
+    { value: "ALL", label: "Semua Waktu", shortLabel: "Semua Waktu", hours: "00.00–23.59 WIB" },
+    { value: "PAGI", label: "Pagi (05.00–10.59 WIB)", shortLabel: "Pagi", hours: "05.00–10.59 WIB" },
+    { value: "SIANG", label: "Siang (11.00–14.59 WIB)", shortLabel: "Siang", hours: "11.00–14.59 WIB" },
+    { value: "SORE", label: "Sore (15.00–17.59 WIB)", shortLabel: "Sore", hours: "15.00–17.59 WIB" },
+    { value: "MALAM", label: "Malam (18.00–04.59 WIB)", shortLabel: "Malam", hours: "18.00–04.59 WIB" },
+] as const;
+
+export const GREETING_QUOTE_STATUSES: readonly {
+    value: GreetingQuoteStatusValue;
+    label: string;
+    badgeClass: string;
+}[] = [
+    {
+        value: "PENDING",
+        label: "Menunggu",
+        badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
+    },
+    {
+        value: "APPROVED",
+        label: "Ditampilkan",
+        badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    },
+    {
+        value: "REJECTED",
+        label: "Tidak Ditampilkan",
+        badgeClass: "bg-slate-200/80 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    },
+] as const;
+
+export function getGreetingQuoteSlotMeta(slot: string) {
+    return GREETING_QUOTE_SLOTS.find((item) => item.value === slot) ?? GREETING_QUOTE_SLOTS[0];
+}
+
+export function getGreetingQuoteStatusMeta(status: string) {
+    return GREETING_QUOTE_STATUSES.find((item) => item.value === status) ?? GREETING_QUOTE_STATUSES[0];
+}
+
+/** Teks bawaan saat tidak ada aturan atau quotes karyawan yang cocok. */
 export const DEFAULT_GREETING_COPY: GreetingCopyMap = {
     pagi: {
         greeting: "Selamat Pagi!",
@@ -68,6 +121,7 @@ export interface GreetingRuleView {
     name: string;
     greeting: string;
     subGreeting: string;
+    authorName?: string | null;
     startTime: string;
     endTime: string;
     repeatWeekly: boolean;
@@ -83,6 +137,7 @@ export type GreetingRuleLike = Pick<
     GreetingRuleView,
     | "greeting"
     | "subGreeting"
+    | "authorName"
     | "startTime"
     | "endTime"
     | "repeatWeekly"
@@ -90,6 +145,32 @@ export type GreetingRuleLike = Pick<
     | "specificDate"
     | "priority"
 >;
+
+export interface GreetingQuoteLike {
+    id: string;
+    greeting: string | null;
+    quote: string;
+    authorName: string | null;
+    slot: GreetingQuoteSlotValue;
+}
+
+export interface EmployeeGreetingQuoteView extends GreetingQuoteLike {
+    employeeId: string;
+    submitterName: string;
+    departmentName: string;
+    shiftDate: string;
+    status: GreetingQuoteStatusValue;
+    reviewedAt: string | null;
+    createdAt: string;
+}
+
+export interface GreetingQuoteUpdateInput {
+    quote: string;
+    greeting?: string | null;
+    authorName?: string | null;
+    slot: GreetingQuoteSlotValue;
+    status: GreetingQuoteStatusValue;
+}
 
 export interface GreetingMoment {
     /** Tanggal WIB `YYYY-MM-DD`. */
@@ -109,6 +190,26 @@ export function resolveGreetingSlot(hour: number | null): GreetingSlot | null {
     return "malam";
 }
 
+export function slotToQuoteSlot(slot: GreetingSlot): GreetingQuoteSlotValue {
+    switch (slot) {
+        case "pagi":
+            return "PAGI";
+        case "siang":
+            return "SIANG";
+        case "sore":
+            return "SORE";
+        case "malam":
+            return "MALAM";
+    }
+}
+
+const SLOT_ROTATION_OFFSET: Record<GreetingSlot, number> = {
+    pagi: 0,
+    siang: 1,
+    sore: 2,
+    malam: 3,
+};
+
 /** `HH:mm` → menit sejak 00.00; `null` bila format tidak valid. */
 export function parseTimeToMinutes(value: string): number | null {
     const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
@@ -120,6 +221,13 @@ export function parseTimeToMinutes(value: string): number | null {
 export function wibDayOfWeek(wibDate: string): number {
     const [year, month, day] = wibDate.split("-").map(Number);
     return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+/** Nomor hari deterministik (hari sejak epoch UTC) dari tanggal WIB `YYYY-MM-DD`. */
+export function wibDateToDayNumber(wibDate: string): number {
+    const [year, month, day] = wibDate.split("-").map(Number);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return 0;
+    return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
 }
 
 /** Geser tanggal WIB `YYYY-MM-DD` sebanyak `days` hari. */
@@ -151,21 +259,64 @@ export function greetingRuleMatches(rule: GreetingRuleLike, moment: GreetingMome
 }
 
 /**
- * Pilih sapaan aktif dengan prioritas tertinggi yang cocok. Bila tidak ada,
- * jatuh ke teks bawaan per jam (perilaku lama) atau sapaan netral.
+ * Pilih 1 quotes karyawan yang disetujui untuk slot WIB saat ini secara
+ * deterministik (berotasi otomatis setiap ganti hari WIB dan berbeda antar slot
+ * untuk quotes bertipe `ALL`).
+ */
+export function pickDailyGreetingQuote(
+    approvedQuotes: readonly GreetingQuoteLike[],
+    moment: GreetingMoment
+): GreetingQuoteLike | null {
+    if (approvedQuotes.length === 0) return null;
+    const slot = resolveGreetingSlot(moment.hour);
+    if (!slot) return null;
+
+    const targetSlot = slotToQuoteSlot(slot);
+    const pool = approvedQuotes.filter((item) => item.slot === targetSlot || item.slot === "ALL");
+    if (pool.length === 0) return null;
+
+    const dayNumber = wibDateToDayNumber(moment.wibDate);
+    const offset = SLOT_ROTATION_OFFSET[slot];
+    const index = (((dayNumber + offset) % pool.length) + pool.length) % pool.length;
+    return pool[index] ?? null;
+}
+
+/**
+ * Pilih sapaan aktif:
+ * 1. Aturan sapaan terjadwal (`GreetingRule`) prioritas tertinggi yang cocok.
+ * 2. Quotes karyawan disetujui (`APPROVED`) untuk slot aktif (rotasi harian WIB).
+ * 3. Teks bawaan per jam (`DEFAULT_GREETING_COPY`) atau netral (`FALLBACK_GREETING`).
  */
 export function resolveGreetingForMoment(
     rules: readonly GreetingRuleLike[],
-    moment: GreetingMoment
+    moment: GreetingMoment,
+    approvedQuotes: readonly GreetingQuoteLike[] = []
 ): GreetingCopy {
     const sorted = [...rules].sort((a, b) => b.priority - a.priority);
     for (const rule of sorted) {
         if (greetingRuleMatches(rule, moment)) {
-            return { greeting: rule.greeting, subGreeting: rule.subGreeting };
+            return {
+                greeting: rule.greeting,
+                subGreeting: rule.subGreeting,
+                authorName: rule.authorName?.trim() || null,
+            };
         }
     }
+
     const slot = resolveGreetingSlot(moment.hour);
-    return slot ? DEFAULT_GREETING_COPY[slot] : FALLBACK_GREETING;
+    if (slot) {
+        const pickedQuote = pickDailyGreetingQuote(approvedQuotes, moment);
+        if (pickedQuote) {
+            return {
+                greeting: pickedQuote.greeting?.trim() || DEFAULT_GREETING_COPY[slot].greeting,
+                subGreeting: pickedQuote.quote,
+                authorName: pickedQuote.authorName?.trim() || null,
+            };
+        }
+        return DEFAULT_GREETING_COPY[slot];
+    }
+
+    return FALLBACK_GREETING;
 }
 
 /** Label hari untuk daftar aturan, mis. "Sen, Sel, Rab". */

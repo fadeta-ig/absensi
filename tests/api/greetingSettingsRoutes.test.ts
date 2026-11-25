@@ -30,28 +30,37 @@ vi.mock("@/lib/services/appSettingsService", () => {
 vi.mock("@/lib/services/greetingSettingsService", () => ({
     canManageGreeting: vi.fn(),
     createGreetingRule: vi.fn(),
+    deleteEmployeeGreetingQuote: vi.fn(),
     deleteGreetingRule: vi.fn(),
     getGreetingEditorInfo: vi.fn(),
     isGreetingEditor: vi.fn(),
     isWig002Session: (session: { username: string; permissions: string[] }) =>
         session.username === "WIG002" && session.permissions.includes("ga.manage"),
+    listActiveGreetingQuotes: vi.fn(),
     listActiveGreetingRules: vi.fn(),
+    listEmployeeGreetingQuotes: vi.fn(),
     listGreetingEditorCandidates: vi.fn(),
     listGreetingRules: vi.fn(),
+    updateEmployeeGreetingQuote: vi.fn(),
     updateGreetingEditor: vi.fn(),
     updateGreetingRule: vi.fn(),
 }));
 
 import { requireAuth } from "@/lib/middleware/apiGuard";
+import { AppSettingsError } from "@/lib/services/appSettingsService";
 import {
     canManageGreeting,
     createGreetingRule,
+    deleteEmployeeGreetingQuote,
     deleteGreetingRule,
     getGreetingEditorInfo,
     isGreetingEditor,
+    listActiveGreetingQuotes,
     listActiveGreetingRules,
+    listEmployeeGreetingQuotes,
     listGreetingEditorCandidates,
     listGreetingRules,
+    updateEmployeeGreetingQuote,
     updateGreetingEditor,
     updateGreetingRule,
 } from "@/lib/services/greetingSettingsService";
@@ -59,6 +68,8 @@ import type { GreetingRuleInput, GreetingRuleLike, GreetingRuleView } from "@/li
 import { GET as rulesGET, POST as rulesPOST } from "@/app/api/ga/greeting-settings/route";
 import { PUT as rulePUT, DELETE as ruleDELETE } from "@/app/api/ga/greeting-settings/[id]/route";
 import { GET as editorGET, PUT as editorPUT } from "@/app/api/ga/greeting-settings/editor/route";
+import { GET as quotesGET } from "@/app/api/ga/greeting-settings/quotes/route";
+import { PATCH as quotePATCH, DELETE as quoteDELETE } from "@/app/api/ga/greeting-settings/quotes/[id]/route";
 import { GET as employeeGET } from "@/app/api/employee/greeting/route";
 
 function jsonRequest(url: string, body: unknown, method = "PUT") {
@@ -101,6 +112,15 @@ beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(listGreetingRules).mockResolvedValue([ruleView()]);
     vi.mocked(listActiveGreetingRules).mockResolvedValue([ruleLike()]);
+    vi.mocked(listActiveGreetingQuotes).mockResolvedValue([
+        {
+            id: "q-1",
+            greeting: "Good Morning",
+            quote: "Semangat terus!",
+            authorName: "Daffa Fakhuddin",
+            slot: "PAGI",
+        },
+    ]);
     vi.mocked(getGreetingEditorInfo).mockResolvedValue(null);
 });
 
@@ -242,7 +262,7 @@ describe("Endpoint karyawan", () => {
         expect((await employeeGET()).status).toBe(403);
     });
 
-    it("200 mengembalikan aturan aktif dan flag editor", async () => {
+    it("200 mengembalikan aturan aktif, quotes disetujui, dan flag editor", async () => {
         vi.mocked(requireAuth).mockResolvedValue(makeEmployeeSession({ employeeId: "ID-9" }));
         vi.mocked(isGreetingEditor).mockResolvedValue(true);
 
@@ -251,6 +271,118 @@ describe("Endpoint karyawan", () => {
         const json = await res.json();
         expect(json.data.canEditGreeting).toBe(true);
         expect(json.data.rules[0].greeting).toBe("Selamat Pagi!");
+        expect(json.data.quotes).toHaveLength(1);
+        expect(json.data.quotes[0].authorName).toBe("Daffa Fakhuddin");
         expect(res.headers.get("cache-control")).toBe("no-store");
+    });
+});
+
+describe("Kurasi quotes karyawan (WIG001, WIG002, editor)", () => {
+    const quoteParams = { params: Promise.resolve({ id: "q-1" }) };
+
+    it("GET quotes 401 tanpa sesi dan 403 untuk karyawan biasa", async () => {
+        vi.mocked(requireAuth).mockResolvedValue(null);
+        expect((await quotesGET(new NextRequest("http://localhost/api/ga/greeting-settings/quotes"))).status).toBe(401);
+
+        vi.mocked(requireAuth).mockResolvedValue(makeEmployeeSession({ employeeId: "ID-9" }));
+        vi.mocked(canManageGreeting).mockResolvedValue(false);
+        expect((await quotesGET(new NextRequest("http://localhost/api/ga/greeting-settings/quotes"))).status).toBe(403);
+    });
+
+    it("GET quotes 200 meneruskan filter ke service dengan Cache-Control private, no-store", async () => {
+        vi.mocked(requireAuth).mockResolvedValue({
+            ...makeWig002Session(),
+            username: "WIG001",
+            permissions: ["hr.manage", "ga.manage"],
+        });
+        vi.mocked(canManageGreeting).mockResolvedValue(true);
+        vi.mocked(listEmployeeGreetingQuotes).mockResolvedValue({
+            items: [],
+            counts: { ALL: 0, PENDING: 0, APPROVED: 0, REJECTED: 0 },
+            pagination: { page: 1, limit: 15, total: 0, totalPages: 1 },
+        });
+
+        const res = await quotesGET(
+            new NextRequest("http://localhost/api/ga/greeting-settings/quotes?status=PENDING&slot=PAGI&search=daffa&page=2")
+        );
+        expect(res.status).toBe(200);
+        expect(res.headers.get("cache-control")).toBe("private, no-store");
+        expect(listEmployeeGreetingQuotes).toHaveBeenCalledWith({
+            status: "PENDING",
+            slot: "PAGI",
+            search: "daffa",
+            page: 2,
+            limit: 15,
+        });
+    });
+
+    it("PATCH/DELETE quotes menegakkan akses, validasi body, dan 404 P2025", async () => {
+        vi.mocked(requireAuth).mockResolvedValue(makeEmployeeSession({ employeeId: "ID-9" }));
+        vi.mocked(canManageGreeting).mockResolvedValue(false);
+        expect(
+            (
+                await quotePATCH(
+                    jsonRequest("http://localhost/api/ga/greeting-settings/quotes/q-1", {
+                        quote: "Semangat!",
+                        slot: "PAGI",
+                        status: "APPROVED",
+                    }, "PATCH"),
+                    quoteParams
+                )
+            ).status
+        ).toBe(403);
+
+        vi.mocked(requireAuth).mockResolvedValue(makeWig002Session());
+        vi.mocked(canManageGreeting).mockResolvedValue(true);
+        expect(
+            (
+                await quotePATCH(
+                    jsonRequest("http://localhost/api/ga/greeting-settings/quotes/q-1", {
+                        quote: "",
+                        slot: "PAGI",
+                        status: "APPROVED",
+                    }, "PATCH"),
+                    quoteParams
+                )
+            ).status
+        ).toBe(400);
+
+        vi.mocked(updateEmployeeGreetingQuote).mockRejectedValueOnce(
+            new AppSettingsError("Quotes karyawan tidak ditemukan.", 404)
+        );
+        expect(
+            (
+                await quotePATCH(
+                    jsonRequest("http://localhost/api/ga/greeting-settings/quotes/q-1", {
+                        quote: "Semangat!",
+                        greeting: "Good Morning",
+                        authorName: "Daffa Fakhuddin",
+                        slot: "PAGI",
+                        status: "APPROVED",
+                    }, "PATCH"),
+                    quoteParams
+                )
+            ).status
+        ).toBe(404);
+
+        vi.mocked(deleteEmployeeGreetingQuote).mockResolvedValueOnce(undefined);
+        const delRes = await quoteDELETE(
+            new NextRequest("http://localhost/api/ga/greeting-settings/quotes/q-1", { method: "DELETE" }),
+            quoteParams
+        );
+        expect(delRes.status).toBe(200);
+        expect(deleteEmployeeGreetingQuote).toHaveBeenCalledWith("q-1");
+    });
+
+    it("GET/PUT editor tetap 403 untuk WIG001 (penunjukan editor khusus WIG002)", async () => {
+        vi.mocked(requireAuth).mockResolvedValue({
+            ...makeWig002Session(),
+            username: "WIG001",
+            permissions: ["hr.manage", "ga.manage"],
+        });
+        expect((await editorGET()).status).toBe(403);
+        expect(
+            (await editorPUT(jsonRequest("http://localhost/api/ga/greeting-settings/editor", { employeeId: "ID-1" }))).status
+        ).toBe(403);
     });
 });
