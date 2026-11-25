@@ -29,6 +29,9 @@ const prismaMock = vi.hoisted(() => ({
     employee: {
         findUnique: vi.fn(),
     },
+    employeeGreetingQuote: {
+        create: vi.fn(),
+    },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -300,5 +303,55 @@ describe("stressmeterService", () => {
             lowCount: 2,
             latestRating: 2,
         });
+    });
+
+    it("menyimpan quotes opsional ke employee_greeting_quotes (PENDING) dengan authorName otomatis saat check-in bintang diisi", async () => {
+        prismaMock.attendanceRecord.findUnique.mockResolvedValueOnce({ clockIn: new Date() });
+        prismaMock.stressmeterCheckin.findUnique.mockResolvedValueOnce(null);
+        prismaMock.stressmeterCheckin.create.mockResolvedValueOnce({
+            id: "chk-q1",
+            rating: 5,
+            skipped: false,
+        });
+        prismaMock.employee.findUnique.mockResolvedValueOnce({ name: "Daffa Fakhuddin, S.Kom." });
+        prismaMock.employeeGreetingQuote.create.mockResolvedValueOnce({ id: "quote-1" });
+
+        const res = await submitEmployeeCheckin("EMP-001", {
+            shiftDate: "2026-11-25",
+            skipped: false,
+            rating: 5,
+            quote: "  Mulai pagi dengan senyum terbaik!  ",
+        });
+
+        expect(res.alreadySubmitted).toBe(false);
+        expect(res.quoteSubmitted).toBe(true);
+        expect(prismaMock.employeeGreetingQuote.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                employeeId: "EMP-001",
+                quote: "Mulai pagi dengan senyum terbaik!",
+                authorName: "Daffa Fakhuddin",
+                slot: "ALL",
+                status: "PENDING",
+            }),
+        });
+
+        // Saat quotes kosong, employeeGreetingQuote.create tidak dipanggil
+        vi.clearAllMocks();
+        prismaMock.attendanceRecord.findUnique.mockResolvedValueOnce({ clockIn: new Date() });
+        prismaMock.stressmeterCheckin.findUnique.mockResolvedValueOnce(null);
+        prismaMock.stressmeterCheckin.create.mockResolvedValueOnce({
+            id: "chk-q2",
+            rating: 4,
+            skipped: false,
+        });
+
+        const noQuoteRes = await submitEmployeeCheckin("EMP-001", {
+            shiftDate: "2026-11-25",
+            skipped: false,
+            rating: 4,
+            quote: "   ",
+        });
+        expect(noQuoteRes.quoteSubmitted).toBe(false);
+        expect(prismaMock.employeeGreetingQuote.create).not.toHaveBeenCalled();
     });
 });

@@ -271,7 +271,7 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
             }
         >
             <EmployeeDraftProvider userId={user.userId ?? user.employeeId} employeeId={user.employeeId}>
-                <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") || pathname.startsWith("/employee/equipment/settings") ? "max-w-4xl" : "max-w-md"}`}>
+                <div className={`w-full min-w-0 mx-auto ${pathname.startsWith("/employee/green-meeting") || pathname.startsWith("/employee/monitoring") || pathname.startsWith("/employee/attendance-history") || pathname.startsWith("/employee/appointments") || pathname.startsWith("/employee/equipment/settings") || pathname.startsWith("/employee/greeting-settings") ? "max-w-4xl" : "max-w-md"}`}>
                     {children}
                 </div>
             </EmployeeDraftProvider>

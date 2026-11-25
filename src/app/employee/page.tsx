@@ -10,7 +10,12 @@ import Link from "next/link";
 import PushNotificationManager from "@/components/PushNotificationManager";
 import { useToast } from "@/components/Toast";
 import { stripGelar } from "@/lib/utils/formatters";
-import { FALLBACK_GREETING, resolveGreetingForMoment, type GreetingRuleLike } from "@/lib/greeting";
+import {
+    FALLBACK_GREETING,
+    resolveGreetingForMoment,
+    type GreetingQuoteLike,
+    type GreetingRuleLike,
+} from "@/lib/greeting";
 import { getResponseErrorMessage, reportClientError } from "@/lib/clientErrors";
 import FeedbackMessage from "@/components/ui/FeedbackMessage";
 import AllMenusSheet from "./components/AllMenusSheet";
@@ -41,6 +46,7 @@ export default function EmployeeHomePage() {
     const [loadError, setLoadError] = useState("");
     const [isAllMenusOpen, setIsAllMenusOpen] = useState(false);
     const [greetingRules, setGreetingRules] = useState<GreetingRuleLike[]>([]);
+    const [greetingQuotes, setGreetingQuotes] = useState<GreetingQuoteLike[]>([]);
     const [canEditGreeting, setCanEditGreeting] = useState(false);
     const [, setClockTick] = useState(0);
 
@@ -116,9 +122,11 @@ export default function EmployeeHomePage() {
                     const greetingJson = greetingRes && greetingRes.ok ? await greetingRes.json() : null;
                     const greetingData = greetingJson?.data;
                     setGreetingRules(Array.isArray(greetingData?.rules) ? (greetingData.rules as GreetingRuleLike[]) : []);
+                    setGreetingQuotes(Array.isArray(greetingData?.quotes) ? (greetingData.quotes as GreetingQuoteLike[]) : []);
                     setCanEditGreeting(Boolean(greetingData?.canEditGreeting));
                 } catch {
                     setGreetingRules([]);
+                    setGreetingQuotes([]);
                     setCanEditGreeting(false);
                 }
                 setNews(Array.isArray(newsData) ? newsData : []);
@@ -154,7 +162,7 @@ export default function EmployeeHomePage() {
         }
         : null;
     const activeGreeting = greetingMoment
-        ? resolveGreetingForMoment(greetingRules, greetingMoment)
+        ? resolveGreetingForMoment(greetingRules, greetingMoment, greetingQuotes)
         : FALLBACK_GREETING;
 
     return (
@@ -223,6 +231,11 @@ export default function EmployeeHomePage() {
                 <figcaption className="text-[11px] text-[var(--text-secondary)] mt-0.5 leading-relaxed">
                     {activeGreeting.subGreeting}
                 </figcaption>
+                {activeGreeting.authorName && (
+                    <p className="text-[11px] font-medium text-[var(--text-muted)] mt-1">
+                        — {activeGreeting.authorName}
+                    </p>
+                )}
             </figure>
 
             {/* ─── Quick Actions ───────────────────────────────── */}

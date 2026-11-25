@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { forbiddenResponse, requireAuth, serverErrorResponse, unauthorizedResponse } from "@/lib/middleware/apiGuard";
 import { PERMISSIONS } from "@/lib/permissions";
-import { isGreetingEditor, listActiveGreetingRules } from "@/lib/services/greetingSettingsService";
+import {
+    isGreetingEditor,
+    listActiveGreetingQuotes,
+    listActiveGreetingRules,
+} from "@/lib/services/greetingSettingsService";
 
 /**
- * GET /api/employee/greeting — aturan sapaan aktif + flag editor.
- * Client memilih aturan yang cocok memakai jam/tanggal WIB dari konteks
+ * GET /api/employee/greeting — aturan sapaan aktif + quotes karyawan disetujui
+ * + flag editor. Client memilih sapaan memakai jam/tanggal WIB dari konteks
  * presensi, sehingga sapaan tetap berubah saat jam berganti tanpa reload.
  */
 export async function GET() {
@@ -16,12 +20,13 @@ export async function GET() {
     }
 
     try {
-        const [rules, canEditGreeting] = await Promise.all([
+        const [rules, quotes, canEditGreeting] = await Promise.all([
             listActiveGreetingRules(),
+            listActiveGreetingQuotes(),
             isGreetingEditor(session),
         ]);
         return NextResponse.json(
-            { success: true, data: { rules, canEditGreeting } },
+            { success: true, data: { rules, quotes, canEditGreeting } },
             { headers: { "Cache-Control": "no-store" } }
         );
     } catch (err) {

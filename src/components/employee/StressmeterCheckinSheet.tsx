@@ -6,6 +6,7 @@ import {
     CheckCircle2,
     HeartHandshake,
     Loader2,
+    Quote,
     Send,
     ShieldCheck,
     Star,
@@ -18,6 +19,7 @@ import {
     getResponseErrorMessage,
     reportClientError,
 } from "@/lib/clientErrors";
+import { MAX_GREETING_QUOTE_LENGTH } from "@/lib/greeting";
 import { STRESSMETER_SCALE, getStressmeterScale } from "@/lib/stressmeterConstants";
 
 type SheetStep = "rating" | "after" | "anonymous" | "anonymous-done";
@@ -43,6 +45,8 @@ export default function StressmeterCheckinSheet({
     const [step, setStep] = useState<SheetStep>(initialStep);
     const [selectedRating, setSelectedRating] = useState<number | null>(null);
     const [hoveredRating, setHoveredRating] = useState<number | null>(null);
+    const [quoteText, setQuoteText] = useState("");
+    const [quoteSubmitted, setQuoteSubmitted] = useState(false);
     const [wasSkipped, setWasSkipped] = useState(false);
     const [submittingAction, setSubmittingAction] = useState<"rating" | "skip" | null>(null);
     const [submittingAnon, setSubmittingAnon] = useState(false);
@@ -55,6 +59,8 @@ export default function StressmeterCheckinSheet({
         setStep(initialStep);
         setSelectedRating(null);
         setHoveredRating(null);
+        setQuoteText("");
+        setQuoteSubmitted(false);
         setWasSkipped(false);
         setSubmittingAction(null);
         setSubmittingAnon(false);
@@ -74,23 +80,29 @@ export default function StressmeterCheckinSheet({
             return;
         }
 
+        const trimmedQuote = quoteText.trim();
         setSubmittingAction(skipped ? "skip" : "rating");
         try {
+            const payload = skipped
+                ? { shiftDate, skipped: true }
+                : trimmedQuote
+                    ? { shiftDate, skipped: false, rating: selectedRating, quote: trimmedQuote }
+                    : { shiftDate, skipped: false, rating: selectedRating };
+
             const res = await fetch("/api/employee/stressmeter/checkin", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(
-                    skipped
-                        ? { shiftDate, skipped: true }
-                        : { shiftDate, skipped: false, rating: selectedRating }
-                ),
+                body: JSON.stringify(payload),
             });
             if (!res.ok) {
                 throw new Error(
                     await getResponseErrorMessage(res, "Gagal menyimpan respons perasaan Anda.")
                 );
             }
+            const json = await res.json().catch(() => null);
+            const savedQuote = Boolean(!skipped && trimmedQuote && (json?.data?.quoteSubmitted ?? true));
             setWasSkipped(skipped);
+            setQuoteSubmitted(savedQuote);
             setStep("after");
             onCompleted?.();
         } catch (err) {
@@ -118,7 +130,7 @@ export default function StressmeterCheckinSheet({
 
     const sheetDescription =
         step === "rating"
-            ? "Opsional aja ya, hanya butuh 5 detik."
+            ? "Pilih bintang sesuai perasaanmu, dan boleh tambahkan quotes penyemangat (opsional)."
             : step === "after"
                 ? "Masukan Anda sangat berarti bagi kami."
                 : step === "anonymous"
@@ -220,59 +232,92 @@ export default function StressmeterCheckinSheet({
             closeLabel="Tutup jendela"
             footer={footer}
         >
-            {/* ── STEP 1: PILIH RATING BINTANG 1–5 ─────────────────── */}
+            {/* ── STEP 1: GRID ATAS-BAWAH (BINTANG 1–5 + QUOTES OPSIONAL) ── */}
             {step === "rating" && (
-                <div className="py-6 flex flex-col items-center gap-4">
-                    <div
-                        className="flex items-center justify-center gap-1.5 sm:gap-2.5"
-                        role="group"
-                        aria-label="Penilaian perasaan 1 sampai 5 bintang"
-                        onMouseLeave={() => setHoveredRating(null)}
-                    >
-                        {STRESSMETER_SCALE.map((item) => {
-                            const filled =
-                                activePreviewRating !== null &&
-                                item.rating <= activePreviewRating;
-                            const isChosen = selectedRating === item.rating;
-                            return (
-                                <button
-                                    key={item.rating}
-                                    type="button"
-                                    onClick={() => setSelectedRating(item.rating)}
-                                    onMouseEnter={() => setHoveredRating(item.rating)}
-                                    onFocus={() => setHoveredRating(item.rating)}
-                                    onBlur={() => setHoveredRating(null)}
-                                    aria-label={`${item.rating} bintang: ${item.label}`}
-                                    aria-pressed={isChosen}
-                                    className="group min-w-[48px] min-h-[48px] p-1.5 rounded-full flex items-center justify-center transition-transform duration-150 hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                <div className="grid grid-cols-1 gap-4 py-3">
+                    <div className="flex flex-col items-center gap-3 py-2">
+                        <div
+                            className="flex items-center justify-center gap-1.5 sm:gap-2.5"
+                            role="group"
+                            aria-label="Penilaian perasaan 1 sampai 5 bintang"
+                            onMouseLeave={() => setHoveredRating(null)}
+                        >
+                            {STRESSMETER_SCALE.map((item) => {
+                                const filled =
+                                    activePreviewRating !== null &&
+                                    item.rating <= activePreviewRating;
+                                const isChosen = selectedRating === item.rating;
+                                return (
+                                    <button
+                                        key={item.rating}
+                                        type="button"
+                                        onClick={() => setSelectedRating(item.rating)}
+                                        onMouseEnter={() => setHoveredRating(item.rating)}
+                                        onFocus={() => setHoveredRating(item.rating)}
+                                        onBlur={() => setHoveredRating(null)}
+                                        aria-label={`${item.rating} bintang: ${item.label}`}
+                                        aria-pressed={isChosen}
+                                        className="group min-w-[48px] min-h-[48px] p-1.5 rounded-full flex items-center justify-center transition-transform duration-150 hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                                    >
+                                        <Star
+                                            className={`w-10 h-10 sm:w-11 sm:h-11 transition-all duration-150 ${
+                                                filled
+                                                    ? "fill-amber-400 text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.35)]"
+                                                    : "text-[var(--border)] group-hover:text-amber-300"
+                                            }`}
+                                        />
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div
+                            className="min-h-[24px] flex items-center justify-center text-center"
+                            aria-live="polite"
+                        >
+                            {activeScale ? (
+                                <p
+                                    className={`text-sm font-semibold tracking-tight transition-colors ${activeScale.textClass}`}
                                 >
-                                    <Star
-                                        className={`w-10 h-10 sm:w-11 sm:h-11 transition-all duration-150 ${
-                                            filled
-                                                ? "fill-amber-400 text-amber-400 drop-shadow-[0_2px_6px_rgba(251,191,36,0.35)]"
-                                                : "text-[var(--border)] group-hover:text-amber-300"
-                                        }`}
-                                    />
-                                </button>
-                            );
-                        })}
+                                    {activeScale.label}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-[var(--text-muted)]">
+                                    Pilih bintang sesuai perasaanmu
+                                </p>
+                            )}
+                        </div>
                     </div>
 
-                    <div
-                        className="min-h-[28px] flex items-center justify-center text-center"
-                        aria-live="polite"
-                    >
-                        {activeScale ? (
-                            <p
-                                className={`text-sm font-semibold tracking-tight transition-colors ${activeScale.textClass}`}
+                    <div className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--secondary)_45%,transparent)] p-3.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <label
+                                htmlFor="stressmeter-quote-input"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]"
                             >
-                                {activeScale.label}
-                            </p>
-                        ) : (
-                            <p className="text-xs text-[var(--text-muted)]">
-                                Pilih bintang sesuai perasaanmu
-                            </p>
-                        )}
+                                <Quote className="w-3.5 h-3.5 text-[var(--primary)]" />
+                                Tulis quotes atau sapaan penyemangat
+                            </label>
+                            <span className="rounded-full bg-[var(--card)] border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)]">
+                                Opsional
+                            </span>
+                        </div>
+                        <textarea
+                            id="stressmeter-quote-input"
+                            rows={2}
+                            maxLength={MAX_GREETING_QUOTE_LENGTH}
+                            disabled={submittingCheckin}
+                            value={quoteText}
+                            onChange={(e) => setQuoteText(e.target.value)}
+                            placeholder="Contoh: Pelan-pelan asal konsisten, hari ini pasti bisa dilewati."
+                            className="form-input text-xs min-h-[68px] resize-none bg-[var(--card)]"
+                        />
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-[var(--text-muted)]">
+                            <span>Akan ditinjau editor dulu sebelum tampil di beranda karyawan.</span>
+                            <span className="shrink-0 tabular-nums">
+                                {quoteText.length}/{MAX_GREETING_QUOTE_LENGTH}
+                            </span>
+                        </div>
                     </div>
                 </div>
             )}
@@ -289,6 +334,12 @@ export default function StressmeterCheckinSheet({
                                 ? "Tidak masalah, semoga harimu tetap lancar ya."
                                 : "Thank you sudah mengisi, semoga harimu lebih baik yaa."}
                         </h3>
+                        {quoteSubmitted && (
+                            <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-3 py-1 text-[11px] font-semibold">
+                                <Quote className="w-3 h-3" />
+                                Quotes kamu masuk antrean kurasi sapaan beranda.
+                            </p>
+                        )}
                         <p className="text-xs text-[var(--text-muted)] leading-relaxed max-w-sm mx-auto">
                             {wasSkipped
                                 ? "Kapan pun kamu ingin bercerita, ruang sharing anonim selalu terbuka untukmu."

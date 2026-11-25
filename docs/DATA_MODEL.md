@@ -138,10 +138,11 @@ Relasi inti Cleaning:
 
 RBAC: Permission `cleaning.execute`, Role `CLEANING_WORKER` di `seedRbac.ts`. Akun outsource memakai `UserAccount.employeeId = null` dan `createdByUserId` untuk membatasi kepemilikan administratif akun; tidak ada model outsource terpisah.
 
-### I. Sapaan Beranda Employee (GreetingRule + AppSetting)
-- `GreetingRule` menyimpan aturan sapaan CRUD: `name`, `greeting`, `subGreeting`, `startTime`/`endTime` (`HH:MM`, `endTime < startTime` berarti lintas hari), `repeatWeekly` + `daysOfWeek` (JSON array 0–6) atau `specificDate` (`YYYY-MM-DD`), `priority` (0–9999), `isActive`, dan aktor `createdByUserId`/`updatedByUserId`. Index `[isActive, priority]`.
-- `AppSetting` `greeting.editorEmployeeId` menyimpan satu `employeeId` karyawan internal aktif yang boleh ikut mengelola aturan.
-- Resolusi: aturan aktif dengan prioritas tertinggi yang cocok dengan jam/hari/tanggal WIB dipakai; bila tidak ada yang cocok, fallback ke teks bawaan per jam di `src/lib/greeting.ts`. Saat jam server belum tersedia, kartu memakai sapaan netral non-editable `Selamat Datang!` dan banner peringatan waktu terpisah.
+### I. Sapaan Beranda Employee (`GreetingRule` + `EmployeeGreetingQuote` + `AppSetting`)
+- `GreetingRule` (`greeting_rules`) menyimpan aturan sapaan CRUD: `name`, `greeting`, `subGreeting`, `authorName` (`VarChar(120)` nullable — nama pengirim/penulis opsional), `startTime`/`endTime` (`HH:MM`, `endTime < startTime` berarti lintas hari), `repeatWeekly` + `daysOfWeek` (JSON array 0–6) atau `specificDate` (`YYYY-MM-DD`), `priority` (0–9999), `isActive`, dan aktor `createdByUserId`/`updatedByUserId`. Index `[isActive, priority]`.
+- `EmployeeGreetingQuote` (`employee_greeting_quotes`) menyimpan quotes opsional kiriman karyawan dari langkah Stressmeter: FK ke `Employee` (`employeeId`, Restrict/Cascade), unik `[employeeId, shiftDate]`, `greeting` (`VarChar(120)?`), `quote` (`Text`), `authorName` (`VarChar(120)?`, terisi otomatis dari nama karyawan tanpa gelar via `stripGelar`, dapat diedit/dikosongkan saat kurasi), `slot` (`GreetingQuoteSlot`: `ALL|PAGI|SIANG|SORE|MALAM`, default `ALL`), `status` (`GreetingQuoteStatus`: `PENDING|APPROVED|REJECTED`, default `PENDING`), `reviewedByUserId`, `reviewedAt`. Indeks `[status, slot]` dan `[createdAt]`. Sengaja **tanpa** FK ke `StressmeterCheckin` maupun kolom `rating` agar privasi skor Stressmeter tetap eksklusif HR.
+- `AppSetting` `greeting.editorEmployeeId` menyimpan satu `employeeId` karyawan internal aktif yang boleh ikut mengelola aturan & mengkurasi quotes (dikelola eksklusif WIG002).
+- Resolusi (`src/lib/greeting.ts`): (1) aturan aktif `GreetingRule` prioritas tertinggi yang cocok jam/hari/tanggal WIB; (2) quotes `APPROVED` pada slot WIB aktif (`PAGI`/`SIANG`/`SORE`/`MALAM` + `ALL`) dengan rotasi deterministik harian; (3) fallback teks bawaan per jam (`DEFAULT_GREETING_COPY`). Saat jam server belum tersedia, kartu memakai sapaan netral non-editable `Selamat Datang!` dan banner peringatan waktu terpisah.
 
 ## 4. Appointment Meeting + Ruangan (2026-10-07)
 

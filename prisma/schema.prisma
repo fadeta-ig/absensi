@@ -89,6 +89,7 @@ model Employee {
   equipmentInspectionsChecked  EquipmentInspection[] @relation("EquipmentInspectionCheckedBy")
   equipmentInspectionsApproved EquipmentInspection[] @relation("EquipmentInspectionApprovedBy")
   stressmeterCheckins          StressmeterCheckin[]
+  greetingQuotes               EmployeeGreetingQuote[]
 
   @@index([managerId], map: "employees_manager_id_fkey")
   @@index([shiftId], map: "employees_shift_id_fkey")
@@ -1841,6 +1842,7 @@ model GreetingRule {
   name            String   @db.VarChar(100)
   greeting        String   @db.VarChar(120)
   subGreeting     String   @db.Text
+  authorName      String?  @map("author_name") @db.VarChar(120)
   startTime       String   @db.VarChar(5) @map("start_time")
   endTime         String   @db.VarChar(5) @map("end_time")
   repeatWeekly    Boolean  @default(true) @map("repeat_weekly")
@@ -1855,6 +1857,47 @@ model GreetingRule {
 
   @@index([isActive, priority], map: "idx_greeting_rules_active_priority")
   @@map("greeting_rules")
+}
+
+// ─── Quotes / Sapaan Kiriman Karyawan (dari Stressmeter) ────────
+// Karyawan dapat mengirim quotes opsional bersamaan dengan rating Stressmeter.
+// Disimpan terpisah dari StressmeterCheckin (tanpa FK/skor bintang) agar privasi
+// data Stressmeter tetap khusus HR. Masuk berstatus PENDING hingga dikurasi oleh
+// WIG001, WIG002, atau editor sapaan menjadi APPROVED / REJECTED.
+enum GreetingQuoteSlot {
+  ALL
+  PAGI
+  SIANG
+  SORE
+  MALAM
+}
+
+enum GreetingQuoteStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model EmployeeGreetingQuote {
+  id               String              @id @default(uuid())
+  employeeId       String              @map("employee_id")
+  shiftDate        DateTime            @map("shift_date") @db.Date
+  greeting         String?             @db.VarChar(120)
+  quote            String              @db.Text
+  authorName       String?             @map("author_name") @db.VarChar(120)
+  slot             GreetingQuoteSlot   @default(ALL)
+  status           GreetingQuoteStatus @default(PENDING)
+  reviewedByUserId String?             @map("reviewed_by_user_id")
+  reviewedAt       DateTime?           @map("reviewed_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [employeeId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([employeeId, shiftDate], map: "uq_greeting_quote_employee_shift_date")
+  @@index([status, slot], map: "idx_greeting_quote_status_slot")
+  @@index([createdAt], map: "idx_greeting_quote_created_at")
+  @@map("employee_greeting_quotes")
 }
 
 // ─── Cleaning Paraf Harian (Tahap 1) ────────────────────────────

@@ -1,5 +1,7 @@
 import { AnonymousShareStatus, Prisma, StressmeterTopic } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import logger, { serializeError } from "@/lib/logger";
+import { submitEmployeeGreetingQuoteFromCheckin } from "@/lib/services/greetingSettingsService";
 import {
     addCalendarDays,
     isValidCalendarDate,
@@ -186,6 +188,7 @@ export async function submitEmployeeCheckin(
         shiftDate: string;
         skipped: boolean;
         rating?: number | null;
+        quote?: string | null;
     }
 ) {
     if (!isValidCalendarDate(input.shiftDate)) {
@@ -221,6 +224,7 @@ export async function submitEmployeeCheckin(
     if (existing) {
         return {
             alreadySubmitted: true,
+            quoteSubmitted: false,
             checkin: {
                 id: existing.id,
                 shiftDate: input.shiftDate,
@@ -238,6 +242,7 @@ export async function submitEmployeeCheckin(
     }
 
     const ratingValue = input.skipped ? null : (input.rating ?? null);
+    const trimmedQuote = !input.skipped && typeof input.quote === "string" ? input.quote.trim() : "";
 
     try {
         const created = await prisma.stressmeterCheckin.create({
@@ -254,8 +259,26 @@ export async function submitEmployeeCheckin(
             },
         });
 
+        let quoteSubmitted = false;
+        if (trimmedQuote) {
+            try {
+                quoteSubmitted = await submitEmployeeGreetingQuoteFromCheckin(
+                    employeeId,
+                    input.shiftDate,
+                    trimmedQuote
+                );
+            } catch (quoteError) {
+                logger.error("[StressmeterCheckin] Failed to save optional greeting quote", {
+                    employeeId,
+                    shiftDate: input.shiftDate,
+                    error: serializeError(quoteError),
+                });
+            }
+        }
+
         return {
             alreadySubmitted: false,
+            quoteSubmitted,
             checkin: {
                 id: created.id,
                 shiftDate: input.shiftDate,
@@ -281,6 +304,7 @@ export async function submitEmployeeCheckin(
             if (raceExisting) {
                 return {
                     alreadySubmitted: true,
+                    quoteSubmitted: false,
                     checkin: {
                         id: raceExisting.id,
                         shiftDate: input.shiftDate,

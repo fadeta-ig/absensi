@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
+    MAX_GREETING_AUTHOR_LENGTH,
     MAX_GREETING_LENGTH,
     MAX_GREETING_NAME_LENGTH,
     MAX_GREETING_PRIORITY,
+    MAX_GREETING_QUOTE_LENGTH,
     MAX_SUB_GREETING_LENGTH,
 } from "@/lib/greeting";
 
@@ -12,6 +14,7 @@ export const greetingRuleSchema = z.object({
     name: z.string().trim().min(1).max(MAX_GREETING_NAME_LENGTH),
     greeting: z.string().trim().min(1).max(MAX_GREETING_LENGTH),
     subGreeting: z.string().trim().min(1).max(MAX_SUB_GREETING_LENGTH),
+    authorName: z.string().trim().max(MAX_GREETING_AUTHOR_LENGTH).nullable().optional(),
     startTime: timeSchema,
     endTime: timeSchema,
     repeatWeekly: z.boolean(),
@@ -32,3 +35,15 @@ export const greetingRuleSchema = z.object({
 });
 
 export const greetingRuleIdSchema = z.string().trim().min(1).max(100);
+
+export const greetingQuoteSlotSchema = z.enum(["ALL", "PAGI", "SIANG", "SORE", "MALAM"]);
+
+export const greetingQuoteStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+
+export const greetingQuoteUpdateSchema = z.object({
+    quote: z.string().trim().min(1, "Teks quotes wajib diisi.").max(MAX_GREETING_QUOTE_LENGTH),
+    greeting: z.string().trim().max(MAX_GREETING_LENGTH).nullable().optional(),
+    authorName: z.string().trim().max(MAX_GREETING_AUTHOR_LENGTH).nullable().optional(),
+    slot: greetingQuoteSlotSchema,
+    status: greetingQuoteStatusSchema,
+});
