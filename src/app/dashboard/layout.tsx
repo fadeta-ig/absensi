@@ -191,8 +191,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AppShell
             user={user}
             navItems={dynamicNavItems}
-            brandTitle="WITS HR"
-            brandSubtitle="Admin Panel"
             mobileTitle="WITS HR"
             storageKey="sidebar-collapsed"
             onLogout={handleLogout}

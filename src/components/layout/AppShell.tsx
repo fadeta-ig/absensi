@@ -37,11 +37,7 @@ interface AppShellProps {
     user: AppShellUser;
     /** Daftar navigasi sidebar */
     navItems: NavItem[];
-    /** Judul brand di sidebar (contoh: "WITS HR" / "WITS Portal") */
-    brandTitle: string;
-    /** Subtitle brand (contoh: "Admin Panel" / "Employee") */
-    brandSubtitle: string;
-    /** Label nama app di mobile header */
+    /** Label aksesibilitas nama portal di header (contoh: "WITS HR" / "WITS") */
     mobileTitle: string;
     /** localStorage key untuk state collapsed sidebar (agar berbeda antar portal) */
     storageKey: string;
@@ -60,13 +56,46 @@ interface AppShellProps {
     children: React.ReactNode;
 }
 
+// ─── Brand Logo (Theme-Aware Landscape) ──────────────────────
+
+function LandscapeBrandLogo({
+    alt,
+    heightClass,
+    sizes,
+    priority = false,
+}: {
+    alt: string;
+    heightClass: string;
+    sizes: string;
+    priority?: boolean;
+}) {
+    return (
+        <span className={`relative inline-block shrink-0 aspect-[747/300] ${heightClass}`}>
+            <Image
+                src="/assets/logo_landscape_blacktext.png"
+                alt={alt}
+                fill
+                sizes={sizes}
+                priority={priority}
+                className="object-contain object-left block dark:hidden"
+            />
+            <Image
+                src="/assets/logo_landscape_whitetext.png"
+                alt={alt}
+                fill
+                sizes={sizes}
+                priority={priority}
+                className="object-contain object-left hidden dark:block"
+            />
+        </span>
+    );
+}
+
 // ─── AppShell Component ───────────────────────────────────────
 
 export default function AppShell({
     user,
     navItems,
-    brandTitle,
-    brandSubtitle,
     mobileTitle,
     storageKey,
     extraNav,
@@ -201,14 +230,9 @@ export default function AppShell({
             {/* ── Mobile Header ─────────────────────────────────── */}
             <header className="fixed top-0 left-0 right-0 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] bg-[var(--card)]/90 backdrop-blur-md border-b border-[var(--border)] px-4 flex items-center justify-between z-50 lg:hidden">
                 {hideMobileHamburger ? (
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 relative shrink-0 rounded-md overflow-hidden">
-                            <Image src="/assets/wits.png" alt="WITS" fill sizes="28px" className="object-contain" priority />
-                        </div>
-                        <span className="flex flex-col leading-tight">
-                            <span className="text-sm font-bold tracking-tight text-[var(--primary)]">{mobileTitle}</span>
-                            <span className="text-[9px] font-medium text-[var(--text-muted)]">Wijaya Integrated Talent System</span>
-                        </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                        <LandscapeBrandLogo alt={mobileTitle} heightClass="h-9" sizes="96px" priority />
+                        <span className="sr-only">{mobileTitle}</span>
                     </div>
                 ) : (
                     <>
@@ -218,14 +242,9 @@ export default function AppShell({
                         >
                             <Menu className="w-5 h-5 text-[var(--text-primary)]" />
                         </button>
-                        <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 relative rounded-md overflow-hidden">
-                                <Image src="/assets/wits.png" alt="WITS" fill sizes="24px" className="object-contain" />
-                            </div>
-                            <span className="flex flex-col leading-tight text-left">
-                                <span className="text-sm font-bold text-[var(--primary)]">{mobileTitle}</span>
-                                <span className="text-[9px] font-medium text-[var(--text-muted)]">Wijaya Integrated Talent System</span>
-                            </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <LandscapeBrandLogo alt={mobileTitle} heightClass="h-8" sizes="84px" priority />
+                            <span className="sr-only">{mobileTitle}</span>
                         </div>
                     </>
                 )}
@@ -238,15 +257,9 @@ export default function AppShell({
             <aside className={`fixed left-0 top-0 bottom-0 bg-[var(--card)] border-r border-[var(--border)] flex flex-col z-[200] transition-all duration-300 lg:translate-x-0 ${sidebarCollapsed ? "lg:w-[72px]" : "lg:w-64"} w-64 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
 
                 {/* Brand */}
-                <div className={`p-4 flex items-center border-b border-[var(--border)] min-h-[64px] relative transition-all ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
-                    <div className={`flex items-center gap-3 w-full ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-                        <div className="w-8 h-8 relative shrink-0 rounded-md overflow-hidden">
-                            <Image src="/assets/wits.png" alt="WITS" fill sizes="32px" className="object-contain" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <h2 className="text-sm font-bold text-[var(--text-primary)] truncate">{brandTitle}</h2>
-                            <p className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest truncate">{brandSubtitle}</p>
-                        </div>
+                <div className={`px-4 py-3 flex items-center border-b border-[var(--border)] min-h-[64px] relative transition-all ${sidebarCollapsed ? "lg:justify-center lg:px-3" : ""}`}>
+                    <div className={`flex items-center w-full min-w-0 pr-7 lg:pr-2 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
+                        <LandscapeBrandLogo alt={mobileTitle} heightClass="h-11" sizes="120px" priority />
                     </div>
 
                     {/* Icon-only logo saat collapsed */}

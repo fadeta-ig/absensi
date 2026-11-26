@@ -182,8 +182,6 @@ export default function GaLayout({ children }: { children: React.ReactNode }) {
         <AppShell
             user={user}
             navItems={navItems}
-            brandTitle="WITS GA"
-            brandSubtitle="General Affairs"
             mobileTitle="WITS GA"
             storageKey="ga-sidebar-collapsed"
             onLogout={handleLogout}

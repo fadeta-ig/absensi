@@ -175,8 +175,6 @@ export default function OutsourceLayout({ children }: { children: React.ReactNod
             <AppShell
                 user={user}
                 navItems={navItems}
-                brandTitle="WITS Outsource"
-                brandSubtitle="Portal E-Checklist"
                 mobileTitle="Portal E-Checklist"
                 storageKey="outsource-sidebar-collapsed"
                 onLogout={handleLogout}

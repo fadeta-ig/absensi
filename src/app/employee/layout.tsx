@@ -245,8 +245,6 @@ export default function EmployeeLayout({ children }: { children: React.ReactNode
                         (i.href !== "/employee/my-tasks/monitoring" || monitorVisible)
                 )
             }
-            brandTitle="WITS Portal"
-            brandSubtitle="Employee"
             mobileTitle="WITS"
             storageKey="employee-sidebar-collapsed"
             onLogout={handleLogout}
